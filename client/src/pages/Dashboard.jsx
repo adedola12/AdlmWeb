@@ -31,12 +31,12 @@ export default function Dashboard() {
           Your 15-day <b>licenseToken</b> is issued and can be used offline by
           plugins.
         </p>
-        <textarea
+        {/* <textarea
           readOnly
           className="mt-3 w-full text-xs p-2 border rounded"
           rows={6}
           value={licenseToken || ""}
-        />
+        /> */}
       </div>
 
       <div className="card">
