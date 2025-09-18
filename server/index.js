@@ -9,6 +9,7 @@ import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
 import adminRoutes from "./routes/admin.js";
 import purchaseRoutes from "./routes/purchase.js";
+import meRouter from "./routes/me.js";
 
 const app = express();
 app.use(helmet());
@@ -27,6 +28,7 @@ app.get("/", (_req, res) =>
 
 app.use("/auth", authRoutes);
 app.use("/", meRoutes);
+app.use("/me", meRouter);
 app.use("/admin", adminRoutes);
 app.use("/purchase", purchaseRoutes);
 

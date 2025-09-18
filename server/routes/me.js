@@ -13,6 +13,15 @@ router.get("/me/entitlements", requireAuth, async (req, res) => {
   return res.json(req.user.entitlements || []);
 });
 
+router.get("/entitlements", requireAuth, async (req, res) => {
+  const ent = (req.user.entitlements || []).map((e) => ({
+    productKey: e.productKey,
+    status: e.status,
+    expiresAt: e.expiresAt || null,
+  }));
+  res.json(ent); // always return JSON (at least [])
+});
+
 router.get("/me/summary", requireAuth, async (req, res) => {
   const ent = (req.user.entitlements || []).map((e) => ({
     productKey: e.productKey,

@@ -20,7 +20,7 @@ export default function Purchase() {
         body: JSON.stringify({ productKey, months: Number(months) }),
       });
       if (!res.ok) throw new Error("Purchase failed");
-      setMsg("Purchase successful. Check Dashboard for updated expiry.");
+      setMsg("Purchase submitted. An admin will approve or reject it soon.");
     } catch (e) {
       setMsg(e.message);
     }
@@ -37,6 +37,7 @@ export default function Purchase() {
         <option value="rategen">RateGen</option>
         <option value="planswift">PlanSwift</option>
         <option value="revit">Revit</option>
+        <option value="mep">Revit MEP</option>
       </select>
       <input
         className="input"
