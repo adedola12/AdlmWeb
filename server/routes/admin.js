@@ -7,13 +7,23 @@ import { Purchase } from "../models/Purchase.js"; // <-- IMPORTANT
 const router = express.Router();
 
 // Admin: list users
-router.get("/users", requireAuth, requireAdmin, async (_req, res) => {
+// routes/admin.js  (your existing admin router)
+router.get("/users", requireAuth, requireAdmin, async (req, res) => {
+  const { q } = req.query;
+  const find = {};
+  if (q) {
+    const rx = new RegExp(String(q).trim(), "i");
+    find.$or = [{ email: rx }, { username: rx }];
+  }
+
   const list = await User.find(
-    {},
-    { email: 1, role: 1, disabled: 1, entitlements: 1, createdAt: 1 }
+    find,
+    { email: 1, username: 1, role: 1, disabled: 1, entitlements: 1, createdAt: 1 }
   ).sort({ createdAt: -1 });
+
   return res.json(list);
 });
+
 
 // Admin: set/extend entitlement (manual override tool you already had)
 // body: { email, productKey, months, status }

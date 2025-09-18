@@ -21,8 +21,18 @@ a.active hr{
   --adlm-navy:#0f172a;
 }
 
-.btn { @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition; }
+/* src/index.css (or your global CSS where .btn is defined) */
+.btn {
+  @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium
+         bg-blue-600 text-white transition duration-150
+         hover:bg-blue-700 hover:shadow-md
+         active:scale-[.98]                        /* micro press */
+         focus:outline-none focus:ring-2 focus:ring-blue-500/50
+         cursor-pointer select-none;               /* cursor effect */
+}
+
 .btn-sm { @apply px-3 py-1 text-xs; }
+
 .input { @apply w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500; }
 .card { @apply rounded-2xl bg-white p-6 shadow-sm border; }
 
