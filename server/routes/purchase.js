@@ -1,36 +1,30 @@
 import express from "express";
-import dayjs from "dayjs";
 import { requireAuth } from "../middleware/auth.js";
+import { Purchase } from "../models/Purchase.js";
 
-// This simulates a purchase (in production, handle payment provider webhooks)
 const router = express.Router();
 
 // POST /purchase { productKey, months }
+// Creates a PENDING purchase for admin review
 router.post("/", requireAuth, async (req, res) => {
   const { productKey, months = 1 } = req.body || {};
-  if (!productKey)
+  if (!productKey) {
     return res.status(400).json({ error: "productKey required" });
-
-  const now = dayjs();
-  let ent = req.user.entitlements.find((e) => e.productKey === productKey);
-  if (!ent) {
-    ent = {
-      productKey,
-      status: "active",
-      expiresAt: now.add(months, "month").toDate(),
-    };
-    req.user.entitlements.push(ent);
-  } else {
-    // extend from current expiry if still active, else from now
-    const base =
-      ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
-        ? dayjs(ent.expiresAt)
-        : now;
-    ent.status = "active";
-    ent.expiresAt = base.add(months, "month").toDate();
   }
-  await req.user.save();
-  return res.json({ ok: true, entitlements: req.user.entitlements });
+
+  const p = await Purchase.create({
+    userId: req.user._id,
+    email: req.user.email,
+    productKey,
+    requestedMonths: Number(months) || 1,
+    status: "pending",
+  });
+
+  return res.json({
+    ok: true,
+    purchase: p,
+    message: "Purchase submitted and pending admin review.",
+  });
 });
 
 export default router;
