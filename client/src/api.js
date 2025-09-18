@@ -1,4 +1,5 @@
-const API = "http://localhost:4000";
+// const API = "http://localhost:4000";
+const API = "https://adlmweb.onrender.com";
 
 export async function api(path, opts = {}) {
   const res = await fetch(API + path, {
