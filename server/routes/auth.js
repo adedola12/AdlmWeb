@@ -75,14 +75,17 @@ export async function requireAuth(req, res, next) {
   }
 }
 
+// wherever you define setRefreshCookie
 function setRefreshCookie(res, token) {
+  const isProd = process.env.NODE_ENV === "production";
   res.cookie("refreshToken", token, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false, // set true behind HTTPS
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,               // must be true for SameSite=None
     maxAge: 1000 * 60 * 60 * 24 * 30,
   });
 }
+
 
 // ---------- SIGNUP ----------
 router.post("/signup", async (req, res) => {
