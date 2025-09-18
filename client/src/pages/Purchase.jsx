@@ -1,5 +1,6 @@
 import React from "react";
 import { useAuth } from "../store.js";
+import { apiAuthed } from "../http.js";
 
 export default function Purchase() {
   const { accessToken } = useAuth();
@@ -10,22 +11,17 @@ export default function Purchase() {
   async function buy() {
     setMsg("");
     try {
-      const res = await fetch("http://localhost:4000/purchase", {
+      await apiAuthed(`/purchase`, {
+        token: accessToken,
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productKey, months: Number(months) }),
       });
-      if (!res.ok) throw new Error("Purchase failed");
       setMsg("Purchase submitted. An admin will approve or reject it soon.");
     } catch (e) {
       setMsg(e.message);
     }
   }
-
   return (
     <div className="max-w-md mx-auto card space-y-3">
       <h1 className="text-xl font-semibold">Purchase</h1>

@@ -1,22 +1,18 @@
 import React from "react";
-import { api } from "../api.js";
-import { useAuth } from "../store.js";
 import dayjs from "dayjs";
+import { useAuth } from "../store.js";
+import { apiAuthed } from "../http.js";
 
 export default function Dashboard() {
-  const { user, accessToken, licenseToken } = useAuth();
+  const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
   const [err, setErr] = React.useState("");
 
   React.useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("http://localhost:4000/me/summary", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          credentials: "include",
-        });
-        if (!res.ok) throw new Error("Failed to load");
-        setSummary(await res.json());
+        const data = await apiAuthed(`/me/summary`, { token: accessToken });
+        setSummary(data);
       } catch (e) {
         setErr(e.message);
       }
