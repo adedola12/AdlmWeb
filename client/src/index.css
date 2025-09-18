@@ -15,6 +15,17 @@ a.active hr{
     font-family: Outfit;
 }
 
+:root{
+  --adlm-primary: #1d4ed8;   /* adjust to your "Primary 600" */
+  --adlm-primary-700:#1e40af;
+  --adlm-navy:#0f172a;
+}
+
+.btn { @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition; }
+.btn-sm { @apply px-3 py-1 text-xs; }
+.input { @apply w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500; }
+.card { @apply rounded-2xl bg-white p-6 shadow-sm border; }
+
 .prata-regular {
     font-family: "Prata", serif;
     font-weight: 400;

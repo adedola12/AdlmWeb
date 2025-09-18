@@ -1,10 +1,14 @@
+// src/pages/Login.jsx  (only the submit + useEffect changes shown)
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.js";
 
 export default function Login() {
   const nav = useNavigate();
+  const [qs] = useSearchParams();
+  const next = qs.get("next") || "/";
+
   const { setAuth } = useAuth();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -23,7 +27,7 @@ export default function Login() {
         accessToken: res.accessToken,
         licenseToken: res.licenseToken,
       });
-      nav("/");
+      nav(next, { replace: true });
     } catch (e) {
       setErr(e.message);
     }
