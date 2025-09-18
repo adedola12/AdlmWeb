@@ -2,6 +2,7 @@
 import React from "react";
 import dayjs from "dayjs";
 import { useAuth } from "../store.js";
+import { apiAuthed } from "../http.js";
 
 const MONTH_CHOICES = [
   { label: "1 month", value: 1 },
@@ -11,10 +12,10 @@ const MONTH_CHOICES = [
 
 export default function Admin() {
   const { accessToken } = useAuth();
-  const [tab, setTab] = React.useState("pending"); // 'pending' | 'active'
+  const [tab, setTab] = React.useState("pending");
   const [users, setUsers] = React.useState([]);
   const [purchases, setPurchases] = React.useState([]);
-  const [q, setQ] = React.useState(""); // search query
+  const [q, setQ] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
 
@@ -24,19 +25,11 @@ export default function Admin() {
     try {
       const qs = q ? `?q=${encodeURIComponent(q)}` : "";
       const [uRes, pRes] = await Promise.all([
-        fetch(`http://localhost:4000/admin/users${qs}`, {
-          credentials: "include",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        fetch("http://localhost:4000/admin/purchases?status=pending", {
-          credentials: "include",
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
+        apiAuthed(`/admin/users${qs}`, { token: accessToken }),
+        apiAuthed(`/admin/purchases?status=pending`, { token: accessToken }),
       ]);
-      if (!uRes.ok) throw new Error("Failed to load users");
-      if (!pRes.ok) throw new Error("Failed to load purchases");
-      setUsers(await uRes.json());
-      setPurchases(await pRes.json());
+      setUsers(uRes);
+      setPurchases(pRes);
     } catch (e) {
       setMsg(e.message);
     } finally {
@@ -45,81 +38,73 @@ export default function Admin() {
   }
 
   React.useEffect(() => {
-    load(); // initial
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // reload when searching (debounced lightly)
+    load();
+  }, []); // initial
   React.useEffect(() => {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   async function updateEntitlement(email, productKey, months = 0, status) {
     setMsg("");
-    const res = await fetch("http://localhost:4000/admin/users/entitlement", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ email, productKey, months, status }),
-    });
-    if (!res.ok) return setMsg("Failed to update entitlement");
-    await load();
-    setMsg("Entitlement updated");
+    try {
+      await apiAuthed(`/admin/users/entitlement`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, productKey, months, status }),
+      });
+      await load();
+      setMsg("Entitlement updated");
+    } catch (e) {
+      setMsg(e.message);
+    }
   }
 
   async function setDisabled(email, disabled) {
     setMsg("");
-    const res = await fetch("http://localhost:4000/admin/users/disable", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ email, disabled }),
-    });
-    if (!res.ok) return setMsg("Failed to update status");
-    await load();
-    setMsg("User status updated");
+    try {
+      await apiAuthed(`/admin/users/disable`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, disabled }),
+      });
+      await load();
+      setMsg("User status updated");
+    } catch (e) {
+      setMsg(e.message);
+    }
   }
 
   async function approvePurchase(id, months) {
     setMsg("");
-    const res = await fetch(
-      `http://localhost:4000/admin/purchases/${id}/approve`,
-      {
+    try {
+      await apiAuthed(`/admin/purchases/${id}/approve`, {
+        token: accessToken,
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ months }),
-      }
-    );
-    if (!res.ok) return setMsg("Failed to approve");
-    await load();
-    setMsg("Purchase approved & entitlement applied");
+      });
+      await load();
+      setMsg("Purchase approved & entitlement applied");
+    } catch (e) {
+      setMsg(e.message);
+    }
   }
 
   async function rejectPurchase(id) {
     setMsg("");
-    const res = await fetch(
-      `http://localhost:4000/admin/purchases/${id}/reject`,
-      {
+    try {
+      await apiAuthed(`/admin/purchases/${id}/reject`, {
+        token: accessToken,
         method: "POST",
-        credentials: "include",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }
-    );
-    if (!res.ok) return setMsg("Failed to reject");
-    await load();
-    setMsg("Purchase rejected");
+      });
+      await load();
+      setMsg("Purchase rejected");
+    } catch (e) {
+      setMsg(e.message);
+    }
   }
 
   // derived: active entitlements (flattened)
@@ -361,14 +346,13 @@ export default function Admin() {
                                 title="Reset device binding"
                                 onClick={async () => {
                                   setMsg("");
-                                  const res = await fetch(
-                                    "http://localhost:4000/admin/users/reset-device",
+                                  const res = await apiAuthed(
+                                    `/admin/users/reset-device`,
                                     {
+                                      token: accessToken,
                                       method: "POST",
-                                      credentials: "include",
                                       headers: {
                                         "Content-Type": "application/json",
-                                        Authorization: `Bearer ${accessToken}`,
                                       },
                                       body: JSON.stringify({
                                         email: u.email,
@@ -376,6 +360,7 @@ export default function Admin() {
                                       }),
                                     }
                                   );
+
                                   if (!res.ok)
                                     return setMsg("Failed to reset device");
                                   await load();

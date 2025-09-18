@@ -1,15 +1,17 @@
-// const API = "http://localhost:4000";
-const API = "https://adlmweb.onrender.com";
+// src/api.js
+import { API_BASE } from "./config";
 
-export async function api(path, opts = {}) {
-  const res = await fetch(API + path, {
+export async function api(path, init = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
-    ...opts,
+    headers: { "Content-Type": "application/json", ...(init.headers || {}) },
+    ...init,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Request failed");
+    const { error } = await res
+      .json()
+      .catch(() => ({ error: "Request failed" }));
+    throw new Error(error || "Request failed");
   }
   return res.json();
 }
