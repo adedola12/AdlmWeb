@@ -163,19 +163,52 @@ router.post("/login", async (req, res) => {
       await user.save();
     }
 
-    // Per-product device binding (if plugin passes productKey + fingerprint)
-    if (productKey && device_fingerprint) {
+    // // Per-product device binding (if plugin passes productKey + fingerprint)
+    // if (productKey && device_fingerprint) {
+    //   const ent = (user.entitlements || []).find(
+    //     (e) => e.productKey === productKey
+    //   );
+    //   if (ent) {
+    //     if (!ent.deviceFingerprint) {
+    //       ent.deviceFingerprint = String(device_fingerprint);
+    //       ent.deviceBoundAt = new Date();
+    //       await user.save();
+    //     } else if (ent.deviceFingerprint !== String(device_fingerprint)) {
+    //       return res.status(403).json({
+    //         error: `This ${productKey} subscription is already bound to another device.`,
+    //         code: "PRODUCT_DEVICE_MISMATCH",
+    //       });
+    //     }
+    //   }
+    // }
+
+    // ⛔ Strict plugin path: require active entitlement for productKey
+    if (productKey) {
       const ent = (user.entitlements || []).find(
         (e) => e.productKey === productKey
       );
-      if (ent) {
+      const active =
+        ent &&
+        ent.status === "active" &&
+        ent.expiresAt &&
+        new Date(ent.expiresAt) > new Date();
+
+      if (!active) {
+        return res.status(403).json({
+          error: `No active subscription for '${productKey}'.`,
+          code: "PRODUCT_NOT_ENTITLED",
+        });
+      }
+
+      // If device_fingerprint provided, enforce binding/lock
+      if (device_fingerprint) {
         if (!ent.deviceFingerprint) {
           ent.deviceFingerprint = String(device_fingerprint);
           ent.deviceBoundAt = new Date();
           await user.save();
         } else if (ent.deviceFingerprint !== String(device_fingerprint)) {
           return res.status(403).json({
-            error: `This ${productKey} subscription is already bound to another device.`,
+            error: `This '${productKey}' subscription is already bound to another device.`,
             code: "PRODUCT_DEVICE_MISMATCH",
           });
         }
