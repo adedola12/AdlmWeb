@@ -19,7 +19,8 @@ const EntitlementSchema = new mongoose.Schema(
 const UserSchema = new mongoose.Schema(
   {
     email: { type: String, index: true, unique: true },
-    username: { type: String, index: true, unique: true, sparse: true }, // NEW
+    username: { type: String, index: true, unique: true, sparse: true },
+    avatarUrl: { type: String }, // ← NEW
     passwordHash: String,
     role: { type: String, enum: ["user", "admin"], default: "user" },
     disabled: { type: Boolean, default: false },

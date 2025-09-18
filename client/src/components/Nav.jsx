@@ -48,6 +48,17 @@ export default function Nav() {
               <Link to="/purchase" className="text-sm">
                 Purchase
               </Link>
+              <Link to="/dashboard" className="text-sm">
+                Dashboard
+              </Link>
+              <Link to="/profile" className="text-sm">
+                Profile
+              </Link>
+              {user.role === "admin" && (
+                <Link to="/admin" className="text-sm">
+                  Admin
+                </Link>
+              )}
               <Link to="/change-password" className="text-sm">
                 Change password
               </Link>
