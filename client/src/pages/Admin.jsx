@@ -1,33 +1,60 @@
+// src/pages/Admin.jsx
 import React from "react";
 import dayjs from "dayjs";
 import { useAuth } from "../store.js";
 
+const MONTH_CHOICES = [
+  { label: "1 month", value: 1 },
+  { label: "6 months", value: 6 },
+  { label: "1 year", value: 12 },
+];
+
 export default function Admin() {
   const { accessToken } = useAuth();
+  const [tab, setTab] = React.useState("pending"); // 'pending' | 'active'
   const [users, setUsers] = React.useState([]);
   const [purchases, setPurchases] = React.useState([]);
+  const [q, setQ] = React.useState(""); // search query
+  const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
 
   async function load() {
-    const [uRes, pRes] = await Promise.all([
-      fetch("http://localhost:4000/admin/users", {
-        credentials: "include",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }),
-      fetch("http://localhost:4000/admin/purchases?status=pending", {
-        credentials: "include",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }),
-    ]);
-    if (!uRes.ok) throw new Error("Failed to load users");
-    if (!pRes.ok) throw new Error("Failed to load purchases");
-    setUsers(await uRes.json());
-    setPurchases(await pRes.json());
+    setLoading(true);
+    setMsg("");
+    try {
+      const qs = q ? `?q=${encodeURIComponent(q)}` : "";
+      const [uRes, pRes] = await Promise.all([
+        fetch(`http://localhost:4000/admin/users${qs}`, {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        fetch("http://localhost:4000/admin/purchases?status=pending", {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+      ]);
+      if (!uRes.ok) throw new Error("Failed to load users");
+      if (!pRes.ok) throw new Error("Failed to load purchases");
+      setUsers(await uRes.json());
+      setPurchases(await pRes.json());
+    } catch (e) {
+      setMsg(e.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   React.useEffect(() => {
-    load().catch((e) => setMsg(e.message));
+    load(); // initial
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // reload when searching (debounced lightly)
+  React.useEffect(() => {
+    const t = setTimeout(load, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   async function updateEntitlement(email, productKey, months = 0, status) {
     setMsg("");
@@ -95,189 +122,282 @@ export default function Admin() {
     setMsg("Purchase rejected");
   }
 
+  // derived: active entitlements (flattened)
+  const activeRows = React.useMemo(() => {
+    const rows = [];
+    users.forEach((u) => {
+      (u.entitlements || []).forEach((e) => {
+        if (e.status === "active") {
+          rows.push({
+            email: u.email,
+            username: u.username,
+            productKey: e.productKey,
+            expiresAt: e.expiresAt,
+            status: e.status,
+          });
+        }
+      });
+    });
+    // local client filter too (in addition to server q)
+    const rx = q ? new RegExp(q, "i") : null;
+    return rx
+      ? rows.filter(
+          (r) =>
+            rx.test(r.email || "") ||
+            rx.test(r.username || "") ||
+            rx.test(r.productKey || "")
+        )
+      : rows;
+  }, [users, q]);
+
   return (
     <div className="space-y-6">
       <div className="card">
-        <h1 className="text-xl font-semibold">Admin</h1>
-        {msg && <div className="text-sm mt-2">{msg}</div>}
-      </div>
-
-      {/* Pending Purchases */}
-      <div className="card">
-        <h2 className="font-semibold mb-3">Pending Purchases</h2>
-        {purchases.length === 0 ? (
-          <div className="text-sm text-slate-600">No pending purchases.</div>
-        ) : (
-          <div className="space-y-2">
-            {purchases.map((p) => (
-              <div
-                key={p._id}
-                className="border rounded p-3 flex items-center justify-between"
-              >
-                <div className="text-sm">
-                  <div>
-                    <b>{p.email}</b> requested <b>{p.productKey}</b>
-                  </div>
-                  <div>
-                    Requested: {p.requestedMonths} mo ·{" "}
-                    {dayjs(p.createdAt).format("YYYY-MM-DD HH:mm")}
-                  </div>
-                </div>
-                <div className="flex gap-2 items-center">
-                  <select
-                    id={`m-${p._id}`}
-                    defaultValue={p.requestedMonths}
-                    className="input"
-                  >
-                    <option value="1">1 month</option>
-                    <option value="6">6 months</option>
-                    <option value="12">1 year</option>
-                  </select>
-                  <button
-                    className="btn"
-                    onClick={() =>
-                      approvePurchase(
-                        p._id,
-                        Number(document.getElementById(`m-${p._id}`).value)
-                      )
-                    }
-                  >
-                    Approve
-                  </button>
-                  <button className="btn" onClick={() => rejectPurchase(p._id)}>
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold">Admin</h1>
+          <div className="flex items-center gap-2">
+            <input
+              className="input"
+              placeholder="Search email / username / product…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <button className="btn btn-sm" onClick={load}>
+              Refresh
+            </button>
           </div>
-        )}
+        </div>
+        {msg && <div className="text-sm mt-2">{msg}</div>}
+
+        {/* Tabs */}
+        <div className="mt-4 border-b">
+          <nav className="flex gap-6">
+            <button
+              onClick={() => setTab("pending")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "pending"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Pending ({purchases.length})
+            </button>
+            <button
+              onClick={() => setTab("active")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "active"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Active subscriptions ({activeRows.length})
+            </button>
+          </nav>
+        </div>
       </div>
 
-      {/* Existing Users/Entitlements UI (unchanged) */}
-      <div className="space-y-3">
-        {users.map((u, idx) => (
-          <div key={idx} className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{u.email}</div>
-                <div className="text-sm text-slate-600">
-                  Role: {u.role} · Disabled: {String(u.disabled)}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="btn"
-                  onClick={() => setDisabled(u.email, !u.disabled)}
-                >
-                  {u.disabled ? "Enable" : "Disable"}
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <div className="text-sm font-medium mb-1">Entitlements</div>
-              {(u.entitlements || []).length === 0 && (
-                <div className="text-sm">None</div>
-              )}
-
-              {(u.entitlements || []).map((e, i) => (
+      {/* === TAB: Pending Purchases === */}
+      {tab === "pending" && (
+        <div className="card">
+          <h2 className="font-semibold mb-3">Pending Purchases</h2>
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : purchases.length === 0 ? (
+            <div className="text-sm text-slate-600">No pending purchases.</div>
+          ) : (
+            <div className="space-y-2">
+              {purchases.map((p) => (
                 <div
-                  key={i}
-                  className="border rounded p-2 mb-2 flex items-center justify-between"
+                  key={p._id}
+                  className="border rounded p-3 flex items-center justify-between"
                 >
                   <div className="text-sm">
                     <div>
-                      {e.productKey} — {e.status}
+                      <b>{p.email}</b> requested <b>{p.productKey}</b>
                     </div>
                     <div>
-                      Expires:{" "}
-                      {e.expiresAt
-                        ? dayjs(e.expiresAt).format("YYYY-MM-DD")
-                        : "-"}
+                      Requested: {p.requestedMonths} mo ·{" "}
+                      {dayjs(p.createdAt).format("YYYY-MM-DD HH:mm")}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    <select
+                      id={`m-${p._id}`}
+                      defaultValue={p.requestedMonths}
+                      className="input max-w-[140px]"
+                    >
+                      {MONTH_CHOICES.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       className="btn"
                       onClick={() =>
-                        updateEntitlement(u.email, e.productKey, 1, "active")
+                        approvePurchase(
+                          p._id,
+                          Number(document.getElementById(`m-${p._id}`).value)
+                        )
                       }
                     >
-                      +1 mo
+                      Approve
                     </button>
                     <button
                       className="btn"
-                      onClick={() =>
-                        updateEntitlement(u.email, e.productKey, 0, "disabled")
-                      }
+                      onClick={() => rejectPurchase(p._id)}
                     >
-                      Disable
-                    </button>
-                    <button
-                      className="btn"
-                      onClick={() =>
-                        updateEntitlement(u.email, e.productKey, 0, "active")
-                      }
-                    >
-                      Activate
-                    </button>
-
-                    <button
-                      className="btn"
-                      onClick={async () => {
-                        setMsg("");
-                        const res = await fetch(
-                          "http://localhost:4000/admin/users/reset-device",
-                          {
-                            method: "POST",
-                            credentials: "include",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: `Bearer ${accessToken}`,
-                            },
-                            body: JSON.stringify({
-                              email: u.email,
-                              productKey: e.productKey,
-                            }),
-                          }
-                        );
-                        if (!res.ok) return setMsg("Failed to reset device");
-                        await load();
-                        setMsg(`Device lock reset for ${e.productKey}`);
-                      }}
-                    >
-                      Reset Device
+                      Reject
                     </button>
                   </div>
                 </div>
               ))}
-
-              <div className="flex gap-2 mt-2">
-                <select id={`p-${idx}`} className="input max-w-xs">
-                  <option value="rategen">rategen</option>
-                  <option value="planswift">planswift</option>
-                  <option value="revit">revit</option>
-                  <option value="mep">revitMep</option>
-                </select>
-                <button
-                  className="btn"
-                  onClick={() =>
-                    updateEntitlement(
-                      u.email,
-                      document.getElementById(`p-${idx}`).value,
-                      1,
-                      "active"
-                    )
-                  }
-                >
-                  Grant +1 mo
-                </button>
-              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </div>
+      )}
+
+      {/* === TAB: Active Subscriptions === */}
+      {tab === "active" && (
+        <div className="card">
+          <h2 className="font-semibold mb-3">Active Subscriptions</h2>
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : activeRows.length === 0 ? (
+            <div className="text-sm text-slate-600">
+              No active subscriptions.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {users.map((u, idx) => {
+                const act = (u.entitlements || []).filter(
+                  (e) => e.status === "active"
+                );
+                if (act.length === 0) return null;
+                return (
+                  <div key={idx} className="border rounded p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold">{u.email}</div>
+                        <div className="text-sm text-slate-600">
+                          {u.username ? `@${u.username} · ` : ""}
+                          Role: {u.role} · Disabled: {String(u.disabled)}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => setDisabled(u.email, !u.disabled)}
+                        >
+                          {u.disabled ? "Enable" : "Disable"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {act.map((e, i) => {
+                        const selId = `renew-${idx}-${i}`;
+                        return (
+                          <div
+                            key={i}
+                            className="border rounded p-2 flex items-center justify-between"
+                          >
+                            <div className="text-sm">
+                              <div className="font-medium">{e.productKey}</div>
+                              <div className="text-slate-600">
+                                Expires:{" "}
+                                {e.expiresAt
+                                  ? dayjs(e.expiresAt).format("YYYY-MM-DD")
+                                  : "-"}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <select
+                                id={selId}
+                                className="input max-w-[140px]"
+                              >
+                                {MONTH_CHOICES.map((m) => (
+                                  <option key={m.value} value={m.value}>
+                                    {m.label}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <button
+                                className="btn btn-sm"
+                                title="Renew selected period"
+                                onClick={() =>
+                                  updateEntitlement(
+                                    u.email,
+                                    e.productKey,
+                                    Number(
+                                      document.getElementById(selId).value
+                                    ),
+                                    "active"
+                                  )
+                                }
+                              >
+                                Renew
+                              </button>
+
+                              <button
+                                className="btn btn-sm"
+                                title="Disable this entitlement"
+                                onClick={() =>
+                                  updateEntitlement(
+                                    u.email,
+                                    e.productKey,
+                                    0,
+                                    "disabled"
+                                  )
+                                }
+                              >
+                                Disable
+                              </button>
+
+                              <button
+                                className="btn btn-sm"
+                                title="Reset device binding"
+                                onClick={async () => {
+                                  setMsg("");
+                                  const res = await fetch(
+                                    "http://localhost:4000/admin/users/reset-device",
+                                    {
+                                      method: "POST",
+                                      credentials: "include",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                        Authorization: `Bearer ${accessToken}`,
+                                      },
+                                      body: JSON.stringify({
+                                        email: u.email,
+                                        productKey: e.productKey,
+                                      }),
+                                    }
+                                  );
+                                  if (!res.ok)
+                                    return setMsg("Failed to reset device");
+                                  await load();
+                                  setMsg(
+                                    `Device lock reset for ${e.productKey}`
+                                  );
+                                }}
+                              >
+                                Reset Device
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
