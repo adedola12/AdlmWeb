@@ -13,7 +13,9 @@ import Purchase from "./pages/Purchase.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Profile from "./pages/Profile.jsx";
+import Learn from "./pages/Learn.jsx";
 import Admin from "./pages/Admin.jsx";
+import AdminLearn from "./pages/AdminLearn.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 
@@ -26,6 +28,7 @@ const router = createBrowserRouter([
       { path: "products", element: <Products /> },
       { path: "login", element: <Login /> },
       { path: "signup", element: <Signup /> },
+      { path: "learn", element: <Learn /> },
       {
         path: "purchase",
         element: (
@@ -63,6 +66,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <Admin />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/learn",
+        element: (
+          <AdminRoute>
+            <AdminLearn />
           </AdminRoute>
         ),
       },

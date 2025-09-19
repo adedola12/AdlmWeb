@@ -11,6 +11,8 @@ import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
 import adminRoutes from "./routes/admin.js";
 import purchaseRoutes from "./routes/purchase.js";
+import learnPublic from "./routes/Learn.js";
+import adminLearn from "./routes/admin.learn.js";
 
 const app = express();
 
@@ -68,6 +70,8 @@ app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
 app.use("/admin", adminRoutes);
 app.use("/purchase", purchaseRoutes);
+app.use("/learn", learnPublic);          // public GETs
+app.use("/admin/learn", adminLearn);     // admin-only CRUD
 
 /* ───────── CORS error helper (nice message instead of crash) ───────── */
 app.use((err, _req, res, next) => {
