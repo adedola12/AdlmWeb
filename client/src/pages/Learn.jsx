@@ -3,6 +3,15 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config";
 
+// Client-side preview helper (delivery transform). No server import needed.
+function makePreviewUrl(url, seconds = 60, startAt = 0) {
+  if (!url) return url;
+  return url.replace(
+    /\/upload\/(?!.*\/upload\/)/,
+    `/upload/so_${startAt},du_${seconds}/`
+  );
+}
+
 function YtThumb({ id, title, thumbnailUrl }) {
   const src = thumbnailUrl || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
   const href = `https://www.youtube.com/watch?v=${id}`;
@@ -21,13 +30,16 @@ function YtThumb({ id, title, thumbnailUrl }) {
 }
 
 function PaidCourseCard({ course }) {
+  // If you uploaded a full video, this shows a trimmed 60s preview at delivery.
+  const previewSrc = makePreviewUrl(course.previewUrl, 60, 0);
+
   return (
     <div className="card">
       <h3 className="text-lg font-semibold mb-3">{course.title}</h3>
       <div className="rounded-xl overflow-hidden border">
         <video
           className="w-full aspect-video"
-          src={course.previewUrl}
+          src={previewSrc || course.previewUrl}
           controls
           preload="metadata"
         />
@@ -73,7 +85,13 @@ export default function Learn() {
   async function loadFree(page = 1) {
     setLoadingFree(true);
     try {
-      const res = await fetch(`${API_BASE}/learn/free?page=${page}&pageSize=5`);
+      const res = await fetch(
+        `${API_BASE}/learn/free?page=${page}&pageSize=5`,
+        {
+          credentials: "include",
+        }
+      );
+      if (!res.ok) throw new Error(`Free videos: ${res.status}`);
       const data = await res.json();
       setFree(data);
     } finally {
@@ -84,9 +102,12 @@ export default function Learn() {
   async function loadCourses() {
     setLoadingCourses(true);
     try {
-      const res = await fetch(`${API_BASE}/learn/courses`);
+      const res = await fetch(`${API_BASE}/learn/courses`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Courses: ${res.status}`);
       const data = await res.json();
-      setCourses(data);
+      setCourses(data || []);
     } finally {
       setLoadingCourses(false);
     }
@@ -122,6 +143,9 @@ export default function Learn() {
                   thumbnailUrl={v.thumbnailUrl}
                 />
               ))}
+              {free.items.length === 0 && (
+                <div className="text-sm text-slate-600">No videos yet.</div>
+              )}
             </div>
 
             <div className="mt-4 flex items-center justify-between">
@@ -152,8 +176,10 @@ export default function Learn() {
         <h2 className="text-xl font-semibold">Paid Courses</h2>
         {loadingCourses ? (
           <div className="text-sm text-slate-600">Loading…</div>
-        ) : (
+        ) : courses.length ? (
           courses.map((c) => <PaidCourseCard key={c._id} course={c} />)
+        ) : (
+          <div className="text-sm text-slate-600">No courses yet.</div>
         )}
       </section>
     </div>

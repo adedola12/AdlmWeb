@@ -8,6 +8,8 @@ export default function AdminLearn() {
   const [free, setFree] = React.useState([]);
   const [courses, setCourses] = React.useState([]);
   const [msg, setMsg] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const previewUrlInputRef = React.useRef(null); // to populate after upload
 
   async function load() {
     setMsg("");
@@ -25,6 +27,7 @@ export default function AdminLearn() {
 
   React.useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ------- Free videos ------- */
@@ -112,6 +115,72 @@ export default function AdminLearn() {
     await load();
   }
 
+  // ---- Cloudinary helpers ----
+
+  // Upload a local file using signed client upload
+  async function uploadPreviewFromFile(file) {
+    if (!file) return;
+    setUploading(true);
+    setMsg("");
+    try {
+      const sig = await apiAuthed(`/admin/media/sign`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource_type: "video" }),
+      });
+
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("api_key", sig.api_key);
+      fd.append("timestamp", sig.timestamp);
+      fd.append("signature", sig.signature);
+      fd.append("folder", sig.folder);
+      fd.append("resource_type", sig.resource_type);
+      if (sig.public_id) fd.append("public_id", sig.public_id);
+      if (sig.eager) fd.append("eager", sig.eager);
+
+      const cloudUrl = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${sig.resource_type}/upload`;
+      const upRes = await fetch(cloudUrl, { method: "POST", body: fd }).then(
+        (r) => r.json()
+      );
+      if (upRes.error) throw new Error(upRes.error.message || "Upload failed");
+
+      // Auto-fill the preview URL field
+      if (previewUrlInputRef.current) {
+        previewUrlInputRef.current.value = upRes.secure_url;
+      }
+      setMsg("Preview uploaded to Cloudinary.");
+    } catch (e) {
+      setMsg(e.message || "Upload error");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // Ingest a remote MP4 URL server-side
+  async function uploadPreviewFromUrl(remoteUrl) {
+    if (!remoteUrl) return;
+    setUploading(true);
+    setMsg("");
+    try {
+      const out = await apiAuthed(`/admin/media/upload-url`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: remoteUrl }),
+      });
+      if (previewUrlInputRef.current) {
+        previewUrlInputRef.current.value = out.secure_url;
+      }
+      setMsg("Remote preview ingested to Cloudinary.");
+    } catch (e) {
+      setMsg(e.message || "Upload error");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="card">
@@ -164,6 +233,7 @@ export default function AdminLearn() {
               </div>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   className="btn btn-sm"
                   onClick={() =>
                     saveFree({ ...v, isPublished: !v.isPublished })
@@ -171,12 +241,19 @@ export default function AdminLearn() {
                 >
                   {v.isPublished ? "Unpublish" : "Publish"}
                 </button>
-                <button className="btn btn-sm" onClick={() => delFree(v._id)}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => delFree(v._id)}
+                >
                   Delete
                 </button>
               </div>
             </div>
           ))}
+          {!free.length && (
+            <div className="text-sm text-slate-600">No videos yet.</div>
+          )}
         </div>
       </div>
 
@@ -192,12 +269,42 @@ export default function AdminLearn() {
             required
           />
           <input name="title" className="input" placeholder="Title" required />
-          <input
-            name="previewUrl"
-            className="input"
-            placeholder="Preview video URL (MP4, HLS, etc.)"
-            required
-          />
+
+          <div className="sm:col-span-2 grid gap-2">
+            <input
+              name="previewUrl"
+              className="input"
+              placeholder="Preview video URL (MP4, etc.)"
+              ref={previewUrlInputRef}
+              required
+            />
+            <div className="flex flex-wrap gap-2">
+              <label className="btn btn-sm cursor-pointer">
+                Upload file
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => uploadPreviewFromFile(e.target.files?.[0])}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={uploading}
+                onClick={() => {
+                  const u = prompt("Remote video URL to ingest (mp4/webm) ?");
+                  if (u) uploadPreviewFromUrl(u);
+                }}
+              >
+                Ingest remote URL
+              </button>
+              {uploading && (
+                <span className="text-sm text-slate-600">Uploading…</span>
+              )}
+            </div>
+          </div>
+
           <input
             name="sort"
             type="number"
@@ -236,6 +343,7 @@ export default function AdminLearn() {
                 </div>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     className="btn btn-sm"
                     onClick={() =>
                       saveCourse({ ...c, isPublished: !c.isPublished })
@@ -244,6 +352,7 @@ export default function AdminLearn() {
                     {c.isPublished ? "Unpublish" : "Publish"}
                   </button>
                   <button
+                    type="button"
                     className="btn btn-sm"
                     onClick={() => delCourse(c._id)}
                   >
@@ -261,6 +370,9 @@ export default function AdminLearn() {
               )}
             </div>
           ))}
+          {!courses.length && (
+            <div className="text-sm text-slate-600">No courses yet.</div>
+          )}
         </div>
       </div>
     </div>
