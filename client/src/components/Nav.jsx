@@ -1,7 +1,7 @@
 // src/components/Nav.jsx
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../store.js";
+import { useAuth } from "../store.jsx";
 import { api } from "../api.js";
 
 export default function Nav() {
