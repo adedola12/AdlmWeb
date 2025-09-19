@@ -2,9 +2,11 @@
 import React from "react";
 import { useAuth } from "../store.js";
 import { api } from "../api.js";
+import { apiAuthed } from "../http.js";
+import { useAuth } from "../store.js";
 
 export default function Profile() {
-  const { user, setAuth } = useAuth();
+  const { user, setAuth, accessToken } = useAuth();
   const [username, setUsername] = React.useState(user?.username || "");
   const [avatarUrl, setAvatarUrl] = React.useState(user?.avatarUrl || "");
   const [msg, setMsg] = React.useState("");
@@ -12,7 +14,7 @@ export default function Profile() {
   React.useEffect(() => {
     (async () => {
       try {
-        const res = await api("/me/profile");
+        const res = await apiAuthed("/me/profile", { token: accessToken });
         setUsername(res.username || "");
         setAvatarUrl(res.avatarUrl || "");
       } catch {}
@@ -23,8 +25,10 @@ export default function Profile() {
     e.preventDefault();
     setMsg("");
     try {
-      const res = await api("/me/profile", {
+      const res = await apiAuthed("/me/profile", {
+        token: accessToken,
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, avatarUrl }),
       });
       // persist the updated user in the auth store
@@ -75,6 +79,10 @@ export default function Profile() {
             </p>
           </div>
           {msg && <div className="text-sm">{msg}</div>}
+          {!accessToken && (
+            <div className="text-sm text-red-600">Missing access token</div>
+          )}
+
           <button className="btn w-full">Save</button>
         </form>
       </div>
