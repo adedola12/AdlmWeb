@@ -31,6 +31,9 @@ export default function Nav() {
           <Link to="/products" className="text-sm">
             Products
           </Link>
+          <Link to="/learn" className="text-sm">
+            Learn
+          </Link>
 
           {!user && (
             <div className="flex items-center gap-5">
@@ -70,9 +73,6 @@ export default function Nav() {
                   Admin
                 </Link>
               )}
-              <Link to="/change-password" className="text-sm">
-                Change password
-              </Link>
               <button onClick={logout} className="btn btn-sm">
                 Logout
               </button>
