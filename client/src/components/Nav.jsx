@@ -33,7 +33,7 @@ export default function Nav() {
           </Link>
 
           {!user && (
-            <div>
+            <div className="flex items-center gap-5">
               <Link
                 to={`/login?next=${encodeURIComponent(
                   loc.pathname + loc.search
