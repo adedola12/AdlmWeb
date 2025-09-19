@@ -33,14 +33,25 @@ export default function Nav() {
           </Link>
 
           {!user && (
-            <Link
-              to={`/login?next=${encodeURIComponent(
-                loc.pathname + loc.search
-              )}`}
-              className="text-sm"
-            >
-              Sign in
-            </Link>
+            <div>
+              <Link
+                to={`/login?next=${encodeURIComponent(
+                  loc.pathname + loc.search
+                )}`}
+                className="text-sm"
+              >
+                Sign in
+              </Link>
+
+              <Link
+                to={`/signup?next=${encodeURIComponent(
+                  loc.pathname + loc.search
+                )}`}
+                className="text-sm"
+              >
+                Sign up
+              </Link>
+            </div>
           )}
 
           {user && (
