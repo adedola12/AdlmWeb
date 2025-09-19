@@ -1,7 +1,7 @@
 // src/pages/Admin.jsx
 import React from "react";
 import dayjs from "dayjs";
-import { useAuth } from "../store.js";
+import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
 const MONTH_CHOICES = [

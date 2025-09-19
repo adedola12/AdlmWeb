@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
-import { useAuth } from "../store.js";
+import { useAuth } from "../store.jsx";
 
 export default function Signup() {
   const nav = useNavigate();

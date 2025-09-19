@@ -1,7 +1,7 @@
 // src/pages/Products.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../store.js";
+import { useAuth } from "../store.jsx";
 
 const products = [
   {

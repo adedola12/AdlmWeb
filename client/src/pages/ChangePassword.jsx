@@ -1,6 +1,6 @@
 import React from "react";
 import { api } from "../api.js";
-import { useAuth } from "../store.js";
+import { useAuth } from "../store.jsx";
 
 export default function ChangePassword() {
   const { user } = useAuth();

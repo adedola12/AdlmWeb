@@ -1,7 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
-import dayjs from "dayjs";
 import { User } from "../models/User.js";
 import { hashPassword, verifyPassword } from "../util/hash.js";
 import {
@@ -12,11 +11,14 @@ import {
 const router = express.Router();
 router.use(cookieParser());
 
-const ACCESS_TTL_MIN = 15;
+const ACCESS_TTL_MIN = 60; // 1 hour if you want longer sessions
 const LICENSE_TTL_DAYS = 15;
+
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "dev_access_secret";
+const JWT_REFRESH_SECRET =
+  process.env.JWT_REFRESH_SECRET || "dev_refresh_secret";
 const JWT_LICENSE_SECRET =
-  process.env.JWT_LICENSE_SECRET || "super_license_secret_change_me";
+  process.env.JWT_LICENSE_SECRET || "dev_license_secret";
 
 function signAccessToken(user) {
   return jwt.sign(
@@ -31,7 +33,6 @@ function signAccessToken(user) {
   );
 }
 
-// licenseToken carries all entitlements, and for each product includes its own dfp
 function signLicenseToken(user) {
   const ent = {};
   (user.entitlements || []).forEach((e) => {
@@ -47,14 +48,12 @@ function signLicenseToken(user) {
       email: user.email,
       username: user.username,
       entitlements: ent,
-      iat: Math.floor(Date.now() / 1000),
     },
     JWT_LICENSE_SECRET,
     { expiresIn: `${LICENSE_TTL_DAYS}d` }
   );
 }
 
-// auth middleware (unchanged)
 export async function requireAuth(req, res, next) {
   try {
     const hdr = req.headers.authorization || "";
@@ -75,17 +74,15 @@ export async function requireAuth(req, res, next) {
   }
 }
 
-// wherever you define setRefreshCookie
 function setRefreshCookie(res, token) {
   const isProd = process.env.NODE_ENV === "production";
   res.cookie("refreshToken", token, {
     httpOnly: true,
     sameSite: isProd ? "none" : "lax",
-    secure: isProd,               // must be true for SameSite=None
-    maxAge: 1000 * 60 * 60 * 24 * 30,
+    secure: isProd,
+    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
   });
 }
-
 
 // ---------- SIGNUP ----------
 router.post("/signup", async (req, res) => {
@@ -111,7 +108,7 @@ router.post("/signup", async (req, res) => {
     const accessToken = signAccessToken(user);
     const refreshToken = jwt.sign(
       { sub: user._id.toString(), v: user.refreshVersion },
-      JWT_ACCESS_SECRET,
+      JWT_REFRESH_SECRET,
       { expiresIn: "30d" }
     );
     setRefreshCookie(res, refreshToken);
@@ -127,24 +124,12 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-/**
- * POST /auth/login
- * Body: { email, password, productKey?, device_fingerprint? }
- * When productKey+device_fingerprint are present (plugins), bind or enforce per-product device lock.
- */
-// ---------- LOGIN (identifier = username OR email) ----------
-/**
- * Body:
- *   identifier  (username OR email)   <-- NEW
- *   password
- *   productKey?             (from plugin)
- *   device_fingerprint?     (from plugin)
- */
+// ---------- LOGIN (email or username) ----------
 router.post("/login", async (req, res) => {
   try {
     const { identifier, email, password, productKey, device_fingerprint } =
       req.body || {};
-    const id = identifier || email; // backwards-compat with older clients
+    const id = identifier || email;
     if (!id || !password)
       return res
         .status(400)
@@ -159,69 +144,18 @@ router.post("/login", async (req, res) => {
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Backfill username if missing
     if (!user.username) {
       const base = deriveUsernameFromEmail(user.email);
       user.username = await ensureUniqueUsername(base, User);
       await user.save();
     }
 
-    // // Per-product device binding (if plugin passes productKey + fingerprint)
-    // if (productKey && device_fingerprint) {
-    //   const ent = (user.entitlements || []).find(
-    //     (e) => e.productKey === productKey
-    //   );
-    //   if (ent) {
-    //     if (!ent.deviceFingerprint) {
-    //       ent.deviceFingerprint = String(device_fingerprint);
-    //       ent.deviceBoundAt = new Date();
-    //       await user.save();
-    //     } else if (ent.deviceFingerprint !== String(device_fingerprint)) {
-    //       return res.status(403).json({
-    //         error: `This ${productKey} subscription is already bound to another device.`,
-    //         code: "PRODUCT_DEVICE_MISMATCH",
-    //       });
-    //     }
-    //   }
-    // }
-
-    // ⛔ Strict plugin path: require active entitlement for productKey
-    if (productKey) {
-      const ent = (user.entitlements || []).find(
-        (e) => e.productKey === productKey
-      );
-      const active =
-        ent &&
-        ent.status === "active" &&
-        ent.expiresAt &&
-        new Date(ent.expiresAt) > new Date();
-
-      if (!active) {
-        return res.status(403).json({
-          error: `No active subscription for '${productKey}'.`,
-          code: "PRODUCT_NOT_ENTITLED",
-        });
-      }
-
-      // If device_fingerprint provided, enforce binding/lock
-      if (device_fingerprint) {
-        if (!ent.deviceFingerprint) {
-          ent.deviceFingerprint = String(device_fingerprint);
-          ent.deviceBoundAt = new Date();
-          await user.save();
-        } else if (ent.deviceFingerprint !== String(device_fingerprint)) {
-          return res.status(403).json({
-            error: `This '${productKey}' subscription is already bound to another device.`,
-            code: "PRODUCT_DEVICE_MISMATCH",
-          });
-        }
-      }
-    }
+    // (optional) plugin/device checks here...
 
     const accessToken = signAccessToken(user);
     const refreshToken = jwt.sign(
       { sub: user._id.toString(), v: user.refreshVersion },
-      JWT_ACCESS_SECRET,
+      JWT_REFRESH_SECRET,
       { expiresIn: "30d" }
     );
     setRefreshCookie(res, refreshToken);
@@ -237,11 +171,39 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.post("/refresh", requireAuth, async (req, res) => {
-  const accessToken = signAccessToken(req.user);
-  // license token also re-issued so plugins can refresh offline window
-  const licenseToken = signLicenseToken(req.user);
-  return res.json({ accessToken, licenseToken });
+// ---------- REFRESH via cookie (NO requireAuth) ----------
+router.post("/refresh", async (req, res) => {
+  try {
+    const rt = req.cookies?.refreshToken;
+    if (!rt) return res.status(401).json({ error: "No refresh token" });
+
+    const payload = jwt.verify(rt, JWT_REFRESH_SECRET); // { sub, v }
+    const user = await User.findById(payload.sub);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    if (user.disabled)
+      return res.status(403).json({ error: "Account disabled" });
+    if (payload.v !== user.refreshVersion)
+      return res.status(401).json({ error: "Session invalidated" });
+
+    // rotate refresh token
+    const newRefreshToken = jwt.sign(
+      { sub: user._id.toString(), v: user.refreshVersion },
+      JWT_REFRESH_SECRET,
+      { expiresIn: "30d" }
+    );
+    setRefreshCookie(res, newRefreshToken);
+
+    const accessToken = signAccessToken(user);
+    const licenseToken = signLicenseToken(user);
+
+    return res.json({
+      accessToken,
+      licenseToken,
+      user: { email: user.email, username: user.username, role: user.role },
+    });
+  } catch {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 });
 
 router.post("/logout", (_req, res) => {

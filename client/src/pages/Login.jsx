@@ -2,7 +2,7 @@
 import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
-import { useAuth } from "../store.js";
+import { useAuth } from "../store.jsx";
 
 export default function Login() {
   const nav = useNavigate();

@@ -1,6 +1,6 @@
 // src/pages/Profile.jsx
 import React from "react";
-import { useAuth } from "../store.js";
+import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
 export default function Profile() {
