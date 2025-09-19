@@ -1,9 +1,7 @@
 // src/pages/Profile.jsx
 import React from "react";
 import { useAuth } from "../store.js";
-import { api } from "../api.js";
 import { apiAuthed } from "../http.js";
-import { useAuth } from "../store.js";
 
 export default function Profile() {
   const { user, setAuth, accessToken } = useAuth();
@@ -12,14 +10,17 @@ export default function Profile() {
   const [msg, setMsg] = React.useState("");
 
   React.useEffect(() => {
+    if (!accessToken) return;
     (async () => {
       try {
         const res = await apiAuthed("/me/profile", { token: accessToken });
         setUsername(res.username || "");
         setAvatarUrl(res.avatarUrl || "");
-      } catch {}
+      } catch (e) {
+        setMsg(e.message);
+      }
     })();
-  }, []);
+  }, [accessToken]);
 
   async function save(e) {
     e.preventDefault();
@@ -67,23 +68,29 @@ export default function Profile() {
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
+
           <div>
             <label className="form-label">Profile image URL</label>
             <input
               className="input"
               value={avatarUrl}
               onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="(Optional) Paste a link to an image hosted online."
             />
-            <p className="text-xs text-slate-500 mt-1">
-              (Optional) Paste a link to an image hosted online.
-            </p>
           </div>
+
           {msg && <div className="text-sm">{msg}</div>}
           {!accessToken && (
             <div className="text-sm text-red-600">Missing access token</div>
           )}
 
-          <button className="btn w-full">Save</button>
+          <button
+            className="btn w-full"
+            disabled={!accessToken}
+            title={!accessToken ? "Sign in again to update profile" : ""}
+          >
+            Save
+          </button>
         </form>
       </div>
 
@@ -96,7 +103,6 @@ export default function Profile() {
           <a href="/login?reset=1" className="btn">
             Forgot password
           </a>
-          {/* hook this to a real reset flow later */}
         </div>
       </div>
     </div>
