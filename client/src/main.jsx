@@ -1,11 +1,10 @@
 // src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createHashRouter, RouterProvider } from "react-router-dom";
-
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { AuthProvider } from "./store.jsx"; // <<< important
 import App from "./App.jsx";
 import "./index.css";
-
 import Home from "./pages/Home.jsx";
 import Products from "./pages/Products.jsx";
 import Login from "./pages/Login.jsx";
@@ -15,12 +14,10 @@ import ChangePassword from "./pages/ChangePassword.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Profile from "./pages/Profile.jsx";
 import Admin from "./pages/Admin.jsx";
-
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 
-// Use hash routing so refreshes on Vercel don't 404
-const router = createHashRouter([
+const router = createBrowserRouter([
   {
     path: "/",
     element: <App />,
@@ -29,7 +26,6 @@ const router = createHashRouter([
       { path: "products", element: <Products /> },
       { path: "login", element: <Login /> },
       { path: "signup", element: <Signup /> },
-
       {
         path: "purchase",
         element: (
@@ -62,8 +58,6 @@ const router = createHashRouter([
           </ProtectedRoute>
         ),
       },
-
-      // Admin only
       {
         path: "admin",
         element: (
@@ -78,6 +72,8 @@ const router = createHashRouter([
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   </React.StrictMode>
 );
