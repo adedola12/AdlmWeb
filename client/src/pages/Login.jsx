@@ -1,4 +1,3 @@
-// src/pages/Login.jsx  (only the submit + useEffect changes shown)
 import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
@@ -13,14 +12,18 @@ export default function Login() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [err, setErr] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
 
   async function submit(e) {
     e.preventDefault();
+    if (loading) return;
     setErr("");
+    setLoading(true);
     try {
+      // server accepts identifier OR email; identifier also allows username logins
       const res = await api("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier: email.trim(), password }),
       });
       setAuth({
         user: res.user,
@@ -30,6 +33,8 @@ export default function Login() {
       nav(next, { replace: true });
     } catch (e) {
       setErr(e.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -39,9 +44,11 @@ export default function Login() {
       <form onSubmit={submit} className="space-y-3">
         <input
           className="input"
-          placeholder="Email"
+          placeholder="Email or username"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="username"
         />
         <input
           className="input"
@@ -49,9 +56,13 @@ export default function Login() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="current-password"
         />
         {err && <div className="text-red-600 text-sm">{err}</div>}
-        <button className="btn w-full">Sign in</button>
+        <button className="btn w-full" disabled={loading}>
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
       </form>
     </div>
   );
