@@ -13,7 +13,7 @@ import adminRoutes from "./routes/admin.js";
 import purchaseRoutes from "./routes/purchase.js";
 import learnPublic from "./routes/Learn.js";
 import adminLearn from "./routes/admin.learn.js";
-import adminMediaRoutes from "./routes/admin.media.js"; // <-- FIX: correct file
+import adminMediaRoutes from "./routes/admin.media.js"; // ✅ correct import
 
 const app = express();
 app.set("trust proxy", 1);
@@ -28,42 +28,43 @@ const whitelist = (process.env.CORS_ORIGINS || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-const corsOptions = {
-  origin(origin, cb) {
-    if (!origin) return cb(null, true);
-    if (whitelist.includes(origin)) return cb(null, true);
-    if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
-    if (/\.vercel\.app$/.test(origin)) return cb(null, true);
-    return cb(new Error(`Not allowed by CORS: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
-app.use(cors(corsOptions));
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin) return cb(null, true);
+      if (whitelist.includes(origin)) return cb(null, true);
+      if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
+      if (/\.vercel\.app$/.test(origin)) return cb(null, true);
+      cb(new Error(`Not allowed by CORS: ${origin}`));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 app.get("/", (_req, res) =>
   res.json({ ok: true, service: "ADLM Auth/Licensing" })
 );
 
-// Mount routes
+// Mount
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
 app.use("/admin", adminRoutes);
 app.use("/purchase", purchaseRoutes);
-app.use("/learn", learnPublic); // public GETs
-app.use("/admin/learn", adminLearn); // admin-only CRUD
-app.use("/admin/media", adminMediaRoutes); // <-- FIX: this now exists
+app.use("/learn", learnPublic);
+app.use("/admin/learn", adminLearn);
+app.use("/admin/media", adminMediaRoutes); // ✅ ensures /admin/media/sign exists
 
-// CORS helper
+// CORS error helper
 app.use((err, _req, res, next) => {
   if (err && /Not allowed by CORS/.test(err.message)) {
     return res.status(403).json({ error: err.message });
   }
-  return next(err);
+  next(err);
 });
 
-// 404 + error
+// 404 + generic
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 app.use((err, _req, res, _next) => {
   console.error(err);
@@ -72,9 +73,7 @@ app.use((err, _req, res, _next) => {
 
 const port = process.env.PORT || 4000;
 connectDB(process.env.MONGO_URI)
-  .then(() => {
-    app.listen(port, () => console.log(`Server running on :${port}`));
-  })
+  .then(() => app.listen(port, () => console.log(`Server running on :${port}`)))
   .catch((err) => {
     console.error("DB error", err);
     process.exit(1);

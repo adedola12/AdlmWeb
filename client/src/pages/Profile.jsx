@@ -95,9 +95,17 @@ export default function Profile() {
             Forgot password
           </a>
           {user?.role === "admin" && (
-            <a href="/admin/learn" className="btn">
-              Manage videos
-            </a>
+            <div className="card">
+              <h2 className="font-semibold mb-3">Admin tools</h2>
+              <div className="flex gap-2">
+                <a href="/admin" className="btn">
+                  Admin dashboard
+                </a>
+                <a href="/admin-learn" className="btn">
+                  Video upload / courses
+                </a>
+              </div>
+            </div>
           )}
         </div>
       </div>

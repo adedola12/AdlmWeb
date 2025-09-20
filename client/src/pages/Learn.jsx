@@ -1,9 +1,8 @@
-// src/pages/Learn.jsx
 import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config";
 
-// Build a 60s preview from a Cloudinary URL (delivery transform)
+// Client-side delivery transformation for 60s preview
 function makePreviewUrl(url, seconds = 60, startAt = 0) {
   if (!url) return url;
   return url.replace(
@@ -12,36 +11,12 @@ function makePreviewUrl(url, seconds = 60, startAt = 0) {
   );
 }
 
-// Accept either a full YT URL or a plain ID, and normalize
-function parseYouTube(input) {
-  if (!input) return { id: "", href: "", thumb: "" };
-  let id = input.trim();
-
-  // full URL forms: youtu.be/<id>, youtube.com/watch?v=<id>, /embed/<id>, etc.
-  try {
-    const u = new URL(id);
-    if (u.host.includes("youtu.be")) id = u.pathname.slice(1);
-    else if (u.searchParams.get("v")) id = u.searchParams.get("v");
-    else {
-      // /embed/<id> or /v/<id>
-      const m = u.pathname.match(/\/(embed|v)\/([^/?#]+)/);
-      if (m) id = m[2];
-    }
-  } catch {
-    // not a URL → assume raw ID
-  }
-
+function YtThumb({ id, title, thumbnailUrl }) {
+  const src = thumbnailUrl || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
   const href = `https://www.youtube.com/watch?v=${id}`;
-  const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-  return { id, href, thumb };
-}
-
-function YtThumb({ youtubeIdOrUrl, title, thumbnailUrl }) {
-  const norm = parseYouTube(youtubeIdOrUrl);
-  const src = thumbnailUrl || norm.thumb;
   return (
     <a
-      href={norm.href}
+      href={href}
       target="_blank"
       rel="noreferrer"
       className="group block rounded-xl overflow-hidden border hover:shadow transition"
@@ -66,6 +41,7 @@ function PaidCourseCard({ course }) {
           preload="metadata"
         />
       </div>
+
       {!!(course.bullets || []).length && (
         <ul className="mt-4 space-y-1 text-sm list-disc pl-5">
           {course.bullets.map((b, i) => (
@@ -73,11 +49,13 @@ function PaidCourseCard({ course }) {
           ))}
         </ul>
       )}
+
       {course.description && (
         <p className="text-sm text-slate-700 mt-3 whitespace-pre-line">
           {course.description}
         </p>
       )}
+
       <div className="mt-4">
         <Link
           to={`/purchase?product=${encodeURIComponent(course.sku)}&months=12`}
@@ -109,13 +87,11 @@ export default function Learn() {
         { credentials: "include" }
       );
       if (!res.ok) throw new Error(`Free videos: ${res.status}`);
-      const data = await res.json();
-      setFree(data);
+      setFree(await res.json());
     } finally {
       setLoadingFree(false);
     }
   }
-
   async function loadCourses() {
     setLoadingCourses(true);
     try {
@@ -123,8 +99,7 @@ export default function Learn() {
         credentials: "include",
       });
       if (!res.ok) throw new Error(`Courses: ${res.status}`);
-      const data = await res.json();
-      setCourses(data || []);
+      setCourses(await res.json());
     } finally {
       setLoadingCourses(false);
     }
@@ -134,7 +109,6 @@ export default function Learn() {
     loadFree(1);
     loadCourses();
   }, []);
-
   const hasPrev = free.page > 1;
   const hasNext = free.page * free.pageSize < free.total;
 
@@ -154,16 +128,15 @@ export default function Learn() {
               {free.items.map((v) => (
                 <YtThumb
                   key={v._id}
-                  youtubeIdOrUrl={v.youtubeId} // can be ID or full URL now
+                  id={v.youtubeId}
                   title={v.title}
                   thumbnailUrl={v.thumbnailUrl}
                 />
               ))}
-              {!free.items.length && (
+              {free.items.length === 0 && (
                 <div className="text-sm text-slate-600">No videos yet.</div>
               )}
             </div>
-
             <div className="mt-4 flex items-center justify-between">
               <button
                 className="btn btn-sm"

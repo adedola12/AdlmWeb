@@ -1,9 +1,8 @@
-// src/pages/AdminLearn.jsx
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
-// normalize any YT input into just an ID before saving
+// normalize full YouTube URLs into plain IDs
 function normalizeYouTubeId(input) {
   if (!input) return "";
   let id = String(input).trim();
@@ -40,7 +39,6 @@ export default function AdminLearn() {
       setMsg(e.message);
     }
   }
-
   React.useEffect(() => {
     load(); /* eslint-disable-next-line */
   }, []);
@@ -75,7 +73,6 @@ export default function AdminLearn() {
     });
     await load();
   }
-
   async function delFree(id) {
     await apiAuthed(`/admin/learn/free/${id}`, {
       token: accessToken,
@@ -92,7 +89,6 @@ export default function AdminLearn() {
       .split("\n")
       .map((s) => s.trim())
       .filter(Boolean);
-
     const payload = {
       sku: fd.get("sku"),
       title: fd.get("title"),
@@ -121,7 +117,6 @@ export default function AdminLearn() {
     });
     await load();
   }
-
   async function delCourse(id) {
     await apiAuthed(`/admin/learn/courses/${id}`, {
       token: accessToken,
@@ -140,7 +135,7 @@ export default function AdminLearn() {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resource_type: "video" }), // folder defaults server-side
+        body: JSON.stringify({ resource_type: "video" }),
       });
 
       const fd = new FormData();
@@ -167,7 +162,6 @@ export default function AdminLearn() {
     }
   }
 
-  // Server-side ingestion of a remote MP4/WebM
   async function uploadPreviewFromUrl(remoteUrl) {
     if (!remoteUrl) return;
     setUploading(true);
@@ -200,7 +194,6 @@ export default function AdminLearn() {
       {/* Free videos */}
       <div className="card">
         <h2 className="font-semibold mb-3">Free Videos (YouTube)</h2>
-
         <form onSubmit={addFree} className="grid sm:grid-cols-2 gap-3 mb-4">
           <input name="title" className="input" placeholder="Title" required />
           <input
