@@ -32,7 +32,6 @@ export default function Profile() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, avatarUrl }),
       });
-      // persist the updated user in the auth store
       setAuth((prev) => ({ ...prev, user: { ...prev.user, ...res.user } }));
       setMsg("Profile updated.");
     } catch (e) {
@@ -44,7 +43,6 @@ export default function Profile() {
     <div className="max-w-xl mx-auto space-y-6">
       <div className="card">
         <h1 className="text-xl font-semibold mb-4">Profile</h1>
-
         <div className="flex items-center gap-4 mb-4">
           <img
             src={
@@ -68,34 +66,27 @@ export default function Profile() {
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
-
           <div>
             <label className="form-label">Profile image URL</label>
             <input
               className="input"
               value={avatarUrl}
               onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="(Optional) Paste a link to an image hosted online."
             />
+            <p className="text-xs text-slate-500 mt-1">(Optional)</p>
           </div>
-
           {msg && <div className="text-sm">{msg}</div>}
           {!accessToken && (
             <div className="text-sm text-red-600">Missing access token</div>
           )}
-
-          <button
-            className="btn w-full"
-            disabled={!accessToken}
-            title={!accessToken ? "Sign in again to update profile" : ""}
-          >
+          <button className="btn w-full" disabled={!accessToken}>
             Save
           </button>
         </form>
       </div>
 
       <div className="card">
-        <h2 className="font-semibold mb-3">Security</h2>
+        <h2 className="font-semibold mb-3">Security & Admin</h2>
         <div className="flex gap-2">
           <a href="/change-password" className="btn">
             Change password
@@ -103,6 +94,11 @@ export default function Profile() {
           <a href="/login?reset=1" className="btn">
             Forgot password
           </a>
+          {user?.role === "admin" && (
+            <a href="/admin/learn" className="btn">
+              Manage videos
+            </a>
+          )}
         </div>
       </div>
     </div>
