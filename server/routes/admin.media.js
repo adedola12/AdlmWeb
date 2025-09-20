@@ -5,26 +5,18 @@ import {
   uploadAsset,
   deleteAsset,
   signUploadParams,
-} from "../utils/cloudinary.js";
+} from "../util/cloudinary.js";
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
 
-/**
- * POST /admin/media/sign
- * Body: { folder?, resource_type?, public_id?, eager? }
- * Returns signature so the browser can upload directly to Cloudinary.
- */
+// POST /admin/media/sign  -> signed client upload
 router.post("/sign", (req, res) => {
   const payload = signUploadParams(req.body || {});
   res.json(payload);
 });
 
-/**
- * POST /admin/media/upload-url
- * Body: { url, folder?, publicId?, resourceType? }
- * Server-side ingestion from a remote URL (no file sent from client).
- */
+// POST /admin/media/upload-url  -> server ingests remote url
 router.post("/upload-url", async (req, res) => {
   const { url, folder, publicId, resourceType } = req.body || {};
   if (!url) return res.status(400).json({ error: "url is required" });
@@ -37,10 +29,7 @@ router.post("/upload-url", async (req, res) => {
   res.json(out);
 });
 
-/**
- * POST /admin/media/delete
- * Body: { publicId, resourceType? }
- */
+// POST /admin/media/delete
 router.post("/delete", async (req, res) => {
   const { publicId, resourceType } = req.body || {};
   if (!publicId) return res.status(400).json({ error: "publicId required" });
