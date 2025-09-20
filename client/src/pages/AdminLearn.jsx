@@ -3,13 +3,29 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
+// normalize any YT input into just an ID before saving
+function normalizeYouTubeId(input) {
+  if (!input) return "";
+  let id = String(input).trim();
+  try {
+    const u = new URL(id);
+    if (u.host.includes("youtu.be")) id = u.pathname.slice(1);
+    else if (u.searchParams.get("v")) id = u.searchParams.get("v");
+    else {
+      const m = u.pathname.match(/\/(embed|v)\/([^/?#]+)/);
+      if (m) id = m[2];
+    }
+  } catch {}
+  return id;
+}
+
 export default function AdminLearn() {
   const { accessToken } = useAuth();
   const [free, setFree] = React.useState([]);
   const [courses, setCourses] = React.useState([]);
   const [msg, setMsg] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
-  const previewUrlInputRef = React.useRef(null); // to populate after upload
+  const previewUrlInputRef = React.useRef(null);
 
   async function load() {
     setMsg("");
@@ -26,17 +42,16 @@ export default function AdminLearn() {
   }
 
   React.useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    load(); /* eslint-disable-next-line */
   }, []);
 
-  /* ------- Free videos ------- */
+  // ----- Free videos -----
   async function addFree(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
     const payload = {
       title: fd.get("title"),
-      youtubeId: fd.get("youtubeId"),
+      youtubeId: normalizeYouTubeId(fd.get("youtubeId")),
       thumbnailUrl: fd.get("thumbnailUrl") || undefined,
       isPublished: fd.get("isPublished") === "on",
       sort: Number(fd.get("sort") || 0),
@@ -69,7 +84,7 @@ export default function AdminLearn() {
     await load();
   }
 
-  /* ------- Paid courses ------- */
+  // ----- Paid courses -----
   async function addCourse(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -115,9 +130,7 @@ export default function AdminLearn() {
     await load();
   }
 
-  // ---- Cloudinary helpers ----
-
-  // Upload a local file using signed client upload
+  // ----- Cloudinary: signed client upload -----
   async function uploadPreviewFromFile(file) {
     if (!file) return;
     setUploading(true);
@@ -127,7 +140,7 @@ export default function AdminLearn() {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resource_type: "video" }),
+        body: JSON.stringify({ resource_type: "video" }), // folder defaults server-side
       });
 
       const fd = new FormData();
@@ -136,9 +149,6 @@ export default function AdminLearn() {
       fd.append("timestamp", sig.timestamp);
       fd.append("signature", sig.signature);
       fd.append("folder", sig.folder);
-      fd.append("resource_type", sig.resource_type);
-      if (sig.public_id) fd.append("public_id", sig.public_id);
-      if (sig.eager) fd.append("eager", sig.eager);
 
       const cloudUrl = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${sig.resource_type}/upload`;
       const upRes = await fetch(cloudUrl, { method: "POST", body: fd }).then(
@@ -146,7 +156,6 @@ export default function AdminLearn() {
       );
       if (upRes.error) throw new Error(upRes.error.message || "Upload failed");
 
-      // Auto-fill the preview URL field
       if (previewUrlInputRef.current) {
         previewUrlInputRef.current.value = upRes.secure_url;
       }
@@ -158,7 +167,7 @@ export default function AdminLearn() {
     }
   }
 
-  // Ingest a remote MP4 URL server-side
+  // Server-side ingestion of a remote MP4/WebM
   async function uploadPreviewFromUrl(remoteUrl) {
     if (!remoteUrl) return;
     setUploading(true);
@@ -197,7 +206,7 @@ export default function AdminLearn() {
           <input
             name="youtubeId"
             className="input"
-            placeholder="YouTube ID (e.g. dQw4...)"
+            placeholder="YouTube URL or ID"
             required
           />
           <input
@@ -212,7 +221,7 @@ export default function AdminLearn() {
             placeholder="Sort (higher first)"
           />
           <label className="flex items-center gap-2 text-sm">
-            <input name="isPublished" type="checkbox" defaultChecked />
+            <input name="isPublished" type="checkbox" defaultChecked />{" "}
             Published
           </label>
           <button className="btn">Add video</button>
@@ -293,7 +302,7 @@ export default function AdminLearn() {
                 className="btn btn-sm"
                 disabled={uploading}
                 onClick={() => {
-                  const u = prompt("Remote video URL to ingest (mp4/webm) ?");
+                  const u = prompt("Remote video URL to ingest (mp4/webm)?");
                   if (u) uploadPreviewFromUrl(u);
                 }}
               >
@@ -312,7 +321,7 @@ export default function AdminLearn() {
             placeholder="Sort (higher first)"
           />
           <label className="flex items-center gap-2 text-sm">
-            <input name="isPublished" type="checkbox" defaultChecked />
+            <input name="isPublished" type="checkbox" defaultChecked />{" "}
             Published
           </label>
           <textarea

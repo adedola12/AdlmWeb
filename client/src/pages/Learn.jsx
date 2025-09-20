@@ -3,7 +3,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config";
 
-// Client-side preview helper (delivery transform). No server import needed.
+// Build a 60s preview from a Cloudinary URL (delivery transform)
 function makePreviewUrl(url, seconds = 60, startAt = 0) {
   if (!url) return url;
   return url.replace(
@@ -12,12 +12,36 @@ function makePreviewUrl(url, seconds = 60, startAt = 0) {
   );
 }
 
-function YtThumb({ id, title, thumbnailUrl }) {
-  const src = thumbnailUrl || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+// Accept either a full YT URL or a plain ID, and normalize
+function parseYouTube(input) {
+  if (!input) return { id: "", href: "", thumb: "" };
+  let id = input.trim();
+
+  // full URL forms: youtu.be/<id>, youtube.com/watch?v=<id>, /embed/<id>, etc.
+  try {
+    const u = new URL(id);
+    if (u.host.includes("youtu.be")) id = u.pathname.slice(1);
+    else if (u.searchParams.get("v")) id = u.searchParams.get("v");
+    else {
+      // /embed/<id> or /v/<id>
+      const m = u.pathname.match(/\/(embed|v)\/([^/?#]+)/);
+      if (m) id = m[2];
+    }
+  } catch {
+    // not a URL → assume raw ID
+  }
+
   const href = `https://www.youtube.com/watch?v=${id}`;
+  const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  return { id, href, thumb };
+}
+
+function YtThumb({ youtubeIdOrUrl, title, thumbnailUrl }) {
+  const norm = parseYouTube(youtubeIdOrUrl);
+  const src = thumbnailUrl || norm.thumb;
   return (
     <a
-      href={href}
+      href={norm.href}
       target="_blank"
       rel="noreferrer"
       className="group block rounded-xl overflow-hidden border hover:shadow transition"
@@ -30,9 +54,7 @@ function YtThumb({ id, title, thumbnailUrl }) {
 }
 
 function PaidCourseCard({ course }) {
-  // If you uploaded a full video, this shows a trimmed 60s preview at delivery.
   const previewSrc = makePreviewUrl(course.previewUrl, 60, 0);
-
   return (
     <div className="card">
       <h3 className="text-lg font-semibold mb-3">{course.title}</h3>
@@ -44,7 +66,6 @@ function PaidCourseCard({ course }) {
           preload="metadata"
         />
       </div>
-
       {!!(course.bullets || []).length && (
         <ul className="mt-4 space-y-1 text-sm list-disc pl-5">
           {course.bullets.map((b, i) => (
@@ -52,13 +73,11 @@ function PaidCourseCard({ course }) {
           ))}
         </ul>
       )}
-
       {course.description && (
         <p className="text-sm text-slate-700 mt-3 whitespace-pre-line">
           {course.description}
         </p>
       )}
-
       <div className="mt-4">
         <Link
           to={`/purchase?product=${encodeURIComponent(course.sku)}&months=12`}
@@ -87,9 +106,7 @@ export default function Learn() {
     try {
       const res = await fetch(
         `${API_BASE}/learn/free?page=${page}&pageSize=5`,
-        {
-          credentials: "include",
-        }
+        { credentials: "include" }
       );
       if (!res.ok) throw new Error(`Free videos: ${res.status}`);
       const data = await res.json();
@@ -126,8 +143,7 @@ export default function Learn() {
       <section className="card">
         <h2 className="text-xl font-semibold mb-4">Free Courses (YouTube)</h2>
         <p className="text-sm text-slate-600 mb-4">
-          Watch free tutorials from the ADLM channel. Click any thumbnail to
-          view on YouTube.
+          Watch free tutorials from the ADLM channel.
         </p>
 
         {loadingFree ? (
@@ -138,12 +154,12 @@ export default function Learn() {
               {free.items.map((v) => (
                 <YtThumb
                   key={v._id}
-                  id={v.youtubeId}
+                  youtubeIdOrUrl={v.youtubeId} // can be ID or full URL now
                   title={v.title}
                   thumbnailUrl={v.thumbnailUrl}
                 />
               ))}
-              {free.items.length === 0 && (
+              {!free.items.length && (
                 <div className="text-sm text-slate-600">No videos yet.</div>
               )}
             </div>
