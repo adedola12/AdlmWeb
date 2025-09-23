@@ -124,7 +124,8 @@ export default function AdminLearn() {
     await load();
   }
 
-  // src/pages/AdminLearn.jsx  (only the upload function changed from your last paste)
+  // inside src/pages/AdminLearn.jsx
+
   async function uploadPreviewFromFile(file) {
     if (!file || uploading) return;
     setUploading(true);
@@ -132,36 +133,18 @@ export default function AdminLearn() {
     setMsg("");
 
     try {
-      const auth = await apiAuthed(`/admin/media/sign`, {
-        token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resource_type: "video" }),
-      });
-
+      // send to YOUR API, not directly to Cloudinary
+      const endpoint = `${
+        import.meta.env.VITE_API_BASE
+      }/admin/media/upload-file`;
       const fd = new FormData();
       fd.append("file", file);
-
-      // UNSIGNED: only upload_preset (don't send folder unless your preset allows it)
-      if (auth.mode === "unsigned") {
-        fd.append("upload_preset", auth.upload_preset);
-        // optional: if your preset allows folder override, uncomment:
-        // if (auth.folder) fd.append("folder", auth.folder);
-      } else {
-        // SIGNED: must include api_key + timestamp + signature
-        fd.append("api_key", auth.api_key);
-        fd.append("timestamp", auth.timestamp);
-        fd.append("signature", auth.signature);
-        if (auth.folder) fd.append("folder", auth.folder);
-        if (auth.public_id) fd.append("public_id", auth.public_id);
-        if (auth.eager) fd.append("eager", auth.eager);
-      }
-
-      const endpoint = `https://api.cloudinary.com/v1_1/${auth.cloud_name}/${auth.resource_type}/upload`;
+      // if you want a custom folder: fd.append("folder", "adlm/previews"); (optional)
 
       const uploadedUrl = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", endpoint);
+        xhr.withCredentials = true; // keep cookies for admin auth
 
         xhr.upload.onprogress = (ev) => {
           if (ev.lengthComputable) {
@@ -170,20 +153,24 @@ export default function AdminLearn() {
         };
 
         xhr.onload = () => {
-          let json = {};
           try {
-            json = JSON.parse(xhr.responseText || "{}");
-          } catch {}
-          if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) {
-            resolve(json.secure_url);
-          } else {
-            reject(
-              new Error(json.error?.message || `Upload failed (${xhr.status})`)
-            );
+            const json = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) {
+              resolve(json.secure_url);
+            } else {
+              reject(new Error(json.error || `Upload failed (${xhr.status})`));
+            }
+          } catch {
+            reject(new Error(`Upload failed (${xhr.status})`));
           }
         };
 
         xhr.onerror = () => reject(new Error("Network error during upload"));
+
+        // include Bearer token header if your apiAuthed expects it via Authorization header
+        // Since we're using XHR, set it manually:
+        xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+
         xhr.send(fd);
       });
 
