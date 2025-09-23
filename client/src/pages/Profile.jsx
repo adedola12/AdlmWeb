@@ -101,7 +101,7 @@ export default function Profile() {
                 <a href="/admin" className="btn">
                   Admin dashboard
                 </a>
-                <a href="/admin-learn" className="btn">
+                <a href="/admin/learn" className="btn">
                   Video upload / courses
                 </a>
               </div>

@@ -1,8 +1,8 @@
+// src/pages/AdminLearn.jsx
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
-// normalize full YouTube URLs into plain IDs
 function normalizeYouTubeId(input) {
   if (!input) return "";
   let id = String(input).trim();
@@ -24,6 +24,7 @@ export default function AdminLearn() {
   const [courses, setCourses] = React.useState([]);
   const [msg, setMsg] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
   const previewUrlInputRef = React.useRef(null);
 
   async function load() {
@@ -40,10 +41,10 @@ export default function AdminLearn() {
     }
   }
   React.useEffect(() => {
-    load(); /* eslint-disable-next-line */
+    load(); // eslint-disable-line
   }, []);
 
-  // ----- Free videos -----
+  // ---- Free videos
   async function addFree(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -63,7 +64,6 @@ export default function AdminLearn() {
     e.target.reset();
     await load();
   }
-
   async function saveFree(item) {
     await apiAuthed(`/admin/learn/free/${item._id}`, {
       token: accessToken,
@@ -81,7 +81,7 @@ export default function AdminLearn() {
     await load();
   }
 
-  // ----- Paid courses -----
+  // ---- Paid courses
   async function addCourse(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -107,7 +107,6 @@ export default function AdminLearn() {
     e.target.reset();
     await load();
   }
-
   async function saveCourse(item) {
     await apiAuthed(`/admin/learn/courses/${item._id}`, {
       token: accessToken,
@@ -125,13 +124,15 @@ export default function AdminLearn() {
     await load();
   }
 
-  // ----- Cloudinary: signed client upload -----
+  // src/pages/AdminLearn.jsx  (only the upload function changed from your last paste)
   async function uploadPreviewFromFile(file) {
-    if (!file) return;
+    if (!file || uploading) return;
     setUploading(true);
+    setProgress(0);
     setMsg("");
+
     try {
-      const sig = await apiAuthed(`/admin/media/sign`, {
+      const auth = await apiAuthed(`/admin/media/sign`, {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -140,31 +141,68 @@ export default function AdminLearn() {
 
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("api_key", sig.api_key);
-      fd.append("timestamp", sig.timestamp);
-      fd.append("signature", sig.signature);
-      fd.append("folder", sig.folder);
 
-      const cloudUrl = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${sig.resource_type}/upload`;
-      const upRes = await fetch(cloudUrl, { method: "POST", body: fd }).then(
-        (r) => r.json()
-      );
-      if (upRes.error) throw new Error(upRes.error.message || "Upload failed");
+      // UNSIGNED: only upload_preset (don't send folder unless your preset allows it)
+      if (auth.mode === "unsigned") {
+        fd.append("upload_preset", auth.upload_preset);
+        // optional: if your preset allows folder override, uncomment:
+        // if (auth.folder) fd.append("folder", auth.folder);
+      } else {
+        // SIGNED: must include api_key + timestamp + signature
+        fd.append("api_key", auth.api_key);
+        fd.append("timestamp", auth.timestamp);
+        fd.append("signature", auth.signature);
+        if (auth.folder) fd.append("folder", auth.folder);
+        if (auth.public_id) fd.append("public_id", auth.public_id);
+        if (auth.eager) fd.append("eager", auth.eager);
+      }
+
+      const endpoint = `https://api.cloudinary.com/v1_1/${auth.cloud_name}/${auth.resource_type}/upload`;
+
+      const uploadedUrl = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", endpoint);
+
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) {
+            setProgress(Math.round((ev.loaded / ev.total) * 100));
+          }
+        };
+
+        xhr.onload = () => {
+          let json = {};
+          try {
+            json = JSON.parse(xhr.responseText || "{}");
+          } catch {}
+          if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) {
+            resolve(json.secure_url);
+          } else {
+            reject(
+              new Error(json.error?.message || `Upload failed (${xhr.status})`)
+            );
+          }
+        };
+
+        xhr.onerror = () => reject(new Error("Network error during upload"));
+        xhr.send(fd);
+      });
 
       if (previewUrlInputRef.current) {
-        previewUrlInputRef.current.value = upRes.secure_url;
+        previewUrlInputRef.current.value = uploadedUrl;
       }
       setMsg("Preview uploaded to Cloudinary.");
     } catch (e) {
       setMsg(e.message || "Upload error");
     } finally {
       setUploading(false);
+      setTimeout(() => setProgress(0), 800);
     }
   }
 
   async function uploadPreviewFromUrl(remoteUrl) {
-    if (!remoteUrl) return;
+    if (!remoteUrl || uploading) return;
     setUploading(true);
+    setProgress(0);
     setMsg("");
     try {
       const out = await apiAuthed(`/admin/media/upload-url`, {
@@ -280,16 +318,23 @@ export default function AdminLearn() {
               ref={previewUrlInputRef}
               required
             />
-            <div className="flex flex-wrap gap-2">
-              <label className="btn btn-sm cursor-pointer">
+
+            <div className="flex flex-wrap items-center gap-2">
+              <label
+                className={`btn btn-sm ${
+                  uploading ? "opacity-50 pointer-events-none" : ""
+                }`}
+              >
                 Upload file
                 <input
                   type="file"
                   accept="video/*"
                   className="hidden"
+                  disabled={uploading}
                   onChange={(e) => uploadPreviewFromFile(e.target.files?.[0])}
                 />
               </label>
+
               <button
                 type="button"
                 className="btn btn-sm"
@@ -301,8 +346,17 @@ export default function AdminLearn() {
               >
                 Ingest remote URL
               </button>
+
               {uploading && (
-                <span className="text-sm text-slate-600">Uploading…</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-40 h-2 bg-slate-200 rounded">
+                    <div
+                      className="h-2 bg-blue-600 rounded"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-slate-600">{progress}%</span>
+                </div>
               )}
             </div>
           </div>
