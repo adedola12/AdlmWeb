@@ -80,7 +80,8 @@ function setRefreshCookie(res, token) {
     httpOnly: true,
     sameSite: isProd ? "none" : "lax",
     secure: isProd,
-    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
+    path: "/", // add this for clarity
+    maxAge: 1000 * 60 * 60 * 24 * 30,
   });
 }
 
@@ -206,23 +207,32 @@ router.post("/refresh", async (req, res) => {
   }
 });
 
-router.post("/logout", requireAuth, async (req, res) => {
+// routes/auth.js (same file you posted)
+const REFRESH_COOKIE_NAME = "refreshToken"; // you set this name in setRefreshCookie
+const isProd = process.env.NODE_ENV === "production";
+
+router.post("/logout", async (req, res) => {
   try {
-    // Optional: bump refreshVersion to invalidate any previously issued refresh tokens
-    if (req.user?._id) {
-      await User.updateOne(
-        { _id: req.user._id },
-        { $inc: { refreshVersion: 1 } }
-      );
+    // If we can verify the cookie, bump refreshVersion to invalidate all prior RTs
+    const rt = req.cookies?.[REFRESH_COOKIE_NAME];
+    if (rt) {
+      try {
+        const payload = jwt.verify(rt, JWT_REFRESH_SECRET); // { sub, v }
+        if (payload?.sub) {
+          await User.updateOne(
+            { _id: payload.sub },
+            { $inc: { refreshVersion: 1 } }
+          );
+        }
+      } catch {}
     }
 
-    // Clear the refresh cookie. Use the EXACT same attributes you used when setting it.
-    res.cookie(REFRESH_COOKIE_NAME, "", {
+    // Clear the cookie with the EXACT same attributes used when setting it
+    res.clearCookie(REFRESH_COOKIE_NAME, {
       httpOnly: true,
-      secure: true, // true if your refresh cookie was set with Secure (recommended with SameSite=None)
-      sameSite: "none", // match what you used for setting
-      path: REFRESH_COOKIE_PATH,
-      expires: new Date(0),
+      sameSite: isProd ? "none" : "lax",
+      secure: isProd,
+      path: "/", // IMPORTANT: you didn't set a path when creating → default is "/"
     });
 
     return res.json({ ok: true });
