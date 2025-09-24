@@ -20,24 +20,18 @@ export function AuthProvider({ children }) {
     }
   });
 
-  // persist to localStorage
   React.useEffect(() => {
     localStorage.setItem("auth", JSON.stringify(auth));
   }, [auth]);
 
-  // hydrate using refresh cookie on first load if no access token
   React.useEffect(() => {
     let cancelled = false;
-
     async function hydrate() {
-      if (auth.accessToken) return;
+      if (auth.accessToken) return; // already authed
       try {
         const res = await fetch(
           `${import.meta.env.VITE_API_BASE}/auth/refresh`,
-          {
-            method: "POST",
-            credentials: "include",
-          }
+          { method: "POST", credentials: "include" }
         );
         if (res.ok) {
           const data = await res.json();
@@ -45,28 +39,22 @@ export function AuthProvider({ children }) {
         }
       } catch {}
     }
-
     hydrate();
 
-    const onRefreshed = (e) => setAuth((prev) => ({ ...prev, ...e.detail })); // see http.js
+    const onRefreshed = (e) => setAuth((prev) => ({ ...prev, ...e.detail }));
     window.addEventListener("auth:refreshed", onRefreshed);
-
     return () => {
       cancelled = true;
       window.removeEventListener("auth:refreshed", onRefreshed);
     };
   }, [auth.accessToken]);
 
-  // background refresh every 10 minutes
   React.useEffect(() => {
     const id = setInterval(async () => {
       try {
         const res = await fetch(
           `${import.meta.env.VITE_API_BASE}/auth/refresh`,
-          {
-            method: "POST",
-            credentials: "include",
-          }
+          { method: "POST", credentials: "include" }
         );
         if (res.ok) {
           const data = await res.json();
@@ -77,8 +65,12 @@ export function AuthProvider({ children }) {
     return () => clearInterval(id);
   }, []);
 
-  const clear = () =>
-    setAuth({ user: null, accessToken: null, licenseToken: null });
+  const clear = React.useCallback(() => {
+    // wipe memory and localStorage synchronously so UI updates immediately
+    const empty = { user: null, accessToken: null, licenseToken: null };
+    setAuth(empty);
+    localStorage.setItem("auth", JSON.stringify(empty));
+  }, []);
 
   return (
     <AuthCtx.Provider value={{ ...auth, setAuth, clear }}>

@@ -14,6 +14,8 @@ import ChangePassword from "./pages/ChangePassword.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Profile from "./pages/Profile.jsx";
 import Learn from "./pages/Learn.jsx";
+import CourseDetail from "./pages/CourseDetail.jsx";
+import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
 import Admin from "./pages/Admin.jsx";
 import AdminLearn from "./pages/AdminLearn.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -77,6 +79,8 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
+      { path: "learn/course/:sku", element: <CourseDetail /> },
+      { path: "learn/free/:id", element: <FreeVideoDetail /> },
     ],
   },
 ]);

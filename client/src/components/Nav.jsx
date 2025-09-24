@@ -1,4 +1,3 @@
-// src/components/Nav.jsx
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
@@ -8,13 +7,18 @@ export default function Nav() {
   const { user, clear } = useAuth();
   const navigate = useNavigate();
   const loc = useLocation();
+  const [busy, setBusy] = React.useState(false);
 
   async function logout() {
+    if (busy) return;
+    setBusy(true);
     try {
-      await api("/auth/logout", { method: "POST" });
-    } catch {}
-    clear();
-    navigate("/login");
+      await api("/auth/logout", { method: "POST" }); // clears cookie server-side
+    } catch {} // ignore
+    clear(); // drop client state immediately
+    navigate("/login", { replace: true }); // go to login
+    // ensure no instant silent rehydrate from a still-cached cookie
+    setTimeout(() => window.location.reload(), 0);
   }
 
   return (
@@ -35,7 +39,7 @@ export default function Nav() {
             Learn
           </Link>
 
-          {!user && (
+          {!user ? (
             <div className="flex items-center gap-5">
               <Link
                 to={`/login?next=${encodeURIComponent(
@@ -45,7 +49,6 @@ export default function Nav() {
               >
                 Sign in
               </Link>
-
               <Link
                 to={`/signup?next=${encodeURIComponent(
                   loc.pathname + loc.search
@@ -55,9 +58,7 @@ export default function Nav() {
                 Sign up
               </Link>
             </div>
-          )}
-
-          {user && (
+          ) : (
             <>
               <Link to="/purchase" className="text-sm">
                 Purchase
@@ -73,8 +74,8 @@ export default function Nav() {
                   Admin
                 </Link>
               )}
-              <button onClick={logout} className="btn btn-sm">
-                Logout
+              <button onClick={logout} className="btn btn-sm" disabled={busy}>
+                {busy ? "Logging out…" : "Logout"}
               </button>
             </>
           )}

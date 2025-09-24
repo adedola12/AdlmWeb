@@ -206,9 +206,29 @@ router.post("/refresh", async (req, res) => {
   }
 });
 
-router.post("/logout", (_req, res) => {
-  res.clearCookie("refreshToken");
-  return res.json({ ok: true });
+router.post("/logout", requireAuth, async (req, res) => {
+  try {
+    // Optional: bump refreshVersion to invalidate any previously issued refresh tokens
+    if (req.user?._id) {
+      await User.updateOne(
+        { _id: req.user._id },
+        { $inc: { refreshVersion: 1 } }
+      );
+    }
+
+    // Clear the refresh cookie. Use the EXACT same attributes you used when setting it.
+    res.cookie(REFRESH_COOKIE_NAME, "", {
+      httpOnly: true,
+      secure: true, // true if your refresh cookie was set with Secure (recommended with SameSite=None)
+      sameSite: "none", // match what you used for setting
+      path: REFRESH_COOKIE_PATH,
+      expires: new Date(0),
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Logout failed" });
+  }
 });
 
 export default router;
