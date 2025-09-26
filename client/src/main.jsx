@@ -20,6 +20,8 @@ import Admin from "./pages/Admin.jsx";
 import AdminLearn from "./pages/AdminLearn.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
+import AdminProducts from "./pages/AdminProducts.jsx";
+import ProductDetail from "./pages/ProductDetail.jsx";
 
 const router = createBrowserRouter([
   {
@@ -28,6 +30,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Home /> },
       { path: "products", element: <Products /> },
+      { path: "product/:key", element: <ProductDetail /> }, // NEW
       { path: "login", element: <Login /> },
       { path: "signup", element: <Signup /> },
       { path: "learn", element: <Learn /> },
@@ -55,6 +58,7 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+
       {
         path: "change-password",
         element: (
@@ -63,6 +67,7 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+
       {
         path: "admin",
         element: (
@@ -76,6 +81,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <AdminLearn />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/products",
+        element: (
+          <AdminRoute>
+            <AdminProducts />
           </AdminRoute>
         ),
       },

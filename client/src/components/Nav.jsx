@@ -29,9 +29,9 @@ export default function Nav() {
         </Link>
 
         <div className="flex items-center gap-5">
-          <Link to="/" className="text-sm">
+          {/* <Link to="/" className="text-sm">
             Home
-          </Link>
+          </Link> */}
           <Link to="/products" className="text-sm">
             Products
           </Link>
