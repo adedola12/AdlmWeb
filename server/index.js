@@ -14,6 +14,7 @@ import purchaseRoutes from "./routes/purchase.js";
 import learnPublic from "./routes/Learn.js";
 import adminLearn from "./routes/admin.learn.js";
 import adminMediaRoutes from "./routes/admin.media.js"; // ✅ correct import
+import mediaRoutes from "./routes/media.js"; 
 import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 
@@ -57,6 +58,7 @@ app.use("/purchase", purchaseRoutes);
 app.use("/learn", learnPublic);
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes); // ✅ ensures /admin/media/sign exists
+app.use("/admin/media", mediaRoutes);   
 app.use("/products", productsPublic);
 app.use("/admin/products", adminProducts);
 

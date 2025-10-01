@@ -65,6 +65,7 @@ export default function Products() {
         setLoading(false);
       }
     })();
+
     setQs(
       (p) => {
         const n = new URLSearchParams(p);
@@ -89,7 +90,15 @@ export default function Products() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Products</h1>
+      {/* Header + admin-only button */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Products</h1>
+        {user?.role === "admin" && (
+          <Link to="/admin/products" className="btn btn-sm">
+            Add product
+          </Link>
+        )}
+      </div>
 
       {loading ? (
         <div className="text-sm text-slate-600">Loading…</div>

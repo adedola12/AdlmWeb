@@ -8,6 +8,16 @@ export default function AdminProducts() {
   const [items, setItems] = React.useState([]);
   const [msg, setMsg] = React.useState("");
 
+  // upload state
+  const [uploadingPreview, setUploadingPreview] = React.useState(false);
+  const [uploadingThumb, setUploadingThumb] = React.useState(false);
+  const [previewPct, setPreviewPct] = React.useState(0);
+  const [thumbPct, setThumbPct] = React.useState(0);
+
+  // refs to write URLs into the inputs after upload
+  const previewInputRef = React.useRef(null);
+  const thumbInputRef = React.useRef(null);
+
   async function load() {
     setMsg("");
     try {
@@ -19,6 +29,7 @@ export default function AdminProducts() {
   }
   React.useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function add(e) {
@@ -42,6 +53,115 @@ export default function AdminProducts() {
     });
     e.target.reset();
     load();
+  }
+
+  function fileLabel(f) {
+    if (!f) return "";
+    return `${f.name} (${Math.round(f.size / 1024 / 1024)} MB)`;
+  }
+
+  /** Signed or unsigned upload with progress */
+  async function uploadToCloudinary(file, type) {
+    if (!file) return null;
+
+    const setPct = type === "video" ? setPreviewPct : setThumbPct;
+    const setUploading =
+      type === "video" ? setUploadingPreview : setUploadingThumb;
+
+    setUploading(true);
+    setPct(0);
+    setMsg(`Requesting ${type} upload ticket…`);
+
+    try {
+      // 1) ask server for signed or unsigned params
+      const sig = await apiAuthed(`/admin/media/sign`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource_type: type }),
+      });
+
+      // 2) build form data
+      const fd = new FormData();
+      fd.append("file", file);
+
+      if (sig.mode === "unsigned" && sig.upload_preset) {
+        // unsigned flow
+        fd.append("upload_preset", sig.upload_preset);
+      } else {
+        // signed flow
+        fd.append("api_key", sig.api_key);
+        fd.append("timestamp", sig.timestamp);
+        fd.append("signature", sig.signature);
+        if (sig.folder) fd.append("folder", sig.folder);
+        if (sig.public_id) fd.append("public_id", sig.public_id);
+        if (sig.eager) fd.append("eager", sig.eager);
+      }
+
+      const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${sig.resource_type}/upload`;
+
+      // 3) XHR for progress
+      const secureUrl = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", endpoint);
+
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) {
+            setPct(Math.round((ev.loaded / ev.total) * 100));
+          }
+        };
+
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) {
+              resolve(json.secure_url);
+            } else {
+              reject(
+                new Error(
+                  json?.error?.message || `Upload failed (${xhr.status})`
+                )
+              );
+            }
+          } catch {
+            reject(new Error(`Upload failed (${xhr.status})`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error("Network error during upload"));
+        xhr.send(fd);
+      });
+
+      return secureUrl;
+    } finally {
+      // let the bar fill; then reset it
+      setTimeout(() => setPct(0), 800);
+      setUploading(false);
+    }
+  }
+
+  async function handlePreviewFile(f) {
+    if (!f) return;
+    setMsg(`Uploading video: ${fileLabel(f)}…`);
+    try {
+      const url = await uploadToCloudinary(f, "video");
+      if (url && previewInputRef.current) previewInputRef.current.value = url;
+      setMsg(url ? "✅ Preview video uploaded." : "Upload failed.");
+    } catch (e) {
+      setMsg(`❌ ${e.message || "Upload error"}`);
+    }
+  }
+
+  async function handleThumbFile(f) {
+    if (!f) return;
+    setMsg(`Uploading image: ${fileLabel(f)}…`);
+    try {
+      const url = await uploadToCloudinary(f, "image");
+      if (url && thumbInputRef.current) thumbInputRef.current.value = url;
+      setMsg(url ? "✅ Thumbnail image uploaded." : "Upload failed.");
+    } catch (e) {
+      setMsg(`❌ ${e.message || "Upload error"}`);
+    }
   }
 
   async function toggle(p) {
@@ -71,6 +191,7 @@ export default function AdminProducts() {
 
       <div className="card">
         <h2 className="font-semibold mb-3">Add product</h2>
+
         <form onSubmit={add} className="grid sm:grid-cols-2 gap-3">
           <input
             className="input"
@@ -79,38 +200,119 @@ export default function AdminProducts() {
             required
           />
           <input className="input" name="name" placeholder="Name" required />
+
           <input
             className="input sm:col-span-2"
             name="blurb"
             placeholder="Short blurb"
           />
+
           <input
             className="input"
             name="priceMonthly"
             placeholder="Price monthly (display)"
             type="number"
           />
-          <input
-            className="input sm:col-span-2"
-            name="previewUrl"
-            placeholder="Preview video URL (MP4/Cloudinary)"
-          />
-          <input
-            className="input sm:col-span-2"
-            name="thumbnailUrl"
-            placeholder="Thumbnail URL (optional)"
-          />
+
+          {/* Preview video */}
+          <div className="sm:col-span-2 grid gap-2">
+            <input
+              className="input"
+              name="previewUrl"
+              placeholder="Preview video URL (MP4 / Cloudinary)"
+              ref={previewInputRef}
+            />
+            <div className="flex items-center gap-3">
+              <label
+                className={`btn btn-sm ${
+                  uploadingPreview ? "opacity-50 pointer-events-none" : ""
+                }`}
+              >
+                Upload preview video
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  disabled={uploadingPreview}
+                  onChange={(e) => handlePreviewFile(e.target.files?.[0])}
+                />
+              </label>
+
+              {uploadingPreview && (
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                  <div className="w-40 h-2 bg-slate-200 rounded">
+                    <div
+                      className="h-2 bg-blue-600 rounded"
+                      style={{ width: `${previewPct}%` }}
+                    />
+                  </div>
+                  <span>{previewPct}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Thumbnail */}
+          <div className="sm:col-span-2 grid gap-2">
+            <input
+              className="input"
+              name="thumbnailUrl"
+              placeholder="Thumbnail image URL (optional)"
+              ref={thumbInputRef}
+            />
+            <div className="flex items-center gap-3">
+              <label
+                className={`btn btn-sm ${
+                  uploadingThumb ? "opacity-50 pointer-events-none" : ""
+                }`}
+              >
+                Upload thumbnail image
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingThumb}
+                  onChange={(e) => handleThumbFile(e.target.files?.[0])}
+                />
+              </label>
+
+              {uploadingThumb && (
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                  <div className="w-40 h-2 bg-slate-200 rounded">
+                    <div
+                      className="h-2 bg-blue-600 rounded"
+                      style={{ width: `${thumbPct}%` }}
+                    />
+                  </div>
+                  <span>{thumbPct}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           <input
             className="input"
             name="sort"
             placeholder="Sort (higher first)"
             type="number"
           />
+
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="isPublished" defaultChecked />{" "}
             Published
           </label>
-          <button className="btn sm:col-span-2">Add</button>
+
+          <button
+            className="btn sm:col-span-2"
+            disabled={uploadingPreview || uploadingThumb}
+            title={
+              uploadingPreview || uploadingThumb
+                ? "Wait for uploads to finish"
+                : undefined
+            }
+          >
+            Add
+          </button>
         </form>
       </div>
 
@@ -118,15 +320,27 @@ export default function AdminProducts() {
         {items.map((p) => (
           <div
             key={p._id}
-            className="border rounded p-2 flex items-center justify-between"
+            className="border rounded p-2 flex items-center justify-between gap-3"
           >
-            <div className="text-sm">
-              <div className="font-medium">{p.name}</div>
-              <div className="text-slate-600">
-                key: {p.key} · sort: {p.sort} ·{" "}
-                {p.isPublished ? "published" : "hidden"}
+            <div className="flex items-center gap-3">
+              {p.thumbnailUrl ? (
+                <img
+                  src={p.thumbnailUrl}
+                  alt=""
+                  className="w-16 h-10 object-cover rounded border"
+                />
+              ) : (
+                <div className="w-16 h-10 rounded border bg-slate-100" />
+              )}
+              <div className="text-sm">
+                <div className="font-medium">{p.name}</div>
+                <div className="text-slate-600">
+                  key: {p.key} · sort: {p.sort} ·{" "}
+                  {p.isPublished ? "published" : "hidden"}
+                </div>
               </div>
             </div>
+
             <div className="flex gap-2">
               <button className="btn btn-sm" onClick={() => toggle(p)}>
                 {p.isPublished ? "Unpublish" : "Publish"}

@@ -22,43 +22,40 @@ const router = express.Router();
  *
  * Returns: { cloud_name, api_key, timestamp, signature, folder, resource_type, public_id? }
  */
+// server/routes/media.js
 router.post("/sign", requireAuth, requireAdmin, async (req, res) => {
   try {
     const {
       resource_type = "video",
       folder = process.env.CLOUDINARY_UPLOAD_FOLDER || "adlm/previews",
-      public_id, // optional custom file name (no extension)
-      eager, // optional: e.g. "so_0,du_60" for 60s clip
+      public_id,
+      eager,
     } = req.body || {};
 
     const timestamp = Math.floor(Date.now() / 1000);
 
-    // Build the params for the signature
-    const paramsToSign = {
-      timestamp,
-      folder,
-      resource_type,
-    };
+    // only sign what Cloudinary expects
+    const paramsToSign = { timestamp, folder };
     if (public_id) paramsToSign.public_id = public_id;
     if (eager) paramsToSign.eager = eager;
 
-    // Generate signature with secret (never send secret to client)
     const signature = cloudinary.utils.api_sign_request(
       paramsToSign,
       process.env.CLOUDINARY_API_SECRET
     );
 
-    return res.json({
+    res.json({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
       api_key: process.env.CLOUDINARY_API_KEY,
       timestamp,
       signature,
       folder,
-      resource_type,
+      resource_type, // returned (so client knows /image or /video), not signed
       ...(public_id ? { public_id } : {}),
+      ...(eager ? { eager } : {}),
     });
   } catch (e) {
-    return res.status(500).json({ error: e.message || "Failed to sign" });
+    res.status(500).json({ error: e.message || "Failed to sign" });
   }
 });
 
