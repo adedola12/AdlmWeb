@@ -2,21 +2,23 @@
 import express from "express";
 import multer from "multer";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import cloudinary from "../cloudinary.js"; // configured v2 client
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
-import { uploadAsset, deleteAsset } from "../utils/cloudinary.js"; // keep your existing URL-ingest + delete helpers if you want
-
-function requireAdmin(_req, res, next) {
-  if (_req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
+import { uploadAsset, deleteAsset } from "../utils/cloudinary.js";
 
 const router = express.Router();
+
+// Gate the whole router once
 router.use(requireAuth, requireAdmin);
 
 // memory storage keeps file in RAM so we can stream it to Cloudinary
 const upload = multer({ storage: multer.memoryStorage() });
 
-router.post("/sign", requireAuth, requireAdmin, async (req, res) => {
+/**
+ * POST /admin/media/sign
+ * Returns signature for signed client upload
+ */
+router.post("/sign", async (req, res) => {
   try {
     const {
       resource_type = "video",
@@ -27,7 +29,7 @@ router.post("/sign", requireAuth, requireAdmin, async (req, res) => {
 
     const timestamp = Math.floor(Date.now() / 1000);
 
-    // only sign what Cloudinary expects
+    // Cloudinary signs only known params (not resource_type)
     const paramsToSign = { timestamp, folder };
     if (public_id) paramsToSign.public_id = public_id;
     if (eager) paramsToSign.eager = eager;
@@ -37,36 +39,36 @@ router.post("/sign", requireAuth, requireAdmin, async (req, res) => {
       process.env.CLOUDINARY_API_SECRET
     );
 
-    res.json({
+    return res.json({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
       api_key: process.env.CLOUDINARY_API_KEY,
       timestamp,
       signature,
       folder,
-      resource_type, // returned (so client knows /image or /video), not signed
+      resource_type, // returned for client to pick /image|/video endpoint
       ...(public_id ? { public_id } : {}),
       ...(eager ? { eager } : {}),
     });
   } catch (e) {
-    res.status(500).json({ error: e.message || "Failed to sign" });
+    return res.status(500).json({ error: e.message || "Failed to sign" });
   }
 });
 
 /**
  * POST /admin/media/upload-file
- * multipart/form-data  { file: <binary> }
- * Optional query/body: folder, publicId
- * Returns: { secure_url, public_id }
+ * multipart/form-data { file: <binary> }
+ * optional: body/query { folder, publicId }
+ * Streams buffer to Cloudinary with upload_stream
  */
 router.post("/upload-file", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "file is required" });
 
-    const { folder, publicId } = { ...req.body, ...req.query };
+    const { folder, publicId, resourceType } = { ...req.body, ...req.query };
     const out = await uploadBufferToCloudinary(req.file.buffer, {
       folder,
       publicId,
-      resourceType: "video",
+      resourceType: resourceType || "video",
     });
     return res.json(out);
   } catch (e) {
@@ -75,42 +77,45 @@ router.post("/upload-file", upload.single("file"), async (req, res) => {
 });
 
 /**
- * (Optional) server-side ingestion from remote URL
- * POST /admin/media/upload-url { url }
+ * POST /admin/media/upload-url { url, folder?, publicId?, resourceType? }
+ * Server-side ingestion of remote URL
  */
 router.post("/upload-url", async (req, res) => {
   try {
     const { url, folder, publicId, resourceType } = req.body || {};
     if (!url) return res.status(400).json({ error: "url is required" });
+
     const out = await uploadAsset({
       file: url,
       folder,
       publicId,
       resourceType: resourceType || "video",
     });
-    res.json(out);
+    return res.json(out);
   } catch (e) {
-    res.status(400).json({ error: e.message || "Upload failed" });
+    return res.status(400).json({ error: e.message || "Upload failed" });
   }
 });
 
-/** Delete by public_id */
+/** POST /admin/media/delete { publicId, resourceType? } */
 router.post("/delete", async (req, res) => {
   const { publicId, resourceType } = req.body || {};
   if (!publicId) return res.status(400).json({ error: "publicId required" });
   const out = await deleteAsset(publicId, resourceType || "video");
-  res.json(out);
+  return res.json(out);
 });
 
-router.post("/preview-url", requireAuth, requireAdmin, (req, res) => {
+/**
+ * POST /admin/media/preview-url { url, durationSec?, startSec? }
+ * Build a delivery transform for a clipped preview (no reupload)
+ */
+router.post("/preview-url", (req, res) => {
   try {
     const { url, durationSec = 60, startSec = 0 } = req.body || {};
     if (!url) return res.status(400).json({ error: "url required" });
 
-    // Inject Cloudinary transformation (so_<start>,du_<duration>)
-    // Example: /upload/so_0,du_60/...
     const previewUrl = url.replace(
-      /\/upload\/(?!.*\/)/, // first "upload" segment
+      /\/upload\/(?!.*\/)/,
       `/upload/so_${startSec},du_${durationSec}/`
     );
 
