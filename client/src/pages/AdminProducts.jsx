@@ -7,7 +7,7 @@ export default function AdminProducts() {
   const [items, setItems] = React.useState([]);
   const [msg, setMsg] = React.useState("");
 
-  // form helpers (controlled only for fields that affect conditional UI)
+  // form helpers
   const [billingInterval, setBillingInterval] = React.useState("monthly");
 
   // upload state
@@ -16,7 +16,7 @@ export default function AdminProducts() {
   const [previewPct, setPreviewPct] = React.useState(0);
   const [thumbPct, setThumbPct] = React.useState(0);
 
-  // refs to write URLs into the inputs after upload
+  // refs to write URLs after upload
   const previewInputRef = React.useRef(null);
   const thumbInputRef = React.useRef(null);
 
@@ -45,6 +45,20 @@ export default function AdminProducts() {
     e.preventDefault();
     const fd = new FormData(e.target);
 
+    // NEW: nested price object (NGN source of truth + optional USD overrides)
+    const price = {
+      monthlyNGN: Number(fd.get("monthlyNGN") || 0),
+      yearlyNGN: Number(fd.get("yearlyNGN") || 0),
+      installNGN: Number(fd.get("installNGN") || 0),
+    };
+    // optional USD overrides (leave blank to auto-convert on server)
+    const monthlyUSD = fd.get("monthlyUSD");
+    const yearlyUSD = fd.get("yearlyUSD");
+    const installUSD = fd.get("installUSD");
+    if (monthlyUSD !== "") price.monthlyUSD = Number(monthlyUSD);
+    if (yearlyUSD !== "") price.yearlyUSD = Number(yearlyUSD);
+    if (installUSD !== "") price.installUSD = Number(installUSD);
+
     const payload = {
       key: fd.get("key"),
       name: fd.get("name"),
@@ -52,9 +66,7 @@ export default function AdminProducts() {
       description: fd.get("description") || "",
       features: parseFeatures(fd.get("features")),
       billingInterval: fd.get("billingInterval") || "monthly",
-      priceMonthly: Number(fd.get("priceMonthly") || 0),
-      priceYearly: Number(fd.get("priceYearly") || 0),
-      installFee: Number(fd.get("installFee") || 0),
+      price, // <-- nested dual-currency pricing
       previewUrl: fd.get("previewUrl") || undefined,
       thumbnailUrl: fd.get("thumbnailUrl") || undefined,
       isPublished: fd.get("isPublished") === "on",
@@ -91,7 +103,7 @@ export default function AdminProducts() {
     setMsg(`Requesting ${type} upload ticket…`);
 
     try {
-      // 1) ask server for signed (or unsigned) params
+      // 1) sign
       const sig = await apiAuthed(`/admin/media/sign`, {
         token: accessToken,
         method: "POST",
@@ -99,7 +111,7 @@ export default function AdminProducts() {
         body: JSON.stringify({ resource_type: type }),
       });
 
-      // 2) build form data
+      // 2) form
       const fd = new FormData();
       fd.append("file", file);
 
@@ -116,17 +128,14 @@ export default function AdminProducts() {
 
       const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${sig.resource_type}/upload`;
 
-      // 3) XHR for progress
+      // 3) xhr for progress
       const secureUrl = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", endpoint);
-
         xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) {
+          if (ev.lengthComputable)
             setPct(Math.round((ev.loaded / ev.total) * 100));
-          }
         };
-
         xhr.onload = () => {
           try {
             const json = JSON.parse(xhr.responseText || "{}");
@@ -143,7 +152,6 @@ export default function AdminProducts() {
             reject(new Error(`Upload failed (${xhr.status})`));
           }
         };
-
         xhr.onerror = () => reject(new Error("Network error during upload"));
         xhr.send(fd);
       });
@@ -216,72 +224,95 @@ export default function AdminProducts() {
             required
           />
           <input className="input" name="name" placeholder="Name" required />
-
           <input
             className="input sm:col-span-2"
             name="blurb"
             placeholder="Short blurb"
           />
 
-          {/* Pricing + billing interval */}
-          <div className="sm:col-span-2 grid sm:grid-cols-3 gap-3">
-            <label className="text-sm">
-              <div className="mb-1">Billing interval</div>
-              <select
-                name="billingInterval"
-                className="input"
-                value={billingInterval}
-                onChange={(e) => setBillingInterval(e.target.value)}
-              >
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-              </select>
-            </label>
+          {/* Billing interval */}
+          <label className="text-sm">
+            <div className="mb-1">Billing interval</div>
+            <select
+              name="billingInterval"
+              className="input"
+              value={billingInterval}
+              onChange={(e) => setBillingInterval(e.target.value)}
+            >
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </label>
 
-            {billingInterval === "monthly" ? (
-              <>
-                <label className="text-sm">
-                  <div className="mb-1">Price / month</div>
-                  <input
-                    className="input"
-                    name="priceMonthly"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                  />
-                </label>
-                <div className="hidden sm:block" />
-              </>
-            ) : (
-              <>
-                <label className="text-sm">
-                  <div className="mb-1">Price / year</div>
-                  <input
-                    className="input"
-                    name="priceYearly"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                  />
-                </label>
-                <div className="hidden sm:block" />
-              </>
-            )}
+          {/* NGN prices */}
+          <label className="text-sm">
+            <div className="mb-1">NGN · Price / month</div>
+            <input
+              className="input"
+              name="monthlyNGN"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0"
+            />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1">NGN · Price / year</div>
+            <input
+              className="input"
+              name="yearlyNGN"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0"
+            />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1">NGN · Install fee (one-time)</div>
+            <input
+              className="input"
+              name="installNGN"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0"
+            />
+          </label>
 
-            <label className="text-sm">
-              <div className="mb-1">Installation fee (one-time)</div>
-              <input
-                className="input"
-                name="installFee"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-              />
-            </label>
-          </div>
+          {/* Optional USD overrides */}
+          <label className="text-sm">
+            <div className="mb-1">USD override · /month (optional)</div>
+            <input
+              className="input"
+              name="monthlyUSD"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder=""
+            />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1">USD override · /year (optional)</div>
+            <input
+              className="input"
+              name="yearlyUSD"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder=""
+            />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1">USD override · Install (optional)</div>
+            <input
+              className="input"
+              name="installUSD"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder=""
+            />
+          </label>
 
           {/* Preview video */}
           <div className="sm:col-span-2 grid gap-2">
@@ -306,7 +337,6 @@ export default function AdminProducts() {
                   onChange={(e) => handlePreviewFile(e.target.files?.[0])}
                 />
               </label>
-
               {uploadingPreview && (
                 <div className="flex items-center gap-2 text-xs text-slate-600">
                   <div className="w-40 h-2 bg-slate-200 rounded">
@@ -344,7 +374,6 @@ export default function AdminProducts() {
                   onChange={(e) => handleThumbFile(e.target.files?.[0])}
                 />
               </label>
-
               {uploadingThumb && (
                 <div className="flex items-center gap-2 text-xs text-slate-600">
                   <div className="w-40 h-2 bg-slate-200 rounded">
@@ -379,7 +408,6 @@ export default function AdminProducts() {
             placeholder="Sort (higher first)"
             type="number"
           />
-
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="isPublished" defaultChecked />{" "}
             Published
@@ -423,23 +451,50 @@ export default function AdminProducts() {
                   {p.isPublished ? "published" : "hidden"}
                 </div>
                 <div className="text-slate-600">
-                  Billing: <b>{p.billingInterval}</b>{" "}
+                  Billing: <b>{p.billingInterval}</b>
+                </div>
+                <div className="text-slate-600">
+                  NGN /
                   {p.billingInterval === "yearly" ? (
                     <>
-                      · Price/yr: <b>${(p.priceYearly || 0).toFixed(2)}</b>
+                      yr: <b>₦{(p.price?.yearlyNGN || 0).toLocaleString()}</b>
                     </>
                   ) : (
                     <>
-                      · Price/mo: <b>${(p.priceMonthly || 0).toFixed(2)}</b>
+                      mo: <b>₦{(p.price?.monthlyNGN || 0).toLocaleString()}</b>
                     </>
                   )}
-                  {p.installFee > 0 && (
+                  {p.price?.installNGN > 0 && (
                     <>
                       {" "}
-                      · Install fee: <b>${(p.installFee || 0).toFixed(2)}</b>
+                      · Install:{" "}
+                      <b>₦{(p.price.installNGN || 0).toLocaleString()}</b>
                     </>
                   )}
                 </div>
+                {(p.price?.monthlyUSD ||
+                  p.price?.yearlyUSD ||
+                  p.price?.installUSD) && (
+                  <div className="text-slate-600">
+                    USD override ·{" "}
+                    {p.billingInterval === "yearly" ? (
+                      <>
+                        yr: <b>${(p.price?.yearlyUSD || 0).toFixed(2)}</b>
+                      </>
+                    ) : (
+                      <>
+                        mo: <b>${(p.price?.monthlyUSD || 0).toFixed(2)}</b>
+                      </>
+                    )}
+                    {p.price?.installUSD > 0 && (
+                      <>
+                        {" "}
+                        · Install:{" "}
+                        <b>${(p.price.installUSD || 0).toFixed(2)}</b>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
