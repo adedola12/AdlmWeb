@@ -1,4 +1,3 @@
-// src/pages/AdminProducts.jsx
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
@@ -7,6 +6,9 @@ export default function AdminProducts() {
   const { accessToken } = useAuth();
   const [items, setItems] = React.useState([]);
   const [msg, setMsg] = React.useState("");
+
+  // form helpers (controlled only for fields that affect conditional UI)
+  const [billingInterval, setBillingInterval] = React.useState("monthly");
 
   // upload state
   const [uploadingPreview, setUploadingPreview] = React.useState(false);
@@ -32,26 +34,42 @@ export default function AdminProducts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function parseFeatures(s) {
+    return (s || "")
+      .split("\n")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+
   async function add(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
+
     const payload = {
       key: fd.get("key"),
       name: fd.get("name"),
-      blurb: fd.get("blurb"),
+      blurb: fd.get("blurb") || "",
+      description: fd.get("description") || "",
+      features: parseFeatures(fd.get("features")),
+      billingInterval: fd.get("billingInterval") || "monthly",
       priceMonthly: Number(fd.get("priceMonthly") || 0),
+      priceYearly: Number(fd.get("priceYearly") || 0),
+      installFee: Number(fd.get("installFee") || 0),
       previewUrl: fd.get("previewUrl") || undefined,
       thumbnailUrl: fd.get("thumbnailUrl") || undefined,
       isPublished: fd.get("isPublished") === "on",
       sort: Number(fd.get("sort") || 0),
     };
+
     await apiAuthed("/admin/products", {
       token: accessToken,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
     e.target.reset();
+    setBillingInterval("monthly");
     load();
   }
 
@@ -60,7 +78,7 @@ export default function AdminProducts() {
     return `${f.name} (${Math.round(f.size / 1024 / 1024)} MB)`;
   }
 
-  /** Signed or unsigned upload with progress */
+  /** Signed/unsigned upload with progress */
   async function uploadToCloudinary(file, type) {
     if (!file) return null;
 
@@ -73,7 +91,7 @@ export default function AdminProducts() {
     setMsg(`Requesting ${type} upload ticket…`);
 
     try {
-      // 1) ask server for signed or unsigned params
+      // 1) ask server for signed (or unsigned) params
       const sig = await apiAuthed(`/admin/media/sign`, {
         token: accessToken,
         method: "POST",
@@ -86,10 +104,8 @@ export default function AdminProducts() {
       fd.append("file", file);
 
       if (sig.mode === "unsigned" && sig.upload_preset) {
-        // unsigned flow
         fd.append("upload_preset", sig.upload_preset);
       } else {
-        // signed flow
         fd.append("api_key", sig.api_key);
         fd.append("timestamp", sig.timestamp);
         fd.append("signature", sig.signature);
@@ -134,7 +150,6 @@ export default function AdminProducts() {
 
       return secureUrl;
     } finally {
-      // let the bar fill; then reset it
       setTimeout(() => setPct(0), 800);
       setUploading(false);
     }
@@ -189,6 +204,7 @@ export default function AdminProducts() {
         {msg && <div className="text-sm mt-2">{msg}</div>}
       </div>
 
+      {/* Add product */}
       <div className="card">
         <h2 className="font-semibold mb-3">Add product</h2>
 
@@ -207,12 +223,65 @@ export default function AdminProducts() {
             placeholder="Short blurb"
           />
 
-          <input
-            className="input"
-            name="priceMonthly"
-            placeholder="Price monthly (display)"
-            type="number"
-          />
+          {/* Pricing + billing interval */}
+          <div className="sm:col-span-2 grid sm:grid-cols-3 gap-3">
+            <label className="text-sm">
+              <div className="mb-1">Billing interval</div>
+              <select
+                name="billingInterval"
+                className="input"
+                value={billingInterval}
+                onChange={(e) => setBillingInterval(e.target.value)}
+              >
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </label>
+
+            {billingInterval === "monthly" ? (
+              <>
+                <label className="text-sm">
+                  <div className="mb-1">Price / month</div>
+                  <input
+                    className="input"
+                    name="priceMonthly"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </label>
+                <div className="hidden sm:block" />
+              </>
+            ) : (
+              <>
+                <label className="text-sm">
+                  <div className="mb-1">Price / year</div>
+                  <input
+                    className="input"
+                    name="priceYearly"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </label>
+                <div className="hidden sm:block" />
+              </>
+            )}
+
+            <label className="text-sm">
+              <div className="mb-1">Installation fee (one-time)</div>
+              <input
+                className="input"
+                name="installFee"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+              />
+            </label>
+          </div>
 
           {/* Preview video */}
           <div className="sm:col-span-2 grid gap-2">
@@ -290,6 +359,20 @@ export default function AdminProducts() {
             </div>
           </div>
 
+          {/* Description + Features */}
+          <textarea
+            className="input sm:col-span-2"
+            name="description"
+            rows={4}
+            placeholder="Long description (Markdown or plain text)"
+          />
+          <textarea
+            className="input sm:col-span-2"
+            name="features"
+            rows={4}
+            placeholder="Features (one per line)"
+          />
+
           <input
             className="input"
             name="sort"
@@ -316,6 +399,7 @@ export default function AdminProducts() {
         </form>
       </div>
 
+      {/* List */}
       <div className="space-y-2">
         {items.map((p) => (
           <div
@@ -337,6 +421,24 @@ export default function AdminProducts() {
                 <div className="text-slate-600">
                   key: {p.key} · sort: {p.sort} ·{" "}
                   {p.isPublished ? "published" : "hidden"}
+                </div>
+                <div className="text-slate-600">
+                  Billing: <b>{p.billingInterval}</b>{" "}
+                  {p.billingInterval === "yearly" ? (
+                    <>
+                      · Price/yr: <b>${(p.priceYearly || 0).toFixed(2)}</b>
+                    </>
+                  ) : (
+                    <>
+                      · Price/mo: <b>${(p.priceMonthly || 0).toFixed(2)}</b>
+                    </>
+                  )}
+                  {p.installFee > 0 && (
+                    <>
+                      {" "}
+                      · Install fee: <b>${(p.installFee || 0).toFixed(2)}</b>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

@@ -16,6 +16,7 @@ import adminLearn from "./routes/admin.learn.js";
 import adminMediaRoutes from "./routes/admin.media.js"; // ✅ correct import
 import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
+import adminSettings from "./routes/admin.settings.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -59,6 +60,7 @@ app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes); // ✅ ensures /admin/media/sign exists
 app.use("/products", productsPublic);
 app.use("/admin/products", adminProducts);
+app.use("/admin/settings", adminSettings);
 
 // CORS error helper
 app.use((err, _req, res, next) => {
