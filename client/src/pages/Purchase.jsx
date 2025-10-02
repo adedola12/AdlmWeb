@@ -71,12 +71,75 @@ export default function Purchase() {
     const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
     return unitPrice(p) * qty + installFee(p, entry.firstTime);
   }
+  // ---- helpers (replace your unitPrice/lineSubtotal with these) ----
+  function getPrices(p, currency) {
+    const m = currency === "USD" ? p.price?.monthlyUSD : p.price?.monthlyNGN;
+    const y = currency === "USD" ? p.price?.yearlyUSD : p.price?.yearlyNGN;
+    const install =
+      currency === "USD" ? p.price?.installUSD : p.price?.installNGN;
+    return {
+      monthly: Number(m || 0),
+      yearly: Number(y || 0),
+      install: Number(install || 0),
+    };
+  }
+
+  function priceForQuantity(p, qty, currency, firstTime) {
+    const { monthly, yearly, install } = getPrices(p, currency);
+    let total = 0;
+    let note = ""; // show what was applied
+
+    if (p.billingInterval === "yearly") {
+      total = yearly * qty;
+      note = `${qty} yr × ${fmt(yearly, currency)}`;
+    } else {
+      // monthly billing with rules
+      const years = Math.floor(qty / 12);
+      const rem = qty % 12;
+
+      if (years > 0) {
+        total += years * yearly;
+        note = `${years}× yearly`;
+      }
+
+      if (rem >= 6) {
+        const discounted = rem * monthly * 0.85; // 15% off
+        total += discounted;
+        note += note ? ` + ${rem} mo @15% off` : `${rem} mo @15% off`;
+      } else if (rem > 0) {
+        total += rem * monthly;
+        note += note ? ` + ${rem} mo` : `${rem} mo`;
+      }
+    }
+
+    if (firstTime) total += install || 0;
+    return {
+      total,
+      note: note || (p.billingInterval === "yearly" ? "yearly" : "monthly"),
+    };
+  }
+
+  // used where you currently compute line items
+  function lineSubtotal(p, entry) {
+    if (!entry) return 0;
+    const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
+    return priceForQuantity(p, qty, currency, !!entry.firstTime).total;
+  }
 
   const chosen = products.filter((p) => !!cart[p.key]);
   const total = chosen.reduce(
     (sum, p) => sum + lineSubtotal(p, cart[p.key]),
     0
   );
+
+const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
+const { total: lineTotal, note } = priceForQuantity(
+  p,
+  qty,
+  currency,
+  entry.firstTime
+);
+  
 
   async function pay() {
     if (!chosen.length) return;
@@ -258,6 +321,23 @@ export default function Purchase() {
                   </div>
                 );
               })}
+            </div>
+
+            <div key={p.key} className="flex items-center justify-between">
+              <div>
+                {p.name} · {qty} {p.billingInterval === "yearly" ? "yr" : "mo"}{" "}
+                ({note}){entry.firstTime && " + install"}
+              </div>
+              <div className="font-medium">{fmt(lineTotal, currency)}</div>
+            </div>
+
+            <div className="text-sm">
+              Subtotal:{" "}
+              <span className="font-semibold">{fmt(sub, currency)}</span>
+              <span className="ml-2 text-xs text-slate-600">
+                ({note}
+                {entry.firstTime ? " + install" : ""})
+              </span>
             </div>
 
             <div className="mt-3 flex items-center justify-between text-lg">
