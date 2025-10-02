@@ -1,15 +1,30 @@
-// src/pages/Learn.jsx
 import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config";
 
-// Make a 60s delivery trim of Cloudinary video
+// Cloudinary 60s preview
 function makePreviewUrl(url, seconds = 60, startAt = 0) {
   if (!url) return url;
   return url.replace(
     /\/upload\/(?!.*\/upload\/)/,
     `/upload/so_${startAt},du_${seconds}/`
   );
+}
+
+// Robust YT ID extractor
+export function extractYouTubeId(input = "") {
+  try {
+    if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+    const url = new URL(input);
+    if (url.hostname.includes("youtu.be")) return url.pathname.replace("/", "");
+    if (url.hostname.includes("youtube.com")) {
+      const id = url.searchParams.get("v");
+      if (id) return id;
+      const m = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return "";
 }
 
 /* --------- Hover helpers --------- */
@@ -52,8 +67,11 @@ function HoverVideo({ src, poster }) {
 
 function HoverYouTube({ id, title, thumb }) {
   const [hovered, setHovered] = React.useState(false);
-  const thumbUrl = thumb || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-  const iframeSrc = `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&rel=0&modestbranding=1`;
+  const thumbUrl =
+    thumb || (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "");
+  const iframeSrc = id
+    ? `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&rel=0&modestbranding=1`
+    : "";
 
   return (
     <div
@@ -62,7 +80,7 @@ function HoverYouTube({ id, title, thumb }) {
       onMouseLeave={() => setHovered(false)}
       title={title}
     >
-      {hovered ? (
+      {hovered && id ? (
         <iframe
           className="w-full aspect-video"
           src={iframeSrc}
@@ -70,11 +88,13 @@ function HoverYouTube({ id, title, thumb }) {
           allow="autoplay; encrypted-media; picture-in-picture"
         />
       ) : (
-        <img
-          src={thumbUrl}
-          alt={title}
-          className="w-full aspect-video object-cover"
-        />
+        thumbUrl && (
+          <img
+            src={thumbUrl}
+            alt={title}
+            className="w-full aspect-video object-cover"
+          />
+        )
       )}
     </div>
   );
@@ -82,9 +102,10 @@ function HoverYouTube({ id, title, thumb }) {
 
 /* --------- Cards --------- */
 function FreeCard({ v }) {
+  const id = extractYouTubeId(v.youtubeId);
   return (
     <div className="group card p-0">
-      <HoverYouTube id={v.youtubeId} title={v.title} thumb={v.thumbnailUrl} />
+      <HoverYouTube id={id} title={v.title} thumb={v.thumbnailUrl} />
       <Link
         to={`/learn/free/${encodeURIComponent(v._id)}`}
         className="block p-3 text-sm font-medium group-hover:text-blue-700"
@@ -94,28 +115,6 @@ function FreeCard({ v }) {
     </div>
   );
 }
-
-// Safe extractor (use on server when saving, or on client before rendering)
-export function extractYouTubeId(input = "") {
-  try {
-    // already an ID
-    if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
-
-    // URL forms
-    const url = new URL(input);
-    if (url.hostname.includes("youtu.be")) {
-      return url.pathname.slice(1); // /VIDEOID
-    }
-    if (url.hostname.includes("youtube.com")) {
-      const id = url.searchParams.get("v");
-      if (id) return id;
-      const m = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
-      if (m) return m[1];
-    }
-  } catch {}
-  return ""; // fallback
-}
-
 
 function PaidCard({ c }) {
   const preview = makePreviewUrl(c.previewUrl, 60, 0);
@@ -128,7 +127,6 @@ function PaidCard({ c }) {
       >
         {c.title}
       </Link>
-      {/* quick actions */}
       <div className="px-3 pb-3">
         <Link
           to={`/purchase?product=${encodeURIComponent(c.sku)}&months=12`}
@@ -162,12 +160,6 @@ export default function Learn() {
     coursePage * perPage
   );
 
-  const id = extractYouTubeId(video.youtubeId);
-  const thumb =
-    video.thumbnailUrl ||
-    (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "");
-
-
   async function loadFree(page = 1) {
     setLoadingFree(true);
     try {
@@ -181,6 +173,7 @@ export default function Learn() {
       setLoadingFree(false);
     }
   }
+
   async function loadCourses() {
     setLoadingCourses(true);
     try {
@@ -259,7 +252,6 @@ export default function Learn() {
                 <PaidCard key={c._id} c={c} />
               ))}
             </div>
-
             <div className="mt-2 flex items-center justify-between">
               <button
                 className="btn btn-sm"
