@@ -25,14 +25,23 @@ router.get("/", async (req, res) => {
 });
 
 // GET /products/:key
+// router.get("/:key", async (req, res) => {
+//   const p = await Product.findOne({
+//     key: req.params.key,
+//     isPublished: true,
+//   }).lean();
+//   if (!p) return res.status(404).json({ error: "Product not found" });
+//   const withUSD = await attachUSDFields(p);
+//   res.json(withUSD);
+// });
+
+// server/routes/products.js
 router.get("/:key", async (req, res) => {
-  const p = await Product.findOne({
-    key: req.params.key,
-    isPublished: true,
-  }).lean();
+  const p = await Product.findOne({ key: req.params.key, isPublished: true })
+    .populate("relatedFreeVideoIds")
+    .lean();
   if (!p) return res.status(404).json({ error: "Product not found" });
-  const withUSD = await attachUSDFields(p);
-  res.json(withUSD);
+  res.json(p);
 });
 
 export default router;

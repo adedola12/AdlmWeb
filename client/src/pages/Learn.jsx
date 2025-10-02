@@ -95,6 +95,28 @@ function FreeCard({ v }) {
   );
 }
 
+// Safe extractor (use on server when saving, or on client before rendering)
+export function extractYouTubeId(input = "") {
+  try {
+    // already an ID
+    if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+
+    // URL forms
+    const url = new URL(input);
+    if (url.hostname.includes("youtu.be")) {
+      return url.pathname.slice(1); // /VIDEOID
+    }
+    if (url.hostname.includes("youtube.com")) {
+      const id = url.searchParams.get("v");
+      if (id) return id;
+      const m = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return ""; // fallback
+}
+
+
 function PaidCard({ c }) {
   const preview = makePreviewUrl(c.previewUrl, 60, 0);
   return (
@@ -139,6 +161,12 @@ export default function Learn() {
     (coursePage - 1) * perPage,
     coursePage * perPage
   );
+
+  const id = extractYouTubeId(video.youtubeId);
+  const thumb =
+    video.thumbnailUrl ||
+    (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "");
+
 
   async function loadFree(page = 1) {
     setLoadingFree(true);

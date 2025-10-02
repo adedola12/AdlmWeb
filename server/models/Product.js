@@ -29,6 +29,13 @@ const ProductSchema = new mongoose.Schema(
       default: "monthly",
     },
 
+    isCourse: { type: Boolean, default: false }, // product itself is a course?
+    courseSku: { type: String }, // if it maps to a PaidCourse.sku
+    relatedFreeVideoIds: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "FreeVideo" },
+    ],
+    relatedCourseSkus: [{ type: String }], // other courses by SKU
+
     // Dual currency pricing container
     price: { type: PriceSchema, default: () => ({}) },
 

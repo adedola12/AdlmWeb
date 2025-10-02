@@ -22,6 +22,7 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 import AdminProducts from "./pages/AdminProducts.jsx";
 import ProductDetail from "./pages/ProductDetail.jsx";
+import RevitProjects from "./pages/RevitProjects.jsx";
 
 const router = createBrowserRouter([
   {
@@ -90,6 +91,14 @@ const router = createBrowserRouter([
           <AdminRoute>
             <AdminProducts />
           </AdminRoute>
+        ),
+      },
+      {
+        path: "revit-projects",
+        element: (
+          <ProtectedRoute>
+            <RevitProjects />
+          </ProtectedRoute>
         ),
       },
       { path: "learn/course/:sku", element: <CourseDetail /> },

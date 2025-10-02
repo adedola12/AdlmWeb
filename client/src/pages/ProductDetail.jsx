@@ -107,7 +107,6 @@ export default function ProductDetail() {
           </Link>
         </div>
       </div>
-
       {(p.features?.length || 0) > 0 && (
         <div className="card">
           <h2 className="text-lg font-semibold mb-2">Features</h2>
@@ -118,7 +117,6 @@ export default function ProductDetail() {
           </ul>
         </div>
       )}
-
       {p.description && (
         <div className="card">
           <h2 className="text-lg font-semibold mb-2">Description</h2>
@@ -127,6 +125,39 @@ export default function ProductDetail() {
           </p>
         </div>
       )}
+
+      {(p.relatedFreeVideoIds?.length || 0) > 0 && (
+        <div className="card">
+          <h2 className="font-semibold mb-2">Related learning</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {p.relatedFreeVideoIds.map((v) => {
+              const id = extractYouTubeId(v.youtubeId);
+              const thumb =
+                v.thumbnailUrl ||
+                (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "");
+              return (
+                <a
+                  key={v._id}
+                  href={`https://www.youtube.com/watch?v=${id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="border rounded overflow-hidden hover:shadow"
+                >
+                  {thumb && (
+                    <img
+                      src={thumb}
+                      className="w-full aspect-video object-cover"
+                      alt=""
+                    />
+                  )}
+                  <div className="p-2 text-sm">{v.title}</div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      
     </div>
   );
 }
