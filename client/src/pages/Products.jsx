@@ -36,6 +36,8 @@ function CardVideo({ src, poster }) {
   );
 }
 
+const ngn = (n) => `₦${(n || 0).toLocaleString()}`;
+
 export default function Products() {
   const [qs, setQs] = useSearchParams();
   const pageFromQs = Math.max(parseInt(qs.get("page") || "1", 10), 1);
@@ -65,7 +67,6 @@ export default function Products() {
         setLoading(false);
       }
     })();
-
     setQs(
       (p) => {
         const n = new URLSearchParams(p);
@@ -80,24 +81,21 @@ export default function Products() {
   const hasPrev = page > 1;
   const hasNext = page < pages;
 
-  function goPurchase(key) {
+  function goPurchase(key, months = 1) {
     if (!user) {
-      const next = encodeURIComponent(`/purchase?product=${key}`);
+      const next = encodeURIComponent(
+        `/purchase?product=${key}&months=${months}`
+      );
       return navigate(`/login?next=${next}`);
     }
-    navigate(`/purchase?product=${key}`);
+    navigate(`/purchase?product=${key}&months=${months}`);
   }
 
   return (
     <div className="space-y-6">
-      {/* Header + admin-only button */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Products</h1>
-        {user?.role === "admin" && (
-          <Link to="/admin/products" className="btn btn-sm">
-            Add product
-          </Link>
-        )}
+        {/* “Add product” button is already shown conditionally elsewhere */}
       </div>
 
       {loading ? (
@@ -105,33 +103,53 @@ export default function Products() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {data.items.map((p) => (
-              <article key={p._id} className="card flex flex-col">
-                <CardVideo src={p.previewUrl} poster={p.thumbnailUrl} />
-                <Link
-                  to={`/product/${encodeURIComponent(p.key)}`}
-                  className="mt-3 text-lg font-semibold hover:text-blue-700"
-                  title={p.name}
-                >
-                  {p.name}
-                </Link>
-                {p.blurb && <p className="mt-1 text-slate-600">{p.blurb}</p>}
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => goPurchase(p.key)}
-                  >
-                    Purchase
-                  </button>
+            {data.items.map((p) => {
+              const yearly = p.price?.yearlyNGN || 0;
+              const monthly = p.price?.monthlyNGN || 0;
+              const cadence = p.billingInterval === "yearly" ? "year" : "month";
+              const unit = p.billingInterval === "yearly" ? yearly : monthly;
+
+              return (
+                <article key={p._id} className="card flex flex-col">
+                  <CardVideo src={p.previewUrl} poster={p.thumbnailUrl} />
+
+                  {/* Name + NGN price inline */}
                   <Link
-                    className="btn btn-sm"
                     to={`/product/${encodeURIComponent(p.key)}`}
+                    className="mt-3 text-lg font-semibold hover:text-blue-700"
+                    title={p.name}
                   >
-                    View details
+                    {p.name}
+                    {" · "}
+                    <span className="font-normal text-slate-700">
+                      {ngn(unit)} / {cadence}
+                    </span>
                   </Link>
-                </div>
-              </article>
-            ))}
+
+                  {p.blurb && <p className="mt-1 text-slate-600">{p.blurb}</p>}
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      className="btn btn-sm"
+                      onClick={() =>
+                        goPurchase(
+                          p.key,
+                          p.billingInterval === "yearly" ? 1 : 1
+                        )
+                      }
+                    >
+                      Purchase
+                    </button>
+                    <Link
+                      className="btn btn-sm"
+                      to={`/product/${encodeURIComponent(p.key)}`}
+                    >
+                      View details
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
           </div>
 
           <div className="mt-4 flex items-center justify-between">

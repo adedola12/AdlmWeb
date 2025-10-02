@@ -4,6 +4,9 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 
+const ngn = (n) => `₦${(n || 0).toLocaleString()}`;
+const usd = (n) => `$${(n || 0).toFixed(2)}`;
+
 export default function ProductDetail() {
   const { key } = useParams();
   const [p, setP] = React.useState(null);
@@ -26,20 +29,32 @@ export default function ProductDetail() {
   }, [key]);
 
   function purchase() {
-    if (!user) {
-      const next = encodeURIComponent(`/purchase?product=${key}`);
-      return navigate(`/login?next=${next}`);
-    }
-    navigate(`/purchase?product=${key}&months=12`);
+    const nextUrl = `/purchase?product=${encodeURIComponent(key)}&months=${
+      p?.billingInterval === "yearly" ? 1 : 1
+    }`;
+    if (!user) return navigate(`/login?next=${encodeURIComponent(nextUrl)}`);
+    navigate(nextUrl);
   }
 
   if (loading) return <div className="text-sm text-slate-600">Loading…</div>;
   if (!p) return <div className="text-sm text-red-600">Product not found.</div>;
 
+  const cadence = p.billingInterval === "yearly" ? "year" : "month";
+  const unitNGN =
+    p.billingInterval === "yearly" ? p.price?.yearlyNGN : p.price?.monthlyNGN;
+  const unitUSD =
+    p.billingInterval === "yearly" ? p.price?.yearlyUSD : p.price?.monthlyUSD;
+
   return (
     <div className="space-y-6">
       <div className="card">
-        <h1 className="text-2xl font-semibold">{p.name}</h1>
+        <h1 className="text-2xl font-semibold">
+          {p.name} ·{" "}
+          <span className="text-slate-700">
+            {ngn(unitNGN)} / {cadence}
+          </span>
+        </h1>
+
         <div className="mt-3 rounded-xl overflow-hidden border bg-black">
           {p.previewUrl ? (
             <video
@@ -58,11 +73,31 @@ export default function ProductDetail() {
             />
           ) : null}
         </div>
-        {p.priceMonthly > 0 && (
-          <div className="mt-2 text-sm text-slate-700">
-            From <span className="font-semibold">${p.priceMonthly}/month</span>
-          </div>
-        )}
+
+        {/* Secondary pricing info */}
+        <div className="mt-2 text-sm text-slate-700">
+          {unitUSD ? (
+            <>
+              NGN: <span className="font-semibold">{ngn(unitNGN)}</span> /{" "}
+              {cadence}
+              {" · "}USD: <span className="font-semibold">{usd(unitUSD)}</span>{" "}
+              / {cadence}
+            </>
+          ) : (
+            <>
+              NGN: <span className="font-semibold">{ngn(unitNGN)}</span> /{" "}
+              {cadence}
+            </>
+          )}
+          {p.price?.installNGN > 0 && (
+            <>
+              {" "}
+              · Install fee:{" "}
+              <span className="font-semibold">{ngn(p.price.installNGN)}</span>
+            </>
+          )}
+        </div>
+
         <div className="mt-4 flex gap-2">
           <button className="btn" onClick={purchase}>
             Purchase
