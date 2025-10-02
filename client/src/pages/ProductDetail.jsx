@@ -1,11 +1,28 @@
-// src/pages/ProductDetail.jsx
 import React from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 
-const ngn = (n) => `₦${(n || 0).toLocaleString()}`;
-const usd = (n) => `$${(n || 0).toFixed(2)}`;
+const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
+const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+
+// Safe extractor for various YouTube URL/ID shapes
+function extractYouTubeId(input = "") {
+  try {
+    if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+    const url = new URL(input);
+    if (url.hostname.includes("youtu.be")) {
+      return url.pathname.replace("/", "");
+    }
+    if (url.hostname.includes("youtube.com")) {
+      const id = url.searchParams.get("v");
+      if (id) return id;
+      const m = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return "";
+}
 
 export default function ProductDetail() {
   const { key } = useParams();
@@ -29,9 +46,8 @@ export default function ProductDetail() {
   }, [key]);
 
   function purchase() {
-    const nextUrl = `/purchase?product=${encodeURIComponent(key)}&months=${
-      p?.billingInterval === "yearly" ? 1 : 1
-    }`;
+    // 1 month for monthly, 1 year for yearly (both = 1 unit)
+    const nextUrl = `/purchase?product=${encodeURIComponent(key)}&months=1`;
     if (!user) return navigate(`/login?next=${encodeURIComponent(nextUrl)}`);
     navigate(nextUrl);
   }
@@ -70,29 +86,23 @@ export default function ProductDetail() {
             <img
               className="w-full aspect-video object-cover"
               src={p.thumbnailUrl}
+              alt=""
             />
           ) : null}
         </div>
 
         {/* Secondary pricing info */}
         <div className="mt-2 text-sm text-slate-700">
+          NGN: <span className="font-semibold">{ngn(unitNGN)}</span> / {cadence}
           {unitUSD ? (
             <>
-              NGN: <span className="font-semibold">{ngn(unitNGN)}</span> /{" "}
-              {cadence}
               {" · "}USD: <span className="font-semibold">{usd(unitUSD)}</span>{" "}
               / {cadence}
             </>
-          ) : (
+          ) : null}
+          {Number(p.price?.installNGN) > 0 && (
             <>
-              NGN: <span className="font-semibold">{ngn(unitNGN)}</span> /{" "}
-              {cadence}
-            </>
-          )}
-          {p.price?.installNGN > 0 && (
-            <>
-              {" "}
-              · Install fee:{" "}
+              {" · "}Install fee:{" "}
               <span className="font-semibold">{ngn(p.price.installNGN)}</span>
             </>
           )}
@@ -107,6 +117,7 @@ export default function ProductDetail() {
           </Link>
         </div>
       </div>
+
       {(p.features?.length || 0) > 0 && (
         <div className="card">
           <h2 className="text-lg font-semibold mb-2">Features</h2>
@@ -117,6 +128,7 @@ export default function ProductDetail() {
           </ul>
         </div>
       )}
+
       {p.description && (
         <div className="card">
           <h2 className="text-lg font-semibold mb-2">Description</h2>
@@ -138,7 +150,7 @@ export default function ProductDetail() {
               return (
                 <a
                   key={v._id}
-                  href={`https://www.youtube.com/watch?v=${id}`}
+                  href={id ? `https://www.youtube.com/watch?v=${id}` : "#"}
                   target="_blank"
                   rel="noreferrer"
                   className="border rounded overflow-hidden hover:shadow"
@@ -157,7 +169,6 @@ export default function ProductDetail() {
           </div>
         </div>
       )}
-      
     </div>
   );
 }

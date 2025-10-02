@@ -2,6 +2,7 @@ import React from "react";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { useSearchParams } from "react-router-dom";
 
 // Format helpers
 const fmt = (n, currency = "USD") =>
@@ -16,8 +17,9 @@ export default function Purchase() {
   const [currency, setCurrency] = React.useState("NGN"); // "NGN" | "USD"
   const [submitting, setSubmitting] = React.useState(false);
   const [msg, setMsg] = React.useState("");
+  const [qs] = useSearchParams();
 
-  // Load published products (public endpoint now returns price.{NGN,USD} + fxRateNGNUSD)
+  // Load published products
   React.useEffect(() => {
     (async () => {
       try {
@@ -31,6 +33,14 @@ export default function Purchase() {
       }
     })();
   }, []);
+
+  // If we land with ?product=KEY&months=N, pre-add to cart once products are loaded
+  React.useEffect(() => {
+    const k = qs.get("product");
+    const m = Math.max(parseInt(qs.get("months") || "1", 10), 1);
+    if (!k) return;
+    setCart((c) => (c[k] ? c : { ...c, [k]: { qty: m, firstTime: false } }));
+  }, [qs, products.length]);
 
   function updateItem(key, patch) {
     setCart((c) => ({
@@ -49,51 +59,30 @@ export default function Purchase() {
     );
   }
 
-  // Client-side subtotal (server re-checks)
-  function unitPrice(p) {
-    if (p.billingInterval === "yearly") {
-      return currency === "USD"
-        ? p.price?.yearlyUSD || 0
-        : p.price?.yearlyNGN || 0;
-    }
-    return currency === "USD"
-      ? p.price?.monthlyUSD || 0
-      : p.price?.monthlyNGN || 0;
-  }
-  function installFee(p, firstTime) {
-    if (!firstTime) return 0;
-    return currency === "USD"
-      ? p.price?.installUSD || 0
-      : p.price?.installNGN || 0;
-  }
-  function lineSubtotal(p, entry) {
-    if (!entry) return 0;
-    const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
-    return unitPrice(p) * qty + installFee(p, entry.firstTime);
-  }
-  // ---- helpers (replace your unitPrice/lineSubtotal with these) ----
-  function getPrices(p, currency) {
-    const m = currency === "USD" ? p.price?.monthlyUSD : p.price?.monthlyNGN;
-    const y = currency === "USD" ? p.price?.yearlyUSD : p.price?.yearlyNGN;
+  // ---- PRICING HELPERS (monthly discount and yearly application) ----
+  function getPrices(p) {
+    const monthly =
+      currency === "USD" ? p.price?.monthlyUSD : p.price?.monthlyNGN;
+    const yearly = currency === "USD" ? p.price?.yearlyUSD : p.price?.yearlyNGN;
     const install =
       currency === "USD" ? p.price?.installUSD : p.price?.installNGN;
     return {
-      monthly: Number(m || 0),
-      yearly: Number(y || 0),
+      monthly: Number(monthly || 0),
+      yearly: Number(yearly || 0),
       install: Number(install || 0),
     };
   }
 
-  function priceForQuantity(p, qty, currency, firstTime) {
-    const { monthly, yearly, install } = getPrices(p, currency);
+  // Returns { total, note }
+  function priceForQuantity(p, qty, firstTime) {
+    const { monthly, yearly, install } = getPrices(p);
     let total = 0;
-    let note = ""; // show what was applied
+    let note = "";
 
     if (p.billingInterval === "yearly") {
       total = yearly * qty;
       note = `${qty} yr × ${fmt(yearly, currency)}`;
     } else {
-      // monthly billing with rules
       const years = Math.floor(qty / 12);
       const rem = qty % 12;
 
@@ -119,11 +108,10 @@ export default function Purchase() {
     };
   }
 
-  // used where you currently compute line items
   function lineSubtotal(p, entry) {
     if (!entry) return 0;
     const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
-    return priceForQuantity(p, qty, currency, !!entry.firstTime).total;
+    return priceForQuantity(p, qty, !!entry.firstTime).total;
   }
 
   const chosen = products.filter((p) => !!cart[p.key]);
@@ -131,15 +119,6 @@ export default function Purchase() {
     (sum, p) => sum + lineSubtotal(p, cart[p.key]),
     0
   );
-
-const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
-const { total: lineTotal, note } = priceForQuantity(
-  p,
-  qty,
-  currency,
-  entry.firstTime
-);
-  
 
   async function pay() {
     if (!chosen.length) return;
@@ -159,7 +138,6 @@ const { total: lineTotal, note } = priceForQuantity(
         body: JSON.stringify({ currency, items }),
       });
 
-      // If NGN and Paystack was initialized, redirect user to Paystack
       if (out?.paystack?.authorization_url) {
         window.location.href = out.paystack.authorization_url;
         return;
@@ -203,7 +181,7 @@ const { total: lineTotal, note } = priceForQuantity(
           const entry = cart[p.key];
           const inCart = !!entry;
           const qtyLabel = p.billingInterval === "yearly" ? "Years" : "Months";
-          const unit = unitPrice(p);
+          const { monthly, yearly, install } = getPrices(p);
 
           return (
             <div
@@ -220,13 +198,13 @@ const { total: lineTotal, note } = priceForQuantity(
                 <span className="font-medium">{p.billingInterval}</span>
               </div>
 
-              {/* Show both prices for clarity */}
+              {/* Show both prices for clarity; NGN is your default but we show both rows */}
               <div className="text-xs text-slate-600 mt-1">
                 NGN:{" "}
                 {p.billingInterval === "yearly"
                   ? `₦${(p.price?.yearlyNGN || 0).toLocaleString()}/yr`
                   : `₦${(p.price?.monthlyNGN || 0).toLocaleString()}/mo`}
-                {p.price?.installNGN > 0 &&
+                {Number(p.price?.installNGN) > 0 &&
                   ` · Install: ₦${(p.price.installNGN || 0).toLocaleString()}`}
               </div>
               <div className="text-xs text-slate-600">
@@ -234,15 +212,18 @@ const { total: lineTotal, note } = priceForQuantity(
                 {p.billingInterval === "yearly"
                   ? `$${(p.price?.yearlyUSD || 0).toFixed(2)}/yr`
                   : `$${(p.price?.monthlyUSD || 0).toFixed(2)}/mo`}
-                {p.price?.installUSD > 0 &&
+                {Number(p.price?.installUSD) > 0 &&
                   ` · Install: $${(p.price.installUSD || 0).toFixed(2)}`}
               </div>
 
               <div className="text-sm mt-1">
-                Price ({currency}):{" "}
+                Current ({currency}):{" "}
                 <span className="font-medium">
-                  {fmt(unit, currency)} /{" "}
-                  {p.billingInterval === "yearly" ? "year" : "month"}
+                  {fmt(
+                    p.billingInterval === "yearly" ? yearly : monthly,
+                    currency
+                  )}{" "}
+                  / {p.billingInterval === "yearly" ? "year" : "month"}
                 </span>
               </div>
 
@@ -280,12 +261,26 @@ const { total: lineTotal, note } = priceForQuantity(
                     First-time user? (add install fee)
                   </label>
 
-                  <div className="text-sm">
-                    Subtotal:{" "}
-                    <span className="font-semibold">
-                      {fmt(lineSubtotal(p, entry), currency)}
-                    </span>
-                  </div>
+                  {(() => {
+                    const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
+                    const { total: sub, note } = priceForQuantity(
+                      p,
+                      qty,
+                      entry.firstTime
+                    );
+                    return (
+                      <div className="text-sm">
+                        Subtotal:{" "}
+                        <span className="font-semibold">
+                          {fmt(sub, currency)}
+                        </span>
+                        <span className="ml-2 text-xs text-slate-600">
+                          ({note}
+                          {entry.firstTime ? " + install" : ""})
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -304,7 +299,12 @@ const { total: lineTotal, note } = priceForQuantity(
             <div className="space-y-2 text-sm">
               {chosen.map((p) => {
                 const entry = cart[p.key];
-                const unit = unitPrice(p);
+                const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
+                const { total: lineTotal, note } = priceForQuantity(
+                  p,
+                  qty,
+                  entry.firstTime
+                );
                 const qtyLabel = p.billingInterval === "yearly" ? "yr" : "mo";
                 return (
                   <div
@@ -312,32 +312,15 @@ const { total: lineTotal, note } = priceForQuantity(
                     className="flex items-center justify-between"
                   >
                     <div>
-                      {p.name} · {entry.qty} {qtyLabel} @ {fmt(unit, currency)}
+                      {p.name} · {qty} {qtyLabel} ({note})
                       {entry.firstTime && " + install"}
                     </div>
                     <div className="font-medium">
-                      {fmt(lineSubtotal(p, entry), currency)}
+                      {fmt(lineTotal, currency)}
                     </div>
                   </div>
                 );
               })}
-            </div>
-
-            <div key={p.key} className="flex items-center justify-between">
-              <div>
-                {p.name} · {qty} {p.billingInterval === "yearly" ? "yr" : "mo"}{" "}
-                ({note}){entry.firstTime && " + install"}
-              </div>
-              <div className="font-medium">{fmt(lineTotal, currency)}</div>
-            </div>
-
-            <div className="text-sm">
-              Subtotal:{" "}
-              <span className="font-semibold">{fmt(sub, currency)}</span>
-              <span className="ml-2 text-xs text-slate-600">
-                ({note}
-                {entry.firstTime ? " + install" : ""})
-              </span>
             </div>
 
             <div className="mt-3 flex items-center justify-between text-lg">
