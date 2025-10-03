@@ -61,7 +61,13 @@ export default function Nav() {
       <nav className="bg-white/90 backdrop-blur border-b sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <Link to="/" className="font-semibold text-blue-700">
-            ADLM
+            <img
+              src="./assets/logo/adlmLogo.png"
+              alt="adlmLogo"
+              width={20}
+              height={20}
+            />
+            ADLM_Studio
           </Link>
 
           {/* Desktop menu */}
