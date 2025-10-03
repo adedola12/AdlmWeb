@@ -1,9 +1,10 @@
-// src/pages/Products.jsx
 import React from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
+import { apiAuthed } from "../http.js";
 
+/* ---------- Small helpers ---------- */
 function CardVideo({ src, poster }) {
   const ref = React.useRef(null);
   const onEnter = () => ref.current?.play();
@@ -36,8 +37,9 @@ function CardVideo({ src, poster }) {
   );
 }
 
-const ngn = (n) => `₦${(n || 0).toLocaleString()}`;
+const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
 
+/* ---------- Page ---------- */
 export default function Products() {
   const [qs, setQs] = useSearchParams();
   const pageFromQs = Math.max(parseInt(qs.get("page") || "1", 10), 1);
@@ -50,23 +52,37 @@ export default function Products() {
     pageSize,
   });
   const [loading, setLoading] = React.useState(false);
-  const { user } = useAuth();
+  const [msg, setMsg] = React.useState("");
+
+  // admin-only edit state
+  const [editingId, setEditingId] = React.useState(null);
+  const [draft, setDraft] = React.useState({});
+  const isEditing = (id) => editingId === id;
+
+  const { user, accessToken } = useAuth();
+  const isAdmin = user?.role === "admin";
   const navigate = useNavigate();
 
+  /* ---------- Load products ---------- */
+  async function load() {
+    setLoading(true);
+    setMsg("");
+    try {
+      const res = await fetch(
+        `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
+        { credentials: "include" }
+      );
+      const json = await res.json();
+      setData(json);
+    } catch (e) {
+      setMsg(e.message || "Failed to load products");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   React.useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(
-          `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
-          { credentials: "include" }
-        );
-        const json = await res.json();
-        setData(json);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    load();
     setQs(
       (p) => {
         const n = new URLSearchParams(p);
@@ -75,6 +91,7 @@ export default function Products() {
       },
       { replace: true }
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const pages = Math.max(Math.ceil(data.total / pageSize), 1);
@@ -91,12 +108,92 @@ export default function Products() {
     navigate(`/purchase?product=${key}&months=${months}`);
   }
 
+  /* ---------- Admin: start/stop edit ---------- */
+  function startEdit(p) {
+    setEditingId(p._id);
+    setDraft({
+      name: p.name || "",
+      blurb: p.blurb || "",
+      billingInterval: p.billingInterval || "monthly",
+      monthlyNGN: p.price?.monthlyNGN ?? 0,
+      yearlyNGN: p.price?.yearlyNGN ?? 0,
+      installNGN: p.price?.installNGN ?? 0,
+      monthlyUSD: p.price?.monthlyUSD ?? "",
+      yearlyUSD: p.price?.yearlyUSD ?? "",
+      installUSD: p.price?.installUSD ?? "",
+      previewUrl: p.previewUrl || "",
+      thumbnailUrl: p.thumbnailUrl || "",
+      isPublished: !!p.isPublished,
+      sort: p.sort ?? 0,
+    });
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft({});
+  }
+
+  /* ---------- Admin: save edit ---------- */
+  async function saveEdit(p) {
+    try {
+      setMsg("");
+      // build payload — keep to fields your PATCH allows
+      const payload = {
+        name: draft.name,
+        blurb: draft.blurb,
+        billingInterval: draft.billingInterval,
+        price: {
+          monthlyNGN: Number(draft.monthlyNGN || 0),
+          yearlyNGN: Number(draft.yearlyNGN || 0),
+          installNGN: Number(draft.installNGN || 0),
+        },
+        previewUrl: draft.previewUrl || undefined,
+        thumbnailUrl: draft.thumbnailUrl || undefined,
+        isPublished: !!draft.isPublished,
+        sort: Number(draft.sort || 0),
+      };
+
+      // optional USD overrides if set (empty string = remove)
+      if (draft.monthlyUSD !== "")
+        payload.price.monthlyUSD = Number(draft.monthlyUSD);
+      else payload.price.monthlyUSD = undefined;
+
+      if (draft.yearlyUSD !== "")
+        payload.price.yearlyUSD = Number(draft.yearlyUSD);
+      else payload.price.yearlyUSD = undefined;
+
+      if (draft.installUSD !== "")
+        payload.price.installUSD = Number(draft.installUSD);
+      else payload.price.installUSD = undefined;
+
+      await apiAuthed(`/admin/products/${p._id}`, {
+        token: accessToken,
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      await load();
+      setMsg("Product updated.");
+      cancelEdit();
+    } catch (e) {
+      setMsg(e.message || "Failed to update product");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Products</h1>
-        {/* “Add product” button is already shown conditionally elsewhere */}
+
+        {/* Admin-only Add Product button */}
+        {isAdmin && (
+          <Link className="btn btn-sm" to="/admin/products" title="Add product">
+            Add product
+          </Link>
+        )}
       </div>
+
+      {msg && <div className="text-sm">{msg}</div>}
 
       {loading ? (
         <div className="text-sm text-slate-600">Loading…</div>
@@ -108,6 +205,7 @@ export default function Products() {
               const monthly = p.price?.monthlyNGN || 0;
               const cadence = p.billingInterval === "yearly" ? "year" : "month";
               const unit = p.billingInterval === "yearly" ? yearly : monthly;
+              const editing = isEditing(p._id);
 
               return (
                 <article key={p._id} className="card flex flex-col">
@@ -126,27 +224,258 @@ export default function Products() {
                     </span>
                   </Link>
 
-                  {p.blurb && <p className="mt-1 text-slate-600">{p.blurb}</p>}
+                  {p.blurb && !editing && (
+                    <p className="mt-1 text-slate-600">{p.blurb}</p>
+                  )}
 
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      className="btn btn-sm"
-                      onClick={() =>
-                        goPurchase(
-                          p.key,
-                          p.billingInterval === "yearly" ? 1 : 1
-                        )
-                      }
-                    >
-                      Purchase
-                    </button>
-                    <Link
-                      className="btn btn-sm"
-                      to={`/product/${encodeURIComponent(p.key)}`}
-                    >
-                      View details
-                    </Link>
-                  </div>
+                  {/* Admin inline editor */}
+                  {editing && isAdmin ? (
+                    <div className="mt-3 space-y-2 text-sm">
+                      <input
+                        className="input"
+                        value={draft.name}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, name: e.target.value }))
+                        }
+                        placeholder="Name"
+                      />
+                      <textarea
+                        className="input"
+                        rows={2}
+                        value={draft.blurb}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, blurb: e.target.value }))
+                        }
+                        placeholder="Short blurb"
+                      />
+
+                      <label className="block">
+                        <span className="text-xs">Billing interval</span>
+                        <select
+                          className="input"
+                          value={draft.billingInterval}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              billingInterval: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="monthly">Monthly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </label>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <label className="text-xs">
+                          NGN / month
+                          <input
+                            className="input mt-1"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.monthlyNGN}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                monthlyNGN: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          NGN / year
+                          <input
+                            className="input mt-1"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.yearlyNGN}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                yearlyNGN: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          NGN install
+                          <input
+                            className="input mt-1"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.installNGN}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                installNGN: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <label className="text-xs">
+                          USD / month (opt)
+                          <input
+                            className="input mt-1"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.monthlyUSD}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                monthlyUSD: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          USD / year (opt)
+                          <input
+                            className="input mt-1"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.yearlyUSD}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                yearlyUSD: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          USD install (opt)
+                          <input
+                            className="input mt-1"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={draft.installUSD}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                installUSD: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <input
+                        className="input"
+                        placeholder="Preview video URL"
+                        value={draft.previewUrl}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            previewUrl: e.target.value,
+                          }))
+                        }
+                      />
+                      <input
+                        className="input"
+                        placeholder="Thumbnail image URL"
+                        value={draft.thumbnailUrl}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            thumbnailUrl: e.target.value,
+                          }))
+                        }
+                      />
+
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!draft.isPublished}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                isPublished: e.target.checked,
+                              }))
+                            }
+                          />
+                          Published
+                        </label>
+
+                        <label className="text-xs">
+                          Sort
+                          <input
+                            className="input ml-2 w-24"
+                            type="number"
+                            value={draft.sort}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                sort: Number(e.target.value || 0),
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => saveEdit(p)}
+                          title="Save changes"
+                        >
+                          Save
+                        </button>
+                        <button className="btn btn-sm" onClick={cancelEdit}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          className="btn btn-sm"
+                          onClick={() =>
+                            goPurchase(
+                              p.key,
+                              p.billingInterval === "yearly" ? 1 : 1
+                            )
+                          }
+                        >
+                          Purchase
+                        </button>
+                        <Link
+                          className="btn btn-sm"
+                          to={`/product/${encodeURIComponent(p.key)}`}
+                        >
+                          View details
+                        </Link>
+
+                        {/* Admin-only Edit button */}
+                        {isAdmin && (
+                          <button
+                            className="btn btn-sm"
+                            onClick={() => startEdit(p)}
+                            title="Edit product"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+
+                      {isAdmin && (
+                        <div className="mt-2 text-xs text-slate-600">
+                          {p.isPublished ? "Published" : "Hidden"} · sort{" "}
+                          {p.sort}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </article>
               );
             })}
