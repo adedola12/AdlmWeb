@@ -2,36 +2,53 @@
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { useSearchParams } from "react-router-dom";
 
 export default function RevitProjects() {
   const { accessToken } = useAuth();
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
+  const [searchParams] = useSearchParams();
 
   async function load() {
     setErr("");
     try {
       const list = await apiAuthed("/projects", { token: accessToken });
       setRows(list);
-      if (list.length && !sel) view(list[0]._id);
+
+      // deep-link selection: ?project=<id>
+      const preselectId = searchParams.get("project");
+      const toOpen = preselectId
+        ? list.find((x) => x._id === preselectId)?._id
+        : list[0]?._id;
+
+      if (toOpen) view(toOpen);
+      else setSel(null);
     } catch (e) {
-      setErr(e.message);
+      setErr(e.message || "Failed to load projects");
     }
   }
+
   async function view(id) {
     setErr("");
     try {
       const p = await apiAuthed(`/projects/${id}`, { token: accessToken });
       setSel(p);
     } catch (e) {
-      setErr(e.message);
+      setErr(e.message || "Failed to open project");
     }
   }
 
   React.useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken]);
+
+  function copyId() {
+    if (!sel?._id) return;
+    navigator.clipboard.writeText(sel._id).catch(() => {});
+  }
 
   return (
     <div className="grid md:grid-cols-3 gap-6">
@@ -42,12 +59,12 @@ export default function RevitProjects() {
             Refresh
           </button>
         </div>
-        {err && <div className="text-red-600 text-sm">{err}</div>}
+        {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
         <div className="mt-3 space-y-2">
           {rows.map((r) => (
             <button
               key={r._id}
-              className={`w-full text-left p-2 border rounded ${
+              className={`w-full text-left p-2 border rounded transition hover:bg-slate-50 ${
                 sel?._id === r._id ? "bg-blue-50" : ""
               }`}
               onClick={() => view(r._id)}
@@ -69,7 +86,15 @@ export default function RevitProjects() {
           <div className="text-sm text-slate-600">Select a project</div>
         ) : (
           <>
-            <h2 className="font-semibold mb-3">{sel.name}</h2>
+            <div className="flex items-start justify-between">
+              <h2 className="font-semibold mb-3">{sel.name}</h2>
+              <div className="flex gap-2">
+                <button className="btn btn-sm" onClick={copyId}>
+                  Copy ID
+                </button>
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
@@ -92,9 +117,16 @@ export default function RevitProjects() {
                 </tbody>
               </table>
             </div>
-            <div className="text-xs text-slate-500 mt-2">
-              Project ID: <code>{sel._id}</code> (use this in the Revit plugin
-              to open/update)
+
+            <div className="text-xs text-slate-500 mt-3 space-y-1">
+              <div>
+                Project ID: <code>{sel._id}</code> (use this in the Revit plugin
+                to open/update)
+              </div>
+              <div>
+                <b>Tip:</b> In the Revit plugin’s “Open from Cloud”, paste this
+                ID to view the saved takeoff.
+              </div>
             </div>
           </>
         )}
