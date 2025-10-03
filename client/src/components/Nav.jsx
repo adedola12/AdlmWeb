@@ -3,6 +3,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { api } from "../api.js";
+import adlmLogo from "../assets/logo/adlmLogo.png";
 
 function MenuLink({ to, children, onClick, className = "" }) {
   return (
@@ -60,14 +61,16 @@ export default function Nav() {
     <>
       <nav className="bg-white/90 backdrop-blur border-b sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-          <Link to="/" className="font-semibold text-blue-700">
+          <Link
+            to="/"
+            className="flex items-center gap-2 font-semibold text-blue-700"
+          >
             <img
-              src="./assets/logo/adlmLogo.png"
-              alt="adlmLogo"
-              width={20}
-              height={20}
+              src={adlmLogo}
+              alt="ADLM Logo"
+              className="w-8 h-8 object-contain"
             />
-            ADLM_Studio
+            <span className="hidden sm:inline">ADLM_Studio</span>
           </Link>
 
           {/* Desktop menu */}
