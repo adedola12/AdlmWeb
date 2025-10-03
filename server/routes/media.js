@@ -1,40 +1,30 @@
-// server/routes/media.js
+// server/routes/meMedia.js
 import express from "express";
 import crypto from "crypto";
-import cloudinary from "../cloudinary.js";
 import { requireAuth } from "../middleware/auth.js";
+import cloudinary from "../utils/cloudinaryConfig.js";
 
-// Simple admin gate. If you already have requireAdmin, use that instead.
-function requireAdmin(_req, res, next) {
-  if (_req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
-
+// Any authenticated user can request a signed ticket for *image* uploads.
+// POST /me/media/sign
+// body: { resource_type?: "image", folder?: "adlm/avatars", public_id?, eager? }
 const router = express.Router();
 
-/**
- * POST /admin/media/sign
- * Body (optional):
- *   resource_type: "image" | "video" | "raw" (default: "video")
- *   folder: override folder (default: process.env.CLOUDINARY_UPLOAD_FOLDER || "adlm/previews")
- *   public_id: optional (let Cloudinary auto-generate if omitted)
- *   eager: optional transformation string(s) (advanced)
- *
- * Returns: { cloud_name, api_key, timestamp, signature, folder, resource_type, public_id? }
- */
-// server/routes/media.js
-router.post("/sign", requireAuth, requireAdmin, async (req, res) => {
+router.post("/sign", requireAuth, async (req, res) => {
   try {
     const {
-      resource_type = "video",
-      folder = process.env.CLOUDINARY_UPLOAD_FOLDER || "adlm/previews",
-      public_id,
-      eager,
+      resource_type = "image", // lock to image for avatars
+      folder = process.env.CLOUDINARY_AVATAR_FOLDER || "adlm/avatars",
+      public_id, // optional
+      eager, // optional
     } = req.body || {};
+
+    if (resource_type !== "image") {
+      return res.status(400).json({ error: "Only image uploads allowed" });
+    }
 
     const timestamp = Math.floor(Date.now() / 1000);
 
-    // only sign what Cloudinary expects
+    // Sign only allowed params
     const paramsToSign = { timestamp, folder };
     if (public_id) paramsToSign.public_id = public_id;
     if (eager) paramsToSign.eager = eager;
@@ -50,38 +40,12 @@ router.post("/sign", requireAuth, requireAdmin, async (req, res) => {
       timestamp,
       signature,
       folder,
-      resource_type, // returned (so client knows /image or /video), not signed
+      resource_type: "image",
       ...(public_id ? { public_id } : {}),
       ...(eager ? { eager } : {}),
     });
   } catch (e) {
     res.status(500).json({ error: e.message || "Failed to sign" });
-  }
-});
-
-/**
- * (Optional) POST /admin/media/preview-url
- * Build a transformed preview URL (e.g., first 60s) from a Cloudinary base URL.
- * Body: { url: "https://res.cloudinary.com/<cloud>/video/upload/.../file.mp4", durationSec?: 60, startSec?: 0 }
- * Returns: { previewUrl }
- */
-router.post("/preview-url", requireAuth, requireAdmin, (req, res) => {
-  try {
-    const { url, durationSec = 60, startSec = 0 } = req.body || {};
-    if (!url) return res.status(400).json({ error: "url required" });
-
-    // Inject Cloudinary transformation (so_<start>,du_<duration>)
-    // Example: /upload/so_0,du_60/...
-    const previewUrl = url.replace(
-      /\/upload\/(?!.*\/)/, // first "upload" segment
-      `/upload/so_${startSec},du_${durationSec}/`
-    );
-
-    return res.json({ previewUrl });
-  } catch (e) {
-    return res
-      .status(500)
-      .json({ error: e.message || "Failed to build preview" });
   }
 });
 
