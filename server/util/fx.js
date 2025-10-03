@@ -6,7 +6,7 @@ import { Setting } from "../models/Setting.js";
 
 // ---- Config ----
 const CACHE_TTL_MS = Number(process.env.FX_TTL_MS || 10 * 60 * 1000); // default 10 min
-const SOURCE = process.env.FX_SOURCE || "https://open.er-api.com/v6/latest/USD";
+const SOURCE = process.env.FX_SOURCE || "https://open.er-api.com/v6/latest/NGN";
 
 // In-memory cache
 let _cache = {
