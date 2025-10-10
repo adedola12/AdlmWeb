@@ -181,7 +181,6 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* === TAB: Pending Purchases === */}
       {tab === "pending" && (
         <div className="card">
           <h2 className="font-semibold mb-3">Pending Purchases</h2>
@@ -191,52 +190,138 @@ export default function Admin() {
             <div className="text-sm text-slate-600">No pending purchases.</div>
           ) : (
             <div className="space-y-2">
-              {purchases.map((p) => (
-                <div
-                  key={p._id}
-                  className="border rounded p-3 flex items-center justify-between"
-                >
-                  <div className="text-sm">
-                    <div>
-                      <b>{p.email}</b> requested <b>{p.productKey}</b>
+              {purchases.map((p) => {
+                const isCart = Array.isArray(p.lines) && p.lines.length > 0;
+
+                return (
+                  <div
+                    key={p._id}
+                    className="border rounded p-3 flex flex-col gap-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm">
+                        <div>
+                          <b>{p.email}</b>{" "}
+                          {isCart ? (
+                            <>submitted a cart</>
+                          ) : (
+                            <>
+                              requested <b>{p.productKey}</b>
+                            </>
+                          )}
+                        </div>
+                        <div className="text-slate-600">
+                          Requested:{" "}
+                          {p.requestedMonths
+                            ? `${p.requestedMonths} mo · `
+                            : ""}
+                          {dayjs(p.createdAt).format("YYYY-MM-DD HH:mm")}
+                        </div>
+                      </div>
+
+                      {/* Right-hand actions */}
+                      <div className="flex gap-2 items-center">
+                        {!isCart ? (
+                          <>
+                            <select
+                              id={`m-${p._id}`}
+                              defaultValue={p.requestedMonths || 1}
+                              className="input max-w-[140px]"
+                            >
+                              {MONTH_CHOICES.map((m) => (
+                                <option key={m.value} value={m.value}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="btn"
+                              onClick={() =>
+                                approvePurchase(
+                                  p._id,
+                                  Number(
+                                    document.getElementById(`m-${p._id}`).value
+                                  )
+                                )
+                              }
+                            >
+                              Approve
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn"
+                            onClick={() => approvePurchase(p._id)}
+                          >
+                            Approve cart
+                          </button>
+                        )}
+
+                        <button
+                          className="btn"
+                          onClick={() => rejectPurchase(p._id)}
+                        >
+                          Reject
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      Requested: {p.requestedMonths} mo ·{" "}
-                      {dayjs(p.createdAt).format("YYYY-MM-DD HH:mm")}
-                    </div>
+
+                    {/* Cart line items (if any) */}
+                    {isCart && (
+                      <div className="rounded border bg-slate-50">
+                        <div className="px-3 py-2 text-sm font-medium">
+                          Cart · {p.currency}{" "}
+                          {p.totalAmount?.toLocaleString?.() ?? p.totalAmount}
+                        </div>
+                        <div className="divide-y">
+                          {p.lines.map((ln, idx) => {
+                            const months =
+                              ln.billingInterval === "yearly"
+                                ? (ln.qty || 0) * 12
+                                : ln.qty || 0;
+                            return (
+                              <div
+                                key={idx}
+                                className="px-3 py-2 text-sm flex items-center justify-between"
+                              >
+                                <div>
+                                  <div className="font-medium">
+                                    {ln.name || ln.productKey}
+                                  </div>
+                                  <div className="text-slate-600">
+                                    {ln.billingInterval} · qty {ln.qty}{" "}
+                                    {ln.billingInterval === "yearly"
+                                      ? "(years)"
+                                      : "(months)"}{" "}
+                                    · adds <b>{months}</b> month
+                                    {months === 1 ? "" : "s"}
+                                  </div>
+                                </div>
+                                <div className="text-right text-slate-700">
+                                  <div>
+                                    Unit: {p.currency}{" "}
+                                    {ln.unit?.toLocaleString?.() ?? ln.unit}
+                                  </div>
+                                  {ln.install > 0 && (
+                                    <div className="text-xs">
+                                      Install: {p.currency} {ln.install}
+                                    </div>
+                                  )}
+                                  <div className="font-semibold">
+                                    Subtotal: {p.currency}{" "}
+                                    {ln.subtotal?.toLocaleString?.() ??
+                                      ln.subtotal}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <select
-                      id={`m-${p._id}`}
-                      defaultValue={p.requestedMonths}
-                      className="input max-w-[140px]"
-                    >
-                      {MONTH_CHOICES.map((m) => (
-                        <option key={m.value} value={m.value}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="btn"
-                      onClick={() =>
-                        approvePurchase(
-                          p._id,
-                          Number(document.getElementById(`m-${p._id}`).value)
-                        )
-                      }
-                    >
-                      Approve
-                    </button>
-                    <button
-                      className="btn"
-                      onClick={() => rejectPurchase(p._id)}
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
