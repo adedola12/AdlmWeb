@@ -204,7 +204,7 @@ export default function Profile() {
             />
           </div>
 
-          <div>
+          {/* <div>
             <label className="form-label">Profile image URL</label>
             <input
               className="input"
@@ -215,7 +215,7 @@ export default function Profile() {
             <p className="text-xs text-slate-500 mt-1">
               Paste a URL manually, or use “Upload new photo” above.
             </p>
-          </div>
+          </div> */}
 
           {msg && <div className="text-sm">{msg}</div>}
           {!accessToken && (
