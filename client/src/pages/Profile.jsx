@@ -8,6 +8,7 @@ export default function Profile() {
   const [username, setUsername] = React.useState(user?.username || "");
   const [avatarUrl, setAvatarUrl] = React.useState(user?.avatarUrl || "");
   const [msg, setMsg] = React.useState("");
+  const [imgErr, setImgErr] = React.useState(false);
 
   // upload state
   const [uploading, setUploading] = React.useState(false);
@@ -28,11 +29,7 @@ export default function Profile() {
   }, [accessToken]);
 
   async function saveProfile(next = {}) {
-    const body = {
-      username,
-      avatarUrl,
-      ...next,
-    };
+    const body = { username, avatarUrl, ...next };
     const res = await apiAuthed("/me/profile", {
       token: accessToken,
       method: "POST",
@@ -49,7 +46,7 @@ export default function Profile() {
     setMsg("Requesting upload ticket…");
 
     try {
-      // 👇 non-admin signer for profile images
+      // non-admin signer for profile images
       const sig = await apiAuthed(`/me/media/sign`, {
         token: accessToken,
         method: "POST",
@@ -62,8 +59,6 @@ export default function Profile() {
 
       const fd = new FormData();
       fd.append("file", file);
-
-      // signed (not unsigned) params
       fd.append("api_key", sig.api_key);
       fd.append("timestamp", sig.timestamp);
       fd.append("signature", sig.signature);
@@ -77,9 +72,8 @@ export default function Profile() {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", endpoint);
         xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) {
+          if (ev.lengthComputable)
             setPct(Math.round((ev.loaded / ev.total) * 100));
-          }
         };
         xhr.onload = () => {
           try {
@@ -112,16 +106,18 @@ export default function Profile() {
     const f = e.target.files?.[0];
     if (!f) return;
     setMsg(`Uploading ${f.name}…`);
+    setImgErr(false);
     try {
       const url = await uploadToCloudinary(f);
       if (!url) throw new Error("No URL returned");
-      setAvatarUrl(url);
-      await saveProfile({ avatarUrl: url }); // auto-save immediately
+      // cache-bust so the <img> always refetches the new file
+      const withBust = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+      setAvatarUrl(withBust);
+      await saveProfile({ avatarUrl: url }); // store clean URL in DB
       setMsg("✅ Profile image updated.");
     } catch (err) {
       setMsg(`❌ ${err.message || "Upload error"}`);
     } finally {
-      // reset input so picking same file again still triggers onChange
       if (fileRef.current) fileRef.current.value = "";
     }
   }
@@ -129,6 +125,7 @@ export default function Profile() {
   async function save(e) {
     e.preventDefault();
     setMsg("");
+    setImgErr(false);
     try {
       await saveProfile();
       setMsg("Profile updated.");
@@ -141,6 +138,8 @@ export default function Profile() {
     user?.email || "A"
   )}`;
 
+  const imgSrc = (avatarUrl || "").trim() || placeholder;
+
   return (
     <div className="max-w-xl mx-auto space-y-6">
       <div className="card">
@@ -148,14 +147,15 @@ export default function Profile() {
 
         <div className="flex items-center gap-4 mb-4">
           <img
-            src={avatarUrl || placeholder}
-            className="w-16 h-16 rounded-full border object-cover"
-            alt=""
+            key={imgSrc} // force reload when URL changes
+            src={imgSrc}
+            onError={() => setImgErr(true)}
+            className="w-16 h-16 rounded-full border object-cover bg-slate-100"
+            alt="Profile"
           />
           <div className="flex-1">
             <div className="text-sm text-slate-600">{user?.email}</div>
 
-            {/* Upload button + hidden file input */}
             <div className="mt-2 flex items-center gap-3">
               <label
                 className={`btn btn-sm ${
@@ -185,6 +185,12 @@ export default function Profile() {
                 </div>
               )}
             </div>
+            {imgErr && (
+              <div className="mt-2 text-xs text-red-600">
+                Couldn’t load the image. Make sure the Cloudinary URL is public
+                and correct.
+              </div>
+            )}
           </div>
         </div>
 
@@ -207,7 +213,7 @@ export default function Profile() {
               placeholder="https://…"
             />
             <p className="text-xs text-slate-500 mt-1">
-              You can paste a URL manually, or use “Upload new photo” above.
+              Paste a URL manually, or use “Upload new photo” above.
             </p>
           </div>
 
