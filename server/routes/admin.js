@@ -6,6 +6,8 @@ import { Purchase } from "../models/Purchase.js"; // <-- IMPORTANT
 
 const router = express.Router();
 
+
+
 // Admin: list users
 // routes/admin.js  (your existing admin router)
 router.get("/users", requireAuth, requireAdmin, async (req, res) => {
@@ -23,6 +25,27 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
 
   return res.json(list);
 });
+
+// small helper
+function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
+  const now = dayjs();
+  let ent = (userDoc.entitlements || []).find(e => e.productKey === productKey);
+
+  if (!ent) {
+    ent = {
+      productKey,
+      status: "active",
+      expiresAt: now.add(monthsToAdd, "month").toDate(),
+    };
+    userDoc.entitlements.push(ent);
+  } else {
+    const base = ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
+      ? dayjs(ent.expiresAt)
+      : now;
+    ent.status = "active";
+    ent.expiresAt = base.add(monthsToAdd, "month").toDate();
+  }
+}
 
 
 // Admin: set/extend entitlement (manual override tool you already had)
@@ -73,51 +96,56 @@ router.get("/purchases", requireAuth, requireAdmin, async (req, res) => {
   return res.json(list);
 });
 
-// Admin: approve a purchase and apply entitlement
-// body: { months } optional; if omitted, uses purchase.requestedMonths
+// Admin: approve a purchase and apply entitlement(s)
+// If purchase has `lines`, each line is applied. If it's a legacy single-product
+// purchase, we fall back to productKey/requestedMonths.
 router.post(
   "/purchases/:id/approve",
   requireAuth,
   requireAdmin,
   async (req, res) => {
-    const p = await Purchase.findById(req.params.id);
-    if (!p) return res.status(404).json({ error: "Purchase not found" });
-    if (p.status !== "pending")
+    const purchase = await Purchase.findById(req.params.id);
+    if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+    if (purchase.status !== "pending") {
       return res.status(400).json({ error: "Purchase not pending" });
-
-    const months = Number(req.body?.months) || p.requestedMonths || 1;
-
-    const u = await User.findById(p.userId);
-    if (!u) return res.status(404).json({ error: "User not found" });
-
-    const now = dayjs();
-    let ent = u.entitlements.find((e) => e.productKey === p.productKey);
-
-    if (!ent) {
-      ent = {
-        productKey: p.productKey,
-        status: "active",
-        expiresAt: now.add(months, "month").toDate(),
-      };
-      u.entitlements.push(ent);
-    } else {
-      const base =
-        ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
-          ? dayjs(ent.expiresAt)
-          : now;
-      ent.status = "active";
-      ent.expiresAt = base.add(months, "month").toDate();
     }
 
-    await u.save();
+    const user = await User.findById(purchase.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    p.status = "approved";
-    p.decidedBy = req.user.email;
-    p.decidedAt = new Date();
-    p.approvedMonths = months;
-    await p.save();
+    // If request includes an override for legacy single-product, use it.
+    const overrideMonths = Number(req.body?.months);
 
-    return res.json({ ok: true, purchase: p, entitlements: u.entitlements });
+    if (Array.isArray(purchase.lines) && purchase.lines.length > 0) {
+      // Cart flow: apply each line
+      purchase.lines.forEach((ln) => {
+        // convert qty to months
+        const months =
+          ln.billingInterval === "yearly" ? (ln.qty || 0) * 12 : (ln.qty || 0);
+        if (months > 0) addMonthsToEntitlement(user, ln.productKey, months);
+      });
+    } else if (purchase.productKey) {
+      // Legacy single-product flow
+      const months = (overrideMonths || purchase.requestedMonths || 1);
+      addMonthsToEntitlement(user, purchase.productKey, months);
+      purchase.approvedMonths = months;
+    } else {
+      return res.status(400).json({ error: "Nothing to approve for this purchase" });
+    }
+
+    await user.save();
+
+    purchase.status = "approved";
+    purchase.decidedBy = req.user.email;
+    purchase.decidedAt = new Date();
+    await purchase.save();
+
+    return res.json({
+      ok: true,
+      purchase,
+      entitlements: user.entitlements,
+      message: "Purchase approved and entitlements updated.",
+    });
   }
 );
 
