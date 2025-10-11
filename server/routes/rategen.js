@@ -2,28 +2,43 @@ import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlement } from "../middleware/requireEntitlement.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import {
+  fetchMasterMaterials,
+  fetchMasterLabour,
+} from "../util/rategenMaster.js";
 
 const router = express.Router();
+
+// You already had these:
 router.use(requireAuth, requireEntitlement("rategen"));
 
-/** Ensure a doc exists and return it */
-async function getOrCreate(userId) {
-  let lib = await RateGenLibrary.findOne({ userId });
-  if (!lib)
-    lib = await RateGenLibrary.create({ userId, materials: [], labour: [] });
-  return lib;
-}
+/** NEW: GET /rategen/master  → { materials, labour } */
+router.get("/master", async (_req, res) => {
+  try {
+    const [materials, labour] = await Promise.all([
+      fetchMasterMaterials(),
+      fetchMasterLabour(),
+    ]);
+    res.json({ materials, labour, source: "mongo-master" });
+  } catch (e) {
+    res
+      .status(500)
+      .json({ error: e.message || "Failed to load master prices" });
+  }
+});
 
-/** GET /rategen/library */
+/** Existing per-user library (kept as-is) */
 router.get("/library", async (req, res) => {
-  const lib = await getOrCreate(req.user._id);
+  let lib = await RateGenLibrary.findOne({ userId: req.user._id });
+  if (!lib) lib = await RateGenLibrary.create({ userId: req.user._id });
   res.json(lib);
 });
 
-/** PUT /rategen/library  { materials?, labour?, baseVersion } */
 router.put("/library", async (req, res) => {
   const { materials, labour, baseVersion } = req.body || {};
-  const lib = await getOrCreate(req.user._id);
+  let lib = await RateGenLibrary.findOne({ userId: req.user._id });
+  if (!lib) lib = await RateGenLibrary.create({ userId: req.user._id });
+
   if (typeof baseVersion === "number" && baseVersion !== lib.version) {
     return res.status(409).json({ error: "Version conflict" });
   }
