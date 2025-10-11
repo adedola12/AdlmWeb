@@ -15,8 +15,8 @@ function Table({ rows }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-b">
+          {rows.map((r) => (
+            <tr key={`${r.sn}-${r.description}`} className="border-b">
               <td className="py-2 pr-4">{r.sn}</td>
               <td className="py-2 pr-4">{r.description}</td>
               <td className="py-2 pr-4">{r.unit}</td>
@@ -38,7 +38,8 @@ export default function RateGenLibrary() {
   async function load() {
     setErr("");
     try {
-      const data = await apiAuthed("/rategen/library", { token: accessToken });
+      const data = await apiAuthed("/rategen/master", { token: accessToken });
+      // matches { materials, labour }
       setLib(data);
     } catch (e) {
       setErr(e.message || "Failed to load");
