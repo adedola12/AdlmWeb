@@ -23,6 +23,8 @@ import AdminRoute from "./components/AdminRoute.jsx";
 import AdminProducts from "./pages/AdminProducts.jsx";
 import ProductDetail from "./pages/ProductDetail.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
+import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
+import RateGenLibrary from "./pages/RateGenLibrary.jsx";
 
 const router = createBrowserRouter([
   {
@@ -103,6 +105,22 @@ const router = createBrowserRouter([
       },
       { path: "learn/course/:sku", element: <CourseDetail /> },
       { path: "learn/free/:id", element: <FreeVideoDetail /> },
+      {
+        path: "projects/:tool", // revit | revitmep | planswift
+        element: (
+          <ProtectedRoute>
+            <ProjectsGeneric />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "rategen",
+        element: (
+          <ProtectedRoute>
+            <RateGenLibrary />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 ]);

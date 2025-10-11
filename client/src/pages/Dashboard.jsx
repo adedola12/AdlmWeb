@@ -23,13 +23,13 @@ export default function Dashboard() {
   }, [accessToken]);
 
   function openProduct(e) {
-    // Only allow click for active subscriptions
     if (e.status !== "active") return;
-    if ((e.productKey || "").toLowerCase() === "revit") {
-      navigate("/revit-projects");
-    } else {
-      navigate(`/product/${e.productKey}`);
-    }
+    const key = (e.productKey || "").toLowerCase();
+    if (key === "revit") return navigate("/projects/revit");
+    if (key === "revitmep") return navigate("/projects/revitmep");
+    if (key === "planswift") return navigate("/projects/planswift");
+    if (key === "rategen") return navigate("/rategen");
+    navigate(`/product/${e.productKey}`);
   }
 
   return (
