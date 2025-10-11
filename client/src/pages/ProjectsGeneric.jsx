@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 const TITLES = {
   revit: "Revit Projects",
-  revitmep: "Revit MEP Projects",
+  mep: "Revit MEP Projects",
   planswift: "PlanSwift Projects",
 };
 
