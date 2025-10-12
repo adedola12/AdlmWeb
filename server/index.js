@@ -13,7 +13,7 @@ import adminRoutes from "./routes/admin.js";
 import purchaseRoutes from "./routes/purchase.js";
 import learnPublic from "./routes/Learn.js";
 import adminLearn from "./routes/admin.learn.js";
-import adminMediaRoutes from "./routes/admin.media.js"; // ✅ correct import
+import adminMediaRoutes from "./routes/admin.media.js";
 import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
@@ -29,63 +29,51 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(express.json());
 app.use(morgan("dev"));
 
-// CORS
+/* ----------------------- CORS ----------------------- */
 const whitelist = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin(origin, cb) {
-      if (!origin) return cb(null, true);
-      if (whitelist.includes(origin)) return cb(null, true);
-      if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
-      if (/\.vercel\.app$/.test(origin)) return cb(null, true);
-      cb(new Error(`Not allowed by CORS: ${origin}`));
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-
-// after app.use(cors({...}))
-app.options('*', cors({
+const corsOptions = {
   origin(origin, cb) {
-    if (!origin) return cb(null, true);
-    if ((process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).includes(origin)) return cb(null, true);
+    if (!origin) return cb(null, true); // allow server-to-server / Postman
+    if (whitelist.includes(origin)) return cb(null, true);
     if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
     if (/\.vercel\.app$/.test(origin)) return cb(null, true);
     cb(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization'],
-}));
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
 
+app.use(cors(corsOptions));
+// ✅ Express 5: use a RegExp for “any path” preflight
+app.options(/.*/, cors(corsOptions));
+
+/* ----------------------- Root ----------------------- */
 app.get("/", (_req, res) =>
   res.json({ ok: true, service: "ADLM Auth/Licensing" })
 );
 
-// Mount
+/* ----------------------- API routes ----------------------- */
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
 app.use("/admin", adminRoutes);
 app.use("/purchase", purchaseRoutes);
 app.use("/learn", learnPublic);
 app.use("/admin/learn", adminLearn);
-app.use("/admin/media", adminMediaRoutes); // ✅ ensures /admin/media/sign exists
+app.use("/admin/media", adminMediaRoutes);
 app.use("/products", productsPublic);
 app.use("/admin/products", adminProducts);
 app.use("/admin/settings", adminSettings);
 app.use("/projects", projectRoutes);
 app.use("/me/media", meMediaRouter);
 app.use("/me/media", meMediaRoutes);
-// ✅ mount API routes BEFORE static serving & SPA fallback
 app.use("/rategen", rategenRouter);
 
-// CORS error helper
+/* ------------- CORS error helper (keep after routes) ------------- */
 app.use((err, _req, res, next) => {
   if (err && /Not allowed by CORS/.test(err.message)) {
     return res.status(403).json({ error: err.message });
@@ -93,16 +81,17 @@ app.use((err, _req, res, next) => {
   next(err);
 });
 
-// then your static hosting / SPA fallback:
+/* ----------------------- Static / SPA ----------------------- */
 app.use(express.static("client/dist"));
 
-// 404 + generic
+/* ----------------------- 404 + generic ----------------------- */
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: "Server error" });
 });
 
+/* ----------------------- Boot ----------------------- */
 const port = process.env.PORT || 4000;
 connectDB(process.env.MONGO_URI)
   .then(() => app.listen(port, () => console.log(`Server running on :${port}`)))
