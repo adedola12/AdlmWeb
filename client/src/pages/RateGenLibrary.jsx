@@ -36,11 +36,14 @@ export default function RateGenLibrary() {
   const [err, setErr] = React.useState("");
 
   async function load() {
+    if (!accessToken) {
+      setErr("You’re signed out. Please sign in again.");
+      return;
+    }
     setErr("");
     try {
       const data = await apiAuthed("/rategen/master", { token: accessToken });
-      // matches { materials, labour }
-      setLib(data);
+      setLib(data); // { materials, labour, source }
     } catch (e) {
       setErr(e.message || "Failed to load");
     }
