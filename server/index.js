@@ -50,6 +50,20 @@ app.use(
   })
 );
 
+// after app.use(cors({...}))
+app.options('*', cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if ((process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).includes(origin)) return cb(null, true);
+    if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
+    if (/\.vercel\.app$/.test(origin)) return cb(null, true);
+    cb(new Error(`Not allowed by CORS: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+}));
+
 app.get("/", (_req, res) =>
   res.json({ ok: true, service: "ADLM Auth/Licensing" })
 );

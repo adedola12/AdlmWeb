@@ -21,11 +21,13 @@ router.get("/master", async (_req, res) => {
     ]);
     res.json({ materials, labour, source: "mongo-master" });
   } catch (e) {
+    console.error("[/rategen/master] error:", e);
     res
       .status(500)
-      .json({ error: e.message || "Failed to load master prices" });
+      .json({ error: e?.message || "Failed to load master prices" });
   }
 });
+
 
 /** Your per-user library (kept for overrides) */
 router.get("/library", async (req, res) => {
