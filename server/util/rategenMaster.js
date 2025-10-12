@@ -1,19 +1,36 @@
+// server/util/rategenMaster.js
 import mongoose from "mongoose";
 
 let conn = null;
+
 function connection() {
   if (conn) return conn;
+
   const uri = process.env.RATEGEN_MONGO_URI;
   if (!uri) throw new Error("RATEGEN_MONGO_URI not set");
+
+  const dbName = process.env.RATEGEN_DB || "ADLMRateDB";
+
   conn = mongoose.createConnection(uri, {
+    dbName, // ✅ make sure we select the right DB
     maxPoolSize: 3,
     serverSelectionTimeoutMS: 8000,
   });
+
+  conn.on("error", (e) => {
+    console.error("[RateGen master Mongo] connection error:", e);
+  });
+
   return conn;
 }
+
 function makeModel(collection, shape) {
   const c = connection();
-  const schema = new mongoose.Schema(shape, { strict: false, collection });
+  const schema = new mongoose.Schema(shape, {
+    strict: false,
+    collection,
+  });
+  // The third arg pins the physical collection name
   return c.model(collection, schema, collection);
 }
 
@@ -22,6 +39,7 @@ const Material = () =>
     MaterialName: String,
     MaterialUnit: String,
     MaterialPrice: Number,
+    MaterialCategory: String,
   });
 
 const Labour = () =>
@@ -29,6 +47,7 @@ const Labour = () =>
     LabourName: String,
     LabourUnit: String,
     LabourPrice: Number,
+    LabourCategory: String,
   });
 
 export async function fetchMasterMaterials() {
@@ -45,6 +64,7 @@ export async function fetchMasterMaterials() {
       price: Number(d.MaterialPrice || 0),
     }));
 }
+
 export async function fetchMasterLabour() {
   const L = Labour();
   const docs = await L.find({}).lean();
