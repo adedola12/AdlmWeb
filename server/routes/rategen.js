@@ -9,10 +9,10 @@ import {
 
 const router = express.Router();
 
-// You already had these:
+// all rategen endpoints require a valid user + rategen entitlement
 router.use(requireAuth, requireEntitlement("rategen"));
 
-/** NEW: GET /rategen/master  → { materials, labour } */
+/** MASTER prices pulled from ADLMRateDB (Mongo) */
 router.get("/master", async (_req, res) => {
   try {
     const [materials, labour] = await Promise.all([
@@ -27,7 +27,7 @@ router.get("/master", async (_req, res) => {
   }
 });
 
-/** Existing per-user library (kept as-is) */
+/** Your per-user library (kept for overrides) */
 router.get("/library", async (req, res) => {
   let lib = await RateGenLibrary.findOne({ userId: req.user._id });
   if (!lib) lib = await RateGenLibrary.create({ userId: req.user._id });
