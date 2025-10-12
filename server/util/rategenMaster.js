@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 
 let conn = null;
-
 function connection() {
   if (conn) return conn;
   const uri = process.env.RATEGEN_MONGO_URI;
@@ -12,17 +11,12 @@ function connection() {
   });
   return conn;
 }
-
-function makeModel(collName, schemaShape) {
+function makeModel(collection, shape) {
   const c = connection();
-  const sch = new mongoose.Schema(schemaShape, {
-    strict: false,
-    collection: collName,
-  });
-  return c.model(collName, sch, collName); // (name, schema, collection)
+  const schema = new mongoose.Schema(shape, { strict: false, collection });
+  return c.model(collection, schema, collection);
 }
 
-// Schemas reflect your screenshot/desktop fields
 const Material = () =>
   makeModel(process.env.RATEGEN_MAT_COLLECTION || "Materials", {
     MaterialName: String,
@@ -37,7 +31,6 @@ const Labour = () =>
     LabourPrice: Number,
   });
 
-/** Fetch and map to {sn, description, unit, price} */
 export async function fetchMasterMaterials() {
   const M = Material();
   const docs = await M.find({}).lean();
@@ -52,7 +45,6 @@ export async function fetchMasterMaterials() {
       price: Number(d.MaterialPrice || 0),
     }));
 }
-
 export async function fetchMasterLabour() {
   const L = Labour();
   const docs = await L.find({}).lean();

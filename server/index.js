@@ -20,6 +20,7 @@ import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
 import meMediaRouter from "./routes/media.js";
 import meMediaRoutes from "./routes/me-media.js";
+import rategenRouter from "./routes/rategen.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -67,6 +68,8 @@ app.use("/admin/settings", adminSettings);
 app.use("/projects", projectRoutes);
 app.use("/me/media", meMediaRouter);
 app.use("/me/media", meMediaRoutes);
+// ✅ mount API routes BEFORE static serving & SPA fallback
+app.use("/rategen", rategenRouter);
 
 // CORS error helper
 app.use((err, _req, res, next) => {
@@ -75,6 +78,9 @@ app.use((err, _req, res, next) => {
   }
   next(err);
 });
+
+// then your static hosting / SPA fallback:
+app.use(express.static("client/dist"));
 
 // 404 + generic
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
