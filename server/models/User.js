@@ -20,7 +20,20 @@ const UserSchema = new mongoose.Schema(
   {
     email: { type: String, index: true, unique: true },
     username: { type: String, index: true, unique: true, sparse: true },
-    avatarUrl: { type: String }, // ← NEW
+    avatarUrl: { type: String },
+    zone: {
+      type: String,
+      enum: [
+        "north_west",
+        "north_east",
+        "north_central",
+        "south_west",
+        "south_east",
+        "south_south",
+      ],
+      default: null,
+    },
+
     passwordHash: String,
     role: { type: String, enum: ["user", "admin"], default: "user" },
     disabled: { type: Boolean, default: false },

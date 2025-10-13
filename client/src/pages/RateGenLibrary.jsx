@@ -34,6 +34,21 @@ export default function RateGenLibrary() {
   const [tab, setTab] = React.useState("materials");
   const [lib, setLib] = React.useState(null);
   const [err, setErr] = React.useState("");
+  const [zone, setZone] = React.useState("");
+
+  // async function load() {
+  //   if (!accessToken) {
+  //     setErr("You’re signed out. Please sign in again.");
+  //     return;
+  //   }
+  //   setErr("");
+  //   try {
+  //     const data = await apiAuthed("/rategen/master", { token: accessToken });
+  //     setLib(data); // { materials, labour, source }
+  //   } catch (e) {
+  //     setErr(e.message || "Failed to load");
+  //   }
+  // }
 
   async function load() {
     if (!accessToken) {
@@ -43,7 +58,8 @@ export default function RateGenLibrary() {
     setErr("");
     try {
       const data = await apiAuthed("/rategen/master", { token: accessToken });
-      setLib(data); // { materials, labour, source }
+      setLib(data); // { materials, labour, source, zone }
+      setZone(data.zone || "");
     } catch (e) {
       setErr(e.message || "Failed to load");
     }
@@ -58,6 +74,13 @@ export default function RateGenLibrary() {
       <div className="card">
         <div className="flex items-center justify-between">
           <h1 className="font-semibold">RateGen Library</h1>
+          {zone && (
+            <div className="text-xs text-slate-600 mt-1">
+              Showing prices for{" "}
+              <span className="font-medium">{zone.replace(/_/g, " ")}</span>
+            </div>
+          )}
+
           <button className="btn btn-sm" onClick={load}>
             Refresh
           </button>

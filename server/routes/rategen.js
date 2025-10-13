@@ -6,20 +6,26 @@ import {
   fetchMasterMaterials,
   fetchMasterLabour,
 } from "../util/rategenMaster.js";
+import { normalizeZone, ZONES } from "../util/zones.js";
 
 const router = express.Router();
 
-// all rategen endpoints require a valid user + rategen entitlement
+// everything here requires user + rategen
 router.use(requireAuth, requireEntitlement("rategen"));
 
-/** MASTER prices pulled from ADLMRateDB (Mongo) */
-router.get("/master", async (_req, res) => {
+/** Quick list of zones (for clients that want labels) */
+router.get("/zones", (_req, res) => res.json(ZONES));
+
+/** Master prices — uses ?zone=… or user.profile.zone */
+router.get("/master", async (req, res) => {
   try {
+    const qZone = normalizeZone(req.query.zone);
+    const zone = qZone || req.user.zone || null;
     const [materials, labour] = await Promise.all([
-      fetchMasterMaterials(),
-      fetchMasterLabour(),
+      fetchMasterMaterials(zone),
+      fetchMasterLabour(zone),
     ]);
-    res.json({ materials, labour, source: "mongo-master" });
+    res.json({ materials, labour, source: "mongo-master", zone });
   } catch (e) {
     console.error("[/rategen/master] error:", e);
     res
@@ -28,8 +34,7 @@ router.get("/master", async (_req, res) => {
   }
 });
 
-
-/** Your per-user library (kept for overrides) */
+/** User overrides library */
 router.get("/library", async (req, res) => {
   let lib = await RateGenLibrary.findOne({ userId: req.user._id });
   if (!lib) lib = await RateGenLibrary.create({ userId: req.user._id });
