@@ -1,36 +1,21 @@
-// server/util/rategenMaster.js
 import mongoose from "mongoose";
+import { normalizeZone } from "./zones.js";
 
 let conn = null;
-
 function connection() {
   if (conn) return conn;
-
   const uri = process.env.RATEGEN_MONGO_URI;
   if (!uri) throw new Error("RATEGEN_MONGO_URI not set");
-
-  const dbName = process.env.RATEGEN_DB || "ADLMRateDB";
-
   conn = mongoose.createConnection(uri, {
-    dbName, // ✅ make sure we select the right DB
     maxPoolSize: 3,
     serverSelectionTimeoutMS: 8000,
   });
-
-  conn.on("error", (e) => {
-    console.error("[RateGen master Mongo] connection error:", e);
-  });
-
   return conn;
 }
 
 function makeModel(collection, shape) {
   const c = connection();
-  const schema = new mongoose.Schema(shape, {
-    strict: false,
-    collection,
-  });
-  // The third arg pins the physical collection name
+  const schema = new mongoose.Schema(shape, { strict: false, collection });
   return c.model(collection, schema, collection);
 }
 
@@ -39,7 +24,7 @@ const Material = () =>
     MaterialName: String,
     MaterialUnit: String,
     MaterialPrice: Number,
-    MaterialCategory: String,
+    zone: String, // 👈 ensure exists in Atlas rows
   });
 
 const Labour = () =>
@@ -47,35 +32,60 @@ const Labour = () =>
     LabourName: String,
     LabourUnit: String,
     LabourPrice: Number,
-    LabourCategory: String,
+    zone: String, // 👈 ensure exists in Atlas rows
   });
 
-export async function fetchMasterMaterials() {
-  const M = Material();
-  const docs = await M.find({}).lean();
-  return docs
-    .sort((a, b) =>
-      String(a.MaterialName || "").localeCompare(String(b.MaterialName || ""))
-    )
-    .map((d, i) => ({
-      sn: i + 1,
-      description: d.MaterialName || "",
-      unit: d.MaterialUnit || "",
-      price: Number(d.MaterialPrice || 0),
-    }));
+function sortByName(a, b, key) {
+  return String(a[key] || "").localeCompare(String(b[key] || ""));
 }
 
-export async function fetchMasterLabour() {
+function selectForZone(all, zoneKey, nameKey) {
+  // strategy:
+  // - prefer exact zone match
+  // - else fallback to "national"
+  // - else fallback to first with that name
+  const z = normalizeZone(zoneKey);
+  const byName = new Map();
+  for (const d of all) {
+    const n = d[nameKey] || "";
+    if (!byName.has(n)) byName.set(n, []);
+    byName.get(n).push(d);
+  }
+  const out = [];
+  for (const [n, arr] of byName.entries()) {
+    let chosen =
+      (z && arr.find((x) => (x.zone || "").toLowerCase() === z)) ||
+      arr.find((x) => (x.zone || "").toLowerCase() === "national") ||
+      arr[0];
+    out.push(chosen);
+  }
+  return out;
+}
+
+export async function fetchMasterMaterials(zoneKey) {
+  const M = Material();
+  const docs = await M.find({}).lean();
+  const selected = selectForZone(docs, zoneKey, "MaterialName").sort((a, b) =>
+    sortByName(a, b, "MaterialName")
+  );
+  return selected.map((d, i) => ({
+    sn: i + 1,
+    description: d.MaterialName || "",
+    unit: d.MaterialUnit || "",
+    price: Number(d.MaterialPrice || 0),
+  }));
+}
+
+export async function fetchMasterLabour(zoneKey) {
   const L = Labour();
   const docs = await L.find({}).lean();
-  return docs
-    .sort((a, b) =>
-      String(a.LabourName || "").localeCompare(String(b.LabourName || ""))
-    )
-    .map((d, i) => ({
-      sn: i + 1,
-      description: d.LabourName || "",
-      unit: d.LabourUnit || "",
-      price: Number(d.LabourPrice || 0),
-    }));
+  const selected = selectForZone(docs, zoneKey, "LabourName").sort((a, b) =>
+    sortByName(a, b, "LabourName")
+  );
+  return selected.map((d, i) => ({
+    sn: i + 1,
+    description: d.LabourName || "",
+    unit: d.LabourUnit || "",
+    price: Number(d.LabourPrice || 0),
+  }));
 }

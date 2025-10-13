@@ -9,11 +9,26 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = React.useState(user?.avatarUrl || "");
   const [msg, setMsg] = React.useState("");
   const [imgErr, setImgErr] = React.useState(false);
+  const [zone, setZone] = React.useState("");
+  const [zones, setZones] = React.useState([]); // from server labels
 
   // upload state
   const [uploading, setUploading] = React.useState(false);
   const [pct, setPct] = React.useState(0);
   const fileRef = React.useRef(null);
+
+  // React.useEffect(() => {
+  //   if (!accessToken) return;
+  //   (async () => {
+  //     try {
+  //       const res = await apiAuthed("/me/profile", { token: accessToken });
+  //       setUsername(res.username || "");
+  //       setAvatarUrl(res.avatarUrl || "");
+  //     } catch (e) {
+  //       setMsg(e.message);
+  //     }
+  //   })();
+  // }, [accessToken]);
 
   React.useEffect(() => {
     if (!accessToken) return;
@@ -22,14 +37,28 @@ export default function Profile() {
         const res = await apiAuthed("/me/profile", { token: accessToken });
         setUsername(res.username || "");
         setAvatarUrl(res.avatarUrl || "");
+        setZone(res.zone || "");
+        setZones(res.zones || []);
       } catch (e) {
         setMsg(e.message);
       }
     })();
   }, [accessToken]);
 
+
+  // async function saveProfile(next = {}) {
+  //   const body = { username, avatarUrl, ...next };
+  //   const res = await apiAuthed("/me/profile", {
+  //     token: accessToken,
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify(body),
+  //   });
+  //   setAuth((prev) => ({ ...prev, user: { ...prev.user, ...res.user } }));
+  // }
+
   async function saveProfile(next = {}) {
-    const body = { username, avatarUrl, ...next };
+    const body = { username, avatarUrl, zone, ...next };
     const res = await apiAuthed("/me/profile", {
       token: accessToken,
       method: "POST",
@@ -38,6 +67,7 @@ export default function Profile() {
     });
     setAuth((prev) => ({ ...prev, user: { ...prev.user, ...res.user } }));
   }
+
 
   async function uploadToCloudinary(file) {
     if (!file) return null;
@@ -204,19 +234,6 @@ export default function Profile() {
             />
           </div>
 
-          {/* <div>
-            <label className="form-label">Profile image URL</label>
-            <input
-              className="input"
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://…"
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              Paste a URL manually, or use “Upload new photo” above.
-            </p>
-          </div> */}
-
           {msg && <div className="text-sm">{msg}</div>}
           {!accessToken && (
             <div className="text-sm text-red-600">Missing access token</div>
@@ -225,6 +242,25 @@ export default function Profile() {
             Save
           </button>
         </form>
+      </div>
+
+      <div>
+        <label className="form-label">Location (Geopolitical Zone)</label>
+        <select
+          className="input"
+          value={zone || ""}
+          onChange={(e) => setZone(e.target.value)}
+        >
+          <option value="">— Select zone —</option>
+          {zones.map((z) => (
+            <option key={z.key} value={z.key}>
+              {z.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-slate-500 mt-1">
+          Your RateGen prices will default to this zone when you sign in.
+        </p>
       </div>
 
       <div className="card">
