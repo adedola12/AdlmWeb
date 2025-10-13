@@ -32,12 +32,12 @@ router.post("/rategen/backfill-zones", async (req, res) => {
   for (const m of mats) {
     for (const z of ZONES) {
       await Materials.updateOne(
-        { MaterialName: m.MaterialName, zone: z },
+        { MaterialName: m.MaterialName, zone: z.key },
         {
           $setOnInsert: {
             MaterialUnit: m.MaterialUnit || "",
             MaterialCategory: m.MaterialCategory || "",
-            MaterialPrice: z === "south_west" ? m.MaterialPrice : null,
+            MaterialPrice: z.key === "south_west" ? m.MaterialPrice : null,
           },
         },
         { upsert: true }
@@ -49,12 +49,12 @@ router.post("/rategen/backfill-zones", async (req, res) => {
   for (const l of labs) {
     for (const z of ZONES) {
       await Labours.updateOne(
-        { LabourName: l.LabourName, zone: z },
+        { LabourName: l.LabourName, zone: z.key },
         {
           $setOnInsert: {
             LabourUnit: l.LabourUnit || "",
             LabourCategory: l.LabourCategory || "",
-            LabourPrice: z === "south_west" ? l.LabourPrice : null,
+            LabourPrice: z.key === "south_west" ? l.LabourPrice : null,
           },
         },
         { upsert: true }
