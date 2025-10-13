@@ -16,6 +16,20 @@ function connection() {
     bufferCommands: false,
   });
 
+  // ---- debug log here (conn is in scope) ----
+  conn.asPromise().then(() => {
+    console.log(
+      "[RateGen master] connected:",
+      conn.host,
+      "/",
+      conn.name,
+      "collections:",
+      process.env.RATEGEN_MAT_COLLECTION || "Materials",
+      ",",
+      process.env.RATEGEN_LAB_COLLECTION || "labours"
+    );
+  });
+
   return conn;
 }
 
