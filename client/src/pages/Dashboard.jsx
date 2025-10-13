@@ -26,7 +26,7 @@ export default function Dashboard() {
     if (e.status !== "active") return;
     const key = (e.productKey || "").toLowerCase();
     if (key === "revit") return navigate("/projects/revit");
-    if (key === "mep") return navigate("/projects/revitmep");
+    if (key === "mep") return navigate("/projects/mep");
     if (key === "planswift") return navigate("/projects/planswift");
     if (key === "rategen") return navigate("/rategen");
     navigate(`/product/${e.productKey}`);
