@@ -99,3 +99,16 @@ connectDB(process.env.MONGO_URI)
     console.error("DB error", err);
     process.exit(1);
   });
+
+// conn.asPromise().then(() => {
+//   console.log(
+//     "[RateGen master] connected:",
+//     conn.host,
+//     "/",
+//     conn.name,
+//     "collections:",
+//     process.env.RATEGEN_MAT_COLLECTION || "Materials",
+//     ",",
+//     process.env.RATEGEN_LAB_COLLECTION || "labours"
+//   );
+// });
