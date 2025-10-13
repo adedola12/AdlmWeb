@@ -11,6 +11,30 @@ router.get("/", requireAuth, async (req, res) => {
   return res.json({ email, role, username, avatarUrl, zone, entitlements });
 });
 
+/* === re-add this: used by desktop app EnsureEntitledAsync() === */
+router.get("/entitlements", requireAuth, async (req, res) => {
+  const ent = (req.user.entitlements || []).map((e) => ({
+    productKey: e.productKey,
+    status: e.status,
+    expiresAt: e.expiresAt || null,
+  }));
+  res.json(ent);
+});
+
+/* === re-add this: used by your web dashboard === */
+router.get("/summary", requireAuth, async (req, res) => {
+  const ent = (req.user.entitlements || []).map((e) => ({
+    productKey: e.productKey,
+    status: e.status,
+    expiresAt: e.expiresAt || null,
+    isExpired: e.expiresAt ? dayjs(e.expiresAt).isBefore(dayjs()) : true,
+  }));
+  return res.json({
+    email: req.user.email,
+    entitlements: ent,
+  });
+});
+
 router.get("/profile", requireAuth, async (req, res) => {
   const { email, username, avatarUrl, role, zone } = req.user;
   return res.json({ email, username, avatarUrl, role, zone, zones: ZONES });
@@ -32,8 +56,7 @@ router.post("/profile", requireAuth, async (req, res) => {
     const nz = normalizeZone(zone);
     if (!nz) return res.status(400).json({ error: "Invalid zone" });
     req.user.zone = nz;
-    // Optional: bump refreshVersion so devices pick up changes sooner
-    req.user.refreshVersion += 1;
+    req.user.refreshVersion += 1; // optional bump
   }
 
   await req.user.save();
