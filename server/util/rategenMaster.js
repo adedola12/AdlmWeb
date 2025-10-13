@@ -13,6 +13,11 @@ function connection() {
   return conn;
 }
 
+function hasPrice(doc, priceKey) {
+  const v = Number(doc?.[priceKey]);
+  return !Number.isNaN(v) && v > 0; // treat 0 or NaN as “no price”
+}
+
 function makeModel(collection, shape) {
   const c = connection();
   const schema = new mongoose.Schema(shape, { strict: false, collection });
@@ -39,11 +44,7 @@ function sortByName(a, b, key) {
   return String(a[key] || "").localeCompare(String(b[key] || ""));
 }
 
-function selectForZone(all, zoneKey, nameKey) {
-  // strategy:
-  // - prefer exact zone match
-  // - else fallback to "national"
-  // - else fallback to first with that name
+function selectForZone(all, zoneKey, nameKey, priceKey) {
   const z = normalizeZone(zoneKey);
   const byName = new Map();
   for (const d of all) {
@@ -51,12 +52,26 @@ function selectForZone(all, zoneKey, nameKey) {
     if (!byName.has(n)) byName.set(n, []);
     byName.get(n).push(d);
   }
+
   const out = [];
-  for (const [n, arr] of byName.entries()) {
+  for (const [, arr] of byName.entries()) {
     let chosen =
+      (z &&
+        arr.find(
+          (x) => (x.zone || "").toLowerCase() === z && hasPrice(x, priceKey)
+        )) ||
+      arr.find(
+        (x) =>
+          (x.zone || "").toLowerCase() === "south_west" && hasPrice(x, priceKey)
+      ) ||
+      arr.find(
+        (x) =>
+          (x.zone || "").toLowerCase() === "national" && hasPrice(x, priceKey)
+      ) ||
+      // if nothing has a price, still return *something* so UI shows the row
       (z && arr.find((x) => (x.zone || "").toLowerCase() === z)) ||
-      arr.find((x) => (x.zone || "").toLowerCase() === "national") ||
       arr[0];
+
     out.push(chosen);
   }
   return out;
@@ -65,8 +80,13 @@ function selectForZone(all, zoneKey, nameKey) {
 export async function fetchMasterMaterials(zoneKey) {
   const M = Material();
   const docs = await M.find({}).lean();
-  const selected = selectForZone(docs, zoneKey, "MaterialName").sort((a, b) =>
-    sortByName(a, b, "MaterialName")
+  const selected = selectForZone(
+    docs,
+    zoneKey,
+    "MaterialName",
+    "MaterialPrice"
+  ).sort((a, b) =>
+    String(a.MaterialName || "").localeCompare(String(b.MaterialName || ""))
   );
   return selected.map((d, i) => ({
     sn: i + 1,
@@ -79,8 +99,13 @@ export async function fetchMasterMaterials(zoneKey) {
 export async function fetchMasterLabour(zoneKey) {
   const L = Labour();
   const docs = await L.find({}).lean();
-  const selected = selectForZone(docs, zoneKey, "LabourName").sort((a, b) =>
-    sortByName(a, b, "LabourName")
+  const selected = selectForZone(
+    docs,
+    zoneKey,
+    "LabourName",
+    "LabourPrice"
+  ).sort((a, b) =>
+    String(a.LabourName || "").localeCompare(String(b.LabourName || ""))
   );
   return selected.map((d, i) => ({
     sn: i + 1,
