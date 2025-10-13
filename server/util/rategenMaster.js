@@ -1,21 +1,23 @@
 import mongoose from "mongoose";
 import { normalizeZone } from "./zones.js";
 
-
 let conn = null;
 function connection() {
   if (conn) return conn;
   const uri =
-    process.env.RATEGEN_MONGO_URI ||        // preferred
-    process.env.MONGO_URI;                  // ← fallback to main
+    process.env.RATEGEN_MONGO_URI || // preferred
+    process.env.MONGO_URI; // fallback
   if (!uri) throw new Error("RATEGEN_MONGO_URI or MONGO_URI not set");
+
   conn = mongoose.createConnection(uri, {
+    dbName: process.env.RATEGEN_DB || "ADLMRateDB", // 👈 IMPORTANT
     maxPoolSize: 3,
     serverSelectionTimeoutMS: 8000,
+    bufferCommands: false,
   });
+
   return conn;
 }
-
 
 function hasPrice(doc, priceKey) {
   const v = Number(doc?.[priceKey]);
