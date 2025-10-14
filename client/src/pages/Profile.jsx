@@ -2,6 +2,7 @@
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { Link } from "react-router-dom";
 
 export default function Profile() {
   const { user, setAuth, accessToken } = useAuth();
@@ -45,7 +46,6 @@ export default function Profile() {
     })();
   }, [accessToken]);
 
-
   // async function saveProfile(next = {}) {
   //   const body = { username, avatarUrl, ...next };
   //   const res = await apiAuthed("/me/profile", {
@@ -67,7 +67,6 @@ export default function Profile() {
     });
     setAuth((prev) => ({ ...prev, user: { ...prev.user, ...res.user } }));
   }
-
 
   async function uploadToCloudinary(file) {
     if (!file) return null;
@@ -260,6 +259,9 @@ export default function Profile() {
         </select>
         <p className="text-xs text-slate-500 mt-1">
           Your RateGen prices will default to this zone when you sign in.
+          <span>
+            <Link to="/rategen"> View Prices </Link>
+          </span>
         </p>
       </div>
 
