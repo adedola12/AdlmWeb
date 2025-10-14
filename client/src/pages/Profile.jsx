@@ -18,18 +18,6 @@ export default function Profile() {
   const [pct, setPct] = React.useState(0);
   const fileRef = React.useRef(null);
 
-  // React.useEffect(() => {
-  //   if (!accessToken) return;
-  //   (async () => {
-  //     try {
-  //       const res = await apiAuthed("/me/profile", { token: accessToken });
-  //       setUsername(res.username || "");
-  //       setAvatarUrl(res.avatarUrl || "");
-  //     } catch (e) {
-  //       setMsg(e.message);
-  //     }
-  //   })();
-  // }, [accessToken]);
 
   React.useEffect(() => {
     if (!accessToken) return;
@@ -46,16 +34,6 @@ export default function Profile() {
     })();
   }, [accessToken]);
 
-  // async function saveProfile(next = {}) {
-  //   const body = { username, avatarUrl, ...next };
-  //   const res = await apiAuthed("/me/profile", {
-  //     token: accessToken,
-  //     method: "POST",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify(body),
-  //   });
-  //   setAuth((prev) => ({ ...prev, user: { ...prev.user, ...res.user } }));
-  // }
 
   async function saveProfile(next = {}) {
     const body = { username, avatarUrl, zone, ...next };
@@ -281,6 +259,9 @@ export default function Profile() {
               </a>
               <a href="/admin/learn" className="btn">
                 Video upload / courses
+              </a>
+              <a href="/admin/rategen" className="btn">
+                Update material & labour prices
               </a>
             </>
           )}

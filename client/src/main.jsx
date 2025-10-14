@@ -25,6 +25,7 @@ import ProductDetail from "./pages/ProductDetail.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
 import RateGenLibrary from "./pages/RateGenLibrary.jsx";
+import AdminRateGen from "./pages/AdminRateGen.jsx";
 
 const router = createBrowserRouter([
   {
@@ -119,6 +120,14 @@ const router = createBrowserRouter([
           <ProtectedRoute>
             <RateGenLibrary />
           </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/rategen",
+        element: (
+          <AdminRoute>
+            <AdminRateGen />
+          </AdminRoute>
         ),
       },
     ],
