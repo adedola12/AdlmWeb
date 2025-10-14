@@ -176,3 +176,37 @@ a.active hr{
   .tab { flex: 1 1 auto; }
 }
 
+
+/* Smooth momentum scroll on iOS inside the table card */
+.mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* On small screens, disable sticky/transform to avoid iOS touch quirks */
+@media (max-width: 640px) {
+  .table-sticky {
+    --sn: 0px; /* neutralize left offset for frozen columns */
+  }
+  /* anything we mark as .freeze will behave like a normal cell on mobile */
+  .table-sticky .freeze {
+    position: static !important;
+    left: auto !important;
+    transform: none !important;
+    z-index: auto !important;
+    background: transparent !important;
+  }
+  /* hide the tiny name-resize handle on phones so it doesn't steal swipes */
+  .table-sticky .name-resizer {
+    display: none !important;
+  }
+}
+
+/* Make sure the page itself can scroll */
+html, body, #root {
+  height: auto;
+  min-height: 100%;
+}
+body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
