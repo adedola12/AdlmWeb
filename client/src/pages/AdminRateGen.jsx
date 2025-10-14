@@ -188,7 +188,7 @@ export default function AdminRateGen() {
 
       {/* ---------- Table ---------- */}
       <div
-        className="card overflow-auto relative table-sticky touch-pan-x overscroll-x-contain"
+        className="card overflow-auto relative table-sticky mobile-scroll touch-auto sm:touch-pan-x overscroll-x-contain"
         style={{ ["--sn"]: `${SN_WIDTH}px`, ["--name"]: `${nameWidth}px` }}
       >
         <table className="min-w-full border-separate border-spacing-0 table-auto text-sm sm:text-base">
@@ -205,7 +205,7 @@ export default function AdminRateGen() {
           <thead>
             <tr className="sticky top-0 bg-white z-40 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
               <th
-                className="th text-center sticky left-0 z-50 bg-white"
+                className="th text-center sticky left-0 z-50 bg-white freeze"
                 style={{
                   left: "var(--sn, 56px)",
                   transform: "translateX(calc(-1 * var(--sn, 56px)))",
@@ -216,7 +216,7 @@ export default function AdminRateGen() {
 
               {/* Resizable name (resizer hidden on mobile via CSS) */}
               <th
-                className="th text-left sticky z-40 bg-white select-none"
+                className="th text-left sticky z-40 bg-white select-none freeze"
                 style={{ left: "var(--sn, 56px)" }}
                 ref={headerRef}
               >
@@ -250,7 +250,7 @@ export default function AdminRateGen() {
                   className="hover:bg-slate-50 hover:shadow-[inset_0_0_0_1px_rgba(59,130,246,0.25)] cursor-pointer transition-colors"
                 >
                   <td
-                    className="td text-center sticky left-0 z-30 bg-white"
+                    className="td text-center sticky left-0 z-30 bg-white freeze"
                     style={{
                       left: "var(--sn, 56px)",
                       transform: "translateX(calc(-1 * var(--sn, 56px)))",
@@ -260,7 +260,7 @@ export default function AdminRateGen() {
                   </td>
 
                   <td
-                    className="td font-medium sticky z-20 bg-white"
+                    className="td font-medium sticky z-20 bg-white freeze"
                     style={{ left: "var(--sn, 56px)" }}
                     title={r.name}
                   >
