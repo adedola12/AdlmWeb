@@ -38,7 +38,7 @@ const whitelist = (process.env.CORS_ORIGINS || "")
 
 const corsOptions = {
   origin(origin, cb) {
-    if (!origin) return cb(null, true); // allow server-to-server / Postman
+    if (!origin) return cb(null, true);
     if (whitelist.includes(origin)) return cb(null, true);
     if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
     if (/\.vercel\.app$/.test(origin)) return cb(null, true);
@@ -50,7 +50,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// ✅ Express 5: use a RegExp for “any path” preflight
 app.options(/.*/, cors(corsOptions));
 
 /* ----------------------- Root ----------------------- */
@@ -75,7 +74,7 @@ app.use("/me/media", meMediaRoutes);
 app.use("/rategen", rategenRouter);
 app.use("/admin/rategen", adminRateGen);
 
-/* ------------- CORS error helper (keep after routes) ------------- */
+/* ------------- CORS error helper ------------- */
 app.use((err, _req, res, next) => {
   if (err && /Not allowed by CORS/.test(err.message)) {
     return res.status(403).json({ error: err.message });
@@ -95,10 +94,11 @@ app.use((err, _req, res, _next) => {
 
 /* ----------------------- Boot ----------------------- */
 const port = process.env.PORT || 4000;
-connectDB(process.env.MONGO_URI)
-  .then(() => app.listen(port, () => console.log(`Server running on :${port}`)))
-  .catch((err) => {
-    console.error("DB error", err);
-    process.exit(1);
-  });
 
+try {
+  await connectDB(process.env.MONGO_URI); // ⬅️ wait for Mongo
+  app.listen(port, () => console.log(`Server running on :${port}`));
+} catch (err) {
+  console.error("DB error", err);
+  process.exit(1);
+}
