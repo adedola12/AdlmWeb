@@ -21,6 +21,7 @@ import projectRoutes from "./routes/projects.js";
 import meMediaRouter from "./routes/media.js";
 import meMediaRoutes from "./routes/me-media.js";
 import rategenRouter from "./routes/rategen.js";
+import adminRateGen from "./routes/admin.rategen.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -72,6 +73,7 @@ app.use("/projects", projectRoutes);
 app.use("/me/media", meMediaRouter);
 app.use("/me/media", meMediaRoutes);
 app.use("/rategen", rategenRouter);
+app.use("/admin/rategen", adminRateGen);
 
 /* ------------- CORS error helper (keep after routes) ------------- */
 app.use((err, _req, res, next) => {
@@ -100,15 +102,3 @@ connectDB(process.env.MONGO_URI)
     process.exit(1);
   });
 
-// conn.asPromise().then(() => {
-//   console.log(
-//     "[RateGen master] connected:",
-//     conn.host,
-//     "/",
-//     conn.name,
-//     "collections:",
-//     process.env.RATEGEN_MAT_COLLECTION || "Materials",
-//     ",",
-//     process.env.RATEGEN_LAB_COLLECTION || "labours"
-//   );
-// });
