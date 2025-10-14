@@ -69,4 +69,110 @@ a.active hr{
     }
   }
   
-  
+
+/* Sticky helpers / responsive widths */
+.table-sticky {
+  --sn: 56px;
+  --name: 200px;
+}
+
+/* Two-line clamp for long names (wrap + truncate) */
+.name-cell{
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;  /* wrap to 2 lines then ellipsis */
+  overflow: hidden;
+  line-height: 1.25rem;
+}
+
+/* Make sticky edges look crisp */
+.table-sticky th.sticky,
+.table-sticky td.sticky {
+  box-shadow: 1px 0 0 rgba(0,0,0,0.06);
+}
+
+/* Smaller name column on narrow screens to reveal more zone prices */
+@media (max-width: 768px){
+  .table-sticky{ --name: 170px; }
+}
+
+/* Sticky helpers + defaults */
+.table-sticky { --sn: 56px; --name: 200px; }
+
+/* Two-line clamp for long names */
+.name-cell{
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.25rem;
+}
+
+/* Hide the resize handle on small screens */
+.name-resizer { display: none; }
+@media (min-width: 640px){ /* sm: */
+  .name-resizer { display: inline-block; }
+}
+
+/* Clean edge for sticky columns */
+.table-sticky th.sticky, .table-sticky td.sticky { box-shadow: 1px 0 0 rgba(0,0,0,0.06); }
+
+/* Mobile tweaks: narrower S/N, a bit narrower Name by default */
+@media (max-width: 640px){
+  .table-sticky{ --sn: 44px; --name: 170px; }
+  /* slightly smaller inputs inside table for compactness */
+  .table-sticky input.input{ padding: 0.375rem 0.5rem; font-size: 0.9rem; }
+}
+
+/* Make horizontal scrolling feel natural on touch */
+.table-sticky{
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+}
+
+/* Optional: slimmer scrollbar when visible */
+.table-sticky::-webkit-scrollbar{ height: 8px; }
+.table-sticky::-webkit-scrollbar-thumb{ background: rgba(0,0,0,0.15); border-radius: 9999px; }
+
+
+/* Segmented tabs */
+.tabbar {
+  display: flex;
+  gap: .25rem;
+  padding: .25rem;
+  border: 1px solid #e5e7eb;           /* slate-200 */
+  border-radius: .75rem;                /* rounded-lg */
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+}
+
+/* default/idle tab */
+.tab {
+  flex: 1 1 0%;
+  padding: .5rem 1rem;
+  border-radius: .5rem;
+  font-weight: 600;
+  color: #374151;                       /* slate-700 */
+  background: transparent;
+  transition: background .2s, color .2s, transform .05s;
+  cursor: pointer;
+  border: 0;
+}
+.tab:hover { background: #f3f4f6; }     /* slate-100 */
+.tab:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* ACTIVE appearance */
+.tab-active {
+  color: #fff;
+  background: #2563eb;                  /* blue-600 */
+  box-shadow: 0 2px 10px rgba(37,99,235,.18),
+              inset 0 0 0 1px rgba(255,255,255,.15);
+}
+
+/* Mobile: make each tab full-width */
+@media (max-width: 640px) {
+  .tabbar { gap: .375rem; }
+  .tab { flex: 1 1 auto; }
+}
+
