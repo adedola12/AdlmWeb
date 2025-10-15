@@ -4,6 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
+import cookieParser from "cookie-parser"; // ⬅️ add
 import { connectDB } from "./db.js";
 
 // routes
@@ -28,6 +29,7 @@ app.set("trust proxy", 1);
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(express.json());
+app.use(cookieParser()); // ⬅️ add
 app.use(morgan("dev"));
 
 /* ----------------------- CORS ----------------------- */
@@ -96,7 +98,7 @@ app.use((err, _req, res, _next) => {
 const port = process.env.PORT || 4000;
 
 try {
-  await connectDB(process.env.MONGO_URI); // ⬅️ wait for Mongo
+  await connectDB(process.env.MONGO_URI); // wait for Mongo
   app.listen(port, () => console.log(`Server running on :${port}`));
 } catch (err) {
   console.error("DB error", err);
