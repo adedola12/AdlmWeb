@@ -1,244 +1,139 @@
+// server/routes/auth.js
 import express from "express";
-import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
-import { User } from "../models/User.js";
-import { hashPassword, verifyPassword } from "../util/hash.js";
-import {
-  deriveUsernameFromEmail,
-  ensureUniqueUsername,
-} from "../util/username.js";
+import bcrypt from "bcryptjs";
+import { signAccess } from "../middleware/auth.js";
+import { ensureDb } from "../db.js";
+import mongoose from "mongoose";
 
 const router = express.Router();
-router.use(cookieParser());
+const REFRESH_COOKIE = "rt";
 
-const ACCESS_TTL_MIN = 60; // 1 hour if you want longer sessions
-const LICENSE_TTL_DAYS = 15;
-
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "dev_access_secret";
-const JWT_REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET || "dev_refresh_secret";
-const JWT_LICENSE_SECRET =
-  process.env.JWT_LICENSE_SECRET || "dev_license_secret";
-
-function signAccessToken(user) {
-  return jwt.sign(
+const Refresh = mongoose.model(
+  "RefreshToken",
+  new mongoose.Schema(
     {
-      sub: user._id.toString(),
-      email: user.email,
-      role: user.role,
-      rv: user.refreshVersion,
+      userId: { type: mongoose.Schema.Types.ObjectId, index: true },
+      token: { type: String, index: true },
+      ua: String,
+      ip: String,
     },
-    JWT_ACCESS_SECRET,
-    { expiresIn: `${ACCESS_TTL_MIN}m` }
-  );
-}
+    { timestamps: true }
+  )
+);
 
-function signLicenseToken(user) {
-  const ent = {};
-  (user.entitlements || []).forEach((e) => {
-    ent[e.productKey] = {
-      status: e.status,
-      exp: e.expiresAt ? e.expiresAt.toISOString() : null,
-      dfp: e.deviceFingerprint || null,
-    };
-  });
-  return jwt.sign(
-    {
-      sub: user._id.toString(),
-      email: user.email,
-      username: user.username,
-      entitlements: ent,
-    },
-    JWT_LICENSE_SECRET,
-    { expiresIn: `${LICENSE_TTL_DAYS}d` }
-  );
-}
+// cookie flags for cross-site
+const refreshCookieOpts = {
+  httpOnly: true,
+  secure: true, // required with SameSite=None
+  sameSite: "none", // so your frontend on another origin gets it
+  path: "/auth/refresh",
+  maxAge: 60 * 60 * 24 * 30 * 1000, // 30 days
+};
 
-export async function requireAuth(req, res, next) {
-  try {
-    const hdr = req.headers.authorization || "";
-    const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-    const payload = jwt.verify(token, JWT_ACCESS_SECRET);
-    const u = await User.findById(payload.sub);
-    if (!u) return res.status(401).json({ error: "Unauthorized" });
-    if (u.disabled) return res.status(403).json({ error: "Account disabled" });
-    if (payload.rv !== u.refreshVersion)
-      return res.status(401).json({ error: "Session invalidated" });
-
-    req.user = u;
-    next();
-  } catch {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-}
-
-function setRefreshCookie(res, token) {
-  const isProd = process.env.NODE_ENV === "production";
-  res.cookie("refreshToken", token, {
-    httpOnly: true,
-    sameSite: isProd ? "none" : "lax",
-    secure: isProd,
-    path: "/", // add this for clarity
-    maxAge: 1000 * 60 * 60 * 24 * 30,
+function signRefresh(payload) {
+  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: "30d",
   });
 }
 
-// ---------- SIGNUP ----------
-router.post("/signup", async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !password)
-      return res.status(400).json({ error: "Email and password required" });
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(409).json({ error: "Email already exists" });
+function verifyRefresh(token) {
+  return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+}
 
-    const base = deriveUsernameFromEmail(email);
-    const username = await ensureUniqueUsername(base, User);
-
-    const passwordHash = await hashPassword(password);
-    const user = await User.create({
-      email,
-      username,
-      passwordHash,
-      role: "user",
-      entitlements: [],
-    });
-
-    const accessToken = signAccessToken(user);
-    const refreshToken = jwt.sign(
-      { sub: user._id.toString(), v: user.refreshVersion },
-      JWT_REFRESH_SECRET,
-      { expiresIn: "30d" }
-    );
-    setRefreshCookie(res, refreshToken);
-    const licenseToken = signLicenseToken(user);
-
-    return res.json({
-      accessToken,
-      licenseToken,
-      user: { email: user.email, username: user.username, role: user.role },
-    });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
-  }
-});
-
-// ---------- LOGIN (email or username) ----------
+/* ---------- LOGIN ---------- */
 router.post("/login", async (req, res) => {
-  try {
-    const { identifier, email, password, productKey, device_fingerprint } =
-      req.body || {};
-    const id = identifier || email;
-    if (!id || !password)
-      return res
-        .status(400)
-        .json({ error: "identifier/email and password required" });
-
-    const query = id.includes("@") ? { email: id } : { username: id };
-    const user = await User.findOne(query);
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
-    if (user.disabled)
-      return res.status(403).json({ error: "Account disabled" });
-
-    const ok = await verifyPassword(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-
-    if (!user.username) {
-      const base = deriveUsernameFromEmail(user.email);
-      user.username = await ensureUniqueUsername(base, User);
-      await user.save();
-    }
-
-    // (optional) plugin/device checks here...
-
-    const accessToken = signAccessToken(user);
-    const refreshToken = jwt.sign(
-      { sub: user._id.toString(), v: user.refreshVersion },
-      JWT_REFRESH_SECRET,
-      { expiresIn: "30d" }
-    );
-    setRefreshCookie(res, refreshToken);
-    const licenseToken = signLicenseToken(user);
-
-    return res.json({
-      accessToken,
-      licenseToken,
-      user: { email: user.email, username: user.username, role: user.role },
-    });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
+  await ensureDb();
+  const { identifier, password } = req.body || {};
+  if (!identifier || !password) {
+    return res.status(400).json({ error: "identifier and password required" });
   }
+
+  // TODO: swap this with your existing user lookup
+  const User = mongoose.model(
+    "User",
+    new mongoose.Schema(
+      {
+        email: String,
+        username: String,
+        passwordHash: String,
+        role: String,
+        zone: String,
+        entitlements: [String],
+      },
+      { strict: false }
+    )
+  );
+
+  const user =
+    (await User.findOne({ email: identifier })) ||
+    (await User.findOne({ username: identifier }));
+  if (!user) return res.status(401).json({ error: "Invalid credentials" });
+
+  const ok = await bcrypt.compare(password, user.passwordHash || "");
+  if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+
+  const payload = {
+    _id: String(user._id),
+    email: user.email,
+    role: user.role || "user",
+    zone: user.zone || "",
+    entitlements: user.entitlements || [],
+  };
+
+  const accessToken = signAccess(payload);
+  const refreshToken = signRefresh({ sub: payload._id });
+
+  await Refresh.create({
+    userId: user._id,
+    token: refreshToken,
+    ua: req.headers["user-agent"] || "",
+    ip: req.ip,
+  });
+
+  res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
+  return res.json({ accessToken, user: payload });
 });
 
-// ---------- REFRESH via cookie (NO requireAuth) ----------
+/* ---------- REFRESH ---------- */
 router.post("/refresh", async (req, res) => {
+  await ensureDb();
+  const token = req.cookies?.[REFRESH_COOKIE];
+  if (!token) return res.status(401).json({ error: "No refresh cookie" });
+
+  let dec;
   try {
-    const rt = req.cookies?.refreshToken;
-    if (!rt) return res.status(401).json({ error: "No refresh token" });
-
-    const payload = jwt.verify(rt, JWT_REFRESH_SECRET); // { sub, v }
-    const user = await User.findById(payload.sub);
-    if (!user) return res.status(401).json({ error: "Unauthorized" });
-    if (user.disabled)
-      return res.status(403).json({ error: "Account disabled" });
-    if (payload.v !== user.refreshVersion)
-      return res.status(401).json({ error: "Session invalidated" });
-
-    // rotate refresh token
-    const newRefreshToken = jwt.sign(
-      { sub: user._id.toString(), v: user.refreshVersion },
-      JWT_REFRESH_SECRET,
-      { expiresIn: "30d" }
-    );
-    setRefreshCookie(res, newRefreshToken);
-
-    const accessToken = signAccessToken(user);
-    const licenseToken = signLicenseToken(user);
-
-    return res.json({
-      accessToken,
-      licenseToken,
-      user: { email: user.email, username: user.username, role: user.role },
-    });
+    dec = verifyRefresh(token);
   } catch {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({ error: "Bad refresh token" });
   }
+
+  const rec = await Refresh.findOne({ token });
+  if (!rec) return res.status(401).json({ error: "Refresh not found" });
+
+  // You may want to re-hydrate some user fields:
+  const User = mongoose.model("User");
+  const user = await User.findById(rec.userId).lean();
+  if (!user) return res.status(401).json({ error: "User missing" });
+
+  const payload = {
+    _id: String(user._id),
+    email: user.email,
+    role: user.role || "user",
+    zone: user.zone || "",
+    entitlements: user.entitlements || [],
+  };
+
+  const accessToken = signAccess(payload);
+  return res.json({ accessToken, user: payload });
 });
 
-// routes/auth.js (same file you posted)
-const REFRESH_COOKIE_NAME = "refreshToken"; // you set this name in setRefreshCookie
-const isProd = process.env.NODE_ENV === "production";
-
+/* ---------- LOGOUT ---------- */
 router.post("/logout", async (req, res) => {
-  try {
-    // If we can verify the cookie, bump refreshVersion to invalidate all prior RTs
-    const rt = req.cookies?.[REFRESH_COOKIE_NAME];
-    if (rt) {
-      try {
-        const payload = jwt.verify(rt, JWT_REFRESH_SECRET); // { sub, v }
-        if (payload?.sub) {
-          await User.updateOne(
-            { _id: payload.sub },
-            { $inc: { refreshVersion: 1 } }
-          );
-        }
-      } catch {}
-    }
-
-    // Clear the cookie with the EXACT same attributes used when setting it
-    res.clearCookie(REFRESH_COOKIE_NAME, {
-      httpOnly: true,
-      sameSite: isProd ? "none" : "lax",
-      secure: isProd,
-      path: "/", // IMPORTANT: you didn't set a path when creating → default is "/"
-    });
-
-    return res.json({ ok: true });
-  } catch (e) {
-    return res.status(500).json({ error: e.message || "Logout failed" });
-  }
+  const token = req.cookies?.[REFRESH_COOKIE];
+  if (token) await Refresh.deleteOne({ token });
+  res.clearCookie(REFRESH_COOKIE, { ...refreshCookieOpts, maxAge: 0 });
+  res.json({ ok: true });
 });
 
 export default router;
