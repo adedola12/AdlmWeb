@@ -61,7 +61,7 @@ export default function RateGenLibrary() {
       setLib(data); // { materials, labour, source, zone }
       setZone(data.zone || "");
     } catch (e) {
-      setErr(e.message || "Failed to load");
+      setErr(e.message || "Failed to load"); 
     }
   }
 
