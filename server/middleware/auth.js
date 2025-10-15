@@ -1,4 +1,3 @@
-// server/middleware/auth.js
 import jwt from "jsonwebtoken";
 
 const ACCESS_COOKIE = "at";
@@ -6,7 +5,6 @@ const ACCESS_COOKIE = "at";
 export function signAccess(payload) {
   return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
 }
-
 export function verifyAccess(token) {
   return jwt.verify(token, process.env.JWT_ACCESS_SECRET);
 }
@@ -18,8 +16,7 @@ export function requireAuth(req, res, next) {
     const cookieToken = req.cookies?.[ACCESS_COOKIE] || null;
     const token = bearer || cookieToken;
     if (!token) return res.status(401).json({ error: "Unauthorized" });
-    const payload = verifyAccess(token);
-    req.user = payload; // NOTE: this is a JWT payload, not a Mongoose doc
+    req.user = verifyAccess(token);
     next();
   } catch {
     return res.status(401).json({ error: "Unauthorized" });

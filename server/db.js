@@ -1,14 +1,13 @@
-// server/db.js
 import mongoose from "mongoose";
 
 let connectPromise = null;
 
 /**
- * Connect once and reuse the same connection.
- * Safe to call multiple times.
+ * Single mongoose connection for the AUTH app.
+ * Uses AUTH_DB (default: adlmWeb) — NOT the RateGen master DB.
  */
 export async function connectDB(uri) {
-  if (mongoose.connection.readyState === 1) return mongoose; // already connected
+  if (mongoose.connection.readyState === 1) return mongoose;
   if (connectPromise) return connectPromise;
 
   const mongoUri = uri || process.env.MONGO_URI;
@@ -16,9 +15,12 @@ export async function connectDB(uri) {
 
   mongoose.set("strictQuery", true);
 
+  // 👇 fall back to 'adlmWeb' to match your legacy clients
+  const authDbName = process.env.AUTH_DB || "adlmWeb";
+
   connectPromise = mongoose
     .connect(mongoUri, {
-      dbName: process.env.RATEGEN_DB || "ADLMRateDB",
+      dbName: authDbName,
       serverSelectionTimeoutMS: 10000,
     })
     .then((m) => {
@@ -31,23 +33,18 @@ export async function connectDB(uri) {
       return m;
     })
     .catch((err) => {
-      // allow another attempt if the first one failed
       connectPromise = null;
       throw err;
     });
 
-  mongoose.connection.on("error", (e) => {
-    console.error("[mongo] connection error:", e?.message || e);
-  });
+  mongoose.connection.on("error", (e) =>
+    console.error("[mongo] connection error:", e?.message || e)
+  );
 
   return connectPromise;
 }
 
-/**
- * Ensure there is an active connection.
- * Useful inside routes/utilities that might run during reconnects.
- */
 export async function ensureDb() {
-  if (mongoose.connection.readyState === 1) return; // connected
+  if (mongoose.connection.readyState === 1) return;
   await connectDB(process.env.MONGO_URI);
 }

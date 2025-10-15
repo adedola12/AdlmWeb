@@ -1,4 +1,3 @@
-// models/User.js
 import mongoose from "mongoose";
 
 const EntitlementSchema = new mongoose.Schema(
@@ -20,7 +19,7 @@ const UserSchema = new mongoose.Schema(
   {
     email: { type: String, index: true, unique: true },
     username: { type: String, index: true, unique: true, sparse: true },
-    avatarUrl: { type: String },
+    avatarUrl: String,
     zone: {
       type: String,
       enum: [
@@ -33,7 +32,6 @@ const UserSchema = new mongoose.Schema(
       ],
       default: null,
     },
-
     passwordHash: String,
     role: { type: String, enum: ["user", "admin"], default: "user" },
     disabled: { type: Boolean, default: false },

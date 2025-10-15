@@ -1,10 +1,9 @@
-// server/index.js
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
-import cookieParser from "cookie-parser"; // 👈 add this
+import cookieParser from "cookie-parser";
 import { connectDB } from "./db.js";
 
 // routes
@@ -25,14 +24,20 @@ import rategenRouter from "./routes/rategen.js";
 import adminRateGen from "./routes/admin.rategen.js";
 
 const app = express();
+app.get("/__debug/db", (_req, res) => {
+  const c = mongoose?.connection || {};
+  res.json({ dbName: c.name, host: c.host, ok: c.readyState === 1 });
+});
 app.set("trust proxy", 1);
 
+// security / parsing
 app.use(helmet({ crossOriginResourcePolicy: false }));
-app.use(express.json());
-app.use(cookieParser()); // 👈 must come before routes (for /auth/refresh)
+app.use(cookieParser());
+app.use(express.json()); // expects valid JSON when Content-Type: application/json
+app.use(express.urlencoded({ extended: false })); // allows form posts too
 app.use(morgan("dev"));
 
-/* ----------------------- CORS ----------------------- */
+/* -------- CORS (allow cookies) -------- */
 const whitelist = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
@@ -40,25 +45,25 @@ const whitelist = (process.env.CORS_ORIGINS || "")
 
 const corsOptions = {
   origin(origin, cb) {
-    if (!origin) return cb(null, true); // allow server-to-server / Postman
+    if (!origin) return cb(null, true);
     if (whitelist.includes(origin)) return cb(null, true);
     if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
     if (/\.vercel\.app$/.test(origin)) return cb(null, true);
     cb(new Error(`Not allowed by CORS: ${origin}`));
   },
-  credentials: true, // 👈 required so browser can send/receive cookies
+  credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
-/* ----------------------- Root ----------------------- */
+/* -------- root -------- */
 app.get("/", (_req, res) =>
   res.json({ ok: true, service: "ADLM Auth/Licensing" })
 );
 
-/* ----------------------- API routes ----------------------- */
+/* -------- API -------- */
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
 app.use("/admin", adminRoutes);
@@ -75,25 +80,29 @@ app.use("/me/media", meMediaRoutes);
 app.use("/rategen", rategenRouter);
 app.use("/admin/rategen", adminRateGen);
 
-/* ------------- CORS error helper ------------- */
+/* -------- helpful error for bad JSON -------- */
 app.use((err, _req, res, next) => {
+  if (err?.type === "entity.parse.failed") {
+    return res.status(400).json({
+      error:
+        'Invalid JSON body. Send application/json like {"identifier":"you@example.com","password":"..."}',
+    });
+  }
   if (err && /Not allowed by CORS/.test(err.message)) {
     return res.status(403).json({ error: err.message });
   }
   next(err);
 });
 
-/* ----------------------- Static / SPA ----------------------- */
+/* -------- static + 404 + generic -------- */
 app.use(express.static("client/dist"));
-
-/* ----------------------- 404 + generic ----------------------- */
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: "Server error" });
 });
 
-/* ----------------------- Boot ----------------------- */
+/* -------- boot -------- */
 const port = process.env.PORT || 4000;
 try {
   await connectDB(process.env.MONGO_URI);
