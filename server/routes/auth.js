@@ -1,4 +1,3 @@
-// server/routes/auth.js
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -30,10 +29,10 @@ const Refresh =
 const isProd = process.env.NODE_ENV === "production";
 const refreshCookieOpts = {
   httpOnly: true,
-  secure: isProd, // secure only in production
+  secure: isProd,
   sameSite: isProd ? "none" : "lax",
   path: "/auth/refresh",
-  maxAge: 30 * 24 * 60 * 60 * 1000, // 30d
+  maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
 function signRefresh(payload) {
@@ -45,11 +44,10 @@ function verifyRefresh(token) {
   return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
 }
 
-/* -------------------- SIGNUP -------------------- */
+/* -------------------- SIGNUP (unchanged) -------------------- */
 router.post("/signup", async (req, res) => {
   try {
     await ensureDb();
-
     const { email, username, password, zone } = req.body || {};
     if (!email || !password)
       return res.status(400).json({ error: "email and password required" });
@@ -64,7 +62,7 @@ router.post("/signup", async (req, res) => {
       passwordHash,
       role: "user",
       zone: zone || null,
-      entitlements: [], // start empty; admin can grant later
+      entitlements: [],
     });
 
     const payload = {
@@ -84,7 +82,6 @@ router.post("/signup", async (req, res) => {
       ua: req.headers["user-agent"] || "",
       ip: req.ip,
     });
-
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
     return res.status(201).json({ accessToken, user: payload });
   } catch (err) {
@@ -93,7 +90,7 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-/* -------------------- LOGIN -------------------- */
+/* -------------------- LOGIN (legacy-friendly) -------------------- */
 router.post("/login", async (req, res) => {
   try {
     await ensureDb();
@@ -111,9 +108,20 @@ router.post("/login", async (req, res) => {
 
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
-    const ok = user.passwordHash
-      ? await bcrypt.compare(password, user.passwordHash)
-      : false;
+    // ✅ support legacy documents that still have `password`
+    let ok = false;
+    if (user.passwordHash) {
+      ok = await bcrypt.compare(password, user.passwordHash);
+    } else if (user.password) {
+      ok = password === user.password;
+      // Optional one-time migration to bcrypt:
+      if (ok) {
+        user.passwordHash = await bcrypt.hash(password, 10);
+        user.password = undefined;
+        await user.save();
+      }
+    }
+
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
     const payload = {
@@ -142,7 +150,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-/* -------------------- REFRESH -------------------- */
+/* -------------------- REFRESH (unchanged) -------------------- */
 router.post("/refresh", async (req, res) => {
   try {
     await ensureDb();
@@ -178,7 +186,7 @@ router.post("/refresh", async (req, res) => {
   }
 });
 
-/* -------------------- LOGOUT -------------------- */
+/* -------------------- LOGOUT (unchanged) -------------------- */
 router.post("/logout", async (req, res) => {
   try {
     const token = req.cookies?.[REFRESH_COOKIE];
