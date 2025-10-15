@@ -19,14 +19,13 @@ export function requireAuth(req, res, next) {
     const token = bearer || cookieToken;
     if (!token) return res.status(401).json({ error: "Unauthorized" });
     const payload = verifyAccess(token);
-    req.user = payload;
+    req.user = payload; // NOTE: this is a JWT payload, not a Mongoose doc
     next();
   } catch {
     return res.status(401).json({ error: "Unauthorized" });
   }
 }
 
-/** Require admin role */
 export function requireAdmin(req, res, next) {
   if (!req.user) return res.status(401).json({ error: "Unauthorized" });
   if ((req.user.role || "user") !== "admin") {

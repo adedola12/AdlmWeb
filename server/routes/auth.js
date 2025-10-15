@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { ensureDb } from "../db.js";
 import { signAccess } from "../middleware/auth.js";
-import {User} from "../models/User.js";
+import { User } from "../models/User.js";
 
 const router = express.Router();
 const REFRESH_COOKIE = "rt";
@@ -26,11 +26,12 @@ const Refresh =
     )
   );
 
+// cookie flags (work in dev and prod)
 const isProd = process.env.NODE_ENV === "production";
 const refreshCookieOpts = {
   httpOnly: true,
-  secure: isProd, // ⬅️ only secure in production
-  sameSite: isProd ? "none" : "lax", // ⬅️ allow cookie on localhost
+  secure: isProd, // secure only in production
+  sameSite: isProd ? "none" : "lax",
   path: "/auth/refresh",
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30d
 };
@@ -43,6 +44,54 @@ function signRefresh(payload) {
 function verifyRefresh(token) {
   return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
 }
+
+/* -------------------- SIGNUP -------------------- */
+router.post("/signup", async (req, res) => {
+  try {
+    await ensureDb();
+
+    const { email, username, password, zone } = req.body || {};
+    if (!email || !password)
+      return res.status(400).json({ error: "email and password required" });
+
+    const exists = await User.findOne({ $or: [{ email }, { username }] });
+    if (exists) return res.status(409).json({ error: "User exists" });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({
+      email,
+      username: username || email.split("@")[0],
+      passwordHash,
+      role: "user",
+      zone: zone || null,
+      entitlements: [], // start empty; admin can grant later
+    });
+
+    const payload = {
+      _id: String(user._id),
+      email: user.email,
+      role: user.role,
+      zone: user.zone || "",
+      entitlements: user.entitlements || [],
+    };
+
+    const accessToken = signAccess(payload);
+    const refreshToken = signRefresh({ sub: payload._id });
+
+    await Refresh.create({
+      userId: user._id,
+      token: refreshToken,
+      ua: req.headers["user-agent"] || "",
+      ip: req.ip,
+    });
+
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
+    return res.status(201).json({ accessToken, user: payload });
+  } catch (err) {
+    console.error("[/auth/signup] error:", err);
+    return res.status(500).json({ error: "Signup failed" });
+  }
+});
 
 /* -------------------- LOGIN -------------------- */
 router.post("/login", async (req, res) => {
@@ -62,12 +111,9 @@ router.post("/login", async (req, res) => {
 
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
-    let ok = false;
-    if (user.passwordHash) {
-      ok = await bcrypt.compare(password, user.passwordHash);
-      // } else if (user.password) {
-      //   ok = password === user.password; // (uncomment only if you still store plain passwords)
-    }
+    const ok = user.passwordHash
+      ? await bcrypt.compare(password, user.passwordHash)
+      : false;
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
     const payload = {
