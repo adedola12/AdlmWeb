@@ -4,7 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
-import cookieParser from "cookie-parser"; // ⬅️ add
+import cookieParser from "cookie-parser"; // 👈 add this
 import { connectDB } from "./db.js";
 
 // routes
@@ -29,7 +29,7 @@ app.set("trust proxy", 1);
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(express.json());
-app.use(cookieParser()); // ⬅️ add
+app.use(cookieParser()); // 👈 must come before routes (for /auth/refresh)
 app.use(morgan("dev"));
 
 /* ----------------------- CORS ----------------------- */
@@ -40,17 +40,16 @@ const whitelist = (process.env.CORS_ORIGINS || "")
 
 const corsOptions = {
   origin(origin, cb) {
-    if (!origin) return cb(null, true);
+    if (!origin) return cb(null, true); // allow server-to-server / Postman
     if (whitelist.includes(origin)) return cb(null, true);
     if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
     if (/\.vercel\.app$/.test(origin)) return cb(null, true);
     cb(new Error(`Not allowed by CORS: ${origin}`));
   },
-  credentials: true,
+  credentials: true, // 👈 required so browser can send/receive cookies
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
-
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
@@ -96,9 +95,8 @@ app.use((err, _req, res, _next) => {
 
 /* ----------------------- Boot ----------------------- */
 const port = process.env.PORT || 4000;
-
 try {
-  await connectDB(process.env.MONGO_URI); // wait for Mongo
+  await connectDB(process.env.MONGO_URI);
   app.listen(port, () => console.log(`Server running on :${port}`));
 } catch (err) {
   console.error("DB error", err);
