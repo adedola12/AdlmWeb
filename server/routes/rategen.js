@@ -51,9 +51,17 @@ router.put("/library", async (req, res) => {
   let lib = await RateGenLibrary.findOne({ userId: req.user._id });
   if (!lib) lib = await RateGenLibrary.create({ userId: req.user._id });
 
-  if (typeof baseVersion === "number" && baseVersion !== lib.version) {
+  if (
+    Number.isFinite(baseVersion) &&
+    baseVersion > 0 &&
+    baseVersion !== lib.version
+  ) {
     return res.status(409).json({ error: "Version conflict" });
   }
+
+  // if (typeof baseVersion === "number" && baseVersion !== lib.version) {
+  //   return res.status(409).json({ error: "Version conflict" });
+  // }
 
   if (Array.isArray(materials)) lib.materials = materials;
   if (Array.isArray(labour)) lib.labour = labour;
