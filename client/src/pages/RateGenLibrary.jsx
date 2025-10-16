@@ -32,23 +32,10 @@ function Table({ rows }) {
 export default function RateGenLibrary() {
   const { accessToken } = useAuth();
   const [tab, setTab] = React.useState("materials");
-  const [lib, setLib] = React.useState(null);
+  const [master, setMaster] = React.useState(null); // { materials, labour, zone }
+  const [mine, setMine] = React.useState(null); // { materials, labour, version }
   const [err, setErr] = React.useState("");
   const [zone, setZone] = React.useState("");
-
-  // async function load() {
-  //   if (!accessToken) {
-  //     setErr("You’re signed out. Please sign in again.");
-  //     return;
-  //   }
-  //   setErr("");
-  //   try {
-  //     const data = await apiAuthed("/rategen/master", { token: accessToken });
-  //     setLib(data); // { materials, labour, source }
-  //   } catch (e) {
-  //     setErr(e.message || "Failed to load");
-  //   }
-  // }
 
   async function load() {
     if (!accessToken) {
@@ -57,68 +44,88 @@ export default function RateGenLibrary() {
     }
     setErr("");
     try {
-      const data = await apiAuthed("/rategen/master", { token: accessToken });
-      setLib(data); // { materials, labour, source, zone }
-      setZone(data.zone || "");
+      const [m, lib] = await Promise.all([
+        apiAuthed("/rategen/master", { token: accessToken }),
+        apiAuthed("/rategen/library", { token: accessToken }),
+      ]);
+      setMaster(m);
+      setZone(m.zone || "");
+      setMine(lib);
     } catch (e) {
-      setErr(e.message || "Failed to load"); 
+      setErr(e.message || "Failed to load");
     }
   }
 
   React.useEffect(() => {
-    load(); /* eslint-disable-next-line */
+    load(); // eslint-disable-next-line
   }, [accessToken]);
+
+  const tabs = [
+    { key: "materials", label: "Master · Materials" },
+    { key: "labour", label: "Master · Labour" },
+    { key: "my-materials", label: "My Materials" },
+    { key: "my-labour", label: "My Labour" },
+  ];
+
+  function rowsForTab() {
+    if (!master) return [];
+    switch (tab) {
+      case "materials":
+        return master.materials || [];
+      case "labour":
+        return master.labour || [];
+      case "my-materials":
+        return (mine?.materials || []).sort((a, b) => a.sn - b.sn);
+      case "my-labour":
+        return (mine?.labour || []).sort((a, b) => a.sn - b.sn);
+      default:
+        return [];
+    }
+  }
 
   return (
     <div className="space-y-4">
       <div className="card">
         <div className="flex items-center justify-between">
-          <h1 className="font-semibold">RateGen Library</h1>
-          {zone && (
-            <div className="text-xs text-slate-600 mt-1">
-              Showing prices for{" "}
-              <span className="font-medium">{zone.replace(/_/g, " ")}</span>
-            </div>
-          )}
-
+          <div>
+            <h1 className="font-semibold">RateGen Library</h1>
+            {zone && (
+              <div className="text-xs text-slate-600 mt-1">
+                Showing master prices for{" "}
+                <span className="font-medium">{zone.replace(/_/g, " ")}</span>
+              </div>
+            )}
+          </div>
           <button className="btn btn-sm" onClick={load}>
             Refresh
           </button>
         </div>
+
         <div className="mt-3 border-b">
           <nav className="flex gap-6">
-            <button
-              onClick={() => setTab("materials")}
-              className={`py-2 -mb-px border-b-2 ${
-                tab === "materials"
-                  ? "border-blue-600 text-blue-700"
-                  : "border-transparent text-slate-600"
-              }`}
-            >
-              Materials
-            </button>
-            <button
-              onClick={() => setTab("labour")}
-              className={`py-2 -mb-px border-b-2 ${
-                tab === "labour"
-                  ? "border-blue-600 text-blue-700"
-                  : "border-transparent text-slate-600"
-              }`}
-            >
-              Labour
-            </button>
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`py-2 -mb-px border-b-2 ${
+                  tab === t.key
+                    ? "border-blue-600 text-blue-700"
+                    : "border-transparent text-slate-600"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </nav>
         </div>
         {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
       </div>
 
       <div className="card">
-        {!lib ? (
+        {!master ? (
           <div className="text-sm text-slate-600">Loading…</div>
-        ) : tab === "materials" ? (
-          <Table rows={lib.materials || []} />
         ) : (
-          <Table rows={lib.labour || []} />
+          <Table rows={rowsForTab()} />
         )}
       </div>
     </div>
