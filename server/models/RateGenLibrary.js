@@ -1,7 +1,13 @@
 import mongoose from "mongoose";
 
 const RateItemSchema = new mongoose.Schema(
-  { sn: Number, description: String, unit: String, price: Number },
+  {
+    sn: Number,
+    description: String,
+    unit: String,
+    price: Number,
+    category: { type: String, default: "" },
+  },
   { _id: false }
 );
 

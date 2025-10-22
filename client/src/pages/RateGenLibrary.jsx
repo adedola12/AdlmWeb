@@ -12,6 +12,7 @@ function Table({ rows }) {
             <th className="py-2 pr-4">Description</th>
             <th className="py-2 pr-4">Unit</th>
             <th className="py-2 pr-4">Price</th>
+            <th className="py-2 pr-4">Category</th>
           </tr>
         </thead>
         <tbody>
@@ -21,6 +22,7 @@ function Table({ rows }) {
               <td className="py-2 pr-4">{r.description}</td>
               <td className="py-2 pr-4">{r.unit}</td>
               <td className="py-2 pr-4">{Number(r.price).toLocaleString()}</td>
+              <td className="py-2 pr-4">{r.category || ""}</td>
             </tr>
           ))}
         </tbody>
