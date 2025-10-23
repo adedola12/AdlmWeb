@@ -68,12 +68,29 @@ export default function Products() {
     setLoading(true);
     setMsg("");
     try {
-      const res = await fetch(
-        `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
-        { credentials: "include" }
-      );
-      const json = await res.json();
-      setData(json);
+      // const res = await fetch(
+      //   `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
+      //   { credentials: "include" }
+      // );
+      // const json = await res.json();
+      // setData(json);
+
+      if (isAdmin) {
+        // admin endpoint returns full list; add client-side paging
+        const res = await apiAuthed(`/admin/products`, { token: accessToken });
+        const all = Array.isArray(res) ? res : [];
+        const total = all.length;
+        const start = (page - 1) * pageSize;
+        const items = all.slice(start, start + pageSize);
+        setData({ items, total, page, pageSize });
+      } else {
+        const res = await fetch(
+          `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
+          { credentials: "include" }
+        );
+        const json = await res.json();
+        setData(json);
+      }
     } catch (e) {
       setMsg(e.message || "Failed to load products");
     } finally {
@@ -114,6 +131,9 @@ export default function Products() {
     setDraft({
       name: p.name || "",
       blurb: p.blurb || "",
+      description: p.description || "",
+      // store features as \n-separated string for a simple textarea editor
+      featuresText: Array.isArray(p.features) ? p.features.join("\n") : "",
       billingInterval: p.billingInterval || "monthly",
       monthlyNGN: p.price?.monthlyNGN ?? 0,
       yearlyNGN: p.price?.yearlyNGN ?? 0,
@@ -140,6 +160,11 @@ export default function Products() {
       const payload = {
         name: draft.name,
         blurb: draft.blurb,
+        description: draft.description,
+        features: (draft.featuresText || "")
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
         billingInterval: draft.billingInterval,
         price: {
           monthlyNGN: Number(draft.monthlyNGN || 0),
@@ -248,6 +273,37 @@ export default function Products() {
                         }
                         placeholder="Short blurb"
                       />
+
+                      {/* Full description */}
+                      <textarea
+                        className="input"
+                        rows={6}
+                        value={draft.description}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            description: e.target.value,
+                          }))
+                        }
+                        placeholder="Full product description (markdown or HTML allowed)"
+                      />
+
+                      {/* Features (one per line) */}
+                      <label className="text-xs">
+                        Features (one per line)
+                        <textarea
+                          className="input mt-1"
+                          rows={5}
+                          value={draft.featuresText}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              featuresText: e.target.value,
+                            }))
+                          }
+                          placeholder={`Feature 1\nFeature 2\nFeature 3`}
+                        />
+                      </label>
 
                       <label className="block">
                         <span className="text-xs">Billing interval</span>
