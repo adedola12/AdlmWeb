@@ -213,12 +213,12 @@ router.post("/password/forgot", async (req, res) => {
   try {
     await ensureDb();
     const { identifier } = req.body || {};
-    if (!user) return res.json({ ok: true }); // same behavior
     if (!identifier)
       return res.status(400).json({ error: "identifier required" });
 
     const user = await findByIdentifier(identifier);
     // We deliberately return 200 even if user not found to avoid account enumeration
+
     if (!user) return res.json({ ok: true });
 
     // simple throttle: allow 1 active unexpired reset at a time
@@ -254,7 +254,6 @@ router.post("/password/forgot", async (req, res) => {
       });
     } catch (mailErr) {
       console.error("[/auth/password/forgot] mail error:", mailErr);
-      // Still return ok to avoid exposing whether an email exists or if mail failed
     }
 
     return res.json({ ok: true });
