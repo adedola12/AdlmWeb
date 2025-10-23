@@ -91,6 +91,19 @@ export default function ProductDetail() {
           ) : null}
         </div>
 
+        {Array.isArray(p.images) && p.images.length > 0 && (
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {p.images.map((src, i) => (
+              <img
+                key={i}
+                src={src}
+                alt=""
+                className="w-full aspect-video object-cover rounded border"
+              />
+            ))}
+          </div>
+        )}
+
         {/* Secondary pricing info */}
         <div className="mt-2 text-sm text-slate-700">
           NGN: <span className="font-semibold">{ngn(unitNGN)}</span> / {cadence}
