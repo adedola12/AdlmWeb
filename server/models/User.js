@@ -20,6 +20,12 @@ const UserSchema = new mongoose.Schema(
     email: { type: String, index: true, unique: true },
     username: { type: String, index: true, unique: true, sparse: true },
     avatarUrl: String,
+
+    // NEW
+    firstName: { type: String, default: "" },
+    lastName: { type: String, default: "" },
+    whatsapp: { type: String, default: "" }, // store normalized + digits
+
     zone: {
       type: String,
       enum: [
