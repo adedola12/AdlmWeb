@@ -294,6 +294,7 @@ router.post("/password/reset", async (req, res) => {
     }
 
     rec.attempts += 1;
+    await rec.save();
 
     // set new password
     user.passwordHash = await bcrypt.hash(newPassword, 10);
@@ -302,6 +303,12 @@ router.post("/password/reset", async (req, res) => {
     // mark used & invalidate existing refresh tokens
     rec.usedAt = new Date();
     await rec.save();
+
+    // now check the code
+    if (String(code) !== String(rec.code)) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
+
     await Refresh.deleteMany({ userId: user._id }); // logout other sessions
 
     return res.json({ ok: true });
