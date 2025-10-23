@@ -8,9 +8,30 @@ import { ZONES, normalizeZone } from "../util/zones.js";
 const router = express.Router();
 
 router.get("/", requireAuth, async (req, res) => {
-  // req.user is JWT payload
-  const { email, role, entitlements, username, avatarUrl, zone } = req.user;
-  return res.json({ email, role, username, avatarUrl, zone, entitlements });
+  // include new fields from JWT (they are added in auth payload)
+  const {
+    email,
+    role,
+    entitlements,
+    username,
+    avatarUrl,
+    zone,
+    firstName,
+    lastName,
+    whatsapp,
+  } = req.user;
+
+  return res.json({
+    email,
+    role,
+    username,
+    avatarUrl,
+    zone,
+    entitlements,
+    firstName: firstName || "",
+    lastName: lastName || "",
+    whatsapp: whatsapp || "",
+  });
 });
 
 /* used by desktop */
@@ -39,15 +60,36 @@ router.get("/summary", requireAuth, async (req, res) => {
   return res.json({ email: user?.email, entitlements: ent });
 });
 
+// Profile details
 router.get("/profile", requireAuth, async (req, res) => {
   const u = await User.findById(req.user._id).lean();
   if (!u) return res.status(404).json({ error: "User missing" });
-  const { email, username, avatarUrl, role, zone } = u;
-  return res.json({ email, username, avatarUrl, role, zone, zones: ZONES });
+  const {
+    email,
+    username,
+    avatarUrl,
+    role,
+    zone,
+    firstName,
+    lastName,
+    whatsapp,
+  } = u;
+  return res.json({
+    email,
+    username,
+    avatarUrl,
+    role,
+    zone,
+    zones: ZONES,
+    firstName: firstName || "",
+    lastName: lastName || "",
+    whatsapp: whatsapp || "",
+  });
 });
 
 router.post("/profile", requireAuth, async (req, res) => {
-  const { username, avatarUrl, zone } = req.body || {};
+  const { username, avatarUrl, zone, firstName, lastName, whatsapp } =
+    req.body || {};
   const u = await User.findById(req.user._id);
   if (!u) return res.status(404).json({ error: "User missing" });
 
@@ -67,15 +109,24 @@ router.post("/profile", requireAuth, async (req, res) => {
     u.refreshVersion += 1;
   }
 
+  if (firstName !== undefined) u.firstName = String(firstName || "").trim();
+  if (lastName !== undefined) u.lastName = String(lastName || "").trim();
+  if (whatsapp !== undefined)
+    u.whatsapp = String(whatsapp || "").replace(/[^\d+]/g, "");
+
   await u.save();
-  const { email, role } = u;
+
+  // return updated user subset
   return res.json({
     user: {
-      email,
+      email: u.email,
       username: u.username,
       avatarUrl: u.avatarUrl,
-      role,
+      role: u.role,
       zone: u.zone,
+      firstName: u.firstName || "",
+      lastName: u.lastName || "",
+      whatsapp: u.whatsapp || "",
     },
   });
 });

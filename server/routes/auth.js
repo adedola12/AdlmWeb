@@ -55,12 +55,28 @@ async function findByIdentifier(identifier) {
 }
 
 /* -------------------- SIGNUP (unchanged) -------------------- */
+
+function normalizeWhatsApp(v) {
+  if (!v) return "";
+  return String(v).replace(/[^\d+]/g, ""); // keep + and digits only
+}
+
+/* -------------------- SIGNUP (updated) -------------------- */
 router.post("/signup", async (req, res) => {
   try {
     await ensureDb();
-    const { email, username, password, zone } = req.body || {};
+    const { email, username, password, zone, firstName, lastName, whatsapp } =
+      req.body || {};
+
     if (!email || !password)
       return res.status(400).json({ error: "email and password required" });
+
+    // Enforce the new fields at API level (optional but recommended)
+    if (!firstName || !lastName || !whatsapp) {
+      return res
+        .status(400)
+        .json({ error: "firstName, lastName and whatsapp are required" });
+    }
 
     const exists = await User.findOne({ $or: [{ email }, { username }] });
     if (exists) return res.status(409).json({ error: "User exists" });
@@ -72,6 +88,9 @@ router.post("/signup", async (req, res) => {
       passwordHash,
       role: "user",
       zone: zone || null,
+      firstName: String(firstName || "").trim(),
+      lastName: String(lastName || "").trim(),
+      whatsapp: normalizeWhatsApp(whatsapp),
       entitlements: [],
     });
 
@@ -81,6 +100,12 @@ router.post("/signup", async (req, res) => {
       role: user.role,
       zone: user.zone || "",
       entitlements: user.entitlements || [],
+      // include new fields in token payload for immediate client access
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      whatsapp: user.whatsapp || "",
+      username: user.username || "",
+      avatarUrl: user.avatarUrl || "",
     };
 
     const accessToken = signAccess(payload);
@@ -134,12 +159,18 @@ router.post("/login", async (req, res) => {
 
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
+    // inside /auth/login after you fetched `user`
     const payload = {
       _id: String(user._id),
       email: user.email,
       role: user.role || "user",
       zone: user.zone || "",
       entitlements: user.entitlements || [],
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      whatsapp: user.whatsapp || "",
+      username: user.username || "",
+      avatarUrl: user.avatarUrl || "",
     };
 
     const accessToken = signAccess(payload);
@@ -180,12 +211,18 @@ router.post("/refresh", async (req, res) => {
     const user = await User.findById(rec.userId).lean();
     if (!user) return res.status(401).json({ error: "User missing" });
 
+    // inside /auth/refresh after you fetched `user`
     const payload = {
       _id: String(user._id),
       email: user.email,
       role: user.role || "user",
       zone: user.zone || "",
       entitlements: user.entitlements || [],
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      whatsapp: user.whatsapp || "",
+      username: user.username || "",
+      avatarUrl: user.avatarUrl || "",
     };
 
     const accessToken = signAccess(payload);
