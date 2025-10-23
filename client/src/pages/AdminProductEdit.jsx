@@ -226,10 +226,15 @@ export default function AdminProductEdit() {
 
   React.useEffect(() => {
     (async () => {
-      const data = await apiAuthed(`/admin/products/${id}`, {
-        token: accessToken,
-      });
-      setP(data);
+      try {
+        const data = await apiAuthed(`/admin/products/${id}`, {
+          token: accessToken,
+        });
+        setP(data);
+      } catch (err) {
+        setMsg(err?.message || "Failed to load product");
+        setP(null);
+      }
       setName(data.name || "");
       setBlurb(data.blurb || "");
       setDescription(data.description || "");
