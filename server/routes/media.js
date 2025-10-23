@@ -3,7 +3,6 @@ import express from "express";
 import crypto from "crypto";
 import { requireAuth } from "../middleware/auth.js";
 import cloudinary from "../utils/cloudinaryConfig.js";
-import express from "express";
 import { v2 as cloudinary } from "cloudinary";
 
 // Any authenticated user can request a signed ticket for *image* uploads.
