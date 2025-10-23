@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { Product } from "../models/Product.js";
 
@@ -18,11 +19,28 @@ router.get("/", async (_req, res) => {
 
 // GET /admin/products/:id  (populated for editor)
 router.get("/:id", async (req, res) => {
-  const p = await Product.findById(req.params.id)
-    .populate("relatedFreeVideoIds")
-    .lean();
-  if (!p) return res.status(404).json({ error: "Not found" });
-  res.json(p);
+  // const p = await Product.findById(req.params.id)
+  //   .populate("relatedFreeVideoIds")
+  //   .lean();
+  // if (!p) return res.status(404).json({ error: "Not found" });
+  // res.json(p);
+
+  const { id } = req.params;
+  let doc = null;
+
+  // Try ObjectId first
+  if (mongoose.isValidObjectId(id)) {
+    doc = await Product.findById(id).populate("relatedFreeVideoIds").lean();
+  }
+  // Fallback: treat as product key
+  if (!doc) {
+    doc = await Product.findOne({ key: id })
+      .populate("relatedFreeVideoIds")
+      .lean();
+  }
+
+  if (!doc) return res.status(404).json({ error: "Not found" });
+  res.json(doc);
 });
 
 // POST /admin/products
