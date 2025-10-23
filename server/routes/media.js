@@ -3,7 +3,7 @@ import express from "express";
 import crypto from "crypto";
 import { requireAuth } from "../middleware/auth.js";
 import cloudinary from "../utils/cloudinaryConfig.js";
-import { v2 as cloudinary } from "cloudinary";
+
 
 // Any authenticated user can request a signed ticket for *image* uploads.
 // POST /me/media/sign
@@ -17,11 +17,11 @@ function requireAdmin(req, _res, next) {
   return res.status(403).json({ error: "Admin only" });
 }
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:    process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// cloudinary.config({
+//   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+//   api_key:    process.env.CLOUDINARY_API_KEY,
+//   api_secret: process.env.CLOUDINARY_API_SECRET,
+// });
 
 
 router.post("/sign", requireAuth, async (req, res) => {
