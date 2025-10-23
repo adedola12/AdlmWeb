@@ -1,5 +1,6 @@
 // server/util/mailer.js
 import nodemailer from "nodemailer";
+import fetch from "node-fetch";
 
 function makeTransport({ host, port, secure }) {
   return nodemailer.createTransport({
@@ -30,20 +31,33 @@ const transports = [
 ];
 
 export async function sendMail({ to, subject, html, text }) {
-  const from =
-    process.env.EMAIL_FROM ||
-    `ADLM Services <${process.env.SMTP_USER || "noreply@adlmstudio.net"}>`;
-
-  let lastErr;
-  for (const t of transports) {
-    try {
-      const info = await t.sendMail({ from, to, subject, html, text });
-      return info;
-    } catch (err) {
-      lastErr = err;
-    }
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn("[mailer] RESEND_API_KEY missing; pretending to send in dev");
+    console.log({ to, subject });
+    return;
   }
-  // Surface a clean error while logging the real cause
-  console.error("[mailer] all SMTP attempts failed:", lastErr);
-  throw new Error("Email delivery failed (SMTP connection)");
+
+  const payload = {
+    from: process.env.EMAIL_FROM || "ADLM Services <noreply@adlmstudio.net>",
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    html,
+    text,
+  };
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error("[mailer] Resend failed:", res.status, body);
+    throw new Error("Email delivery failed");
+  }
 }

@@ -54,7 +54,6 @@ async function findByIdentifier(identifier) {
   return u;
 }
 
-
 /* -------------------- SIGNUP (unchanged) -------------------- */
 router.post("/signup", async (req, res) => {
   try {
@@ -214,6 +213,7 @@ router.post("/password/forgot", async (req, res) => {
   try {
     await ensureDb();
     const { identifier } = req.body || {};
+    if (!user) return res.json({ ok: true }); // same behavior
     if (!identifier)
       return res.status(400).json({ error: "identifier required" });
 
@@ -243,16 +243,19 @@ router.post("/password/forgot", async (req, res) => {
 
     // send email
     const safeName = user.username || user.email.split("@")[0];
-    await sendMail({
-      to: user.email,
-      subject: "Your ADLM password reset code",
-      html: `
-        <p>Hi ${safeName},</p>
-        <p>Your password reset code is:</p>
-        <p style="font-size:20px;font-weight:bold;letter-spacing:3px">${code}</p>
-        <p>This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>
-      `,
-    });
+    try {
+      await sendMail({
+        to: user.email,
+        subject: "Your ADLM password reset code",
+        html: `<p>Hi ${safeName},</p>
+               <p>Your password reset code is:</p>
+               <p style="font-size:20px;font-weight:bold;letter-spacing:3px">${code}</p>
+               <p>This code expires in 10 minutes.</p>`,
+      });
+    } catch (mailErr) {
+      console.error("[/auth/password/forgot] mail error:", mailErr);
+      // Still return ok to avoid exposing whether an email exists or if mail failed
+    }
 
     return res.json({ ok: true });
   } catch (err) {
@@ -266,6 +269,7 @@ router.post("/password/reset", async (req, res) => {
   try {
     await ensureDb();
     const { identifier, code, newPassword } = req.body || {};
+
     if (!identifier || !code || !newPassword)
       return res
         .status(400)
