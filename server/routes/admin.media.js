@@ -127,4 +127,48 @@ router.post("/preview-url", (req, res) => {
   }
 });
 
+router.get("/assets", async (req, res) => {
+  const {
+    type = "image",
+    prefix = "",
+    max = 24,
+    next: next_cursor,
+    q = "",
+  } = req.query;
+
+  try {
+    const opts = {
+      type: "upload",
+      resource_type: type === "video" ? "video" : "image",
+      max_results: Math.min(Number(max) || 24, 100),
+      prefix: prefix || undefined,
+      next_cursor: next_cursor || undefined,
+    };
+
+    const out = await cloudinary.api.resources(opts);
+    let items = out.resources.map((r) => ({
+      public_id: r.public_id,
+      url: r.secure_url,
+      format: r.format,
+      bytes: r.bytes,
+      width: r.width,
+      height: r.height,
+      created_at: r.created_at,
+    }));
+
+    const ql = (q || "").toLowerCase();
+    if (ql) {
+      items = items.filter(
+        (x) =>
+          x.public_id.toLowerCase().includes(ql) ||
+          x.url.toLowerCase().includes(ql)
+      );
+    }
+
+    res.json({ items, next: out.next_cursor || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Cloudinary list failed" });
+  }
+});
+
 export default router;
