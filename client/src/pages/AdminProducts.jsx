@@ -16,6 +16,10 @@ export default function AdminProducts() {
   const [previewPct, setPreviewPct] = React.useState(0);
   const [thumbPct, setThumbPct] = React.useState(0);
 
+  const [images, setImages] = React.useState([]); // gallery (array of URLs)
+  const [showImagePicker, setShowImagePicker] = React.useState(false);
+  const [showVideoPicker, setShowVideoPicker] = React.useState(false);
+
   // refs to write URLs after upload
   const previewInputRef = React.useRef(null);
   const thumbInputRef = React.useRef(null);
@@ -67,8 +71,11 @@ export default function AdminProducts() {
       features: parseFeatures(fd.get("features")),
       billingInterval: fd.get("billingInterval") || "monthly",
       price, // <-- nested dual-currency pricing
-      previewUrl: fd.get("previewUrl") || undefined,
-      thumbnailUrl: fd.get("thumbnailUrl") || undefined,
+      // previewUrl: fd.get("previewUrl") || undefined,
+      // thumbnailUrl: fd.get("thumbnailUrl") || undefined,
+      previewUrl: previewInputRef.current?.value || undefined,
+      thumbnailUrl: thumbInputRef.current?.value || images[0] || undefined,
+      images,
       isPublished: fd.get("isPublished") === "on",
       sort: Number(fd.get("sort") || 0),
     };
@@ -205,6 +212,136 @@ export default function AdminProducts() {
     load();
   }
 
+  // --- Small UI helpers --- //
+  function Thumb({
+    src,
+    onPrimary,
+    onRemove,
+    primaryLabel = "Make thumbnail",
+  }) {
+    return (
+      <div className="relative">
+        <img src={src} className="w-24 h-24 object-cover rounded border" />
+        <div className="mt-1 flex gap-1">
+          {onPrimary && (
+            <button type="button" className="btn btn-xs" onClick={onPrimary}>
+              {primaryLabel}
+            </button>
+          )}
+          <button type="button" className="btn btn-xs" onClick={onRemove}>
+            Remove
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function MediaBrowserModal({
+    open,
+    onClose,
+    type = "image",
+    onPick,
+    accessToken,
+  }) {
+    const [items, setItems] = React.useState([]);
+    const [q, setQ] = React.useState("");
+    const [next, setNext] = React.useState(null);
+    const [loading, setLoading] = React.useState(false);
+
+    async function load(cursor = null) {
+      setLoading(true);
+      try {
+        const qs = new URLSearchParams();
+        qs.set("type", type);
+        if (q) qs.set("q", q);
+        if (cursor) qs.set("next", cursor);
+        const res = await fetch(
+          `${API_BASE}/admin/media/assets?${qs.toString()}`,
+          {
+            credentials: "include",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+        const json = await res.json();
+        if (cursor) {
+          setItems((prev) => [...prev, ...json.items]);
+        } else {
+          setItems(json.items || []);
+        }
+        setNext(json.next || null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    React.useEffect(() => {
+      if (open) load(null);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, q, type]);
+
+    if (!open) return null;
+    return (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl p-4 w-full max-w-3xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="font-semibold">Choose from Cloudinary ({type})</div>
+            <button className="btn btn-sm" onClick={onClose}>
+              Close
+            </button>
+          </div>
+          <input
+            className="input"
+            placeholder="Search filename..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                {items.map((it) => (
+                  <button
+                    key={it.public_id}
+                    className="border rounded overflow-hidden"
+                    onClick={() => onPick(it.url)}
+                    title={it.public_id}
+                    type="button"
+                  >
+                    {type === "image" ? (
+                      <img src={it.url} className="w-full h-24 object-cover" />
+                    ) : (
+                      <video
+                        src={it.url}
+                        className="w-full h-24 object-cover"
+                      />
+                    )}
+                  </button>
+                ))}
+                {!items.length && (
+                  <div className="text-sm text-slate-600 col-span-full">
+                    No assets found.
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
+                <div />
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={!next || loading}
+                  onClick={() => load(next)}
+                >
+                  Load more
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="card">
@@ -315,7 +452,7 @@ export default function AdminProducts() {
           </label>
 
           {/* Preview video */}
-          <div className="sm:col-span-2 grid gap-2">
+          {/* <div className="sm:col-span-2 grid gap-2">
             <input
               className="input"
               name="previewUrl"
@@ -349,10 +486,10 @@ export default function AdminProducts() {
                 </div>
               )}
             </div>
-          </div>
+          </div> */}
 
           {/* Thumbnail */}
-          <div className="sm:col-span-2 grid gap-2">
+          {/* <div className="sm:col-span-2 grid gap-2">
             <input
               className="input"
               name="thumbnailUrl"
@@ -386,7 +523,128 @@ export default function AdminProducts() {
                 </div>
               )}
             </div>
+          </div> */}
+
+          {/* Gallery images */}
+          <div className="sm:col-span-2">
+            <div className="mb-2 font-medium">Images</div>
+            <div className="flex flex-wrap gap-3">
+              {images.map((src, i) => (
+                <Thumb
+                  key={`${src}-${i}`}
+                  src={src}
+                  onPrimary={() => {
+                    // make this the thumbnail
+                    if (thumbInputRef.current)
+                      thumbInputRef.current.value = src;
+                  }}
+                  onRemove={() =>
+                    setImages((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  primaryLabel="Use as thumbnail"
+                />
+              ))}
+              {!images.length && (
+                <div className="text-sm text-slate-600">No images yet.</div>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <label
+                className={`btn btn-sm ${
+                  uploadingThumb ? "opacity-50 pointer-events-none" : ""
+                }`}
+              >
+                Upload image
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingThumb}
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const url = await uploadToCloudinary(f, "image");
+                    if (url)
+                      setImages((prev) => Array.from(new Set([...prev, url])));
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setShowImagePicker(true)}
+              >
+                Add from Cloudinary
+              </button>
+              {/* keep a hidden input for thumbnail (can be set by clicking a Thumb) */}
+              <input ref={thumbInputRef} name="thumbnailUrl" type="hidden" />
+            </div>
           </div>
+
+          {/* Preview video */}
+          <div className="sm:col-span-2">
+            <div className="mb-2 font-medium">Preview video</div>
+            <div className="flex items-center gap-3">
+              <div className="rounded overflow-hidden border bg-black">
+                <video
+                  className="w-48 h-28 object-cover"
+                  src={previewInputRef.current?.value || ""}
+                  controls
+                  preload="metadata"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label
+                  className={`btn btn-sm ${
+                    uploadingPreview ? "opacity-50 pointer-events-none" : ""
+                  }`}
+                >
+                  Upload video
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    disabled={uploadingPreview}
+                    onChange={(e) => handlePreviewFile(e.target.files?.[0])}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => setShowVideoPicker(true)}
+                >
+                  Choose from Cloudinary
+                </button>
+                <input
+                  ref={previewInputRef}
+                  name="previewUrl"
+                  className="hidden"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Modals */}
+          <MediaBrowserModal
+            open={showImagePicker}
+            onClose={() => setShowImagePicker(false)}
+            type="image"
+            accessToken={accessToken}
+            onPick={(url) => {
+              setImages((prev) => Array.from(new Set([...prev, url])));
+              setShowImagePicker(false);
+            }}
+          />
+          <MediaBrowserModal
+            open={showVideoPicker}
+            onClose={() => setShowVideoPicker(false)}
+            type="video"
+            accessToken={accessToken}
+            onPick={(url) => {
+              if (previewInputRef.current) previewInputRef.current.value = url;
+              setShowVideoPicker(false);
+            }}
+          />
 
           {/* Description + Features */}
           <textarea

@@ -100,12 +100,10 @@ function FreeVideoPicker({ selected, setSelected }) {
   async function load(p = 1) {
     setLoading(true);
     try {
-      // Using public Learn endpoint (published only). Swap to admin if needed.
       const res = await fetch(`${API_BASE}/learn/free?page=${p}&pageSize=6`, {
         credentials: "include",
       });
       const json = await res.json();
-      // naive client-side "search"
       const items = (json.items || []).filter(
         (x) => !query || x.title.toLowerCase().includes(query.toLowerCase())
       );
@@ -194,6 +192,128 @@ function FreeVideoPicker({ selected, setSelected }) {
   );
 }
 
+// --- Small UI helpers --- //
+function Thumb({ src, onPrimary, onRemove, primaryLabel = "Make thumbnail" }) {
+  return (
+    <div className="relative">
+      <img src={src} className="w-24 h-24 object-cover rounded border" />
+      <div className="mt-1 flex gap-1">
+        {onPrimary && (
+          <button type="button" className="btn btn-xs" onClick={onPrimary}>
+            {primaryLabel}
+          </button>
+        )}
+        <button type="button" className="btn btn-xs" onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MediaBrowserModal({
+  open,
+  onClose,
+  type = "image",
+  onPick,
+  accessToken,
+}) {
+  const [items, setItems] = React.useState([]);
+  const [q, setQ] = React.useState("");
+  const [next, setNext] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+
+  async function load(cursor = null) {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      qs.set("type", type);
+      if (q) qs.set("q", q);
+      if (cursor) qs.set("next", cursor);
+      const res = await fetch(
+        `${API_BASE}/admin/media/assets?${qs.toString()}`,
+        {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+      const json = await res.json();
+      if (cursor) {
+        setItems((prev) => [...prev, ...json.items]);
+      } else {
+        setItems(json.items || []);
+      }
+      setNext(json.next || null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  React.useEffect(() => {
+    if (open) load(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, q, type]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl p-4 w-full max-w-3xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="font-semibold">Choose from Cloudinary ({type})</div>
+          <button className="btn btn-sm" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <input
+          className="input"
+          placeholder="Search filename..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {loading ? (
+          <div className="text-sm text-slate-600">Loading…</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {items.map((it) => (
+                <button
+                  key={it.public_id}
+                  className="border rounded overflow-hidden"
+                  onClick={() => onPick(it.url)}
+                  title={it.public_id}
+                  type="button"
+                >
+                  {type === "image" ? (
+                    <img src={it.url} className="w-full h-24 object-cover" />
+                  ) : (
+                    <video src={it.url} className="w-full h-24 object-cover" />
+                  )}
+                </button>
+              ))}
+              {!items.length && (
+                <div className="text-sm text-slate-600 col-span-full">
+                  No assets found.
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <div />
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={!next || loading}
+                onClick={() => load(next)}
+              >
+                Load more
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminProductEdit() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -224,6 +344,50 @@ export default function AdminProductEdit() {
   const [sort, setSort] = React.useState(0);
   const [relatedFreeVideoIds, setRelatedFreeVideoIds] = React.useState([]);
 
+  // FIX: add missing modal states
+  const [showImagePicker, setShowImagePicker] = React.useState(false);
+  const [showVideoPicker, setShowVideoPicker] = React.useState(false);
+
+  // small uploader (no progress UI here)
+  async function uploadToCloudinary(
+    file,
+    resourceType /* "image" | "video" */
+  ) {
+    try {
+      const sig = await apiAuthed(`/admin/media/sign`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource_type: resourceType }),
+      });
+
+      const fd = new FormData();
+      fd.append("file", file);
+
+      if (sig.mode === "unsigned" && sig.upload_preset) {
+        fd.append("upload_preset", sig.upload_preset);
+      } else {
+        fd.append("api_key", sig.api_key);
+        fd.append("timestamp", sig.timestamp);
+        fd.append("signature", sig.signature);
+        if (sig.folder) fd.append("folder", sig.folder);
+        if (sig.public_id) fd.append("public_id", sig.public_id);
+        if (sig.eager) fd.append("eager", sig.eager);
+      }
+
+      const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${sig.resource_type}/upload`;
+      const res = await fetch(endpoint, { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || !json.secure_url) {
+        throw new Error(json?.error?.message || "Upload failed");
+      }
+      return json.secure_url;
+    } catch (e) {
+      setMsg(`❌ ${e.message || "Upload error"}`);
+      return null;
+    }
+  }
+
   React.useEffect(() => {
     (async () => {
       try {
@@ -231,31 +395,31 @@ export default function AdminProductEdit() {
           token: accessToken,
         });
         setP(data);
+        setName(data.name || "");
+        setBlurb(data.blurb || "");
+        setDescription(data.description || "");
+        setFeatures(Array.isArray(data.features) ? data.features : []);
+        setImages(Array.isArray(data.images) ? data.images : []);
+        setBillingInterval(data.billingInterval || "monthly");
+        setPrice({
+          monthlyNGN: data.price?.monthlyNGN ?? 0,
+          yearlyNGN: data.price?.yearlyNGN ?? 0,
+          installNGN: data.price?.installNGN ?? 0,
+          monthlyUSD: data.price?.monthlyUSD ?? "",
+          yearlyUSD: data.price?.yearlyUSD ?? "",
+          installUSD: data.price?.installUSD ?? "",
+        });
+        setPreviewUrl(data.previewUrl || "");
+        setThumbnailUrl(data.thumbnailUrl || "");
+        setIsPublished(!!data.isPublished);
+        setSort(data.sort ?? 0);
+        setRelatedFreeVideoIds(
+          (data.relatedFreeVideoIds || []).map((v) => v._id)
+        );
       } catch (err) {
         setMsg(err?.message || "Failed to load product");
         setP(null);
       }
-      setName(data.name || "");
-      setBlurb(data.blurb || "");
-      setDescription(data.description || "");
-      setFeatures(Array.isArray(data.features) ? data.features : []);
-      setImages(Array.isArray(data.images) ? data.images : []);
-      setBillingInterval(data.billingInterval || "monthly");
-      setPrice({
-        monthlyNGN: data.price?.monthlyNGN ?? 0,
-        yearlyNGN: data.price?.yearlyNGN ?? 0,
-        installNGN: data.price?.installNGN ?? 0,
-        monthlyUSD: data.price?.monthlyUSD ?? "",
-        yearlyUSD: data.price?.yearlyUSD ?? "",
-        installUSD: data.price?.installUSD ?? "",
-      });
-      setPreviewUrl(data.previewUrl || "");
-      setThumbnailUrl(data.thumbnailUrl || "");
-      setIsPublished(!!data.isPublished);
-      setSort(data.sort ?? 0);
-      setRelatedFreeVideoIds(
-        (data.relatedFreeVideoIds || []).map((v) => v._id)
-      );
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -269,7 +433,7 @@ export default function AdminProductEdit() {
         blurb,
         description,
         features,
-        images,
+        images: Array.from(new Set(images)), // dedupe
         billingInterval,
         price: {
           monthlyNGN: Number(price.monthlyNGN || 0),
@@ -282,7 +446,6 @@ export default function AdminProductEdit() {
         sort: Number(sort || 0),
         relatedFreeVideoIds,
       };
-      // optional USD overrides (empty string → unset)
       if (price.monthlyUSD !== "")
         payload.price.monthlyUSD = Number(price.monthlyUSD);
       if (price.yearlyUSD !== "")
@@ -451,35 +614,149 @@ export default function AdminProductEdit() {
         </div>
 
         <div className="card space-y-4">
-          <ReorderableList
-            title="Features"
-            items={features}
-            setItems={setFeatures}
-            placeholder="Add a feature…"
-          />
+          {/* Image gallery */}
+          <div>
+            <div className="font-medium mb-2">Images</div>
+            <div className="flex flex-wrap gap-3">
+              {images.map((src, i) => (
+                <div key={`${src}-${i}`} className="flex flex-col items-start">
+                  <img
+                    src={src}
+                    className="w-24 h-24 object-cover rounded border"
+                  />
+                  <div className="mt-1 flex gap-1">
+                    <button
+                      type="button"
+                      className="btn btn-xs"
+                      onClick={() => setThumbnailUrl(src)}
+                      title="Use as thumbnail"
+                    >
+                      Make thumbnail
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-xs"
+                      onClick={() =>
+                        setImages((arr) => arr.filter((_, idx) => idx !== i))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {!images.length && (
+                <div className="text-sm text-slate-600">No images yet.</div>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <label className="btn btn-sm">
+                Upload image
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const url = await uploadToCloudinary(f, "image");
+                    if (url)
+                      setImages((prev) => Array.from(new Set([...prev, url])));
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setShowImagePicker(true)}
+              >
+                Add from Cloudinary
+              </button>
+            </div>
+          </div>
 
-          <ReorderableList
-            title="Images (URLs)"
-            items={images}
-            setItems={setImages}
-            placeholder="https://…"
-          />
-
+          {/* Preview & Thumbnail controls with tiny previews */}
           <div className="space-y-2">
             <div className="font-medium">Preview & Thumbnail</div>
-            <input
-              className="input"
-              placeholder="Preview video URL"
-              value={previewUrl}
-              onChange={(e) => setPreviewUrl(e.target.value)}
-            />
-            <input
-              className="input"
-              placeholder="Thumbnail URL"
-              value={thumbnailUrl}
-              onChange={(e) => setThumbnailUrl(e.target.value)}
-            />
+
+            <div className="flex items-center gap-3">
+              <div className="rounded overflow-hidden border bg-black">
+                <video
+                  className="w-40 h-24 object-cover"
+                  src={previewUrl}
+                  controls
+                  preload="metadata"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <input
+                  className="input"
+                  placeholder="Preview video URL"
+                  value={previewUrl}
+                  onChange={(e) => setPreviewUrl(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <label className="btn btn-sm">
+                    Upload video
+                    <input
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        const url = await uploadToCloudinary(f, "video");
+                        if (url) setPreviewUrl(url);
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => setShowVideoPicker(true)}
+                  >
+                    Choose from Cloudinary
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <img
+                src={thumbnailUrl || images[0] || ""}
+                className="w-24 h-24 object-cover rounded border"
+                alt=""
+              />
+              <input
+                className="input"
+                placeholder="Thumbnail URL"
+                value={thumbnailUrl}
+                onChange={(e) => setThumbnailUrl(e.target.value)}
+              />
+            </div>
           </div>
+
+          {/* Modals */}
+          <MediaBrowserModal
+            open={showImagePicker}
+            onClose={() => setShowImagePicker(false)}
+            type="image"
+            accessToken={accessToken}
+            onPick={(url) => {
+              setImages((prev) => Array.from(new Set([...prev, url])));
+              setShowImagePicker(false);
+            }}
+          />
+          <MediaBrowserModal
+            open={showVideoPicker}
+            onClose={() => setShowVideoPicker(false)}
+            type="video"
+            accessToken={accessToken}
+            onPick={(url) => {
+              setPreviewUrl(url);
+              setShowVideoPicker(false);
+            }}
+          />
         </div>
       </div>
 
