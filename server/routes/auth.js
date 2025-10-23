@@ -293,22 +293,6 @@ router.post("/password/reset", async (req, res) => {
         .json({ error: "Too many attempts. Request a new code." });
     }
 
-    // rec.attempts += 1;
-    // await rec.save();
-
-    // // set new password
-    // user.passwordHash = await bcrypt.hash(newPassword, 10);
-    // await user.save();
-
-    // // mark used & invalidate existing refresh tokens
-    // rec.usedAt = new Date();
-    // await rec.save();
-
-    // // now check the code
-    // if (String(code) !== String(rec.code)) {
-    //   return res.status(400).json({ error: "Invalid or expired code" });
-    // }
-
     // if wrong code, count attempt and fail
     if (String(code) !== String(rec.code)) {
       rec.attempts += 1;
