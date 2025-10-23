@@ -4,13 +4,11 @@ import crypto from "crypto";
 import { requireAuth } from "../middleware/auth.js";
 import cloudinary from "../utils/cloudinaryConfig.js";
 
-
 // Any authenticated user can request a signed ticket for *image* uploads.
 // POST /me/media/sign
 // body: { resource_type?: "image", folder?: "adlm/avatars", public_id?, eager? }
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
-
 
 function requireAdmin(req, _res, next) {
   if (req.user?.role === "admin") return next();
@@ -22,7 +20,6 @@ function requireAdmin(req, _res, next) {
 //   api_key:    process.env.CLOUDINARY_API_KEY,
 //   api_secret: process.env.CLOUDINARY_API_SECRET,
 // });
-
 
 router.post("/sign", requireAuth, async (req, res) => {
   try {
@@ -64,14 +61,13 @@ router.post("/sign", requireAuth, async (req, res) => {
   }
 });
 
-// server/routes/media.js
 router.get("/assets", async (req, res) => {
   const {
     type = "image",
-    prefix = "",              // optional folder prefix
-    max = 24,                 // page size
-    next: next_cursor,        // pagination token
-    q = "",                   // naive filename search
+    prefix = "",
+    max = 24,
+    next: next_cursor,
+    q = "",
   } = req.query;
 
   try {
@@ -84,7 +80,7 @@ router.get("/assets", async (req, res) => {
     };
 
     const out = await cloudinary.api.resources(opts);
-    let items = out.resources.map(r => ({
+    let items = out.resources.map((r) => ({
       public_id: r.public_id,
       url: r.secure_url,
       format: r.format,
@@ -94,12 +90,12 @@ router.get("/assets", async (req, res) => {
       created_at: r.created_at,
     }));
 
-    // light client-side search by filename/public_id
     const ql = (q || "").toLowerCase();
     if (ql) {
-      items = items.filter(x =>
-        x.public_id.toLowerCase().includes(ql) ||
-        x.url.toLowerCase().includes(ql)
+      items = items.filter(
+        (x) =>
+          x.public_id.toLowerCase().includes(ql) ||
+          x.url.toLowerCase().includes(ql)
       );
     }
 
@@ -108,6 +104,5 @@ router.get("/assets", async (req, res) => {
     res.status(500).json({ error: e.message || "Cloudinary list failed" });
   }
 });
-
 
 export default router;

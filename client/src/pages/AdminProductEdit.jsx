@@ -681,13 +681,20 @@ export default function AdminProductEdit() {
 
             <div className="flex items-center gap-3">
               <div className="rounded overflow-hidden border bg-black">
-                <video
-                  className="w-40 h-24 object-cover"
-                  src={previewUrl}
-                  controls
-                  preload="metadata"
-                />
+                {previewUrl ? (
+                  <video
+                    className="w-40 h-24 object-cover"
+                    src={previewUrl}
+                    controls
+                    preload="metadata"
+                  />
+                ) : (
+                  <div className="w-40 h-24 flex items-center justify-center text-xs text-white/70">
+                    No preview
+                  </div>
+                )}
               </div>
+
               <div className="flex flex-col gap-2">
                 <input
                   className="input"
@@ -722,11 +729,17 @@ export default function AdminProductEdit() {
             </div>
 
             <div className="flex items-center gap-3">
-              <img
-                src={thumbnailUrl || images[0] || ""}
-                className="w-24 h-24 object-cover rounded border"
-                alt=""
-              />
+              {thumbnailUrl || images[0] ? (
+                <img
+                  src={thumbnailUrl || images[0]}
+                  className="w-24 h-24 object-cover rounded border"
+                  alt=""
+                />
+              ) : (
+                <div className="w-24 h-24 rounded border bg-slate-100 flex items-center justify-center text-xs text-slate-500">
+                  No thumbnail
+                </div>
+              )}
               <input
                 className="input"
                 placeholder="Thumbnail URL"
