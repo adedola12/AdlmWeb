@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 import { ensureDb } from "../db.js";
 import { signAccess } from "../middleware/auth.js";
 import { User } from "../models/User.js";
+import { PasswordReset } from "../models/PasswordReset.js";
+import { sendMail } from "../util/mailer.js";
 
 const router = express.Router();
 const REFRESH_COOKIE = "rt";
@@ -43,6 +45,15 @@ function signRefresh(payload) {
 function verifyRefresh(token) {
   return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
 }
+
+// helper to find user by email OR username
+async function findByIdentifier(identifier) {
+  const u =
+    (await User.findOne({ email: identifier })) ||
+    (await User.findOne({ username: identifier }));
+  return u;
+}
+
 
 /* -------------------- SIGNUP (unchanged) -------------------- */
 router.post("/signup", async (req, res) => {
@@ -196,6 +207,104 @@ router.post("/logout", async (req, res) => {
   } catch (err) {
     console.error("[/auth/logout] error:", err);
     res.json({ ok: true });
+  }
+});
+
+router.post("/password/forgot", async (req, res) => {
+  try {
+    await ensureDb();
+    const { identifier } = req.body || {};
+    if (!identifier)
+      return res.status(400).json({ error: "identifier required" });
+
+    const user = await findByIdentifier(identifier);
+    // We deliberately return 200 even if user not found to avoid account enumeration
+    if (!user) return res.json({ ok: true });
+
+    // simple throttle: allow 1 active unexpired reset at a time
+    const existing = await PasswordReset.findOne({
+      userId: user._id,
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+    if (existing) {
+      return res.json({ ok: true }); // code already sent recently
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await PasswordReset.create({
+      userId: user._id,
+      code,
+      expiresAt: expires,
+      requestedFromIp: req.ip,
+    });
+
+    // send email
+    const safeName = user.username || user.email.split("@")[0];
+    await sendMail({
+      to: user.email,
+      subject: "Your ADLM password reset code",
+      html: `
+        <p>Hi ${safeName},</p>
+        <p>Your password reset code is:</p>
+        <p style="font-size:20px;font-weight:bold;letter-spacing:3px">${code}</p>
+        <p>This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>
+      `,
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[/auth/password/forgot] error:", err);
+    return res.status(500).json({ error: "Unable to send code" });
+  }
+});
+
+/* -------------------- RESET (verify + set new) -------------------- */
+router.post("/password/reset", async (req, res) => {
+  try {
+    await ensureDb();
+    const { identifier, code, newPassword } = req.body || {};
+    if (!identifier || !code || !newPassword)
+      return res
+        .status(400)
+        .json({ error: "identifier, code, newPassword required" });
+
+    const user = await findByIdentifier(identifier);
+    if (!user) return res.status(400).json({ error: "Invalid code" });
+
+    const rec = await PasswordReset.findOne({
+      userId: user._id,
+      code: String(code),
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!rec) return res.status(400).json({ error: "Invalid or expired code" });
+
+    // optional brute-force guard
+    if (rec.attempts >= 5) {
+      return res
+        .status(429)
+        .json({ error: "Too many attempts. Request a new code." });
+    }
+
+    rec.attempts += 1;
+
+    // set new password
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    // mark used & invalidate existing refresh tokens
+    rec.usedAt = new Date();
+    await rec.save();
+    await Refresh.deleteMany({ userId: user._id }); // logout other sessions
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[/auth/password/reset] error:", err);
+    return res.status(500).json({ error: "Reset failed" });
   }
 });
 
