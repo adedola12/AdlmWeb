@@ -499,6 +499,9 @@ export default function AdminProducts() {
             </div>
 
             <div className="flex gap-2">
+              <Link className="btn btn-sm" to={`/admin/products/${p._id}/edit`}>
+                Edit
+              </Link>
               <button className="btn btn-sm" onClick={() => toggle(p)}>
                 {p.isPublished ? "Unpublish" : "Publish"}
               </button>

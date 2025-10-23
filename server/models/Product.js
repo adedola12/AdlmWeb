@@ -21,6 +21,7 @@ const ProductSchema = new mongoose.Schema(
     blurb: { type: String, default: "" },
     description: { type: String, default: "" },
     features: { type: [String], default: [] },
+    images: { type: [String], default: [] }, // gallery of images
 
     // "monthly" or "yearly" is the default billing cadence for UI
     billingInterval: {

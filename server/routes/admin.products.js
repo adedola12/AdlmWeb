@@ -16,6 +16,15 @@ router.get("/", async (_req, res) => {
   res.json(items);
 });
 
+// GET /admin/products/:id  (populated for editor)
+router.get("/:id", async (req, res) => {
+  const p = await Product.findById(req.params.id)
+    .populate("relatedFreeVideoIds")
+    .lean();
+  if (!p) return res.status(404).json({ error: "Not found" });
+  res.json(p);
+});
+
 // POST /admin/products
 router.post("/", async (req, res) => {
   const {
@@ -24,6 +33,7 @@ router.post("/", async (req, res) => {
     blurb,
     description,
     features = [],
+    images = [],
     billingInterval = "monthly",
     // flat fields from your current UI:
     priceMonthly, // legacy — keep for compat (NGN)
@@ -35,6 +45,8 @@ router.post("/", async (req, res) => {
     thumbnailUrl,
     isPublished = true,
     sort = 0,
+    relatedFreeVideoIds = [],
+    relatedCourseSkus = [],
   } = req.body || {};
 
   if (!key || !name)
@@ -55,12 +67,15 @@ router.post("/", async (req, res) => {
     blurb,
     description,
     features,
+    images,
     billingInterval,
     price: safePrice,
     previewUrl,
     thumbnailUrl,
     isPublished,
     sort,
+    relatedFreeVideoIds,
+    relatedCourseSkus,
   });
   res.json(p);
 });
@@ -69,6 +84,14 @@ router.post("/", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   const body = { ...req.body };
   if (body.key) delete body.key; // keep key stable
+  // sanitize arrays to avoid nulls/strings creeping in
+  if (Array.isArray(body.features))
+    body.features = body.features.filter(Boolean);
+  if (Array.isArray(body.images)) body.images = body.images.filter(Boolean);
+  if (Array.isArray(body.relatedFreeVideoIds))
+    body.relatedFreeVideoIds = body.relatedFreeVideoIds.filter(Boolean);
+  if (Array.isArray(body.relatedCourseSkus))
+    body.relatedCourseSkus = body.relatedCourseSkus.filter(Boolean);
 
   const p = await Product.findByIdAndUpdate(req.params.id, body, { new: true });
   if (!p) return res.status(404).json({ error: "Not found" });

@@ -516,7 +516,9 @@ export default function Products() {
                         {isAdmin && (
                           <button
                             className="btn btn-sm"
-                            onClick={() => startEdit(p)}
+                            onClick={() =>
+                              navigate(`/admin/products/${p._id}/edit`)
+                            }
                             title="Edit product"
                           >
                             Edit
