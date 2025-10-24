@@ -53,6 +53,11 @@ router.post("/", async (req, res) => {
     features = [],
     images = [],
     billingInterval = "monthly",
+
+    // ✅ NEW — accept course flags
+    isCourse = false,
+    courseSku,
+
     // flat fields from your current UI:
     priceMonthly, // legacy — keep for compat (NGN)
     priceYearly, // legacy — keep for compat (NGN)
@@ -87,6 +92,10 @@ router.post("/", async (req, res) => {
     features,
     images,
     billingInterval,
+    // ✅ persist these
+    isCourse: !!isCourse,
+    courseSku: courseSku || undefined,
+    
     price: safePrice,
     previewUrl,
     thumbnailUrl,
