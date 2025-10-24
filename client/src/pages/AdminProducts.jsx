@@ -1,6 +1,8 @@
 import React from "react";
+import { Link } from "react-router-dom"; // ✅ add this
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { API_BASE } from "../config"; // ✅ and this (used in MediaBrowserModal)
 
 export default function AdminProducts() {
   const { accessToken } = useAuth();
@@ -55,7 +57,8 @@ export default function AdminProducts() {
       yearlyNGN: Number(fd.get("yearlyNGN") || 0),
       installNGN: Number(fd.get("installNGN") || 0),
     };
-    // optional USD overrides (leave blank to auto-convert on server)
+    const productType = fd.get("productType") || "software";
+    const courseSku = (fd.get("courseSku") || "").trim();
     const monthlyUSD = fd.get("monthlyUSD");
     const yearlyUSD = fd.get("yearlyUSD");
     const installUSD = fd.get("installUSD");
@@ -70,14 +73,16 @@ export default function AdminProducts() {
       description: fd.get("description") || "",
       features: parseFeatures(fd.get("features")),
       billingInterval: fd.get("billingInterval") || "monthly",
-      price, // <-- nested dual-currency pricing
-      // previewUrl: fd.get("previewUrl") || undefined,
-      // thumbnailUrl: fd.get("thumbnailUrl") || undefined,
+      price,
       previewUrl: previewInputRef.current?.value || undefined,
       thumbnailUrl: thumbInputRef.current?.value || images[0] || undefined,
       images,
       isPublished: fd.get("isPublished") === "on",
       sort: Number(fd.get("sort") || 0),
+
+      // ✅ new fields for course/products
+      isCourse: productType === "course",
+      courseSku: productType === "course" && courseSku ? courseSku : undefined,
     };
 
     await apiAuthed("/admin/products", {
@@ -379,6 +384,29 @@ export default function AdminProducts() {
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
             </select>
+          </label>
+
+          {/* Product type */}
+          <label className="text-sm">
+            <div className="mb-1">Product type</div>
+            <select
+              name="productType"
+              className="input"
+              defaultValue="software"
+            >
+              <option value="software">Software</option>
+              <option value="course">Course</option>
+            </select>
+          </label>
+
+          {/* Course SKU (only used if Product type is Course) */}
+          <label className="text-sm">
+            <div className="mb-1">Course SKU (if Course)</div>
+            <input
+              className="input"
+              name="courseSku"
+              placeholder="e.g. QS-BASICS-101"
+            />
           </label>
 
           {/* NGN prices */}
@@ -710,6 +738,11 @@ export default function AdminProducts() {
                 </div>
                 <div className="text-slate-600">
                   Billing: <b>{p.billingInterval}</b>
+                  {p.isCourse && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-xs">
+                      Course{p.courseSku ? ` · ${p.courseSku}` : ""}
+                    </span>
+                  )}
                 </div>
                 <div className="text-slate-600">
                   NGN /
