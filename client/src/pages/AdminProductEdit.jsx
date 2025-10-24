@@ -713,7 +713,11 @@ export default function AdminProductEdit() {
                         const f = e.target.files?.[0];
                         if (!f) return;
                         const url = await uploadToCloudinary(f, "video");
-                        if (url) setPreviewUrl(url);
+                        if (url) {
+                          setPreviewUrl(url); // ✅ show it immediately
+                          if (previewInputRef.current)
+                            previewInputRef.current.value = url; // still persist in form
+                        }
                       }}
                     />
                   </label>
@@ -766,7 +770,8 @@ export default function AdminProductEdit() {
             type="video"
             accessToken={accessToken}
             onPick={(url) => {
-              setPreviewUrl(url);
+              setPreviewUrl(url); // ✅ show it
+              if (previewInputRef.current) previewInputRef.current.value = url; // persist in form
               setShowVideoPicker(false);
             }}
           />

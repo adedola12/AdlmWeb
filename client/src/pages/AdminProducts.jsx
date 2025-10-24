@@ -17,6 +17,7 @@ export default function AdminProducts() {
   const [uploadingThumb, setUploadingThumb] = React.useState(false);
   const [previewPct, setPreviewPct] = React.useState(0);
   const [thumbPct, setThumbPct] = React.useState(0);
+  const [previewUrl, setPreviewUrl] = React.useState(null); // null = no video yet
 
   const [images, setImages] = React.useState([]); // gallery (array of URLs)
   const [showImagePicker, setShowImagePicker] = React.useState(false);
@@ -74,7 +75,8 @@ export default function AdminProducts() {
       features: parseFeatures(fd.get("features")),
       billingInterval: fd.get("billingInterval") || "monthly",
       price,
-      previewUrl: previewInputRef.current?.value || undefined,
+      // previewUrl: previewInputRef.current?.value || undefined,
+      previewUrl: previewUrl || undefined,
       thumbnailUrl: thumbInputRef.current?.value || images[0] || undefined,
       images,
       isPublished: fd.get("isPublished") === "on",
@@ -614,12 +616,18 @@ export default function AdminProducts() {
             <div className="mb-2 font-medium">Preview video</div>
             <div className="flex items-center gap-3">
               <div className="rounded overflow-hidden border bg-black">
-                <video
-                  className="w-48 h-28 object-cover"
-                  src={previewInputRef.current?.value || ""}
-                  controls
-                  preload="metadata"
-                />
+                {previewUrl ? (
+                  <video
+                    className="w-48 h-28 object-cover"
+                    src={previewUrl} // ✅ valid URL
+                    controls
+                    preload="metadata"
+                  />
+                ) : (
+                  <div className="w-48 h-28 grid place-items-center text-white/70">
+                    No preview video
+                  </div>
+                )}
               </div>
               <div className="flex flex-col gap-2">
                 <label
