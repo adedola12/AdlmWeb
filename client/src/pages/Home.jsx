@@ -1,8 +1,13 @@
 // src/pages/Home.jsx
 import React from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../store.jsx";
 
 export default function Home() {
+  const { accessToken, user } = useAuth(); // either is fine to check
+
+  const isAuthed = Boolean(accessToken || (user && user.email));
+
   return (
     <div className="space-y-14">
       {/* Hero */}
@@ -22,12 +27,15 @@ export default function Home() {
           >
             Explore Products
           </Link>
-          <Link
-            className="btn bg-blue-900/30 border border-white/30"
-            to="/login"
-          >
-            Sign in
-          </Link>
+
+          {!isAuthed && (
+            <Link
+              className="btn bg-blue-900/30 border border-white/30"
+              to="/login"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </section>
 

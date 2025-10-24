@@ -22,6 +22,10 @@ import meMediaRouter from "./routes/media.js";
 import meMediaRoutes from "./routes/me-media.js";
 import rategenRouter from "./routes/rategen.js";
 import adminRateGen from "./routes/admin.rategen.js";
+import adminCoursesRouter from "./routes/adminCourses.js";
+import meCoursesRouter from "./routes/meCourses.js";
+import adminCourseGradingRouter from "./routes/adminCourseGrading.js";
+import webhooksRouter from "./routes/webhooks.js";
 
 const app = express();
 app.get("/__debug/db", (_req, res) => {
@@ -79,6 +83,10 @@ app.use("/me/media", meMediaRouter);
 app.use("/me/media", meMediaRoutes);
 app.use("/rategen", rategenRouter);
 app.use("/admin/rategen", adminRateGen);
+app.use("/admin/courses", adminCoursesRouter);
+app.use("/me/courses", meCoursesRouter);
+app.use("/admin/course-grading", adminCourseGradingRouter);
+app.use("/webhooks", webhooksRouter);
 
 /* -------- helpful error for bad JSON -------- */
 app.use((err, _req, res, next) => {

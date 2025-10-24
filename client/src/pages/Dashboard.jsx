@@ -8,7 +8,11 @@ import { useNavigate } from "react-router-dom";
 export default function Dashboard() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
+  const [courses, setCourses] = React.useState(null); // enrollments+course+progress
   const [err, setErr] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const [msg, setMsg] = React.useState("");
+
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -21,6 +25,264 @@ export default function Dashboard() {
       }
     })();
   }, [accessToken]);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiAuthed(`/me/courses`, { token: accessToken });
+        setCourses(data);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [accessToken]);
+
+  async function signUpload(resource_type = "raw") {
+    const res = await apiAuthed(`/me/media/sign`, {
+      token: accessToken,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resource_type }),
+    });
+    return res;
+  }
+
+  async function uploadToCloudinary(file, resource_type = "raw") {
+    setUploading(true);
+    setMsg("Uploading…");
+    try {
+      const sig = await signUpload(resource_type);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("api_key", sig.api_key);
+      fd.append("timestamp", sig.timestamp);
+      fd.append("signature", sig.signature);
+      if (sig.folder) fd.append("folder", sig.folder);
+
+      const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resource_type}/upload`;
+      const res = await fetch(endpoint, { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || !json.secure_url)
+        throw new Error(json?.error?.message || "Upload failed");
+      return json.secure_url;
+    } finally {
+      setUploading(false);
+      setMsg("");
+    }
+  }
+
+  async function submitAssignment(courseSku, moduleCode, file) {
+    try {
+      if (!file) return;
+      const ext = (file.name || "").split(".").pop().toLowerCase();
+      const isVideo = ["mp4", "mov", "avi", "mkv", "webm"].includes(ext);
+      const isImage = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext);
+      const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
+      const fileUrl = await uploadToCloudinary(file, resourceType);
+      await apiAuthed(`/me/courses/${encodeURIComponent(courseSku)}/submit`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moduleCode, fileUrl }),
+      });
+      setMsg("✅ Submitted");
+      // reload
+      const data = await apiAuthed(`/me/courses`, { token: accessToken });
+      setCourses(data);
+    } catch (e) {
+      setMsg(`❌ ${e.message || "Submit failed"}`);
+    }
+  }
+
+  function SubscriptionList() {
+    if (!summary) return "Loading…";
+    return (
+      <div className="space-y-2">
+        {(summary.entitlements || []).length === 0 && (
+          <div>No subscriptions yet.</div>
+        )}
+        {(summary.entitlements || []).map((e, i) => {
+          const isActive = e.status === "active";
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => openProduct(e)}
+              className={`w-full border rounded p-3 flex items-center justify-between text-left 
+                    transition hover:bg-slate-50 ${
+                      isActive
+                        ? "cursor-pointer"
+                        : "opacity-60 cursor-not-allowed"
+                    }`}
+            >
+              <div>
+                <div className="font-medium">{e.productKey}</div>
+                <div className="text-sm text-slate-600">Status: {e.status}</div>
+              </div>
+              <div className="text-sm">
+                Expires:{" "}
+                {e.expiresAt ? dayjs(e.expiresAt).format("YYYY-MM-DD") : "-"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function Courses() {
+    if (!courses) return <div>Loading courses…</div>;
+    if (!courses.length)
+      return <div className="text-sm text-slate-600">No courses yet.</div>;
+
+    return (
+      <div className="space-y-4">
+        {courses.map((c) => {
+          const { course, enrollment, progress, moduleSubmissions } = c;
+          return (
+            <div key={course.sku} className="border rounded p-3">
+              <div className="flex items-center gap-3">
+                {course.thumbnailUrl ? (
+                  <img
+                    src={course.thumbnailUrl}
+                    className="w-20 h-14 object-cover rounded border"
+                  />
+                ) : (
+                  <div className="w-20 h-14 rounded border bg-slate-100" />
+                )}
+                <div className="flex-1">
+                  <div className="font-semibold">{course.title}</div>
+                  <div className="text-sm text-slate-600">{course.blurb}</div>
+                </div>
+                <div className="text-sm font-medium">{progress}% complete</div>
+              </div>
+
+              <div className="mt-3 grid md:grid-cols-2 gap-3">
+                <div className="rounded overflow-hidden border bg-black">
+                  {course.onboardingVideoUrl ? (
+                    <video
+                      className="w-full h-40 object-cover"
+                      src={course.onboardingVideoUrl}
+                      controls
+                      preload="metadata"
+                    />
+                  ) : (
+                    <div className="w-full h-40 grid place-items-center text-white/70">
+                      No onboarding video
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <a
+                    className="btn btn-sm"
+                    href={course.classroomJoinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open in Google Classroom
+                  </a>
+                  {enrollment.certificateUrl && (
+                    <a
+                      className="btn btn-sm"
+                      href={enrollment.certificateUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Download Certificate
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="font-medium mb-1">Modules & Assignments</div>
+                <div className="space-y-2">
+                  {moduleSubmissions.map((m) => (
+                    <div key={m.moduleCode} className="border rounded p-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">
+                            {m.moduleCode} — {m.moduleTitle}
+                          </div>
+                          <div className="text-xs text-slate-600">
+                            {m.requiresSubmission
+                              ? "Assignment required"
+                              : "No assignment required"}
+                          </div>
+                        </div>
+                        <div
+                          className={`text-xs ${
+                            m.completed ? "text-green-600" : "text-slate-600"
+                          }`}
+                        >
+                          {m.completed ? "Completed" : "In progress"}
+                        </div>
+                      </div>
+
+                      {m.requiresSubmission && (
+                        <div className="mt-2">
+                          <div className="text-xs text-slate-600 mb-1">
+                            Your submissions:
+                          </div>
+                          <div className="space-y-1">
+                            {m.submissions.length === 0 && (
+                              <div className="text-xs text-slate-500">
+                                No submissions yet.
+                              </div>
+                            )}
+                            {m.submissions.map((s) => (
+                              <div
+                                key={s._id}
+                                className="text-xs flex items-center justify-between"
+                              >
+                                <a
+                                  className="underline"
+                                  href={s.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {s.fileUrl}
+                                </a>
+                                <span>
+                                  {s.gradeStatus}
+                                  {s.feedback ? ` · ${s.feedback}` : ""}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <label
+                            className={`btn btn-xs mt-2 ${
+                              uploading ? "opacity-50 pointer-events-none" : ""
+                            }`}
+                          >
+                            Upload assignment
+                            <input
+                              type="file"
+                              className="hidden"
+                              disabled={uploading}
+                              onChange={(e) =>
+                                submitAssignment(
+                                  course.sku,
+                                  m.moduleCode,
+                                  e.target.files?.[0]
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   function openProduct(e) {
     if (e.status !== "active") return;
@@ -35,54 +297,24 @@ export default function Dashboard() {
   return (
     <div className="space-y-4">
       <div className="card">
-        <h1 className="text-xl font-semibold">Welcome, {user?.email}</h1>
-        <p className="text-sm text-slate-600">
+        <h1 className="text-xl font-semibold">
+          Welcome, {user?.email || user?.firstName}
+        </h1>
+        {/* <p className="text-sm text-slate-600">
           Your 15-day <b>licenseToken</b> is issued and can be used offline by
           plugins.
-        </p>
+        </p> */}
       </div>
 
       <div className="card">
         <h2 className="font-semibold mb-2">Active Subscriptions</h2>
         {err && <div className="text-red-600 text-sm">{err}</div>}
-        {!summary ? (
-          "Loading…"
-        ) : (
-          <div className="space-y-2">
-            {(summary.entitlements || []).length === 0 && (
-              <div>No subscriptions yet.</div>
-            )}
-            {(summary.entitlements || []).map((e, i) => {
-              const isActive = e.status === "active";
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => openProduct(e)}
-                  className={`w-full border rounded p-3 flex items-center justify-between text-left 
-                    transition hover:bg-slate-50 ${
-                      isActive
-                        ? "cursor-pointer"
-                        : "opacity-60 cursor-not-allowed"
-                    }`}
-                >
-                  <div>
-                    <div className="font-medium">{e.productKey}</div>
-                    <div className="text-sm text-slate-600">
-                      Status: {e.status}
-                    </div>
-                  </div>
-                  <div className="text-sm">
-                    Expires:{" "}
-                    {e.expiresAt
-                      ? dayjs(e.expiresAt).format("YYYY-MM-DD")
-                      : "-"}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {!summary ? "Loading…" : <SubscriptionList />}
+      </div>
+
+      <div className="card">
+        <h2 className="font-semibold mb-2">My Courses</h2>
+        <Courses />
       </div>
     </div>
   );
