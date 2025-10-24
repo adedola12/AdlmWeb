@@ -15,6 +15,12 @@ export default function Dashboard() {
 
   const navigate = useNavigate();
 
+  const displayName =
+    (user?.firstName && user.firstName.trim()) ||
+    (user?.username && user.username.trim()) ||
+    user?.email ||
+    "there";
+
   React.useEffect(() => {
     (async () => {
       try {
@@ -297,9 +303,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-4">
       <div className="card">
-        <h1 className="text-xl font-semibold">
-          Welcome, {user?.email || user?.firstName}
-        </h1>
+        <h1 className="text-xl font-semibold">Welcome, {displayName}</h1>
         {/* <p className="text-sm text-slate-600">
           Your 15-day <b>licenseToken</b> is issued and can be used offline by
           plugins.

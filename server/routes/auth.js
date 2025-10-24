@@ -100,7 +100,6 @@ router.post("/signup", async (req, res) => {
       role: user.role,
       zone: user.zone || "",
       entitlements: user.entitlements || [],
-      // include new fields in token payload for immediate client access
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       whatsapp: user.whatsapp || "",

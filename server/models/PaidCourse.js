@@ -26,6 +26,6 @@ const PaidCourseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ guard against OverwriteModelError on hot-reload
+
 export const PaidCourse =
   mongoose.models.PaidCourse || mongoose.model("PaidCourse", PaidCourseSchema);
