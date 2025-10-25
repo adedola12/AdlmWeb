@@ -1,27 +1,29 @@
+// server/util/autoEnroll.js
 import { Product } from "../models/Product.js";
-import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 
 export async function autoEnrollFromPurchase(purchase) {
-  // purchase.lines: [{ productKey, ... }]
-  const productKeys = [
-    ...new Set((purchase.lines || []).map((l) => l.productKey)),
-  ];
-  const products = await Product.find({ key: { $in: productKeys } }).lean();
+  // Find all product keys affected by the purchase:
+  const productKeys = purchase.lines?.length
+    ? purchase.lines.map((l) => l.productKey)
+    : purchase.productKey
+    ? [purchase.productKey]
+    : [];
 
-  for (const line of purchase.lines || []) {
-    const p = products.find((x) => x.key === line.productKey);
-    if (!p || !p.isCourse || !p.courseSku) continue;
+  if (!productKeys.length) return;
 
-    const course = await PaidCourse.findOne({ sku: p.courseSku }).lean();
-    if (!course) continue;
+  const prods = await Product.find({
+    key: { $in: productKeys },
+    isCourse: true,
+  }).lean();
 
-    // create enrollment if none
+  for (const p of prods) {
+    if (!p.courseSku) continue;
+    // idempotent create
     const exists = await CourseEnrollment.findOne({
       userId: purchase.userId,
       courseSku: p.courseSku,
     });
-
     if (!exists) {
       await CourseEnrollment.create({
         userId: purchase.userId,
