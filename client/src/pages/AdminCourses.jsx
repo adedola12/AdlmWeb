@@ -1,3 +1,4 @@
+// src/pages/AdminCourses.jsx
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
@@ -66,6 +67,7 @@ export default function AdminCourses() {
   const { accessToken } = useAuth();
   const [qs] = useSearchParams();
   const editingSku = qs.get("edit") || "";
+
   const [items, setItems] = React.useState([]);
   const [msg, setMsg] = React.useState("");
   const [draft, setDraft] = React.useState({
@@ -118,32 +120,7 @@ export default function AdminCourses() {
     load(); /* eslint-disable */
   }, []);
 
-  // when ?edit=SKU is present, preload the form
-  // React.useEffect(() => {
-  //   (async () => {
-  //     if (!editingSku) return;
-  //     try {
-  //       const c = await apiAuthed(
-  //         `/admin/courses/${encodeURIComponent(editingSku)}`,
-  //         { token: accessToken }
-  //       );
-  //       setDraft({
-  //         sku: c.sku,
-  //         title: c.title || "",
-  //         blurb: c.blurb || "",
-  //         thumbnailUrl: c.thumbnailUrl || "",
-  //         onboardingVideoUrl: c.onboardingVideoUrl || "",
-  //         classroomJoinUrl: c.classroomJoinUrl || "",
-  //         certificateTemplateUrl: c.certificateTemplateUrl || "",
-  //         isPublished: !!c.isPublished,
-  //         sort: c.sort ?? 0,
-  //         modules: Array.isArray(c.modules) ? c.modules : [],
-  //       });
-  //     } catch {}
-  //   })();
-  // }, [editingSku, accessToken]);
-
-  // when ?edit=SKU is present, preload the form
+  // Preload form when ?edit=SKU is present
   React.useEffect(() => {
     (async () => {
       if (!editingSku) return;
@@ -165,13 +142,12 @@ export default function AdminCourses() {
           modules: Array.isArray(c.modules) ? c.modules : [],
         });
       } catch (e) {
-        // ✅ If the course doc doesn't exist yet, bootstrap it from the Product doc
+        // no PaidCourse yet — bootstrap from Product (can now be found by courseSku)
         try {
           const prod = await apiAuthed(
             `/admin/products/${encodeURIComponent(editingSku)}`,
             { token: accessToken }
           );
-          // Create a minimal PaidCourse
           const created = await apiAuthed(`/admin/courses`, {
             token: accessToken,
             method: "POST",
@@ -189,7 +165,6 @@ export default function AdminCourses() {
               modules: [],
             }),
           });
-
           setDraft({
             sku: created.sku,
             title: created.title || "",
@@ -202,8 +177,6 @@ export default function AdminCourses() {
             sort: created.sort ?? 0,
             modules: Array.isArray(created.modules) ? created.modules : [],
           });
-
-          // refresh list
           load();
         } catch (inner) {
           setMsg(inner.message || "Failed to prepare course for editing");
@@ -271,7 +244,6 @@ export default function AdminCourses() {
         {msg && <div className="text-sm mt-2">{msg}</div>}
       </div>
 
-      {/* Create */}
       <div className="card">
         <h2 className="font-semibold mb-2">Create course</h2>
         <form onSubmit={createCourse} className="grid sm:grid-cols-2 gap-3">
@@ -295,22 +267,6 @@ export default function AdminCourses() {
             value={draft.blurb}
             onChange={(e) => setDraft((d) => ({ ...d, blurb: e.target.value }))}
           />
-          {/* <input
-            className="input"
-            placeholder="Thumbnail URL"
-            value={draft.thumbnailUrl}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, thumbnailUrl: e.target.value }))
-            }
-          />
-          <input
-            className="input"
-            placeholder="Onboarding video URL"
-            value={draft.onboardingVideoUrl}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, onboardingVideoUrl: e.target.value }))
-            }
-          /> */}
 
           <label className="text-sm">
             <div className="mb-1">Thumbnail URL</div>
@@ -344,6 +300,7 @@ export default function AdminCourses() {
               />
             )}
           </div>
+
           <label className="text-sm">
             <div className="mb-1">Onboarding video URL</div>
             <input
@@ -369,15 +326,16 @@ export default function AdminCourses() {
                 }}
               />
             </label>
-            {draft.onboardingVideoUrl ? (
+            {draft.onboardingVideoUrl && (
               <video
                 className="w-40 h-24 border rounded object-cover"
                 src={draft.onboardingVideoUrl}
                 controls
                 preload="metadata"
               />
-            ) : null}
+            )}
           </div>
+
           <input
             className="input"
             placeholder="Classroom join URL"
@@ -397,6 +355,7 @@ export default function AdminCourses() {
               }))
             }
           />
+
           <div className="sm:col-span-2 space-y-2">
             <div className="font-medium">Modules</div>
             {draft.modules.map((m, i) => (
@@ -435,6 +394,7 @@ export default function AdminCourses() {
               Add module
             </button>
           </div>
+
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -464,7 +424,6 @@ export default function AdminCourses() {
         </form>
       </div>
 
-      {/* List */}
       <div className="space-y-2">
         {items.map((c) => (
           <div

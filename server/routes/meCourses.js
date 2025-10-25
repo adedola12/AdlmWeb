@@ -139,9 +139,49 @@ router.post("/:sku/complete", async (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /me/courses/:sku  -> single course for the logged-in user
+// router.get("/me/courses/:sku", async (req, res) => {
+//   const sku = req.params.sku;
+//   const course = await PaidCourse.findOne({ sku, isPublished: true }).lean();
+//   if (!course) return res.status(404).json({ error: "Course not found" });
+
+//   const enrollment = await CourseEnrollment.findOne({
+//     userId: req.user._id,
+//     courseSku: sku,
+//   }).lean();
+
+//   if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
+
+//   // build module submissions view (same shape you use in Dashboard)
+//   const subs = await CourseSubmission.find({
+//     userId: req.user._id,
+//     courseSku: sku,
+//   }).lean();
+
+//   const submissionsByModule = subs.reduce((m, s) => {
+//     (m[s.moduleCode] ||= []).push(s);
+//     return m;
+//   }, {});
+
+//   const moduleSubmissions = (course.modules || []).map((m) => ({
+//     moduleCode: m.code,
+//     moduleTitle: m.title,
+//     requiresSubmission: !!m.requiresSubmission,
+//     completed: (enrollment.completedModules || []).includes(m.code),
+//     submissions: submissionsByModule[m.code] || [],
+//   }));
+
+//   const total = (course.modules || []).length || 0;
+//   const done = (enrollment.completedModules || []).length || 0;
+//   const progress = total ? Math.round((done / total) * 100) : 0;
+
+//   res.json({ course, enrollment, progress, moduleSubmissions });
+// });
+// at the bottom of server/routes/me.courses.js
 
 // GET /me/courses/:sku  -> single course for the logged-in user
-router.get("/me/courses/:sku", async (req, res) => {
+router.get("/:sku", async (req, res) => {
+  // ← fixed path
   const sku = req.params.sku;
   const course = await PaidCourse.findOne({ sku, isPublished: true }).lean();
   if (!course) return res.status(404).json({ error: "Course not found" });
@@ -153,7 +193,6 @@ router.get("/me/courses/:sku", async (req, res) => {
 
   if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
 
-  // build module submissions view (same shape you use in Dashboard)
   const subs = await CourseSubmission.find({
     userId: req.user._id,
     courseSku: sku,
@@ -178,4 +217,5 @@ router.get("/me/courses/:sku", async (req, res) => {
 
   res.json({ course, enrollment, progress, moduleSubmissions });
 });
+
 export default router;
