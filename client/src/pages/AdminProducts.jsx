@@ -52,7 +52,6 @@ export default function AdminProducts() {
     e.preventDefault();
     const fd = new FormData(e.target);
 
-    // NEW: nested price object (NGN source of truth + optional USD overrides)
     const price = {
       monthlyNGN: Number(fd.get("monthlyNGN") || 0),
       yearlyNGN: Number(fd.get("yearlyNGN") || 0),
@@ -182,7 +181,11 @@ export default function AdminProducts() {
     setMsg(`Uploading video: ${fileLabel(f)}…`);
     try {
       const url = await uploadToCloudinary(f, "video");
-      if (url && previewInputRef.current) previewInputRef.current.value = url;
+      // if (url && previewInputRef.current) previewInputRef.current.value = url;
+      if (url) {
+        if (previewInputRef.current) previewInputRef.current.value = url;
+        setPreviewUrl(url); // ✅ update state so <video src> is never ""
+      }
       setMsg(url ? "✅ Preview video uploaded." : "Upload failed.");
     } catch (e) {
       setMsg(`❌ ${e.message || "Upload error"}`);
@@ -677,7 +680,9 @@ export default function AdminProducts() {
             type="video"
             accessToken={accessToken}
             onPick={(url) => {
+              // if (previewInputRef.current) previewInputRef.current.value = url;
               if (previewInputRef.current) previewInputRef.current.value = url;
+              setPreviewUrl(url); // ✅ keep state in syn
               setShowVideoPicker(false);
             }}
           />

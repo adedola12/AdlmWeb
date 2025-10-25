@@ -102,12 +102,13 @@ export default function Dashboard() {
 
   function SubscriptionList() {
     if (!summary) return "Loading…";
+    const list = (summary.entitlements || []).filter((e) => !e.isCourse); // ✅ hide courses
     return (
       <div className="space-y-2">
-        {(summary.entitlements || []).length === 0 && (
-          <div>No subscriptions yet.</div>
-        )}
-        {(summary.entitlements || []).map((e, i) => {
+        {/* {(summary.entitlements || []).length === 0 && ( */}
+        {list.length === 0 && <div>No subscriptions yet.</div>}
+        {/* {(summary.entitlements || []).map((e, i) => { */}
+        {list.map((e, i) => {
           const isActive = e.status === "active";
           return (
             <button
@@ -320,6 +321,23 @@ export default function Dashboard() {
         <h2 className="font-semibold mb-2">My Courses</h2>
         <Courses />
       </div>
+
+      {user?.role === "admin" && (
+        <div className="card">
+          <h2 className="font-semibold mb-2">Admin tools</h2>
+          <div className="flex gap-2 flex-wrap">
+            <a href="/admin/products" className="btn btn-sm">
+              Products
+            </a>
+            <a href="/admin/courses" className="btn btn-sm">
+              Courses
+            </a>
+            <a href="/admin/course-grading" className="btn btn-sm">
+              Course grading
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

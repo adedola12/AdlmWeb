@@ -18,7 +18,6 @@ export default function Profile() {
   const [pct, setPct] = React.useState(0);
   const fileRef = React.useRef(null);
 
-
   React.useEffect(() => {
     if (!accessToken) return;
     (async () => {
@@ -33,7 +32,6 @@ export default function Profile() {
       }
     })();
   }, [accessToken]);
-
 
   async function saveProfile(next = {}) {
     const body = { username, avatarUrl, zone, ...next };
@@ -262,6 +260,12 @@ export default function Profile() {
               </a>
               <a href="/admin/rategen" className="btn">
                 Update material & labour prices
+              </a>
+              <a href="/admin/courses" className="btn">
+                Admin · Courses
+              </a>
+              <a href="/admin/course-grading" className="btn">
+                Course grading
               </a>
             </>
           )}

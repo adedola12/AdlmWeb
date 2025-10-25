@@ -27,6 +27,8 @@ import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
 import RateGenLibrary from "./pages/RateGenLibrary.jsx";
 import AdminRateGen from "./pages/AdminRateGen.jsx";
 import AdminProductEdit from "./pages/AdminProductEdit.jsx";
+import AdminCourses from "./pages/AdminCourses.jsx";
+import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
 
 const router = createBrowserRouter([
   {
@@ -136,6 +138,22 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <AdminProductEdit />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "/admin/courses",
+        element: (
+          <AdminRoute>
+            <AdminCourses />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "/admin/course-grading",
+        element: (
+          <AdminRoute>
+            <AdminCourseGrading />
           </AdminRoute>
         ),
       },
