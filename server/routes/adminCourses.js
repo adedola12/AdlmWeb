@@ -20,7 +20,8 @@ router.get("/", async (_req, res) => {
 
 // Get one
 router.get("/:sku", async (req, res) => {
-  const c = await PaidCourse.findOne({ sku: req.params.sku }).lean();
+  const sku = req.params.sku;
+  const c = await PaidCourse.findOne({ sku }).lean();
   if (!c) return res.status(404).json({ error: "Not found" });
   res.json(c);
 });
