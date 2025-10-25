@@ -119,6 +119,31 @@ export default function AdminCourses() {
   }, []);
 
   // when ?edit=SKU is present, preload the form
+  // React.useEffect(() => {
+  //   (async () => {
+  //     if (!editingSku) return;
+  //     try {
+  //       const c = await apiAuthed(
+  //         `/admin/courses/${encodeURIComponent(editingSku)}`,
+  //         { token: accessToken }
+  //       );
+  //       setDraft({
+  //         sku: c.sku,
+  //         title: c.title || "",
+  //         blurb: c.blurb || "",
+  //         thumbnailUrl: c.thumbnailUrl || "",
+  //         onboardingVideoUrl: c.onboardingVideoUrl || "",
+  //         classroomJoinUrl: c.classroomJoinUrl || "",
+  //         certificateTemplateUrl: c.certificateTemplateUrl || "",
+  //         isPublished: !!c.isPublished,
+  //         sort: c.sort ?? 0,
+  //         modules: Array.isArray(c.modules) ? c.modules : [],
+  //       });
+  //     } catch {}
+  //   })();
+  // }, [editingSku, accessToken]);
+
+  // when ?edit=SKU is present, preload the form
   React.useEffect(() => {
     (async () => {
       if (!editingSku) return;
@@ -139,7 +164,51 @@ export default function AdminCourses() {
           sort: c.sort ?? 0,
           modules: Array.isArray(c.modules) ? c.modules : [],
         });
-      } catch {}
+      } catch (e) {
+        // ✅ If the course doc doesn't exist yet, bootstrap it from the Product doc
+        try {
+          const prod = await apiAuthed(
+            `/admin/products/${encodeURIComponent(editingSku)}`,
+            { token: accessToken }
+          );
+          // Create a minimal PaidCourse
+          const created = await apiAuthed(`/admin/courses`, {
+            token: accessToken,
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sku: editingSku,
+              title: prod.name || editingSku,
+              blurb: prod.blurb || "",
+              thumbnailUrl: prod.thumbnailUrl || prod.images?.[0] || "",
+              onboardingVideoUrl: prod.previewUrl || "",
+              classroomJoinUrl: "",
+              certificateTemplateUrl: "",
+              isPublished: false,
+              sort: prod.sort ?? 0,
+              modules: [],
+            }),
+          });
+
+          setDraft({
+            sku: created.sku,
+            title: created.title || "",
+            blurb: created.blurb || "",
+            thumbnailUrl: created.thumbnailUrl || "",
+            onboardingVideoUrl: created.onboardingVideoUrl || "",
+            classroomJoinUrl: created.classroomJoinUrl || "",
+            certificateTemplateUrl: created.certificateTemplateUrl || "",
+            isPublished: !!created.isPublished,
+            sort: created.sort ?? 0,
+            modules: Array.isArray(created.modules) ? created.modules : [],
+          });
+
+          // refresh list
+          load();
+        } catch (inner) {
+          setMsg(inner.message || "Failed to prepare course for editing");
+        }
+      }
     })();
   }, [editingSku, accessToken]);
 
