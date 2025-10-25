@@ -29,7 +29,16 @@ router.get("/", async (req, res) => {
   }, {});
 
   const out = enrollments.map((e) => {
-    const course = bySku[e.courseSku] || null;
+    const course = bySku[e.courseSku] || {
+      sku: e.courseSku,
+      title: e.courseSku,
+      blurb: "",
+      thumbnailUrl: "",
+      onboardingVideoUrl: "",
+      classroomJoinUrl: "",
+      modules: [],
+    };
+
     const totalModules = course?.modules?.length || 0;
     const completed = new Set(e.completedModules || []);
     const completedCount = completed.size;
@@ -90,40 +99,44 @@ router.post("/:sku/submit", async (req, res) => {
 });
 
 // server/routes/me.courses.js (same file where /:sku/submit exists)
- // POST /me/courses/:sku/complete  { moduleCode }
- router.post("/:sku/complete", async (req, res) => {
-   const { moduleCode } = req.body || {};
-   if (!moduleCode) return res.status(400).json({ error: "moduleCode required" });
+// POST /me/courses/:sku/complete  { moduleCode }
+router.post("/:sku/complete", async (req, res) => {
+  const { moduleCode } = req.body || {};
+  if (!moduleCode)
+    return res.status(400).json({ error: "moduleCode required" });
 
-   const course = await PaidCourse.findOne({ sku: req.params.sku }).lean();
-   if (!course) return res.status(404).json({ error: "Course not found" });
+  const course = await PaidCourse.findOne({ sku: req.params.sku }).lean();
+  if (!course) return res.status(404).json({ error: "Course not found" });
 
-   const isModule = (course.modules || []).some((m) => m.code === moduleCode);
-   if (!isModule) return res.status(400).json({ error: "Invalid module" });
+  const isModule = (course.modules || []).some((m) => m.code === moduleCode);
+  if (!isModule) return res.status(400).json({ error: "Invalid module" });
 
-   const enr = await CourseEnrollment.findOne({
-     userId: req.user._id,
-     courseSku: req.params.sku,
-   });
-   if (!enr) return res.status(403).json({ error: "Not enrolled" });
+  const enr = await CourseEnrollment.findOne({
+    userId: req.user._id,
+    courseSku: req.params.sku,
+  });
+  if (!enr) return res.status(403).json({ error: "Not enrolled" });
 
-   if (!enr.completedModules.includes(moduleCode)) {
-     enr.completedModules.push(moduleCode);
-   }
+  if (!enr.completedModules.includes(moduleCode)) {
+    enr.completedModules.push(moduleCode);
+  }
 
-   // if all modules done and not yet certified, issue certificate (same logic as grading route)
-   const total = course?.modules?.length || 0;
-   if (total > 0 && (new Set(enr.completedModules)).size >= total && !enr.certificateUrl) {
-     // optional: call your issueCertificate helper used in admin grading
-     // const certUrl = await issueCertificate({ ... });
-     // enr.status = "completed";
-     // enr.certificateUrl = certUrl;
-     // enr.certificateIssuedAt = new Date();
-   }
+  // if all modules done and not yet certified, issue certificate (same logic as grading route)
+  const total = course?.modules?.length || 0;
+  if (
+    total > 0 &&
+    new Set(enr.completedModules).size >= total &&
+    !enr.certificateUrl
+  ) {
+    // optional: call your issueCertificate helper used in admin grading
+    // const certUrl = await issueCertificate({ ... });
+    // enr.status = "completed";
+    // enr.certificateUrl = certUrl;
+    // enr.certificateIssuedAt = new Date();
+  }
 
-   await enr.save();
-   res.json({ ok: true });
- });
-
+  await enr.save();
+  res.json({ ok: true });
+});
 
 export default router;
