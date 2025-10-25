@@ -107,11 +107,14 @@ router.post("/", async (req, res) => {
   });
 
   // If it's a Course product, ensure a PaidCourse doc exists & is basic-filled
-  if (courseFlag && sku) {
-    const existsCourse = await PaidCourse.findOne({ sku }).lean();
+  // if (courseFlag && sku) {
+  //   const existsCourse = await PaidCourse.findOne({ sku }).lean();
+  // If it's a Course product, ensure a PaidCourse doc exists
+  if (isCourse && courseSku) {
+    const existsCourse = await PaidCourse.findOne({ sku: courseSku }).lean();
     if (!existsCourse) {
       await PaidCourse.create({
-        sku,
+        sku: courseSku,
         title: name,
         blurb: blurb || "",
         thumbnailUrl: thumbnailUrl || images?.[0] || "",
@@ -159,6 +162,7 @@ router.patch("/:id", async (req, res) => {
       });
     }
   }
+
   res.json(p);
 });
 
