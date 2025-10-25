@@ -9,6 +9,7 @@ const ModuleSchema = new mongoose.Schema(
     instructions: { type: String, default: "" },
     videoUrl: { type: String }, // <- OPTIONAL if you want in-site playback per module
     durationSec: { type: Number }, // <- OPTIONAL for progress UI
+    assignmentPrompt: { type: String, default: "" },
   },
   { _id: false }
 );
