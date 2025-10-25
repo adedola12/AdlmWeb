@@ -1,7 +1,7 @@
 // server/routes/admin.learn.js
 import express from "express";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
-import { FreeVideo, PaidCourse } from "../models/Learn.js";
+import { FreeVideo, PaidCourseVideo } from "../models/Learn.js";
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
@@ -57,7 +57,7 @@ router.delete("/free/:id", async (req, res) => {
 
 /* ---------- PAID COURSES ---------- */
 router.get("/courses", async (_req, res) => {
-  const list = await PaidCourse.find({})
+  const list = await PaidCourseVideo.find({})
     .sort({ sort: -1, createdAt: -1 })
     .lean();
   res.json(list);
@@ -76,10 +76,10 @@ router.post("/courses", async (req, res) => {
   if (!sku || !title || !previewUrl)
     return res.status(400).json({ error: "sku, title, previewUrl required" });
 
-  const exists = await PaidCourse.findOne({ sku });
+  const exists = await PaidCourseVideo.findOne({ sku });
   if (exists) return res.status(409).json({ error: "SKU already exists" });
 
-  const doc = await PaidCourse.create({
+  const doc = await PaidCourseVideo.create({
     sku,
     title,
     previewUrl,
@@ -92,7 +92,7 @@ router.post("/courses", async (req, res) => {
 });
 
 router.patch("/courses/:id", async (req, res) => {
-  const item = await PaidCourse.findById(req.params.id);
+  const item = await PaidCourseVideo.findById(req.params.id);
   if (!item) return res.status(404).json({ error: "Not found" });
 
   const { sku, title, previewUrl, bullets, description, isPublished, sort } =
@@ -111,7 +111,7 @@ router.patch("/courses/:id", async (req, res) => {
 });
 
 router.delete("/courses/:id", async (req, res) => {
-  await PaidCourse.findByIdAndDelete(req.params.id);
+  await PaidCourseVideo.findByIdAndDelete(req.params.id);
   res.json({ ok: true });
 });
 

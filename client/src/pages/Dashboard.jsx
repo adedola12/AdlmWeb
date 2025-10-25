@@ -147,7 +147,11 @@ export default function Dashboard() {
         {courses.map((c) => {
           const { course, enrollment, progress, moduleSubmissions } = c;
           return (
-            <div key={course.sku} className="border rounded p-3">
+            <div
+              key={course.sku}
+              className="border rounded p-3 hover:bg-slate-50 cursor-pointer"
+              onClick={() => navigate(`/learn/course/${course.sku}`)}
+            >
               <div className="flex items-center gap-3">
                 {course.thumbnailUrl ? (
                   <img

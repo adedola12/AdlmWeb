@@ -1,6 +1,7 @@
 // server/routes/learn.js
 import express from "express";
-import { FreeVideo, PaidCourse } from "../models/Learn.js";
+import { FreeVideo, PaidCourseVideo } from "../models/Learn.js";
+import { PaidCourse } from "../models/PaidCourse.js";
 
 const router = express.Router();
 
@@ -36,7 +37,7 @@ router.get("/free", async (req, res) => {
  * Returns all published paid courses.
  */
 router.get("/courses", async (_req, res) => {
-  const items = await PaidCourse.find({ isPublished: true })
+  const items = await PaidCourseVideo.find({ isPublished: true })
     .sort({ sort: -1, createdAt: -1 })
     .lean();
   return res.json(items);

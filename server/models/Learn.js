@@ -1,33 +1,36 @@
 // server/models/Learn.js
 import mongoose from "mongoose";
 
+/* -------- Free (YouTube) videos -------- */
 const FreeVideoSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
-    youtubeId: { type: String, required: true }, // e.g. "dQw4w9WgXcQ"
-    // optional override thumbnail; if not set, client uses https://img.youtube.com/vi/:id/hqdefault.jpg
+    youtubeId: { type: String, required: true },
     thumbnailUrl: { type: String },
-    isPublished: { type: Boolean, default: true },
-    sort: { type: Number, default: 0 }, // for ordering
-  },
-  { timestamps: true }
-);
-
-const PaidCourseSchema = new mongoose.Schema(
-  {
-    sku: { type: String, required: true, unique: true }, // e.g. "bimCourse" / "bimMepCourse"
-    title: { type: String, required: true },
-    // MP4 or streaming URL (Cloudinary, etc)
-    previewUrl: { type: String, required: true },
-    // short bullet points for highlights
-    bullets: { type: [String], default: [] },
-    // rich text allowed; keep simple string
-    description: { type: String, default: "" },
     isPublished: { type: Boolean, default: true },
     sort: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
 
-export const FreeVideo = mongoose.model("FreeVideo", FreeVideoSchema);
-export const PaidCourse = mongoose.model("PaidCourse", PaidCourseSchema);
+export const FreeVideo =
+  mongoose.models.FreeVideo || mongoose.model("FreeVideo", FreeVideoSchema);
+
+/* -------- Paid course CATALOG cards (marketing/videos) -------- */
+const PaidCourseVideoSchema = new mongoose.Schema(
+  {
+    sku: { type: String, required: true, unique: true }, // matches Product.courseSku
+    title: { type: String, required: true },
+    previewUrl: { type: String, required: true }, // Cloudinary/Drive/streaming url
+    bullets: { type: [String], default: [] },
+    description: { type: String, default: "" },
+    thumbnailUrl: { type: String }, // optional card image
+    isPublished: { type: Boolean, default: true },
+    sort: { type: Number, default: 0 },
+  },
+  { timestamps: true }
+);
+
+export const PaidCourseVideo =
+  mongoose.models.PaidCourseVideo ||
+  mongoose.model("PaidCourseVideo", PaidCourseVideoSchema);

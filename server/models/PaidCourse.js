@@ -1,11 +1,14 @@
+// server/models/PaidCourse.js
 import mongoose from "mongoose";
 
 const ModuleSchema = new mongoose.Schema(
   {
-    code: { type: String, required: true },
-    title: { type: String, required: true },
+    code: String,
+    title: String,
     requiresSubmission: { type: Boolean, default: false },
     instructions: { type: String, default: "" },
+    videoUrl: { type: String }, // <- OPTIONAL if you want in-site playback per module
+    durationSec: { type: Number }, // <- OPTIONAL for progress UI
   },
   { _id: false }
 );
@@ -15,6 +18,7 @@ const PaidCourseSchema = new mongoose.Schema(
     sku: { type: String, unique: true, index: true },
     title: { type: String, required: true },
     blurb: { type: String, default: "" },
+    description: { type: String, default: "" },
     thumbnailUrl: { type: String },
     onboardingVideoUrl: { type: String },
     classroomJoinUrl: { type: String },
@@ -25,7 +29,6 @@ const PaidCourseSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
 
 export const PaidCourse =
   mongoose.models.PaidCourse || mongoose.model("PaidCourse", PaidCourseSchema);
