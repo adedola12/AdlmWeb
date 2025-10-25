@@ -5,10 +5,28 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useNavigate } from "react-router-dom";
 
+// Local helpers (or import from ../lib/video)
+const extractDriveId = (url = "") => {
+  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  try {
+    const u = new URL(url);
+    const id = u.searchParams.get("id");
+    if (id) return id;
+  } catch {}
+  return "";
+};
+const driveDirect = (id = "") =>
+  id ? `https://drive.google.com/uc?export=download&id=${id}` : "";
+const toPlayable = (url = "") => {
+  const id = extractDriveId(url);
+  return id ? driveDirect(id) : url;
+};
+
 export default function Dashboard() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
-  const [courses, setCourses] = React.useState(null); // enrollments+course+progress
+  const [courses, setCourses] = React.useState(null);
   const [err, setErr] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
@@ -92,7 +110,6 @@ export default function Dashboard() {
         body: JSON.stringify({ moduleCode, fileUrl }),
       });
       setMsg("✅ Submitted");
-      // reload
       const data = await apiAuthed(`/me/courses`, { token: accessToken });
       setCourses(data);
     } catch (e) {
@@ -102,12 +119,10 @@ export default function Dashboard() {
 
   function SubscriptionList() {
     if (!summary) return "Loading…";
-    const list = (summary.entitlements || []).filter((e) => !e.isCourse); // ✅ hide courses
+    const list = (summary.entitlements || []).filter((e) => !e.isCourse);
     return (
       <div className="space-y-2">
-        {/* {(summary.entitlements || []).length === 0 && ( */}
         {list.length === 0 && <div>No subscriptions yet.</div>}
-        {/* {(summary.entitlements || []).map((e, i) => { */}
         {list.map((e, i) => {
           const isActive = e.status === "active";
           return (
@@ -115,12 +130,9 @@ export default function Dashboard() {
               key={i}
               type="button"
               onClick={() => openProduct(e)}
-              className={`w-full border rounded p-3 flex items-center justify-between text-left 
-                    transition hover:bg-slate-50 ${
-                      isActive
-                        ? "cursor-pointer"
-                        : "opacity-60 cursor-not-allowed"
-                    }`}
+              className={`w-full border rounded p-3 flex items-center justify-between text-left transition hover:bg-slate-50 ${
+                isActive ? "cursor-pointer" : "opacity-60 cursor-not-allowed"
+              }`}
             >
               <div>
                 <div className="font-medium">{e.productKey}</div>
@@ -144,8 +156,6 @@ export default function Dashboard() {
 
     return (
       <div className="space-y-4">
-        {/* {courses.map((c) => {
-          const { course, enrollment, progress, moduleSubmissions } = c; */}
         {courses.map((c, i) => {
           const {
             course,
@@ -162,7 +172,7 @@ export default function Dashboard() {
               className="border rounded p-3 hover:bg-slate-50 cursor-pointer"
               onClick={() =>
                 hasCourse && navigate(`/learn/course/${course.sku}`)
-              } // ← use your real route
+              }
             >
               <div className="flex items-center gap-3">
                 {hasCourse && course.thumbnailUrl ? (
@@ -196,7 +206,7 @@ export default function Dashboard() {
                     {course.onboardingVideoUrl ? (
                       <video
                         className="w-full h-40 object-cover"
-                        src={course.onboardingVideoUrl}
+                        src={toPlayable(course.onboardingVideoUrl || "")}
                         controls
                         preload="metadata"
                       />
@@ -237,10 +247,8 @@ export default function Dashboard() {
                 <div className="space-y-2">
                   {(moduleSubmissions || []).map((m) => (
                     <div key={m.moduleCode} className="border rounded p-2">
-                      {/* …unchanged… */}
                       {m.requiresSubmission && (
                         <div className="mt-2">
-                          {/* … */}
                           {(m.submissions?.length ?? 0) === 0 && (
                             <div className="text-xs text-slate-500">
                               No submissions yet.
@@ -251,7 +259,15 @@ export default function Dashboard() {
                               key={s._id}
                               className="text-xs flex items-center justify-between"
                             >
-                              {/* … */}
+                              <a
+                                href={s.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline"
+                              >
+                                {s.fileUrl}
+                              </a>
+                              <span>{s.gradeStatus || "pending"}</span>
                             </div>
                           ))}
                           <label
@@ -300,10 +316,6 @@ export default function Dashboard() {
     <div className="space-y-4">
       <div className="card">
         <h1 className="text-xl font-semibold">Welcome, {displayName}</h1>
-        {/* <p className="text-sm text-slate-600">
-          Your 15-day <b>licenseToken</b> is issued and can be used offline by
-          plugins.
-        </p> */}
       </div>
 
       <div className="card">

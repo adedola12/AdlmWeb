@@ -4,13 +4,33 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useSearchParams } from "react-router-dom";
 
-const toDriveEmbed = (url = "") => {
-  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  return m ? `https://drive.google.com/file/d/${m[1]}/preview` : "";
+// Extract a Google Drive file id
+const extractDriveId = (url = "") => {
+  if (!url) return "";
+  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m1) return m1[1];
+  try {
+    const u = new URL(url);
+    const id = u.searchParams.get("id");
+    if (id) return id;
+  } catch {}
+  return "";
+};
+
+// Make a direct-stream URL for <video src=...>
+const driveDirectVideo = (id = "") =>
+  id ? `https://drive.google.com/uc?export=download&id=${id}` : "";
+
+// Given a user-entered videoUrl, return a playable src
+const toPlayableVideo = (url = "") => {
+  const id = extractDriveId(url);
+  if (id) return { src: driveDirectVideo(id), type: "drive" };
+  return { src: url, type: "direct" };
 };
 
 function ModuleRow({ m, i, onChange, onRemove }) {
-  const driveEmbed = toDriveEmbed(m.videoUrl || "");
+  const { src: playableSrc } = toPlayableVideo(m.videoUrl || "");
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 border rounded p-2">
       <input
@@ -54,9 +74,15 @@ function ModuleRow({ m, i, onChange, onRemove }) {
           onChange(i, { ...m, assignmentPrompt: e.target.value })
         }
       />
-      {driveEmbed && (
-        <div className="sm:col-span-5 rounded overflow-hidden border">
-          <iframe src={driveEmbed} className="w-full h-44" allow="autoplay" />
+
+      {playableSrc && (
+        <div className="sm:col-span-5 rounded overflow-hidden border bg-black">
+          <video
+            className="w-full h-44 object-cover"
+            src={playableSrc}
+            controls
+            preload="metadata"
+          />
         </div>
       )}
     </div>
@@ -117,7 +143,7 @@ export default function AdminCourses() {
     }
   }
   React.useEffect(() => {
-    load(); /* eslint-disable */
+    load(); // eslint-disable-line
   }, []);
 
   // Preload form when ?edit=SKU is present
@@ -127,7 +153,9 @@ export default function AdminCourses() {
       try {
         const c = await apiAuthed(
           `/admin/courses/${encodeURIComponent(editingSku)}`,
-          { token: accessToken }
+          {
+            token: accessToken,
+          }
         );
         setDraft({
           sku: c.sku,
@@ -142,11 +170,12 @@ export default function AdminCourses() {
           modules: Array.isArray(c.modules) ? c.modules : [],
         });
       } catch (e) {
-        // no PaidCourse yet — bootstrap from Product (can now be found by courseSku)
         try {
           const prod = await apiAuthed(
             `/admin/products/${encodeURIComponent(editingSku)}`,
-            { token: accessToken }
+            {
+              token: accessToken,
+            }
           );
           const created = await apiAuthed(`/admin/courses`, {
             token: accessToken,
@@ -329,7 +358,7 @@ export default function AdminCourses() {
             {draft.onboardingVideoUrl && (
               <video
                 className="w-40 h-24 border rounded object-cover"
-                src={draft.onboardingVideoUrl}
+                src={toPlayableVideo(draft.onboardingVideoUrl).src}
                 controls
                 preload="metadata"
               />
