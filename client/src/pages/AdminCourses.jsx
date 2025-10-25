@@ -3,6 +3,11 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useSearchParams } from "react-router-dom";
 
+const toDriveEmbed = (url = "") => {
+  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? `https://drive.google.com/file/d/${m[1]}/preview` : "";
+};
+
 function ModuleRow({ m, i, onChange, onRemove }) {
   const driveEmbed = toDriveEmbed(m.videoUrl || "");
   return (
@@ -100,11 +105,6 @@ export default function AdminCourses() {
       throw new Error(j?.error?.message || "Upload failed");
     return j.secure_url;
   }
-
-  const toDriveEmbed = (url = "") => {
-    const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    return m ? `https://drive.google.com/file/d/${m[1]}/preview` : "";
-  };
 
   async function load() {
     try {

@@ -146,25 +146,26 @@ export default function Dashboard() {
       <div className="space-y-4">
         {/* {courses.map((c) => {
           const { course, enrollment, progress, moduleSubmissions } = c; */}
-        {courses.map((c) => {
-          const { course, enrollment, progress, moduleSubmissions } = c;
+        {courses.map((c, i) => {
+          const {
+            course,
+            enrollment,
+            progress = 0,
+            moduleSubmissions = [],
+          } = c || {};
           const hasCourse = !!course;
           const sku = course?.sku || enrollment?.courseSku || `unknown-${i}`;
-          const title =
-            course?.title || enrollment?.courseSku || "Course unavailable";
-          const blurb =
-            course?.blurb || "Course details are not available yet.";
+
           return (
             <div
-              key={hasCourse ? course.sku : enrollment?._id}
+              key={sku}
               className="border rounded p-3 hover:bg-slate-50 cursor-pointer"
-              // onClick={() => navigate(`/learn/course/${course.sku}`)}
               onClick={() =>
-                hasCourse && navigate(`/learn/courses/${course.sku}`)
-              }
+                hasCourse && navigate(`/learn/course/${course.sku}`)
+              } // ← use your real route
             >
               <div className="flex items-center gap-3">
-                {hasCourse && course?.thumbnailUrl ? (
+                {hasCourse && course.thumbnailUrl ? (
                   <img
                     src={course.thumbnailUrl}
                     className="w-20 h-14 object-cover rounded border"
@@ -172,25 +173,27 @@ export default function Dashboard() {
                 ) : (
                   <div className="w-20 h-14 rounded border bg-slate-100" />
                 )}
+
                 <div className="flex-1">
                   <div className="font-semibold">
                     {hasCourse ? course.title : enrollment?.courseSku}
                   </div>
-
                   <div className="text-sm text-slate-600">
                     {hasCourse
                       ? course.blurb
                       : "Course details are not available yet."}
                   </div>
                 </div>
-                <div className="text-sm font-medium">{progress}% complete</div>
+
+                <div className="text-sm font-medium">
+                  {Number(progress) || 0}% complete
+                </div>
               </div>
 
-              {/* <div className="mt-3 grid md:grid-cols-2 gap-3"> */}
-              {course && (
+              {hasCourse && (
                 <div className="mt-3 grid md:grid-cols-2 gap-3">
                   <div className="rounded overflow-hidden border bg-black">
-                    {hasCourse && course?.onboardingVideoUrl ? (
+                    {course.onboardingVideoUrl ? (
                       <video
                         className="w-full h-40 object-cover"
                         src={course.onboardingVideoUrl}
@@ -205,7 +208,7 @@ export default function Dashboard() {
                   </div>
 
                   <div className="space-y-2">
-                    {course?.classroomJoinUrl && (
+                    {course.classroomJoinUrl && (
                       <a
                         className="btn btn-sm"
                         href={course.classroomJoinUrl}
@@ -215,7 +218,7 @@ export default function Dashboard() {
                         Open in Google Classroom
                       </a>
                     )}
-                    {enrollment.certificateUrl && (
+                    {enrollment?.certificateUrl && (
                       <a
                         className="btn btn-sm"
                         href={enrollment.certificateUrl}
@@ -232,60 +235,25 @@ export default function Dashboard() {
               <div className="mt-4">
                 <div className="font-medium mb-1">Modules & Assignments</div>
                 <div className="space-y-2">
-                  {moduleSubmissions.map((m) => (
+                  {(moduleSubmissions || []).map((m) => (
                     <div key={m.moduleCode} className="border rounded p-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium">
-                            {m.moduleCode} — {m.moduleTitle}
-                          </div>
-                          <div className="text-xs text-slate-600">
-                            {m.requiresSubmission
-                              ? "Assignment required"
-                              : "No assignment required"}
-                          </div>
-                        </div>
-                        <div
-                          className={`text-xs ${
-                            m.completed ? "text-green-600" : "text-slate-600"
-                          }`}
-                        >
-                          {m.completed ? "Completed" : "In progress"}
-                        </div>
-                      </div>
-
+                      {/* …unchanged… */}
                       {m.requiresSubmission && (
                         <div className="mt-2">
-                          <div className="text-xs text-slate-600 mb-1">
-                            Your submissions:
-                          </div>
-                          <div className="space-y-1">
-                            {m.submissions.length === 0 && (
-                              <div className="text-xs text-slate-500">
-                                No submissions yet.
-                              </div>
-                            )}
-                            {m.submissions.map((s) => (
-                              <div
-                                key={s._id}
-                                className="text-xs flex items-center justify-between"
-                              >
-                                <a
-                                  className="underline"
-                                  href={s.fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  {s.fileUrl}
-                                </a>
-                                <span>
-                                  {s.gradeStatus}
-                                  {s.feedback ? ` · ${s.feedback}` : ""}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-
+                          {/* … */}
+                          {(m.submissions?.length ?? 0) === 0 && (
+                            <div className="text-xs text-slate-500">
+                              No submissions yet.
+                            </div>
+                          )}
+                          {(m.submissions || []).map((s) => (
+                            <div
+                              key={s._id}
+                              className="text-xs flex items-center justify-between"
+                            >
+                              {/* … */}
+                            </div>
+                          ))}
                           <label
                             className={`btn btn-xs mt-2 ${
                               uploading ? "opacity-50 pointer-events-none" : ""
@@ -298,7 +266,7 @@ export default function Dashboard() {
                               disabled={uploading}
                               onChange={(e) =>
                                 submitAssignment(
-                                  course.sku,
+                                  sku,
                                   m.moduleCode,
                                   e.target.files?.[0]
                                 )
