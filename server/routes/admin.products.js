@@ -1,3 +1,4 @@
+// server/routes/admin.products.js
 import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
@@ -18,24 +19,22 @@ router.get("/", async (_req, res) => {
   res.json(items);
 });
 
-// GET /admin/products/:id  (populated for editor)
+// GET /admin/products/:id  -> supports ObjectId, product.key, or product.courseSku
 router.get("/:id", async (req, res) => {
-  // const p = await Product.findById(req.params.id)
-  //   .populate("relatedFreeVideoIds")
-  //   .lean();
-  // if (!p) return res.status(404).json({ error: "Not found" });
-  // res.json(p);
-
   const { id } = req.params;
   let doc = null;
 
-  // Try ObjectId first
   if (mongoose.isValidObjectId(id)) {
     doc = await Product.findById(id).populate("relatedFreeVideoIds").lean();
   }
-  // Fallback: treat as product key
   if (!doc) {
     doc = await Product.findOne({ key: id })
+      .populate("relatedFreeVideoIds")
+      .lean();
+  }
+  // NEW: allow lookup by courseSku (used by your editor fallback)
+  if (!doc) {
+    doc = await Product.findOne({ courseSku: id })
       .populate("relatedFreeVideoIds")
       .lean();
   }
@@ -44,7 +43,7 @@ router.get("/:id", async (req, res) => {
   res.json(doc);
 });
 
-// POST /admin/products
+// POST /admin/products  (unchanged except for context)
 router.post("/", async (req, res) => {
   const {
     key,
@@ -54,17 +53,12 @@ router.post("/", async (req, res) => {
     features = [],
     images = [],
     billingInterval = "monthly",
-
-    // ✅ NEW — accept course flags
     isCourse = false,
     courseSku,
-
-    // flat fields from your current UI:
-    priceMonthly, // legacy — keep for compat (NGN)
-    priceYearly, // legacy — keep for compat (NGN)
-    installFee, // legacy — NGN
-    // new structure (preferred):
-    price, // { monthlyNGN, yearlyNGN, installNGN, monthlyUSD?, yearlyUSD?, installUSD? }
+    priceMonthly,
+    priceYearly,
+    installFee,
+    price,
     previewUrl,
     thumbnailUrl,
     isPublished = true,
@@ -93,10 +87,8 @@ router.post("/", async (req, res) => {
     features,
     images,
     billingInterval,
-    // ✅ persist these
     isCourse: !!isCourse,
     courseSku: courseSku || undefined,
-
     price: safePrice,
     previewUrl,
     thumbnailUrl,
@@ -106,26 +98,23 @@ router.post("/", async (req, res) => {
     relatedCourseSkus,
   });
 
-  // If it's a Course product, ensure a PaidCourse doc exists & is basic-filled
-  // if (courseFlag && sku) {
-  //   const existsCourse = await PaidCourse.findOne({ sku }).lean();
-  // If it's a Course product, ensure a PaidCourse doc exists
-  if (isCourse && courseSku) {
-    const existsCourse = await PaidCourse.findOne({ sku: courseSku }).lean();
+  if (p.isCourse && p.courseSku) {
+    const existsCourse = await PaidCourse.findOne({ sku: p.courseSku }).lean();
     if (!existsCourse) {
       await PaidCourse.create({
-        sku: courseSku,
-        title: name,
-        blurb: blurb || "",
-        thumbnailUrl: thumbnailUrl || images?.[0] || "",
-        onboardingVideoUrl: previewUrl || "",
+        sku: p.courseSku,
+        title: p.name,
+        blurb: p.blurb || "",
+        thumbnailUrl: p.thumbnailUrl || p.images?.[0] || "",
+        onboardingVideoUrl: p.previewUrl || "",
         classroomJoinUrl: "",
         modules: [],
         isPublished: false,
-        sort,
+        sort: p.sort || 0,
       });
     }
   }
+
   res.json(p);
 });
 
@@ -145,7 +134,7 @@ router.patch("/:id", async (req, res) => {
   const p = await Product.findByIdAndUpdate(req.params.id, body, { new: true });
   if (!p) return res.status(404).json({ error: "Not found" });
 
-  // Ensure a PaidCourse exists when marked as course
+  // Ensure a PaidCourse exists if product is a course
   if (p.isCourse && p.courseSku) {
     const existsCourse = await PaidCourse.findOne({ sku: p.courseSku }).lean();
     if (!existsCourse) {

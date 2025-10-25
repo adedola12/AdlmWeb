@@ -30,9 +30,10 @@ export async function apiAuthed(path, { token, ...init } = {}) {
   // try to refresh once
   const r = await refresh();
   // let the app store capture the new access token if needed:
+  
   window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: r }));
   res = await doFetch(r.accessToken);
 
   if (!res.ok) throw new Error(await res.text());
   return res.json();
-}
+} 

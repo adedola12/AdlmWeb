@@ -1,9 +1,11 @@
+// server/index.js
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
+import mongoose from "mongoose"; // ← add this
 import { connectDB } from "./db.js";
 
 // routes
