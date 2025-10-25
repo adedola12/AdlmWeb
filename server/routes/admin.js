@@ -3,10 +3,9 @@ import dayjs from "dayjs";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js"; // <-- IMPORTANT
+import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 
 const router = express.Router();
-
-
 
 // Admin: list users
 // routes/admin.js  (your existing admin router)
@@ -18,10 +17,14 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
     find.$or = [{ email: rx }, { username: rx }];
   }
 
-  const list = await User.find(
-    find,
-    { email: 1, username: 1, role: 1, disabled: 1, entitlements: 1, createdAt: 1 }
-  ).sort({ createdAt: -1 });
+  const list = await User.find(find, {
+    email: 1,
+    username: 1,
+    role: 1,
+    disabled: 1,
+    entitlements: 1,
+    createdAt: 1,
+  }).sort({ createdAt: -1 });
 
   return res.json(list);
 });
@@ -29,7 +32,9 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
 // small helper
 function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
   const now = dayjs();
-  let ent = (userDoc.entitlements || []).find(e => e.productKey === productKey);
+  let ent = (userDoc.entitlements || []).find(
+    (e) => e.productKey === productKey
+  );
 
   if (!ent) {
     ent = {
@@ -39,14 +44,14 @@ function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
     };
     userDoc.entitlements.push(ent);
   } else {
-    const base = ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
-      ? dayjs(ent.expiresAt)
-      : now;
+    const base =
+      ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
+        ? dayjs(ent.expiresAt)
+        : now;
     ent.status = "active";
     ent.expiresAt = base.add(monthsToAdd, "month").toDate();
   }
 }
-
 
 // Admin: set/extend entitlement (manual override tool you already had)
 // body: { email, productKey, months, status }
@@ -121,16 +126,18 @@ router.post(
       purchase.lines.forEach((ln) => {
         // convert qty to months
         const months =
-          ln.billingInterval === "yearly" ? (ln.qty || 0) * 12 : (ln.qty || 0);
+          ln.billingInterval === "yearly" ? (ln.qty || 0) * 12 : ln.qty || 0;
         if (months > 0) addMonthsToEntitlement(user, ln.productKey, months);
       });
     } else if (purchase.productKey) {
       // Legacy single-product flow
-      const months = (overrideMonths || purchase.requestedMonths || 1);
+      const months = overrideMonths || purchase.requestedMonths || 1;
       addMonthsToEntitlement(user, purchase.productKey, months);
       purchase.approvedMonths = months;
     } else {
-      return res.status(400).json({ error: "Nothing to approve for this purchase" });
+      return res
+        .status(400)
+        .json({ error: "Nothing to approve for this purchase" });
     }
 
     await user.save();
@@ -140,6 +147,8 @@ router.post(
     purchase.decidedAt = new Date();
     await purchase.save();
 
+    await autoEnrollFromPurchase(purchase);
+    
     return res.json({
       ok: true,
       purchase,
@@ -171,22 +180,25 @@ router.post(
 
 // POST /admin/users/reset-device { email }
 // POST /admin/users/reset-device  { email, productKey }
-router.post("/users/reset-device", requireAuth, requireAdmin, async (req, res) => {
-  const { email, productKey } = req.body || {};
-  const u = await User.findOne({ email });
-  if (!u) return res.status(404).json({ error: "User not found" });
+router.post(
+  "/users/reset-device",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const { email, productKey } = req.body || {};
+    const u = await User.findOne({ email });
+    if (!u) return res.status(404).json({ error: "User not found" });
 
-  const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
-  if (!ent) return res.status(404).json({ error: "Entitlement not found" });
+    const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
+    if (!ent) return res.status(404).json({ error: "Entitlement not found" });
 
-  ent.deviceFingerprint = undefined;
-  ent.deviceBoundAt = undefined;
-  u.refreshVersion += 1;   // kick all current sessions
-  await u.save();
+    ent.deviceFingerprint = undefined;
+    ent.deviceBoundAt = undefined;
+    u.refreshVersion += 1; // kick all current sessions
+    await u.save();
 
-  return res.json({ ok: true });
-});
-
-
+    return res.json({ ok: true });
+  }
+);
 
 export default router;

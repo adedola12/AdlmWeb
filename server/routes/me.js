@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
+import { Product } from "../models/Product.js";
 
 const router = express.Router();
 
@@ -51,13 +52,29 @@ router.get("/summary", requireAuth, async (req, res) => {
     entitlements: 1,
     email: 1,
   }).lean();
-  const ent = (user?.entitlements || []).map((e) => ({
-    productKey: e.productKey,
-    status: e.status,
-    expiresAt: e.expiresAt || null,
-    isExpired: e.expiresAt ? dayjs(e.expiresAt).isBefore(dayjs()) : true,
+  // const ent = (user?.entitlements || []).map((e) => ({
+  //   productKey: e.productKey,
+  //   status: e.status,
+  //   expiresAt: e.expiresAt || null,
+  //   isExpired: e.expiresAt ? dayjs(e.expiresAt).isBefore(dayjs()) : true,
+  // }));
+
+  const ents = (user.entitlements || []).map((e) => ({
+    ...e,
+    isCourse: false,
   }));
-  return res.json({ email: user?.email, entitlements: ent });
+
+  const keys = ents.map((e) => e.productKey);
+  const prods = await Product.find({ key: { $in: keys } })
+    .select("key isCourse")
+    .lean();
+  const byKey = Object.fromEntries(prods.map((p) => [p.key, !!p.isCourse]));
+  const entitlements = ents.map((e) => ({
+    ...e,
+    isCourse: !!byKey[e.productKey],
+  }));
+
+  return res.json({ email: user?.email, entitlements });
 });
 
 // Profile details
