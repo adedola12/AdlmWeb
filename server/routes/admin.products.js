@@ -145,7 +145,24 @@ router.patch("/:id", async (req, res) => {
   const p = await Product.findByIdAndUpdate(req.params.id, body, { new: true });
   if (!p) return res.status(404).json({ error: "Not found" });
 
-  // keep a PaidCourse around if this product is a course
+  // If it's a Course product, ensure a PaidCourse doc exists
+  if (isCourse && courseSku) {
+    const existsCourse = await PaidCourse.findOne({ sku: courseSku }).lean();
+    if (!existsCourse) {
+      await PaidCourse.create({
+        sku: courseSku,
+        title: name,
+        blurb: blurb || "",
+        thumbnailUrl: thumbnailUrl || images?.[0] || "",
+        onboardingVideoUrl: previewUrl || "",
+        classroomJoinUrl: "",
+        modules: [],
+        isPublished: false,
+        sort,
+      });
+    }
+  }
+
   if (p.isCourse && p.courseSku) {
     const c = await PaidCourse.findOne({ sku: p.courseSku });
     if (!c) {
