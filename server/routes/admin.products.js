@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { Product } from "../models/Product.js";
+import { PaidCourse } from "../models/PaidCourse.js";
 
 function requireAdmin(req, res, next) {
   if (req.user?.role === "admin") return next();
@@ -95,7 +96,7 @@ router.post("/", async (req, res) => {
     // ✅ persist these
     isCourse: !!isCourse,
     courseSku: courseSku || undefined,
-    
+
     price: safePrice,
     previewUrl,
     thumbnailUrl,
@@ -104,6 +105,24 @@ router.post("/", async (req, res) => {
     relatedFreeVideoIds,
     relatedCourseSkus,
   });
+
+  // If it's a Course product, ensure a PaidCourse doc exists & is basic-filled
+  if (courseFlag && sku) {
+    const existsCourse = await PaidCourse.findOne({ sku }).lean();
+    if (!existsCourse) {
+      await PaidCourse.create({
+        sku,
+        title: name,
+        blurb: blurb || "",
+        thumbnailUrl: thumbnailUrl || images?.[0] || "",
+        onboardingVideoUrl: previewUrl || "",
+        classroomJoinUrl: "",
+        modules: [],
+        isPublished: false,
+        sort,
+      });
+    }
+  }
   res.json(p);
 });
 
@@ -122,6 +141,24 @@ router.patch("/:id", async (req, res) => {
 
   const p = await Product.findByIdAndUpdate(req.params.id, body, { new: true });
   if (!p) return res.status(404).json({ error: "Not found" });
+
+  // keep a PaidCourse around if this product is a course
+  if (p.isCourse && p.courseSku) {
+    const c = await PaidCourse.findOne({ sku: p.courseSku });
+    if (!c) {
+      await PaidCourse.create({
+        sku: p.courseSku,
+        title: p.name,
+        blurb: p.blurb || "",
+        thumbnailUrl: p.thumbnailUrl || p.images?.[0] || "",
+        onboardingVideoUrl: p.previewUrl || "",
+        classroomJoinUrl: "",
+        modules: [],
+        isPublished: false,
+        sort: p.sort || 0,
+      });
+    }
+  }
   res.json(p);
 });
 

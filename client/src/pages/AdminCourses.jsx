@@ -4,6 +4,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
 function ModuleRow({ m, i, onChange, onRemove }) {
+  const driveEmbed = toDriveEmbed(m.videoUrl || "");
   return (
     <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 border rounded p-2">
       <input
@@ -31,6 +32,27 @@ function ModuleRow({ m, i, onChange, onRemove }) {
       <button className="btn btn-sm" onClick={() => onRemove(i)}>
         Remove
       </button>
+
+      <input
+        className="input sm:col-span-2"
+        placeholder="Module video URL (Google Drive or MP4/Cloudinary)"
+        value={m.videoUrl || ""}
+        onChange={(e) => onChange(i, { ...m, videoUrl: e.target.value })}
+      />
+      <textarea
+        className="input sm:col-span-3"
+        rows={2}
+        placeholder="Assignment prompt / instructions (optional)"
+        value={m.assignmentPrompt || ""}
+        onChange={(e) =>
+          onChange(i, { ...m, assignmentPrompt: e.target.value })
+        }
+      />
+      {driveEmbed && (
+        <div className="sm:col-span-5 rounded overflow-hidden border">
+          <iframe src={driveEmbed} className="w-full h-44" allow="autoplay" />
+        </div>
+      )}
     </div>
   );
 }
@@ -136,7 +158,7 @@ export default function AdminCourses() {
             value={draft.blurb}
             onChange={(e) => setDraft((d) => ({ ...d, blurb: e.target.value }))}
           />
-          <input
+          {/* <input
             className="input"
             placeholder="Thumbnail URL"
             value={draft.thumbnailUrl}
@@ -151,7 +173,74 @@ export default function AdminCourses() {
             onChange={(e) =>
               setDraft((d) => ({ ...d, onboardingVideoUrl: e.target.value }))
             }
-          />
+          /> */}
+          
+          <label className="text-sm">
+            <div className="mb-1">Thumbnail URL</div>
+            <input
+              className="input"
+              value={draft.thumbnailUrl}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, thumbnailUrl: e.target.value }))
+              }
+            />
+          </label>
+          <div className="flex gap-2">
+            <label className="btn btn-sm">
+              Upload thumbnail
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const url = await uploadToCloudinary(f, "image");
+                  if (url) setDraft((d) => ({ ...d, thumbnailUrl: url }));
+                }}
+              />
+            </label>
+            {draft.thumbnailUrl && (
+              <img
+                src={draft.thumbnailUrl}
+                className="w-16 h-10 rounded border object-cover"
+              />
+            )}
+          </div>
+          <label className="text-sm">
+            <div className="mb-1">Onboarding video URL</div>
+            <input
+              className="input"
+              value={draft.onboardingVideoUrl}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, onboardingVideoUrl: e.target.value }))
+              }
+            />
+          </label>
+          <div className="flex gap-2 items-center">
+            <label className="btn btn-sm">
+              Upload video
+              <input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const url = await uploadToCloudinary(f, "video");
+                  if (url) setDraft((d) => ({ ...d, onboardingVideoUrl: url }));
+                }}
+              />
+            </label>
+            {draft.onboardingVideoUrl ? (
+              <video
+                className="w-40 h-24 border rounded object-cover"
+                src={draft.onboardingVideoUrl}
+                controls
+                preload="metadata"
+              />
+            ) : null}
+          </div>
           <input
             className="input"
             placeholder="Classroom join URL"
@@ -171,7 +260,6 @@ export default function AdminCourses() {
               }))
             }
           />
-
           <div className="sm:col-span-2 space-y-2">
             <div className="font-medium">Modules</div>
             {draft.modules.map((m, i) => (
@@ -210,7 +298,6 @@ export default function AdminCourses() {
               Add module
             </button>
           </div>
-
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -230,7 +317,6 @@ export default function AdminCourses() {
               setDraft((d) => ({ ...d, sort: Number(e.target.value || 0) }))
             }
           />
-
           <button className="btn sm:col-span-2">Create</button>
         </form>
       </div>
