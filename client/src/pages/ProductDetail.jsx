@@ -128,6 +128,14 @@ export default function ProductDetail() {
           <Link className="btn" to="/products">
             Back to products
           </Link>
+          {user?.role === "admin" && p.isCourse && p.courseSku && (
+            <Link
+              className="btn"
+              to={`/admin/courses?edit=${encodeURIComponent(p.courseSku)}`}
+            >
+              Edit course
+            </Link>
+          )}
         </div>
       </div>
 

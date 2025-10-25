@@ -146,13 +146,9 @@ export default function Dashboard() {
       <div className="space-y-4">
         {/* {courses.map((c) => {
           const { course, enrollment, progress, moduleSubmissions } = c; */}
-        {courses.map((c, i) => {
-          const {
-            course,
-            enrollment,
-            progress = 0,
-            moduleSubmissions = [],
-          } = c;
+        {courses.map((c) => {
+          const { course, enrollment, progress, moduleSubmissions } = c;
+          const hasCourse = !!course;
           const sku = course?.sku || enrollment?.courseSku || `unknown-${i}`;
           const title =
             course?.title || enrollment?.courseSku || "Course unavailable";
@@ -160,13 +156,15 @@ export default function Dashboard() {
             course?.blurb || "Course details are not available yet.";
           return (
             <div
-              key={sku}
+              key={hasCourse ? course.sku : enrollment?._id}
               className="border rounded p-3 hover:bg-slate-50 cursor-pointer"
               // onClick={() => navigate(`/learn/course/${course.sku}`)}
-              onClick={() => course && navigate(`/learn/course/${sku}`)}
+              onClick={() =>
+                hasCourse && navigate(`/learn/courses/${course.sku}`)
+              }
             >
               <div className="flex items-center gap-3">
-                {course?.thumbnailUrl ? (
+                {hasCourse && course?.thumbnailUrl ? (
                   <img
                     src={course.thumbnailUrl}
                     className="w-20 h-14 object-cover rounded border"
@@ -175,8 +173,15 @@ export default function Dashboard() {
                   <div className="w-20 h-14 rounded border bg-slate-100" />
                 )}
                 <div className="flex-1">
-                  <div className="font-semibold">{title}</div>
-                  <div className="text-sm text-slate-600">{blurb}</div>
+                  <div className="font-semibold">
+                    {hasCourse ? course.title : enrollment?.courseSku}
+                  </div>
+
+                  <div className="text-sm text-slate-600">
+                    {hasCourse
+                      ? course.blurb
+                      : "Course details are not available yet."}
+                  </div>
                 </div>
                 <div className="text-sm font-medium">{progress}% complete</div>
               </div>
@@ -185,7 +190,7 @@ export default function Dashboard() {
               {course && (
                 <div className="mt-3 grid md:grid-cols-2 gap-3">
                   <div className="rounded overflow-hidden border bg-black">
-                    {course?.onboardingVideoUrl ? (
+                    {hasCourse && course?.onboardingVideoUrl ? (
                       <video
                         className="w-full h-40 object-cover"
                         src={course.onboardingVideoUrl}

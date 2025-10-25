@@ -1,7 +1,7 @@
-// src/pages/AdminCourses.jsx
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { useSearchParams } from "react-router-dom";
 
 function ModuleRow({ m, i, onChange, onRemove }) {
   const driveEmbed = toDriveEmbed(m.videoUrl || "");
@@ -59,6 +59,8 @@ function ModuleRow({ m, i, onChange, onRemove }) {
 
 export default function AdminCourses() {
   const { accessToken } = useAuth();
+  const [qs] = useSearchParams();
+  const editingSku = qs.get("edit") || "";
   const [items, setItems] = React.useState([]);
   const [msg, setMsg] = React.useState("");
   const [draft, setDraft] = React.useState({
@@ -74,6 +76,36 @@ export default function AdminCourses() {
     modules: [],
   });
 
+  async function uploadToCloudinary(file, resource_type) {
+    const sig = await apiAuthed(`/admin/media/sign`, {
+      token: accessToken,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resource_type }),
+    });
+    const fd = new FormData();
+    fd.append("file", file);
+    if (sig.mode === "unsigned" && sig.upload_preset) {
+      fd.append("upload_preset", sig.upload_preset);
+    } else {
+      fd.append("api_key", sig.api_key);
+      fd.append("timestamp", sig.timestamp);
+      fd.append("signature", sig.signature);
+      if (sig.folder) fd.append("folder", sig.folder);
+    }
+    const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resource_type}/upload`;
+    const r = await fetch(endpoint, { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok || !j.secure_url)
+      throw new Error(j?.error?.message || "Upload failed");
+    return j.secure_url;
+  }
+
+  const toDriveEmbed = (url = "") => {
+    const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    return m ? `https://drive.google.com/file/d/${m[1]}/preview` : "";
+  };
+
   async function load() {
     try {
       const data = await apiAuthed("/admin/courses", { token: accessToken });
@@ -85,6 +117,31 @@ export default function AdminCourses() {
   React.useEffect(() => {
     load(); /* eslint-disable */
   }, []);
+
+  // when ?edit=SKU is present, preload the form
+  React.useEffect(() => {
+    (async () => {
+      if (!editingSku) return;
+      try {
+        const c = await apiAuthed(
+          `/admin/courses/${encodeURIComponent(editingSku)}`,
+          { token: accessToken }
+        );
+        setDraft({
+          sku: c.sku,
+          title: c.title || "",
+          blurb: c.blurb || "",
+          thumbnailUrl: c.thumbnailUrl || "",
+          onboardingVideoUrl: c.onboardingVideoUrl || "",
+          classroomJoinUrl: c.classroomJoinUrl || "",
+          certificateTemplateUrl: c.certificateTemplateUrl || "",
+          isPublished: !!c.isPublished,
+          sort: c.sort ?? 0,
+          modules: Array.isArray(c.modules) ? c.modules : [],
+        });
+      } catch {}
+    })();
+  }, [editingSku, accessToken]);
 
   async function createCourse(e) {
     e.preventDefault();
@@ -123,6 +180,17 @@ export default function AdminCourses() {
     await apiAuthed(`/admin/courses/${encodeURIComponent(sku)}`, {
       token: accessToken,
       method: "DELETE",
+    });
+    load();
+  }
+
+  async function saveCourse(e) {
+    e.preventDefault();
+    await apiAuthed(`/admin/courses/${encodeURIComponent(draft.sku)}`, {
+      token: accessToken,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
     });
     load();
   }
@@ -174,7 +242,7 @@ export default function AdminCourses() {
               setDraft((d) => ({ ...d, onboardingVideoUrl: e.target.value }))
             }
           /> */}
-          
+
           <label className="text-sm">
             <div className="mb-1">Thumbnail URL</div>
             <input
@@ -317,7 +385,13 @@ export default function AdminCourses() {
               setDraft((d) => ({ ...d, sort: Number(e.target.value || 0) }))
             }
           />
-          <button className="btn sm:col-span-2">Create</button>
+          {editingSku ? (
+            <button className="btn sm:col-span-2" onClick={saveCourse}>
+              Save changes
+            </button>
+          ) : (
+            <button className="btn sm:col-span-2">Create</button>
+          )}
         </form>
       </div>
 
