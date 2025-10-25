@@ -144,16 +144,29 @@ export default function Dashboard() {
 
     return (
       <div className="space-y-4">
-        {courses.map((c) => {
-          const { course, enrollment, progress, moduleSubmissions } = c;
+        {/* {courses.map((c) => {
+          const { course, enrollment, progress, moduleSubmissions } = c; */}
+        {courses.map((c, i) => {
+          const {
+            course,
+            enrollment,
+            progress = 0,
+            moduleSubmissions = [],
+          } = c;
+          const sku = course?.sku || enrollment?.courseSku || `unknown-${i}`;
+          const title =
+            course?.title || enrollment?.courseSku || "Course unavailable";
+          const blurb =
+            course?.blurb || "Course details are not available yet.";
           return (
             <div
-              key={course.sku}
+              key={sku}
               className="border rounded p-3 hover:bg-slate-50 cursor-pointer"
-              onClick={() => navigate(`/learn/course/${course.sku}`)}
+              // onClick={() => navigate(`/learn/course/${course.sku}`)}
+              onClick={() => course && navigate(`/learn/course/${sku}`)}
             >
               <div className="flex items-center gap-3">
-                {course.thumbnailUrl ? (
+                {course?.thumbnailUrl ? (
                   <img
                     src={course.thumbnailUrl}
                     className="w-20 h-14 object-cover rounded border"
@@ -162,49 +175,54 @@ export default function Dashboard() {
                   <div className="w-20 h-14 rounded border bg-slate-100" />
                 )}
                 <div className="flex-1">
-                  <div className="font-semibold">{course.title}</div>
-                  <div className="text-sm text-slate-600">{course.blurb}</div>
+                  <div className="font-semibold">{title}</div>
+                  <div className="text-sm text-slate-600">{blurb}</div>
                 </div>
                 <div className="text-sm font-medium">{progress}% complete</div>
               </div>
 
-              <div className="mt-3 grid md:grid-cols-2 gap-3">
-                <div className="rounded overflow-hidden border bg-black">
-                  {course.onboardingVideoUrl ? (
-                    <video
-                      className="w-full h-40 object-cover"
-                      src={course.onboardingVideoUrl}
-                      controls
-                      preload="metadata"
-                    />
-                  ) : (
-                    <div className="w-full h-40 grid place-items-center text-white/70">
-                      No onboarding video
-                    </div>
-                  )}
-                </div>
+              {/* <div className="mt-3 grid md:grid-cols-2 gap-3"> */}
+              {course && (
+                <div className="mt-3 grid md:grid-cols-2 gap-3">
+                  <div className="rounded overflow-hidden border bg-black">
+                    {course?.onboardingVideoUrl ? (
+                      <video
+                        className="w-full h-40 object-cover"
+                        src={course.onboardingVideoUrl}
+                        controls
+                        preload="metadata"
+                      />
+                    ) : (
+                      <div className="w-full h-40 grid place-items-center text-white/70">
+                        No onboarding video
+                      </div>
+                    )}
+                  </div>
 
-                <div className="space-y-2">
-                  <a
-                    className="btn btn-sm"
-                    href={course.classroomJoinUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open in Google Classroom
-                  </a>
-                  {enrollment.certificateUrl && (
-                    <a
-                      className="btn btn-sm"
-                      href={enrollment.certificateUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Download Certificate
-                    </a>
-                  )}
+                  <div className="space-y-2">
+                    {course?.classroomJoinUrl && (
+                      <a
+                        className="btn btn-sm"
+                        href={course.classroomJoinUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open in Google Classroom
+                      </a>
+                    )}
+                    {enrollment.certificateUrl && (
+                      <a
+                        className="btn btn-sm"
+                        href={enrollment.certificateUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Download Certificate
+                      </a>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="mt-4">
                 <div className="font-medium mb-1">Modules & Assignments</div>
