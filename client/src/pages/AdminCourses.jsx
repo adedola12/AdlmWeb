@@ -3,33 +3,50 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useSearchParams } from "react-router-dom";
-
-// Extract a Google Drive file id
-const extractDriveId = (url = "") => {
-  if (!url) return "";
-  const m1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (m1) return m1[1];
-  try {
-    const u = new URL(url);
-    const id = u.searchParams.get("id");
-    if (id) return id;
-  } catch {}
-  return "";
-};
-
-// Make a direct-stream URL for <video src=...>
-const driveDirectVideo = (id = "") =>
-  id ? `https://drive.google.com/uc?export=download&id=${id}` : "";
-
-// Given a user-entered videoUrl, return a playable src
-const toPlayableVideo = (url = "") => {
-  const id = extractDriveId(url);
-  if (id) return { src: driveDirectVideo(id), type: "drive" };
-  return { src: url, type: "direct" };
-};
+import { parseBunny, bunnyIframeSrc, bunnyShorthand } from "../lib/video";
 
 function ModuleRow({ m, i, onChange, onRemove }) {
-  const { src: playableSrc } = toPlayableVideo(m.videoUrl || "");
+  const parsed = parseBunny(m.videoUrl || "");
+  const isBunny = parsed?.kind === "bunny";
+  const playableSrc = isBunny
+    ? bunnyIframeSrc(parsed.libId, parsed.videoId)
+    : parsed?.src;
+
+  const [prog, setProg] = React.useState(0);
+  const [busy, setBusy] = React.useState(false);
+
+  async function handleUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setBusy(true);
+      setProg(1);
+      // Create container
+      const created = await bunnyCreate(
+        // accessToken is in module closure via props drilling? easiest is to read from a global hook
+        // We'll read from window since ModuleRow has no props for token:
+        // Better approach: pass accessToken as a prop. We'll do that:
+        // (See usage below)
+        ModuleRow.accessToken,
+        `module-${m.code || "untitled"}-${Date.now()}`
+      );
+      // Upload bytes
+      const uploaded = await bunnyUploadWithProgress({
+        token: ModuleRow.accessToken,
+        videoId: created.videoId,
+        file,
+        onProgress: (p) => setProg(p),
+      });
+      // Save shorthand into this module's videoUrl
+      onChange(i, { ...m, videoUrl: uploaded.shorthand });
+    } catch (err) {
+      alert(err.message || "Upload failed");
+    } finally {
+      setBusy(false);
+      setProg(0);
+      e.target.value = "";
+    }
+  }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 border rounded p-2">
@@ -59,12 +76,25 @@ function ModuleRow({ m, i, onChange, onRemove }) {
         Remove
       </button>
 
-      <input
-        className="input sm:col-span-2"
-        placeholder="Module video URL (Google Drive or MP4/Cloudinary)"
-        value={m.videoUrl || ""}
-        onChange={(e) => onChange(i, { ...m, videoUrl: e.target.value })}
-      />
+      <div className="sm:col-span-2 flex gap-2">
+        <input
+          className="input flex-1"
+          placeholder="Module video (Bunny embed/CDN URL, bunny:LIB:VIDEO, or MP4/Cloudinary)"
+          value={m.videoUrl || ""}
+          onChange={(e) => onChange(i, { ...m, videoUrl: e.target.value })}
+        />
+        <label className={`btn btn-sm shrink-0 ${busy ? "opacity-60" : ""}`}>
+          Upload
+          <input
+            type="file"
+            accept="video/*"
+            className="hidden"
+            disabled={busy}
+            onChange={handleUpload}
+          />
+        </label>
+      </div>
+
       <textarea
         className="input sm:col-span-3"
         rows={2}
@@ -75,19 +105,79 @@ function ModuleRow({ m, i, onChange, onRemove }) {
         }
       />
 
+      {prog > 0 && (
+        <div className="sm:col-span-5">
+          <div className="h-2 bg-slate-200 rounded overflow-hidden">
+            <div className="h-full bg-black" style={{ width: `${prog}%` }} />
+          </div>
+        </div>
+      )}
+
       {playableSrc && (
         <div className="sm:col-span-5 rounded overflow-hidden border bg-black">
-          <video
-            className="w-full h-44 object-cover"
-            src={playableSrc}
-            controls
-            preload="metadata"
-          />
+          {isBunny ? (
+            <iframe
+              src={playableSrc}
+              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+              allowFullScreen
+              className="w-full h-44"
+              title={`module-${i}-bunny`}
+            />
+          ) : (
+            <video
+              className="w-full h-44 object-cover"
+              src={playableSrc}
+              controls
+              preload="metadata"
+            />
+          )}
         </div>
       )}
     </div>
   );
 }
+
+
+// --- Bunny upload helpers (admin only) ---
+
+async function bunnyCreate(token, title) {
+  return apiAuthed("/admin/bunny/create", {
+    token,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+}
+
+/** Upload using XHR so we can show progress */
+function bunnyUploadWithProgress({ token, videoId, file, onProgress }) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/admin/bunny/upload");
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    const form = new FormData();
+    form.append("videoId", videoId);
+    form.append("file", file);
+
+    xhr.upload.onprogress = (evt) => {
+      if (!evt.lengthComputable) return;
+      const pct = Math.round((evt.loaded / evt.total) * 100);
+      onProgress?.(pct);
+    };
+    xhr.onload = () => {
+      try {
+        const json = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300) return resolve(json);
+        reject(new Error(json?.error || "Upload failed"));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.send(form);
+  });
+}
+
 
 export default function AdminCourses() {
   const { accessToken } = useAuth();
@@ -108,6 +198,39 @@ export default function AdminCourses() {
     sort: 0,
     modules: [],
   });
+  // State for progress
+  const [onboardingProg, setOnboardingProg] = React.useState(0);
+  const [onboardingBusy, setOnboardingBusy] = React.useState(false);
+
+  async function handleOnboardingUpload(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      setOnboardingBusy(true);
+      setOnboardingProg(1);
+      // 1) Create a video container
+      const created = await bunnyCreate(
+        accessToken,
+        `onboarding-${draft.sku}-${Date.now()}`
+      );
+      // 2) Upload bytes with progress
+      const uploaded = await bunnyUploadWithProgress({
+        token: accessToken,
+        videoId: created.videoId,
+        file: f,
+        onProgress: (p) => setOnboardingProg(p),
+      });
+      // 3) Save shorthand to the draft field
+      setDraft((d) => ({ ...d, onboardingVideoUrl: uploaded.shorthand }));
+    } catch (err) {
+      alert(err.message || "Upload failed");
+    } finally {
+      setOnboardingBusy(false);
+      setOnboardingProg(0);
+      // reset input so re-selecting the same file re-fires change
+      e.target.value = "";
+    }
+  }
 
   async function uploadToCloudinary(file, resource_type) {
     const sig = await apiAuthed(`/admin/media/sign`, {
@@ -153,9 +276,7 @@ export default function AdminCourses() {
       try {
         const c = await apiAuthed(
           `/admin/courses/${encodeURIComponent(editingSku)}`,
-          {
-            token: accessToken,
-          }
+          { token: accessToken }
         );
         setDraft({
           sku: c.sku,
@@ -173,9 +294,7 @@ export default function AdminCourses() {
         try {
           const prod = await apiAuthed(
             `/admin/products/${encodeURIComponent(editingSku)}`,
-            {
-              token: accessToken,
-            }
+            { token: accessToken }
           );
           const created = await apiAuthed(`/admin/courses`, {
             token: accessToken,
@@ -266,6 +385,12 @@ export default function AdminCourses() {
     load();
   }
 
+  const onboardingParsed = parseBunny(draft.onboardingVideoUrl || "");
+  const onboardingIsBunny = onboardingParsed?.kind === "bunny";
+  const onboardingSrc = onboardingIsBunny
+    ? bunnyIframeSrc(onboardingParsed.libId, onboardingParsed.videoId)
+    : onboardingParsed?.src;
+
   return (
     <div className="space-y-6">
       <div className="card">
@@ -331,7 +456,7 @@ export default function AdminCourses() {
           </div>
 
           <label className="text-sm">
-            <div className="mb-1">Onboarding video URL</div>
+            <div className="mb-1">Onboarding video (Bunny or direct)</div>
             <input
               className="input"
               value={draft.onboardingVideoUrl}
@@ -341,27 +466,25 @@ export default function AdminCourses() {
             />
           </label>
           <div className="flex gap-2 items-center">
-            <label className="btn btn-sm">
-              Upload video
-              <input
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const url = await uploadToCloudinary(f, "video");
-                  if (url) setDraft((d) => ({ ...d, onboardingVideoUrl: url }));
-                }}
-              />
-            </label>
-            {draft.onboardingVideoUrl && (
-              <video
-                className="w-40 h-24 border rounded object-cover"
-                src={toPlayableVideo(draft.onboardingVideoUrl).src}
-                controls
-                preload="metadata"
-              />
+            {onboardingSrc && (
+              <div className="w-40 h-24 border rounded overflow-hidden bg-black">
+                {onboardingIsBunny ? (
+                  <iframe
+                    src={onboardingSrc}
+                    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                    allowFullScreen
+                    className="w-full h-full"
+                    title="onboarding-preview"
+                  />
+                ) : (
+                  <video
+                    className="w-full h-full object-cover"
+                    src={onboardingSrc}
+                    controls
+                    preload="metadata"
+                  />
+                )}
+              </div>
             )}
           </div>
 
@@ -407,6 +530,8 @@ export default function AdminCourses() {
                 }
               />
             ))}
+            
+            ModuleRow.accessToken = accessToken;
             <button
               type="button"
               className="btn btn-sm"
@@ -451,6 +576,60 @@ export default function AdminCourses() {
             <button className="btn sm:col-span-2">Create</button>
           )}
         </form>
+      </div>
+
+      <label className="text-sm">
+        <div className="mb-1">Onboarding video (Bunny or direct)</div>
+        <input
+          className="input"
+          value={draft.onboardingVideoUrl}
+          onChange={(e) =>
+            setDraft((d) => ({ ...d, onboardingVideoUrl: e.target.value }))
+          }
+        />
+      </label>
+
+      <div className="flex items-center gap-2">
+        <label className={`btn btn-sm ${onboardingBusy ? "opacity-60" : ""}`}>
+          Upload to Bunny
+          <input
+            type="file"
+            accept="video/*"
+            className="hidden"
+            disabled={onboardingBusy}
+            onChange={handleOnboardingUpload}
+          />
+        </label>
+
+        {onboardingProg > 0 && (
+          <div className="flex-1 h-2 bg-slate-200 rounded overflow-hidden">
+            <div
+              className="h-full bg-black"
+              style={{ width: `${onboardingProg}%` }}
+            />
+          </div>
+        )}
+
+        {onboardingSrc && (
+          <div className="w-40 h-24 border rounded overflow-hidden bg-black">
+            {onboardingIsBunny ? (
+              <iframe
+                src={onboardingSrc}
+                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                allowFullScreen
+                className="w-full h-full"
+                title="onboarding-preview"
+              />
+            ) : (
+              <video
+                className="w-full h-full object-cover"
+                src={onboardingSrc}
+                controls
+                preload="metadata"
+              />
+            )}
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

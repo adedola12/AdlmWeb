@@ -4,24 +4,7 @@ import dayjs from "dayjs";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useNavigate } from "react-router-dom";
-
-// Local helpers (or import from ../lib/video)
-const extractDriveId = (url = "") => {
-  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (m) return m[1];
-  try {
-    const u = new URL(url);
-    const id = u.searchParams.get("id");
-    if (id) return id;
-  } catch {}
-  return "";
-};
-const driveDirect = (id = "") =>
-  id ? `https://drive.google.com/uc?export=download&id=${id}` : "";
-const toPlayable = (url = "") => {
-  const id = extractDriveId(url);
-  return id ? driveDirect(id) : url;
-};
+import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
 
 export default function Dashboard() {
   const { user, accessToken } = useAuth();
@@ -166,6 +149,12 @@ export default function Dashboard() {
           const hasCourse = !!course;
           const sku = course?.sku || enrollment?.courseSku || `unknown-${i}`;
 
+          const parsed = parseBunny(course?.onboardingVideoUrl || "");
+          const isBunny = parsed?.kind === "bunny";
+          const src = isBunny
+            ? bunnyIframeSrc(parsed.libId, parsed.videoId)
+            : parsed?.src;
+
           return (
             <div
               key={sku}
@@ -179,6 +168,7 @@ export default function Dashboard() {
                   <img
                     src={course.thumbnailUrl}
                     className="w-20 h-14 object-cover rounded border"
+                    alt=""
                   />
                 ) : (
                   <div className="w-20 h-14 rounded border bg-slate-100" />
@@ -203,13 +193,23 @@ export default function Dashboard() {
               {hasCourse && (
                 <div className="mt-3 grid md:grid-cols-2 gap-3">
                   <div className="rounded overflow-hidden border bg-black">
-                    {course.onboardingVideoUrl ? (
-                      <video
-                        className="w-full h-40 object-cover"
-                        src={toPlayable(course.onboardingVideoUrl || "")}
-                        controls
-                        preload="metadata"
-                      />
+                    {src ? (
+                      isBunny ? (
+                        <iframe
+                          src={src}
+                          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                          allowFullScreen
+                          className="w-full h-40"
+                          title={`onboarding-${sku}`}
+                        />
+                      ) : (
+                        <video
+                          className="w-full h-40 object-cover"
+                          src={src}
+                          controls
+                          preload="metadata"
+                        />
+                      )
                     ) : (
                       <div className="w-full h-40 grid place-items-center text-white/70">
                         No onboarding video
