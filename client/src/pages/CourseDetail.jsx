@@ -3,24 +3,7 @@ import React from "react";
 import { useParams } from "react-router-dom";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
-
-// Drive helpers
-const extractDriveId = (url = "") => {
-  const m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (m) return m[1];
-  try {
-    const u = new URL(url);
-    const id = u.searchParams.get("id");
-    if (id) return id;
-  } catch {}
-  return "";
-};
-const driveDirect = (id = "") =>
-  id ? `https://drive.google.com/uc?export=download&id=${id}` : "";
-const toPlayable = (url = "") => {
-  const id = extractDriveId(url);
-  return id ? driveDirect(id) : url;
-};
+import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
 
 export default function CourseDetail() {
   const { sku } = useParams();
@@ -43,7 +26,7 @@ export default function CourseDetail() {
     }
   }
   React.useEffect(() => {
-    load(); // eslint-disable-next-line
+    load(); // eslint-disable-line
   }, [sku, accessToken]);
 
   async function markComplete(moduleCode) {
@@ -117,18 +100,25 @@ export default function CourseDetail() {
     moduleSubmissions.find((m) => m.moduleCode === activeCode) ||
     moduleSubmissions[0] ||
     {};
-  const videoSrc = toPlayable(
+
+  const parsed = parseBunny(
     active?.videoUrl || course?.onboardingVideoUrl || ""
   );
+  const isBunny = parsed?.kind === "bunny";
+  const playerSrc = isBunny
+    ? bunnyIframeSrc(parsed.libId, parsed.videoId)
+    : parsed?.src;
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="card">
         <div className="flex items-center gap-4">
           {course.thumbnailUrl ? (
             <img
               src={course.thumbnailUrl}
               className="w-24 h-16 object-cover rounded border"
+              alt=""
             />
           ) : (
             <div className="w-24 h-16 rounded border bg-slate-100" />
@@ -149,16 +139,27 @@ export default function CourseDetail() {
         </div>
       </div>
 
+      {/* Player + Assignment */}
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="card lg:col-span-2">
           <div className="rounded overflow-hidden border bg-black">
-            {videoSrc ? (
-              <video
-                className="w-full aspect-video"
-                src={videoSrc}
-                controls
-                preload="metadata"
-              />
+            {playerSrc ? (
+              isBunny ? (
+                <iframe
+                  src={playerSrc}
+                  allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                  allowFullScreen
+                  className="w-full aspect-video"
+                  title="bunny-player"
+                />
+              ) : (
+                <video
+                  className="w-full aspect-video"
+                  src={playerSrc}
+                  controls
+                  preload="metadata"
+                />
+              )
             ) : (
               <div className="w-full aspect-video grid place-items-center text-white/70">
                 No video available
@@ -231,6 +232,7 @@ export default function CourseDetail() {
           )}
         </div>
 
+        {/* Modules list */}
         <div className="card">
           <div className="font-semibold mb-2">Modules</div>
           <div className="space-y-2">
@@ -268,6 +270,7 @@ export default function CourseDetail() {
         </div>
       </div>
 
+      {/* Footer: certificate */}
       {enrollment?.certificateUrl && (
         <div className="card">
           <a
