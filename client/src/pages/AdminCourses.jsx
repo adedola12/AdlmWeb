@@ -3,9 +3,49 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useSearchParams } from "react-router-dom";
-import { parseBunny, bunnyIframeSrc, bunnyShorthand } from "../lib/video";
+import { parseBunny, bunnyIframeSrc } from "../lib/video";
 
-function ModuleRow({ m, i, onChange, onRemove }) {
+// ── Bunny upload helpers ─────────────────────────────────────────────
+async function bunnyCreate(token, title) {
+  return apiAuthed("/admin/bunny/create", {
+    token,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+}
+
+// XHR so we can track progress
+function bunnyUploadWithProgress({ token, videoId, file, onProgress }) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/admin/bunny/upload");
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    const form = new FormData();
+    form.append("videoId", videoId);
+    form.append("file", file);
+
+    xhr.upload.onprogress = (evt) => {
+      if (!evt.lengthComputable) return;
+      const pct = Math.round((evt.loaded / evt.total) * 100);
+      onProgress?.(pct);
+    };
+    xhr.onload = () => {
+      try {
+        const json = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300) return resolve(json);
+        reject(new Error(json?.error || "Upload failed"));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.send(form);
+  });
+}
+
+// ── Module row ──────────────────────────────────────────────────────
+function ModuleRow({ m, i, onChange, onRemove, accessToken }) {
   const parsed = parseBunny(m.videoUrl || "");
   const isBunny = parsed?.kind === "bunny";
   const playableSrc = isBunny
@@ -21,24 +61,17 @@ function ModuleRow({ m, i, onChange, onRemove }) {
     try {
       setBusy(true);
       setProg(1);
-      // Create container
       const created = await bunnyCreate(
-        // accessToken is in module closure via props drilling? easiest is to read from a global hook
-        // We'll read from window since ModuleRow has no props for token:
-        // Better approach: pass accessToken as a prop. We'll do that:
-        // (See usage below)
-        ModuleRow.accessToken,
+        accessToken,
         `module-${m.code || "untitled"}-${Date.now()}`
       );
-      // Upload bytes
       const uploaded = await bunnyUploadWithProgress({
-        token: ModuleRow.accessToken,
+        token: accessToken,
         videoId: created.videoId,
         file,
         onProgress: (p) => setProg(p),
       });
-      // Save shorthand into this module's videoUrl
-      onChange(i, { ...m, videoUrl: uploaded.shorthand });
+      onChange(i, { ...m, videoUrl: uploaded.shorthand }); // bunny:LIB:VIDEO
     } catch (err) {
       alert(err.message || "Upload failed");
     } finally {
@@ -137,48 +170,7 @@ function ModuleRow({ m, i, onChange, onRemove }) {
   );
 }
 
-
-// --- Bunny upload helpers (admin only) ---
-
-async function bunnyCreate(token, title) {
-  return apiAuthed("/admin/bunny/create", {
-    token,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title }),
-  });
-}
-
-/** Upload using XHR so we can show progress */
-function bunnyUploadWithProgress({ token, videoId, file, onProgress }) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/admin/bunny/upload");
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    const form = new FormData();
-    form.append("videoId", videoId);
-    form.append("file", file);
-
-    xhr.upload.onprogress = (evt) => {
-      if (!evt.lengthComputable) return;
-      const pct = Math.round((evt.loaded / evt.total) * 100);
-      onProgress?.(pct);
-    };
-    xhr.onload = () => {
-      try {
-        const json = JSON.parse(xhr.responseText || "{}");
-        if (xhr.status >= 200 && xhr.status < 300) return resolve(json);
-        reject(new Error(json?.error || "Upload failed"));
-      } catch (e) {
-        reject(e);
-      }
-    };
-    xhr.onerror = () => reject(new Error("Network error"));
-    xhr.send(form);
-  });
-}
-
-
+// ── AdminCourses page ───────────────────────────────────────────────
 export default function AdminCourses() {
   const { accessToken } = useAuth();
   const [qs] = useSearchParams();
@@ -198,7 +190,7 @@ export default function AdminCourses() {
     sort: 0,
     modules: [],
   });
-  // State for progress
+
   const [onboardingProg, setOnboardingProg] = React.useState(0);
   const [onboardingBusy, setOnboardingBusy] = React.useState(false);
 
@@ -208,26 +200,22 @@ export default function AdminCourses() {
     try {
       setOnboardingBusy(true);
       setOnboardingProg(1);
-      // 1) Create a video container
       const created = await bunnyCreate(
         accessToken,
         `onboarding-${draft.sku}-${Date.now()}`
       );
-      // 2) Upload bytes with progress
       const uploaded = await bunnyUploadWithProgress({
         token: accessToken,
         videoId: created.videoId,
         file: f,
         onProgress: (p) => setOnboardingProg(p),
       });
-      // 3) Save shorthand to the draft field
       setDraft((d) => ({ ...d, onboardingVideoUrl: uploaded.shorthand }));
     } catch (err) {
       alert(err.message || "Upload failed");
     } finally {
       setOnboardingBusy(false);
       setOnboardingProg(0);
-      // reset input so re-selecting the same file re-fires change
       e.target.value = "";
     }
   }
@@ -269,7 +257,6 @@ export default function AdminCourses() {
     load(); // eslint-disable-line
   }, []);
 
-  // Preload form when ?edit=SKU is present
   React.useEffect(() => {
     (async () => {
       if (!editingSku) return;
@@ -451,11 +438,12 @@ export default function AdminCourses() {
               <img
                 src={draft.thumbnailUrl}
                 className="w-16 h-10 rounded border object-cover"
+                alt=""
               />
             )}
           </div>
 
-          <label className="text-sm">
+          <label className="text-sm sm:col-span-2">
             <div className="mb-1">Onboarding video (Bunny or direct)</div>
             <input
               className="input"
@@ -465,7 +453,30 @@ export default function AdminCourses() {
               }
             />
           </label>
-          <div className="flex gap-2 items-center">
+
+          <div className="sm:col-span-2 flex items-center gap-2">
+            <label
+              className={`btn btn-sm ${onboardingBusy ? "opacity-60" : ""}`}
+            >
+              Upload to Bunny
+              <input
+                type="file"
+                accept="video/*"
+                className="hidden"
+                disabled={onboardingBusy}
+                onChange={handleOnboardingUpload}
+              />
+            </label>
+
+            {onboardingProg > 0 && (
+              <div className="flex-1 h-2 bg-slate-200 rounded overflow-hidden">
+                <div
+                  className="h-full bg-black"
+                  style={{ width: `${onboardingProg}%` }}
+                />
+              </div>
+            )}
+
             {onboardingSrc && (
               <div className="w-40 h-24 border rounded overflow-hidden bg-black">
                 {onboardingIsBunny ? (
@@ -488,26 +499,6 @@ export default function AdminCourses() {
             )}
           </div>
 
-          <input
-            className="input"
-            placeholder="Classroom join URL"
-            value={draft.classroomJoinUrl}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, classroomJoinUrl: e.target.value }))
-            }
-          />
-          <input
-            className="input sm:col-span-2"
-            placeholder="Certificate template URL"
-            value={draft.certificateTemplateUrl}
-            onChange={(e) =>
-              setDraft((d) => ({
-                ...d,
-                certificateTemplateUrl: e.target.value,
-              }))
-            }
-          />
-
           <div className="sm:col-span-2 space-y-2">
             <div className="font-medium">Modules</div>
             {draft.modules.map((m, i) => (
@@ -515,6 +506,7 @@ export default function AdminCourses() {
                 key={i}
                 m={m}
                 i={i}
+                accessToken={accessToken}
                 onChange={(idx, nm) =>
                   setDraft((d) => {
                     const mods = d.modules.slice();
@@ -530,8 +522,6 @@ export default function AdminCourses() {
                 }
               />
             ))}
-            
-            ModuleRow.accessToken = accessToken;
             <button
               type="button"
               className="btn btn-sm"
@@ -556,7 +546,7 @@ export default function AdminCourses() {
               onChange={(e) =>
                 setDraft((d) => ({ ...d, isPublished: e.target.checked }))
               }
-            />{" "}
+            />
             Published
           </label>
           <input
@@ -578,60 +568,6 @@ export default function AdminCourses() {
         </form>
       </div>
 
-      <label className="text-sm">
-        <div className="mb-1">Onboarding video (Bunny or direct)</div>
-        <input
-          className="input"
-          value={draft.onboardingVideoUrl}
-          onChange={(e) =>
-            setDraft((d) => ({ ...d, onboardingVideoUrl: e.target.value }))
-          }
-        />
-      </label>
-
-      <div className="flex items-center gap-2">
-        <label className={`btn btn-sm ${onboardingBusy ? "opacity-60" : ""}`}>
-          Upload to Bunny
-          <input
-            type="file"
-            accept="video/*"
-            className="hidden"
-            disabled={onboardingBusy}
-            onChange={handleOnboardingUpload}
-          />
-        </label>
-
-        {onboardingProg > 0 && (
-          <div className="flex-1 h-2 bg-slate-200 rounded overflow-hidden">
-            <div
-              className="h-full bg-black"
-              style={{ width: `${onboardingProg}%` }}
-            />
-          </div>
-        )}
-
-        {onboardingSrc && (
-          <div className="w-40 h-24 border rounded overflow-hidden bg-black">
-            {onboardingIsBunny ? (
-              <iframe
-                src={onboardingSrc}
-                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                allowFullScreen
-                className="w-full h-full"
-                title="onboarding-preview"
-              />
-            ) : (
-              <video
-                className="w-full h-full object-cover"
-                src={onboardingSrc}
-                controls
-                preload="metadata"
-              />
-            )}
-          </div>
-        )}
-      </div>
-
       <div className="space-y-2">
         {items.map((c) => (
           <div
@@ -643,6 +579,7 @@ export default function AdminCourses() {
                 <img
                   src={c.thumbnailUrl}
                   className="w-16 h-10 object-cover rounded border"
+                  alt=""
                 />
               ) : (
                 <div className="w-16 h-10 rounded border bg-slate-100" />
