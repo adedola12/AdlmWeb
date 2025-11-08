@@ -22,18 +22,19 @@ export async function apiAuthed(path, { token, ...init } = {}) {
     });
 
   let res = await doFetch(token);
-  if (res.status !== 401) {
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
-  } 
 
-  // try to refresh once
-  const r = await refresh();
-  // let the app store capture the new access token if needed:
-  
-  window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: r }));
-  res = await doFetch(r.accessToken);
+  if (res.status === 401) {
+    // try one refresh
+    try {
+      const r = await refresh();
+      window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: r }));
+      res = await doFetch(r.accessToken);
+    } catch {
+      // optional: nuke any cached token/state here
+      throw new Error("refresh failed");
+    }
+  }
 
   if (!res.ok) throw new Error(await res.text());
   return res.json();
-} 
+}

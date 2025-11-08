@@ -3,12 +3,17 @@ import dayjs from "dayjs";
 
 export const REFRESH_COOKIE = "rt";
 
-const isProd = process.env.NODE_ENV === "production";
+const PROD = process.env.NODE_ENV === "production";
+
+// If you use a custom apex/subdomain, you may set COOKIE_DOMAIN=".yourdomain.com"
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
+
 export const refreshCookieOpts = {
   httpOnly: true,
-  secure: isProd,
-  sameSite: isProd ? "none" : "lax",
-  path: "/auth/refresh",
+  secure: PROD ? true : false,
+  sameSite: PROD ? "none" : "lax",
+  domain: COOKIE_DOMAIN, // keep undefined if you don’t need a domain
+  path: "/auth/refresh", // cookie only sent to POST /auth/refresh
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
 
