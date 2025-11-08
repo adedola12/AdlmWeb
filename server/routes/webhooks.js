@@ -1,3 +1,4 @@
+// server/routes/webhooks.js
 import express from "express";
 import crypto from "crypto";
 import { Purchase } from "../models/Purchase.js";
@@ -5,7 +6,7 @@ import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 
 const router = express.Router();
 
-// Paystack webhook
+// Must receive raw body (index mounts this router BEFORE express.json)
 router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const secret = process.env.PAYSTACK_SECRET_KEY;
@@ -25,17 +26,16 @@ router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
     const purchase = await Purchase.findOne({ paystackRef: ref });
     if (!purchase) return res.json({ ok: true });
 
-    // mark paid
-    purchase.paid = true;
-    purchase.status = "approved";
-    await purchase.save();
-
-    // auto enroll for any course lines
-    await autoEnrollFromPurchase(purchase);
-
+    if (!purchase.paid) {
+      purchase.paid = true;
+      purchase.status = "approved";
+      await purchase.save();
+      await autoEnrollFromPurchase(purchase);
+    }
     res.json({ ok: true });
-  } catch (e) {
-    res.status(200).json({ ok: true }); // keep webhook 200
+  } catch (_e) {
+    // Always 200 so Paystack doesn't retry forever
+    res.status(200).json({ ok: true });
   }
 });
 

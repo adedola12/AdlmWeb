@@ -29,6 +29,7 @@ import AdminRateGen from "./pages/AdminRateGen.jsx";
 import AdminProductEdit from "./pages/AdminProductEdit.jsx";
 import AdminCourses from "./pages/AdminCourses.jsx";
 import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
+import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 
 const router = createBrowserRouter([
   {
@@ -54,6 +55,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/checkout/thanks",
+        element: (
+          <ProtectedRoute>
+            <CheckoutThanks />
           </ProtectedRoute>
         ),
       },
