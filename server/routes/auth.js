@@ -25,6 +25,26 @@ async function findByIdentifier(identifier) {
   );
 }
 
+// Treat these clients as "native/plugin" => enforce entitlement + device binding
+function isPluginClient(req) {
+  const h = (s) => (req.get(s) || "").toLowerCase();
+
+  // Option A: explicit header from your Windows apps
+  //   e.g. X-ADLM-Client: rategen-win or revit-plugin
+  const kind = h("x-adlm-client"); // "rategen-win", "revit-plugin", etc.
+  if (kind && /win|plugin|desktop/i.test(kind)) return true;
+
+  // Option B: fallback signal via body
+  if ((req.body?.client || "").toLowerCase() === "plugin") return true;
+
+  // Option C: if request sends a device fingerprint at all, assume plugin
+  if (req.body?.device_fingerprint) return true;
+
+  // Otherwise assume website
+  return false;
+}
+
+
 /* -------------------- SIGNUP -------------------- */
 router.post("/signup", async (req, res) => {
   try {
@@ -91,32 +111,19 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-/* -------------------- LOGIN (entitlement + device binding) -------------------- */
+/* -------------------- LOGIN (web vs plugin) -------------------- */
 router.post("/login", async (req, res) => {
   try {
     await ensureDb();
 
-    const { identifier, password, productKey, device_fingerprint } =
-      req.body || {};
-
-    if (!identifier || !password)
-      return res
-        .status(400)
-        .json({ error: "identifier and password required" });
-
-    if (!productKey)
-      return res.status(400).json({ error: "productKey required" });
-
-    if (!device_fingerprint) {
-      return res
-        .status(400)
-        .json({ error: "device_fingerprint required", code: "DFP_REQUIRED" });
+    const { identifier, password, productKey, device_fingerprint } = req.body || {};
+    if (!identifier || !password) {
+      return res.status(400).json({ error: "identifier and password required" });
     }
 
     const user = await findByIdentifier(identifier);
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
-    if (user.disabled)
-      return res.status(403).json({ error: "Account disabled" });
+    if (user.disabled) return res.status(403).json({ error: "Account disabled" });
 
     // password check (supports legacy `password`)
     let ok = false;
@@ -133,40 +140,44 @@ router.post("/login", async (req, res) => {
     }
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
-    // entitlement check for productKey
-    const ent = (user.entitlements || []).find(
-      (e) => e.productKey === productKey
-    );
-    if (!ent) {
-      return res.status(403).json({
-        error: "You do not have access to this product.",
-        code: "NOT_ENTITLED",
-      });
-    }
+    const pluginLogin = isPluginClient(req);
 
-    const now = new Date();
-    const active =
-      String(ent.status || "").toLowerCase() === "active" &&
-      ent.expiresAt &&
-      new Date(ent.expiresAt) > now;
-    if (!active) {
-      return res.status(403).json({
-        error: "You do not have access to this product.",
-        code: "NOT_ENTITLED",
-      });
-    }
+    // ── Only for plugin/desktop logins: require entitlement + device binding ──
+    if (pluginLogin) {
+      if (!productKey) {
+        return res.status(400).json({ error: "productKey required", code: "PRODUCT_KEY_REQUIRED" });
+      }
+      if (!device_fingerprint) {
+        return res.status(400).json({ error: "device_fingerprint required", code: "DFP_REQUIRED" });
+      }
 
-    // device binding
-    if (!ent.deviceFingerprint) {
-      ent.deviceFingerprint = device_fingerprint;
-      ent.deviceBoundAt = now;
-      needsSave = true;
-    } else if (ent.deviceFingerprint !== device_fingerprint) {
-      return res.status(403).json({
-        error: "This subscription is already bound to another device.",
-        code: "DEVICE_MISMATCH",
-      });
+      const ent = (user.entitlements || []).find((e) => e.productKey === productKey);
+      if (!ent) {
+        return res.status(403).json({ error: "You do not have access to this product.", code: "NOT_ENTITLED" });
+      }
+
+      const now = new Date();
+      const active =
+        String(ent.status || "").toLowerCase() === "active" &&
+        ent.expiresAt && new Date(ent.expiresAt) > now;
+
+      if (!active) {
+        return res.status(403).json({ error: "You do not have access to this product.", code: "NOT_ENTITLED" });
+      }
+
+      // one-device binding
+      if (!ent.deviceFingerprint) {
+        ent.deviceFingerprint = device_fingerprint;
+        ent.deviceBoundAt = now;
+        needsSave = true;
+      } else if (ent.deviceFingerprint !== device_fingerprint) {
+        return res.status(403).json({
+          error: "This subscription is already bound to another device.",
+          code: "DEVICE_MISMATCH",
+        });
+      }
     }
+    // ── End plugin-only checks ──
 
     if (needsSave) await user.save();
 
@@ -200,6 +211,7 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Login failed" });
   }
 });
+
 
 /* -------------------- REFRESH -------------------- */
 router.post("/refresh", async (req, res) => {
