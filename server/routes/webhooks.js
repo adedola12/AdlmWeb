@@ -30,6 +30,10 @@ router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
       purchase.paid = true;
       purchase.status = "approved";
       await purchase.save();
+      const { applyEntitlementsFromPurchase } = await import(
+        "../util/applyEntitlements.js"
+      );
+      await applyEntitlementsFromPurchase(purchase);
       await autoEnrollFromPurchase(purchase);
     }
     res.json({ ok: true });

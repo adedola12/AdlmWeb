@@ -18,17 +18,17 @@ export default function CheckoutThanks() {
           setStatus("Missing payment reference.");
           return;
         }
-        const out = await apiAuthed(
-          `/purchase/verify?reference=${encodeURIComponent(reference)}`,
-          {
-            token: accessToken,
-            method: "GET",
-          }
+        const res = await fetch(
+          `${API_BASE}/purchase/verify?reference=${encodeURIComponent(
+            reference
+          )}`,
+          { credentials: "include" }
         );
+        const out = await res.json();
         if (out?.ok) {
           setStatus("Payment successful! Your access has been activated.");
           // e.g. take users to their courses/dashboard after 2–3s
-          setTimeout(() => navigate("/me/courses"), 2000);
+          setTimeout(() => navigate("/dashboard"), 1500);
         } else {
           setStatus(
             `Payment status: ${out?.status || out?.message || "unknown"}`
