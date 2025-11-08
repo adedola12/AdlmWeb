@@ -181,7 +181,7 @@ router.post("/cart", requireAuth, async (req, res) => {
 });
 
 // NEW: verify endpoint (used by Thank-You page)
-router.get("/verify", requireAuth, async (req, res) => {
+router.get("/verify", async (req, res) => {
   try {
     const reference = (req.query.reference || "").trim();
     if (!reference)
@@ -216,6 +216,11 @@ router.get("/verify", requireAuth, async (req, res) => {
       purchase.paid = true;
       purchase.status = "approved";
       await purchase.save();
+
+      const { applyEntitlementsFromPurchase } = await import(
+        "../util/applyEntitlements.js"
+      );
+      await applyEntitlementsFromPurchase(purchase);
       // optional: import here to avoid cycle
       const { autoEnrollFromPurchase } = await import("../util/autoEnroll.js");
       await autoEnrollFromPurchase(purchase);

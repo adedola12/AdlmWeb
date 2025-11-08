@@ -70,6 +70,8 @@ app.get("/", (_req, res) =>
   res.json({ ok: true, service: "ADLM Auth/Licensing" })
 );
 
+app.use("/webhooks", webhooksRouter);
+
 /* -------- API -------- */
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
@@ -89,7 +91,7 @@ app.use("/admin/rategen", adminRateGen);
 app.use("/admin/courses", adminCoursesRouter);
 app.use("/me/courses", meCoursesRouter);
 app.use("/admin/course-grading", adminCourseGradingRouter);
-app.use("/webhooks", webhooksRouter);
+
 app.use("/admin/bunny", adminBunny);
 
 /* -------- helpful error for bad JSON -------- */
