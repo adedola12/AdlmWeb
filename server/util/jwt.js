@@ -1,6 +1,18 @@
 import jwt from "jsonwebtoken";
 import dayjs from "dayjs";
 
+export const REFRESH_COOKIE = "rt";
+
+const isProd = process.env.NODE_ENV === "production";
+export const refreshCookieOpts = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? "none" : "lax",
+  path: "/auth/refresh",
+  maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+};
+
+
 export function signAccessToken(user) {
   // short-lived (15 minutes)
   return jwt.sign(
@@ -39,6 +51,17 @@ export function signLicenseToken(user) {
     { expiresIn: "15d" }
   );
 }
+
+export function signAccess(payload) {
+  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
+}
+
+export function signRefresh(payload) {
+  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: "30d",
+  });
+}
+
 
 export function verifyAccess(token) {
   return jwt.verify(token, process.env.JWT_ACCESS_SECRET);

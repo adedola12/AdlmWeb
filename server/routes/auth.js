@@ -1,67 +1,31 @@
+// server/routes/auth.js
 import express from "express";
-import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import mongoose from "mongoose";
 import { ensureDb } from "../db.js";
-import { signAccess } from "../middleware/auth.js";
 import { User } from "../models/User.js";
+import { Refresh } from "../models/Refresh.js";
 import { PasswordReset } from "../models/PasswordReset.js";
 import { sendMail } from "../util/mailer.js";
+import {
+  signAccess,
+  signRefresh,
+  verifyRefresh,
+  REFRESH_COOKIE,
+  refreshCookieOpts,
+} from "../util/jwt.js";
 
 const router = express.Router();
-const REFRESH_COOKIE = "rt";
 
-/* ---- refresh token store ---- */
-const Refresh =
-  mongoose.models.RefreshToken ||
-  mongoose.model(
-    "RefreshToken",
-    new mongoose.Schema(
-      {
-        userId: { type: mongoose.Schema.Types.ObjectId, index: true },
-        token: { type: String, index: true },
-        ua: String,
-        ip: String,
-      },
-      { timestamps: true }
-    )
-  );
-
-// cookie flags (work in dev and prod)
-const isProd = process.env.NODE_ENV === "production";
-const refreshCookieOpts = {
-  httpOnly: true,
-  secure: isProd,
-  sameSite: isProd ? "none" : "lax",
-  path: "/auth/refresh",
-  maxAge: 30 * 24 * 60 * 60 * 1000,
-};
-
-function signRefresh(payload) {
-  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: "30d",
-  });
-}
-function verifyRefresh(token) {
-  return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-}
-
-// helper to find user by email OR username
+/* -------------------- helpers -------------------- */
+const normalizeWhatsApp = (v) => (!v ? "" : String(v).replace(/[^\d+]/g, ""));
 async function findByIdentifier(identifier) {
-  const u =
+  return (
     (await User.findOne({ email: identifier })) ||
-    (await User.findOne({ username: identifier }));
-  return u;
+    (await User.findOne({ username: identifier }))
+  );
 }
 
-/* -------------------- SIGNUP (unchanged) -------------------- */
-
-function normalizeWhatsApp(v) {
-  if (!v) return "";
-  return String(v).replace(/[^\d+]/g, ""); // keep + and digits only
-}
-
-/* -------------------- SIGNUP (updated) -------------------- */
+/* -------------------- SIGNUP -------------------- */
 router.post("/signup", async (req, res) => {
   try {
     await ensureDb();
@@ -71,14 +35,16 @@ router.post("/signup", async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: "email and password required" });
 
-    // Enforce the new fields at API level (optional but recommended)
+    // enforce basic profile fields (optional)
     if (!firstName || !lastName || !whatsapp) {
       return res
         .status(400)
         .json({ error: "firstName, lastName and whatsapp are required" });
     }
 
-    const exists = await User.findOne({ $or: [{ email }, { username }] });
+    const exists = await User.findOne({
+      $or: [{ email }, ...(username ? [{ username }] : [])],
+    });
     if (exists) return res.status(409).json({ error: "User exists" });
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -116,49 +82,94 @@ router.post("/signup", async (req, res) => {
       ua: req.headers["user-agent"] || "",
       ip: req.ip,
     });
+
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
-    return res.status(201).json({ accessToken, user: payload });
+    res.status(201).json({ accessToken, user: payload });
   } catch (err) {
     console.error("[/auth/signup] error:", err);
-    return res.status(500).json({ error: "Signup failed" });
+    res.status(500).json({ error: "Signup failed" });
   }
 });
 
-/* -------------------- LOGIN (legacy-friendly) -------------------- */
+/* -------------------- LOGIN (entitlement + device binding) -------------------- */
 router.post("/login", async (req, res) => {
   try {
     await ensureDb();
 
-    const { identifier, password } = req.body || {};
-    if (!identifier || !password) {
+    const { identifier, password, productKey, device_fingerprint } =
+      req.body || {};
+
+    if (!identifier || !password)
       return res
         .status(400)
         .json({ error: "identifier and password required" });
+
+    if (!productKey)
+      return res.status(400).json({ error: "productKey required" });
+
+    if (!device_fingerprint) {
+      return res
+        .status(400)
+        .json({ error: "device_fingerprint required", code: "DFP_REQUIRED" });
     }
 
-    const user =
-      (await User.findOne({ email: identifier })) ||
-      (await User.findOne({ username: identifier }));
-
+    const user = await findByIdentifier(identifier);
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    if (user.disabled)
+      return res.status(403).json({ error: "Account disabled" });
 
-    // ✅ support legacy documents that still have `password`
+    // password check (supports legacy `password`)
     let ok = false;
+    let needsSave = false;
     if (user.passwordHash) {
       ok = await bcrypt.compare(password, user.passwordHash);
     } else if (user.password) {
       ok = password === user.password;
-      // Optional one-time migration to bcrypt:
       if (ok) {
         user.passwordHash = await bcrypt.hash(password, 10);
         user.password = undefined;
-        await user.save();
+        needsSave = true;
       }
     }
-
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
-    // inside /auth/login after you fetched `user`
+    // entitlement check for productKey
+    const ent = (user.entitlements || []).find(
+      (e) => e.productKey === productKey
+    );
+    if (!ent) {
+      return res.status(403).json({
+        error: "You do not have access to this product.",
+        code: "NOT_ENTITLED",
+      });
+    }
+
+    const now = new Date();
+    const active =
+      String(ent.status || "").toLowerCase() === "active" &&
+      ent.expiresAt &&
+      new Date(ent.expiresAt) > now;
+    if (!active) {
+      return res.status(403).json({
+        error: "You do not have access to this product.",
+        code: "NOT_ENTITLED",
+      });
+    }
+
+    // device binding
+    if (!ent.deviceFingerprint) {
+      ent.deviceFingerprint = device_fingerprint;
+      ent.deviceBoundAt = now;
+      needsSave = true;
+    } else if (ent.deviceFingerprint !== device_fingerprint) {
+      return res.status(403).json({
+        error: "This subscription is already bound to another device.",
+        code: "DEVICE_MISMATCH",
+      });
+    }
+
+    if (needsSave) await user.save();
+
     const payload = {
       _id: String(user._id),
       email: user.email,
@@ -183,17 +194,18 @@ router.post("/login", async (req, res) => {
     });
 
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
-    return res.json({ accessToken, user: payload });
+    res.json({ accessToken, user: payload });
   } catch (err) {
     console.error("[/auth/login] error:", err);
-    return res.status(500).json({ error: "Login failed" });
+    res.status(500).json({ error: "Login failed" });
   }
 });
 
-/* -------------------- REFRESH (unchanged) -------------------- */
+/* -------------------- REFRESH -------------------- */
 router.post("/refresh", async (req, res) => {
   try {
     await ensureDb();
+
     const token = req.cookies?.[REFRESH_COOKIE];
     if (!token) return res.status(401).json({ error: "No refresh cookie" });
 
@@ -210,7 +222,6 @@ router.post("/refresh", async (req, res) => {
     const user = await User.findById(rec.userId).lean();
     if (!user) return res.status(401).json({ error: "User missing" });
 
-    // inside /auth/refresh after you fetched `user`
     const payload = {
       _id: String(user._id),
       email: user.email,
@@ -225,14 +236,14 @@ router.post("/refresh", async (req, res) => {
     };
 
     const accessToken = signAccess(payload);
-    return res.json({ accessToken, user: payload });
+    res.json({ accessToken, user: payload });
   } catch (err) {
     console.error("[/auth/refresh] error:", err);
-    return res.status(500).json({ error: "Refresh failed" });
+    res.status(500).json({ error: "Refresh failed" });
   }
 });
 
-/* -------------------- LOGOUT (unchanged) -------------------- */
+/* -------------------- LOGOUT -------------------- */
 router.post("/logout", async (req, res) => {
   try {
     const token = req.cookies?.[REFRESH_COOKIE];
@@ -245,6 +256,7 @@ router.post("/logout", async (req, res) => {
   }
 });
 
+/* -------------------- PASSWORD: FORGOT -------------------- */
 router.post("/password/forgot", async (req, res) => {
   try {
     await ensureDb();
@@ -253,22 +265,17 @@ router.post("/password/forgot", async (req, res) => {
       return res.status(400).json({ error: "identifier required" });
 
     const user = await findByIdentifier(identifier);
-    // We deliberately return 200 even if user not found to avoid account enumeration
+    if (!user) return res.json({ ok: true }); // avoid enumeration
 
-    if (!user) return res.json({ ok: true });
-
-    // simple throttle: allow 1 active unexpired reset at a time
     const existing = await PasswordReset.findOne({
       userId: user._id,
       usedAt: null,
       expiresAt: { $gt: new Date() },
     });
-    if (existing) {
-      return res.json({ ok: true }); // code already sent recently
-    }
+    if (existing) return res.json({ ok: true });
 
-    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
-    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
 
     await PasswordReset.create({
       userId: user._id,
@@ -277,7 +284,6 @@ router.post("/password/forgot", async (req, res) => {
       requestedFromIp: req.ip,
     });
 
-    // send email
     const safeName = user.username || user.email.split("@")[0];
     try {
       await sendMail({
@@ -292,19 +298,18 @@ router.post("/password/forgot", async (req, res) => {
       console.error("[/auth/password/forgot] mail error:", mailErr);
     }
 
-    return res.json({ ok: true });
+    res.json({ ok: true });
   } catch (err) {
     console.error("[/auth/password/forgot] error:", err);
-    return res.status(500).json({ error: "Unable to send code" });
+    res.status(500).json({ error: "Unable to send code" });
   }
 });
 
-/* -------------------- RESET (verify + set new) -------------------- */
+/* -------------------- PASSWORD: RESET -------------------- */
 router.post("/password/reset", async (req, res) => {
   try {
     await ensureDb();
     const { identifier, code, newPassword } = req.body || {};
-
     if (!identifier || !code || !newPassword)
       return res
         .status(400)
@@ -319,34 +324,30 @@ router.post("/password/reset", async (req, res) => {
       usedAt: null,
       expiresAt: { $gt: new Date() },
     });
-
     if (!rec) return res.status(400).json({ error: "Invalid or expired code" });
 
-    // optional brute-force guard
-    if (rec.attempts >= 5) {
+    if (rec.attempts >= 5)
       return res
         .status(429)
         .json({ error: "Too many attempts. Request a new code." });
-    }
 
-    // if wrong code, count attempt and fail
+    // (String compare already done by query, but keep guard)
     if (String(code) !== String(rec.code)) {
       rec.attempts += 1;
       await rec.save();
       return res.status(400).json({ error: "Invalid or expired code" });
     }
-    // correct code → update password
+
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await user.save();
     rec.usedAt = new Date();
     await rec.save();
 
-    await Refresh.deleteMany({ userId: user._id }); // logout other sessions
-
-    return res.json({ ok: true });
+    await Refresh.deleteMany({ userId: user._id }); // invalidate sessions
+    res.json({ ok: true });
   } catch (err) {
     console.error("[/auth/password/reset] error:", err);
-    return res.status(500).json({ error: "Reset failed" });
+    res.status(500).json({ error: "Reset failed" });
   }
 });
 

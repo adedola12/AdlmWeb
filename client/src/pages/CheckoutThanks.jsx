@@ -2,7 +2,7 @@
 import React from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { apiAuthed } from "../http.js";
+import { API_BASE } from "../config";
 
 export default function CheckoutThanks() {
   const [qs] = useSearchParams();
