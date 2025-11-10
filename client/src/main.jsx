@@ -30,6 +30,7 @@ import AdminProductEdit from "./pages/AdminProductEdit.jsx";
 import AdminCourses from "./pages/AdminCourses.jsx";
 import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
 import CheckoutThanks from "./pages/CheckoutThanks.jsx";
+import AboutADLM from "./pages/About.jsx";
 
 const router = createBrowserRouter([
   {
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
       { path: "login", element: <Login /> },
       { path: "signup", element: <Signup /> },
       { path: "learn", element: <Learn /> },
+      {path: "about", element: <AboutADLM/>},
       {
         path: "purchase",
         element: (

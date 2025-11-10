@@ -1,16 +1,33 @@
-// src/components/Nav.jsx
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { api } from "../api.js";
 import adlmLogo from "../assets/logo/adlmLogo.png";
 
-function MenuLink({ to, children, onClick, className = "" }) {
+function DesktopLink({ to, children }) {
+  const { pathname } = useLocation();
+  const active =
+    (to === "/" && pathname === "/") || (to !== "/" && pathname.startsWith(to));
+  return (
+    <Link
+      to={to}
+      className={`px-3 py-1 rounded text-sm transition ${
+        active
+          ? "bg-white/10 text-white"
+          : "text-white/80 hover:text-white hover:bg-white/10"
+      }`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function MobileLink({ to, children, onClick }) {
   return (
     <Link
       to={to}
       onClick={onClick}
-      className={`block px-4 py-3 text-base hover:bg-slate-50 rounded-md ${className}`}
+      className="block w-full text-left px-4 py-3 text-[15px] text-slate-100/90 hover:bg-white/10"
     >
       {children}
     </Link>
@@ -21,28 +38,17 @@ export default function Nav() {
   const { user, clear } = useAuth();
   const navigate = useNavigate();
   const loc = useLocation();
-  const [busy, setBusy] = React.useState(false);
+
   const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
 
-  // Close drawer on route change
-  React.useEffect(() => {
-    setOpen(false);
-  }, [loc.pathname, loc.search]);
+  React.useEffect(() => setOpen(false), [loc.pathname, loc.search]);
 
-  // Lock body scroll when drawer is open
   React.useEffect(() => {
     const orig = document.body.style.overflow;
-    if (open) document.body.style.overflow = "hidden";
-    else document.body.style.overflow = orig || "";
+    document.body.style.overflow = open ? "hidden" : orig || "";
     return () => (document.body.style.overflow = orig || "");
   }, [open]);
-
-  // Close on Escape
-  React.useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   async function logout() {
     if (busy) return;
@@ -59,55 +65,54 @@ export default function Nav() {
 
   return (
     <>
-      <nav className="bg-white/90 backdrop-blur border-b sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-          <Link
-            to="/"
-            className="flex items-center gap-2 font-semibold text-blue-700"
-          >
-            <img
-              src={adlmLogo}
-              alt="ADLM Logo"
-              className="w-8 h-8 object-contain"
-            />
-            <span className="hidden sm:inline">ADLM_Studio</span>
+      {/* DARK TOP BAR */}
+      <header className="sticky top-0 z-50 bg-blue-950/95 backdrop-blur border-b border-blue-900">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 h-14 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2">
+            <img src={adlmLogo} alt="ADLM Logo" className="w-7 h-7" />
+            <span className="hidden sm:inline text-white font-semibold">
+              ADLM_Studio
+            </span>
           </Link>
 
-          {/* Desktop menu */}
-          <div className="hidden md:flex items-center gap-5">
-            <Link to="/products" className="text-sm">
-              Products
-            </Link>
-            <Link to="/learn" className="text-sm">
-              Learn
-            </Link>
+          {/* Center links (desktop) */}
+          <nav className="hidden md:flex items-center gap-1">
+            <DesktopLink to="/">Home</DesktopLink>
+            <DesktopLink to="/products">Products</DesktopLink>
+            <DesktopLink to="/about">About</DesktopLink>
+            <DesktopLink to="/learn">Learn</DesktopLink>
+          </nav>
 
+          {/* Right side actions */}
+          <div className="hidden md:flex items-center gap-2">
             {!user ? (
-              <div className="flex items-center gap-5">
-                <Link to={`/login?next=${next}`} className="text-sm">
-                  Sign in
+              <>
+                <Link
+                  to={`/login?next=${next}`}
+                  className="px-3 py-1 rounded border border-white/30 text-white/90 hover:bg-white/10 text-sm"
+                >
+                  Login
                 </Link>
-                <Link to={`/signup?next=${next}`} className="text-sm">
+                <Link
+                  to={`/signup?next=${next}`}
+                  className="px-3 py-1 rounded bg-white text-blue-800 text-sm font-medium hover:bg-blue-50"
+                >
                   Sign up
                 </Link>
-              </div>
+              </>
             ) : (
               <>
-                <Link to="/purchase" className="text-sm">
-                  Purchase
-                </Link>
-                <Link to="/dashboard" className="text-sm">
-                  Dashboard
-                </Link>
-                <Link to="/profile" className="text-sm">
-                  Profile
-                </Link>
+                <DesktopLink to="/purchase">Purchase</DesktopLink>
+                <DesktopLink to="/dashboard">Dashboard</DesktopLink>
+                <DesktopLink to="/profile">Profile</DesktopLink>
                 {user.role === "admin" && (
-                  <Link to="/admin" className="text-sm">
-                    Admin
-                  </Link>
+                  <DesktopLink to="/admin">Admin</DesktopLink>
                 )}
-                <button onClick={logout} className="btn btn-sm" disabled={busy}>
+                <button
+                  onClick={logout}
+                  className="ml-1 px-3 py-1 rounded bg-white text-blue-900 text-sm font-medium hover:bg-blue-50"
+                  disabled={busy}
+                >
                   {busy ? "Logging out…" : "Logout"}
                 </button>
               </>
@@ -116,15 +121,13 @@ export default function Nav() {
 
           {/* Mobile hamburger */}
           <button
-            className="md:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
-            aria-label="Open menu"
-            aria-expanded={open}
+            className="md:hidden inline-flex items-center justify-center p-2 rounded text-white/90 hover:bg-white/10"
             onClick={() => setOpen(true)}
+            aria-label="Open menu"
           >
-            {/* Hamburger icon */}
             <svg
-              className="h-6 w-6 text-slate-700"
               viewBox="0 0 24 24"
+              className="w-6 h-6"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -133,42 +136,33 @@ export default function Nav() {
             </svg>
           </button>
         </div>
-      </nav>
+      </header>
 
-      {/* Backdrop */}
+      {/* Mobile overlay */}
       <div
-        className={`fixed inset-0 z-40 bg-black/40 transition-opacity md:hidden ${
-          open
-            ? "opacity-100 pointer-events-auto"
-            : "opacity-0 pointer-events-none"
+        className={`fixed inset-0 z-50 bg-black/50 transition-opacity md:hidden ${
+          open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setOpen(false)}
       />
 
-      {/* Slide-out drawer */}
+      {/* Mobile drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-80 max-w-[85%] bg-white border-r shadow-lg transition-transform md:hidden
+        className={`fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85%] bg-blue-950 text-white shadow-lg transition-transform md:hidden
         ${open ? "translate-x-0" : "-translate-x-full"}`}
-        role="dialog"
-        aria-modal="true"
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <Link
-            to="/"
-            className="font-semibold text-blue-700"
-            onClick={() => setOpen(false)}
-          >
-            ADLM
+        <div className="h-14 px-4 flex items-center justify-between border-b border-white/10">
+          <Link to="/" onClick={() => setOpen(false)} className="font-semibold">
+            ADLM_Studio
           </Link>
           <button
-            className="rounded-md p-2 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
-            aria-label="Close menu"
             onClick={() => setOpen(false)}
+            className="p-2 rounded hover:bg-white/10"
+            aria-label="Close menu"
           >
-            {/* X icon */}
             <svg
-              className="h-6 w-6 text-slate-700"
               viewBox="0 0 24 24"
+              className="w-6 h-6"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -178,58 +172,63 @@ export default function Nav() {
           </button>
         </div>
 
-        <div className="py-2">
-          <MenuLink to="/products" onClick={() => setOpen(false)}>
+        <nav className="py-2">
+          <MobileLink to="/" onClick={() => setOpen(false)}>
+            Home
+          </MobileLink>
+          <MobileLink to="/products" onClick={() => setOpen(false)}>
             Products
-          </MenuLink>
-          <MenuLink to="/learn" onClick={() => setOpen(false)}>
-            Learn
-          </MenuLink>
+          </MobileLink>
+          <MobileLink to="/about" onClick={() => setOpen(false)}>
+            About
+          </MobileLink>
 
           {!user ? (
             <>
-              <MenuLink
+              <MobileLink
                 to={`/login?next=${next}`}
                 onClick={() => setOpen(false)}
               >
                 Sign in
-              </MenuLink>
-              <MenuLink
+              </MobileLink>
+              <MobileLink
                 to={`/signup?next=${next}`}
                 onClick={() => setOpen(false)}
               >
                 Sign up
-              </MenuLink>
+              </MobileLink>
             </>
           ) : (
             <>
-              <MenuLink to="/purchase" onClick={() => setOpen(false)}>
+              <MobileLink to="/purchase" onClick={() => setOpen(false)}>
                 Purchase
-              </MenuLink>
-              <MenuLink to="/dashboard" onClick={() => setOpen(false)}>
+              </MobileLink>
+              <MobileLink to="/dashboard" onClick={() => setOpen(false)}>
                 Dashboard
-              </MenuLink>
-              <MenuLink to="/profile" onClick={() => setOpen(false)}>
+              </MobileLink>
+              <MobileLink to="/profile" onClick={() => setOpen(false)}>
                 Profile
-              </MenuLink>
+              </MobileLink>
               {user.role === "admin" && (
-                <MenuLink to="/admin" onClick={() => setOpen(false)}>
+                <MobileLink to="/admin" onClick={() => setOpen(false)}>
                   Admin
-                </MenuLink>
+                </MobileLink>
               )}
-
               <div className="px-4 pt-2">
-                <button onClick={logout} className="btn w-full" disabled={busy}>
+                <button
+                  onClick={logout}
+                  className="w-full px-4 py-2 rounded bg-white text-blue-900 font-medium hover:bg-blue-50"
+                  disabled={busy}
+                >
                   {busy ? "Logging out…" : "Logout"}
                 </button>
               </div>
             </>
           )}
-        </div>
+        </nav>
 
-        {/* Optional footer */}
-        <div className="mt-auto px-4 py-3 border-t text-xs text-slate-500">
-          © {new Date().getFullYear()} ADLM
+        <div className="mt-auto px-4 py-3 border-t border-white/10 text-xs text-white/60">
+          © {new Date().getFullYear()} ADLM Studio
         </div>
       </aside>
     </>

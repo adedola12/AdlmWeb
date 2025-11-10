@@ -3,89 +3,296 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 
-export default function Home() {
-  const { accessToken, user } = useAuth(); // either is fine to check
+/* ---------------------- tiny helpers ---------------------- */
+function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
 
+function useInView(ref, rootMargin = "0px") {
+  const [inView, setInView] = React.useState(false);
+  React.useEffect(() => {
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && setInView(true),
+      { root: null, rootMargin, threshold: 0.2 }
+    );
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, [ref, rootMargin]);
+  return inView;
+}
+
+function CountUp({ to = 100, duration = 1200, decimals = 0, suffix = "" }) {
+  const [val, setVal] = React.useState(0);
+  const started = React.useRef(false);
+  const ref = React.useRef(null);
+  const inView = useInView(ref, "0px 0px -20% 0px");
+
+  React.useEffect(() => {
+    if (started.current || !inView) return;
+    started.current = true;
+
+    const start = performance.now();
+    const animate = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = easeOutCubic(t);
+      const current = to * eased;
+      setVal(current);
+      if (t < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [inView, to, duration]);
+
+  const formatted =
+    decimals > 0
+      ? Math.min(val, to).toFixed(decimals)
+      : Math.floor(Math.min(val, to)).toLocaleString();
+
+  return (
+    <span ref={ref}>
+      {formatted}
+      {suffix}
+    </span>
+  );
+}
+
+/**
+ * Hero uses a background image at /public/hero-construction.jpg.
+ * Swap the URL if you prefer a different image.
+ */
+export default function Home() {
+  const { accessToken, user } = useAuth();
   const isAuthed = Boolean(accessToken || (user && user.email));
 
   return (
-    <div className="space-y-14">
-      {/* Hero */}
-      <section className="rounded-2xl p-8 md:p-12 bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
-        <h1 className="text-3xl md:text-4xl font-semibold">
-          ADLM — The QS ConTech Hub
-        </h1>
-        <p className="mt-3 max-w-2xl text-blue-100">
-          Central platform for Quantity Surveyors and Contractors to discover,
-          subscribe, and manage ADLM tools: RateGen, Revit Plugin, and PlanSwift
-          Plugin.
-        </p>
-        <div className="mt-6 flex gap-3">
-          <Link
-            className="btn bg-white text-blue-700 hover:bg-blue-50"
-            to="/products"
+    <div className="min-h-screen flex flex-col bg-white text-slate-900">
+      {/* local keyframes for subtle fades */}
+      <style>{`
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
+      {/* HERO */}
+      <section className="relative bg-blue-900 text-white">
+        {/* background + overlay */}
+        <div
+          className="absolute inset-0 bg-[url('/hero-construction.jpg')] bg-cover bg-center opacity-40"
+          aria-hidden="true"
+        />
+        <div className="absolute inset-0 bg-blue-900/70" aria-hidden="true" />
+
+        <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 pt-16 pb-24 sm:pt-24 sm:pb-28">
+          <div
+            className="max-w-3xl opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
+            style={{ animationDelay: "120ms" }}
           >
-            Explore Products
-          </Link>
-
-          {!isAuthed && (
-            <Link
-              className="btn bg-blue-900/30 border border-white/30"
-              to="/login"
+            <h1
+              className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
+              style={{ animationDelay: "220ms" }}
             >
-              Sign in
-            </Link>
-          )}
-        </div>
-      </section>
+              Digitizing Quantity Surveying for
+              <br className="hidden sm:block" />
+              Faster, Defensible Cost Management
+            </h1>
+            <p
+              className="mt-4 text-white/90 max-w-2xl opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
+              style={{ animationDelay: "320ms" }}
+            >
+              ADLM builds a full digital stack for the Quantity Surveying
+              profession—<b>RateGen</b> for instant rate build-ups, <b>Revit</b>
+              &amp; <b>PlanSwift</b> plugins for model/2D take-off, plus
+              training, certifications and dashboards. Nigeria-first, with
+              location-based pricing by geo-political zones.
+            </p>
 
-      {/* About */}
-      <section className="card">
-        <h2 className="text-xl font-semibold">About ADLM</h2>
-        <p className="mt-2 text-slate-700">
-          ADLM builds practical cost-engineering tools for Africa—accelerating
-          BoQs, take-offs, and rate build-ups. Our plugins integrate with Revit
-          and PlanSwift, while RateGen delivers fast, standards-aligned pricing.
-        </p>
-      </section>
-
-      {/* Overview */}
-      <section className="card">
-        <h2 className="text-xl font-semibold">Overview</h2>
-        <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[
-            {
-              title: "Products",
-              desc: "RateGen, Revit Plugin, PlanSwift Plugin—one account, unified licensing.",
-            },
-            {
-              title: "Subscriptions",
-              desc: "Monthly, 6-month, and yearly plans. Pay in ₦ or $. Device-bound licenses.",
-            },
-            {
-              title: "Training",
-              desc: "QS/BIM/MEP modules, videos, and certifications (MVP scope ready).",
-            },
-            {
-              title: "User Dashboard",
-              desc: "Manage subscriptions, invoices, downloads, and training progress.",
-            },
-            {
-              title: "Admin",
-              desc: "Approve purchases, manage entitlements, view analytics.",
-            },
-            {
-              title: "Security",
-              desc: "JWT auth, TLS, hashed passwords, license server with device-lock.",
-            },
-          ].map((c) => (
-            <div key={c.title} className="rounded-xl border bg-white p-5">
-              <div className="font-medium">{c.title}</div>
-              <div className="mt-1 text-sm text-slate-600">{c.desc}</div>
+            <div
+              className="mt-6 flex flex-wrap items-center gap-3 opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
+              style={{ animationDelay: "420ms" }}
+            >
+              <Link
+                to="/products"
+                className="inline-flex items-center gap-2 rounded bg-white text-blue-700 px-4 py-2 font-medium hover:bg-blue-50 transition"
+              >
+                Explore Products
+              </Link>
+              {!isAuthed && (
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-2 rounded border border-white/40 px-4 py-2 font-medium hover:bg-white/10 transition"
+                >
+                  Login
+                </Link>
+              )}
             </div>
-          ))}
+          </div>
+        </div>
+
+        {/* STATS */}
+        <div className="relative z-10 bg-white text-blue-900">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-200">
+              <Stat label="Tools" valueNode={<CountUp to={4} suffix="+" />} />
+              <Stat
+                label="QS Professionals"
+                valueNode={<CountUp to={1000} suffix="+" />}
+              />
+              <Stat
+                label="Countries"
+                valueNode={<CountUp to={10} suffix="+" />}
+              />
+              <Stat
+                label="Uptime"
+                valueNode={<CountUp to={99.9} decimals={1} suffix="%" />}
+              />
+            </div>
+          </div>
         </div>
       </section>
+
+      {/* WHY CHOOSE */}
+      <section className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-24 pb-12 sm:pb-16">
+        <div
+          className="text-center opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
+          style={{ animationDelay: "120ms" }}
+        >
+          <h2 className="text-xl sm:text-2xl font-semibold text-blue-900">
+            Why Choose ADLM Studio?
+          </h2>
+        </div>
+        <p
+          className="mt-3 text-slate-600 max-w-2xl mx-auto text-center opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
+          style={{ animationDelay: "220ms" }}
+        >
+          A single platform that unifies rate build-ups, digital take-off,
+          learning, certifications and team management—so QS teams deliver
+          accurate, defensible numbers, faster.
+        </p>
+
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <FeatureCard
+            delay="140ms"
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                className="w-7 h-7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              >
+                <path d="M3 7h18v10H3z" />
+                <path d="M7 7V3h10v4" />
+              </svg>
+            }
+            title="End-to-End QS Toolkit"
+            text="One login for RateGen, Revit & PlanSwift plugins, plus learning and certificates. Build-ups, 2D/3D take-off, valuation—connected."
+          />
+          <FeatureCard
+            delay="200ms"
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                className="w-7 h-7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              >
+                <path d="M9 12l2 2 4-4" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            }
+            title="Nigeria-Ready Pricing"
+            text="Location-based material & labour rates by geo-political zones with audit trail and version history—built for local reality."
+          />
+          <FeatureCard
+            delay="260ms"
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                className="w-7 h-7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              >
+                <path d="M3 21v-6a4 4 0 014-4h10a4 4 0 014 4v6" />
+                <circle cx="7.5" cy="7" r="3" />
+                <circle cx="16.5" cy="7" r="3" />
+              </svg>
+            }
+            title="Team & Project Workflows"
+            text="Manage entitlements, roles and classroom cohorts. Sync projects to the cloud and track assignments & certificates."
+          />
+          <FeatureCard
+            delay="320ms"
+            icon={
+              <svg
+                viewBox="0 0 24 24"
+                className="w-7 h-7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              >
+                <path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            }
+            title="Data You Can Defend"
+            text="Exportable BoQs, logs and automated reports with secure licensing and 99.9% uptime—confidence for clients and auditors."
+          />
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="bg-blue-900 text-white">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-12 sm:py-16 text-center">
+          <h3 className="text-xl sm:text-2xl font-semibold">
+            Ready to Modernize Your QS Workflow?
+          </h3>
+          <p className="mt-2 text-white/90 max-w-2xl mx-auto">
+            Join QS professionals using ADLM to measure faster, price smarter
+            and defend every naira with data.
+          </p>
+          <div className="mt-6">
+            <Link
+              to="/products"
+              className="inline-block bg-white text-blue-700 rounded px-5 py-2 font-medium hover:bg-blue-50 transition"
+            >
+              Get Started Today
+            </Link>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ----------- presentational helpers ----------- */
+
+function Stat({ valueNode, label }) {
+  return (
+    <div className="px-4 py-4 text-center">
+      <div className="text-xl sm:text-2xl font-semibold">{valueNode}</div>
+      <div className="text-xs sm:text-sm text-slate-600">{label}</div>
+    </div>
+  );
+}
+
+function FeatureCard({ icon, title, text, delay = "0ms" }) {
+  return (
+    <div
+      className="
+        rounded-lg border border-slate-200 bg-white p-5 shadow-sm
+        transition
+        hover:-translate-y-0.5
+        hover:shadow-2xl hover:shadow-blue-500/15
+        opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]
+      "
+      style={{ animationDelay: delay }}
+    >
+      <div className="text-blue-700">{icon}</div>
+      <div className="mt-3 font-medium">{title}</div>
+      <div className="mt-1 text-sm text-slate-600">{text}</div>
     </div>
   );
 }

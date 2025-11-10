@@ -4,7 +4,23 @@ import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
-/* ---------- Small helpers ---------- */
+/* -------------------- UI helpers -------------------- */
+const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
+
+function useInView(ref, threshold = 0.12) {
+  const [inView, setInView] = React.useState(false);
+  React.useEffect(() => {
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && setInView(true),
+      { threshold }
+    );
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, [ref, threshold]);
+  return inView;
+}
+
 function CardVideo({ src, poster }) {
   const ref = React.useRef(null);
   const onEnter = () => ref.current?.play();
@@ -16,7 +32,7 @@ function CardVideo({ src, poster }) {
   };
   return (
     <div
-      className="rounded-xl overflow-hidden border aspect-video bg-black"
+      className="rounded-xl overflow-hidden aspect-video bg-black ring-1 ring-black/5"
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
@@ -37,22 +53,36 @@ function CardVideo({ src, poster }) {
   );
 }
 
-const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
+/* Derive a category-like label from product shape (best effort) */
+const getCategory = (p) =>
+  p?.metadata?.category || p?.category || p?.type || "General";
 
-/* ---------- Page ---------- */
+/* -------------------- Page -------------------- */
 export default function Products() {
   const [qs, setQs] = useSearchParams();
   const pageFromQs = Math.max(parseInt(qs.get("page") || "1", 10), 1);
+
   const [page, setPage] = React.useState(pageFromQs);
-  const pageSize = 9; // 3x3
+  const pageSize = 9;
+
   const [data, setData] = React.useState({
     items: [],
     total: 0,
     page,
     pageSize,
   });
+
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
+
+  // Search & filter UI state (client-side)
+  const [query, setQuery] = React.useState("");
+  const [category, setCategory] = React.useState("All Products");
+
+  // cart badge (localStorage-backed)
+  const [cartCount, setCartCount] = React.useState(
+    Number(localStorage.getItem("cartCount") || 0)
+  );
 
   // admin-only edit state
   const [editingId, setEditingId] = React.useState(null);
@@ -63,20 +93,12 @@ export default function Products() {
   const isAdmin = user?.role === "admin";
   const navigate = useNavigate();
 
-  /* ---------- Load products ---------- */
+  /* -------------------- load products -------------------- */
   async function load() {
     setLoading(true);
     setMsg("");
     try {
-      // const res = await fetch(
-      //   `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
-      //   { credentials: "include" }
-      // );
-      // const json = await res.json();
-      // setData(json);
-
       if (isAdmin) {
-        // admin endpoint returns full list; add client-side paging
         const res = await apiAuthed(`/admin/products`, { token: accessToken });
         const all = Array.isArray(res) ? res : [];
         const total = all.length;
@@ -115,24 +137,35 @@ export default function Products() {
   const hasPrev = page > 1;
   const hasNext = page < pages;
 
-  function goPurchase(key, months = 1) {
-    if (!user) {
-      const next = encodeURIComponent(
-        `/purchase?product=${key}&months=${months}`
-      );
-      return navigate(`/login?next=${next}`);
+  /* -------------------- Add-to-cart (badge + storage) -------------------- */
+  function addToCart(p, months = 1) {
+    const nextCount = Number(localStorage.getItem("cartCount") || 0) + 1;
+    localStorage.setItem("cartCount", String(nextCount));
+    setCartCount(nextCount);
+
+    let items = [];
+    try {
+      items = JSON.parse(localStorage.getItem("cartItems") || "[]");
+      if (!Array.isArray(items)) items = [];
+    } catch {
+      items = [];
     }
-    navigate(`/purchase?product=${key}&months=${months}`);
+    const i = items.findIndex((it) => it.productKey === p.key);
+    if (i >= 0) {
+      items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + months;
+    } else {
+      items.push({ productKey: p.key, qty: months, firstTime: false });
+    }
+    localStorage.setItem("cartItems", JSON.stringify(items));
   }
 
-  /* ---------- Admin: start/stop edit ---------- */
+  /* -------------------- admin edit -------------------- */
   function startEdit(p) {
     setEditingId(p._id);
     setDraft({
       name: p.name || "",
       blurb: p.blurb || "",
       description: p.description || "",
-      // store features as \n-separated string for a simple textarea editor
       featuresText: Array.isArray(p.features) ? p.features.join("\n") : "",
       billingInterval: p.billingInterval || "monthly",
       monthlyNGN: p.price?.monthlyNGN ?? 0,
@@ -151,12 +184,9 @@ export default function Products() {
     setEditingId(null);
     setDraft({});
   }
-
-  /* ---------- Admin: save edit ---------- */
   async function saveEdit(p) {
     try {
       setMsg("");
-      // build payload — keep to fields your PATCH allows
       const payload = {
         name: draft.name,
         blurb: draft.blurb,
@@ -176,19 +206,12 @@ export default function Products() {
         isPublished: !!draft.isPublished,
         sort: Number(draft.sort || 0),
       };
-
-      // optional USD overrides if set (empty string = remove)
       if (draft.monthlyUSD !== "")
         payload.price.monthlyUSD = Number(draft.monthlyUSD);
-      else payload.price.monthlyUSD = undefined;
-
       if (draft.yearlyUSD !== "")
         payload.price.yearlyUSD = Number(draft.yearlyUSD);
-      else payload.price.yearlyUSD = undefined;
-
       if (draft.installUSD !== "")
         payload.price.installUSD = Number(draft.installUSD);
-      else payload.price.installUSD = undefined;
 
       await apiAuthed(`/admin/products/${p._id}`, {
         token: accessToken,
@@ -196,7 +219,6 @@ export default function Products() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
       await load();
       setMsg("Product updated.");
       cancelEdit();
@@ -205,17 +227,87 @@ export default function Products() {
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Products</h1>
+  /* -------------------- derived: filter list -------------------- */
+  const allCats = React.useMemo(() => {
+    const set = new Set(["All Products"]);
+    (data.items || []).forEach((p) => set.add(getCategory(p)));
+    return Array.from(set);
+  }, [data.items]);
 
-        {/* Admin-only Add Product button */}
-        {isAdmin && (
-          <Link className="btn btn-sm" to="/admin/products" title="Add product">
-            Add product
-          </Link>
-        )}
+  /* -------------------- animations CSS -------------------- */
+  const style = `
+    @keyframes fade-in-up { from {opacity:0; transform: translateY(8px);} to {opacity:1; transform: translateY(0);} }
+    @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.02);} 100% { transform: scale(1);} }
+  `;
+
+  return (
+    <div className="space-y-4">
+      <style>{style}</style>
+
+      {/* Toolbar: shadow + subtle ring */}
+      <div className="rounded-2xl bg-white p-3 md:p-4 sticky top-[56px] z-10 shadow-sm ring-1 ring-black/5">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search products…"
+              className="w-full rounded-lg px-10 py-2 outline-none ring-1 ring-black/5 focus:ring-2 focus:ring-blue-600"
+            />
+            <svg
+              className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
+          </div>
+
+          <select
+            className="rounded-lg px-3 py-2 ring-1 ring-black/5 focus:ring-2 focus:ring-blue-600"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            title="Category"
+          >
+            {allCats.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
+          {/* Admin-only Add Product button */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate("/admin/products")}
+              className="rounded-lg px-3 py-2 ring-1 ring-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:animate-[pop_200ms_ease-out]"
+              title="Add a new product"
+            >
+              + Add Product
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => navigate("/purchase")}
+            className="relative rounded-lg px-3 py-2 ring-1 ring-black/5 hover:bg-slate-50 active:animate-[pop_200ms_ease-out]"
+            title="Cart"
+          >
+            Cart
+            <span className="ml-2 inline-flex items-center justify-center text-xs px-2 h-5 rounded-full bg-blue-600 text-white">
+              {cartCount}
+            </span>
+          </button>
+        </div>
+
+        <div className="mt-2 text-xs text-slate-600">
+          Showing {data.items.length} of {data.total} products.
+        </div>
       </div>
 
       {msg && <div className="text-sm">{msg}</div>}
@@ -224,322 +316,36 @@ export default function Products() {
         <div className="text-sm text-slate-600">Loading…</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {data.items.map((p) => {
-              const yearly = p.price?.yearlyNGN || 0;
-              const monthly = p.price?.monthlyNGN || 0;
-              const cadence = p.billingInterval === "yearly" ? "year" : "month";
-              const unit = p.billingInterval === "yearly" ? yearly : monthly;
-              const editing = isEditing(p._id);
-
-              return (
-                <article key={p._id} className="card flex flex-col">
-                  <CardVideo src={p.previewUrl} poster={p.thumbnailUrl} />
-
-                  {/* Name + NGN price inline */}
-                  <Link
-                    to={`/product/${encodeURIComponent(p.key)}`}
-                    className="mt-3 text-lg font-semibold hover:text-blue-700"
-                    title={p.name}
-                  >
-                    {p.name}
-                    {" · "}
-                    <span className="font-normal text-slate-700">
-                      {ngn(unit)} / {cadence}
-                    </span>
-                  </Link>
-
-                  {p.blurb && !editing && (
-                    <p className="mt-1 text-slate-600">{p.blurb}</p>
-                  )}
-
-                  {/* Admin inline editor */}
-                  {editing && isAdmin ? (
-                    <div className="mt-3 space-y-2 text-sm">
-                      <input
-                        className="input"
-                        value={draft.name}
-                        onChange={(e) =>
-                          setDraft((d) => ({ ...d, name: e.target.value }))
-                        }
-                        placeholder="Name"
-                      />
-                      <textarea
-                        className="input"
-                        rows={2}
-                        value={draft.blurb}
-                        onChange={(e) =>
-                          setDraft((d) => ({ ...d, blurb: e.target.value }))
-                        }
-                        placeholder="Short blurb"
-                      />
-
-                      {/* Full description */}
-                      <textarea
-                        className="input"
-                        rows={6}
-                        value={draft.description}
-                        onChange={(e) =>
-                          setDraft((d) => ({
-                            ...d,
-                            description: e.target.value,
-                          }))
-                        }
-                        placeholder="Full product description (markdown or HTML allowed)"
-                      />
-
-                      {/* Features (one per line) */}
-                      <label className="text-xs">
-                        Features (one per line)
-                        <textarea
-                          className="input mt-1"
-                          rows={5}
-                          value={draft.featuresText}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              featuresText: e.target.value,
-                            }))
-                          }
-                          placeholder={`Feature 1\nFeature 2\nFeature 3`}
-                        />
-                      </label>
-
-                      <label className="block">
-                        <span className="text-xs">Billing interval</span>
-                        <select
-                          className="input"
-                          value={draft.billingInterval}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              billingInterval: e.target.value,
-                            }))
-                          }
-                        >
-                          <option value="monthly">Monthly</option>
-                          <option value="yearly">Yearly</option>
-                        </select>
-                      </label>
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <label className="text-xs">
-                          NGN / month
-                          <input
-                            className="input mt-1"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={draft.monthlyNGN}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                monthlyNGN: e.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                        <label className="text-xs">
-                          NGN / year
-                          <input
-                            className="input mt-1"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={draft.yearlyNGN}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                yearlyNGN: e.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                        <label className="text-xs">
-                          NGN install
-                          <input
-                            className="input mt-1"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={draft.installNGN}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                installNGN: e.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <label className="text-xs">
-                          USD / month (opt)
-                          <input
-                            className="input mt-1"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={draft.monthlyUSD}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                monthlyUSD: e.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                        <label className="text-xs">
-                          USD / year (opt)
-                          <input
-                            className="input mt-1"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={draft.yearlyUSD}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                yearlyUSD: e.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                        <label className="text-xs">
-                          USD install (opt)
-                          <input
-                            className="input mt-1"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={draft.installUSD}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                installUSD: e.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <input
-                        className="input"
-                        placeholder="Preview video URL"
-                        value={draft.previewUrl}
-                        onChange={(e) =>
-                          setDraft((d) => ({
-                            ...d,
-                            previewUrl: e.target.value,
-                          }))
-                        }
-                      />
-                      <input
-                        className="input"
-                        placeholder="Thumbnail image URL"
-                        value={draft.thumbnailUrl}
-                        onChange={(e) =>
-                          setDraft((d) => ({
-                            ...d,
-                            thumbnailUrl: e.target.value,
-                          }))
-                        }
-                      />
-
-                      <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={!!draft.isPublished}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                isPublished: e.target.checked,
-                              }))
-                            }
-                          />
-                          Published
-                        </label>
-
-                        <label className="text-xs">
-                          Sort
-                          <input
-                            className="input ml-2 w-24"
-                            type="number"
-                            value={draft.sort}
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                sort: Number(e.target.value || 0),
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <div className="flex gap-2 mt-1">
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => saveEdit(p)}
-                          title="Save changes"
-                        >
-                          Save
-                        </button>
-                        <button className="btn btn-sm" onClick={cancelEdit}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="mt-3 flex items-center gap-2">
-                        <button
-                          className="btn btn-sm"
-                          onClick={() =>
-                            goPurchase(
-                              p.key,
-                              p.billingInterval === "yearly" ? 1 : 1
-                            )
-                          }
-                        >
-                          Purchase
-                        </button>
-                        <Link
-                          className="btn btn-sm"
-                          to={`/product/${encodeURIComponent(p.key)}`}
-                        >
-                          View details
-                        </Link>
-
-                        {/* Admin-only Edit button */}
-                        {isAdmin && (
-                          <button
-                            className="btn btn-sm"
-                            onClick={() =>
-                              navigate(`/admin/products/${p._id}/edit`)
-                            }
-                            title="Edit product"
-                          >
-                            Edit
-                          </button>
-                        )}
-                      </div>
-
-                      {isAdmin && (
-                        <div className="mt-2 text-xs text-slate-600">
-                          {p.isPublished ? "Published" : "Hidden"} · sort{" "}
-                          {p.sort}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </article>
-              );
-            })}
+          {/* Cards grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            {data.items
+              .filter((p) => {
+                const q = query.trim().toLowerCase();
+                const catOk =
+                  category === "All Products" || getCategory(p) === category;
+                if (!q) return catOk;
+                const hay = `${p.name || ""} ${p.blurb || ""}`.toLowerCase();
+                return catOk && hay.includes(q);
+              })
+              .map((p, idx) => (
+                <ProductCard
+                  key={p._id}
+                  p={p}
+                  idx={idx}
+                  isAdmin={isAdmin}
+                  isEditing={isEditing}
+                  startEdit={startEdit}
+                  cancelEdit={cancelEdit}
+                  draft={draft}
+                  setDraft={setDraft}
+                  saveEdit={saveEdit}
+                  addToCart={addToCart}
+                />
+              ))}
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
+          {/* Pagination */}
+          <div className="mt-6 flex items-center justify-between">
             <button
               className="btn btn-sm"
               disabled={!hasPrev}
@@ -561,5 +367,194 @@ export default function Products() {
         </>
       )}
     </div>
+  );
+}
+
+/* -------------------- Card -------------------- */
+function ProductCard({
+  p,
+  idx,
+  isAdmin,
+  isEditing,
+  startEdit,
+  cancelEdit,
+  draft,
+  setDraft,
+  saveEdit,
+  addToCart,
+}) {
+  const editing = isEditing(p._id);
+  const cat = getCategory(p);
+  const rating = Number(p.rating || 0) || null;
+  const popular =
+    typeof p.isPopular === "boolean"
+      ? p.isPopular
+      : (p.sort ?? 99) <= 1 || (rating || 0) >= 4.8;
+  const outOfStock = p.stockQty === 0;
+
+  const yearly = p.price?.yearlyNGN || 0;
+  const monthly = p.price?.monthlyNGN || 0;
+  const cadence = p.billingInterval === "yearly" ? "year" : "month";
+  const unit = p.billingInterval === "yearly" ? yearly : monthly;
+
+  const cardRef = React.useRef(null);
+  const inView = useInView(cardRef);
+  const delay = 80 + idx * 30;
+
+  return (
+    <article
+      ref={cardRef}
+      className={`
+        relative rounded-2xl bg-white p-3 md:p-4 flex flex-col
+        shadow-sm ring-1 ring-black/5 transition will-change-transform
+        hover:-translate-y-0.5 hover:shadow-lg hover:ring-black/10
+        ${inView ? "opacity-100" : "opacity-0"}
+      `}
+      style={{
+        animation: inView && `fade-in-up 500ms ease-out ${delay}ms forwards`,
+      }}
+    >
+      {(popular || outOfStock) && (
+        <div className="absolute right-3 top-3 z-10">
+          <span
+            className={`text-[11px] px-2 py-0.5 rounded-full backdrop-blur ring-1 ${
+              outOfStock
+                ? "bg-red-50 text-red-700 ring-red-200"
+                : "bg-blue-50 text-blue-700 ring-blue-200"
+            }`}
+          >
+            {outOfStock ? "Out of Stock" : "Popular"}
+          </span>
+        </div>
+      )}
+
+      <CardVideo src={p.previewUrl} poster={p.thumbnailUrl} />
+
+      <div className="mt-2 flex items-center justify-between">
+        <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[11px]">
+          {cat}
+        </span>
+        {rating && (
+          <span className="text-[11px] text-amber-500 inline-flex items-center gap-1">
+            ★ {rating.toFixed(1)}
+          </span>
+        )}
+      </div>
+
+      <Link
+        to={`/product/${encodeURIComponent(p.key)}`}
+        className="mt-2 text-base md:text-lg font-semibold hover:text-blue-700 line-clamp-2"
+        title={p.name}
+      >
+        {p.name}
+      </Link>
+
+      {p.blurb && !editing && (
+        <p className="mt-1 text-xs md:text-sm text-slate-600 line-clamp-2">
+          {p.blurb}
+        </p>
+      )}
+
+      <div className="mt-3">
+        <div className="text-slate-900 tracking-tight">
+          <span className="text-base align-top mr-1">NGN</span>
+          <span className="text-2xl md:text-3xl font-bold">
+            {(Number(unit) || 0).toLocaleString()}
+          </span>
+        </div>
+        <div className="text-[11px] text-slate-500 -mt-0.5">per {cadence}</div>
+      </div>
+
+      {editing && isAdmin ? (
+        <div className="mt-3 space-y-2 text-sm">
+          <input
+            className="input"
+            value={draft.name}
+            onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            placeholder="Name"
+          />
+          <textarea
+            className="input"
+            rows={2}
+            value={draft.blurb}
+            onChange={(e) => setDraft((d) => ({ ...d, blurb: e.target.value }))}
+            placeholder="Short blurb"
+          />
+          <textarea
+            className="input"
+            rows={4}
+            value={draft.description}
+            onChange={(e) =>
+              setDraft((d) => ({ ...d, description: e.target.value }))
+            }
+            placeholder="Full description"
+          />
+          <label className="text-xs">
+            Features (one per line)
+            <textarea
+              className="input mt-1"
+              rows={4}
+              value={draft.featuresText}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, featuresText: e.target.value }))
+              }
+              placeholder={`Feature 1\nFeature 2\nFeature 3`}
+            />
+          </label>
+
+          <div className="flex gap-2">
+            <button className="btn btn-sm" onClick={() => saveEdit(p)}>
+              Save
+            </button>
+            <button className="btn btn-sm" onClick={cancelEdit}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            className={`rounded-md px-3 py-2 text-sm font-medium ring-1 ring-slate-200 transition active:animate-[pop_180ms_ease-out]
+              ${
+                outOfStock
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-blue-50"
+              }
+            `}
+            onClick={() =>
+              !outOfStock &&
+              addToCart(p, p.billingInterval === "yearly" ? 1 : 1)
+            }
+            title="Add to Cart"
+          >
+            Add to Cart
+          </button>
+
+          <Link
+            className="rounded-md px-3 py-2 text-sm font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition active:animate-[pop_180ms_ease-out] ring-1 ring-blue-600/0"
+            to={`/product/${encodeURIComponent(p.key)}`}
+            title="View details"
+          >
+            View details
+          </Link>
+
+          {isAdmin && (
+            <button
+              className="col-span-2 rounded-md px-3 py-2 text-sm font-medium ring-1 ring-slate-200 hover:bg-slate-50 transition"
+              onClick={() => startEdit(p)}
+              title="Edit product"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+      )}
+
+      {isAdmin && !editing && (
+        <div className="mt-2 text-[11px] text-slate-500">
+          {p.isPublished ? "Published" : "Hidden"} · sort {p.sort}
+        </div>
+      )}
+    </article>
   );
 }

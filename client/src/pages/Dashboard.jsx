@@ -1,19 +1,20 @@
 // src/pages/Dashboard.jsx
 import React from "react";
 import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useNavigate } from "react-router-dom";
-import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
+
+dayjs.extend(relativeTime);
 
 export default function Dashboard() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
   const [courses, setCourses] = React.useState(null);
   const [err, setErr] = React.useState("");
-  const [uploading, setUploading] = React.useState(false);
-  const [msg, setMsg] = React.useState("");
-
+  const [loadingSummary, setLoadingSummary] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState("subscriptions"); // "products" | "subscriptions" | "learning" | "orders"
   const navigate = useNavigate();
 
   const displayName =
@@ -24,11 +25,14 @@ export default function Dashboard() {
 
   React.useEffect(() => {
     (async () => {
+      setLoadingSummary(true);
       try {
         const data = await apiAuthed(`/me/summary`, { token: accessToken });
-        setSummary(data);
+        setSummary(data || {});
       } catch (e) {
         setErr(e.message || "Failed to load summary");
+      } finally {
+        setLoadingSummary(false);
       }
     })();
   }, [accessToken]);
@@ -37,273 +41,26 @@ export default function Dashboard() {
     (async () => {
       try {
         const data = await apiAuthed(`/me/courses`, { token: accessToken });
-        setCourses(data);
+        setCourses(data || []);
       } catch (e) {
         console.error(e);
       }
     })();
   }, [accessToken]);
 
-  async function signUpload(resource_type = "raw") {
-    const res = await apiAuthed(`/me/media/sign`, {
-      token: accessToken,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resource_type }),
-    });
-    return res;
-  }
-
-  async function uploadToCloudinary(file, resource_type = "raw") {
-    setUploading(true);
-    setMsg("Uploading…");
-    try {
-      const sig = await signUpload(resource_type);
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("api_key", sig.api_key);
-      fd.append("timestamp", sig.timestamp);
-      fd.append("signature", sig.signature);
-      if (sig.folder) fd.append("folder", sig.folder);
-
-      const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resource_type}/upload`;
-      const res = await fetch(endpoint, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok || !json.secure_url)
-        throw new Error(json?.error?.message || "Upload failed");
-      return json.secure_url;
-    } finally {
-      setUploading(false);
-      setMsg("");
-    }
-  }
-
-  async function submitAssignment(courseSku, moduleCode, file) {
-    try {
-      if (!file) return;
-      const ext = (file.name || "").split(".").pop().toLowerCase();
-      const isVideo = ["mp4", "mov", "avi", "mkv", "webm"].includes(ext);
-      const isImage = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext);
-      const resourceType = isVideo ? "video" : isImage ? "image" : "raw";
-      const fileUrl = await uploadToCloudinary(file, resourceType);
-      await apiAuthed(`/me/courses/${encodeURIComponent(courseSku)}/submit`, {
-        token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ moduleCode, fileUrl }),
-      });
-      setMsg("✅ Submitted");
-      const data = await apiAuthed(`/me/courses`, { token: accessToken });
-      setCourses(data);
-    } catch (e) {
-      setMsg(`❌ ${e.message || "Submit failed"}`);
-    }
-  }
-
-  function SubscriptionList() {
-    if (!summary) return "Loading…";
-    const list = (summary.entitlements || []).filter((e) => !e.isCourse);
-    return (
-      <div className="space-y-2">
-        {list.length === 0 && <div>No subscriptions yet.</div>}
-        {list.map((e, i) => {
-          const isActive = e.status === "active";
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => openProduct(e)}
-              className={`w-full border rounded p-3 flex items-center justify-between text-left transition hover:bg-slate-50 ${
-                isActive ? "cursor-pointer" : "opacity-60 cursor-not-allowed"
-              }`}
-            >
-              <div>
-                <div className="font-medium">{e.productKey}</div>
-                <div className="text-sm text-slate-600">Status: {e.status}</div>
-              </div>
-              <div className="text-sm">
-                Expires:{" "}
-                {e.expiresAt ? dayjs(e.expiresAt).format("YYYY-MM-DD") : "-"}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
-  function Courses() {
-    if (!courses) return <div>Loading courses…</div>;
-    if (!courses.length)
-      return <div className="text-sm text-slate-600">No courses yet.</div>;
-
-    return (
-      <div className="space-y-4">
-        {courses.map((c, i) => {
-          const {
-            course,
-            enrollment,
-            progress = 0,
-            moduleSubmissions = [],
-          } = c || {};
-          const hasCourse = !!course;
-          const sku = course?.sku || enrollment?.courseSku || `unknown-${i}`;
-
-          const parsed = parseBunny(course?.onboardingVideoUrl || "");
-          const isBunny = parsed?.kind === "bunny";
-          const src = isBunny
-            ? bunnyIframeSrc(parsed.libId, parsed.videoId)
-            : parsed?.src;
-
-          return (
-            <div
-              key={sku}
-              className="border rounded p-3 hover:bg-slate-50 cursor-pointer"
-              onClick={() =>
-                hasCourse && navigate(`/learn/course/${course.sku}`)
-              }
-            >
-              <div className="flex items-center gap-3">
-                {hasCourse && course.thumbnailUrl ? (
-                  <img
-                    src={course.thumbnailUrl}
-                    className="w-20 h-14 object-cover rounded border"
-                    alt=""
-                  />
-                ) : (
-                  <div className="w-20 h-14 rounded border bg-slate-100" />
-                )}
-
-                <div className="flex-1">
-                  <div className="font-semibold">
-                    {hasCourse ? course.title : enrollment?.courseSku}
-                  </div>
-                  <div className="text-sm text-slate-600">
-                    {hasCourse
-                      ? course.blurb
-                      : "Course details are not available yet."}
-                  </div>
-                </div>
-
-                <div className="text-sm font-medium">
-                  {Number(progress) || 0}% complete
-                </div>
-              </div>
-
-              {hasCourse && (
-                <div className="mt-3 grid md:grid-cols-2 gap-3">
-                  <div className="rounded overflow-hidden border bg-black">
-                    {src ? (
-                      isBunny ? (
-                        <iframe
-                          src={src}
-                          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                          allowFullScreen
-                          className="w-full h-40"
-                          title={`onboarding-${sku}`}
-                        />
-                      ) : (
-                        <video
-                          className="w-full h-40 object-cover"
-                          src={src}
-                          controls
-                          preload="metadata"
-                        />
-                      )
-                    ) : (
-                      <div className="w-full h-40 grid place-items-center text-white/70">
-                        No onboarding video
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    {course.classroomJoinUrl && (
-                      <a
-                        className="btn btn-sm"
-                        href={course.classroomJoinUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open in Google Classroom
-                      </a>
-                    )}
-                    {enrollment?.certificateUrl && (
-                      <a
-                        className="btn btn-sm"
-                        href={enrollment.certificateUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Download Certificate
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-4">
-                <div className="font-medium mb-1">Modules & Assignments</div>
-                <div className="space-y-2">
-                  {(moduleSubmissions || []).map((m) => (
-                    <div key={m.moduleCode} className="border rounded p-2">
-                      {m.requiresSubmission && (
-                        <div className="mt-2">
-                          {(m.submissions?.length ?? 0) === 0 && (
-                            <div className="text-xs text-slate-500">
-                              No submissions yet.
-                            </div>
-                          )}
-                          {(m.submissions || []).map((s) => (
-                            <div
-                              key={s._id}
-                              className="text-xs flex items-center justify-between"
-                            >
-                              <a
-                                href={s.fileUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="underline"
-                              >
-                                {s.fileUrl}
-                              </a>
-                              <span>{s.gradeStatus || "pending"}</span>
-                            </div>
-                          ))}
-                          <label
-                            className={`btn btn-xs mt-2 ${
-                              uploading ? "opacity-50 pointer-events-none" : ""
-                            }`}
-                          >
-                            Upload assignment
-                            <input
-                              type="file"
-                              className="hidden"
-                              disabled={uploading}
-                              onChange={(e) =>
-                                submitAssignment(
-                                  sku,
-                                  m.moduleCode,
-                                  e.target.files?.[0]
-                                )
-                              }
-                            />
-                          </label>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
+  // Fallback safe getters
+  const activeProductsCount =
+    summary?.products?.filter?.((p) => p.isActive !== false)?.length ??
+    (summary?.entitlements || []).filter((e) => !e.isCourse).length ??
+    0;
+  const activeSubscriptionsCount = (summary?.entitlements || []).filter(
+    (e) => !e.isCourse && e.status === "active"
+  ).length;
+  const tutorialsWatched = summary?.tutorialsWatched ?? 0;
+  const totalOrders = summary?.ordersCount ?? summary?.totalOrders ?? 0;
 
   function openProduct(e) {
-    if (e.status !== "active") return;
+    if (!e || e.status !== "active") return;
     const key = (e.productKey || "").toLowerCase();
     if (key === "revit") return navigate("/projects/revit");
     if (key === "mep") return navigate("/projects/mep");
@@ -313,38 +70,482 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="card">
-        <h1 className="text-xl font-semibold">Welcome, {displayName}</h1>
+    <div className="min-h-screen p-4 md:p-6">
+      {/* tiny local styles (animations + glows) */}
+      <style>{`
+        .fade-up { opacity:0; transform: translateY(8px); animation: fadeUp .6s ease forwards; }
+        @keyframes fadeUp { to { opacity:1; transform: translateY(0); } }
+        .card-hover { transition: transform .18s ease, box-shadow .18s ease; }
+        .card-hover:hover { transform: translateY(-6px); box-shadow: 0 10px 30px rgba(15,23,42,0.08); }
+        .stat-appear { opacity:0; transform: translateY(8px) scale(.99); animation: statIn .6s ease forwards; }
+        @keyframes statIn { to { opacity:1; transform: translateY(0) scale(1); } }
+      `}</style>
+
+      {/* Header band */}
+      <div className="rounded-lg overflow-hidden bg-blue-800 text-white shadow-md">
+        <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+          <h1 className="text-xl md:text-2xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-blue-100/90 mt-1">
+            Manage your products, subscriptions, and learning progress
+          </p>
+        </div>
       </div>
 
-      <div className="card">
-        <h2 className="font-semibold mb-2">Active Subscriptions</h2>
-        {err && <div className="text-red-600 text-sm">{err}</div>}
-        {!summary ? "Loading…" : <SubscriptionList />}
-      </div>
+      <div className="max-w-7xl mx-auto mt-6 space-y-6">
+        {/* Stats grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Active Products"
+            value={activeProductsCount}
+            subtitle="Products you can access"
+            delay={60}
+          />
+          <StatCard
+            title="Active Subscriptions"
+            value={activeSubscriptionsCount}
+            subtitle="Currently active"
+            delay={120}
+          />
+          <StatCard
+            title="Tutorials Watched"
+            value={tutorialsWatched}
+            subtitle="Learning progress"
+            delay={180}
+          />
+          <StatCard
+            title="Total Orders"
+            value={totalOrders}
+            subtitle="Orders placed"
+            delay={240}
+          />
+        </div>
 
-      <div className="card">
-        <h2 className="font-semibold mb-2">My Courses</h2>
-        <Courses />
-      </div>
+        {/* Main content layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left/main column */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* tabs */}
+            <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-3 flex flex-wrap items-center gap-2">
+              <TabBtn
+                label="My Products"
+                active={activeTab === "products"}
+                onClick={() => setActiveTab("products")}
+              />
+              <TabBtn
+                label="Subscriptions"
+                active={activeTab === "subscriptions"}
+                onClick={() => setActiveTab("subscriptions")}
+              />
+              <TabBtn
+                label="Learning"
+                active={activeTab === "learning"}
+                onClick={() => setActiveTab("learning")}
+              />
+              <TabBtn
+                label="Order History"
+                active={activeTab === "orders"}
+                onClick={() => setActiveTab("orders")}
+              />
 
-      {user?.role === "admin" && (
-        <div className="card">
-          <h2 className="font-semibold mb-2">Admin tools</h2>
-          <div className="flex gap-2 flex-wrap">
-            <a href="/admin/products" className="btn btn-sm">
-              Products
-            </a>
-            <a href="/admin/courses" className="btn btn-sm">
-              Courses
-            </a>
-            <a href="/admin/course-grading" className="btn btn-sm">
-              Course grading
+              {/* admin add product button (only visible to admins) */}
+              {user?.role === "admin" && (
+                <div className="ml-auto">
+                  <a
+                    href="/admin/products"
+                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-blue-700 transition"
+                  >
+                    + Add product
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Tab content container */}
+            <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4 space-y-4">
+              {activeTab === "products" && (
+                <ProductsTab
+                  products={summary?.products || []}
+                  loading={loadingSummary}
+                />
+              )}
+
+              {activeTab === "subscriptions" && (
+                <SubscriptionsTab
+                  entitlements={summary?.entitlements || []}
+                  onOpen={openProduct}
+                />
+              )}
+
+              {activeTab === "learning" && <LearningTab courses={courses} />}
+
+              {activeTab === "orders" && (
+                <OrdersTab
+                  orders={summary?.orders || []}
+                  loading={loadingSummary}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Right column summary / membership card */}
+          <aside className="space-y-4">
+            <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4 card-hover">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="text-sm text-slate-500">Membership</div>
+                  <div className="mt-2 font-semibold text-lg">Premium Plus</div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    Started on{" "}
+                    {summary?.membership?.startedAt
+                      ? dayjs(summary.membership.startedAt).format("YYYY-MM-DD")
+                      : "—"}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-slate-500">Status</div>
+                  <div className="mt-2">
+                    <span className="inline-flex items-center gap-2 px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                      Active
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 text-sm text-slate-700">
+                <ul className="space-y-2">
+                  <li className="flex items-start gap-2">
+                    <CheckIcon /> Unlimited access to all tutorials
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckIcon /> Priority customer support
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckIcon /> Advanced analytics dashboard
+                  </li>
+                </ul>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-xs text-slate-500">Monthly Price</div>
+                  <div className="font-semibold">
+                    ₦{(summary?.membership?.monthlyNGN || 0).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Next Billing</div>
+                  <div className="font-semibold">
+                    {summary?.membership?.nextBilling
+                      ? dayjs(summary.membership.nextBilling).format(
+                          "YYYY-MM-DD"
+                        )
+                      : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
+                  onClick={() => navigate("/products")}
+                >
+                  Upgrade Plan
+                </button>
+                <button
+                  className="flex-1 border rounded-md py-2 hover:bg-slate-50 transition"
+                  onClick={() => navigate("/subscriptions")}
+                >
+                  Cancel Subscription
+                </button>
+              </div>
+            </div>
+
+            {/* quick links */}
+            <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4">
+              <div className="text-sm font-semibold">Quick Links</div>
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <button
+                  className="text-left text-sm py-2 px-3 rounded-md hover:bg-slate-50 transition"
+                  onClick={() => navigate("/projects/revit")}
+                >
+                  Your Projects (Revit)
+                </button>
+                <button
+                  className="text-left text-sm py-2 px-3 rounded-md hover:bg-slate-50 transition"
+                  onClick={() => navigate("/learn")}
+                >
+                  Learning Center
+                </button>
+                <button
+                  className="text-left text-sm py-2 px-3 rounded-md hover:bg-slate-50 transition"
+                  onClick={() => navigate("/support")}
+                >
+                  Contact Support
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        {/* admin tools */}
+        {user?.role === "admin" && (
+          <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4">
+            <h3 className="font-semibold mb-2">Admin tools</h3>
+            <div className="flex gap-2 flex-wrap">
+              <a href="/admin/products" className="btn btn-sm">
+                Products
+              </a>
+              <a href="/admin/courses" className="btn btn-sm">
+                Courses
+              </a>
+              <a href="/admin/course-grading" className="btn btn-sm">
+                Course grading
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- small components ---------- */
+
+function StatCard({ title, value, subtitle = "", delay = 0 }) {
+  return (
+    <div
+      className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4 stat-appear"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="text-xs text-slate-500">{title}</div>
+      <div className="mt-2 flex items-center justify-between">
+        <div className="text-2xl font-semibold">{value}</div>
+        <div className="text-xs text-slate-400">{subtitle}</div>
+      </div>
+    </div>
+  );
+}
+
+function TabBtn({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-2 rounded-md text-sm ${
+        active ? "bg-blue-600 text-white" : "text-slate-700 hover:bg-slate-50"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ProductsTab({ products = [], loading }) {
+  if (loading) return <div>Loading products…</div>;
+  if (!products || products.length === 0)
+    return <div className="text-sm text-slate-600">No products yet.</div>;
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {products.map((p) => (
+        <div
+          key={p._id}
+          className="rounded-lg ring-1 ring-slate-200 p-3 hover:shadow-md transition card-hover flex gap-3 items-start"
+        >
+          <div className="w-16 h-12 bg-slate-100 rounded overflow-hidden flex-shrink-0">
+            {p.thumbnailUrl ? (
+              <img
+                src={p.thumbnailUrl}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-slate-100" />
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="font-medium">{p.name}</div>
+            <div className="text-sm text-slate-500">{p.blurb}</div>
+            <div className="text-xs text-slate-400 mt-2">
+              {p.price?.monthlyNGN
+                ? `₦${Number(p.price.monthlyNGN).toLocaleString()}/mo`
+                : ""}
+            </div>
+          </div>
+          <div>
+            <a
+              className="text-blue-600 text-sm"
+              href={`/product/${encodeURIComponent(p.key)}`}
+            >
+              View
             </a>
           </div>
         </div>
-      )}
+      ))}
     </div>
+  );
+}
+
+function SubscriptionsTab({ entitlements = [], onOpen }) {
+  const subs = entitlements.filter((e) => !e.isCourse);
+  if (!subs.length)
+    return <div className="text-sm text-slate-600">No subscriptions yet.</div>;
+
+  return (
+    <div className="space-y-3">
+      {subs.map((s, i) => (
+        <div
+          key={i}
+          className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-sm"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm text-slate-500">{s.productKey}</div>
+              <div className="font-semibold mt-1">
+                {s.productName || s.productKey}
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                {s.billingInterval ? `${s.billingInterval}` : ""}
+                {s.installFee
+                  ? ` · Install: ₦${Number(s.installFee).toLocaleString()}`
+                  : ""}
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div className="text-xs text-slate-400">Status</div>
+              <div className="mt-1">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs ${
+                    s.status === "active"
+                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                      : "bg-slate-50 text-slate-600 ring-1 ring-slate-100"
+                  }`}
+                >
+                  {s.status}
+                </span>
+              </div>
+              <div className="text-xs text-slate-400 mt-2">Expires</div>
+              <div className="mt-1 text-sm">
+                {s.expiresAt ? dayjs(s.expiresAt).format("YYYY-MM-DD") : "-"}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <button
+              className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+              onClick={() => onOpen(s)}
+            >
+              Open
+            </button>
+            <button className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition">
+              Manage
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LearningTab({ courses = [] }) {
+  if (!courses) return <div>Loading…</div>;
+  if (courses.length === 0)
+    return (
+      <div className="text-sm text-slate-600">No enrolled courses yet.</div>
+    );
+
+  return (
+    <div className="space-y-3">
+      {courses.map((c) => {
+        const course = c.course || {};
+        const progress = c.progress || 0;
+        return (
+          <div
+            key={course.sku || c.enrollment?.courseSku}
+            className="rounded-xl ring-1 ring-slate-200 p-3 bg-white shadow-sm flex gap-3 items-center"
+          >
+            <div className="w-16 h-12 bg-slate-100 rounded overflow-hidden">
+              {course.thumbnailUrl ? (
+                <img
+                  src={course.thumbnailUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-slate-100" />
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="font-medium">
+                {course.title || c.enrollment?.courseSku}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Progress: {progress}%
+              </div>
+              <div className="w-full bg-slate-100 h-2 rounded mt-2">
+                <div
+                  className="bg-blue-600 h-2 rounded"
+                  style={{ width: `${Math.min(100, progress)}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              <a
+                className="text-blue-600 text-sm"
+                href={course.sku ? `/learn/course/${course.sku}` : "#"}
+              >
+                Open
+              </a>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OrdersTab({ orders = [], loading }) {
+  if (loading) return <div>Loading…</div>;
+  if (!orders || orders.length === 0)
+    return <div className="text-sm text-slate-600">No orders yet.</div>;
+
+  return (
+    <div className="space-y-2">
+      {orders.map((o) => (
+        <div
+          key={o._id || o.orderId}
+          className="rounded-lg p-3 ring-1 ring-slate-200 bg-white"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">
+                {o.title || `Order ${o.orderId || "—"}`}
+              </div>
+              <div className="text-xs text-slate-500">
+                {o.status || o.state}
+              </div>
+            </div>
+            <div className="text-sm text-slate-600">
+              {o.createdAt ? dayjs(o.createdAt).format("YYYY-MM-DD") : "-"}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* simple check icon used in membership card */
+function CheckIcon() {
+  return (
+    <svg
+      className="w-4 h-4 text-emerald-600 shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+    >
+      <path strokeWidth="2" d="M5 13l4 4L19 7" />
+    </svg>
   );
 }
