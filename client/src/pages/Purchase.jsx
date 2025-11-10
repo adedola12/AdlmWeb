@@ -34,13 +34,34 @@ export default function Purchase() {
     })();
   }, []);
 
-  // If we land with ?product=KEY&months=N, pre-add to cart once products are loaded
+  // Prefill from ?product=KEY&months=N (kept)
   React.useEffect(() => {
     const k = qs.get("product");
     const m = Math.max(parseInt(qs.get("months") || "1", 10), 1);
     if (!k) return;
     setCart((c) => (c[k] ? c : { ...c, [k]: { qty: m, firstTime: false } }));
   }, [qs, products.length]);
+
+  // NEW: Prefill from localStorage cartItems after products load
+  React.useEffect(() => {
+    if (!products.length) return;
+    const raw = localStorage.getItem("cartItems");
+    if (!raw) return;
+    try {
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return;
+      setCart((c) => {
+        const next = { ...c };
+        arr.forEach(({ productKey, qty, firstTime }) => {
+          next[productKey] = {
+            qty: Math.max(parseInt(qty || 1, 10), 1),
+            firstTime: !!firstTime,
+          };
+        });
+        return next;
+      });
+    } catch {}
+  }, [products.length]);
 
   function updateItem(key, patch) {
     setCart((c) => ({
@@ -139,12 +160,17 @@ export default function Purchase() {
       });
 
       if (out?.paystack?.authorization_url) {
+        // Clear local cart before redirect so the badge resets on return
+        localStorage.setItem("cartItems", "[]");
+        localStorage.setItem("cartCount", "0");
         window.location.href = out.paystack.authorization_url;
         return;
       }
 
       setMsg(out.message || "Order submitted. Admin will verify.");
       setCart({});
+      localStorage.setItem("cartItems", "[]");
+      localStorage.setItem("cartCount", "0");
     } catch (e) {
       setMsg(e.message || "Payment failed");
     } finally {
@@ -198,7 +224,7 @@ export default function Purchase() {
                 <span className="font-medium">{p.billingInterval}</span>
               </div>
 
-              {/* Show both prices for clarity; NGN is your default but we show both rows */}
+              {/* Show both prices for clarity */}
               <div className="text-xs text-slate-600 mt-1">
                 NGN:{" "}
                 {p.billingInterval === "yearly"
