@@ -1,6 +1,8 @@
 // src/pages/AboutADLM.jsx
 import React from "react";
 import { Link } from "react-router-dom";
+import dolapo from "../assets/team/Dola.jpg";
+import richard from "../assets/team/Richard.jpg";
 
 /* -------------------- tiny animation helpers -------------------- */
 function useInView(threshold = 0.12) {
@@ -205,10 +207,8 @@ export default function AboutADLM() {
   const ph = {
     hero: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=1600&auto=format&fit=crop",
     site: "https://images.unsplash.com/photo-1504306663385-cd3fee2e5af1?q=80&w=1600&auto=format&fit=crop",
-    team1:
-      "https://images.unsplash.com/photo-1605902711834-8b11c3e3ef5f?q=80&w=1200&auto=format&fit=crop",
-    team2:
-      "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=1200&auto=format&fit=crop",
+    team1: dolapo,
+    team2: richard,
     team3:
       "https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=1200&auto=format&fit=crop",
     team4:
@@ -484,7 +484,7 @@ export default function AboutADLM() {
         <Reveal delay={120}>
           <div className="mt-8 flex flex-wrap gap-3 justify-center">
             <Link
-              to="/contact"
+              to="http://wa.me/2348106503524"
               className="rounded-lg bg-blue-600 text-white px-5 py-2 hover:bg-blue-700 active:animate-[pop_200ms_ease-out]"
             >
               Talk to Us
