@@ -356,7 +356,7 @@ export default function Purchase() {
 
             <button
               className="btn mt-4"
-              onClick={pay}
+              // onClick={pay}
               disabled={!chosen.length || submitting}
             >
               {submitting
