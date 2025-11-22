@@ -18,6 +18,8 @@ export default function Purchase() {
   const [submitting, setSubmitting] = React.useState(false);
   const [msg, setMsg] = React.useState("");
   const [qs] = useSearchParams();
+  const [showManualPayModal, setShowManualPayModal] = React.useState(false);
+  const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
 
   // Load published products
   React.useEffect(() => {
@@ -42,7 +44,7 @@ export default function Purchase() {
     setCart((c) => (c[k] ? c : { ...c, [k]: { qty: m, firstTime: false } }));
   }, [qs, products.length]);
 
-  // NEW: Prefill from localStorage cartItems after products load
+  // Prefill from localStorage cartItems after products load
   React.useEffect(() => {
     if (!products.length) return;
     const raw = localStorage.getItem("cartItems");
@@ -80,7 +82,7 @@ export default function Purchase() {
     );
   }
 
-  // ---- PRICING HELPERS (monthly discount and yearly application) ----
+  // PRICING HELPERS
   function getPrices(p) {
     const monthly =
       currency === "USD" ? p.price?.monthlyUSD : p.price?.monthlyNGN;
@@ -94,7 +96,6 @@ export default function Purchase() {
     };
   }
 
-  // Returns { total, note }
   function priceForQuantity(p, qty, firstTime) {
     const { monthly, yearly, install } = getPrices(p);
     let total = 0;
@@ -113,7 +114,7 @@ export default function Purchase() {
       }
 
       if (rem >= 6) {
-        const discounted = rem * monthly * 0.85; // 15% off
+        const discounted = rem * monthly * 0.85;
         total += discounted;
         note += note ? ` + ${rem} mo @15% off` : `${rem} mo @15% off`;
       } else if (rem > 0) {
@@ -141,7 +142,8 @@ export default function Purchase() {
     0
   );
 
-  async function pay() {
+  // NEW: show manual-pay modal instead of redirecting to Paystack
+  async function createPendingPurchaseAndShowModal() {
     if (!chosen.length) return;
     setSubmitting(true);
     setMsg("");
@@ -152,6 +154,7 @@ export default function Purchase() {
         firstTime: !!cart[p.key].firstTime,
       }));
 
+      // call server to create pending purchase (same endpoint as before)
       const out = await apiAuthed(`/purchase/cart`, {
         token: accessToken,
         method: "POST",
@@ -159,20 +162,42 @@ export default function Purchase() {
         body: JSON.stringify({ currency, items }),
       });
 
-      if (out?.paystack?.authorization_url) {
-        // Clear local cart before redirect so the badge resets on return
-        localStorage.setItem("cartItems", "[]");
-        localStorage.setItem("cartCount", "0");
-        window.location.href = out.paystack.authorization_url;
-        return;
-      }
+      // We intentionally do NOT redirect to Paystack.
+      // Instead, show modal with bank details and let user confirm manual payment.
+      setPendingPurchaseId(out.purchaseId || out.purchase?._id || null);
+      setShowManualPayModal(true);
 
-      setMsg(out.message || "Order submitted. Admin will verify.");
+      // leave cart intact until the user confirms "I have paid"
+      setMsg(out.message || "Order created. Please pay manually and confirm.");
+    } catch (e) {
+      setMsg(e.message || "Failed to create order");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // called when user presses "I have paid" in the modal
+  async function confirmManualPayment() {
+    if (!pendingPurchaseId) {
+      setMsg("No pending purchase found.");
+      return;
+    }
+    setSubmitting(true);
+    setMsg("");
+    try {
+      // Clear the cart locally (so UI updates)
       setCart({});
       localStorage.setItem("cartItems", "[]");
       localStorage.setItem("cartCount", "0");
+
+      // Optionally tell backend to mark as waiting-for-admin-review (already pending)
+      // We can also hit a "notify" endpoint if you prefer to send an admin notification.
+      // For now: purchase already has status 'pending', so admin UI will show it.
+      setShowManualPayModal(false);
+      setPendingPurchaseId(null);
+      setMsg("Thank you. Your payment request is pending admin verification.");
     } catch (e) {
-      setMsg(e.message || "Payment failed");
+      setMsg(e.message || "Confirmation failed");
     } finally {
       setSubmitting(false);
     }
@@ -356,19 +381,66 @@ export default function Purchase() {
 
             <button
               className="btn mt-4"
-              // onClick={pay}
+              onClick={createPendingPurchaseAndShowModal}
               disabled={!chosen.length || submitting}
             >
-              {submitting
-                ? "Redirecting…"
-                : currency === "NGN"
-                ? "Pay with Paystack"
-                : "Place Order"}
+              {submitting ? "Processing…" : "Pay"}
             </button>
             {msg && <div className="text-sm mt-2">{msg}</div>}
           </>
         )}
       </div>
+
+      {/* Manual payment modal */}
+      {showManualPayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowManualPayModal(false)}
+          />
+          <div className="relative bg-white rounded p-6 max-w-lg w-full z-10">
+            <h3 className="text-lg font-semibold mb-2">Pay to account</h3>
+            <p className="text-sm text-slate-700 mb-4">
+              Use the following account details to make payment, then click "I
+              have paid".
+            </p>
+
+            <div className="space-y-2 mb-4">
+              <div className="font-medium">Account number</div>
+              <div className="text-lg">1634998770</div>
+
+              <div className="font-medium mt-2">Account name</div>
+              <div className="text-lg">ADLM Studio</div>
+
+              <div className="font-medium mt-2">Bank</div>
+              <div className="text-lg">Access Bank</div>
+
+              <div className="text-xs text-slate-500 mt-2">
+                After you click "I have paid", we'll clear your cart locally and
+                the admin will be notified to approve or reject your
+                subscription.
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                className="btn btn-ghost"
+                onClick={() => setShowManualPayModal(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn"
+                onClick={confirmManualPayment}
+                disabled={submitting}
+              >
+                {submitting ? "Confirming…" : "I have paid"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
