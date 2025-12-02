@@ -96,6 +96,7 @@ const router = createBrowserRouter([
       {
         path: "/admin/trainings",
         element: (
+          
           <AdminRoute>
             <AdminTrainings />
           </AdminRoute>
