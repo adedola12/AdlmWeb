@@ -93,10 +93,10 @@ app.use("/admin/rategen", adminRateGen);
 app.use("/admin/courses", adminCoursesRouter);
 app.use("/me/courses", meCoursesRouter);
 app.use("/admin/course-grading", adminCourseGradingRouter);
+app.use("/admin/bunny", adminBunny);
+
 app.use("/trainings", trainingsPublic);
 app.use("/admin/trainings", adminTrainings);
-
-app.use("/admin/bunny", adminBunny);
 
 /* -------- helpful error for bad JSON -------- */
 app.use((err, _req, res, next) => {

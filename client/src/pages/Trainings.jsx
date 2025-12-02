@@ -109,6 +109,8 @@ export default function Trainings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const API_BASE = import.meta.env.VITE_API_URL || "";
+
   useEffect(() => {
     let isMounted = true;
 
@@ -117,12 +119,24 @@ export default function Trainings() {
         setLoading(true);
         setError("");
 
-        const res = await fetch("/trainings", {
+        const res = await fetch(`${API_BASE}/trainings`, {
           credentials: "include",
         });
-        if (!res.ok) throw new Error("Failed to load trainings");
 
-        const data = await res.json();
+        // helpful extra safety: show plain text if JSON fails
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(`Failed (${res.status}): ${text}`);
+        }
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.error("Not JSON, got:", text.slice(0, 120));
+          throw new Error("Server did not return valid JSON");
+        }
+
         if (!isMounted) return;
 
         setStats(data.stats);
