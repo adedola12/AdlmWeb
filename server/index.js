@@ -29,6 +29,8 @@ import meCoursesRouter from "./routes/meCourses.js";
 import adminCourseGradingRouter from "./routes/adminCourseGrading.js";
 import webhooksRouter from "./routes/webhooks.js";
 import adminBunny from "./routes/adminBunny.js";
+import trainingsPublic from "./routes/trainings.js";
+import adminTrainings from "./routes/admin.trainings.js";
 
 const app = express();
 app.get("/__debug/db", (_req, res) => {
@@ -91,6 +93,8 @@ app.use("/admin/rategen", adminRateGen);
 app.use("/admin/courses", adminCoursesRouter);
 app.use("/me/courses", meCoursesRouter);
 app.use("/admin/course-grading", adminCourseGradingRouter);
+app.use("/trainings", trainingsPublic);
+app.use("/admin/trainings", adminTrainings);
 
 app.use("/admin/bunny", adminBunny);
 
