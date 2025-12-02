@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET;
+const API_BASE = import.meta.env.VITE_API_URL || ""; // <-- add this
 
 async function uploadToCloudinary(file) {
   const formData = new FormData();
@@ -49,7 +50,7 @@ export default function AdminTrainings() {
     async function load() {
       try {
         setLoadingList(true);
-        const res = await fetch("/admin/trainings", {
+        const res = await fetch(`${API_BASE}/admin/trainings`, {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Failed to load trainings");
@@ -99,7 +100,7 @@ export default function AdminTrainings() {
       const imageUrl = await uploadToCloudinary(form.imageFile);
 
       // 2) Send to backend
-      const res = await fetch("/admin/trainings", {
+      const res = await fetch(`${API_BASE}/admin/trainings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -155,7 +156,8 @@ export default function AdminTrainings() {
     if (!window.confirm("Delete this training?")) return;
 
     try {
-      const res = await fetch(`/admin/trainings/${id}`, {
+      const res = await fetch(`${API_BASE}/admin/trainings/${id}`, {
+        method: "DELETE",
         method: "DELETE",
         credentials: "include",
       });
