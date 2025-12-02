@@ -3,7 +3,11 @@ import React, { useEffect, useState } from "react";
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET;
-const API_BASE = import.meta.env.VITE_API_URL || ""; // <-- add this
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "http://localhost:4000" : "");
+
+console.log("AdminTrainings config:", { CLOUD_NAME, UPLOAD_PRESET, API_BASE });
 
 async function uploadToCloudinary(file) {
   const formData = new FormData();
@@ -53,8 +57,20 @@ export default function AdminTrainings() {
         const res = await fetch(`${API_BASE}/admin/trainings`, {
           credentials: "include",
         });
-        if (!res.ok) throw new Error("Failed to load trainings");
-        const data = await res.json();
+
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(`Failed (${res.status}): ${text}`);
+        }
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.error("AdminTrainings: not JSON, got:", text.slice(0, 120));
+          throw new Error("Server did not return valid JSON");
+        }
+
         if (!mounted) return;
         setItems(data.items || []);
       } catch (err) {
@@ -96,10 +112,8 @@ export default function AdminTrainings() {
     try {
       setSaving(true);
 
-      // 1) Upload image to Cloudinary
       const imageUrl = await uploadToCloudinary(form.imageFile);
 
-      // 2) Send to backend
       const res = await fetch(`${API_BASE}/admin/trainings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,16 +135,21 @@ export default function AdminTrainings() {
         }),
       });
 
+      const text = await res.text();
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(text || "Failed to save training");
+        }
         throw new Error(data.error || "Failed to save training");
       }
 
-      const data = await res.json();
+      const data = JSON.parse(text);
       setItems((prev) => [data.item, ...prev]);
       setSuccessMsg("Training created successfully");
 
-      // reset form (except mode)
       setForm((f) => ({
         ...f,
         title: "",
@@ -157,7 +176,6 @@ export default function AdminTrainings() {
 
     try {
       const res = await fetch(`${API_BASE}/admin/trainings/${id}`, {
-        method: "DELETE",
         method: "DELETE",
         credentials: "include",
       });
