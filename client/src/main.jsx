@@ -31,6 +31,8 @@ import AdminCourses from "./pages/AdminCourses.jsx";
 import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
 import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 import AboutADLM from "./pages/About.jsx";
+import Trainings from "./pages/Trainings.jsx";
+import AdminTrainings from "./pages/AdminTrainings.jsx";
 
 const router = createBrowserRouter([
   {
@@ -43,7 +45,8 @@ const router = createBrowserRouter([
       { path: "login", element: <Login /> },
       { path: "signup", element: <Signup /> },
       { path: "learn", element: <Learn /> },
-      {path: "about", element: <AboutADLM/>},
+      { path: "about", element: <AboutADLM /> },
+      { path: "training", element: <Trainings /> },
       {
         path: "purchase",
         element: (
@@ -90,6 +93,15 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
+      {
+        path: "/admin/trainings",
+        element: (
+          <AdminRoute>
+            <AdminTrainings />
+          </AdminRoute>
+        ),
+      },
+
       {
         path: "admin/learn",
         element: (
