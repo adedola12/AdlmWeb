@@ -3,6 +3,8 @@ import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useSearchParams } from "react-router-dom";
+import ComingSoonModal from "../components/ComingSoonModal.jsx";
+
 
 // Format helpers
 const fmt = (n, currency = "USD") =>
@@ -20,6 +22,11 @@ export default function Purchase() {
   const [qs] = useSearchParams();
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
+  const [showComingSoonModal, setShowComingSoonModal] = React.useState(false);
+
+  const closeComingSoonModal = () => {
+    setShowComingSoonModal(false);
+  };
 
   // Load published products
   React.useEffect(() => {
@@ -205,6 +212,10 @@ export default function Purchase() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <ComingSoonModal
+        show={showComingSoonModal}
+        onClose={closeComingSoonModal}
+      />
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Subscribe</h1>
@@ -281,7 +292,8 @@ export default function Purchase() {
               <div className="mt-3 flex items-center gap-2">
                 <button
                   className="btn btn-sm"
-                  onClick={() => toggleInCart(p.key)}
+                  onClick={() => setShowComingSoonModal(true)}
+                  // onClick={() => toggleInCart(p.key)}
                 >
                   {inCart ? "Remove" : "Add"}
                 </button>

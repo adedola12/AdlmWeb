@@ -3,6 +3,7 @@ import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import ComingSoonModal from "../components/ComingSoonModal.jsx";
 
 /* -------------------- UI helpers -------------------- */
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
@@ -80,9 +81,15 @@ export default function Products() {
   const [category, setCategory] = React.useState("All Products");
 
   // cart badge (localStorage-backed)
-  const [cartCount, setCartCount] = React.useState(
+  const [cartCount, setCartCount] = React.useState(() =>
     Number(localStorage.getItem("cartCount") || 0)
   );
+
+  const [showModal, setShowModal] = React.useState(false);
+
+  const closeModal = () => {
+    setShowModal(false);
+  };
 
   // admin-only edit state
   const [editingId, setEditingId] = React.useState(null);
@@ -137,27 +144,7 @@ export default function Products() {
   const hasPrev = page > 1;
   const hasNext = page < pages;
 
-  /* -------------------- Add-to-cart (badge + storage) -------------------- */
-  function addToCart(p, months = 1) {
-    const nextCount = Number(localStorage.getItem("cartCount") || 0) + 1;
-    localStorage.setItem("cartCount", String(nextCount));
-    setCartCount(nextCount);
 
-    let items = [];
-    try {
-      items = JSON.parse(localStorage.getItem("cartItems") || "[]");
-      if (!Array.isArray(items)) items = [];
-    } catch {
-      items = [];
-    }
-    const i = items.findIndex((it) => it.productKey === p.key);
-    if (i >= 0) {
-      items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + months;
-    } else {
-      items.push({ productKey: p.key, qty: months, firstTime: false });
-    }
-    localStorage.setItem("cartItems", JSON.stringify(items));
-  }
 
   /* -------------------- admin edit -------------------- */
   function startEdit(p) {
@@ -243,6 +230,8 @@ export default function Products() {
   return (
     <div className="space-y-4">
       <style>{style}</style>
+
+      <ComingSoonModal show={showModal} onClose={closeModal} />
 
       {/* Toolbar: shadow + subtle ring */}
       <div className="rounded-2xl bg-white p-3 md:p-4 sticky top-[56px] z-10 shadow-sm ring-1 ring-black/5">
@@ -339,7 +328,7 @@ export default function Products() {
                   draft={draft}
                   setDraft={setDraft}
                   saveEdit={saveEdit}
-                  addToCart={addToCart}
+                  setShowModal={setShowModal}
                 />
               ))}
           </div>
@@ -381,7 +370,7 @@ function ProductCard({
   draft,
   setDraft,
   saveEdit,
-  addToCart,
+  setShowModal,
 }) {
   const editing = isEditing(p._id);
   const cat = getCategory(p);
@@ -521,11 +510,9 @@ function ProductCard({
                   : "hover:bg-blue-50"
               }
             `}
-            onClick={() =>
-              !outOfStock &&
-              addToCart(p, p.billingInterval === "yearly" ? 1 : 1)
-            }
+            onClick={() => !outOfStock && setShowModal(true)}
             title="Add to Cart"
+            disabled={outOfStock}
           >
             Add to Cart
           </button>
