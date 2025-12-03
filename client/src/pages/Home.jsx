@@ -119,10 +119,10 @@ export default function Home() {
               </Link>
               {!isAuthed && (
                 <Link
-                  to="/login"
+                  to="/signup"
                   className="inline-flex items-center gap-2 rounded border border-white/40 px-4 py-2 font-medium hover:bg-white/10 transition"
                 >
-                  Login
+                  Sign up
                 </Link>
               )}
             </div>
