@@ -1,11 +1,24 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import appleLogo from "../assets/icons/apple-logo.png";
+import googlePlayLogo from "../assets/icons/playstore.png";
+import ComingSoonModal from "./ComingSoonModal.jsx";
 
 export default function Footer() {
+  const [showComingSoonModal, setShowComingSoonModal] = useState(false);
+
+  const closeComingSoonModal = () => {
+    setShowComingSoonModal(false);
+  };
+
   return (
     <footer className="bg-blue-950 text-white">
+      <ComingSoonModal
+        show={showComingSoonModal}
+        onClose={closeComingSoonModal}
+      />
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
           <div>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 grid place-items-center rounded bg-white/20 font-bold">
@@ -95,6 +108,26 @@ export default function Footer() {
             </ul>
             <div className="mt-4 text-sm text-white/80">
               Lagos, Nigeria · Mon–Fri · 9am–6pm (WAT)
+            </div>
+          </div>
+
+          <div>
+            <div className="font-semibold">Get the App</div>
+            <div className="mt-3 space-y-2">
+              <a href="#" onClick={(e) => { e.preventDefault(); setShowComingSoonModal(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700">
+                <img src={appleLogo} alt="Apple App Store" className="w-6 h-6" />
+                <div>
+                  <div className="text-xs">Download on the</div>
+                  <div className="text-lg font-semibold">App Store</div>
+                </div>
+              </a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setShowComingSoonModal(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700">
+                <img src={googlePlayLogo} alt="Google Play Store" className="w-6 h-6" />
+                <div>
+                  <div className="text-xs">GET IT ON</div>
+                  <div className="text-lg font-semibold">Google Play</div>
+                </div>
+              </a>
             </div>
           </div>
         </div>
