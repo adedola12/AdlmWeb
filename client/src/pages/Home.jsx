@@ -1,6 +1,6 @@
 // src/pages/Home.jsx
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 
 /* ---------------------- tiny helpers ---------------------- */
@@ -274,10 +274,18 @@ management."
 /* ----------- presentational helpers ----------- */
 
 function Stat({ valueNode, label }) {
+  const navigate = useNavigate();
+
   return (
     <div className="px-4 py-4 text-center">
       <div className="text-xl sm:text-2xl font-semibold">{valueNode}</div>
-      <div className="text-xs sm:text-sm text-slate-600">{label}</div>
+      <div
+        className="text-xs sm:text-sm text-slate-600 cursor-pointer hover:underline"
+        onClick={() => navigate("/testimonials")}
+        role="button"
+      >
+        {label}
+      </div>
     </div>
   );
 }
@@ -291,6 +299,7 @@ function FeatureCard({ icon, title, text, delay = "0ms" }) {
         hover:-translate-y-0.5
         hover:shadow-2xl hover:shadow-blue-500/15
         opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]
+        cursor-pointer
       "
       style={{ animationDelay: delay }}
     >

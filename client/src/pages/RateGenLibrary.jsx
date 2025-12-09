@@ -39,6 +39,9 @@ export default function RateGenLibrary() {
   const [err, setErr] = React.useState("");
   const [zone, setZone] = React.useState("");
 
+  // NEW: search text
+  const [search, setSearch] = React.useState("");
+
   async function load() {
     if (!accessToken) {
       setErr("You’re signed out. Please sign in again.");
@@ -85,10 +88,27 @@ export default function RateGenLibrary() {
     }
   }
 
+  // Filter by search text (applies to all tabs)
+  const allRows = rowsForTab();
+  const trimmed = search.trim().toLowerCase();
+  const visibleRows = trimmed
+    ? allRows.filter((r) => {
+        const fields = [
+          r.description,
+          r.unit,
+          r.category,
+          r.sn != null ? String(r.sn) : "",
+        ];
+        return fields.some(
+          (val) => val && String(val).toLowerCase().includes(trimmed)
+        );
+      })
+    : allRows;
+
   return (
     <div className="space-y-4">
       <div className="card">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="font-semibold">RateGen Library</h1>
             {zone && (
@@ -104,7 +124,7 @@ export default function RateGenLibrary() {
         </div>
 
         <div className="mt-3 border-b">
-          <nav className="flex gap-6">
+          <nav className="flex flex-wrap gap-4">
             {tabs.map((t) => (
               <button
                 key={t.key}
@@ -120,6 +140,23 @@ export default function RateGenLibrary() {
             ))}
           </nav>
         </div>
+
+        {/* Search bar */}
+        <div className="mt-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <p className="text-xs text-slate-500">
+            Showing {visibleRows.length} of {allRows.length} items
+          </p>
+          <div className="w-full md:w-64">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search description, unit, category…"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
         {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
       </div>
 
@@ -127,7 +164,7 @@ export default function RateGenLibrary() {
         {!master ? (
           <div className="text-sm text-slate-600">Loading…</div>
         ) : (
-          <Table rows={rowsForTab()} />
+          <Table rows={visibleRows} />
         )}
       </div>
     </div>

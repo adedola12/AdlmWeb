@@ -33,6 +33,8 @@ import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 import AboutADLM from "./pages/About.jsx";
 import Trainings from "./pages/Trainings.jsx";
 import AdminTrainings from "./pages/AdminTrainings.jsx";
+import NotFound from "./pages/NotFound.jsx";
+import Testimonials from "./pages/Testimonials.jsx";
 
 const router = createBrowserRouter([
   {
@@ -47,6 +49,8 @@ const router = createBrowserRouter([
       { path: "learn", element: <Learn /> },
       { path: "about", element: <AboutADLM /> },
       { path: "training", element: <Trainings /> },
+      { path: "testimonials", element: <Testimonials /> },
+
       {
         path: "purchase",
         element: (
@@ -96,7 +100,6 @@ const router = createBrowserRouter([
       {
         path: "/admin/trainings",
         element: (
-          
           <AdminRoute>
             <AdminTrainings />
           </AdminRoute>
@@ -177,6 +180,7 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
+      { path: "*", element: <NotFound /> },
     ],
   },
 ]);
