@@ -100,11 +100,11 @@ export default function Home() {
               className="mt-4 text-white/90 max-w-2xl opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
               style={{ animationDelay: "320ms" }}
             >
-              ADLM builds a full digital stack for the Quantity Surveying
-              profession—<b>RateGen</b> for instant rate build-ups, <b>Revit</b>
-              &amp; <b>PlanSwift</b> plugins for model/2D take-off, plus
-              training, certifications and dashboards. Nigeria-first, with
-              location-based pricing by geo-political zones.
+              ADLM Studio provides a comprehensive digital toolkit that helps
+              <b> Quantity Surveyors </b>measure, price, and manage projects
+              quickly and accurately. From instant rate build-ups to 2D/3D
+              take-off and professional training, we bring everything you need
+              into one easy-to-use platform—built for the Nigerian market.
             </p>
 
             <div
@@ -158,7 +158,7 @@ export default function Home() {
           style={{ animationDelay: "120ms" }}
         >
           <h2 className="text-xl sm:text-2xl font-semibold text-blue-900">
-            Why Choose ADLM Studio?
+            Why QS Professionals Choose ADLM Studio
           </h2>
         </div>
         <p
@@ -185,8 +185,9 @@ export default function Home() {
                 <path d="M7 7V3h10v4" />
               </svg>
             }
-            title="End-to-End QS Toolkit"
-            text="One login for RateGen, Revit & PlanSwift plugins, plus learning and certificates. Build-ups, 2D/3D take-off, valuation—connected."
+            title="Everything You Need in One Place"
+            text="No need to jump between software. Access RateGen, Revit & PlanSwift plugins,
+training, certifications, and reporting — all with one login."
           />
           <FeatureCard
             delay="200ms"
@@ -202,8 +203,9 @@ export default function Home() {
                 <circle cx="12" cy="12" r="9" />
               </svg>
             }
-            title="Nigeria-Ready Pricing"
-            text="Location-based material & labour rates by geo-political zones with audit trail and version history—built for local reality."
+            title="Built for Nigerian Reality"
+            text="Get accurate material and labour rates tailored to each geopolitical zone. Every
+rate comes with history, updates, and audit trails you can defend."
           />
           <FeatureCard
             delay="260ms"
@@ -220,8 +222,9 @@ export default function Home() {
                 <circle cx="16.5" cy="7" r="3" />
               </svg>
             }
-            title="Team & Project Workflows"
-            text="Manage entitlements, roles and classroom cohorts. Sync projects to the cloud and track assignments & certificates."
+            title="Work Better as a Team"
+            text="Manage team roles, learning progress, and project permissions. Keep everything
+synced in the cloud so your team stays organized."
           />
           <FeatureCard
             delay="320ms"
@@ -237,8 +240,9 @@ export default function Home() {
                 <path d="M9 12l2 2 4-4" />
               </svg>
             }
-            title="Data You Can Defend"
-            text="Exportable BoQs, logs and automated reports with secure licensing and 99.9% uptime—confidence for clients and auditors."
+            title="Data You Can Stand On"
+            text="Export BoQs, reports, and logs you can proudly present to clients, auditors, or
+management."
           />
         </div>
       </section>
@@ -247,11 +251,11 @@ export default function Home() {
       <section className="bg-blue-900 text-white">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-12 sm:py-16 text-center">
           <h3 className="text-xl sm:text-2xl font-semibold">
-            Ready to Modernize Your QS Workflow?
+            Ready to work faster and defend your numbers with confidence?
           </h3>
           <p className="mt-2 text-white/90 max-w-2xl mx-auto">
-            Join QS professionals using ADLM to measure faster, price smarter
-            and defend every naira with data.
+            Join hundreds of QS professionals using ADLM to deliver accurate
+            results — every time.
           </p>
           <div className="mt-6">
             <Link
