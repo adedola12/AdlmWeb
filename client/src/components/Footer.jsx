@@ -27,8 +27,7 @@ export default function Footer() {
               <span className="font-semibold">ADLM Studio</span>
             </div>
             <p className="mt-3 text-white/70 text-sm">
-              We provide a complete digital toolkit for Quantity Surveyors—Rate
-              build-ups, 2D/3D take-off, training and certifications.
+              Digital tools and training for modern Quantity Surveyors.
             </p>
           </div>
 
@@ -114,15 +113,37 @@ export default function Footer() {
           <div>
             <div className="font-semibold">Get the App</div>
             <div className="mt-3 space-y-2">
-              <a href="#" onClick={(e) => { e.preventDefault(); setShowComingSoonModal(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700">
-                <img src={appleLogo} alt="Apple App Store" className="w-6 h-6" />
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowComingSoonModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700"
+              >
+                <img
+                  src={appleLogo}
+                  alt="Apple App Store"
+                  className="w-6 h-6"
+                />
                 <div>
                   <div className="text-xs">Download on the</div>
                   <div className="text-lg font-semibold">App Store</div>
                 </div>
               </a>
-              <a href="#" onClick={(e) => { e.preventDefault(); setShowComingSoonModal(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700">
-                <img src={googlePlayLogo} alt="Google Play Store" className="w-6 h-6" />
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowComingSoonModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700"
+              >
+                <img
+                  src={googlePlayLogo}
+                  alt="Google Play Store"
+                  className="w-6 h-6"
+                />
                 <div>
                   <div className="text-xs">GET IT ON</div>
                   <div className="text-lg font-semibold">Google Play</div>
