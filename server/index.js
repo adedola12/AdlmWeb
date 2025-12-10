@@ -31,6 +31,9 @@ import webhooksRouter from "./routes/webhooks.js";
 import adminBunny from "./routes/adminBunny.js";
 import trainingsPublic from "./routes/trainings.js";
 import adminTrainings from "./routes/admin.trainings.js";
+import showcasePublic from "./routes/showcase.js";
+import adminShowcase from "./routes/admin.showcase.js";
+
 
 const app = express();
 app.get("/__debug/db", (_req, res) => {
@@ -97,6 +100,10 @@ app.use("/admin/bunny", adminBunny);
 
 app.use("/trainings", trainingsPublic);
 app.use("/admin/trainings", adminTrainings);
+
+app.use("/showcase", showcasePublic);
+app.use("/admin/showcase", adminShowcase);
+
 
 /* -------- helpful error for bad JSON -------- */
 app.use((err, _req, res, next) => {

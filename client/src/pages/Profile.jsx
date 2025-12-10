@@ -267,6 +267,11 @@ export default function Profile() {
               <a href="/admin/course-grading" className="btn">
                 Course grading
               </a>
+
+              {/* NEW: Admin add/view testimonials button */}
+              <a href="/admin/showcase" className="btn">
+                Add / manage testimonials
+              </a>
             </>
           )}
         </div>
