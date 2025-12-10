@@ -1,68 +1,7 @@
 // src/components/TestUser.jsx
 import React from "react";
 
-const testimonials = [
-  {
-    id: 1,
-    name: "Michael Chen",
-    role: "Project Director",
-    company: "Skyline Construction LLC",
-    location: "New York, NY",
-    category: "Commercial",
-    text: "ConstructTech has revolutionized how we manage our construction projects. The BIM integration tools are phenomenal, and the equipment quality is unmatched. Our teams collaborate more smoothly than ever.",
-    avatar: "/avatars/user1.jpg",
-  },
-  {
-    id: 2,
-    name: "Sarah Martinez",
-    role: "Operations Manager",
-    company: "Matrix Build Solutions",
-    location: "Los Angeles, CA",
-    category: "Residential",
-    text: "Outstanding customer service and top-tier equipment. The training programs provided by ConstructTech helped our team maximize efficiency. We've completed 15 major projects using their tools.",
-    avatar: "/avatars/user2.jpg",
-  },
-  {
-    id: 3,
-    name: "David Thompson",
-    role: "Site Engineer",
-    company: "Metro Infrastructure Inc.",
-    location: "Chicago, IL",
-    category: "Infrastructure",
-    text: "The IoT sensors and smart equipment monitoring have been game-changers for our infrastructure projects. Real-time data helps us prevent issues before they become costly problems.",
-    avatar: "/avatars/user3.jpg",
-  },
-  {
-    id: 4,
-    name: "Emily Rodriguez",
-    role: "CEO",
-    company: "GreenBuild Enterprise",
-    location: "Seattle, WA",
-    category: "Sustainable",
-    text: "As a sustainability-focused company, we appreciate ConstructTech’s commitment to green building practices. Their eco-friendly equipment and digital solutions align perfectly with our mission.",
-    avatar: "/avatars/user4.jpg",
-  },
-  {
-    id: 5,
-    name: "James Wilson",
-    role: "Construction Supervisor",
-    company: "Premier Contractors",
-    location: "Houston, TX",
-    category: "Industrial",
-    text: "We’ve been using ConstructTech equipment for over 3 years now. The reliability is exceptional, and after-sales maintenance support is second to none. Our downtime has decreased dramatically.",
-    avatar: "/avatars/user5.jpg",
-  },
-  {
-    id: 6,
-    name: "Rachel King",
-    role: "Project Manager",
-    company: "Urban Development Corp",
-    location: "San Francisco, CA",
-    category: "Mixed-Use",
-    text: "The digital transformation tools have modernized our entire workflow. Cloud-based collaboration and analytics have improved project delivery times significantly. Best investment we’ve made.",
-    avatar: "/avatars/user6.jpg",
-  },
-];
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 const categories = [
   "All Projects",
@@ -104,13 +43,14 @@ function Avatar({ name, src }) {
   );
 }
 
-function StarRow() {
+function StarRow({ rating = 5 }) {
+  const stars = Math.round(rating || 5);
   return (
     <div className="flex items-center gap-0.5 text-amber-400 text-xs">
       {Array.from({ length: 5 }).map((_, i) => (
         <svg
           key={i}
-          className="w-4 h-4"
+          className={`w-4 h-4 ${i < stars ? "" : "opacity-40"}`}
           viewBox="0 0 20 20"
           fill="currentColor"
         >
@@ -130,7 +70,7 @@ function TestimonialCard({ t }) {
           <span className="text-3xl leading-none">❝</span>
         </div>
 
-        <StarRow />
+        <StarRow rating={t.rating} />
 
         <p className="mt-3 text-sm text-slate-700 leading-relaxed line-clamp-6">
           {t.text}
@@ -139,7 +79,7 @@ function TestimonialCard({ t }) {
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Avatar name={t.name} src={t.avatar} />
+          <Avatar name={t.name} src={t.avatarUrl} />
           <div className="flex flex-col">
             <div className="flex items-center gap-1 text-sm font-medium text-slate-900">
               {t.name}
@@ -166,8 +106,44 @@ function TestimonialCard({ t }) {
 
 const TestUser = () => {
   const [search, setSearch] = React.useState("");
+  const [testimonials, setTestimonials] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+
   const [activeCat, setActiveCat] = React.useState("All Projects");
   const [page, setPage] = React.useState(1);
+
+  // load from backend
+  React.useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+        const res = await fetch(`${API_BASE}/showcase/testimonials`);
+        if (!res.ok) throw new Error("Failed to load testimonials");
+        const data = await res.json();
+        if (!mounted) return;
+        setTestimonials(data.items || []);
+      } catch (err) {
+        console.error(err);
+        if (mounted) setError(err.message || "Error loading testimonials");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // reset to first page when filters change
+  React.useEffect(() => {
+    setPage(1);
+  }, [search, activeCat]);
 
   // filter testimonials
   const filtered = testimonials.filter((t) => {
@@ -185,11 +161,6 @@ const TestUser = () => {
   const currentPage = Math.min(page, pageCount);
   const start = (currentPage - 1) * PER_PAGE;
   const pageItems = filtered.slice(start, start + PER_PAGE);
-
-  React.useEffect(() => {
-    // reset to first page when filters change
-    setPage(1);
-  }, [search, activeCat]);
 
   return (
     <section className="w-full bg-[#F8FAFC] py-10 md:py-14 px-4">
@@ -245,19 +216,32 @@ const TestUser = () => {
         </div>
 
         {/* cards */}
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {pageItems.map((t) => (
-            <TestimonialCard key={t.id} t={t} />
-          ))}
-          {pageItems.length === 0 && (
-            <div className="col-span-full text-center text-sm text-slate-500 py-10">
-              No testimonials found. Try adjusting your filters.
+        <div className="mt-6">
+          {loading && (
+            <div className="text-center text-sm text-slate-500 py-6">
+              Loading testimonials…
+            </div>
+          )}
+          {error && !loading && (
+            <div className="text-center text-sm text-red-600 py-6">{error}</div>
+          )}
+
+          {!loading && !error && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              {pageItems.map((t) => (
+                <TestimonialCard key={t._id || t.id} t={t} />
+              ))}
+              {pageItems.length === 0 && (
+                <div className="col-span-full text-center text-sm text-slate-500 py-10">
+                  No testimonials found. Try adjusting your filters.
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* pagination */}
-        {pageCount > 1 && (
+        {!loading && !error && pageCount > 1 && (
           <div className="mt-6 flex items-center justify-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}

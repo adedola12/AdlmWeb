@@ -35,6 +35,7 @@ import Trainings from "./pages/Trainings.jsx";
 import AdminTrainings from "./pages/AdminTrainings.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import Testimonials from "./pages/Testimonials.jsx";
+import AdminShowcase from "./pages/AdminShowcase.jsx";
 
 const router = createBrowserRouter([
   {
@@ -128,6 +129,14 @@ const router = createBrowserRouter([
           <ProtectedRoute>
             <RevitProjects />
           </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/showcase",
+        element: (
+          <AdminRoute>
+            <AdminShowcase />
+          </AdminRoute>
         ),
       },
       { path: "learn/course/:sku", element: <CourseDetail /> },
