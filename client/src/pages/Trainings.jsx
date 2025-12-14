@@ -1,6 +1,7 @@
 // src/pages/Trainings.jsx
 import React, { useEffect, useState } from "react";
 import { api } from "../http";
+import { Link } from "react-router-dom";
 
 function formatDate(dateStr) {
   if (!dateStr) return "";
@@ -26,6 +27,7 @@ function modeBadgeClasses(mode) {
 
 function TrainingCard({ training }) {
   const {
+    _id,
     title,
     description,
     mode,
@@ -36,20 +38,40 @@ function TrainingCard({ training }) {
     attendees,
     tags = [],
     imageUrl,
+    imageUrls = [],
   } = training;
 
+  const coverImage = imageUrl || imageUrls?.[0] || "";
   const locationText = [city, country].filter(Boolean).join(", ");
 
   return (
-    <div className="bg-white rounded-[10px] shadow-md flex flex-col overflow-hidden">
+    <div
+      className="
+        group bg-white rounded-[12px] shadow-md flex flex-col overflow-hidden
+        transition-all duration-300
+        hover:-translate-y-2 hover:shadow-xl
+        hover:ring-1 hover:ring-gray-200
+      "
+    >
       {/* Image */}
-      <div className="relative h-48 w-full overflow-hidden">
-        <img
-          src={imageUrl}
-          alt={title}
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
+      <div className="relative h-48 w-full overflow-hidden bg-gray-100">
+        {coverImage ? (
+          <img
+            src={coverImage}
+            alt={title}
+            className="
+              h-full w-full object-cover
+              transition-transform duration-300
+              group-hover:scale-[1.06]
+            "
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        ) : null}
+
         <span
           className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs text-white capitalize ${modeBadgeClasses(
             mode
@@ -61,9 +83,18 @@ function TrainingCard({ training }) {
 
       {/* Content */}
       <div className="flex flex-col gap-3 p-5 flex-1">
-        <h3 className="text-gray-900 text-base font-semibold line-clamp-2">
+        {/* Clickable title */}
+        <Link
+          to={`/trainings/${_id}`}
+          className="
+            text-gray-900 text-base font-semibold line-clamp-2
+            hover:text-blue-700 transition-colors
+            focus:outline-none focus:ring-2 focus:ring-blue-500/50 rounded
+          "
+          title="View training details"
+        >
           {title}
-        </h3>
+        </Link>
 
         {description && (
           <p className="text-sm text-gray-600 line-clamp-3">{description}</p>
@@ -73,12 +104,14 @@ function TrainingCard({ training }) {
           <p>
             <span className="font-medium">Date:</span> {formatDate(date)}
           </p>
+
           {(locationText || venue) && (
             <p>
               <span className="font-medium">Location:</span>{" "}
               {[locationText, venue].filter(Boolean).join(" • ")}
             </p>
           )}
+
           {attendees ? (
             <p>
               <span className="font-medium">Attendees:</span> {attendees}
@@ -109,8 +142,6 @@ export default function Trainings() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const API_BASE = import.meta.env.VITE_API_URL || "";
 
   useEffect(() => {
     let isMounted = true;
@@ -156,7 +187,7 @@ export default function Trainings() {
             </p>
           </div>
 
-          {/* Stats cards */}
+          {/* Stats cards (hover/3d feel) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
             <StatCard label="Total Events" value={stats?.totalEvents ?? 0} />
             <StatCard
@@ -202,9 +233,27 @@ export default function Trainings() {
 
 function StatCard({ label, value }) {
   return (
-    <div className="bg-white/10 border border-white/10 rounded-[10px] px-4 py-3 md:px-4 md:py-4 backdrop-blur-sm">
-      <p className="text-xl md:text-2xl font-semibold text-white">{value}</p>
-      <p className="mt-1 text-[11px] md:text-xs text-blue-100">{label}</p>
+    <div
+      className="
+        bg-white/10 border border-white/10 rounded-[12px]
+        px-4 py-3 md:px-4 md:py-4 backdrop-blur-sm
+        transition-all duration-300
+        hover:-translate-y-1 hover:shadow-lg hover:bg-white/15
+      "
+      style={{ transformStyle: "preserve-3d" }}
+    >
+      <p
+        className="text-xl md:text-2xl font-semibold text-white"
+        style={{ transform: "translateZ(10px)" }}
+      >
+        {value}
+      </p>
+      <p
+        className="mt-1 text-[11px] md:text-xs text-blue-100"
+        style={{ transform: "translateZ(6px)" }}
+      >
+        {label}
+      </p>
     </div>
   );
 }
