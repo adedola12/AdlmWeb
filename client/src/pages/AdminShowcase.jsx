@@ -1,10 +1,9 @@
 // src/pages/AdminShowcase.jsx
 import React from "react";
-
 import { API_BASE } from "../config"; // adjust path
 
 function AdminShowcase() {
-  const [activeTab, setActiveTab] = React.useState("testimonials"); // 'testimonials' | 'companies' | 'leaders'
+  const [activeTab, setActiveTab] = React.useState("testimonials");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -129,9 +128,7 @@ function AdminShowcase() {
         "adlm/showcase/companies",
         file
       );
-      if (url) {
-        setCForm((prev) => ({ ...prev, logoUrl: url }));
-      }
+      if (url) setCForm((prev) => ({ ...prev, logoUrl: url }));
     } catch (err) {
       setError(err.message || "Error uploading company logo");
     } finally {
@@ -144,9 +141,7 @@ function AdminShowcase() {
     if (!file) return;
     try {
       const url = await uploadImageToCloudinary("adlm/showcase/leaders", file);
-      if (url) {
-        setLForm((prev) => ({ ...prev, logoUrl: url }));
-      }
+      if (url) setLForm((prev) => ({ ...prev, logoUrl: url }));
     } catch (err) {
       setError(err.message || "Error uploading leader logo");
     } finally {
@@ -237,6 +232,7 @@ function AdminShowcase() {
 
   /* ---------- Submit handlers ---------- */
 
+  // ✅ OPEN: no admin key
   async function handleTestimonialSubmit(e) {
     e.preventDefault();
     setError("");
@@ -257,17 +253,12 @@ function AdminShowcase() {
       const res = await fetch(`${API_BASE}/admin/showcase/testimonials`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          ...tForm,
-          rating: Number(tForm.rating) || 5,
-        }),
+        body: JSON.stringify({ ...tForm, rating: Number(tForm.rating) || 5 }),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      if (!res.ok)
         throw new Error(data.error || "Failed to create testimonial");
-      }
 
       setTestimonials((prev) => [data.item, ...prev]);
       setTForm({
@@ -290,6 +281,7 @@ function AdminShowcase() {
     }
   }
 
+  // ✅ OPEN: no admin key
   async function handleCompanySubmit(e) {
     e.preventDefault();
     setError("");
@@ -304,14 +296,11 @@ function AdminShowcase() {
       const res = await fetch(`${API_BASE}/admin/showcase/companies`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(cForm),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create company");
-      }
+      if (!res.ok) throw new Error(data.error || "Failed to create company");
 
       setCompanies((prev) => [data.item, ...prev]);
       setCForm({
@@ -330,6 +319,7 @@ function AdminShowcase() {
     }
   }
 
+  // ✅ STILL PROTECTED: keep admin key (working)
   async function handleLeaderSubmit(e) {
     e.preventDefault();
     setError("");
@@ -351,9 +341,8 @@ function AdminShowcase() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      if (!res.ok)
         throw new Error(data.error || "Failed to create industry leader");
-      }
 
       setLeaders((prev) => [data.item, ...prev]);
       setLForm({
@@ -373,12 +362,12 @@ function AdminShowcase() {
 
   /* ---------- Delete handlers ---------- */
 
+  // ✅ OPEN: no admin key
   async function handleDeleteTestimonial(id) {
     if (!window.confirm("Delete this testimonial?")) return;
     try {
       const res = await fetch(`${API_BASE}/admin/showcase/testimonials/${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to delete testimonial");
       setTestimonials((prev) => prev.filter((t) => t._id !== id));
@@ -388,12 +377,12 @@ function AdminShowcase() {
     }
   }
 
+  // ✅ OPEN: no admin key
   async function handleDeleteCompany(id) {
     if (!window.confirm("Delete this company?")) return;
     try {
       const res = await fetch(`${API_BASE}/admin/showcase/companies/${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to delete company");
       setCompanies((prev) => prev.filter((c) => c._id !== id));
@@ -403,6 +392,7 @@ function AdminShowcase() {
     }
   }
 
+  // ✅ STILL PROTECTED: keep admin key
   async function handleDeleteLeader(id) {
     if (!window.confirm("Delete this industry leader?")) return;
     try {
@@ -410,7 +400,7 @@ function AdminShowcase() {
         `${API_BASE}/admin/showcase/industry-leaders/${id}`,
         {
           method: "DELETE",
-          credentials: "include",
+          headers: { "x-admin-key": import.meta.env.VITE_ADMIN_API_KEY },
         }
       );
       if (!res.ok) throw new Error("Failed to delete industry leader");
