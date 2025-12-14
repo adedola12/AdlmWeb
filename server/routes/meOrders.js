@@ -5,19 +5,41 @@ import { Purchase } from "../models/Purchase.js";
 const router = express.Router();
 router.use(requireAuth);
 
-// GET /me/orders
+// GET /me/orders?page=1&limit=10
 router.get("/", async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit || "50", 10), 100);
+  const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit || "10", 10), 1),
+    50
+  );
 
-  const orders = await Purchase.find({ userId: req.user._id })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .select(
-      "currency totalAmount lines status paid paystackRef decidedBy decidedAt createdAt updatedAt"
-    )
-    .lean();
+  const filter = { userId: req.user._id };
 
-  res.json({ items: orders });
+  const [total, items] = await Promise.all([
+    Purchase.countDocuments(filter),
+    Purchase.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .select(
+        "currency totalAmount lines status paid paystackRef decidedBy decidedAt createdAt updatedAt"
+      )
+      .lean(),
+  ]);
+
+  const pages = Math.max(Math.ceil(total / limit), 1);
+
+  res.json({
+    items,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages,
+      hasPrev: page > 1,
+      hasNext: page < pages,
+    },
+  });
 });
 
 export default router;
