@@ -255,6 +255,10 @@ export default function Profile() {
               <a href="/admin" className="btn">
                 Admin dashboard
               </a>
+              {/* ✅ NEW: Admin Trainings/Events */}
+              <Link to="/admin/trainings" className="btn">
+                Add / manage trainings & events
+              </Link>
               <a href="/admin/learn" className="btn">
                 Video upload / courses
               </a>
