@@ -1,5 +1,4 @@
-// src/http.js
-import { API_BASE } from "./config";
+import { API_BASE, IS_PROD } from "./config";
 
 async function refresh() {
   const res = await fetch(`${API_BASE}/auth/refresh`, {
@@ -37,4 +36,37 @@ export async function apiAuthed(path, { token, ...init } = {}) {
 
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+export async function api(path, init = {}) {
+  if (!API_BASE) {
+    // Fail loudly so you don’t waste time debugging HTML-as-JSON again
+    throw new Error(
+      IS_PROD
+        ? "API_BASE is missing in production. Set VITE_API_BASE on Vercel and redeploy."
+        : "API_BASE is missing. Set VITE_API_BASE in .env.local"
+    );
+  }
+
+  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+
+  const res = await fetch(url, {
+    credentials: "include",
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+    },
+  });
+
+  const ct = res.headers.get("content-type") || "";
+  const isJson = ct.includes("application/json");
+
+  if (!res.ok) {
+    const msg = isJson
+      ? (await res.json().catch(() => ({}))).error
+      : await res.text().catch(() => res.statusText);
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+
+  return isJson ? res.json() : res.text();
 }

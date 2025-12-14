@@ -1,13 +1,15 @@
 // src/pages/AdminTrainings.jsx
 import React, { useEffect, useState } from "react";
+import { api } from "../http";
+import { CLOUD_NAME, UPLOAD_PRESET } from "../config";
 
-const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET;
-const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? "http://localhost:4000" : "");
+// const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+// const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET;
+// const API_BASE =
+//   import.meta.env.VITE_API_URL ||
+//   (import.meta.env.DEV ? "http://localhost:4000" : "");
 
-console.log("AdminTrainings config:", { CLOUD_NAME, UPLOAD_PRESET, API_BASE });
+// console.log("AdminTrainings config:", { CLOUD_NAME, UPLOAD_PRESET, API_BASE });
 
 async function uploadToCloudinary(file) {
   const formData = new FormData();

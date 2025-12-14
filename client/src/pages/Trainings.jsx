@@ -1,5 +1,6 @@
 // src/pages/Trainings.jsx
 import React, { useEffect, useState } from "react";
+import { api } from "../http";
 
 function formatDate(dateStr) {
   if (!dateStr) return "";
@@ -119,30 +120,12 @@ export default function Trainings() {
         setLoading(true);
         setError("");
 
-        const res = await fetch(`${API_BASE}/trainings`, {
-          credentials: "include",
-        });
-
-        // helpful extra safety: show plain text if JSON fails
-        const text = await res.text();
-        if (!res.ok) {
-          throw new Error(`Failed (${res.status}): ${text}`);
-        }
-
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          console.error("Not JSON, got:", text.slice(0, 120));
-          throw new Error("Server did not return valid JSON");
-        }
-
+        const data = await api("/trainings");
         if (!isMounted) return;
 
         setStats(data.stats);
         setItems(data.items || []);
       } catch (err) {
-        console.error(err);
         if (isMounted) setError(err.message || "Error loading trainings");
       } finally {
         if (isMounted) setLoading(false);
