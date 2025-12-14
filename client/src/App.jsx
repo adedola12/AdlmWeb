@@ -1,23 +1,27 @@
 import React from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
+  const location = useLocation();
 
   const VIDEO_ID = "UibPcyLIvHg";
-  const MAX_SECONDS = 120; // ✅ change this (e.g. 15, 30, 60)
+  const MAX_SECONDS = 120;
 
+  // Show modal whenever user lands on Home (/)
   React.useEffect(() => {
-    const hasSeen = localStorage.getItem("adlm_seen_welcome_video");
-    if (!hasSeen) setShowVideo(true);
-  }, []);
+    if (location.pathname === "/") {
+      setShowVideo(true);
+    } else {
+      setShowVideo(false); // close if they leave Home
+    }
+  }, [location.pathname]);
 
   function closeVideo() {
     setShowVideo(false);
-    localStorage.setItem("adlm_seen_welcome_video", "1");
   }
 
   return (
@@ -35,8 +39,8 @@ export default function App() {
         onClose={closeVideo}
         videoId={VIDEO_ID}
         title="Welcome to ADLM — quick intro"
-        maxSeconds={MAX_SECONDS} // ✅ limit watch length
-        closeOnOutsideClick={true} // ✅ clicking “body/backdrop” closes
+        maxSeconds={MAX_SECONDS}
+        closeOnOutsideClick={true}
       />
     </div>
   );
