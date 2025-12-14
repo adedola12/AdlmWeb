@@ -7,11 +7,10 @@ import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
 
-  // ✅ Set your YouTube video ID here
-  const VIDEO_ID = "UibPcyLIvHg"; // example from your earlier link
+  const VIDEO_ID = "UibPcyLIvHg";
+  const MAX_SECONDS = 120; // ✅ change this (e.g. 15, 30, 60)
 
   React.useEffect(() => {
-    // Show only once per browser (remove this logic if you want it every time)
     const hasSeen = localStorage.getItem("adlm_seen_welcome_video");
     if (!hasSeen) setShowVideo(true);
   }, []);
@@ -31,12 +30,13 @@ export default function App() {
 
       <Footer />
 
-      {/* ✅ Video popup overlays above everything */}
       <YoutubeWelcomeModal
         open={showVideo}
         onClose={closeVideo}
         videoId={VIDEO_ID}
         title="Welcome to ADLM — quick intro"
+        maxSeconds={MAX_SECONDS} // ✅ limit watch length
+        closeOnOutsideClick={true} // ✅ clicking “body/backdrop” closes
       />
     </div>
   );
