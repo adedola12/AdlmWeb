@@ -41,6 +41,7 @@ export default function App() {
         title="Welcome to ADLM — quick intro"
         maxSeconds={MAX_SECONDS}
         closeOnOutsideClick={true}
+        hideControls={false}
       />
     </div>
   );
