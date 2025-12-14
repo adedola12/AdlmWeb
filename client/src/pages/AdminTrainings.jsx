@@ -1,17 +1,18 @@
 // src/pages/AdminTrainings.jsx
-import React, { useEffect, useState } from "react";
-import { api } from "../http";
-// import { CLOUD_NAME, UPLOAD_PRESET } from "../config";
-
-const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET;
-const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? "http://localhost:4000" : "");
+import React, { useEffect, useRef, useState } from "react";
+import { API_BASE, CLOUD_NAME, UPLOAD_PRESET } from "../config";
+import { apiAuthed } from "../http.js";
+import { useAuth } from "../store.jsx";
 
 console.log("AdminTrainings config:", { CLOUD_NAME, UPLOAD_PRESET, API_BASE });
 
 async function uploadToCloudinary(file) {
+  if (!CLOUD_NAME || !UPLOAD_PRESET) {
+    throw new Error(
+      "Cloudinary is not configured. Set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UNSIGNED_PRESET in Vercel and redeploy."
+    );
+  }
+
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", UPLOAD_PRESET);
@@ -25,14 +26,25 @@ async function uploadToCloudinary(file) {
   );
 
   if (!res.ok) {
-    throw new Error("Failed to upload image");
+    let msg = "Failed to upload image";
+    try {
+      const data = await res.json();
+      msg = data?.error?.message || msg;
+    } catch {
+      // ignore
+    }
+    throw new Error(msg);
   }
 
   const data = await res.json();
+  if (!data?.secure_url)
+    throw new Error("Upload succeeded but no URL returned");
   return data.secure_url;
 }
 
 export default function AdminTrainings() {
+  const { accessToken } = useAuth();
+
   const [items, setItems] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,42 +63,67 @@ export default function AdminTrainings() {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Prevent double-fetch in React StrictMode (DEV) without changing UI
+  const didLoadRef = useRef(false);
+
   useEffect(() => {
+    if (!API_BASE) {
+      setError(
+        "API_BASE is missing. Set VITE_API_BASE and redeploy the frontend."
+      );
+    }
+  }, []);
+
+  /* ---------------------------------- */
+  /* Load trainings                     */
+  /* ---------------------------------- */
+  useEffect(() => {
+    if (!API_BASE) return;
+    if (!accessToken) return;
+
+    // DEV strict-mode guard
+    if (didLoadRef.current) return;
+    didLoadRef.current = true;
+
     let mounted = true;
+
     async function load() {
       try {
+        setError("");
         setLoadingList(true);
-        const res = await fetch(`${API_BASE}/admin/trainings`, {
-          credentials: "include",
+
+        // IMPORTANT: use apiAuthed so Authorization header is sent
+        const data = await apiAuthed("/admin/trainings", {
+          token: accessToken,
+          method: "GET",
         });
-
-        const text = await res.text();
-        if (!res.ok) {
-          throw new Error(`Failed (${res.status}): ${text}`);
-        }
-
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          console.error("AdminTrainings: not JSON, got:", text.slice(0, 120));
-          throw new Error("Server did not return valid JSON");
-        }
 
         if (!mounted) return;
         setItems(data.items || []);
       } catch (err) {
         console.error(err);
-        if (mounted) setError(err.message);
+        if (!mounted) return;
+
+        const msg = String(err?.message || "");
+
+        // make Unauthorized clearer
+        if (/401|unauthorized/i.test(msg)) {
+          setError(
+            "Unauthorized. Please sign in again with an admin account (session may have expired)."
+          );
+        } else {
+          setError(msg || "Failed to load trainings");
+        }
       } finally {
         if (mounted) setLoadingList(false);
       }
     }
+
     load();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [accessToken]);
 
   function handleChange(e) {
     const { name, value, files } = e.target;
@@ -102,6 +139,11 @@ export default function AdminTrainings() {
     setError("");
     setSuccessMsg("");
 
+    if (!accessToken) {
+      setError("Missing access token. Please sign in again.");
+      return;
+    }
+
     if (!form.imageFile) {
       setError("Please select an image");
       return;
@@ -116,10 +158,11 @@ export default function AdminTrainings() {
 
       const imageUrl = await uploadToCloudinary(form.imageFile);
 
-      const res = await fetch(`${API_BASE}/admin/trainings`, {
+      // IMPORTANT: use apiAuthed so Authorization header is sent
+      const data = await apiAuthed("/admin/trainings", {
+        token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           title: form.title,
           description: form.description,
@@ -137,18 +180,6 @@ export default function AdminTrainings() {
         }),
       });
 
-      const text = await res.text();
-      if (!res.ok) {
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch {
-          throw new Error(text || "Failed to save training");
-        }
-        throw new Error(data.error || "Failed to save training");
-      }
-
-      const data = JSON.parse(text);
       setItems((prev) => [data.item, ...prev]);
       setSuccessMsg("Training created successfully");
 
@@ -167,7 +198,14 @@ export default function AdminTrainings() {
       e.target.reset();
     } catch (err) {
       console.error(err);
-      setError(err.message || "Error creating training");
+      const msg = String(err?.message || "");
+      if (/401|unauthorized/i.test(msg)) {
+        setError(
+          "Unauthorized. Please sign in again with an admin account (session may have expired)."
+        );
+      } else {
+        setError(msg || "Error creating training");
+      }
     } finally {
       setSaving(false);
     }
@@ -176,16 +214,29 @@ export default function AdminTrainings() {
   async function handleDelete(id) {
     if (!window.confirm("Delete this training?")) return;
 
+    if (!accessToken) {
+      setError("Missing access token. Please sign in again.");
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE}/admin/trainings/${id}`, {
+      // IMPORTANT: use apiAuthed so Authorization header is sent
+      await apiAuthed(`/admin/trainings/${id}`, {
+        token: accessToken,
         method: "DELETE",
-        credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to delete training");
+
       setItems((prev) => prev.filter((i) => i._id !== id));
     } catch (err) {
       console.error(err);
-      setError(err.message || "Error deleting training");
+      const msg = String(err?.message || "");
+      if (/401|unauthorized/i.test(msg)) {
+        setError(
+          "Unauthorized. Please sign in again with an admin account (session may have expired)."
+        );
+      } else {
+        setError(msg || "Error deleting training");
+      }
     }
   }
 
