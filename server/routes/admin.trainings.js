@@ -5,8 +5,8 @@ import { requireAdmin } from "../middleware/auth.js"; // adjust path if needed
 
 const router = express.Router();
 
-// All routes here require admin
-router.use(requireAdmin);
+// // All routes here require admin
+// router.use(requireAdmin);
 
 // GET /admin/trainings
 router.get("/", async (_req, res) => {
