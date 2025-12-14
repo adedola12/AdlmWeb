@@ -16,6 +16,16 @@ export default function Dashboard() {
   const [loadingSummary, setLoadingSummary] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState("subscriptions"); // "products" | "subscriptions" | "learning" | "orders"
   const [orders, setOrders] = React.useState([]);
+  const [ordersPage, setOrdersPage] = React.useState(1);
+  const [ordersPagination, setOrdersPagination] = React.useState({
+    page: 1,
+    pages: 1,
+    total: 0,
+    limit: 10,
+    hasPrev: false,
+    hasNext: false,
+  });
+
   const [loadingOrders, setLoadingOrders] = React.useState(false);
   const [ordersErr, setOrdersErr] = React.useState("");
 
@@ -59,17 +69,28 @@ export default function Dashboard() {
       setLoadingOrders(true);
       setOrdersErr("");
       try {
-        const data = await apiAuthed(`/me/orders?limit=50`, {
+        const data = await apiAuthed(`/me/orders?page=${ordersPage}&limit=10`, {
           token: accessToken,
         });
+
         setOrders(data?.items || []);
+        setOrdersPagination(
+          data?.pagination || {
+            page: ordersPage,
+            pages: 1,
+            total: (data?.items || []).length,
+            limit: 10,
+            hasPrev: ordersPage > 1,
+            hasNext: false,
+          }
+        );
       } catch (e) {
         setOrdersErr(e.message || "Failed to load orders");
       } finally {
         setLoadingOrders(false);
       }
     })();
-  }, [activeTab, accessToken]);
+  }, [activeTab, accessToken, ordersPage]);
 
   // Fallback safe getters
   const activeProductsCount =
@@ -167,7 +188,10 @@ export default function Dashboard() {
               <TabBtn
                 label="Order History"
                 active={activeTab === "orders"}
-                onClick={() => setActiveTab("orders")}
+                onClick={() => {
+                  setActiveTab("orders");
+                  setOrdersPage(1);
+                }}
               />
 
               {/* admin add product button (only visible to admins) */}
@@ -206,6 +230,8 @@ export default function Dashboard() {
                   orders={orders}
                   loading={loadingOrders}
                   error={ordersErr}
+                  pagination={ordersPagination}
+                  onPageChange={setOrdersPage}
                 />
               )}
             </div>
@@ -253,7 +279,9 @@ export default function Dashboard() {
                 <div>
                   <div className="text-xs text-slate-500">Monthly Price</div>
                   <div className="font-semibold">
-                    ₦{(summary?.membership?.monthlyNGN || 0).toLocaleString()}
+                    {/* ₦{(summary?.membership?.monthlyNGN || 0).toLocaleString()}
+                     */}
+                    <div className="font-semibold">Coming soon</div>
                   </div>
                 </div>
                 <div>
@@ -269,18 +297,14 @@ export default function Dashboard() {
               </div>
 
               <div className="mt-4 flex gap-2">
-                <button
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
-                  onClick={() => navigate("/products")}
-                >
-                  Upgrade Plan
-                </button>
-                <button
-                  className="flex-1 border rounded-md py-2 hover:bg-slate-50 transition"
-                  onClick={() => navigate("/subscriptions")}
-                >
-                  Cancel Subscription
-                </button>
+                <div className="mt-4">
+                  <button
+                    className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
+                    onClick={() => navigate("/products")}
+                  >
+                    Upgrade Plan
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -529,126 +553,192 @@ function LearningTab({ courses = [] }) {
   );
 }
 
-function OrdersTab({ orders = [], loading, error }) {
+function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
   if (loading)
     return <div className="text-sm text-slate-600">Loading orders…</div>;
   if (error) return <div className="text-sm text-red-600">{error}</div>;
+
+  const page = pagination?.page || 1;
+  const pages = pagination?.pages || 1;
+  const hasPrev = !!pagination?.hasPrev;
+  const hasNext = !!pagination?.hasNext;
+
+  const goTo = (p) => {
+    const next = Math.max(1, Math.min(pages, p));
+    if (next !== page) onPageChange(next);
+  };
 
   if (!orders || orders.length === 0) {
     return <div className="text-sm text-slate-600">No orders yet.</div>;
   }
 
   return (
-    <div className="space-y-3">
-      {orders.map((o) => {
-        const dateText = o.createdAt
-          ? dayjs(o.createdAt).format("MMM D, YYYY")
-          : "—";
-        const timeAgo = o.createdAt ? dayjs(o.createdAt).fromNow() : "";
+    <div className="space-y-4">
+      {/* Orders list */}
+      <div className="space-y-3">
+        {orders.map((o) => {
+          const dateText = o.createdAt
+            ? dayjs(o.createdAt).format("MMM D, YYYY")
+            : "—";
+          const timeAgo = o.createdAt ? dayjs(o.createdAt).fromNow() : "";
 
-        const statusLabel = o.paid
-          ? "Paid"
-          : o.status === "approved"
-          ? "Approved"
-          : o.status === "rejected"
-          ? "Rejected"
-          : "Pending";
-
-        const statusPill =
-          o.paid || o.status === "approved"
-            ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+          const statusLabel = o.paid
+            ? "Paid"
+            : o.status === "approved"
+            ? "Approved"
             : o.status === "rejected"
-            ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
-            : "bg-amber-50 text-amber-800 ring-1 ring-amber-100";
+            ? "Rejected"
+            : "Pending";
 
-        return (
-          <div
-            key={o._id}
-            className="rounded-xl ring-1 ring-slate-200 bg-white p-4 shadow-sm"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-900">
-                  Order #{String(o._id).slice(-6).toUpperCase()}
+          const statusPill =
+            o.paid || o.status === "approved"
+              ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+              : o.status === "rejected"
+              ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+              : "bg-amber-50 text-amber-800 ring-1 ring-amber-100";
+
+          return (
+            <div
+              key={o._id}
+              className="rounded-xl ring-1 ring-slate-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">
+                    Order #{String(o._id).slice(-6).toUpperCase()}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {dateText} {timeAgo ? `• ${timeAgo}` : ""}
+                  </div>
                 </div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {dateText} {timeAgo ? `• ${timeAgo}` : ""}
+
+                <div className="text-right">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-xs ${statusPill}`}
+                  >
+                    {statusLabel}
+                  </span>
+                  <div className="mt-2 text-sm font-semibold text-slate-900">
+                    {o.currency || "NGN"}{" "}
+                    {Number(o.totalAmount || 0).toLocaleString()}
+                  </div>
                 </div>
               </div>
 
-              <div className="text-right">
-                <span
-                  className={`inline-flex px-2 py-0.5 rounded-full text-xs ${statusPill}`}
-                >
-                  {statusLabel}
-                </span>
-                <div className="mt-2 text-sm font-semibold text-slate-900">
-                  {o.currency || "NGN"}{" "}
-                  {Number(o.totalAmount || 0).toLocaleString()}
+              {/* Line items */}
+              {Array.isArray(o.lines) && o.lines.length > 0 && (
+                <div className="mt-3 rounded-lg bg-slate-50 ring-1 ring-slate-100 overflow-hidden">
+                  <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-2 text-xs text-slate-500">
+                    <div className="col-span-6">Item</div>
+                    <div className="col-span-3">Billing</div>
+                    <div className="col-span-1 text-right">Qty</div>
+                    <div className="col-span-2 text-right">Subtotal</div>
+                  </div>
+
+                  <div className="divide-y divide-slate-100">
+                    {o.lines.map((ln, idx) => (
+                      <div key={idx} className="px-3 py-2">
+                        <div className="sm:grid sm:grid-cols-12 sm:gap-2 text-sm">
+                          <div className="sm:col-span-6">
+                            <div className="font-medium text-slate-900">
+                              {ln.name || ln.productKey}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {ln.productKey}
+                              {ln.install
+                                ? ` • Install: ${o.currency} ${Number(
+                                    ln.install
+                                  ).toLocaleString()}`
+                                : ""}
+                            </div>
+                          </div>
+
+                          <div className="sm:col-span-3 text-slate-600 capitalize mt-2 sm:mt-0">
+                            <span className="sm:hidden text-xs text-slate-500 mr-2">
+                              Billing:
+                            </span>
+                            {ln.billingInterval || "-"}
+                          </div>
+
+                          <div className="sm:col-span-1 text-slate-700 mt-1 sm:mt-0 sm:text-right">
+                            <span className="sm:hidden text-xs text-slate-500 mr-2">
+                              Qty:
+                            </span>
+                            {ln.qty || 1}
+                          </div>
+
+                          <div className="sm:col-span-2 font-medium text-slate-900 mt-1 sm:mt-0 sm:text-right">
+                            <span className="sm:hidden text-xs text-slate-500 mr-2">
+                              Subtotal:
+                            </span>
+                            {o.currency}{" "}
+                            {Number(ln.subtotal || 0).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              )}
+
+              {/* Meta */}
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                {o.paystackRef ? <span>Ref: {o.paystackRef}</span> : null}
+                {o.decidedAt ? (
+                  <span>
+                    Reviewed: {dayjs(o.decidedAt).format("MMM D, YYYY")}
+                    {o.decidedBy ? ` • by ${o.decidedBy}` : ""}
+                  </span>
+                ) : null}
               </div>
             </div>
+          );
+        })}
+      </div>
 
-            {/* Line items */}
-            {Array.isArray(o.lines) && o.lines.length > 0 && (
-              <div className="mt-3 rounded-lg bg-slate-50 ring-1 ring-slate-100 overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-slate-500">
-                  <div className="col-span-6">Item</div>
-                  <div className="col-span-3">Billing</div>
-                  <div className="col-span-1 text-right">Qty</div>
-                  <div className="col-span-2 text-right">Subtotal</div>
-                </div>
+      {/* Pagination footer */}
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <button
+          className="px-3 py-2 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+          disabled={!hasPrev}
+          onClick={() => goTo(page - 1)}
+        >
+          Previous
+        </button>
 
-                <div className="divide-y divide-slate-100">
-                  {o.lines.map((ln, idx) => (
-                    <div
-                      key={idx}
-                      className="grid grid-cols-12 gap-2 px-3 py-2 text-sm"
-                    >
-                      <div className="col-span-6">
-                        <div className="font-medium text-slate-900 line-clamp-1">
-                          {ln.name || ln.productKey}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {ln.productKey}
-                          {ln.install
-                            ? ` • Install: ${o.currency} ${Number(
-                                ln.install
-                              ).toLocaleString()}`
-                            : ""}
-                        </div>
-                      </div>
+        <div className="flex items-center gap-1 flex-wrap justify-center">
+          {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              onClick={() => goTo(p)}
+              className={`min-w-[36px] px-3 py-2 rounded-md text-sm border ${
+                p === page
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "hover:bg-slate-50"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+          {pages > 1 && (
+            <button
+              onClick={() => goTo(pages)}
+              className="min-w-[64px] px-3 py-2 rounded-md text-sm border hover:bg-slate-50"
+              title="Last page"
+            >
+              Last
+            </button>
+          )}
+        </div>
 
-                      <div className="col-span-3 text-slate-600 text-sm capitalize">
-                        {ln.billingInterval || "-"}
-                      </div>
-
-                      <div className="col-span-1 text-right text-slate-700">
-                        {ln.qty || 1}
-                      </div>
-
-                      <div className="col-span-2 text-right font-medium text-slate-900">
-                        {o.currency} {Number(ln.subtotal || 0).toLocaleString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Meta */}
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-              {o.paystackRef ? <span>Ref: {o.paystackRef}</span> : null}
-              {o.decidedAt ? (
-                <span>
-                  Reviewed: {dayjs(o.decidedAt).format("MMM D, YYYY")}
-                  {o.decidedBy ? ` • by ${o.decidedBy}` : ""}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        );
-      })}
+        <button
+          className="px-3 py-2 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+          disabled={!hasNext}
+          onClick={() => goTo(page + 1)}
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }
