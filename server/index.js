@@ -34,7 +34,6 @@ import adminTrainings from "./routes/admin.trainings.js";
 import showcasePublic from "./routes/showcase.js";
 import adminShowcase from "./routes/admin.showcase.js";
 
-
 const app = express();
 app.get("/__debug/db", (_req, res) => {
   const c = mongoose?.connection || {};
@@ -65,7 +64,12 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "x-admin-key",
+    "X-Requested-With",
+  ],
 };
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
@@ -103,7 +107,6 @@ app.use("/admin/trainings", adminTrainings);
 
 app.use("/showcase", showcasePublic);
 app.use("/admin/showcase", adminShowcase);
-
 
 /* -------- helpful error for bad JSON -------- */
 app.use((err, _req, res, next) => {
