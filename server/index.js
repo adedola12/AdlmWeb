@@ -33,6 +33,7 @@ import trainingsPublic from "./routes/trainings.js";
 import adminTrainings from "./routes/admin.trainings.js";
 import showcasePublic from "./routes/showcase.js";
 import adminShowcase from "./routes/admin.showcase.js";
+import meOrdersRoutes from "./routes/meOrders.js";
 
 const app = express();
 app.get("/__debug/db", (_req, res) => {
@@ -95,6 +96,7 @@ app.use("/admin/settings", adminSettings);
 app.use("/projects", projectRoutes);
 app.use("/me/media", meMediaRouter);
 app.use("/me/media", meMediaRoutes);
+app.use("/me/orders", meOrdersRoutes);
 app.use("/rategen", rategenRouter);
 app.use("/admin/rategen", adminRateGen);
 app.use("/admin/courses", adminCoursesRouter);

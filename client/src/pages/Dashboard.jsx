@@ -15,6 +15,10 @@ export default function Dashboard() {
   const [err, setErr] = React.useState("");
   const [loadingSummary, setLoadingSummary] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState("subscriptions"); // "products" | "subscriptions" | "learning" | "orders"
+  const [orders, setOrders] = React.useState([]);
+  const [loadingOrders, setLoadingOrders] = React.useState(false);
+  const [ordersErr, setOrdersErr] = React.useState("");
+
   const navigate = useNavigate();
 
   const displayName =
@@ -47,6 +51,25 @@ export default function Dashboard() {
       }
     })();
   }, [accessToken]);
+
+  React.useEffect(() => {
+    if (activeTab !== "orders") return;
+
+    (async () => {
+      setLoadingOrders(true);
+      setOrdersErr("");
+      try {
+        const data = await apiAuthed(`/me/orders?limit=50`, {
+          token: accessToken,
+        });
+        setOrders(data?.items || []);
+      } catch (e) {
+        setOrdersErr(e.message || "Failed to load orders");
+      } finally {
+        setLoadingOrders(false);
+      }
+    })();
+  }, [activeTab, accessToken]);
 
   // Fallback safe getters
   const activeProductsCount =
@@ -180,8 +203,9 @@ export default function Dashboard() {
 
               {activeTab === "orders" && (
                 <OrdersTab
-                  orders={summary?.orders || []}
-                  loading={loadingSummary}
+                  orders={orders}
+                  loading={loadingOrders}
+                  error={ordersErr}
                 />
               )}
             </div>
@@ -505,33 +529,126 @@ function LearningTab({ courses = [] }) {
   );
 }
 
-function OrdersTab({ orders = [], loading }) {
-  if (loading) return <div>Loading…</div>;
-  if (!orders || orders.length === 0)
+function OrdersTab({ orders = [], loading, error }) {
+  if (loading)
+    return <div className="text-sm text-slate-600">Loading orders…</div>;
+  if (error) return <div className="text-sm text-red-600">{error}</div>;
+
+  if (!orders || orders.length === 0) {
     return <div className="text-sm text-slate-600">No orders yet.</div>;
+  }
 
   return (
-    <div className="space-y-2">
-      {orders.map((o) => (
-        <div
-          key={o._id || o.orderId}
-          className="rounded-lg p-3 ring-1 ring-slate-200 bg-white"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">
-                {o.title || `Order ${o.orderId || "—"}`}
+    <div className="space-y-3">
+      {orders.map((o) => {
+        const dateText = o.createdAt
+          ? dayjs(o.createdAt).format("MMM D, YYYY")
+          : "—";
+        const timeAgo = o.createdAt ? dayjs(o.createdAt).fromNow() : "";
+
+        const statusLabel = o.paid
+          ? "Paid"
+          : o.status === "approved"
+          ? "Approved"
+          : o.status === "rejected"
+          ? "Rejected"
+          : "Pending";
+
+        const statusPill =
+          o.paid || o.status === "approved"
+            ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+            : o.status === "rejected"
+            ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+            : "bg-amber-50 text-amber-800 ring-1 ring-amber-100";
+
+        return (
+          <div
+            key={o._id}
+            className="rounded-xl ring-1 ring-slate-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-900">
+                  Order #{String(o._id).slice(-6).toUpperCase()}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {dateText} {timeAgo ? `• ${timeAgo}` : ""}
+                </div>
               </div>
-              <div className="text-xs text-slate-500">
-                {o.status || o.state}
+
+              <div className="text-right">
+                <span
+                  className={`inline-flex px-2 py-0.5 rounded-full text-xs ${statusPill}`}
+                >
+                  {statusLabel}
+                </span>
+                <div className="mt-2 text-sm font-semibold text-slate-900">
+                  {o.currency || "NGN"}{" "}
+                  {Number(o.totalAmount || 0).toLocaleString()}
+                </div>
               </div>
             </div>
-            <div className="text-sm text-slate-600">
-              {o.createdAt ? dayjs(o.createdAt).format("YYYY-MM-DD") : "-"}
+
+            {/* Line items */}
+            {Array.isArray(o.lines) && o.lines.length > 0 && (
+              <div className="mt-3 rounded-lg bg-slate-50 ring-1 ring-slate-100 overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-slate-500">
+                  <div className="col-span-6">Item</div>
+                  <div className="col-span-3">Billing</div>
+                  <div className="col-span-1 text-right">Qty</div>
+                  <div className="col-span-2 text-right">Subtotal</div>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {o.lines.map((ln, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-12 gap-2 px-3 py-2 text-sm"
+                    >
+                      <div className="col-span-6">
+                        <div className="font-medium text-slate-900 line-clamp-1">
+                          {ln.name || ln.productKey}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {ln.productKey}
+                          {ln.install
+                            ? ` • Install: ${o.currency} ${Number(
+                                ln.install
+                              ).toLocaleString()}`
+                            : ""}
+                        </div>
+                      </div>
+
+                      <div className="col-span-3 text-slate-600 text-sm capitalize">
+                        {ln.billingInterval || "-"}
+                      </div>
+
+                      <div className="col-span-1 text-right text-slate-700">
+                        {ln.qty || 1}
+                      </div>
+
+                      <div className="col-span-2 text-right font-medium text-slate-900">
+                        {o.currency} {Number(ln.subtotal || 0).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Meta */}
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+              {o.paystackRef ? <span>Ref: {o.paystackRef}</span> : null}
+              {o.decidedAt ? (
+                <span>
+                  Reviewed: {dayjs(o.decidedAt).format("MMM D, YYYY")}
+                  {o.decidedBy ? ` • by ${o.decidedBy}` : ""}
+                </span>
+              ) : null}
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
