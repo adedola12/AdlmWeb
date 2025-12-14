@@ -1,4 +1,3 @@
-// server/models/Training.js
 import mongoose from "mongoose";
 
 const trainingSchema = new mongoose.Schema(
@@ -6,7 +5,6 @@ const trainingSchema = new mongoose.Schema(
     title: { type: String, required: true },
     description: { type: String, default: "" },
 
-    // "online", "office", or "conference"
     mode: {
       type: String,
       enum: ["online", "office", "conference"],
@@ -20,10 +18,13 @@ const trainingSchema = new mongoose.Schema(
     venue: { type: String, default: "" },
 
     attendees: { type: Number, default: 0 },
-
     tags: [{ type: String }],
 
-    imageUrl: { type: String, required: true }, // Cloudinary URL
+    // ✅ NEW: multiple images
+    imageUrls: { type: [String], required: true, default: [] },
+
+    // (optional) keep old field for backward compatibility if you already have data
+    // imageUrl: { type: String },
   },
   { timestamps: true }
 );
