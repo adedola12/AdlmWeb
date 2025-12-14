@@ -1,14 +1,10 @@
-// server/routes/admin.trainings.js
 import express from "express";
 import { Training } from "../models/Training.js";
-import { requireAdmin } from "../middleware/auth.js"; // adjust path if needed
+import { requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
-
-// // All routes here require admin
 // router.use(requireAdmin);
 
-// GET /admin/trainings
 router.get("/", async (_req, res) => {
   try {
     const items = await Training.find().sort({ createdAt: -1 });
@@ -19,7 +15,6 @@ router.get("/", async (_req, res) => {
   }
 });
 
-// POST /admin/trainings
 router.post("/", async (req, res) => {
   try {
     const {
@@ -32,10 +27,23 @@ router.post("/", async (req, res) => {
       venue,
       attendees,
       tags,
+
+      // ✅ prefer new field
+      imageUrls,
+
+      // ✅ old field for backward compatibility
       imageUrl,
     } = req.body;
 
-    if (!title || !mode || !date || !imageUrl) {
+    // Normalize: accept either imageUrls[] or imageUrl
+    const normalizedImageUrls =
+      Array.isArray(imageUrls) && imageUrls.length
+        ? imageUrls.filter(Boolean)
+        : imageUrl
+        ? [imageUrl]
+        : [];
+
+    if (!title || !mode || !date || normalizedImageUrls.length === 0) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -49,7 +57,9 @@ router.post("/", async (req, res) => {
       venue,
       attendees: attendees || 0,
       tags: (tags || []).map((t) => t.trim()).filter(Boolean),
-      imageUrl,
+
+      // ✅ store multiple
+      imageUrls: normalizedImageUrls,
     });
 
     res.status(201).json({ item: training });
@@ -59,7 +69,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// DELETE /admin/trainings/:id
 router.delete("/:id", async (req, res) => {
   try {
     await Training.findByIdAndDelete(req.params.id);

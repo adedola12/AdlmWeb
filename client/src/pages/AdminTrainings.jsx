@@ -6,40 +6,55 @@ import { useAuth } from "../store.jsx";
 
 console.log("AdminTrainings config:", { CLOUD_NAME, UPLOAD_PRESET, API_BASE });
 
-async function uploadToCloudinary(file) {
+function uploadToCloudinaryWithProgress(file, onProgress) {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
-    throw new Error(
-      "Cloudinary is not configured. Set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UNSIGNED_PRESET in Vercel and redeploy."
+    return Promise.reject(
+      new Error(
+        "Cloudinary is not configured. Set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UNSIGNED_PRESET in Vercel and redeploy."
+      )
     );
   }
 
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", UPLOAD_PRESET);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
 
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-    {
-      method: "POST",
-      body: formData,
-    }
-  );
+    xhr.open("POST", url);
 
-  if (!res.ok) {
-    let msg = "Failed to upload image";
-    try {
-      const data = await res.json();
-      msg = data?.error?.message || msg;
-    } catch {
-      // ignore
-    }
-    throw new Error(msg);
-  }
+    xhr.upload.onprogress = (evt) => {
+      if (!evt.lengthComputable) return;
+      const pct = Math.round((evt.loaded / evt.total) * 100);
+      onProgress?.(pct);
+    };
 
-  const data = await res.json();
-  if (!data?.secure_url)
-    throw new Error("Upload succeeded but no URL returned");
-  return data.secure_url;
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300) {
+          if (!data?.secure_url || !data?.public_id) {
+            return reject(new Error("Upload OK but missing url/public_id"));
+          }
+          return resolve({
+            secure_url: data.secure_url,
+            public_id: data.public_id,
+          });
+        }
+        const msg = data?.error?.message || "Failed to upload image";
+        reject(new Error(msg));
+      } catch {
+        reject(new Error("Failed to upload image"));
+      }
+    };
+
+    xhr.onerror = () =>
+      reject(new Error("Network error while uploading image"));
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", UPLOAD_PRESET);
+
+    xhr.send(formData);
+  });
 }
 
 export default function AdminTrainings() {
@@ -48,6 +63,8 @@ export default function AdminTrainings() {
   const [items, setItems] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // ✅ keep your form fields (do not remove)
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -58,13 +75,24 @@ export default function AdminTrainings() {
     venue: "",
     attendees: "",
     tags: "",
-    imageFile: null,
+    imageFile: [], // keep as requested (not used directly)
   });
+
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // Prevent double-fetch in React StrictMode (DEV) without changing UI
+  // imageEntries: local selected images + upload progress + uploaded ids
+  // { id, file, previewUrl, progress, status, errorMsg, uploadedUrl, uploadedPublicId }
+  const [imageEntries, setImageEntries] = useState([]);
+
+  // Prevent double-fetch in React StrictMode (DEV)
   const didLoadRef = useRef(false);
+
+  // Keep latest imageEntries for cleanup on unmount
+  const imageEntriesRef = useRef([]);
+  useEffect(() => {
+    imageEntriesRef.current = imageEntries;
+  }, [imageEntries]);
 
   useEffect(() => {
     if (!API_BASE) {
@@ -74,14 +102,22 @@ export default function AdminTrainings() {
     }
   }, []);
 
-  /* ---------------------------------- */
-  /* Load trainings                     */
-  /* ---------------------------------- */
+  // Cleanup previews on unmount
+  useEffect(() => {
+    return () => {
+      imageEntriesRef.current.forEach((x) => {
+        if (x.previewUrl) URL.revokeObjectURL(x.previewUrl);
+      });
+    };
+  }, []);
+
+  /* ------------------------------- */
+  /* Load trainings                  */
+  /* ------------------------------- */
   useEffect(() => {
     if (!API_BASE) return;
     if (!accessToken) return;
 
-    // DEV strict-mode guard
     if (didLoadRef.current) return;
     didLoadRef.current = true;
 
@@ -92,7 +128,6 @@ export default function AdminTrainings() {
         setError("");
         setLoadingList(true);
 
-        // IMPORTANT: use apiAuthed so Authorization header is sent
         const data = await apiAuthed("/admin/trainings", {
           token: accessToken,
           method: "GET",
@@ -105,8 +140,6 @@ export default function AdminTrainings() {
         if (!mounted) return;
 
         const msg = String(err?.message || "");
-
-        // make Unauthorized clearer
         if (/401|unauthorized/i.test(msg)) {
           setError(
             "Unauthorized. Please sign in again with an admin account (session may have expired)."
@@ -125,15 +158,98 @@ export default function AdminTrainings() {
     };
   }, [accessToken]);
 
+  /* ------------------------------- */
+  /* Form Change                     */
+  /* ------------------------------- */
   function handleChange(e) {
     const { name, value, files } = e.target;
-    if (name === "imageFile") {
-      setForm((f) => ({ ...f, imageFile: files[0] || null }));
-    } else {
-      setForm((f) => ({ ...f, [name]: value }));
+
+    // ✅ handle image multi-select
+    if (name === "imageFiles") {
+      const picked = files ? Array.from(files) : [];
+
+      const newEntries = picked.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()
+          .toString(16)
+          .slice(2)}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        progress: 0,
+        status: "pending", // pending | uploading | done | error
+        errorMsg: "",
+        uploadedUrl: "",
+        uploadedPublicId: "",
+      }));
+
+      setImageEntries((prev) => [...prev, ...newEntries]);
+
+      // allow selecting same file again later
+      e.target.value = "";
+      return;
+    }
+
+    // normal form fields
+    setForm((f) => ({ ...f, [name]: value }));
+  }
+
+  function removeImageEntryLocalOnly(id) {
+    setImageEntries((prev) => {
+      const target = prev.find((x) => x.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((x) => x.id !== id);
+    });
+  }
+
+  // ✅ Delete after upload (Cloudinary) — only works if image is already uploaded (status done)
+  async function deleteUploadedImage(entry) {
+    if (!accessToken) {
+      setError("Missing access token. Please sign in again.");
+      return;
+    }
+    if (!entry?.uploadedPublicId) {
+      // fallback: just remove locally
+      removeImageEntryLocalOnly(entry.id);
+      return;
+    }
+
+    const confirmMsg =
+      "This image has already been uploaded. Delete it from Cloudinary?";
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setError("");
+
+      // mark as uploading to block double actions
+      setImageEntries((prev) =>
+        prev.map((x) =>
+          x.id === entry.id ? { ...x, status: "uploading", errorMsg: "" } : x
+        )
+      );
+
+      await apiAuthed("/admin/trainings/cloudinary/delete", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publicId: entry.uploadedPublicId }),
+      });
+
+      // remove entry
+      removeImageEntryLocalOnly(entry.id);
+    } catch (err) {
+      console.error(err);
+      const msg = String(err?.message || "Failed to delete image");
+      setImageEntries((prev) =>
+        prev.map((x) =>
+          x.id === entry.id ? { ...x, status: "error", errorMsg: msg } : x
+        )
+      );
+      setError(msg);
     }
   }
 
+  /* ------------------------------- */
+  /* Submit                          */
+  /* ------------------------------- */
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -144,21 +260,85 @@ export default function AdminTrainings() {
       return;
     }
 
-    if (!form.imageFile) {
-      setError("Please select an image");
-      return;
-    }
     if (!form.title || !form.date) {
       setError("Title and date are required");
+      return;
+    }
+
+    if (!imageEntries.length) {
+      setError("Please select at least one image");
       return;
     }
 
     try {
       setSaving(true);
 
-      const imageUrl = await uploadToCloudinary(form.imageFile);
+      // mark all as uploading
+      setImageEntries((prev) =>
+        prev.map((x) => ({
+          ...x,
+          status: x.status === "done" ? "done" : "uploading",
+          progress: x.status === "done" ? 100 : 0,
+          errorMsg: "",
+        }))
+      );
 
-      // IMPORTANT: use apiAuthed so Authorization header is sent
+      const imageUrls = [];
+      const imagePublicIds = [];
+
+      // upload sequentially (stable). If you want parallel later, I’ll adjust it.
+      for (const entry of imageEntries) {
+        // skip already-uploaded images (if admin saved earlier then changed mind)
+        if (
+          entry.status === "done" &&
+          entry.uploadedUrl &&
+          entry.uploadedPublicId
+        ) {
+          imageUrls.push(entry.uploadedUrl);
+          imagePublicIds.push(entry.uploadedPublicId);
+          continue;
+        }
+
+        try {
+          const result = await uploadToCloudinaryWithProgress(
+            entry.file,
+            (pct) => {
+              setImageEntries((prev) =>
+                prev.map((x) =>
+                  x.id === entry.id ? { ...x, progress: pct } : x
+                )
+              );
+            }
+          );
+
+          setImageEntries((prev) =>
+            prev.map((x) =>
+              x.id === entry.id
+                ? {
+                    ...x,
+                    status: "done",
+                    progress: 100,
+                    uploadedUrl: result.secure_url,
+                    uploadedPublicId: result.public_id,
+                  }
+                : x
+            )
+          );
+
+          imageUrls.push(result.secure_url);
+          imagePublicIds.push(result.public_id);
+        } catch (err) {
+          const msg = String(err?.message || "Upload failed");
+          setImageEntries((prev) =>
+            prev.map((x) =>
+              x.id === entry.id ? { ...x, status: "error", errorMsg: msg } : x
+            )
+          );
+          throw new Error(msg);
+        }
+      }
+
+      // save training to DB
       const data = await apiAuthed("/admin/trainings", {
         token: accessToken,
         method: "POST",
@@ -176,13 +356,21 @@ export default function AdminTrainings() {
             .split(",")
             .map((t) => t.trim())
             .filter(Boolean),
-          imageUrl,
+          imageUrls,
+          imagePublicIds, // ✅ store public ids for deletion later
         }),
       });
 
       setItems((prev) => [data.item, ...prev]);
       setSuccessMsg("Training created successfully");
 
+      // cleanup previews
+      imageEntries.forEach(
+        (x) => x.previewUrl && URL.revokeObjectURL(x.previewUrl)
+      );
+      setImageEntries([]);
+
+      // reset form fields (keep keys)
       setForm((f) => ({
         ...f,
         title: "",
@@ -193,8 +381,9 @@ export default function AdminTrainings() {
         venue: "",
         attendees: "",
         tags: "",
-        imageFile: null,
+        imageFile: [],
       }));
+
       e.target.reset();
     } catch (err) {
       console.error(err);
@@ -211,8 +400,14 @@ export default function AdminTrainings() {
     }
   }
 
+  /* ------------------------------- */
+  /* Delete training + images         */
+  /* ------------------------------- */
   async function handleDelete(id) {
-    if (!window.confirm("Delete this training?")) return;
+    if (
+      !window.confirm("Delete this training (and its images from Cloudinary)?")
+    )
+      return;
 
     if (!accessToken) {
       setError("Missing access token. Please sign in again.");
@@ -220,7 +415,6 @@ export default function AdminTrainings() {
     }
 
     try {
-      // IMPORTANT: use apiAuthed so Authorization header is sent
       await apiAuthed(`/admin/trainings/${id}`, {
         token: accessToken,
         method: "DELETE",
@@ -393,22 +587,95 @@ export default function AdminTrainings() {
               />
             </div>
 
+            {/* Images */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cover Image *
+                Images *
               </label>
+
               <input
                 type="file"
-                name="imageFile"
+                name="imageFiles"
                 accept="image/*"
+                multiple
                 onChange={handleChange}
                 className="w-full text-sm"
-                required
               />
+
               <p className="mt-1 text-xs text-gray-500">
-                This will be uploaded to Cloudinary and used on the public
-                Trainings page.
+                Select multiple images. You can remove any image before saving.
+                Upload progress will show when you click “Save Training”. If you
+                mistakenly uploaded an image, you can delete it from Cloudinary
+                too.
               </p>
+
+              {imageEntries.length > 0 && (
+                <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {imageEntries.map((img) => (
+                    <div
+                      key={img.id}
+                      className="border rounded-lg p-2 bg-gray-50"
+                    >
+                      <div className="relative">
+                        <img
+                          src={img.previewUrl}
+                          alt="preview"
+                          className="h-24 w-full object-cover rounded"
+                        />
+
+                        {/* Remove (before upload) OR Delete from Cloudinary (after upload) */}
+                        {img.status === "done" ? (
+                          <button
+                            type="button"
+                            onClick={() => deleteUploadedImage(img)}
+                            disabled={saving}
+                            className="absolute top-1 right-1 bg-white/90 text-red-600 text-xs px-2 py-1 rounded shadow hover:bg-white disabled:opacity-50"
+                            title="Delete from Cloudinary"
+                          >
+                            Delete
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => removeImageEntryLocalOnly(img.id)}
+                            disabled={saving && img.status === "uploading"}
+                            className="absolute top-1 right-1 bg-white/90 text-red-600 text-xs px-2 py-1 rounded shadow hover:bg-white disabled:opacity-50"
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Progress */}
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between text-[11px] text-gray-600">
+                          <span>
+                            {img.status === "pending" && "Ready"}
+                            {img.status === "uploading" && "Uploading..."}
+                            {img.status === "done" && "Uploaded"}
+                            {img.status === "error" && "Failed"}
+                          </span>
+                          <span>{img.progress}%</span>
+                        </div>
+
+                        <div className="h-2 w-full bg-gray-200 rounded mt-1 overflow-hidden">
+                          <div
+                            className="h-2 bg-blue-600"
+                            style={{ width: `${img.progress}%` }}
+                          />
+                        </div>
+
+                        {img.status === "error" && (
+                          <p className="text-[11px] text-red-600 mt-1">
+                            {img.errorMsg}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="md:col-span-2 flex justify-end">
@@ -443,7 +710,7 @@ export default function AdminTrainings() {
               >
                 <div className="flex items-center gap-3">
                   <img
-                    src={t.imageUrl}
+                    src={(t.imageUrls && t.imageUrls[0]) || t.imageUrl}
                     alt={t.title}
                     className="h-12 w-12 rounded object-cover"
                   />
