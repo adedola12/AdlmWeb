@@ -6,17 +6,14 @@ function loadYouTubeIframeAPI() {
   if (ytApiPromise) return ytApiPromise;
 
   ytApiPromise = new Promise((resolve) => {
-    // If already available
     if (window.YT && window.YT.Player) return resolve(window.YT);
 
-    // Create callback
     const prev = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = () => {
       if (typeof prev === "function") prev();
       resolve(window.YT);
     };
 
-    // Inject script once
     const existing = document.querySelector(
       'script[src="https://www.youtube.com/iframe_api"]'
     );
@@ -35,8 +32,11 @@ export default function YoutubeWelcomeModal({
   onClose,
   videoId,
   title = "Watch this quick intro",
-  maxSeconds = 20, // ✅ set limit here
-  closeOnOutsideClick = true, // ✅ click backdrop closes
+  maxSeconds = 20,
+  closeOnOutsideClick = true,
+
+  // ✅ add this: if you want no timeline at all
+  hideControls = true,
 }) {
   const mountRef = React.useRef(null);
   const playerRef = React.useRef(null);
@@ -50,7 +50,6 @@ export default function YoutubeWelcomeModal({
     };
     window.addEventListener("keydown", onKeyDown);
 
-    // prevent background scroll
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -60,7 +59,6 @@ export default function YoutubeWelcomeModal({
     };
   }, [open, onClose]);
 
-  // Create / destroy player when modal opens/closes
   React.useEffect(() => {
     if (!open) return;
 
@@ -70,7 +68,7 @@ export default function YoutubeWelcomeModal({
       const YT = await loadYouTubeIframeAPI();
       if (cancelled) return;
 
-      // Clean any old instance
+      // destroy previous
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
@@ -78,30 +76,37 @@ export default function YoutubeWelcomeModal({
         playerRef.current = null;
       }
 
-      // Ensure mount is empty
+      // clear mount
       if (mountRef.current) mountRef.current.innerHTML = "";
 
-      // Create player
       playerRef.current = new YT.Player(mountRef.current, {
         videoId,
+        width: "100%",
+        height: "100%",
         playerVars: {
           autoplay: 1,
           mute: 1,
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
-          controls: 1,
+          controls: hideControls ? 0 : 1, // ✅ timeline hidden if true
+          fs: 0,
+          iv_load_policy: 3, // hide annotations
+          disablekb: 1,
+          origin: window.location.origin, // helps some embed behaviors
         },
         events: {
           onReady: (e) => {
             try {
+              // start at 0 always
+              e.target.seekTo(0, true);
               e.target.playVideo();
             } catch {}
           },
         },
       });
 
-      // Loop logic: when it reaches maxSeconds, restart to 0
+      // ✅ hard loop back to 0 at maxSeconds
       clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         const p = playerRef.current;
@@ -120,7 +125,7 @@ export default function YoutubeWelcomeModal({
             p.playVideo();
           } catch {}
         }
-      }, 250);
+      }, 200);
     }
 
     init();
@@ -137,31 +142,26 @@ export default function YoutubeWelcomeModal({
         playerRef.current = null;
       }
     };
-  }, [open, videoId, maxSeconds]);
+  }, [open, videoId, maxSeconds, hideControls]);
 
   if (!open) return null;
 
   return (
     <div
       className="fixed inset-0 z-[9999]"
-      onClick={() => {
-        if (closeOnOutsideClick) onClose?.();
-      }}
+      onClick={() => closeOnOutsideClick && onClose?.()}
       role="presentation"
     >
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60" />
 
-      {/* Modal */}
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
           role="dialog"
           aria-modal="true"
           aria-label={title}
-          className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl overflow-hidden"
-          onClick={(e) => e.stopPropagation()} // ✅ clicking card won't close
+          className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <div className="text-sm md:text-base font-semibold text-slate-900">
               {title}
@@ -176,13 +176,19 @@ export default function YoutubeWelcomeModal({
             </button>
           </div>
 
-          {/* Video */}
-          <div className="relative w-full aspect-video bg-black">
-            {/* YouTube API mounts player into this div */}
-            <div className="absolute inset-0" ref={mountRef} />
+          {/* ✅ Video container */}
+          <div className="relative w-full aspect-video bg-black overflow-hidden">
+            {/* ✅ Force the iframe to fill the box */}
+            <div
+              ref={mountRef}
+              className="yt-player absolute inset-0"
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
+            />
           </div>
 
-          {/* Footer */}
           <div className="px-4 py-3 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -194,6 +200,15 @@ export default function YoutubeWelcomeModal({
           </div>
         </div>
       </div>
+
+      {/* ✅ crucial: make the generated iframe cover 100% */}
+      <style>{`
+        .yt-player iframe {
+          width: 100% !important;
+          height: 100% !important;
+          display: block;
+        }
+      `}</style>
     </div>
   );
 }
