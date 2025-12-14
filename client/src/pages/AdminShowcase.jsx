@@ -343,8 +343,10 @@ function AdminShowcase() {
       setLoading(true);
       const res = await fetch(`${API_BASE}/admin/showcase/industry-leaders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": import.meta.env.VITE_ADMIN_API_KEY,
+        },
         body: JSON.stringify(lForm),
       });
 

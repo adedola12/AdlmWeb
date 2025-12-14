@@ -4,12 +4,11 @@ import {
   TrainedCompany,
   Testimonial,
 } from "../models/Showcase.js";
-import { requireAdmin } from "../middleware/auth.js";
+// import { requireAdmin } from "../middleware/auth.js";
+import { requireAdminKey } from "../middleware/adminKey.js";
 
 const router = express.Router();
-
-// all below require admin
-router.use(requireAdmin);
+router.use(requireAdminKey);
 
 /* -------- Industry Leaders -------- */
 
