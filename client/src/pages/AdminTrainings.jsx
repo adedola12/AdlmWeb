@@ -5,6 +5,8 @@ import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 
 console.log("AdminTrainings config:", { CLOUD_NAME, UPLOAD_PRESET, API_BASE });
+console.log("UPLOAD_PRESET being used:", UPLOAD_PRESET);
+console.log("CLOUD_NAME being used:", CLOUD_NAME);
 
 function uploadToCloudinaryWithProgress(file, onProgress) {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
