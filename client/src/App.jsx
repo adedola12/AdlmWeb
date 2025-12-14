@@ -28,7 +28,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Nav />
 
-      <main className="max-w-6xl mx-auto w-full px-6 py-8 flex-1">
+      <main className="w-full flex-1">
         <Outlet />
       </main>
 

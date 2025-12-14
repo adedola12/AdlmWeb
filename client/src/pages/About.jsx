@@ -328,7 +328,7 @@ export default function AboutADLM() {
                 Explore Products
               </Link>
               <Link
-                to="/training"
+                to="/trainings"
                 className="inline-flex items-center rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2"
               >
                 Training & Events
