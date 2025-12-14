@@ -1,4 +1,3 @@
-// server/routes/showcase.js
 import express from "express";
 import {
   IndustryLeader,
@@ -11,7 +10,10 @@ const router = express.Router();
 // GET /showcase/industry-leaders
 router.get("/industry-leaders", async (_req, res) => {
   try {
-    const items = await IndustryLeader.find().sort({ createdAt: -1 });
+    // only featured leaders
+    const items = await IndustryLeader.find({ featured: true }).sort({
+      createdAt: -1,
+    });
     res.json({ items });
   } catch (err) {
     console.error("GET /showcase/industry-leaders error", err);
@@ -22,7 +24,10 @@ router.get("/industry-leaders", async (_req, res) => {
 // GET /showcase/companies
 router.get("/companies", async (_req, res) => {
   try {
-    const items = await TrainedCompany.find().sort({ createdAt: -1 });
+    // only featured companies
+    const items = await TrainedCompany.find({ featured: true }).sort({
+      createdAt: -1,
+    });
     res.json({ items });
   } catch (err) {
     console.error("GET /showcase/companies error", err);
@@ -46,11 +51,13 @@ router.get("/testimonials", async (_req, res) => {
 // GET /showcase/stats  – high-level training stats for the UI
 router.get("/stats", async (_req, res) => {
   try {
-    const companiesTrained = await TrainedCompany.countDocuments();
-    const testimonialsCount = await Testimonial.countDocuments();
+    const companiesTrained = await TrainedCompany.countDocuments({
+      featured: true,
+    });
+    const testimonialsCount = await Testimonial.countDocuments({
+      featured: true,
+    });
 
-    // You can later move these constants into your DB or env if you want
-    // inside router.get("/stats", ...)
     res.json({
       companiesTrained,
       employeesTrained: 15000,
@@ -58,7 +65,6 @@ router.get("/stats", async (_req, res) => {
       trainingRating: 4.9,
       testimonials: testimonialsCount,
 
-      // hero section fields
       heroTitle: "Customer Testimonials",
       heroSubtitle:
         "Hear from over 10,000+ satisfied customers who have transformed their construction projects with ConstructTech",
@@ -72,6 +78,5 @@ router.get("/stats", async (_req, res) => {
     res.status(500).json({ error: "Failed to fetch stats" });
   }
 });
-
 
 export default router;

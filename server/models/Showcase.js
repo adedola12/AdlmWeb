@@ -1,4 +1,3 @@
-// server/models/Showcase.js
 import mongoose from "mongoose";
 
 const IndustryLeaderSchema = new mongoose.Schema(
@@ -7,6 +6,7 @@ const IndustryLeaderSchema = new mongoose.Schema(
     code: { type: String }, // e.g. "SC"
     logoUrl: { type: String }, // logo image url (optional)
     website: { type: String }, // optional
+    featured: { type: Boolean, default: true }, // show/hide on public site
   },
   { timestamps: true }
 );
@@ -18,6 +18,7 @@ const TrainedCompanySchema = new mongoose.Schema(
     location: { type: String }, // e.g. "Boston, MA"
     logoUrl: { type: String }, // optional
     website: { type: String }, // optional
+    featured: { type: Boolean, default: true }, // show/hide on public site
   },
   { timestamps: true }
 );

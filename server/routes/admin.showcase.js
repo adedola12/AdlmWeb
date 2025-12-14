@@ -1,4 +1,3 @@
-// server/routes/admin.showcase.js
 import express from "express";
 import {
   IndustryLeader,
@@ -17,10 +16,16 @@ router.use(requireAdmin);
 // POST /admin/showcase/industry-leaders
 router.post("/industry-leaders", async (req, res) => {
   try {
-    const { name, code, logoUrl, website } = req.body;
+    const { name, code, logoUrl, website, featured } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
 
-    const item = await IndustryLeader.create({ name, code, logoUrl, website });
+    const item = await IndustryLeader.create({
+      name,
+      code,
+      logoUrl,
+      website,
+      featured: featured !== undefined ? featured : true,
+    });
     res.status(201).json({ item });
   } catch (err) {
     console.error("POST /admin/showcase/industry-leaders error", err);
@@ -43,7 +48,7 @@ router.delete("/industry-leaders/:id", async (req, res) => {
 
 router.post("/companies", async (req, res) => {
   try {
-    const { name, code, location, logoUrl, website } = req.body;
+    const { name, code, location, logoUrl, website, featured } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
 
     const item = await TrainedCompany.create({
@@ -52,6 +57,7 @@ router.post("/companies", async (req, res) => {
       location,
       logoUrl,
       website,
+      featured: featured !== undefined ? featured : true,
     });
     res.status(201).json({ item });
   } catch (err) {
