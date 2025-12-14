@@ -9,9 +9,40 @@ async function refresh() {
   return res.json();
 }
 
+// export async function apiAuthed(path, { token, ...init } = {}) {
+//   const doFetch = (tkn) =>
+//     fetch(`${API_BASE}${path}`, {
+//       credentials: "include",
+//       ...init,
+//       headers: {
+//         ...(init.headers || {}),
+//         ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}),
+//       },
+//     });
+
+//   let res = await doFetch(token);
+
+//   if (res.status === 401) {
+//     // try one refresh
+//     try {
+//       const r = await refresh();
+//       window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: r }));
+//       res = await doFetch(r.accessToken);
+//     } catch {
+//       // optional: nuke any cached token/state here
+//       throw new Error("refresh failed");
+//     }
+//   }
+
+//   if (!res.ok) throw new Error(await res.text());
+//   return res.json();
+// }
+
 export async function apiAuthed(path, { token, ...init } = {}) {
+  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+
   const doFetch = (tkn) =>
-    fetch(`${API_BASE}${path}`, {
+    fetch(url, {
       credentials: "include",
       ...init,
       headers: {
@@ -23,19 +54,26 @@ export async function apiAuthed(path, { token, ...init } = {}) {
   let res = await doFetch(token);
 
   if (res.status === 401) {
-    // try one refresh
     try {
       const r = await refresh();
       window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: r }));
       res = await doFetch(r.accessToken);
     } catch {
-      // optional: nuke any cached token/state here
-      throw new Error("refresh failed");
+      throw new Error("Unauthorized");
     }
   }
 
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const ct = res.headers.get("content-type") || "";
+  const isJson = ct.includes("application/json");
+
+  if (!res.ok) {
+    const msg = isJson
+      ? (await res.json().catch(() => ({}))).error
+      : await res.text().catch(() => "");
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+
+  return isJson ? res.json() : res.text();
 }
 
 export async function api(path, init = {}) {
