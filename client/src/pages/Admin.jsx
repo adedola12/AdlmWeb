@@ -1,6 +1,7 @@
 // src/pages/Admin.jsx
 import React from "react";
 import dayjs from "dayjs";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
@@ -12,6 +13,8 @@ const MONTH_CHOICES = [
 
 export default function Admin() {
   const { accessToken } = useAuth();
+  const navigate = useNavigate();
+
   const [tab, setTab] = React.useState("pending");
   const [users, setUsers] = React.useState([]);
   const [purchases, setPurchases] = React.useState([]);
@@ -39,7 +42,8 @@ export default function Admin() {
 
   React.useEffect(() => {
     load();
-  }, []); // initial
+  }, []);
+
   React.useEffect(() => {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
@@ -107,7 +111,6 @@ export default function Admin() {
     }
   }
 
-  // derived: active entitlements (flattened)
   const activeRows = React.useMemo(() => {
     const rows = [];
     users.forEach((u) => {
@@ -123,7 +126,6 @@ export default function Admin() {
         }
       });
     });
-    // local client filter too (in addition to server q)
     const rx = q ? new RegExp(q, "i") : null;
     return rx
       ? rows.filter(
@@ -140,6 +142,7 @@ export default function Admin() {
       <div className="card">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold">Admin</h1>
+
           <div className="flex items-center gap-2">
             <input
               className="input"
@@ -147,14 +150,24 @@ export default function Admin() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
+
             <button className="btn btn-sm" onClick={load}>
               Refresh
             </button>
+
+            {/* ✅ NEW */}
+            <button
+              className="btn btn-sm"
+              onClick={() => navigate("/admin/coupons")}
+              title="Create / manage coupons"
+            >
+              AddCoupon
+            </button>
           </div>
         </div>
+
         {msg && <div className="text-sm mt-2">{msg}</div>}
 
-        {/* Tabs */}
         <div className="mt-4 border-b">
           <nav className="flex gap-6">
             <button
@@ -431,27 +444,31 @@ export default function Admin() {
                                 title="Reset device binding"
                                 onClick={async () => {
                                   setMsg("");
-                                  const res = await apiAuthed(
-                                    `/admin/users/reset-device`,
-                                    {
-                                      token: accessToken,
-                                      method: "POST",
-                                      headers: {
-                                        "Content-Type": "application/json",
-                                      },
-                                      body: JSON.stringify({
-                                        email: u.email,
-                                        productKey: e.productKey,
-                                      }),
-                                    }
-                                  );
+                                  try {
+                                    await apiAuthed(
+                                      `/admin/users/reset-device`,
+                                      {
+                                        token: accessToken,
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({
+                                          email: u.email,
+                                          productKey: e.productKey,
+                                        }),
+                                      }
+                                    );
 
-                                  if (!res.ok)
-                                    return setMsg("Failed to reset device");
-                                  await load();
-                                  setMsg(
-                                    `Device lock reset for ${e.productKey}`
-                                  );
+                                    await load();
+                                    setMsg(
+                                      `Device lock reset for ${e.productKey}`
+                                    );
+                                  } catch (err) {
+                                    setMsg(
+                                      err?.message || "Failed to reset device"
+                                    );
+                                  }
                                 }}
                               >
                                 Reset Device

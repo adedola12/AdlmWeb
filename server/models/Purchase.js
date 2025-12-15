@@ -44,6 +44,18 @@ const PurchaseSchema = new mongoose.Schema(
     // new fields:
     currency: { type: String, enum: ["NGN", "USD"], default: "NGN" },
     totalAmount: { type: Number, default: 0 },
+    totalBeforeDiscount: { type: Number, default: 0 },
+
+    coupon: {
+      code: { type: String },
+      type: { type: String, enum: ["percent", "fixed"] },
+      value: { type: Number },
+      currency: { type: String, enum: ["NGN", "USD"] }, // for fixed coupons
+      discountAmount: { type: Number, default: 0 },
+      couponId: { type: mongoose.Schema.Types.ObjectId, ref: "Coupon" },
+      redeemedApplied: { type: Boolean, default: false }, // incremented only on approve/paid
+    },
+
     lines: { type: [LineSchema], default: [] },
     paystackRef: { type: String }, // returned from init
     paid: { type: Boolean, default: false },
