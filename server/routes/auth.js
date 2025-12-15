@@ -91,6 +91,9 @@ router.post("/signup", async (req, res) => {
         subject,
         html,
       });
+
+      user.welcomeEmailSentAt = new Date();
+      await user.save();
     } catch (mailErr) {
       // Don't fail signup if email fails
       console.error("[/auth/signup] welcome mail error:", mailErr);
@@ -179,12 +182,10 @@ router.post("/login", async (req, res) => {
         (e) => e.productKey === productKey
       );
       if (!ent) {
-        return res
-          .status(403)
-          .json({
-            error: "You do not have access to this product.",
-            code: "NOT_ENTITLED",
-          });
+        return res.status(403).json({
+          error: "You do not have access to this product.",
+          code: "NOT_ENTITLED",
+        });
       }
 
       const now = new Date();
@@ -194,12 +195,10 @@ router.post("/login", async (req, res) => {
         new Date(ent.expiresAt) > now;
 
       if (!active) {
-        return res
-          .status(403)
-          .json({
-            error: "You do not have access to this product.",
-            code: "NOT_ENTITLED",
-          });
+        return res.status(403).json({
+          error: "You do not have access to this product.",
+          code: "NOT_ENTITLED",
+        });
       }
 
       // one-device binding

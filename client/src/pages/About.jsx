@@ -1,8 +1,9 @@
 // src/pages/AboutADLM.jsx
 import React from "react";
 import { Link } from "react-router-dom";
-import dolapo from "../assets/team/Dola.jpg";
+import dolapo from "../assets/team/Dola.jpeg";
 import richard from "../assets/team/Richard.jpg";
+import gladys from "../assets/team/Gladys.JPG";
 
 /* -------------------- tiny animation helpers -------------------- */
 function useInView(threshold = 0.12) {
@@ -209,8 +210,7 @@ export default function AboutADLM() {
     site: "https://images.unsplash.com/photo-1504306663385-cd3fee2e5af1?q=80&w=1600&auto=format&fit=crop",
     team1: dolapo,
     team2: richard,
-    team3:
-      "https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=1200&auto=format&fit=crop",
+    team3: gladys,
     team4:
       "https://images.unsplash.com/photo-1529070538774-1843cb3265df?q=80&w=1200&auto=format&fit=crop",
   };
@@ -288,10 +288,30 @@ export default function AboutADLM() {
   ];
 
   const leaders = [
-    { name: "Adedolapo Quasim", role: "Founder & Team Lead", img: ph.team1 },
-    { name: "Richard Enoch", role: "Product Designer", img: ph.team2 },
-    { name: "Adenuga Ayomide", role: "Product Manager", img: ph.team3 },
-    { name: "Etti Taiwo", role: "Fullstack Developer", img: ph.team4 },
+    {
+      name: "Adedolapo Quasim",
+      role: "Founder & Team Lead",
+      img: ph.team1,
+      linkedin: "https://www.linkedin.com/in/quasim-adedolapo-446367127/",
+    },
+    {
+      name: "Richard Enoch",
+      role: "Product Designer",
+      img: ph.team2,
+      linkedin: "https://www.linkedin.com/in/richardenoch/",
+    },
+    {
+      name: "Gladys Terungwa",
+      role: "Product Manager",
+      img: ph.team3,
+      linkedin: "https://www.linkedin.com/in/gladys-terungwa-9697b6313/",
+    },
+    {
+      name: "Etti Taiwo",
+      role: "Fullstack Developer",
+      img: ph.team4,
+      linkedin: "https://www.linkedin.com/in/taiwo-etti/",
+    },
   ];
 
   return (
@@ -419,11 +439,24 @@ export default function AboutADLM() {
                   <SafeImg
                     src={p.img}
                     alt={p.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover object-top"
                   />
                 </div>
                 <div className="p-4">
-                  <div className="font-medium">{p.name}</div>
+                  {p.linkedin ? (
+                    <a
+                      href={p.linkedin}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium hover:underline"
+                      title={`Open ${p.name} on LinkedIn`}
+                    >
+                      {p.name}
+                    </a>
+                  ) : (
+                    <div className="font-medium">{p.name}</div>
+                  )}
+
                   <div className="text-sm text-slate-600">{p.role}</div>
                 </div>
               </div>
