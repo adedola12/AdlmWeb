@@ -1,35 +1,14 @@
 import express from "express";
 import dayjs from "dayjs";
-import { requireAuth } from "../middleware/auth.js";
+import { Coupon } from "../models/Coupon.js";
 import { validateAndComputeDiscount } from "../util/coupons.js";
 
 const router = express.Router();
 
-// POST /coupons/validate
-router.post("/validate", requireAuth, async (req, res) => {
-  const { code, currency = "NGN", subtotal = 0 } = req.body || {};
-  const out = await validateAndComputeDiscount({
-    code,
-    currency: String(currency).toUpperCase(),
-    subtotal: Number(subtotal || 0),
-  });
-  if (!out.ok) return res.status(400).json({ error: out.error });
-
-  if (!out.coupon) return res.json({ ok: true, coupon: null, discount: 0 });
-
-  return res.json({
-    ok: true,
-    coupon: {
-      code: out.coupon.code,
-      type: out.coupon.type,
-      value: out.coupon.value,
-      currency: out.coupon.currency,
-      description: out.coupon.description || "",
-    },
-    discount: out.discount,
-  });
-});
-// GET /coupons/banner  -> returns active banner coupon (if any)
+/**
+ * GET /coupons/banner
+ * Returns the current active banner coupon (if any).
+ */
 router.get("/banner", async (_req, res) => {
   const now = dayjs();
 
@@ -37,29 +16,68 @@ router.get("/banner", async (_req, res) => {
     .sort({ updatedAt: -1 })
     .lean();
 
-  if (!c) return res.json({ ok: true, coupon: null });
+  if (!c) return res.json({ ok: true, banner: null });
 
   if (c.startsAt && now.isBefore(dayjs(c.startsAt)))
-    return res.json({ ok: true, coupon: null });
+    return res.json({ ok: true, banner: null });
 
   if (c.endsAt && now.isAfter(dayjs(c.endsAt)))
-    return res.json({ ok: true, coupon: null });
+    return res.json({ ok: true, banner: null });
 
   return res.json({
     ok: true,
-    coupon: {
-      _id: c._id,
+    banner: {
       code: c.code,
+      bannerText: c.bannerText || "",
       type: c.type,
       value: c.value,
       currency: c.currency,
-      description: c.description || "",
-      bannerText: c.bannerText || "",
       startsAt: c.startsAt || null,
       endsAt: c.endsAt || null,
+      appliesTo: c.appliesTo || { mode: "all", productKeys: [] },
     },
   });
 });
 
+/**
+ * POST /coupons/validate
+ * body: { code, currency, subtotal, productKeys? }
+ */
+router.post("/validate", async (req, res) => {
+  try {
+    const { code, currency, subtotal, productKeys } = req.body || {};
+
+    const out = await validateAndComputeDiscount({
+      code,
+      currency,
+      subtotal,
+      productKeys: Array.isArray(productKeys) ? productKeys : [],
+    });
+
+    if (!out.ok) return res.status(400).json({ error: out.error });
+
+    return res.json({
+      ok: true,
+      coupon: out.coupon
+        ? {
+            _id: out.coupon._id,
+            code: out.coupon.code,
+            type: out.coupon.type,
+            value: out.coupon.value,
+            currency: out.coupon.currency,
+            startsAt: out.coupon.startsAt || null,
+            endsAt: out.coupon.endsAt || null,
+            appliesTo: out.coupon.appliesTo || { mode: "all", productKeys: [] },
+            bannerText: out.coupon.bannerText || "",
+            isBanner: !!out.coupon.isBanner,
+            isActive: !!out.coupon.isActive,
+          }
+        : null,
+      discount: out.discount || 0,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Validate failed" });
+  }
+});
 
 export default router;

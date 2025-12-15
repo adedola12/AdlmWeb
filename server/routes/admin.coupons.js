@@ -1,128 +1,205 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
+import dayjs from "dayjs";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { Coupon } from "../models/Coupon.js";
-import { normalizeCode } from "../util/coupons.js";
-
-function requireAdmin(req, res, next) {
-  if (req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
+import { Purchase } from "../models/Purchase.js";
 
 const router = express.Router();
-router.use(requireAuth, requireAdmin);
+
+function normalizeCode(code) {
+  return String(code || "")
+    .trim()
+    .toUpperCase();
+}
+
+function parseDate(v) {
+  if (!v) return undefined;
+  const d = dayjs(v);
+  return d.isValid() ? d.toDate() : undefined;
+}
 
 // GET /admin/coupons
-router.get("/", async (_req, res) => {
-  const items = await Coupon.find({}).sort({ createdAt: -1 }).lean();
-  res.json(items);
+router.get("/", requireAuth, requireAdmin, async (_req, res) => {
+  const list = await Coupon.find({}).sort({ createdAt: -1 }).lean();
+  return res.json(list);
 });
 
-// POST /admin/coupons
-router.post("/", async (req, res) => {
-  const {
-    code,
-    description = "",
-    type,
-    value,
-    currency = "NGN",
-    minSubtotal = 0,
-    isActive = true,
-    startsAt,
-    endsAt,
-    maxRedemptions,
-  } = req.body || {};
+// POST /admin/coupons (create)
+router.post("/", requireAuth, requireAdmin, async (req, res) => {
+  const body = req.body || {};
 
-  const ccode = normalizeCode(code);
-  if (!ccode) return res.status(400).json({ error: "code required" });
-  if (!["percent", "fixed"].includes(type))
+  const code = normalizeCode(body.code);
+  if (!code) return res.status(400).json({ error: "code required" });
+
+  const doc = {
+    code,
+    description: String(body.description || ""),
+    type: body.type,
+    value: Number(body.value || 0),
+    currency: body.currency || "NGN",
+    minSubtotal: Number(body.minSubtotal || 0),
+    maxRedemptions:
+      body.maxRedemptions != null ? Number(body.maxRedemptions) : undefined,
+    isActive: !!body.isActive,
+
+    startsAt: parseDate(body.startsAt),
+    endsAt: parseDate(body.endsAt),
+
+    isBanner: !!body.isBanner,
+    bannerText: String(body.bannerText || ""),
+
+    appliesTo: {
+      mode: body?.appliesTo?.mode || body?.appliesToMode || "all",
+      productKeys: Array.isArray(body?.appliesTo?.productKeys)
+        ? body.appliesTo.productKeys
+        : Array.isArray(body?.appliesToProductKeys)
+        ? body.appliesToProductKeys
+        : [],
+    },
+  };
+
+  if (!["percent", "fixed"].includes(doc.type))
     return res.status(400).json({ error: "type must be percent or fixed" });
 
-  const v = Number(value);
-  if (!Number.isFinite(v) || v <= 0)
+  if (doc.value <= 0)
     return res.status(400).json({ error: "value must be > 0" });
 
-  if (type === "percent" && (v <= 0 || v > 100))
-    return res.status(400).json({ error: "percent must be 1..100" });
+  // prevent banner if inactive
+  if (doc.isBanner && !doc.isActive)
+    return res.status(400).json({ error: "Banner coupon must be active." });
 
-  const exists = await Coupon.findOne({ code: ccode }).lean();
-  if (exists) return res.status(409).json({ error: "code already exists" });
+  // ensure ONLY one banner at a time
+  if (doc.isBanner) {
+    await Coupon.updateMany({ isBanner: true }, { $set: { isBanner: false } });
+  }
 
-  const doc = await Coupon.create({
-    code: ccode,
-    description,
-    type,
-    value: v,
-    currency: String(currency).toUpperCase(),
-    minSubtotal: Number(minSubtotal || 0),
-    isActive: !!isActive,
-    startsAt: startsAt ? new Date(startsAt) : undefined,
-    endsAt: endsAt ? new Date(endsAt) : undefined,
-    maxRedemptions: maxRedemptions != null ? Number(maxRedemptions) : undefined,
-  });
-
-  res.json(doc);
+  const created = await Coupon.create(doc);
+  return res.json({ ok: true, coupon: created });
 });
 
-// PATCH /admin/coupons/:id
-router.patch("/:id", async (req, res) => {
-  const body = { ...req.body };
-  if (body.code) delete body.code; // don't allow changing code
-
-  if (body.currency) body.currency = String(body.currency).toUpperCase();
-  if (body.value != null) body.value = Number(body.value);
-  if (body.minSubtotal != null) body.minSubtotal = Number(body.minSubtotal);
-  if (body.maxRedemptions != null)
-    body.maxRedemptions = Number(body.maxRedemptions);
-
-  const doc = await Coupon.findByIdAndUpdate(req.params.id, body, {
-    new: true,
-  });
-  if (!doc) return res.status(404).json({ error: "Not found" });
-  res.json(doc);
-});
-
-// POST /admin/coupons/:id/disable
-router.post("/:id/disable", async (req, res) => {
-  const doc = await Coupon.findByIdAndUpdate(
-    req.params.id,
-    { isActive: false },
-    { new: true }
-  );
-  if (!doc) return res.status(404).json({ error: "Not found" });
-  res.json(doc);
-});
-
-// POST /admin/coupons/:id/enable
-router.post("/:id/enable", async (req, res) => {
-  const doc = await Coupon.findByIdAndUpdate(
-    req.params.id,
-    { isActive: true },
-    { new: true }
-  );
-  if (!doc) return res.status(404).json({ error: "Not found" });
-  res.json(doc);
-});
-
-// POST /admin/coupons/:id/banner  body: { isBanner: true|false }
-router.post("/:id/banner", requireAuth, requireAdmin, async (req, res) => {
-  const isBanner = !!req.body?.isBanner;
-
+// PATCH /admin/coupons/:id (edit)
+router.patch("/:id", requireAuth, requireAdmin, async (req, res) => {
   const c = await Coupon.findById(req.params.id);
   if (!c) return res.status(404).json({ error: "Coupon not found" });
 
-  if (isBanner) {
-    // ensure only one banner coupon at a time
-    await Coupon.updateMany(
-      { _id: { $ne: c._id } },
-      { $set: { isBanner: false } }
-    );
+  const body = req.body || {};
+
+  if (body.code != null) c.code = normalizeCode(body.code);
+  if (body.description != null) c.description = String(body.description || "");
+  if (body.type != null) c.type = body.type;
+  if (body.value != null) c.value = Number(body.value || 0);
+  if (body.currency != null) c.currency = body.currency;
+  if (body.minSubtotal != null) c.minSubtotal = Number(body.minSubtotal || 0);
+  if (body.maxRedemptions !== undefined) {
+    c.maxRedemptions =
+      body.maxRedemptions === null || body.maxRedemptions === ""
+        ? undefined
+        : Number(body.maxRedemptions);
+  }
+  if (body.isActive != null) c.isActive = !!body.isActive;
+
+  if (body.startsAt !== undefined) c.startsAt = parseDate(body.startsAt);
+  if (body.endsAt !== undefined) c.endsAt = parseDate(body.endsAt);
+
+  if (body.bannerText != null) c.bannerText = String(body.bannerText || "");
+
+  // appliesTo (product-specific)
+  if (body.appliesTo != null) {
+    c.appliesTo = {
+      mode: body.appliesTo.mode || "all",
+      productKeys: Array.isArray(body.appliesTo.productKeys)
+        ? body.appliesTo.productKeys
+        : [],
+    };
   }
 
-  c.isBanner = isBanner;
-  await c.save();
+  // banner rules
+  if (body.isBanner != null) {
+    const nextBanner = !!body.isBanner;
 
+    if (nextBanner && !c.isActive)
+      return res.status(400).json({ error: "Banner coupon must be active." });
+
+    if (nextBanner) {
+      await Coupon.updateMany(
+        { isBanner: true },
+        { $set: { isBanner: false } }
+      );
+      c.isBanner = true;
+    } else {
+      c.isBanner = false;
+    }
+  }
+
+  await c.save();
   return res.json({ ok: true, coupon: c });
 });
 
+// POST /admin/coupons/:id/enable
+router.post("/:id/enable", requireAuth, requireAdmin, async (req, res) => {
+  await Coupon.updateOne({ _id: req.params.id }, { $set: { isActive: true } });
+  return res.json({ ok: true });
+});
+
+// POST /admin/coupons/:id/disable
+router.post("/:id/disable", requireAuth, requireAdmin, async (req, res) => {
+  // also remove banner if disabling
+  await Coupon.updateOne(
+    { _id: req.params.id },
+    { $set: { isActive: false, isBanner: false } }
+  );
+  return res.json({ ok: true });
+});
+
+// POST /admin/coupons/:id/banner  body: { isBanner: boolean }
+router.post("/:id/banner", requireAuth, requireAdmin, async (req, res) => {
+  const c = await Coupon.findById(req.params.id);
+  if (!c) return res.status(404).json({ error: "Coupon not found" });
+
+  const nextBanner = !!req.body?.isBanner;
+
+  if (nextBanner && !c.isActive)
+    return res.status(400).json({ error: "Banner coupon must be active." });
+
+  if (nextBanner) {
+    await Coupon.updateMany({ isBanner: true }, { $set: { isBanner: false } });
+    c.isBanner = true;
+  } else {
+    c.isBanner = false;
+  }
+
+  await c.save();
+  return res.json({ ok: true, coupon: c });
+});
+
+/**
+ * GET /admin/coupons/stats
+ * Simple analytics from Purchases:
+ * - uses coupon.couponId inside Purchase
+ */
+router.get("/stats", requireAuth, requireAdmin, async (_req, res) => {
+  const rows = await Purchase.aggregate([
+    { $match: { "coupon.couponId": { $exists: true, $ne: null } } },
+    {
+      $group: {
+        _id: "$coupon.couponId",
+        purchases: { $sum: 1 },
+        totalDiscountGiven: { $sum: "$coupon.discountAmount" },
+        lastUsedAt: { $max: "$createdAt" },
+      },
+    },
+  ]);
+
+  const statsById = {};
+  rows.forEach((r) => {
+    statsById[String(r._id)] = {
+      purchases: r.purchases || 0,
+      totalDiscountGiven: r.totalDiscountGiven || 0,
+      lastUsedAt: r.lastUsedAt || null,
+    };
+  });
+
+  return res.json({ ok: true, statsById });
+});
 
 export default router;
