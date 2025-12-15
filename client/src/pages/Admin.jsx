@@ -138,7 +138,7 @@ export default function Admin() {
   }, [users, q]);
 
   return (
-    <div className="space-y-6 px-8 md:px-25 py-4">
+    <div className="space-y-6 ">
       <div className="card">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold">Admin</h1>

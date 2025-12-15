@@ -4,8 +4,14 @@ import { Product } from "../models/Product.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { FreeVideo } from "../models/Learn.js";
 import { Training } from "../models/Training.js";
+import { HelpBotLog } from "../models/HelpBotLog.js";
+
 
 const router = express.Router();
+
+function isAdmin(req) {
+  return req.user?.role === "admin";
+}
 
 /* ------------------ Simple rate limit (no extra deps) ------------------ */
 const RL_WINDOW_MS = 60 * 1000; // 1 minute
@@ -229,8 +235,11 @@ router.post("/search", rateLimit, async (req, res) => {
       includeTrainings,
       includeFreeVideos,
     });
-
     const scored = catalog.all
+      .filter((it) => {
+        if (it.adminOnly && !isAdmin(req)) return false;
+        return true;
+      })
       .map((it) => {
         const idBoost = it.kind === "product" || it.kind === "course" ? 6 : 4;
         const score = scoreMatch(message, it.tokens, idBoost, it.id);
@@ -239,7 +248,19 @@ router.post("/search", rateLimit, async (req, res) => {
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map(({ tokens, ...safe }) => safe); // remove tokens from response
+      .map(({ tokens, ...safe }) => safe);
+
+      await HelpBotLog.create({
+        ip:
+          req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
+          req.socket?.remoteAddress,
+        userId: req.user?._id || null,
+        role: req.user?.role || "guest",
+        message,
+        matches: scored.length,
+        flagged: scored.length === 0 && message.length > 60,
+      });
+
 
     res.json({ matches: scored });
   } catch (err) {
