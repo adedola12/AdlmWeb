@@ -80,4 +80,37 @@ router.post("/validate", async (req, res) => {
   }
 });
 
+
+// GET /coupons/active
+router.get("/active", async (_req, res) => {
+  const now = dayjs();
+
+  const list = await Coupon.find({ isActive: true })
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  const active = list.filter((c) => {
+    if (c.startsAt && now.isBefore(dayjs(c.startsAt))) return false;
+    if (c.endsAt && now.isAfter(dayjs(c.endsAt))) return false;
+    if (c.maxRedemptions != null && c.redeemedCount >= c.maxRedemptions) return false;
+    return true;
+  });
+
+  // send only what frontend needs
+  res.json({
+    ok: true,
+    items: active.map((c) => ({
+      code: c.code,
+      type: c.type,
+      value: c.value,
+      currency: c.currency || "NGN",
+      minSubtotal: c.minSubtotal || 0,
+      startsAt: c.startsAt || null,
+      endsAt: c.endsAt || null,
+      appliesTo: c.appliesTo || { mode: "all", productKeys: [] },
+    })),
+  });
+});
+
+
 export default router;
