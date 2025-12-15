@@ -4,6 +4,7 @@ import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
+import HelpBot from "./components/HelpBot.jsx";
 import { API_BASE } from "./config";
 
 export default function App() {
@@ -54,7 +55,7 @@ export default function App() {
       </main>
 
       <Footer />
-
+      <HelpBot />
       <YoutubeWelcomeModal
         open={showVideo}
         onClose={closeVideo}
