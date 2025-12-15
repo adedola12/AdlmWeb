@@ -2,29 +2,37 @@ import mongoose from "mongoose";
 
 const CouponSchema = new mongoose.Schema(
   {
-    code: { type: String, required: true, unique: true, index: true }, // stored UPPERCASE
+    code: { type: String, required: true, unique: true, index: true },
     description: { type: String, default: "" },
 
     type: { type: String, enum: ["percent", "fixed"], required: true },
-    value: { type: Number, required: true }, // percent: 1-100, fixed: amount in currency below
+    value: { type: Number, required: true },
 
-    currency: { type: String, enum: ["NGN", "USD"], default: "NGN" }, // only used when type=fixed
-    minSubtotal: { type: Number, default: 0 }, // in chosen checkout currency (same currency as cart)
+    // fixed coupons only
+    currency: { type: String, enum: ["NGN", "USD"], default: "NGN" },
 
-    isActive: { type: Boolean, default: true },
+    minSubtotal: { type: Number, default: 0 },
 
-    // add to Coupon schema fields:
-    isBanner: { type: Boolean, default: false, index: true },
-    bannerText: { type: String, default: "" },
+    maxRedemptions: { type: Number },
+    redeemedCount: { type: Number, default: 0, index: true },
+
+    isActive: { type: Boolean, default: true, index: true },
+
+    // duration
     startsAt: { type: Date },
     endsAt: { type: Date },
 
-    maxRedemptions: { type: Number }, // optional
-    redeemedCount: { type: Number, default: 0 },
+    // ✅ Banner support
+    isBanner: { type: Boolean, default: false, index: true },
+    bannerText: { type: String, default: "" },
+
+    // ✅ Product-specific coupons
+    appliesTo: {
+      mode: { type: String, enum: ["all", "include"], default: "all" },
+      productKeys: { type: [String], default: [] },
+    },
   },
   { timestamps: true }
 );
-
-CouponSchema.index({ code: 1 }, { unique: true });
 
 export const Coupon = mongoose.model("Coupon", CouponSchema);

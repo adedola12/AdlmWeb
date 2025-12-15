@@ -3,11 +3,15 @@ import { Outlet, useLocation } from "react-router-dom";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
-import CouponBanner from "./components/CouponBanner.jsx"; // ✅ add
+import CouponBanner from "./components/CouponBanner.jsx";
+import { API_BASE } from "./config";
 
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
   const location = useLocation();
+
+  const [banner, setBanner] = React.useState(null);
+  const [bannerDismissed, setBannerDismissed] = React.useState(false);
 
   const VIDEO_ID = "UibPcyLIvHg";
   const MAX_SECONDS = 120;
@@ -17,18 +21,40 @@ export default function App() {
     else setShowVideo(false);
   }, [location.pathname]);
 
+  // load banner
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/coupons/banner`);
+        const json = await res.json();
+        if (json?.ok) setBanner(json.banner || null);
+      } catch {
+        // ignore banner failure
+      }
+    })();
+  }, []);
+
   function closeVideo() {
     setShowVideo(false);
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <CouponBanner /> {/* ✅ NEW site-wide banner */}
+      {!bannerDismissed && (
+        <CouponBanner
+          banner={banner}
+          onClose={() => setBannerDismissed(true)}
+        />
+      )}
+
       <Nav />
+
       <main className="w-full px-3 flex-1">
         <Outlet />
       </main>
+
       <Footer />
+
       <YoutubeWelcomeModal
         open={showVideo}
         onClose={closeVideo}

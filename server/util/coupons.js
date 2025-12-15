@@ -7,7 +7,17 @@ export function normalizeCode(code) {
     .toUpperCase();
 }
 
-export async function validateAndComputeDiscount({ code, currency, subtotal }) {
+function intersects(a = [], b = []) {
+  const set = new Set(a);
+  return b.some((x) => set.has(x));
+}
+
+export async function validateAndComputeDiscount({
+  code,
+  currency,
+  subtotal,
+  productKeys = [],
+}) {
   const couponCode = normalizeCode(code);
   if (!couponCode) return { ok: true, coupon: null, discount: 0 };
 
@@ -32,31 +42,34 @@ export async function validateAndComputeDiscount({ code, currency, subtotal }) {
       ).toLocaleString()}.`,
     };
 
+  // ✅ product-specific enforcement
+  const mode = c.appliesTo?.mode || "all";
+  const allowedKeys = c.appliesTo?.productKeys || [];
+
+  if (mode === "include" && allowedKeys.length > 0) {
+    const ok = intersects(allowedKeys, productKeys);
+    if (!ok) {
+      return { ok: false, error: "Coupon not valid for selected products." };
+    }
+  }
+
   let discount = 0;
 
   if (c.type === "percent") {
     const pct = Math.max(Math.min(Number(c.value || 0), 100), 0);
     discount = (Number(subtotal || 0) * pct) / 100;
   } else {
-    // fixed
-    // fixed coupon only applies if coupon currency matches checkout currency
     if (String(c.currency || "NGN") !== String(currency || "NGN")) {
       return { ok: false, error: `Coupon is only valid for ${c.currency}.` };
     }
     discount = Number(c.value || 0);
   }
 
-  // never exceed subtotal
   discount = Math.min(discount, Number(subtotal || 0));
-  // round 2dp for USD, integer-ish for NGN
   discount =
     currency === "USD"
       ? Math.round((discount + Number.EPSILON) * 100) / 100
       : Math.round(discount);
 
-  return {
-    ok: true,
-    coupon: c,
-    discount,
-  };
+  return { ok: true, coupon: c, discount };
 }

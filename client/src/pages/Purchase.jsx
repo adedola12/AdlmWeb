@@ -165,6 +165,7 @@ export default function Purchase() {
     0
   );
   const grandTotal = Math.max(total - discount, 0);
+  const productKeys = chosen.map((p) => p.key);
 
   async function applyCoupon() {
     setMsg("");
@@ -179,7 +180,12 @@ export default function Purchase() {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: couponCode, currency, subtotal }),
+        body: JSON.stringify({
+          code: couponCode,
+          currency,
+          subtotal,
+          productKeys,
+        }),
       });
 
       setCouponInfo(out.coupon);
