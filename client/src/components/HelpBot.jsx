@@ -459,7 +459,7 @@ export default function HelpBot() {
             </button>
           </div>
 
-          <div className="px-3 pb-3">
+          {/* <div className="px-3 pb-3">
             <button
               onClick={() =>
                 window.open(
@@ -472,7 +472,7 @@ export default function HelpBot() {
             >
               Chat with Live Support on WhatsApp
             </button>
-          </div>
+          </div> */}
         </div>
       )}
     </>
