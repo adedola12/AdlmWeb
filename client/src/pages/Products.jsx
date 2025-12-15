@@ -144,8 +144,6 @@ export default function Products() {
   const hasPrev = page > 1;
   const hasNext = page < pages;
 
-
-
   /* -------------------- admin edit -------------------- */
   function startEdit(p) {
     setEditingId(p._id);
@@ -228,7 +226,7 @@ export default function Products() {
   `;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 py-4 px-3 md:px-6 lg:px-12">
       <style>{style}</style>
 
       <ComingSoonModal show={showModal} onClose={closeModal} />
