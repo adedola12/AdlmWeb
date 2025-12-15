@@ -117,6 +117,12 @@ export default function Home() {
               >
                 Explore Products
               </Link>
+              <Link
+                to="https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link"
+                className="inline-flex items-center gap-2 rounded bg-white text-blue-700 px-4 py-2 font-medium hover:bg-blue-50 transition"
+              >
+                Download Mobile App
+              </Link>
               {!isAuthed && (
                 <Link
                   to="/signup"
