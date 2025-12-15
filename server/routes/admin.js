@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js"; // <-- IMPORTANT
+import { Coupon } from "../models/Coupon.js";
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 
 const router = express.Router();
@@ -31,10 +32,10 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
 
 // small helper
 function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
+  userDoc.entitlements = userDoc.entitlements || []; // ✅ ensure array exists
+
   const now = dayjs();
-  let ent = (userDoc.entitlements || []).find(
-    (e) => e.productKey === productKey
-  );
+  let ent = userDoc.entitlements.find((e) => e.productKey === productKey);
 
   if (!ent) {
     ent = {
@@ -48,6 +49,7 @@ function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
       ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
         ? dayjs(ent.expiresAt)
         : now;
+
     ent.status = "active";
     ent.expiresAt = base.add(monthsToAdd, "month").toDate();
   }
@@ -118,19 +120,16 @@ router.post(
     const user = await User.findById(purchase.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // If request includes an override for legacy single-product, use it.
     const overrideMonths = Number(req.body?.months);
 
+    // Apply entitlements
     if (Array.isArray(purchase.lines) && purchase.lines.length > 0) {
-      // Cart flow: apply each line
       purchase.lines.forEach((ln) => {
-        // convert qty to months
         const months =
           ln.billingInterval === "yearly" ? (ln.qty || 0) * 12 : ln.qty || 0;
         if (months > 0) addMonthsToEntitlement(user, ln.productKey, months);
       });
     } else if (purchase.productKey) {
-      // Legacy single-product flow
       const months = overrideMonths || purchase.requestedMonths || 1;
       addMonthsToEntitlement(user, purchase.productKey, months);
       purchase.approvedMonths = months;
@@ -140,15 +139,25 @@ router.post(
         .json({ error: "Nothing to approve for this purchase" });
     }
 
+    // ✅ Coupon redemption increments ONLY once (idempotent)
+    if (purchase.coupon?.couponId && !purchase.coupon.redeemedApplied) {
+      await Coupon.updateOne(
+        { _id: purchase.coupon.couponId },
+        { $inc: { redeemedCount: 1 } }
+      );
+      purchase.coupon.redeemedApplied = true;
+    }
+
     await user.save();
 
     purchase.status = "approved";
     purchase.decidedBy = req.user.email;
     purchase.decidedAt = new Date();
+
     await purchase.save();
 
     await autoEnrollFromPurchase(purchase);
-    
+
     return res.json({
       ok: true,
       purchase,
@@ -194,7 +203,8 @@ router.post(
 
     ent.deviceFingerprint = undefined;
     ent.deviceBoundAt = undefined;
-    u.refreshVersion += 1; // kick all current sessions
+    u.refreshVersion = (u.refreshVersion || 0) + 1;
+
     await u.save();
 
     return res.json({ ok: true });

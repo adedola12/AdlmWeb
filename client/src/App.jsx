@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
+import CouponBanner from "./components/CouponBanner.jsx"; // ✅ add
 
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
@@ -11,13 +12,9 @@ export default function App() {
   const VIDEO_ID = "UibPcyLIvHg";
   const MAX_SECONDS = 120;
 
-  // Show modal whenever user lands on Home (/)
   React.useEffect(() => {
-    if (location.pathname === "/") {
-      setShowVideo(true);
-    } else {
-      setShowVideo(false); // close if they leave Home
-    }
+    if (location.pathname === "/") setShowVideo(true);
+    else setShowVideo(false);
   }, [location.pathname]);
 
   function closeVideo() {
@@ -25,15 +22,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen  flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      <CouponBanner /> {/* ✅ NEW site-wide banner */}
       <Nav />
-
-      <main className="w-full px-3  flex-1">
+      <main className="w-full px-3 flex-1">
         <Outlet />
       </main>
-
       <Footer />
-
       <YoutubeWelcomeModal
         open={showVideo}
         onClose={closeVideo}

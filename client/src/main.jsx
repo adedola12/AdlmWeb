@@ -37,6 +37,8 @@ import NotFound from "./pages/NotFound.jsx";
 import Testimonials from "./pages/Testimonials.jsx";
 import AdminShowcase from "./pages/AdminShowcase.jsx";
 import TrainingDetail from "./pages/TrainingDetail.jsx";
+import AdminCoupons from "./pages/AdminCoupons.jsx"; // ✅ add this import
+
 
 const router = createBrowserRouter([
   {
@@ -74,6 +76,15 @@ const router = createBrowserRouter([
         path: "/checkout/thanks",
         element: <CheckoutThanks />,
       },
+      {
+        path: "admin/coupons",
+        element: (
+          <AdminRoute>
+            <AdminCoupons />
+          </AdminRoute>
+        ),
+      },
+
       {
         path: "profile",
         element: (

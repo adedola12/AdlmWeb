@@ -34,6 +34,9 @@ import adminTrainings from "./routes/admin.trainings.js";
 import showcasePublic from "./routes/showcase.js";
 import adminShowcase from "./routes/admin.showcase.js";
 import meOrdersRoutes from "./routes/meOrders.js";
+import couponsPublic from "./routes/coupons.js";
+import adminCoupons from "./routes/admin.coupons.js";
+
 
 const app = express();
 app.get("/__debug/db", (_req, res) => {
@@ -90,6 +93,9 @@ app.use("/purchase", purchaseRoutes);
 app.use("/learn", learnPublic);
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes);
+app.use("/coupons", couponsPublic);
+app.use("/admin/coupons", adminCoupons);
+
 app.use("/products", productsPublic);
 app.use("/admin/products", adminProducts);
 app.use("/admin/settings", adminSettings);

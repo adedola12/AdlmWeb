@@ -5,7 +5,6 @@ import { apiAuthed } from "../http.js";
 import { useSearchParams } from "react-router-dom";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 
-
 // Format helpers
 const fmt = (n, currency = "USD") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
@@ -14,19 +13,25 @@ const fmt = (n, currency = "USD") =>
 
 export default function Purchase() {
   const { accessToken } = useAuth();
+
   const [products, setProducts] = React.useState([]);
   const [cart, setCart] = React.useState({}); // { [productKey]: { qty, firstTime } }
-  const [currency, setCurrency] = React.useState("NGN"); // "NGN" | "USD"
+  const [currency, setCurrency] = React.useState("NGN");
+
+  const [couponCode, setCouponCode] = React.useState("");
+  const [couponInfo, setCouponInfo] = React.useState(null);
+  const [discount, setDiscount] = React.useState(0);
+
   const [submitting, setSubmitting] = React.useState(false);
   const [msg, setMsg] = React.useState("");
+
   const [qs] = useSearchParams();
+
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
-  const [showComingSoonModal, setShowComingSoonModal] = React.useState(false);
 
-  const closeComingSoonModal = () => {
-    setShowComingSoonModal(false);
-  };
+  const [showComingSoonModal, setShowComingSoonModal] = React.useState(false);
+  const closeComingSoonModal = () => setShowComingSoonModal(false);
 
   // Load published products
   React.useEffect(() => {
@@ -43,7 +48,7 @@ export default function Purchase() {
     })();
   }, []);
 
-  // Prefill from ?product=KEY&months=N (kept)
+  // Prefill from ?product=KEY&months=N
   React.useEffect(() => {
     const k = qs.get("product");
     const m = Math.max(parseInt(qs.get("months") || "1", 10), 1);
@@ -56,11 +61,13 @@ export default function Purchase() {
     if (!products.length) return;
     const raw = localStorage.getItem("cartItems");
     if (!raw) return;
+
     try {
       const arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return;
-      setCart((c) => {
-        const next = { ...c };
+
+      setCart(() => {
+        const next = {};
         arr.forEach(({ productKey, qty, firstTime }) => {
           next[productKey] = {
             qty: Math.max(parseInt(qty || 1, 10), 1),
@@ -78,6 +85,7 @@ export default function Purchase() {
       [key]: { ...(c[key] || { qty: 1, firstTime: false }), ...patch },
     }));
   }
+
   function toggleInCart(key) {
     setCart((c) =>
       c[key]
@@ -89,13 +97,14 @@ export default function Purchase() {
     );
   }
 
-  // PRICING HELPERS
+  // Pricing helpers
   function getPrices(p) {
     const monthly =
       currency === "USD" ? p.price?.monthlyUSD : p.price?.monthlyNGN;
     const yearly = currency === "USD" ? p.price?.yearlyUSD : p.price?.yearlyNGN;
     const install =
       currency === "USD" ? p.price?.installUSD : p.price?.installNGN;
+
     return {
       monthly: Number(monthly || 0),
       yearly: Number(yearly || 0),
@@ -131,6 +140,13 @@ export default function Purchase() {
     }
 
     if (firstTime) total += install || 0;
+
+    // normalize
+    total =
+      currency === "USD"
+        ? Math.round((total + Number.EPSILON) * 100) / 100
+        : Math.round(total);
+
     return {
       total,
       note: note || (p.billingInterval === "yearly" ? "yearly" : "monthly"),
@@ -148,12 +164,40 @@ export default function Purchase() {
     (sum, p) => sum + lineSubtotal(p, cart[p.key]),
     0
   );
+  const grandTotal = Math.max(total - discount, 0);
 
-  // NEW: show manual-pay modal instead of redirecting to Paystack
+  async function applyCoupon() {
+    setMsg("");
+    setCouponInfo(null);
+    setDiscount(0);
+
+    const subtotal = total;
+    if (!couponCode.trim()) return;
+
+    try {
+      const out = await apiAuthed(`/coupons/validate`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponCode, currency, subtotal }),
+      });
+
+      setCouponInfo(out.coupon);
+      setDiscount(Number(out.discount || 0));
+    } catch (e) {
+      setCouponInfo(null);
+      setDiscount(0);
+      setMsg(e.message || "Invalid coupon");
+    }
+  }
+
+  // Manual payment flow
   async function createPendingPurchaseAndShowModal() {
     if (!chosen.length) return;
+
     setSubmitting(true);
     setMsg("");
+
     try {
       const items = chosen.map((p) => ({
         productKey: p.key,
@@ -161,20 +205,16 @@ export default function Purchase() {
         firstTime: !!cart[p.key].firstTime,
       }));
 
-      // call server to create pending purchase (same endpoint as before)
       const out = await apiAuthed(`/purchase/cart`, {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currency, items }),
+        body: JSON.stringify({ currency, items, couponCode }), // ✅ send couponCode
       });
 
-      // We intentionally do NOT redirect to Paystack.
-      // Instead, show modal with bank details and let user confirm manual payment.
-      setPendingPurchaseId(out.purchaseId || out.purchase?._id || null);
+      setPendingPurchaseId(out.purchaseId || null);
       setShowManualPayModal(true);
 
-      // leave cart intact until the user confirms "I have paid"
       setMsg(out.message || "Order created. Please pay manually and confirm.");
     } catch (e) {
       setMsg(e.message || "Failed to create order");
@@ -183,25 +223,23 @@ export default function Purchase() {
     }
   }
 
-  // called when user presses "I have paid" in the modal
   async function confirmManualPayment() {
     if (!pendingPurchaseId) {
       setMsg("No pending purchase found.");
       return;
     }
+
     setSubmitting(true);
     setMsg("");
+
     try {
-      // Clear the cart locally (so UI updates)
       setCart({});
       localStorage.setItem("cartItems", "[]");
       localStorage.setItem("cartCount", "0");
 
-      // Optionally tell backend to mark as waiting-for-admin-review (already pending)
-      // We can also hit a "notify" endpoint if you prefer to send an admin notification.
-      // For now: purchase already has status 'pending', so admin UI will show it.
       setShowManualPayModal(false);
       setPendingPurchaseId(null);
+
       setMsg("Thank you. Your payment request is pending admin verification.");
     } catch (e) {
       setMsg(e.message || "Confirmation failed");
@@ -216,6 +254,7 @@ export default function Purchase() {
         show={showComingSoonModal}
         onClose={closeComingSoonModal}
       />
+
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Subscribe</h1>
@@ -224,6 +263,7 @@ export default function Purchase() {
             (installation fee applies).
           </p>
         </div>
+
         <label className="text-sm">
           <div className="mb-1">Currency</div>
           <select
@@ -243,7 +283,7 @@ export default function Purchase() {
           const entry = cart[p.key];
           const inCart = !!entry;
           const qtyLabel = p.billingInterval === "yearly" ? "Years" : "Months";
-          const { monthly, yearly, install } = getPrices(p);
+          const { monthly, yearly } = getPrices(p);
 
           return (
             <div
@@ -260,25 +300,7 @@ export default function Purchase() {
                 <span className="font-medium">{p.billingInterval}</span>
               </div>
 
-              {/* Show both prices for clarity */}
-              <div className="text-xs text-slate-600 mt-1">
-                NGN:{" "}
-                {p.billingInterval === "yearly"
-                  ? `₦${(p.price?.yearlyNGN || 0).toLocaleString()}/yr`
-                  : `₦${(p.price?.monthlyNGN || 0).toLocaleString()}/mo`}
-                {Number(p.price?.installNGN) > 0 &&
-                  ` · Install: ₦${(p.price.installNGN || 0).toLocaleString()}`}
-              </div>
-              <div className="text-xs text-slate-600">
-                USD:{" "}
-                {p.billingInterval === "yearly"
-                  ? `$${(p.price?.yearlyUSD || 0).toFixed(2)}/yr`
-                  : `$${(p.price?.monthlyUSD || 0).toFixed(2)}/mo`}
-                {Number(p.price?.installUSD) > 0 &&
-                  ` · Install: $${(p.price.installUSD || 0).toFixed(2)}`}
-              </div>
-
-              <div className="text-sm mt-1">
+              <div className="text-sm mt-2">
                 Current ({currency}):{" "}
                 <span className="font-medium">
                   {fmt(
@@ -292,8 +314,7 @@ export default function Purchase() {
               <div className="mt-3 flex items-center gap-2">
                 <button
                   className="btn btn-sm"
-                  onClick={() => setShowComingSoonModal(true)}
-                  // onClick={() => toggleInCart(p.key)}
+                  onClick={() => toggleInCart(p.key)}
                 >
                   {inCart ? "Remove" : "Add"}
                 </button>
@@ -313,6 +334,7 @@ export default function Purchase() {
                       }
                     />
                   </label>
+
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -336,7 +358,7 @@ export default function Purchase() {
                         Subtotal:{" "}
                         <span className="font-semibold">
                           {fmt(sub, currency)}
-                        </span>
+                        </span>{" "}
                         <span className="ml-2 text-xs text-slate-600">
                           ({note}
                           {entry.firstTime ? " + install" : ""})
@@ -351,7 +373,7 @@ export default function Purchase() {
         })}
       </div>
 
-      {/* Cart summary */}
+      {/* Summary */}
       <div className="card">
         <h2 className="font-semibold mb-2">Summary</h2>
 
@@ -369,6 +391,7 @@ export default function Purchase() {
                   entry.firstTime
                 );
                 const qtyLabel = p.billingInterval === "yearly" ? "yr" : "mo";
+
                 return (
                   <div
                     key={p.key}
@@ -386,9 +409,49 @@ export default function Purchase() {
               })}
             </div>
 
-            <div className="mt-3 flex items-center justify-between text-lg">
-              <div>Total</div>
-              <div className="font-semibold">{fmt(total, currency)}</div>
+            {/* Coupon */}
+            <div className="mt-4 border-t pt-4">
+              <div className="text-sm font-medium mb-2">Discount coupon</div>
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="Enter coupon code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                />
+                <button
+                  className="btn btn-sm"
+                  type="button"
+                  onClick={applyCoupon}
+                >
+                  Apply
+                </button>
+              </div>
+
+              {couponInfo && (
+                <div className="text-sm text-emerald-700 mt-2">
+                  Applied: <b>{couponInfo.code}</b> · Discount:{" "}
+                  <b>{fmt(discount, currency)}</b>
+                </div>
+              )}
+            </div>
+
+            {/* Totals */}
+            <div className="mt-4 border-t pt-4 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <div>Subtotal</div>
+                <div className="font-medium">{fmt(total, currency)}</div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>Discount</div>
+                <div className="font-medium">- {fmt(discount, currency)}</div>
+              </div>
+
+              <div className="flex items-center justify-between text-lg">
+                <div>Total</div>
+                <div className="font-semibold">{fmt(grandTotal, currency)}</div>
+              </div>
             </div>
 
             <button
@@ -398,6 +461,7 @@ export default function Purchase() {
             >
               {submitting ? "Processing…" : "Pay"}
             </button>
+
             {msg && <div className="text-sm mt-2">{msg}</div>}
           </>
         )}
@@ -428,9 +492,8 @@ export default function Purchase() {
               <div className="text-lg">Access Bank</div>
 
               <div className="text-xs text-slate-500 mt-2">
-                After you click "I have paid", we'll clear your cart locally and
-                the admin will be notified to approve or reject your
-                subscription.
+                After you click "I have paid", we clear your cart locally and
+                the admin will verify.
               </div>
             </div>
 
