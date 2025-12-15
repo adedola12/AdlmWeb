@@ -78,14 +78,15 @@ export default function AdminCoupons() {
   }
 
   // Load products for product-specific selection (using PUBLIC products endpoint is safest)
+  // Load products for product-specific selection (ADMIN endpoint = all products in DB)
   async function loadProducts() {
     try {
-      const res = await fetch(`/products?page=1&pageSize=200`, {
-        credentials: "include",
-      });
-      const json = await res.json();
-      setProducts(Array.isArray(json?.items) ? json.items : []);
-    } catch {
+      // admin/products already returns ALL (based on your Products.jsx logic)
+      const res = await apiAuthed("/admin/products", { token: accessToken });
+      const list = Array.isArray(res) ? res : [];
+      setProducts(list);
+    } catch (e) {
+      console.error(e);
       setProducts([]);
     }
   }
@@ -367,11 +368,14 @@ export default function AdminCoupons() {
               multiple
               size={5}
             >
-              {products.map((p) => (
-                <option key={p.key || p._id} value={p.key}>
-                  {p.name} ({p.key})
-                </option>
-              ))}
+              {products.map((p) => {
+                const k = p.key || p.slug || p._id; // fallback
+                return (
+                  <option key={k} value={k}>
+                    {p.name} ({k})
+                  </option>
+                );
+              })}
             </select>
           </label>
 

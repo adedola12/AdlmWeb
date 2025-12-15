@@ -1,3 +1,4 @@
+// src/pages/Products.jsx
 import React from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
@@ -58,6 +59,11 @@ function CardVideo({ src, poster }) {
 const getCategory = (p) =>
   p?.metadata?.category || p?.category || p?.type || "General";
 
+/* Safe product key resolver (supports your existing data shapes) */
+function getProductKey(p) {
+  return String(p?.key || p?.slug || p?._id || "").trim();
+}
+
 /* -------------------- Page -------------------- */
 export default function Products() {
   const [qs, setQs] = useSearchParams();
@@ -81,20 +87,20 @@ export default function Products() {
   const [category, setCategory] = React.useState("All Products");
 
   // cart badge (localStorage-backed)
-  const [cartCount, setCartCount] = React.useState(() =>
+  const [cartCount] = React.useState(() =>
     Number(localStorage.getItem("cartCount") || 0)
   );
 
   const [showModal, setShowModal] = React.useState(false);
-
-  const closeModal = () => {
-    setShowModal(false);
-  };
+  const closeModal = () => setShowModal(false);
 
   // admin-only edit state
   const [editingId, setEditingId] = React.useState(null);
   const [draft, setDraft] = React.useState({});
   const isEditing = (id) => editingId === id;
+
+  // Coupons (active)
+  const [activeCoupons, setActiveCoupons] = React.useState([]);
 
   const { user, accessToken } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -118,7 +124,12 @@ export default function Products() {
           { credentials: "include" }
         );
         const json = await res.json();
-        setData(json);
+        setData({
+          items: Array.isArray(json?.items) ? json.items : [],
+          total: Number(json?.total || 0),
+          page: Number(json?.page || page),
+          pageSize: Number(json?.pageSize || pageSize),
+        });
       }
     } catch (e) {
       setMsg(e.message || "Failed to load products");
@@ -140,7 +151,29 @@ export default function Products() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  const pages = Math.max(Math.ceil(data.total / pageSize), 1);
+  /* -------------------- load active coupons -------------------- */
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/coupons/active`, {
+          credentials: "include",
+        });
+        const json = await res.json();
+        const list = Array.isArray(json?.items) ? json.items : [];
+
+        // IMPORTANT: only keep product-specific coupons (mode === "include")
+        const productOnly = list.filter(
+          (c) => (c?.appliesTo?.mode || "all") === "include"
+        );
+
+        setActiveCoupons(productOnly);
+      } catch {
+        setActiveCoupons([]);
+      }
+    })();
+  }, []);
+
+  const pages = Math.max(Math.ceil((data.total || 0) / pageSize), 1);
   const hasPrev = page > 1;
   const hasNext = page < pages;
 
@@ -165,10 +198,12 @@ export default function Products() {
       sort: p.sort ?? 0,
     });
   }
+
   function cancelEdit() {
     setEditingId(null);
     setDraft({});
   }
+
   async function saveEdit(p) {
     try {
       setMsg("");
@@ -191,6 +226,7 @@ export default function Products() {
         isPublished: !!draft.isPublished,
         sort: Number(draft.sort || 0),
       };
+
       if (draft.monthlyUSD !== "")
         payload.price.monthlyUSD = Number(draft.monthlyUSD);
       if (draft.yearlyUSD !== "")
@@ -204,6 +240,7 @@ export default function Products() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       await load();
       setMsg("Product updated.");
       cancelEdit();
@@ -231,7 +268,7 @@ export default function Products() {
 
       <ComingSoonModal show={showModal} onClose={closeModal} />
 
-      {/* Toolbar: shadow + subtle ring */}
+      {/* Toolbar */}
       <div className="rounded-2xl bg-white p-3 md:p-4 sticky top-[56px] z-10 shadow-sm ring-1 ring-black/5">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="flex-1 relative">
@@ -267,7 +304,6 @@ export default function Products() {
             ))}
           </select>
 
-          {/* Admin-only Add Product button */}
           {isAdmin && (
             <button
               type="button"
@@ -293,7 +329,7 @@ export default function Products() {
         </div>
 
         <div className="mt-2 text-xs text-slate-600">
-          Showing {data.items.length} of {data.total} products.
+          Showing {(data.items || []).length} of {data.total || 0} products.
         </div>
       </div>
 
@@ -303,9 +339,8 @@ export default function Products() {
         <div className="text-sm text-slate-600">Loading…</div>
       ) : (
         <>
-          {/* Cards grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {data.items
+            {(data.items || [])
               .filter((p) => {
                 const q = query.trim().toLowerCase();
                 const catOk =
@@ -316,9 +351,10 @@ export default function Products() {
               })
               .map((p, idx) => (
                 <ProductCard
-                  key={p._id}
+                  key={p._id || getProductKey(p)}
                   p={p}
                   idx={idx}
+                  coupons={activeCoupons}
                   isAdmin={isAdmin}
                   isEditing={isEditing}
                   startEdit={startEdit}
@@ -331,7 +367,6 @@ export default function Products() {
               ))}
           </div>
 
-          {/* Pagination */}
           <div className="mt-6 flex items-center justify-between">
             <button
               className="btn btn-sm"
@@ -361,6 +396,7 @@ export default function Products() {
 function ProductCard({
   p,
   idx,
+  coupons = [],
   isAdmin,
   isEditing,
   startEdit,
@@ -373,10 +409,12 @@ function ProductCard({
   const editing = isEditing(p._id);
   const cat = getCategory(p);
   const rating = Number(p.rating || 0) || null;
+
   const popular =
     typeof p.isPopular === "boolean"
       ? p.isPopular
       : (p.sort ?? 99) <= 1 || (rating || 0) >= 4.8;
+
   const outOfStock = p.stockQty === 0;
 
   const yearly = p.price?.yearlyNGN || 0;
@@ -387,6 +425,34 @@ function ProductCard({
   const cardRef = React.useRef(null);
   const inView = useInView(cardRef);
   const delay = 80 + idx * 30;
+
+  const productKey = getProductKey(p);
+
+  // coupon applies ONLY if "include" mode and product key is in list
+  const applicable = (coupons || []).filter((c) => {
+    const mode = c?.appliesTo?.mode || "all";
+    if (mode !== "include") return false;
+    const keys = (c?.appliesTo?.productKeys || []).map(String);
+    // support cases where admin saved _id or key
+    return keys.includes(productKey) || keys.includes(String(p._id || ""));
+  });
+
+  // pick best savings coupon
+  let bestCoupon = null;
+  let bestSavings = 0;
+
+  for (const c of applicable) {
+    let savings = 0;
+    if (c.type === "percent") {
+      savings = (Number(unit || 0) * Number(c.value || 0)) / 100;
+    } else {
+      savings = Number(c.value || 0);
+    }
+    if (savings > bestSavings) {
+      bestSavings = savings;
+      bestCoupon = c;
+    }
+  }
 
   return (
     <article
@@ -415,6 +481,18 @@ function ProductCard({
         </div>
       )}
 
+      {/* Product-specific coupon badge */}
+      {bestCoupon && (
+        <div className="absolute left-3 top-3 z-10">
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+            {bestCoupon.code} ·{" "}
+            {bestCoupon.type === "percent"
+              ? `${bestCoupon.value}% OFF`
+              : `SAVE ${ngn(bestCoupon.value)}`}
+          </span>
+        </div>
+      )}
+
       <CardVideo src={p.previewUrl} poster={p.thumbnailUrl} />
 
       <div className="mt-2 flex items-center justify-between">
@@ -429,7 +507,7 @@ function ProductCard({
       </div>
 
       <Link
-        to={`/product/${encodeURIComponent(p.key)}`}
+        to={`/product/${encodeURIComponent(productKey)}`}
         className="mt-2 text-base md:text-lg font-semibold hover:text-blue-700 line-clamp-2"
         title={p.name}
       >
@@ -517,7 +595,7 @@ function ProductCard({
 
           <Link
             className="rounded-md px-3 py-2 text-sm font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition active:animate-[pop_180ms_ease-out] ring-1 ring-blue-600/0"
-            to={`/product/${encodeURIComponent(p.key)}`}
+            to={`/product/${encodeURIComponent(productKey)}`}
             title="View details"
           >
             View details
