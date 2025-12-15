@@ -6,6 +6,7 @@ import { User } from "../models/User.js";
 import { Refresh } from "../models/Refresh.js";
 import { PasswordReset } from "../models/PasswordReset.js";
 import { sendMail } from "../util/mailer.js";
+import { buildWelcomeEmail } from "../util/welcomeEmail.js";
 import {
   signAccess,
   signRefresh,
@@ -44,7 +45,6 @@ function isPluginClient(req) {
   return false;
 }
 
-
 /* -------------------- SIGNUP -------------------- */
 router.post("/signup", async (req, res) => {
   try {
@@ -79,6 +79,22 @@ router.post("/signup", async (req, res) => {
       whatsapp: normalizeWhatsApp(whatsapp),
       entitlements: [],
     });
+
+    try {
+      const { subject, html } = buildWelcomeEmail({
+        firstName: user.firstName,
+        lastName: user.lastName,
+      });
+
+      await sendMail({
+        to: user.email,
+        subject,
+        html,
+      });
+    } catch (mailErr) {
+      // Don't fail signup if email fails
+      console.error("[/auth/signup] welcome mail error:", mailErr);
+    }
 
     const payload = {
       _id: String(user._id),
@@ -116,14 +132,18 @@ router.post("/login", async (req, res) => {
   try {
     await ensureDb();
 
-    const { identifier, password, productKey, device_fingerprint } = req.body || {};
+    const { identifier, password, productKey, device_fingerprint } =
+      req.body || {};
     if (!identifier || !password) {
-      return res.status(400).json({ error: "identifier and password required" });
+      return res
+        .status(400)
+        .json({ error: "identifier and password required" });
     }
 
     const user = await findByIdentifier(identifier);
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
-    if (user.disabled) return res.status(403).json({ error: "Account disabled" });
+    if (user.disabled)
+      return res.status(403).json({ error: "Account disabled" });
 
     // password check (supports legacy `password`)
     let ok = false;
@@ -145,24 +165,41 @@ router.post("/login", async (req, res) => {
     // ── Only for plugin/desktop logins: require entitlement + device binding ──
     if (pluginLogin) {
       if (!productKey) {
-        return res.status(400).json({ error: "productKey required", code: "PRODUCT_KEY_REQUIRED" });
+        return res
+          .status(400)
+          .json({ error: "productKey required", code: "PRODUCT_KEY_REQUIRED" });
       }
       if (!device_fingerprint) {
-        return res.status(400).json({ error: "device_fingerprint required", code: "DFP_REQUIRED" });
+        return res
+          .status(400)
+          .json({ error: "device_fingerprint required", code: "DFP_REQUIRED" });
       }
 
-      const ent = (user.entitlements || []).find((e) => e.productKey === productKey);
+      const ent = (user.entitlements || []).find(
+        (e) => e.productKey === productKey
+      );
       if (!ent) {
-        return res.status(403).json({ error: "You do not have access to this product.", code: "NOT_ENTITLED" });
+        return res
+          .status(403)
+          .json({
+            error: "You do not have access to this product.",
+            code: "NOT_ENTITLED",
+          });
       }
 
       const now = new Date();
       const active =
         String(ent.status || "").toLowerCase() === "active" &&
-        ent.expiresAt && new Date(ent.expiresAt) > now;
+        ent.expiresAt &&
+        new Date(ent.expiresAt) > now;
 
       if (!active) {
-        return res.status(403).json({ error: "You do not have access to this product.", code: "NOT_ENTITLED" });
+        return res
+          .status(403)
+          .json({
+            error: "You do not have access to this product.",
+            code: "NOT_ENTITLED",
+          });
       }
 
       // one-device binding
@@ -211,7 +248,6 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Login failed" });
   }
 });
-
 
 /* -------------------- REFRESH -------------------- */
 router.post("/refresh", async (req, res) => {
