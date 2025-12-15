@@ -36,6 +36,8 @@ import adminShowcase from "./routes/admin.showcase.js";
 import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
+import helpbotRoutes from "./routes/helpbot.js";
+
 
 
 const app = express();
@@ -115,6 +117,7 @@ app.use("/admin/trainings", adminTrainings);
 
 app.use("/showcase", showcasePublic);
 app.use("/admin/showcase", adminShowcase);
+app.use("/helpbot", helpbotRoutes);
 
 /* -------- helpful error for bad JSON -------- */
 app.use((err, _req, res, next) => {
