@@ -43,6 +43,7 @@ const UserSchema = new mongoose.Schema(
     disabled: { type: Boolean, default: false },
     entitlements: [EntitlementSchema],
     refreshVersion: { type: Number, default: 1 },
+    welcomeEmailSentAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
