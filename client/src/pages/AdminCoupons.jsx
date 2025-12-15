@@ -235,7 +235,7 @@ export default function AdminCoupons() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-8 md:px-25 py-4">
       <div className="card">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-xl font-semibold">Admin · Coupons</h1>
