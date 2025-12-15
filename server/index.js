@@ -48,7 +48,41 @@ app.get("/__debug/db", (_req, res) => {
 app.set("trust proxy", 1);
 
 // security / parsing
-app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "https://js.paystack.co",
+          "https://checkout.flutterwave.com",
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        fontSrc: ["'self'", "https:", "data:"],
+        connectSrc: [
+          "'self'",
+          "https://api.paystack.co",
+          "https://api.flutterwave.com",
+        ],
+        frameSrc: [
+          "https://js.paystack.co",
+          "https://checkout.flutterwave.com",
+        ],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    hsts: process.env.NODE_ENV === "production",
+  })
+);
+
 app.use(cookieParser());
 app.use(express.json()); // expects valid JSON when Content-Type: application/json
 app.use(express.urlencoded({ extended: false })); // allows form posts too

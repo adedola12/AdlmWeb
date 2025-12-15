@@ -50,7 +50,7 @@ export default function App() {
 
       <Nav />
 
-      <main className="w-full px-3 flex-1">
+      <main className="w-full flex-1 px-8 md:px-25 py-4">
         <Outlet />
       </main>
 
