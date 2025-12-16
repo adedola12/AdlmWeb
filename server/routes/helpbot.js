@@ -5,12 +5,29 @@ import { PaidCourse } from "../models/PaidCourse.js";
 import { FreeVideo } from "../models/Learn.js";
 import { Training } from "../models/Training.js";
 import { HelpBotLog } from "../models/HelpBotLog.js";
-
+import { askAI } from "../services/helpbotAI.js";
 
 const router = express.Router();
 
 function isAdmin(req) {
   return req.user?.role === "admin";
+}
+
+const aiHits = new Map();
+
+function canUseAI(ip) {
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000; // 1 hr
+  const max = 10;
+
+  const hits = aiHits.get(ip) || [];
+  const recent = hits.filter((t) => now - t < windowMs);
+
+  if (recent.length >= max) return false;
+
+  recent.push(now);
+  aiHits.set(ip, recent);
+  return true;
 }
 
 /* ------------------ Simple rate limit (no extra deps) ------------------ */
@@ -250,17 +267,51 @@ router.post("/search", rateLimit, async (req, res) => {
       .slice(0, limit)
       .map(({ tokens, ...safe }) => safe);
 
-      await HelpBotLog.create({
-        ip:
-          req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
-          req.socket?.remoteAddress,
-        userId: req.user?._id || null,
-        role: req.user?.role || "guest",
-        message,
-        matches: scored.length,
-        flagged: scored.length === 0 && message.length > 60,
+    await HelpBotLog.create({
+      ip:
+        req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
+        req.socket?.remoteAddress,
+      userId: req.user?._id || null,
+      role: req.user?.role || "guest",
+      message,
+      matches: scored.length,
+      flagged: scored.length === 0 && message.length > 60,
+    });
+
+    if (!canUseAI(req.ip)) {
+      return res.json({
+        reply:
+          "I’ve reached my AI help limit for now. Please contact support for further help.",
+        actions: [
+          {
+            label: "WhatsApp Support",
+            wa: true,
+          },
+        ],
+      });
+    }
+
+    // AI fallback (only if nothing matched)
+    if (scored.length === 0) {
+      const aiReply = await askAI({
+        question: message,
+        context: `
+Available pages: Home, Products, Learn, Trainings, Checkout, Dashboard
+Products include: Revit Plugin, PlanSwift Plugin, RateGen
+`,
       });
 
+      if (aiReply) {
+        return res.json({
+          ai: true,
+          reply: aiReply,
+          actions: [
+            { label: "Browse Products", to: "/products" },
+            { label: "Contact Support (WhatsApp)", wa: true },
+          ],
+        });
+      }
+    }
 
     res.json({ matches: scored });
   } catch (err) {

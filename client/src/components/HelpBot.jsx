@@ -356,6 +356,24 @@ export default function HelpBot() {
       return;
     }
 
+    if (res.ai && res.reply) {
+      pushBot(res.reply, [
+        ...res.actions.map((a) =>
+          a.wa
+            ? {
+                label: "Chat on WhatsApp",
+                kind: "wa",
+                href: buildWhatsAppLink(
+                  `Hi ADLM Support, I need help with: ${userText}`
+                ),
+              }
+            : { label: a.label, kind: "nav", to: a.to }
+        ),
+      ]);
+      return;
+    }
+
+
     // 4) final fallback
     pushBot(
       "I’m not sure yet. Try “site map” or type the exact product/course name (e.g., RateGen, PlanSwift, BIM course).",
