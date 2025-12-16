@@ -230,6 +230,7 @@ function MediaBrowserModal({
       qs.set("type", type);
       if (q) qs.set("q", q);
       if (cursor) qs.set("next", cursor);
+
       const res = await fetch(
         `${API_BASE}/admin/media/assets?${qs.toString()}`,
         {
@@ -237,82 +238,153 @@ function MediaBrowserModal({
           headers: { Authorization: `Bearer ${accessToken}` },
         }
       );
+
       const json = await res.json();
-      if (cursor) {
-        setItems((prev) => [...prev, ...json.items]);
-      } else {
-        setItems(json.items || []);
-      }
+
+      if (cursor) setItems((prev) => [...prev, ...(json.items || [])]);
+      else setItems(json.items || []);
+
       setNext(json.next || null);
     } finally {
       setLoading(false);
     }
   }
 
+  // load when open / search changes / type changes
   React.useEffect(() => {
     if (open) load(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, q, type]);
 
+  // ESC closes modal
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
+
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl p-4 w-full max-w-3xl space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="font-semibold">Choose from Cloudinary ({type})</div>
-          <button className="btn btn-sm" onClick={onClose}>
-            Close
-          </button>
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      onMouseDown={(e) => {
+        // close if user clicks the dark overlay (outside the dialog)
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden">
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 bg-white border-b">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div>
+              <div className="font-semibold text-slate-900">
+                Choose from Cloudinary{" "}
+                <span className="text-slate-500">({type})</span>
+              </div>
+              <div className="text-xs text-slate-500">
+                Click an asset to select • Esc or X to close
+              </div>
+            </div>
+
+            {/* X close button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-9 w-9 rounded-full grid place-items-center hover:bg-slate-100 active:scale-95 transition"
+              aria-label="Close"
+              title="Close"
+            >
+              <span className="text-xl leading-none">&times;</span>
+            </button>
+          </div>
+
+          <div className="px-4 pb-3">
+            <input
+              className="input w-full"
+              placeholder="Search filename..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
         </div>
-        <input
-          className="input"
-          placeholder="Search filename..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        {loading ? (
-          <div className="text-sm text-slate-600">Loading…</div>
-        ) : (
-          <>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-              {items.map((it) => (
-                <button
-                  key={it.public_id}
-                  className="border rounded overflow-hidden"
-                  onClick={() => onPick(it.url)}
-                  title={it.public_id}
-                  type="button"
-                >
-                  {type === "image" ? (
-                    <img src={it.url} className="w-full h-24 object-cover" />
-                  ) : (
-                    <video src={it.url} className="w-full h-24 object-cover" />
-                  )}
-                </button>
-              ))}
-              {!items.length && (
-                <div className="text-sm text-slate-600 col-span-full">
-                  No assets found.
-                </div>
-              )}
-            </div>
-            <div className="flex items-center justify-between">
-              <div />
-              <button
-                type="button"
-                className="btn btn-sm"
-                disabled={!next || loading}
-                onClick={() => load(next)}
+
+        {/* Scrollable body */}
+        <div className="px-4 py-4">
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : (
+            <>
+              <div
+                className="
+                  max-h-[65vh]
+                  overflow-y-auto
+                  pr-1
+                "
               >
-                Load more
-              </button>
-            </div>
-          </>
-        )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {items.map((it) => (
+                    <button
+                      key={it.public_id}
+                      className="border rounded-xl overflow-hidden hover:shadow-sm transition bg-white"
+                      onClick={() => onPick(it.url)}
+                      title={it.public_id}
+                      type="button"
+                    >
+                      {type === "image" ? (
+                        <img
+                          src={it.url}
+                          className="w-full h-24 object-cover"
+                          alt=""
+                          loading="lazy"
+                        />
+                      ) : (
+                        <video
+                          src={it.url}
+                          className="w-full h-24 object-cover"
+                          preload="metadata"
+                        />
+                      )}
+                      <div className="px-2 py-1 text-[11px] text-slate-600 truncate">
+                        {it.public_id}
+                      </div>
+                    </button>
+                  ))}
+
+                  {!items.length && (
+                    <div className="text-sm text-slate-600 col-span-full">
+                      No assets found.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer actions */}
+              <div className="mt-4 flex items-center justify-between">
+                <button type="button" className="btn btn-sm" onClick={onClose}>
+                  Close
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={!next || loading}
+                  onClick={() => load(next)}
+                >
+                  Load more
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
 
 export default function AdminProductEdit() {
   const { id } = useParams();
