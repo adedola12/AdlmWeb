@@ -424,7 +424,7 @@ export default function HelpBot() {
           <div className="px-4 py-3 bg-slate-900 text-white">
             <div className="font-semibold">ADLM Help</div>
             <div className="text-xs opacity-80">
-              Server Search • Site Map • WhatsApp Support
+              Make fast enquiries • Site Map • WhatsApp Support
             </div>
           </div>
 
