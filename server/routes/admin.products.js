@@ -118,11 +118,16 @@ router.post("/", async (req, res) => {
   res.json(p);
 });
 
-// PATCH /admin/products/:id
+// PATCH /admin/products/:id  -> supports ObjectId OR product.key OR courseSku
 router.patch("/:id", async (req, res) => {
-  const body = { ...req.body };
-  if (body.key) delete body.key;
+  const { id } = req.params;
 
+  const body = { ...req.body };
+
+  // never allow changing key via edit
+  if ("key" in body) delete body.key;
+
+  // sanitize arrays
   if (Array.isArray(body.features))
     body.features = body.features.filter(Boolean);
   if (Array.isArray(body.images)) body.images = body.images.filter(Boolean);
@@ -131,7 +136,16 @@ router.patch("/:id", async (req, res) => {
   if (Array.isArray(body.relatedCourseSkus))
     body.relatedCourseSkus = body.relatedCourseSkus.filter(Boolean);
 
-  const p = await Product.findByIdAndUpdate(req.params.id, body, { new: true });
+  // ✅ choose filter depending on id type
+  const filter = mongoose.isValidObjectId(id)
+    ? { _id: id }
+    : { $or: [{ key: id }, { courseSku: id }] };
+
+  const p = await Product.findOneAndUpdate(filter, body, {
+    new: true,
+    runValidators: true,
+  });
+
   if (!p) return res.status(404).json({ error: "Not found" });
 
   // Ensure a PaidCourse exists if product is a course
@@ -155,10 +169,17 @@ router.patch("/:id", async (req, res) => {
   res.json(p);
 });
 
-// DELETE /admin/products/:id
+// DELETE /admin/products/:id  -> supports ObjectId OR product.key OR courseSku
 router.delete("/:id", async (req, res) => {
-  const out = await Product.findByIdAndDelete(req.params.id);
+  const { id } = req.params;
+
+  const filter = mongoose.isValidObjectId(id)
+    ? { _id: id }
+    : { $or: [{ key: id }, { courseSku: id }] };
+
+  const out = await Product.findOneAndDelete(filter);
   if (!out) return res.status(404).json({ error: "Not found" });
+
   res.json({ ok: true });
 });
 
