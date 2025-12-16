@@ -49,6 +49,16 @@ a.active hr{
     }
   }
 
+  @keyframes helpBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-help-bounce {
+  animation: helpBounce 1.4s ease-in-out infinite;
+}
+
+
   .no-scrollbar {
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */

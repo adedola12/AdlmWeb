@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
+import { FaUserAstronaut } from "react-icons/fa";
 
 /* ------------------ WhatsApp ------------------ */
 const WHATSAPP_NUMBER = "2348106503524";
@@ -410,10 +411,12 @@ export default function HelpBot() {
     <>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-50 rounded-full px-4 py-3 shadow-lg bg-blue-600 text-white hover:bg-blue-700"
-        aria-label="Open help chat"
+        className="fixed right-5 top-1/2 -translate-y-1/2 z-50 rounded-full p-4 shadow-lg bg-blue-600 text-white hover:bg-blue-700
+           animate-help-bounce active:scale-95 transition-transform"
+        aria-label={open ? "Close help chat" : "Open help chat"}
+        title={open ? "Close help" : "Need help?"}
       >
-        {open ? "Close" : "Help"}
+        <FaUserAstronaut className="text-2xl" />
       </button>
 
       {open && (
