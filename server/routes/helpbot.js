@@ -1,4 +1,3 @@
-// server/routes/helpbot.js
 import express from "express";
 import { Product } from "../models/Product.js";
 import { PaidCourse } from "../models/PaidCourse.js";
@@ -9,66 +8,25 @@ import { askAI } from "../services/helpbotAI.js";
 
 const router = express.Router();
 
-function isAdmin(req) {
-  return req.user?.role === "admin";
-}
-
-const aiHits = new Map();
-
-function canUseAI(ip) {
-  const now = Date.now();
-  const windowMs = 60 * 60 * 1000; // 1 hr
-  const max = 10;
-
-  const hits = aiHits.get(ip) || [];
-  const recent = hits.filter((t) => now - t < windowMs);
-
-  if (recent.length >= max) return false;
-
-  recent.push(now);
-  aiHits.set(ip, recent);
-  return true;
-}
-
-/* ------------------ Simple rate limit (no extra deps) ------------------ */
-const RL_WINDOW_MS = 60 * 1000; // 1 minute
-const RL_MAX = 60; // 60 requests/min per IP (tune)
-const hits = new Map();
-
-function rateLimit(req, res, next) {
-  const ip =
+/* ------------------ helpers ------------------ */
+function getIP(req) {
+  return (
     req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
     req.socket?.remoteAddress ||
-    "unknown";
-
-  const now = Date.now();
-  const rec = hits.get(ip) || { ts: now, count: 0 };
-
-  if (now - rec.ts > RL_WINDOW_MS) {
-    rec.ts = now;
-    rec.count = 0;
-  }
-
-  rec.count += 1;
-  hits.set(ip, rec);
-
-  if (rec.count > RL_MAX) {
-    return res
-      .status(429)
-      .json({ error: "Too many requests. Try again soon." });
-  }
-  next();
+    "unknown"
+  );
 }
 
-/* ------------------ Helpers ------------------ */
 function normalize(text) {
   return String(text || "")
     .toLowerCase()
     .trim();
 }
+
 function uniq(arr) {
   return Array.from(new Set(arr.filter(Boolean)));
 }
+
 function tokenize(text) {
   return uniq(
     normalize(text)
@@ -94,8 +52,52 @@ function scoreMatch(message, itemTokens, idBoost, itemId) {
   return score;
 }
 
-/* ------------------ Server-side cache (NOT localStorage) ------------------ */
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 mins (tune)
+/* ------------------ rate limit (no deps) ------------------ */
+const RL_WINDOW_MS = 60 * 1000;
+const RL_MAX = 60;
+const rlHits = new Map();
+
+function rateLimit(req, res, next) {
+  const ip = getIP(req);
+  const now = Date.now();
+  const rec = rlHits.get(ip) || { ts: now, count: 0 };
+
+  if (now - rec.ts > RL_WINDOW_MS) {
+    rec.ts = now;
+    rec.count = 0;
+  }
+
+  rec.count += 1;
+  rlHits.set(ip, rec);
+
+  if (rec.count > RL_MAX) {
+    return res
+      .status(429)
+      .json({ error: "Too many requests. Try again soon." });
+  }
+
+  next();
+}
+
+/* ------------------ AI limit (separate) ------------------ */
+const aiHits = new Map();
+function canUseAI(ip) {
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000; // 1hr
+  const max = 10;
+
+  const hits = aiHits.get(ip) || [];
+  const recent = hits.filter((t) => now - t < windowMs);
+
+  if (recent.length >= max) return false;
+
+  recent.push(now);
+  aiHits.set(ip, recent);
+  return true;
+}
+
+/* ------------------ server cache ------------------ */
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 mins
 let CACHE = { ts: 0, data: null };
 
 async function buildCatalog({ includeTrainings, includeFreeVideos }) {
@@ -148,9 +150,9 @@ async function buildCatalog({ includeTrainings, includeFreeVideos }) {
 
     return {
       kind: "product",
-      id,
+      id: String(id),
       label,
-      to: id ? `/product/${encodeURIComponent(id)}` : "/products",
+      to: id ? `/product/${encodeURIComponent(String(id))}` : "/products",
       tokens: tokenize(textBlob),
       meta: {
         billingInterval: p?.billingInterval || "monthly",
@@ -172,9 +174,9 @@ async function buildCatalog({ includeTrainings, includeFreeVideos }) {
 
     return {
       kind: "course",
-      id,
+      id: String(id),
       label,
-      to: id ? `/learn/course/${encodeURIComponent(id)}` : "/learn",
+      to: id ? `/learn/course/${encodeURIComponent(String(id))}` : "/learn",
       tokens: tokenize(textBlob),
       meta: {},
     };
@@ -189,9 +191,9 @@ async function buildCatalog({ includeTrainings, includeFreeVideos }) {
 
     return {
       kind: "training",
-      id,
+      id: String(id),
       label,
-      to: id ? `/trainings/${encodeURIComponent(id)}` : "/trainings",
+      to: id ? `/trainings/${encodeURIComponent(String(id))}` : "/trainings",
       tokens: tokenize(textBlob),
       meta: { mode: t.mode, date: t.date },
     };
@@ -204,9 +206,9 @@ async function buildCatalog({ includeTrainings, includeFreeVideos }) {
 
     return {
       kind: "freeVideo",
-      id,
+      id: String(id),
       label,
-      to: id ? `/learn/free/${encodeURIComponent(id)}` : "/learn",
+      to: id ? `/learn/free/${encodeURIComponent(String(id))}` : "/learn",
       tokens: tokenize(textBlob),
       meta: {},
     };
@@ -220,21 +222,22 @@ async function buildCatalog({ includeTrainings, includeFreeVideos }) {
 async function getCatalogCached(opts) {
   const now = Date.now();
   if (CACHE.data && now - CACHE.ts < CACHE_TTL_MS) return CACHE.data;
-
   const data = await buildCatalog(opts);
   CACHE = { ts: now, data };
   return data;
 }
 
-/* ------------------ Endpoints ------------------ */
-
+/* ------------------ endpoint ------------------ */
 /**
  * POST /helpbot/search
  * body: { message: string, includeTrainings?: boolean, includeFreeVideos?: boolean, limit?: number }
- * returns: { matches: [{kind,id,label,to,meta,score}] }
+ * returns:
+ *   - { matches: [...] } OR
+ *   - { ai: true, reply: string, actions: [...] }
  */
 router.post("/search", rateLimit, async (req, res) => {
   try {
+    const ip = getIP(req);
     const message = String(req.body?.message || "").trim();
     const includeTrainings = !!req.body?.includeTrainings;
     const includeFreeVideos = !!req.body?.includeFreeVideos;
@@ -244,19 +247,15 @@ router.post("/search", rateLimit, async (req, res) => {
     );
 
     if (!message) return res.json({ matches: [] });
-    if (message.length > 240) {
+    if (message.length > 240)
       return res.status(400).json({ error: "Message too long." });
-    }
 
     const catalog = await getCatalogCached({
       includeTrainings,
       includeFreeVideos,
     });
+
     const scored = catalog.all
-      .filter((it) => {
-        if (it.adminOnly && !isAdmin(req)) return false;
-        return true;
-      })
       .map((it) => {
         const idBoost = it.kind === "product" || it.kind === "course" ? 6 : 4;
         const score = scoreMatch(message, it.tokens, idBoost, it.id);
@@ -267,53 +266,53 @@ router.post("/search", rateLimit, async (req, res) => {
       .slice(0, limit)
       .map(({ tokens, ...safe }) => safe);
 
-    await HelpBotLog.create({
-      ip:
-        req.headers["x-forwarded-for"]?.toString().split(",")[0] ||
-        req.socket?.remoteAddress,
-      userId: req.user?._id || null,
-      role: req.user?.role || "guest",
-      message,
-      matches: scored.length,
-      flagged: scored.length === 0 && message.length > 60,
-    });
+    // log (best effort)
+    try {
+      await HelpBotLog.create({
+        ip,
+        userId: req.user?._id || null,
+        role: req.user?.role || "guest",
+        message,
+        matches: scored.length,
+        flagged: scored.length === 0 && message.length > 60,
+      });
+    } catch {}
 
-    if (!canUseAI(req.ip)) {
+    // If we have matches, return immediately (no AI quota used)
+    if (scored.length > 0) return res.json({ matches: scored });
+
+    // AI fallback only when no matches
+    if (!canUseAI(ip)) {
       return res.json({
+        ai: false,
         reply:
           "I’ve reached my AI help limit for now. Please contact support for further help.",
+        actions: [{ label: "WhatsApp Support", wa: true }],
+      });
+    }
+
+    const aiReply = await askAI({
+      question: message,
+      context: `
+Available pages: Home, Products, Learn, Trainings, Checkout, Dashboard
+Products include: Revit Plugin, PlanSwift Plugin, RateGen
+If user needs human help, suggest WhatsApp support.
+`,
+    });
+
+    if (aiReply) {
+      return res.json({
+        ai: true,
+        reply: aiReply,
         actions: [
-          {
-            label: "WhatsApp Support",
-            wa: true,
-          },
+          { label: "Browse Products", to: "/products" },
+          { label: "Contact Support (WhatsApp)", wa: true },
         ],
       });
     }
 
-    // AI fallback (only if nothing matched)
-    if (scored.length === 0) {
-      const aiReply = await askAI({
-        question: message,
-        context: `
-Available pages: Home, Products, Learn, Trainings, Checkout, Dashboard
-Products include: Revit Plugin, PlanSwift Plugin, RateGen
-`,
-      });
-
-      if (aiReply) {
-        return res.json({
-          ai: true,
-          reply: aiReply,
-          actions: [
-            { label: "Browse Products", to: "/products" },
-            { label: "Contact Support (WhatsApp)", wa: true },
-          ],
-        });
-      }
-    }
-
-    res.json({ matches: scored });
+    // no AI reply (or disabled)
+    return res.json({ matches: [] });
   } catch (err) {
     console.error("POST /helpbot/search error", err);
     res.status(500).json({ error: "Search failed" });

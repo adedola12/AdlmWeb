@@ -86,7 +86,6 @@ const SITE_MAP = [
     keywords: ["signup", "register"],
     description: "Create a new account.",
   },
-
   {
     id: "dashboard",
     label: "Dashboard",
@@ -111,7 +110,6 @@ const SITE_MAP = [
     description: "Update your password (requires login).",
     protected: true,
   },
-
   {
     id: "admin",
     label: "Admin Dashboard",
@@ -262,7 +260,7 @@ export default function HelpBot() {
 
     const json = await res.json();
     if (!res.ok) throw new Error(json?.error || "Search failed");
-    return Array.isArray(json?.matches) ? json.matches : [];
+    return json; // IMPORTANT: return full JSON, not only matches
   }
 
   async function send(text) {
@@ -286,16 +284,38 @@ export default function HelpBot() {
       return;
     }
 
-    // 2) server-side matches
+    // 2) backend search (matches OR AI reply)
     try {
-      const matches = await searchBackend(userText);
+      const result = await searchBackend(userText);
+
+      // AI reply path
+      if (result?.ai && result?.reply) {
+        const actions = (result.actions || []).map((a) =>
+          a.wa
+            ? {
+                label: "Chat on WhatsApp",
+                kind: "wa",
+                href: buildWhatsAppLink(
+                  `Hi ADLM Support, I need help with: ${userText}`
+                ),
+              }
+            : { label: a.label, kind: "nav", to: a.to }
+        );
+
+        pushBot(result.reply, [
+          ...actions,
+          { label: "Products", to: "/products", kind: "nav" },
+        ]);
+        return;
+      }
+
+      const matches = Array.isArray(result?.matches) ? result.matches : [];
 
       if (matches.length >= 1) {
         const lines = matches
           .map((m, idx) => `${idx + 1}) ${summarizeServerMatch(m)}`)
           .join("\n");
 
-        // Filter admin-only UI routes from actions (backend results are public items)
         const actions = matches
           .map((m) => [
             { label: `Open: ${m.label}`, to: m.to, kind: "nav" },
@@ -322,11 +342,10 @@ export default function HelpBot() {
         return;
       }
     } catch (e) {
-      // If backend is down, we still proceed to route fallback
       console.warn("HelpBot backend search failed:", e);
     }
 
-    // 3) route match fallback
+    // 3) route fallback
     if (routeMatch?.to) {
       if (routeMatch.adminOnly && !isAdmin) {
         pushBot("That page is for admins only. Contact support for access.", [
@@ -355,24 +374,6 @@ export default function HelpBot() {
       );
       return;
     }
-
-    if (res.ai && res.reply) {
-      pushBot(res.reply, [
-        ...res.actions.map((a) =>
-          a.wa
-            ? {
-                label: "Chat on WhatsApp",
-                kind: "wa",
-                href: buildWhatsAppLink(
-                  `Hi ADLM Support, I need help with: ${userText}`
-                ),
-              }
-            : { label: a.label, kind: "nav", to: a.to }
-        ),
-      ]);
-      return;
-    }
-
 
     // 4) final fallback
     pushBot(
@@ -476,21 +477,6 @@ export default function HelpBot() {
               Send
             </button>
           </div>
-
-          {/* <div className="px-3 pb-3">
-            <button
-              onClick={() =>
-                window.open(
-                  buildWhatsAppLink(),
-                  "_blank",
-                  "noopener,noreferrer"
-                )
-              }
-              className="w-full rounded-xl px-3 py-2 text-sm bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              Chat with Live Support on WhatsApp
-            </button>
-          </div> */}
         </div>
       )}
     </>
