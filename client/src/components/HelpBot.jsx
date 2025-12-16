@@ -221,6 +221,20 @@ function summarizeServerMatch(m) {
   return m.label;
 }
 
+const DEFAULT_MESSAGES = [
+  {
+    role: "bot",
+    text: "Hi 👋 I’m ADLM Help. Type a product/course/training name (e.g. RateGen, PlanSwift, BIM course) or type “site map”.",
+    actions: [
+      { label: "Products", to: "/products", kind: "nav" },
+      { label: "Learn", to: "/learn", kind: "nav" },
+      { label: "Trainings", to: "/trainings", kind: "nav" },
+      { label: "Site Map", kind: "text", text: "site map" },
+      { label: "WhatsApp Support", kind: "wa", href: buildWhatsAppLink() },
+    ],
+  },
+];
+
 export default function HelpBot() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -228,23 +242,40 @@ export default function HelpBot() {
 
   const [open, setOpen] = React.useState(false);
   const [input, setInput] = React.useState("");
-  const [messages, setMessages] = React.useState(() => [
-    {
-      role: "bot",
-      text: "Hi 👋 I’m ADLM Help. Type a product/course/training name (e.g. RateGen, PlanSwift, BIM course) or type “site map”.",
-      actions: [
-        { label: "Products", to: "/products", kind: "nav" },
-        { label: "Learn", to: "/learn", kind: "nav" },
-        { label: "Trainings", to: "/trainings", kind: "nav" },
-        { label: "Site Map", kind: "text", text: "site map" },
-        { label: "WhatsApp Support", kind: "wa", href: buildWhatsAppLink() },
-      ],
-    },
-  ]);
+  const [messages, setMessages] = React.useState(() => DEFAULT_MESSAGES);
+
+  const panelRef = React.useRef(null);
+
+  function resetBotState() {
+    setInput("");
+    setMessages(DEFAULT_MESSAGES);
+  }
 
   function pushBot(text, actions = []) {
     setMessages((prev) => [...prev, { role: "bot", text, actions }]);
   }
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    function onDown(e) {
+      const panel = panelRef.current;
+      // if click is NOT inside the chat panel => close + reset
+      if (panel && !panel.contains(e.target)) {
+        setOpen(false);
+        resetBotState();
+      }
+    }
+
+    // capture phase helps when clicks happen inside portals/overlays
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("touchstart", onDown, true);
+
+    return () => {
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("touchstart", onDown, true);
+    };
+  }, [open]);
 
   async function searchBackend(message) {
     const res = await fetch(`${API_BASE}/helpbot/search`, {
@@ -420,7 +451,10 @@ export default function HelpBot() {
       </button>
 
       {open && (
-        <div className="fixed bottom-20 right-5 z-50 w-[380px] max-w-[92vw] rounded-2xl bg-white shadow-xl ring-1 ring-black/10 overflow-hidden">
+        <div
+          ref={panelRef}
+          className="fixed bottom-20 right-5 z-50 w-[380px] max-w-[92vw] rounded-2xl bg-white shadow-xl ring-1 ring-black/10 overflow-hidden"
+        >
           <div className="px-4 py-3 bg-slate-900 text-white">
             <div className="font-semibold">ADLM Help</div>
             <div className="text-xs opacity-80">
