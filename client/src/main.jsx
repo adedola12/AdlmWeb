@@ -37,8 +37,8 @@ import NotFound from "./pages/NotFound.jsx";
 import Testimonials from "./pages/Testimonials.jsx";
 import AdminShowcase from "./pages/AdminShowcase.jsx";
 import TrainingDetail from "./pages/TrainingDetail.jsx";
-import AdminCoupons from "./pages/AdminCoupons.jsx"; // ✅ add this import
-
+import AdminCoupons from "./pages/AdminCoupons.jsx";
+import Support from "./pages/Support.jsx";
 
 const router = createBrowserRouter([
   {
@@ -55,6 +55,7 @@ const router = createBrowserRouter([
       { path: "trainings", element: <Trainings /> },
       { path: "trainings/:id", element: <TrainingDetail /> },
       { path: "testimonials", element: <Testimonials /> },
+      { path: "support", element: <Support /> },
 
       {
         path: "purchase",
