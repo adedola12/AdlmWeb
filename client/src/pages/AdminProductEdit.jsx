@@ -474,9 +474,10 @@ export default function AdminProductEdit() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Edit product</h1>
         <div className="flex gap-2">
-          <Link className="btn btn-sm" to="/products">
-            Back to products
+          <Link className="btn btn-sm" to="/admin/products">
+            Back to admin products
           </Link>
+
           <button className="btn btn-sm" onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </button>
