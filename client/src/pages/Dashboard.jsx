@@ -651,7 +651,6 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
             ? "Rejected"
             : "Awaiting admin approval";
 
-
           const statusPill =
             o.paid || o.status === "approved"
               ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
@@ -807,11 +806,31 @@ function InstallationsTab({ installations = [] }) {
     return <div className="text-sm text-slate-600">No installations yet.</div>;
   }
 
+  const getProductLabel = (p) =>
+    // prefer explicit fields if your backend provides them
+    p?.productName ||
+    p?.product?.name ||
+    p?.entitlement?.productName ||
+    p?.subscription?.productName ||
+    // fallback to product key
+    p?.productKey ||
+    p?.product?.key ||
+    p?.entitlement?.productKey ||
+    p?.subscription?.productKey ||
+    // last resort
+    "your product";
+
   return (
     <div className="space-y-3">
       {installations.map((p) => {
         const st = p?.installation?.status || "none";
         const isPending = st === "pending";
+        const firstLine = Array.isArray(p.lines) ? p.lines[0] : null;
+        const productLabel =
+          firstLine?.name ||
+          firstLine?.productKey ||
+          p.productKey ||
+          "your product";
 
         return (
           <div
@@ -820,7 +839,11 @@ function InstallationsTab({ installations = [] }) {
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="font-semibold">Installation</div>
+                <div className="font-semibold">
+                  Installation for{" "}
+                  {p.installationProductName || p.installationProductKey}
+                </div>
+
                 <div className="text-xs text-slate-500">
                   {p.decidedAt ? dayjs(p.decidedAt).format("YYYY-MM-DD") : ""}
                 </div>
@@ -880,7 +903,6 @@ function InstallationsTab({ installations = [] }) {
     </div>
   );
 }
-
 
 function CheckIcon() {
   return (

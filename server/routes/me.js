@@ -95,8 +95,47 @@ router.get("/summary", requireAuth, async (req, res) => {
     .sort({ decidedAt: -1 })
     .lean();
 
+  // build a set of productKeys from installs (prefer lines, fallback to root productKey)
+  const installKeys = Array.from(
+    new Set(
+      installs
+        .flatMap((p) =>
+          Array.isArray(p.lines) && p.lines.length
+            ? p.lines.map((l) => l.productKey)
+            : [p.productKey]
+        )
+        .filter(Boolean)
+    )
+  );
 
- return res.json({ email: user?.email, entitlements, installations: installs });
+  const installProducts = await Product.find({ key: { $in: installKeys } })
+    .select("key name")
+    .lean();
+
+  const prodNameByKey = Object.fromEntries(
+    installProducts.map((x) => [x.key, x.name])
+  );
+
+  const installsEnriched = installs.map((p) => {
+    // If multiple lines exist, pick the first (or you can join them)
+    const firstLine =
+      Array.isArray(p.lines) && p.lines.length ? p.lines[0] : null;
+    const key = firstLine?.productKey || p.productKey || "";
+    const name = firstLine?.name || prodNameByKey[key] || key || "";
+
+    return {
+      ...p,
+      installationProductKey: key,
+      installationProductName: name,
+    };
+  });
+
+  return res.json({
+    email: user?.email,
+    entitlements,
+    installations: installsEnriched,
+  });
+
 
 });
 
