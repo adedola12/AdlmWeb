@@ -5,6 +5,8 @@ import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
 import { Product } from "../models/Product.js";
+import { Purchase } from "../models/Purchase.js";
+
 
 const router = express.Router();
 
@@ -74,7 +76,28 @@ router.get("/summary", requireAuth, async (req, res) => {
     isCourse: !!byKey[e.productKey],
   }));
 
-  return res.json({ email: user?.email, entitlements });
+  const installs = await Purchase.find(
+    {
+      userId: req.user._id,
+      status: "approved",
+      "installation.status": { $in: ["pending", "complete"] },
+    },
+    {
+      lines: 1,
+      productKey: 1,
+      status: 1,
+      installation: 1,
+      decidedAt: 1,
+      totalAmount: 1,
+      currency: 1,
+    }
+  )
+    .sort({ decidedAt: -1 })
+    .lean();
+
+
+ return res.json({ email: user?.email, entitlements, installations: installs });
+
 });
 
 // Profile details

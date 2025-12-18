@@ -30,7 +30,7 @@ function getSubscriptionState(s) {
       };
     }
 
-    const daysLeft = end.diff(now, "day"); // integer days remaining
+    const daysLeft = end.diff(now, "day");
     if (daysLeft <= 7) {
       return {
         label: "expiring soon",
@@ -39,7 +39,6 @@ function getSubscriptionState(s) {
     }
   }
 
-  // fallback to existing status if no expiresAt (or invalid)
   const status = (s?.status || "active").toLowerCase();
 
   if (status === "active") {
@@ -160,7 +159,7 @@ export default function Dashboard() {
 
   function openProduct(e) {
     if (!e) return;
-    if (isExpiredSub(e)) return; // block expired even if backend says "active"
+    if (isExpiredSub(e)) return;
     if ((e.status || "").toLowerCase() !== "active") return;
 
     const key = (e.productKey || "").toLowerCase();
@@ -171,9 +170,25 @@ export default function Dashboard() {
     navigate(`/product/${e.productKey}`);
   }
 
+  // ✅ NEW: Manage (renew) -> take user to purchase page with product pre-selected
+  function manageSubscription(s) {
+    if (!s?.productKey) return;
+
+    // pick a reasonable default renewal duration:
+    // - yearly products: 1 year
+    // - monthly products: 1 month
+    const interval = (s.billingInterval || "monthly").toLowerCase();
+    const qty = interval === "yearly" ? 1 : 1;
+
+    navigate(
+      `/purchase?product=${encodeURIComponent(
+        s.productKey
+      )}&months=${qty}&return=/dashboard`
+    );
+  }
+
   return (
     <div className="min-h-screen p-4 md:p-6">
-      {/* tiny local styles (animations + glows) */}
       <style>{`
         .fade-up { opacity:0; transform: translateY(8px); animation: fadeUp .6s ease forwards; }
         @keyframes fadeUp { to { opacity:1; transform: translateY(0); } }
@@ -183,7 +198,6 @@ export default function Dashboard() {
         @keyframes statIn { to { opacity:1; transform: translateY(0) scale(1); } }
       `}</style>
 
-      {/* Header band */}
       <div className="rounded-lg overflow-hidden bg-blue-800 text-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
           <h1 className="text-xl md:text-2xl font-semibold">Dashboard</h1>
@@ -194,7 +208,6 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto mt-6 space-y-6">
-        {/* Stats grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Active Products"
@@ -222,11 +235,8 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Main content layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left/main column */}
           <div className="lg:col-span-2 space-y-4">
-            {/* tabs */}
             <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-3 flex flex-wrap items-center gap-2">
               <TabBtn
                 label="My Products"
@@ -251,8 +261,12 @@ export default function Dashboard() {
                   setOrdersPage(1);
                 }}
               />
+              <TabBtn
+                label="Installations"
+                active={activeTab === "installations"}
+                onClick={() => setActiveTab("installations")}
+              />
 
-              {/* admin add product button (only visible to admins) */}
               {user?.role === "admin" && (
                 <div className="ml-auto">
                   <a
@@ -265,7 +279,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Tab content container */}
             <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4 space-y-4">
               {activeTab === "products" && (
                 <ProductsTab
@@ -278,6 +291,7 @@ export default function Dashboard() {
                 <SubscriptionsTab
                   entitlements={summary?.entitlements || []}
                   onOpen={openProduct}
+                  onManage={manageSubscription} // ✅ pass handler
                 />
               )}
 
@@ -292,11 +306,17 @@ export default function Dashboard() {
                   onPageChange={setOrdersPage}
                 />
               )}
+
+              {activeTab === "installations" && (
+                <InstallationsTab
+                  installations={summary?.installations || []}
+                />
+              )}
             </div>
           </div>
 
-          {/* Right column summary / membership card */}
           <aside className="space-y-4">
+            {/* keep your right column as-is */}
             <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4 card-hover">
               <div className="flex items-start gap-3">
                 <div className="flex-1">
@@ -333,25 +353,6 @@ export default function Dashboard() {
                 </ul>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div>
-                  <div className="text-xs text-slate-500">Monthly Price</div>
-                  <div className="font-semibold">
-                    <div className="font-semibold">Coming soon</div>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Next Billing</div>
-                  <div className="font-semibold">
-                    {summary?.membership?.nextBilling
-                      ? dayjs(summary.membership.nextBilling).format(
-                          "YYYY-MM-DD"
-                        )
-                      : "—"}
-                  </div>
-                </div>
-              </div>
-
               <div className="mt-4 flex gap-2">
                 <div className="mt-4">
                   <button
@@ -364,7 +365,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* quick links */}
             <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4">
               <div className="text-sm font-semibold">Quick Links</div>
               <div className="mt-3 grid grid-cols-1 gap-2">
@@ -391,7 +391,6 @@ export default function Dashboard() {
           </aside>
         </div>
 
-        {/* admin tools */}
         {user?.role === "admin" && (
           <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4">
             <h3 className="font-semibold mb-2">Admin tools</h3>
@@ -489,7 +488,7 @@ function ProductsTab({ products = [], loading }) {
   );
 }
 
-function SubscriptionsTab({ entitlements = [], onOpen }) {
+function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
   const subs = entitlements.filter((e) => !e.isCourse);
   if (!subs.length)
     return <div className="text-sm text-slate-600">No subscriptions yet.</div>;
@@ -543,7 +542,12 @@ function SubscriptionsTab({ entitlements = [], onOpen }) {
               >
                 Open
               </button>
-              <button className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition">
+
+              {/* ✅ Manage now routes to renewal purchase page */}
+              <button
+                className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
+                onClick={() => onManage?.(s)}
+              >
                 Manage
               </button>
             </div>
@@ -645,7 +649,8 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
             ? "Approved"
             : o.status === "rejected"
             ? "Rejected"
-            : "Pending";
+            : "Awaiting admin approval";
+
 
           const statusPill =
             o.paid || o.status === "approved"
@@ -797,7 +802,86 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
   );
 }
 
-/* simple check icon used in membership card */
+function InstallationsTab({ installations = [] }) {
+  if (!installations.length) {
+    return <div className="text-sm text-slate-600">No installations yet.</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {installations.map((p) => {
+        const st = p?.installation?.status || "none";
+        const isPending = st === "pending";
+
+        return (
+          <div
+            key={p._id}
+            className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold">Installation</div>
+                <div className="text-xs text-slate-500">
+                  {p.decidedAt ? dayjs(p.decidedAt).format("YYYY-MM-DD") : ""}
+                </div>
+              </div>
+
+              <span
+                className={`px-2 py-0.5 rounded-full text-xs ${
+                  isPending
+                    ? "bg-amber-50 text-amber-800 ring-1 ring-amber-100"
+                    : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                }`}
+              >
+                {isPending ? "Pending installation" : "Installation complete"}
+              </span>
+            </div>
+
+            {isPending && (
+              <div className="mt-3 text-sm text-slate-700 space-y-2">
+                <div className="font-medium">Next steps</div>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>
+                    Download AnyDesk:{" "}
+                    <a
+                      className="text-blue-600"
+                      href={p.installation?.anydeskUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Click here
+                    </a>
+                  </li>
+                  <li>Send your AnyDesk Address to support</li>
+                  <li>
+                    Watch installation process video:{" "}
+                    <a
+                      className="text-blue-600"
+                      href={p.installation?.installVideoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Watch
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            )}
+
+            {!isPending && (
+              <div className="mt-3 text-sm text-slate-700">
+                ✅ Your installation has been completed. You can now use the
+                software.
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
 function CheckIcon() {
   return (
     <svg
