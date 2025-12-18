@@ -131,6 +131,7 @@ router.post("/signup", async (req, res) => {
 });
 
 /* -------------------- LOGIN (web vs plugin) -------------------- */
+/* -------------------- LOGIN (web vs plugin) -------------------- */
 router.post("/login", async (req, res) => {
   try {
     await ensureDb();
@@ -151,6 +152,7 @@ router.post("/login", async (req, res) => {
     // password check (supports legacy `password`)
     let ok = false;
     let needsSave = false;
+
     if (user.passwordHash) {
       ok = await bcrypt.compare(password, user.passwordHash);
     } else if (user.password) {
@@ -161,68 +163,129 @@ router.post("/login", async (req, res) => {
         needsSave = true;
       }
     }
+
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
     const pluginLogin = isPluginClient(req);
 
     // ── Only for plugin/desktop logins: require entitlement + device binding ──
     if (pluginLogin) {
-      if (!productKey) {
-        return res
-          .status(400)
-          .json({ error: "productKey required", code: "PRODUCT_KEY_REQUIRED" });
-      }
-      if (!device_fingerprint) {
-        return res
-          .status(400)
-          .json({ error: "device_fingerprint required", code: "DFP_REQUIRED" });
+      const pk = String(productKey || "")
+        .trim()
+        .toLowerCase();
+      const dfp = String(device_fingerprint || "").trim();
+
+      if (!pk) {
+        return res.status(400).json({
+          error: "productKey required",
+          code: "PRODUCT_KEY_REQUIRED",
+        });
       }
 
-      const ent = (user.entitlements || []).find(
-        (e) => e.productKey === productKey
+      if (!dfp) {
+        return res.status(400).json({
+          error: "device_fingerprint required",
+          code: "DFP_REQUIRED",
+        });
+      }
+
+      // find ALL entitlements for this productKey (case-insensitive)
+      const entList = (user.entitlements || []).filter(
+        (e) =>
+          String(e.productKey || "")
+            .trim()
+            .toLowerCase() === pk
       );
-      if (!ent) {
+
+      if (!entList.length) {
         return res.status(403).json({
           error: "You do not have access to this product.",
           code: "NOT_ENTITLED",
+          productKey: pk,
         });
       }
 
       const now = new Date();
-      const status = String(ent.status || "").toLowerCase();
-      const expiresAt = ent.expiresAt ? new Date(ent.expiresAt) : null;
+
+      // pick the “best” entitlement:
+      // 1) active + not expired (best)
+      // 2) else latest expiresAt
+      const ranked = entList
+        .map((e) => {
+          const status = String(e.status || "")
+            .trim()
+            .toLowerCase();
+          const exp = e.expiresAt ? new Date(e.expiresAt) : null;
+          const expOk = exp && !isNaN(exp.getTime()) ? exp : null;
+
+          // If your expiresAt is saved like "YYYY-MM-DD", treat as end of that day (UTC)
+          // so it doesn't expire at 00:00.
+          if (
+            expOk &&
+            typeof e.expiresAt === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(e.expiresAt)
+          ) {
+            expOk.setUTCHours(23, 59, 59, 999);
+          }
+
+          const isActive = status === "active";
+          const notExpired = expOk ? expOk.getTime() > now.getTime() : false;
+
+          return { e, status, expOk, isActive, notExpired };
+        })
+        .sort((a, b) => {
+          const aGood = a.isActive && a.notExpired ? 1 : 0;
+          const bGood = b.isActive && b.notExpired ? 1 : 0;
+          if (bGood !== aGood) return bGood - aGood;
+
+          const at = a.expOk ? a.expOk.getTime() : 0;
+          const bt = b.expOk ? b.expOk.getTime() : 0;
+          return bt - at;
+        });
+
+      const ent = ranked[0].e;
+      const status = String(ent.status || "")
+        .trim()
+        .toLowerCase();
+      let expiresAt = ent.expiresAt ? new Date(ent.expiresAt) : null;
+
+      if (
+        expiresAt &&
+        !isNaN(expiresAt.getTime()) &&
+        typeof ent.expiresAt === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(ent.expiresAt)
+      ) {
+        expiresAt.setUTCHours(23, 59, 59, 999);
+      }
 
       if (status !== "active") {
         return res.status(403).json({
           error: "Your subscription is not active.",
           code: "SUBSCRIPTION_INACTIVE",
-          productKey,
+          productKey: pk,
           expiresAt: ent.expiresAt || null,
         });
       }
 
-      if (!expiresAt || expiresAt <= now) {
+      if (
+        !expiresAt ||
+        isNaN(expiresAt.getTime()) ||
+        expiresAt.getTime() <= now.getTime()
+      ) {
         return res.status(403).json({
           error: "Your subscription has expired.",
           code: "SUBSCRIPTION_EXPIRED",
-          productKey,
+          productKey: pk,
           expiresAt: ent.expiresAt || null,
-        });
-      }
-
-      if (!active) {
-        return res.status(403).json({
-          error: "You do not have access to this product.",
-          code: "NOT_ENTITLED",
         });
       }
 
       // one-device binding
       if (!ent.deviceFingerprint) {
-        ent.deviceFingerprint = device_fingerprint;
+        ent.deviceFingerprint = dfp;
         ent.deviceBoundAt = now;
         needsSave = true;
-      } else if (ent.deviceFingerprint !== device_fingerprint) {
+      } else if (ent.deviceFingerprint !== dfp) {
         return res.status(403).json({
           error: "This subscription is already bound to another device.",
           code: "DEVICE_MISMATCH",
