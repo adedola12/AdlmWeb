@@ -8,6 +8,55 @@ import { useNavigate } from "react-router-dom";
 
 dayjs.extend(relativeTime);
 
+/* ---------------- subscription helpers ---------------- */
+
+function isExpiredSub(s) {
+  if (!s?.expiresAt) return false;
+  const end = dayjs(s.expiresAt).endOf("day");
+  return end.isValid() && end.isBefore(dayjs());
+}
+
+function getSubscriptionState(s) {
+  const now = dayjs();
+  const exp = s?.expiresAt ? dayjs(s.expiresAt) : null;
+
+  if (exp && exp.isValid()) {
+    const end = exp.endOf("day");
+
+    if (end.isBefore(now)) {
+      return {
+        label: "expired",
+        pill: "bg-rose-50 text-rose-700 ring-1 ring-rose-100",
+      };
+    }
+
+    const daysLeft = end.diff(now, "day"); // integer days remaining
+    if (daysLeft <= 7) {
+      return {
+        label: "expiring soon",
+        pill: "bg-amber-50 text-amber-800 ring-1 ring-amber-100",
+      };
+    }
+  }
+
+  // fallback to existing status if no expiresAt (or invalid)
+  const status = (s?.status || "active").toLowerCase();
+
+  if (status === "active") {
+    return {
+      label: "active",
+      pill: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100",
+    };
+  }
+
+  return {
+    label: status,
+    pill: "bg-slate-50 text-slate-600 ring-1 ring-slate-100",
+  };
+}
+
+/* ---------------- page ---------------- */
+
 export default function Dashboard() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
@@ -97,14 +146,23 @@ export default function Dashboard() {
     summary?.products?.filter?.((p) => p.isActive !== false)?.length ??
     (summary?.entitlements || []).filter((e) => !e.isCourse).length ??
     0;
-  const activeSubscriptionsCount = (summary?.entitlements || []).filter(
-    (e) => !e.isCourse && e.status === "active"
-  ).length;
+
+  // ✅ exclude expired even when backend says "active"
+  const activeSubscriptionsCount = (summary?.entitlements || []).filter((e) => {
+    if (e.isCourse) return false;
+    if ((e.status || "").toLowerCase() !== "active") return false;
+    if (isExpiredSub(e)) return false;
+    return true;
+  }).length;
+
   const tutorialsWatched = summary?.tutorialsWatched ?? 0;
   const totalOrders = summary?.ordersCount ?? summary?.totalOrders ?? 0;
 
   function openProduct(e) {
-    if (!e || e.status !== "active") return;
+    if (!e) return;
+    if (isExpiredSub(e)) return; // block expired even if backend says "active"
+    if ((e.status || "").toLowerCase() !== "active") return;
+
     const key = (e.productKey || "").toLowerCase();
     if (key === "revit") return navigate("/projects/revit");
     if (key === "mep") return navigate("/projects/mep");
@@ -279,8 +337,6 @@ export default function Dashboard() {
                 <div>
                   <div className="text-xs text-slate-500">Monthly Price</div>
                   <div className="font-semibold">
-                    {/* ₦{(summary?.membership?.monthlyNGN || 0).toLocaleString()}
-                     */}
                     <div className="font-semibold">Coming soon</div>
                   </div>
                 </div>
@@ -440,58 +496,60 @@ function SubscriptionsTab({ entitlements = [], onOpen }) {
 
   return (
     <div className="space-y-3">
-      {subs.map((s, i) => (
-        <div
-          key={i}
-          className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-sm"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-sm text-slate-500">{s.productKey}</div>
-              <div className="font-semibold mt-1">
-                {s.productName || s.productKey}
+      {subs.map((s, i) => {
+        const st = getSubscriptionState(s);
+        const expired = isExpiredSub(s);
+
+        return (
+          <div
+            key={i}
+            className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm text-slate-500">{s.productKey}</div>
+                <div className="font-semibold mt-1">
+                  {s.productName || s.productKey}
+                </div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {s.billingInterval ? `${s.billingInterval}` : ""}
+                  {s.installFee
+                    ? ` · Install: ₦${Number(s.installFee).toLocaleString()}`
+                    : ""}
+                </div>
               </div>
-              <div className="text-xs text-slate-400 mt-1">
-                {s.billingInterval ? `${s.billingInterval}` : ""}
-                {s.installFee
-                  ? ` · Install: ₦${Number(s.installFee).toLocaleString()}`
-                  : ""}
+
+              <div className="text-right">
+                <div className="text-xs text-slate-400">Status</div>
+                <div className="mt-1">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs ${st.pill}`}
+                  >
+                    {st.label}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 mt-2">Expires</div>
+                <div className="mt-1 text-sm">
+                  {s.expiresAt ? dayjs(s.expiresAt).format("YYYY-MM-DD") : "-"}
+                </div>
               </div>
             </div>
 
-            <div className="text-right">
-              <div className="text-xs text-slate-400">Status</div>
-              <div className="mt-1">
-                <span
-                  className={`px-2 py-0.5 rounded-full text-xs ${
-                    s.status === "active"
-                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
-                      : "bg-slate-50 text-slate-600 ring-1 ring-slate-100"
-                  }`}
-                >
-                  {s.status}
-                </span>
-              </div>
-              <div className="text-xs text-slate-400 mt-2">Expires</div>
-              <div className="mt-1 text-sm">
-                {s.expiresAt ? dayjs(s.expiresAt).format("YYYY-MM-DD") : "-"}
-              </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={expired}
+                onClick={() => onOpen(s)}
+              >
+                Open
+              </button>
+              <button className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition">
+                Manage
+              </button>
             </div>
           </div>
-
-          <div className="mt-4 flex gap-2">
-            <button
-              className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
-              onClick={() => onOpen(s)}
-            >
-              Open
-            </button>
-            <button className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition">
-              Manage
-            </button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -574,7 +632,6 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
 
   return (
     <div className="space-y-4">
-      {/* Orders list */}
       <div className="space-y-3">
         {orders.map((o) => {
           const dateText = o.createdAt
@@ -625,7 +682,6 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
                 </div>
               </div>
 
-              {/* Line items */}
               {Array.isArray(o.lines) && o.lines.length > 0 && (
                 <div className="mt-3 rounded-lg bg-slate-50 ring-1 ring-slate-100 overflow-hidden">
                   <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-2 text-xs text-slate-500">
@@ -681,7 +737,6 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
                 </div>
               )}
 
-              {/* Meta */}
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
                 {o.paystackRef ? <span>Ref: {o.paystackRef}</span> : null}
                 {o.decidedAt ? (
@@ -696,7 +751,6 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
         })}
       </div>
 
-      {/* Pagination footer */}
       <div className="flex items-center justify-between gap-3 pt-2">
         <button
           className="px-3 py-2 rounded-md border text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
