@@ -189,10 +189,26 @@ router.post("/login", async (req, res) => {
       }
 
       const now = new Date();
-      const active =
-        String(ent.status || "").toLowerCase() === "active" &&
-        ent.expiresAt &&
-        new Date(ent.expiresAt) > now;
+      const status = String(ent.status || "").toLowerCase();
+      const expiresAt = ent.expiresAt ? new Date(ent.expiresAt) : null;
+
+      if (status !== "active") {
+        return res.status(403).json({
+          error: "Your subscription is not active.",
+          code: "SUBSCRIPTION_INACTIVE",
+          productKey,
+          expiresAt: ent.expiresAt || null,
+        });
+      }
+
+      if (!expiresAt || expiresAt <= now) {
+        return res.status(403).json({
+          error: "Your subscription has expired.",
+          code: "SUBSCRIPTION_EXPIRED",
+          productKey,
+          expiresAt: ent.expiresAt || null,
+        });
+      }
 
       if (!active) {
         return res.status(403).json({
