@@ -1,4 +1,3 @@
-// server/routes/purchase.js
 import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { Purchase } from "../models/Purchase.js";
@@ -8,13 +7,10 @@ import { validateAndComputeDiscount } from "../util/coupons.js";
 
 const router = express.Router();
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-function toKobo(naira) {
-  return Math.round(Number(naira || 0) * 100);
-}
+// If you are on Node < 18, uncomment:
+// import fetch from "node-fetch";
 
-// (unchanged) POST "/" — simple pending order
 router.post("/", requireAuth, async (req, res) => {
   const { productKey, months = 1 } = req.body || {};
   if (!productKey)
@@ -35,380 +31,50 @@ router.post("/", requireAuth, async (req, res) => {
   });
 });
 
-// CART checkout -> Paystack init for NGN
-// router.post("/cart", requireAuth, async (req, res) => {
-//   try {
-//     const items = Array.isArray(req.body?.items) ? req.body.items : [];
-//     const currency = (req.body?.currency || "NGN").toUpperCase();
-
-//     if (!items.length) return res.status(400).json({ error: "items required" });
-//     if (!["NGN", "USD"].includes(currency))
-//       return res.status(400).json({ error: "currency must be NGN or USD" });
-
-//     const keys = [...new Set(items.map((i) => i.productKey))];
-//     const products = await Product.find({
-//       key: { $in: keys },
-//       isPublished: true,
-//     }).lean();
-//     const byKey = Object.fromEntries(products.map((p) => [p.key, p]));
-
-//     const fx = await getFxRate();
-//     const lines = [];
-//     let total = 0;
-
-//     for (const i of items) {
-//       const p = byKey[i.productKey];
-//       if (!p)
-//         return res
-//           .status(400)
-//           .json({ error: `Invalid product: ${i.productKey}` });
-
-//       const qty = Math.max(parseInt(i.qty || 1, 10), 1);
-//       const firstTime = !!i.firstTime;
-
-//       let unitNGN =
-//         p.billingInterval === "yearly"
-//           ? p.price?.yearlyNGN || 0
-//           : p.price?.monthlyNGN || 0;
-//       let installNGN = firstTime ? p.price?.installNGN || 0 : 0;
-
-//       let unit = unitNGN;
-//       let install = installNGN;
-
-//       if (currency === "USD") {
-//         const ovUnit =
-//           p.billingInterval === "yearly"
-//             ? p.price?.yearlyUSD
-//             : p.price?.monthlyUSD;
-//         const ovInstall = p.price?.installUSD;
-//         unit = ovUnit != null ? ovUnit : unitNGN * fx;
-//         install = ovInstall != null ? ovInstall : installNGN * fx;
-//         unit = Math.round((unit + Number.EPSILON) * 100) / 100;
-//         install = Math.round((install + Number.EPSILON) * 100) / 100;
-//       }
-
-//       const recurring = unit * qty;
-//       const lineTotal = recurring + install;
-
-//       lines.push({
-//         productKey: p.key,
-//         name: p.name,
-//         billingInterval: p.billingInterval,
-//         qty,
-//         unit,
-//         install,
-//         subtotal: lineTotal,
-//       });
-
-//       total += lineTotal;
-//     }
-
-//     const purchase = await Purchase.create({
-//       userId: req.user._id,
-//       email: req.user.email,
-//       currency,
-//       totalAmount: total,
-//       lines,
-//       status: "pending",
-//     });
-
-//     let paystackInit = null;
-//     if (currency === "NGN") {
-//       if (!PAYSTACK_SECRET) {
-//         return res.json({
-//           ok: true,
-//           simulated: true,
-//           purchaseId: purchase._id,
-//           lines,
-//           total,
-//           currency,
-//           message: "Paystack secret not set; simulated order created.",
-//         });
-//       }
-
-//       const initBody = {
-//         email: req.user.email,
-//         amount: toKobo(total),
-//         currency: "NGN",
-//         metadata: { purchaseId: purchase._id.toString() },
-//         callback_url: `${FRONTEND_URL}/checkout/thanks`, // <-- important
-//       };
-
-//       const psRes = await fetch(
-//         "https://api.paystack.co/transaction/initialize",
-//         {
-//           method: "POST",
-//           headers: {
-//             Authorization: `Bearer ${PAYSTACK_SECRET}`,
-//             "Content-Type": "application/json",
-//           },
-//           body: JSON.stringify(initBody),
-//         }
-//       );
-
-//       const psJson = await psRes.json();
-//       if (!psRes.ok || !psJson.status) {
-//         return res
-//           .status(400)
-//           .json({ error: psJson?.message || "Paystack init failed" });
-//       }
-
-//       await Purchase.updateOne(
-//         { _id: purchase._id },
-//         { $set: { paystackRef: psJson.data.reference } }
-//       );
-
-//       paystackInit = {
-//         authorization_url: psJson.data.authorization_url,
-//         reference: psJson.data.reference,
-//       };
-//     }
-
-//     return res.json({
-//       ok: true,
-//       purchaseId: purchase._id,
-//       lines,
-//       total,
-//       currency,
-//       paystack: paystackInit,
-//       message:
-//         currency === "NGN"
-//           ? "Proceed to Paystack to complete payment."
-//           : "USD selected — implement USD flow or convert to NGN for Paystack.",
-//     });
-//   } catch (e) {
-//     return res.status(500).json({ error: e.message || "Cart purchase failed" });
-//   }
-// });
-
-// CART checkout -> Paystack init for NGN
-// router.post("/cart", requireAuth, async (req, res) => {
-//   try {
-//     const items = Array.isArray(req.body?.items) ? req.body.items : [];
-//     const currency = (req.body?.currency || "NGN").toUpperCase();
-//     const couponCode = (req.body?.couponCode || "").trim();
-
-//     if (!items.length) return res.status(400).json({ error: "items required" });
-//     if (!["NGN", "USD"].includes(currency))
-//       return res.status(400).json({ error: "currency must be NGN or USD" });
-
-//     const keys = [...new Set(items.map((i) => i.productKey))];
-//     const products = await Product.find({
-//       key: { $in: keys },
-//       isPublished: true,
-//     }).lean();
-//     const byKey = Object.fromEntries(products.map((p) => [p.key, p]));
-
-//     const fx = await getFxRate();
-//     const lines = [];
-//     let total = 0;
-
-//     const totalBeforeDiscount = total;
-
-//     const couponRes = await validateAndComputeDiscount({
-//       code: couponCode,
-//       currency,
-//       subtotal: totalBeforeDiscount,
-//     });
-
-//     if (!couponRes.ok) return res.status(400).json({ error: couponRes.error });
-
-//     const discount = couponRes.discount || 0;
-//     const totalAfterDiscount =
-//       currency === "USD"
-//         ? Math.round((totalBeforeDiscount - discount + Number.EPSILON) * 100) /
-//           100
-//         : Math.max(Math.round(totalBeforeDiscount - discount), 0);
-
-//     for (const i of items) {
-//       const p = byKey[i.productKey];
-//       if (!p)
-//         return res
-//           .status(400)
-//           .json({ error: `Invalid product: ${i.productKey}` });
-
-//       const qty = Math.max(parseInt(i.qty || 1, 10), 1);
-//       const firstTime = !!i.firstTime;
-
-//       let unitNGN =
-//         p.billingInterval === "yearly"
-//           ? p.price?.yearlyNGN || 0
-//           : p.price?.monthlyNGN || 0;
-//       let installNGN = firstTime ? p.price?.installNGN || 0 : 0;
-
-//       let unit = unitNGN;
-//       let install = installNGN;
-
-//       if (currency === "USD") {
-//         const ovUnit =
-//           p.billingInterval === "yearly"
-//             ? p.price?.yearlyUSD
-//             : p.price?.monthlyUSD;
-//         const ovInstall = p.price?.installUSD;
-//         unit = ovUnit != null ? ovUnit : unitNGN * fx;
-//         install = ovInstall != null ? ovInstall : installNGN * fx;
-//         unit = Math.round((unit + Number.EPSILON) * 100) / 100;
-//         install = Math.round((install + Number.EPSILON) * 100) / 100;
-//       }
-
-//       const recurring = unit * qty;
-//       const lineTotal = recurring + install;
-
-//       lines.push({
-//         productKey: p.key,
-//         name: p.name,
-//         billingInterval: p.billingInterval,
-//         qty,
-//         unit,
-//         install,
-//         subtotal: lineTotal,
-//       });
-
-//       total += lineTotal;
-//     }
-
-//     const purchase = await Purchase.create({
-//       userId: req.user._id,
-//       email: req.user.email,
-//       currency,
-
-//       totalBeforeDiscount,
-//       totalAmount: totalAfterDiscount,
-
-//       lines,
-//       status: "pending",
-
-//       coupon: couponRes.coupon
-//         ? {
-//             code: couponRes.coupon.code,
-//             type: couponRes.coupon.type,
-//             value: couponRes.coupon.value,
-//             currency: couponRes.coupon.currency,
-//             discountAmount: discount,
-//             couponId: couponRes.coupon._id,
-//             redeemedApplied: false,
-//           }
-//         : undefined,
-//     });
-
-//     // -----------------------------
-//     // PAYSTACK: temporarily disabled
-//     // -----------------------------
-//     // The Paystack integration is intentionally commented out for now.
-//     // If you want to re-enable later, restore the block below (and ensure PAYSTACK_SECRET is set).
-//     /*
-//     let paystackInit = null;
-//     if (currency === "NGN") {
-//       if (!PAYSTACK_SECRET) {
-//         return res.json({
-//           ok: true,
-//           simulated: true,
-//           purchaseId: purchase._id,
-//           lines,
-//           total,
-//           currency,
-//           message: "Paystack secret not set; simulated order created.",
-//         });
-//       }
-
-//       const initBody = {
-//         email: req.user.email,
-//         amount: toKobo(total),
-//         currency: "NGN",
-//         metadata: { purchaseId: purchase._id.toString() },
-//         callback_url: `${FRONTEND_URL}/checkout/thanks`,
-//       };
-
-//       const psRes = await fetch(
-//         "https://api.paystack.co/transaction/initialize",
-//         {
-//           method: "POST",
-//           headers: {
-//             Authorization: `Bearer ${PAYSTACK_SECRET}`,
-//             "Content-Type": "application/json",
-//           },
-//           body: JSON.stringify(initBody),
-//         }
-//       );
-
-//       const psJson = await psRes.json();
-//       if (!psRes.ok || !psJson.status) {
-//         return res
-//           .status(400)
-//           .json({ error: psJson?.message || "Paystack init failed" });
-//       }
-
-//       await Purchase.updateOne(
-//         { _id: purchase._id },
-//         { $set: { paystackRef: psJson.data.reference } }
-//       );
-
-//       paystackInit = {
-//         authorization_url: psJson.data.authorization_url,
-//         reference: psJson.data.reference,
-//       };
-//     }
-//     */
-
-//     // For now, return a response indicating a manual payment flow (no redirect).
-//     return res.json({
-//       ok: true,
-//       purchaseId: purchase._id,
-//       lines,
-//       totalBeforeDiscount,
-//       discount,
-//       total: totalAfterDiscount,
-//       currency,
-//       coupon: purchase.coupon?.code ? { code: purchase.coupon.code } : null,
-//       paystack: null,
-//       message:
-//         "Manual payment requested. Please pay to the provided account and click 'I have paid' in the client UI. Admin will verify.",
-//     });
-//   } catch (e) {
-//     return res.status(500).json({ error: e.message || "Cart purchase failed" });
-//   }
-// });
-
 // CART checkout -> Manual flow (coupon supported)
 router.post("/cart", requireAuth, async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
-    const currency = (req.body?.currency || "NGN").toUpperCase();
-    const couponCode = (req.body?.couponCode || "").trim();
+    const currency = String(req.body?.currency || "NGN").toUpperCase();
+    const couponCode = String(req.body?.couponCode || "").trim();
 
     if (!items.length) return res.status(400).json({ error: "items required" });
-    if (!["NGN", "USD"].includes(currency))
+    if (!["NGN", "USD"].includes(currency)) {
       return res.status(400).json({ error: "currency must be NGN or USD" });
+    }
 
-    const keys = [...new Set(items.map((i) => i.productKey))];
+    const keys = [...new Set(items.map((i) => i.productKey).filter(Boolean))];
+    if (!keys.length) return res.status(400).json({ error: "Invalid items" });
+
     const products = await Product.find({
       key: { $in: keys },
       isPublished: true,
     }).lean();
 
     const byKey = Object.fromEntries(products.map((p) => [p.key, p]));
-
     const fx = await getFxRate();
+
     const lines = [];
     let total = 0;
 
     // 1) build lines + compute subtotal FIRST
     for (const i of items) {
       const p = byKey[i.productKey];
-      if (!p)
+      if (!p) {
         return res
           .status(400)
           .json({ error: `Invalid product: ${i.productKey}` });
+      }
 
       const qty = Math.max(parseInt(i.qty || 1, 10), 1);
       const firstTime = !!i.firstTime;
 
-      let unitNGN =
+      const unitNGN =
         p.billingInterval === "yearly"
-          ? p.price?.yearlyNGN || 0
-          : p.price?.monthlyNGN || 0;
+          ? Number(p.price?.yearlyNGN || 0)
+          : Number(p.price?.monthlyNGN || 0);
 
-      let installNGN = firstTime ? p.price?.installNGN || 0 : 0;
+      const installNGN = firstTime ? Number(p.price?.installNGN || 0) : 0;
 
       let unit = unitNGN;
       let install = installNGN;
@@ -421,11 +87,14 @@ router.post("/cart", requireAuth, async (req, res) => {
 
         const ovInstall = p.price?.installUSD;
 
-        unit = ovUnit != null ? ovUnit : unitNGN * fx;
-        install = ovInstall != null ? ovInstall : installNGN * fx;
+        unit = ovUnit != null ? Number(ovUnit) : unitNGN * fx;
+        install = ovInstall != null ? Number(ovInstall) : installNGN * fx;
 
         unit = Math.round((unit + Number.EPSILON) * 100) / 100;
         install = Math.round((install + Number.EPSILON) * 100) / 100;
+      } else {
+        unit = Math.round(unit);
+        install = Math.round(install);
       }
 
       const recurring = unit * qty;
@@ -438,7 +107,10 @@ router.post("/cart", requireAuth, async (req, res) => {
         qty,
         unit,
         install,
-        subtotal: lineTotal,
+        subtotal:
+          currency === "USD"
+            ? Math.round((lineTotal + Number.EPSILON) * 100) / 100
+            : Math.round(lineTotal),
       });
 
       total += lineTotal;
@@ -448,7 +120,7 @@ router.post("/cart", requireAuth, async (req, res) => {
     total =
       currency === "USD"
         ? Math.round((total + Number.EPSILON) * 100) / 100
-        : Math.round(total);
+        : Math.max(Math.round(total), 0);
 
     const totalBeforeDiscount = total;
 
@@ -461,12 +133,16 @@ router.post("/cart", requireAuth, async (req, res) => {
 
     if (!couponRes.ok) return res.status(400).json({ error: couponRes.error });
 
-    const discount = couponRes.discount || 0;
+    const discount = Number(couponRes.discount || 0);
 
     const totalAfterDiscount =
       currency === "USD"
-        ? Math.round((totalBeforeDiscount - discount + Number.EPSILON) * 100) /
-          100
+        ? Math.max(
+            Math.round(
+              (totalBeforeDiscount - discount + Number.EPSILON) * 100
+            ) / 100,
+            0
+          )
         : Math.max(Math.round(totalBeforeDiscount - discount), 0);
 
     // 3) save purchase
@@ -474,13 +150,10 @@ router.post("/cart", requireAuth, async (req, res) => {
       userId: req.user._id,
       email: req.user.email,
       currency,
-
       totalBeforeDiscount,
       totalAmount: totalAfterDiscount,
-
       lines,
       status: "pending",
-
       coupon: couponRes.coupon
         ? {
             code: couponRes.coupon.code,
@@ -512,11 +185,10 @@ router.post("/cart", requireAuth, async (req, res) => {
   }
 });
 
-
-// NEW: verify endpoint (used by Thank-You page)
+// verify endpoint (Thank-You page)
 router.get("/verify", async (req, res) => {
   try {
-    const reference = (req.query.reference || "").trim();
+    const reference = String(req.query.reference || "").trim();
     if (!reference)
       return res.status(400).json({ error: "reference required" });
     if (!PAYSTACK_SECRET)
@@ -526,19 +198,18 @@ router.get("/verify", async (req, res) => {
       `https://api.paystack.co/transaction/verify/${encodeURIComponent(
         reference
       )}`,
-      {
-        headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
-      }
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } }
     );
-    const data = await psRes.json();
-    if (!psRes.ok || !data.status) {
+
+    const data = await psRes.json().catch(() => ({}));
+    if (!psRes.ok || !data?.status) {
       return res
         .status(400)
         .json({ error: data?.message || "Verification failed" });
     }
 
-    const paidOk = data.data?.status === "success";
-    if (!paidOk) return res.json({ ok: false, status: data.data?.status });
+    const paidOk = data?.data?.status === "success";
+    if (!paidOk) return res.json({ ok: false, status: data?.data?.status });
 
     const purchase = await Purchase.findOne({ paystackRef: reference });
     if (!purchase)
@@ -554,7 +225,7 @@ router.get("/verify", async (req, res) => {
         "../util/applyEntitlements.js"
       );
       await applyEntitlementsFromPurchase(purchase);
-      // optional: import here to avoid cycle
+
       const { autoEnrollFromPurchase } = await import("../util/autoEnroll.js");
       await autoEnrollFromPurchase(purchase);
     }
@@ -563,6 +234,24 @@ router.get("/verify", async (req, res) => {
   } catch (e) {
     return res.status(500).json({ error: e.message || "Verify failed" });
   }
+});
+
+router.post("/:id/confirm-manual", requireAuth, async (req, res) => {
+  const p = await Purchase.findById(req.params.id);
+  if (!p) return res.status(404).json({ error: "Purchase not found" });
+
+  if (String(p.userId) !== String(req.user._id)) {
+    return res.status(403).json({ error: "Not allowed" });
+  }
+
+  if (p.status !== "pending") {
+    return res.status(400).json({ error: "Purchase is not pending" });
+  }
+
+  p.userConfirmedAt = new Date();
+  await p.save();
+
+  return res.json({ ok: true, message: "Payment confirmation received." });
 });
 
 export default router;

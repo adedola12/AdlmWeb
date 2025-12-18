@@ -1,37 +1,14 @@
-// import mongoose from "mongoose";
-
-// const PurchaseSchema = new mongoose.Schema(
-//   {
-//     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-//     email: { type: String, index: true },
-//     productKey: { type: String, required: true }, // rategen|planswift|revit
-//     requestedMonths: { type: Number, default: 1 }, // from user
-//     status: {
-//       type: String,
-//       enum: ["pending", "approved", "rejected"],
-//       default: "pending",
-//       index: true,
-//     },
-//     decidedBy: { type: String }, // admin email
-//     decidedAt: { type: Date },
-//     approvedMonths: { type: Number }, // what admin actually granted
-//   },
-//   { timestamps: true }
-// );
-
-// export const Purchase = mongoose.model("Purchase", PurchaseSchema);
-
 import mongoose from "mongoose";
 
 const LineSchema = new mongoose.Schema(
   {
-    productKey: String,
-    name: String,
-    billingInterval: String,
-    qty: Number,
-    unit: Number, // unit price in chosen currency
-    install: Number, // install fee in chosen currency
-    subtotal: Number, // unit*qty + install (chosen currency)
+    productKey: { type: String, trim: true },
+    name: { type: String, trim: true },
+    billingInterval: { type: String, trim: true }, // "monthly" | "yearly"
+    qty: { type: Number, default: 1, min: 1 },
+    unit: { type: Number, default: 0 }, // unit price in chosen currency
+    install: { type: Number, default: 0 }, // install fee in chosen currency
+    subtotal: { type: Number, default: 0 }, // unit*qty + install (chosen currency)
   },
   { _id: false }
 );
@@ -39,15 +16,14 @@ const LineSchema = new mongoose.Schema(
 const PurchaseSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-    email: { type: String, index: true },
+    email: { type: String, trim: true, lowercase: true, index: true },
 
-    // new fields:
     currency: { type: String, enum: ["NGN", "USD"], default: "NGN" },
     totalAmount: { type: Number, default: 0 },
     totalBeforeDiscount: { type: Number, default: 0 },
 
     coupon: {
-      code: { type: String },
+      code: { type: String, trim: true, uppercase: true },
       type: { type: String, enum: ["percent", "fixed"] },
       value: { type: Number },
       currency: { type: String, enum: ["NGN", "USD"] }, // for fixed coupons
@@ -57,12 +33,32 @@ const PurchaseSchema = new mongoose.Schema(
     },
 
     lines: { type: [LineSchema], default: [] },
-    paystackRef: { type: String }, // returned from init
+
+    paystackRef: { type: String, trim: true }, // returned from init
     paid: { type: Boolean, default: false },
 
     // legacy compatibility
-    productKey: { type: String }, // optional now
+    productKey: { type: String, trim: true }, // optional now
     requestedMonths: { type: Number }, // optional now
+
+    // ✅ FIX: was "installation = { ... }" (invalid JS). Must be "installation: { ... }"
+    installation: {
+      status: {
+        type: String,
+        enum: ["none", "pending", "complete"],
+        default: "none",
+      },
+      anydeskUrl: {
+        type: String,
+        default: "https://anydesk.com/en/downloads/windows",
+      },
+      installVideoUrl: { type: String, default: "" },
+      address: { type: String, default: "" },
+      markedBy: { type: String, default: "" },
+      markedAt: { type: Date },
+    },
+
+    userConfirmedAt: { type: Date }, // optional
 
     status: {
       type: String,
@@ -70,11 +66,13 @@ const PurchaseSchema = new mongoose.Schema(
       default: "pending",
       index: true,
     },
-    decidedBy: { type: String },
+    decidedBy: { type: String, trim: true },
     decidedAt: { type: Date },
     approvedMonths: { type: Number },
   },
-  { timestamps: true }
+  { timestamps: true, minimize: false }
 );
 
-export const Purchase = mongoose.model("Purchase", PurchaseSchema);
+// ✅ Prevent model overwrite in dev/hot-reload
+export const Purchase =
+  mongoose.models.Purchase || mongoose.model("Purchase", PurchaseSchema);

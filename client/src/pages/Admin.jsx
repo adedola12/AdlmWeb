@@ -22,16 +22,23 @@ export default function Admin() {
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
 
+  const [installations, setInstallations] = React.useState([]);
+
+
   async function load() {
     setLoading(true);
     setMsg("");
     try {
       const qs = q ? `?q=${encodeURIComponent(q)}` : "";
-      const [uRes, pRes] = await Promise.all([
+      const [uRes, pRes, iRes] = await Promise.all([
         apiAuthed(`/admin/users${qs}`, { token: accessToken }),
         apiAuthed(`/admin/purchases?status=pending`, { token: accessToken }),
+        apiAuthed(`/admin/installations`, { token: accessToken }),
       ]);
+
       setUsers(uRes);
+      setInstallations(iRes || []);
+
       setPurchases(pRes);
     } catch (e) {
       setMsg(e.message);
@@ -189,6 +196,17 @@ export default function Admin() {
               }`}
             >
               Active subscriptions ({activeRows.length})
+            </button>
+
+            <button
+              onClick={() => setTab("installations")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "installations"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Installations ({installations.length})
             </button>
           </nav>
         </div>
@@ -481,6 +499,62 @@ export default function Admin() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "installations" && (
+        <div className="card">
+          <h2 className="font-semibold mb-3">Pending Installations</h2>
+
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : installations.length === 0 ? (
+            <div className="text-sm text-slate-600">
+              No pending installations.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {installations.map((p) => (
+                <div
+                  key={p._id}
+                  className="border rounded p-3 flex items-center justify-between gap-3"
+                >
+                  <div className="text-sm">
+                    <div>
+                      <b>{p.email}</b> · Approved purchase
+                    </div>
+                    <div className="text-slate-600">
+                      {p.decidedAt
+                        ? dayjs(p.decidedAt).format("YYYY-MM-DD HH:mm")
+                        : ""}
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      setMsg("");
+                      try {
+                        await apiAuthed(
+                          `/admin/installations/${p._id}/complete`,
+                          {
+                            token: accessToken,
+                            method: "POST",
+                          }
+                        );
+                        await load();
+                        setMsg("Installation marked complete");
+                      } catch (e) {
+                        setMsg(e.message || "Failed to mark complete");
+                      }
+                    }}
+                  >
+                    Mark complete
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

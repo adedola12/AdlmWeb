@@ -2,14 +2,13 @@ import express from "express";
 import dayjs from "dayjs";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { User } from "../models/User.js";
-import { Purchase } from "../models/Purchase.js"; // <-- IMPORTANT
+import { Purchase } from "../models/Purchase.js";
 import { Coupon } from "../models/Coupon.js";
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
+import { sendMail } from "../util/mailer.js"; // ✅ FIX: missing import
 
 const router = express.Router();
 
-// Admin: list users
-// routes/admin.js  (your existing admin router)
 router.get("/users", requireAuth, requireAdmin, async (req, res) => {
   const { q } = req.query;
   const find = {};
@@ -30,9 +29,8 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
   return res.json(list);
 });
 
-// small helper
 function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
-  userDoc.entitlements = userDoc.entitlements || []; // ✅ ensure array exists
+  userDoc.entitlements = userDoc.entitlements || [];
 
   const now = dayjs();
   let ent = userDoc.entitlements.find((e) => e.productKey === productKey);
@@ -55,8 +53,6 @@ function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
   }
 }
 
-// Admin: set/extend entitlement (manual override tool you already had)
-// body: { email, productKey, months, status }
 router.post(
   "/users/entitlement",
   requireAuth,
@@ -65,6 +61,8 @@ router.post(
     const { email, productKey, months = 0, status } = req.body || {};
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
+
+    u.entitlements = u.entitlements || [];
 
     const now = dayjs();
     let ent = u.entitlements.find((e) => e.productKey === productKey);
@@ -95,7 +93,6 @@ router.post(
   }
 );
 
-// Admin: list purchases (?status=pending|approved|rejected)
 router.get("/purchases", requireAuth, requireAdmin, async (req, res) => {
   const q = {};
   if (req.query.status) q.status = req.query.status;
@@ -103,9 +100,6 @@ router.get("/purchases", requireAuth, requireAdmin, async (req, res) => {
   return res.json(list);
 });
 
-// Admin: approve a purchase and apply entitlement(s)
-// If purchase has `lines`, each line is applied. If it's a legacy single-product
-// purchase, we fall back to productKey/requestedMonths.
 router.post(
   "/purchases/:id/approve",
   requireAuth,
@@ -113,9 +107,8 @@ router.post(
   async (req, res) => {
     const purchase = await Purchase.findById(req.params.id);
     if (!purchase) return res.status(404).json({ error: "Purchase not found" });
-    if (purchase.status !== "pending") {
+    if (purchase.status !== "pending")
       return res.status(400).json({ error: "Purchase not pending" });
-    }
 
     const user = await User.findById(purchase.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -139,7 +132,7 @@ router.post(
         .json({ error: "Nothing to approve for this purchase" });
     }
 
-    // ✅ Coupon redemption increments ONLY once (idempotent)
+    // Coupon redemption increments ONLY once (idempotent)
     if (purchase.coupon?.couponId && !purchase.coupon.redeemedApplied) {
       await Coupon.updateOne(
         { _id: purchase.coupon.couponId },
@@ -154,7 +147,43 @@ router.post(
     purchase.decidedBy = req.user.email;
     purchase.decidedAt = new Date();
 
+    // mark installation as pending
+    purchase.installation = purchase.installation || {};
+    purchase.installation.status = "pending";
+    purchase.installation.anydeskUrl =
+      purchase.installation.anydeskUrl ||
+      "https://anydesk.com/en/downloads/windows";
+    purchase.installation.installVideoUrl =
+      purchase.installation.installVideoUrl || "";
+
     await purchase.save();
+
+    // send email (safe)
+    try {
+      await sendMail({
+        to: user.email,
+        subject: "ADLM Purchase Approved — Installation Pending",
+        html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.5">
+          <h2>Your purchase has been approved ✅</h2>
+          <p>Your subscription is now active, and our team will proceed with software installation.</p>
+          <p><b>Next steps:</b></p>
+          <ol>
+            <li>Download AnyDesk: <a href="https://anydesk.com/en/downloads/windows">Click here</a></li>
+            <li>Send us your AnyDesk Address</li>
+            ${
+              purchase.installation.installVideoUrl
+                ? `<li>Watch installation process video: <a href="${purchase.installation.installVideoUrl}">Watch</a></li>`
+                : ""
+            }
+          </ol>
+          <p>Thank you for choosing ADLM.</p>
+        </div>
+      `,
+      });
+    } catch (e) {
+      console.error("[admin approve] sendMail failed:", e?.message || e);
+    }
 
     await autoEnrollFromPurchase(purchase);
 
@@ -167,7 +196,6 @@ router.post(
   }
 );
 
-// Admin: reject a purchase
 router.post(
   "/purchases/:id/reject",
   requireAuth,
@@ -187,8 +215,30 @@ router.post(
   }
 );
 
-// POST /admin/users/reset-device { email }
-// POST /admin/users/reset-device  { email, productKey }
+router.get("/installations", requireAuth, requireAdmin, async (req, res) => {
+  const q = { status: "approved", "installation.status": "pending" };
+  const list = await Purchase.find(q).sort({ decidedAt: -1 }).limit(500);
+  return res.json(list);
+});
+
+router.post(
+  "/installations/:id/complete",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const p = await Purchase.findById(req.params.id);
+    if (!p) return res.status(404).json({ error: "Purchase not found" });
+
+    p.installation = p.installation || {};
+    p.installation.status = "complete";
+    p.installation.markedBy = req.user.email;
+    p.installation.markedAt = new Date();
+
+    await p.save();
+    return res.json({ ok: true, purchase: p });
+  }
+);
+
 router.post(
   "/users/reset-device",
   requireAuth,
@@ -206,7 +256,6 @@ router.post(
     u.refreshVersion = (u.refreshVersion || 0) + 1;
 
     await u.save();
-
     return res.json({ ok: true });
   }
 );

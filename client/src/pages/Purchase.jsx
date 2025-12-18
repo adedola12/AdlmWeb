@@ -2,10 +2,9 @@ import React from "react";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 
-// Format helpers
 const fmt = (n, currency = "USD") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
     n || 0
@@ -26,6 +25,8 @@ export default function Purchase() {
   const [msg, setMsg] = React.useState("");
 
   const [qs] = useSearchParams();
+  const navigate = useNavigate();
+  const returnTo = qs.get("return") || "/dashboard";
 
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
@@ -33,7 +34,6 @@ export default function Purchase() {
   const [showComingSoonModal, setShowComingSoonModal] = React.useState(false);
   const closeComingSoonModal = () => setShowComingSoonModal(false);
 
-  // Load published products
   React.useEffect(() => {
     (async () => {
       try {
@@ -54,7 +54,7 @@ export default function Purchase() {
     const m = Math.max(parseInt(qs.get("months") || "1", 10), 1);
     if (!k) return;
     setCart((c) => (c[k] ? c : { ...c, [k]: { qty: m, firstTime: false } }));
-  }, [qs, products.length]);
+  }, [qs]);
 
   // Prefill from localStorage cartItems after products load
   React.useEffect(() => {
@@ -69,6 +69,7 @@ export default function Purchase() {
       setCart(() => {
         const next = {};
         arr.forEach(({ productKey, qty, firstTime }) => {
+          if (!productKey) return;
           next[productKey] = {
             qty: Math.max(parseInt(qty || 1, 10), 1),
             firstTime: !!firstTime,
@@ -76,7 +77,9 @@ export default function Purchase() {
         });
         return next;
       });
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, [products.length]);
 
   function updateItem(key, patch) {
@@ -97,7 +100,6 @@ export default function Purchase() {
     );
   }
 
-  // Pricing helpers
   function getPrices(p) {
     const monthly =
       currency === "USD" ? p.price?.monthlyUSD : p.price?.monthlyNGN;
@@ -110,6 +112,13 @@ export default function Purchase() {
       yearly: Number(yearly || 0),
       install: Number(install || 0),
     };
+  }
+
+  function normalizeMoney(n) {
+    const x = Number(n || 0);
+    return currency === "USD"
+      ? Math.round((x + Number.EPSILON) * 100) / 100
+      : Math.round(x);
   }
 
   function priceForQuantity(p, qty, firstTime) {
@@ -141,14 +150,8 @@ export default function Purchase() {
 
     if (firstTime) total += install || 0;
 
-    // normalize
-    total =
-      currency === "USD"
-        ? Math.round((total + Number.EPSILON) * 100) / 100
-        : Math.round(total);
-
     return {
-      total,
+      total: normalizeMoney(total),
       note: note || (p.billingInterval === "yearly" ? "yearly" : "monthly"),
     };
   }
@@ -160,11 +163,10 @@ export default function Purchase() {
   }
 
   const chosen = products.filter((p) => !!cart[p.key]);
-  const total = chosen.reduce(
-    (sum, p) => sum + lineSubtotal(p, cart[p.key]),
-    0
+  const total = normalizeMoney(
+    chosen.reduce((sum, p) => sum + lineSubtotal(p, cart[p.key]), 0)
   );
-  const grandTotal = Math.max(total - discount, 0);
+  const grandTotal = normalizeMoney(Math.max(total - Number(discount || 0), 0));
   const productKeys = chosen.map((p) => p.key);
 
   async function applyCoupon() {
@@ -172,8 +174,11 @@ export default function Purchase() {
     setCouponInfo(null);
     setDiscount(0);
 
-    const subtotal = total;
     if (!couponCode.trim()) return;
+    if (!chosen.length) {
+      setMsg("Select at least one item before applying a coupon.");
+      return;
+    }
 
     try {
       const out = await apiAuthed(`/coupons/validate`, {
@@ -181,15 +186,15 @@ export default function Purchase() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: couponCode,
+          code: couponCode.trim(),
           currency,
-          subtotal,
+          subtotal: total,
           productKeys,
         }),
       });
 
-      setCouponInfo(out.coupon);
-      setDiscount(Number(out.discount || 0));
+      setCouponInfo(out.coupon || null);
+      setDiscount(normalizeMoney(out.discount || 0));
     } catch (e) {
       setCouponInfo(null);
       setDiscount(0);
@@ -197,7 +202,6 @@ export default function Purchase() {
     }
   }
 
-  // Manual payment flow
   async function createPendingPurchaseAndShowModal() {
     if (!chosen.length) return;
 
@@ -215,12 +219,15 @@ export default function Purchase() {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currency, items, couponCode }), // ✅ send couponCode
+        body: JSON.stringify({
+          currency,
+          items,
+          couponCode: couponCode.trim(),
+        }),
       });
 
       setPendingPurchaseId(out.purchaseId || null);
       setShowManualPayModal(true);
-
       setMsg(out.message || "Order created. Please pay manually and confirm.");
     } catch (e) {
       setMsg(e.message || "Failed to create order");
@@ -239,6 +246,11 @@ export default function Purchase() {
     setMsg("");
 
     try {
+      await apiAuthed(`/purchase/${pendingPurchaseId}/confirm-manual`, {
+        token: accessToken,
+        method: "POST",
+      });
+
       setCart({});
       localStorage.setItem("cartItems", "[]");
       localStorage.setItem("cartCount", "0");
@@ -246,7 +258,7 @@ export default function Purchase() {
       setShowManualPayModal(false);
       setPendingPurchaseId(null);
 
-      setMsg("Thank you. Your payment request is pending admin verification.");
+      navigate(`${returnTo}?notice=purchase_pending`);
     } catch (e) {
       setMsg(e.message || "Confirmation failed");
     } finally {
@@ -256,6 +268,15 @@ export default function Purchase() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <style>{`
+        .clamp-2{
+          display:-webkit-box;
+          -webkit-line-clamp:2;
+          -webkit-box-orient:vertical;
+          overflow:hidden;
+        }
+      `}</style>
+
       <ComingSoonModal
         show={showComingSoonModal}
         onClose={closeComingSoonModal}
@@ -299,7 +320,7 @@ export default function Purchase() {
               }`}
             >
               <div className="font-medium">{p.name}</div>
-              <div className="text-sm text-slate-600">{p.blurb}</div>
+              <div className="text-sm text-slate-600 clamp-2">{p.blurb}</div>
 
               <div className="mt-2 text-sm">
                 Billing:{" "}
