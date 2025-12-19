@@ -38,8 +38,6 @@ import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 
-
-
 const app = express();
 app.get("/__debug/db", (_req, res) => {
   const c = mongoose?.connection || {};
@@ -67,6 +65,7 @@ app.use(
           "'self'",
           "https://api.paystack.co",
           "https://api.flutterwave.com",
+          "https://api.cloudinary.com",
         ],
         frameSrc: [
           "https://js.paystack.co",
@@ -136,7 +135,7 @@ app.use("/products", productsPublic);
 app.use("/admin/products", adminProducts);
 app.use("/admin/settings", adminSettings);
 app.use("/projects", projectRoutes);
-app.use("/me/media", meMediaRouter);
+// app.use("/me/media", meMediaRouter); // ← old media route
 app.use("/me/media", meMediaRoutes);
 app.use("/me/orders", meOrdersRoutes);
 app.use("/rategen", rategenRouter);
