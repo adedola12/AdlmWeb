@@ -20,7 +20,7 @@ import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
-import meMediaRouter from "./routes/media.js";
+
 import meMediaRoutes from "./routes/me-media.js";
 import rategenRouter from "./routes/rategen.js";
 import adminRateGen from "./routes/admin.rategen.js";
