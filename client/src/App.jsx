@@ -5,6 +5,9 @@ import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import HelpBot from "./components/HelpBot.jsx";
+import confetti from "canvas-confetti";
+import LaunchCountdownBanner from "./components/LaunchCountdownBanner.jsx";
+
 import { API_BASE } from "./config";
 
 export default function App() {
@@ -16,6 +19,13 @@ export default function App() {
 
   const VIDEO_ID = "UibPcyLIvHg";
   const MAX_SECONDS = 120;
+
+  // ✅ avoid double confetti in React.StrictMode
+  const didConfetti = React.useRef(false);
+
+  // set your launch time here (Africa/Lagos is +01:00)
+  // Example: 24 hours from now is NOT stable, better use a real date/time:
+  const LAUNCH_AT = "2025-12-20T09:00:00+01:00"; // <-- change this
 
   React.useEffect(() => {
     if (location.pathname === "/") setShowVideo(true);
@@ -35,12 +45,35 @@ export default function App() {
     })();
   }, []);
 
+  React.useEffect(() => {
+    if (didConfetti.current) return;
+    didConfetti.current = true;
+
+    // quick burst
+    confetti({
+      particleCount: 120,
+      spread: 70,
+      origin: { y: 0.2 },
+    });
+
+    // small follow-up
+    setTimeout(() => {
+      confetti({
+        particleCount: 80,
+        spread: 55,
+        origin: { y: 0.2 },
+      });
+    }, 350);
+  }, []);
+
   function closeVideo() {
     setShowVideo(false);
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
+      {/* ✅ Launch countdown banner on top */}
+      <LaunchCountdownBanner targetIso={LAUNCH_AT} title="Full launch in" />
       {!bannerDismissed && (
         <CouponBanner
           banner={banner}
@@ -50,7 +83,7 @@ export default function App() {
 
       <Nav />
 
-      <main className="w-full flex-1 px-8 md:px-25 py-4">
+      <main className="w-full flex-1 px-4 md:px-8 py-4">
         <Outlet />
       </main>
 
