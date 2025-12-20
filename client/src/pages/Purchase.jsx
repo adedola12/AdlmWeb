@@ -1,14 +1,32 @@
+// src/pages/Purchase.jsx
 import React from "react";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import ComingSoonModal from "../components/ComingSoonModal.jsx";
 
 const fmt = (n, currency = "USD") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
     n || 0
   );
+
+function getProductKey(p) {
+  return String(p?.key || p?.slug || p?._id || "").trim();
+}
+
+function readCartItems() {
+  try {
+    const arr = JSON.parse(localStorage.getItem("cartItems") || "[]");
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function clearCartStorage() {
+  localStorage.setItem("cartItems", "[]");
+  localStorage.setItem("cartCount", "0");
+}
 
 export default function Purchase() {
   const { accessToken } = useAuth();
@@ -31,26 +49,24 @@ export default function Purchase() {
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
 
-  const [showComingSoonModal, setShowComingSoonModal] = React.useState(false);
-  const closeComingSoonModal = () => setShowComingSoonModal(false);
-
   React.useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/products?page=1&pageSize=100`, {
+        const res = await fetch(`${API_BASE}/products?page=1&pageSize=200`, {
           credentials: "include",
         });
         const json = await res.json();
-        setProducts(json.items || []);
+        setProducts(Array.isArray(json.items) ? json.items : []);
       } catch (e) {
         console.error(e);
+        setProducts([]);
       }
     })();
   }, []);
 
   // Prefill from ?product=KEY&months=N
   React.useEffect(() => {
-    const k = qs.get("product");
+    const k = (qs.get("product") || "").trim();
     const m = Math.max(parseInt(qs.get("months") || "1", 10), 1);
     if (!k) return;
     setCart((c) => (c[k] ? c : { ...c, [k]: { qty: m, firstTime: false } }));
@@ -59,27 +75,22 @@ export default function Purchase() {
   // Prefill from localStorage cartItems after products load
   React.useEffect(() => {
     if (!products.length) return;
-    const raw = localStorage.getItem("cartItems");
-    if (!raw) return;
 
-    try {
-      const arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return;
+    const arr = readCartItems();
+    if (!arr.length) return;
 
-      setCart(() => {
-        const next = {};
-        arr.forEach(({ productKey, qty, firstTime }) => {
-          if (!productKey) return;
-          next[productKey] = {
-            qty: Math.max(parseInt(qty || 1, 10), 1),
-            firstTime: !!firstTime,
-          };
-        });
-        return next;
+    setCart(() => {
+      const next = {};
+      arr.forEach(({ productKey, qty, firstTime }) => {
+        const k = String(productKey || "").trim();
+        if (!k) return;
+        next[k] = {
+          qty: Math.max(parseInt(qty || 1, 10), 1),
+          firstTime: !!firstTime,
+        };
       });
-    } catch {
-      // ignore
-    }
+      return next;
+    });
   }, [products.length]);
 
   function updateItem(key, patch) {
@@ -162,12 +173,21 @@ export default function Purchase() {
     return priceForQuantity(p, qty, !!entry.firstTime).total;
   }
 
-  const chosen = products.filter((p) => !!cart[p.key]);
+  // ✅ Match products against cart keys using safe key resolver
+  const chosen = products.filter((p) => {
+    const k = getProductKey(p);
+    return !!cart[k];
+  });
+
   const total = normalizeMoney(
-    chosen.reduce((sum, p) => sum + lineSubtotal(p, cart[p.key]), 0)
+    chosen.reduce((sum, p) => {
+      const k = getProductKey(p);
+      return sum + lineSubtotal(p, cart[k]);
+    }, 0)
   );
+
   const grandTotal = normalizeMoney(Math.max(total - Number(discount || 0), 0));
-  const productKeys = chosen.map((p) => p.key);
+  const productKeys = chosen.map((p) => getProductKey(p));
 
   async function applyCoupon() {
     setMsg("");
@@ -202,6 +222,19 @@ export default function Purchase() {
     }
   }
 
+  // ✅ Persist cart -> localStorage anytime cart changes (so badge + reload stays consistent)
+  React.useEffect(() => {
+    const items = Object.entries(cart).map(([productKey, entry]) => ({
+      productKey,
+      qty: Math.max(parseInt(entry?.qty || 1, 10), 1),
+      firstTime: !!entry?.firstTime,
+    }));
+
+    localStorage.setItem("cartItems", JSON.stringify(items));
+    const totalQty = items.reduce((sum, it) => sum + Number(it.qty || 0), 0);
+    localStorage.setItem("cartCount", String(totalQty));
+  }, [cart]);
+
   async function createPendingPurchaseAndShowModal() {
     if (!chosen.length) return;
 
@@ -209,11 +242,15 @@ export default function Purchase() {
     setMsg("");
 
     try {
-      const items = chosen.map((p) => ({
-        productKey: p.key,
-        qty: Math.max(parseInt(cart[p.key].qty || 1, 10), 1),
-        firstTime: !!cart[p.key].firstTime,
-      }));
+      const items = chosen.map((p) => {
+        const k = getProductKey(p);
+        const entry = cart[k];
+        return {
+          productKey: k,
+          qty: Math.max(parseInt(entry.qty || 1, 10), 1),
+          firstTime: !!entry.firstTime,
+        };
+      });
 
       const out = await apiAuthed(`/purchase/cart`, {
         token: accessToken,
@@ -252,8 +289,7 @@ export default function Purchase() {
       });
 
       setCart({});
-      localStorage.setItem("cartItems", "[]");
-      localStorage.setItem("cartCount", "0");
+      clearCartStorage();
 
       setShowManualPayModal(false);
       setPendingPurchaseId(null);
@@ -276,11 +312,6 @@ export default function Purchase() {
           overflow:hidden;
         }
       `}</style>
-
-      {/* <ComingSoonModal
-        show={showComingSoonModal}
-        onClose={closeComingSoonModal}
-      /> */}
 
       <div className="flex items-end justify-between gap-4">
         <div>
@@ -307,14 +338,16 @@ export default function Purchase() {
       {/* Catalog */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {products.map((p) => {
-          const entry = cart[p.key];
+          const k = getProductKey(p);
+          const entry = cart[k];
           const inCart = !!entry;
+
           const qtyLabel = p.billingInterval === "yearly" ? "Years" : "Months";
           const { monthly, yearly } = getPrices(p);
 
           return (
             <div
-              key={p._id}
+              key={p._id || k}
               className={`border rounded p-3 ${
                 inCart ? "ring-2 ring-blue-500" : ""
               }`}
@@ -339,10 +372,7 @@ export default function Purchase() {
               </div>
 
               <div className="mt-3 flex items-center gap-2">
-                <button
-                  className="btn btn-sm"
-                  onClick={() => toggleInCart(p.key)}
-                >
+                <button className="btn btn-sm" onClick={() => toggleInCart(k)}>
                   {inCart ? "Remove" : "Add"}
                 </button>
               </div>
@@ -356,9 +386,7 @@ export default function Purchase() {
                       min="1"
                       className="input mt-1"
                       value={entry.qty}
-                      onChange={(e) =>
-                        updateItem(p.key, { qty: e.target.value })
-                      }
+                      onChange={(e) => updateItem(k, { qty: e.target.value })}
                     />
                   </label>
 
@@ -367,7 +395,7 @@ export default function Purchase() {
                       type="checkbox"
                       checked={entry.firstTime}
                       onChange={(e) =>
-                        updateItem(p.key, { firstTime: e.target.checked })
+                        updateItem(k, { firstTime: e.target.checked })
                       }
                     />
                     First-time user? (add install fee)
@@ -410,7 +438,8 @@ export default function Purchase() {
           <>
             <div className="space-y-2 text-sm">
               {chosen.map((p) => {
-                const entry = cart[p.key];
+                const k = getProductKey(p);
+                const entry = cart[k];
                 const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
                 const { total: lineTotal, note } = priceForQuantity(
                   p,
@@ -420,10 +449,7 @@ export default function Purchase() {
                 const qtyLabel = p.billingInterval === "yearly" ? "yr" : "mo";
 
                 return (
-                  <div
-                    key={p.key}
-                    className="flex items-center justify-between"
-                  >
+                  <div key={k} className="flex items-center justify-between">
                     <div>
                       {p.name} · {qty} {qtyLabel} ({note})
                       {entry.firstTime && " + install"}

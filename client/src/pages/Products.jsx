@@ -32,6 +32,7 @@ function CardVideo({ src, poster }) {
       ref.current.currentTime = 0;
     }
   };
+
   return (
     <div
       className="rounded-xl overflow-hidden aspect-video bg-black ring-1 ring-black/5"
@@ -59,9 +60,30 @@ function CardVideo({ src, poster }) {
 const getCategory = (p) =>
   p?.metadata?.category || p?.category || p?.type || "General";
 
-/* Safe product key resolver (supports your existing data shapes) */
+/* ✅ Safe product key resolver (supports your existing data shapes) */
 function getProductKey(p) {
   return String(p?.key || p?.slug || p?._id || "").trim();
+}
+
+/* ✅ Cart helpers (single source of truth) */
+function readCartItems() {
+  try {
+    const arr = JSON.parse(localStorage.getItem("cartItems") || "[]");
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCartItems(items) {
+  localStorage.setItem("cartItems", JSON.stringify(items || []));
+  // keep cartCount synced as total qty
+  const totalQty = (items || []).reduce(
+    (sum, it) => sum + Number(it.qty || 0),
+    0
+  );
+  localStorage.setItem("cartCount", String(totalQty));
+  return totalQty;
 }
 
 /* -------------------- Page -------------------- */
@@ -86,10 +108,11 @@ export default function Products() {
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState("All Products");
 
-  // cart badge (localStorage-backed)
-  const [cartCount, setCartCount] = React.useState(
-    Number(localStorage.getItem("cartCount") || 0)
-  );
+  // cart badge (localStorage-backed) — keep it as total qty
+  const [cartCount, setCartCount] = React.useState(() => {
+    const n = Number(localStorage.getItem("cartCount") || 0);
+    return Number.isFinite(n) ? n : 0;
+  });
 
   const [showModal, setShowModal] = React.useState(false);
   const closeModal = () => setShowModal(false);
@@ -161,7 +184,7 @@ export default function Products() {
         const json = await res.json();
         const list = Array.isArray(json?.items) ? json.items : [];
 
-        // IMPORTANT: only keep product-specific coupons (mode === "include")
+        // only keep product-specific coupons (mode === "include")
         const productOnly = list.filter(
           (c) => (c?.appliesTo?.mode || "all") === "include"
         );
@@ -197,28 +220,6 @@ export default function Products() {
       isPublished: !!p.isPublished,
       sort: p.sort ?? 0,
     });
-  }
-
-  /* -------------------- Add-to-cart (badge + storage) -------------------- */
-  function addToCart(p, months = 1) {
-    const nextCount = Number(localStorage.getItem("cartCount") || 0) + 1;
-    localStorage.setItem("cartCount", String(nextCount));
-    setCartCount(nextCount);
-
-    let items = [];
-    try {
-      items = JSON.parse(localStorage.getItem("cartItems") || "[]");
-      if (!Array.isArray(items)) items = [];
-    } catch {
-      items = [];
-    }
-    const i = items.findIndex((it) => it.productKey === p.key);
-    if (i >= 0) {
-      items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + months;
-    } else {
-      items.push({ productKey: p.key, qty: months, firstTime: false });
-    }
-    localStorage.setItem("cartItems", JSON.stringify(items));
   }
 
   function cancelEdit() {
@@ -277,6 +278,29 @@ export default function Products() {
     (data.items || []).forEach((p) => set.add(getCategory(p)));
     return Array.from(set);
   }, [data.items]);
+
+  /* -------------------- Add-to-cart (storage + badge) -------------------- */
+  function addToCart(p, months = 1) {
+    const productKey = getProductKey(p);
+    if (!productKey) {
+      setMsg("This product is missing a key. Please contact admin.");
+      return;
+    }
+
+    const qtyToAdd = Math.max(parseInt(months || 1, 10), 1);
+    const items = readCartItems();
+
+    const i = items.findIndex((it) => String(it.productKey) === productKey);
+    if (i >= 0) {
+      items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + qtyToAdd;
+    } else {
+      items.push({ productKey, qty: qtyToAdd, firstTime: false });
+    }
+
+    const nextCount = writeCartItems(items);
+    setCartCount(nextCount);
+    setMsg("✅ Added to cart.");
+  }
 
   /* -------------------- animations CSS -------------------- */
   const style = `
@@ -373,7 +397,7 @@ export default function Products() {
               })
               .map((p, idx) => (
                 <ProductCard
-                  key={p._id}
+                  key={p._id || getProductKey(p) || idx}
                   p={p}
                   idx={idx}
                   isAdmin={isAdmin}
@@ -384,6 +408,7 @@ export default function Products() {
                   setDraft={setDraft}
                   saveEdit={saveEdit}
                   addToCart={addToCart}
+                  coupons={activeCoupons} // ✅ PASS COUPONS PROPERLY
                 />
               ))}
           </div>
@@ -425,6 +450,7 @@ function ProductCard({
   setDraft,
   saveEdit,
   addToCart,
+  coupons, // ✅ receive coupons
 }) {
   const editing = isEditing(p._id);
   const cat = getCategory(p);
@@ -448,13 +474,14 @@ function ProductCard({
 
   const productKey = getProductKey(p);
 
-  // coupon applies ONLY if "include" mode and product key is in list
+  // ✅ coupon applies ONLY if "include" mode and product key is in list
   const applicable = (coupons || []).filter((c) => {
     const mode = c?.appliesTo?.mode || "all";
     if (mode !== "include") return false;
     const keys = (c?.appliesTo?.productKeys || []).map(String);
-    // support cases where admin saved _id or key
-    return keys.includes(productKey) || keys.includes(String(p._id || ""));
+    return (
+      keys.includes(String(productKey)) || keys.includes(String(p._id || ""))
+    );
   });
 
   // pick best savings coupon
@@ -574,6 +601,7 @@ function ProductCard({
             }
             placeholder="Full description"
           />
+
           <label className="text-xs">
             Features (one per line)
             <textarea
@@ -606,16 +634,17 @@ function ProductCard({
                   : "hover:bg-blue-50"
               }
             `}
-            onClick={() =>
-              !outOfStock &&
-              addToCart(p, p.billingInterval === "yearly" ? 1 : 1)
-            }
+            onClick={() => {
+              if (outOfStock) return;
+              addToCart(p, 1);
+            }}
             title="Add to Cart"
           >
             Add to Cart
           </button>
+
           <Link
-            className="rounded-md px-3 py-2 text-sm font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition active:animate-[pop_180ms_ease-out] ring-1 ring-blue-600/0"
+            className="rounded-md px-3 py-2 text-sm font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition active:animate-[pop_180ms_ease-out]"
             to={`/product/${encodeURIComponent(productKey)}`}
             title="View details"
           >
