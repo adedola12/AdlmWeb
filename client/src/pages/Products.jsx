@@ -174,6 +174,24 @@ export default function Products() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
+  React.useEffect(() => {
+    const arr = readCartItems();
+    if (!arr.length) return;
+
+    setCart(() => {
+      const next = {};
+      arr.forEach(({ productKey, qty, firstTime }) => {
+        const k = String(productKey || "").trim();
+        if (!k) return;
+        next[k] = {
+          qty: Math.max(parseInt(qty || 1, 10), 1),
+          firstTime: !!firstTime,
+        };
+      });
+      return next;
+    });
+  }, []);
+
   /* -------------------- load active coupons -------------------- */
   React.useEffect(() => {
     (async () => {
@@ -280,27 +298,35 @@ export default function Products() {
   }, [data.items]);
 
   /* -------------------- Add-to-cart (storage + badge) -------------------- */
-  function addToCart(p, months = 1) {
-    const productKey = getProductKey(p);
-    if (!productKey) {
-      setMsg("This product is missing a key. Please contact admin.");
-      return;
-    }
+function addToCart(p, months = 1) {
+  const productKey = getProductKey(p);
+  if (!productKey) return;
 
-    const qtyToAdd = Math.max(parseInt(months || 1, 10), 1);
-    const items = readCartItems();
-
-    const i = items.findIndex((it) => String(it.productKey) === productKey);
-    if (i >= 0) {
-      items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + qtyToAdd;
-    } else {
-      items.push({ productKey, qty: qtyToAdd, firstTime: false });
-    }
-
-    const nextCount = writeCartItems(items);
-    setCartCount(nextCount);
-    setMsg("✅ Added to cart.");
+  // read existing
+  let items = [];
+  try {
+    items = JSON.parse(localStorage.getItem("cartItems") || "[]");
+    if (!Array.isArray(items)) items = [];
+  } catch {
+    items = [];
   }
+
+  // merge
+  const i = items.findIndex((it) => String(it.productKey) === productKey);
+  if (i >= 0) {
+    items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + months;
+  } else {
+    items.push({ productKey, qty: months, firstTime: false });
+  }
+
+  localStorage.setItem("cartItems", JSON.stringify(items));
+
+  // cartCount should reflect total quantity (not just +1)
+  const totalQty = items.reduce((sum, it) => sum + Number(it.qty || 0), 0);
+  localStorage.setItem("cartCount", String(totalQty));
+  setCartCount(totalQty);
+}
+
 
   /* -------------------- animations CSS -------------------- */
   const style = `
@@ -363,7 +389,13 @@ export default function Products() {
 
           <button
             type="button"
-            onClick={() => navigate("/purchase")}
+            onClick={() =>
+              navigate(
+                `/purchase?return=${encodeURIComponent(
+                  "/products?page=" + page
+                )}`
+              )
+            }
             className="relative rounded-lg px-3 py-2 ring-1 ring-black/5 hover:bg-slate-50 active:animate-[pop_200ms_ease-out]"
             title="Cart"
           >

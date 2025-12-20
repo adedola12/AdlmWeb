@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./store.jsx"; // <<< important
 import App from "./App.jsx";
 import "./index.css";
+import AppError from "./pages/AppError.jsx";
 import Home from "./pages/Home.jsx";
 import Products from "./pages/Products.jsx";
 import Login from "./pages/Login.jsx";
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <App />,
+    errorElement: <AppError />,
     children: [
       { index: true, element: <Home /> },
       { path: "products", element: <Products /> },
