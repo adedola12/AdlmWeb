@@ -17,8 +17,8 @@ export default function App() {
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
 
-  const VIDEO_ID = "UibPcyLIvHg";
-  const MAX_SECONDS = 120;
+  const VIDEO_ID = "YX6vJTaAUXA";
+  const MAX_SECONDS = 300; // 5 minutes
 
   // ✅ avoid double confetti in React.StrictMode
   const didConfetti = React.useRef(false);
