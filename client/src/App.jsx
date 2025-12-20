@@ -25,7 +25,7 @@ export default function App() {
 
   // set your launch time here (Africa/Lagos is +01:00)
   // Example: 24 hours from now is NOT stable, better use a real date/time:
-  const LAUNCH_AT = "2025-12-20T09:00:00+01:00"; // <-- change this
+  const LAUNCH_AT = "2025-12-20T11:00:00+01:00"; // <-- change this
 
   React.useEffect(() => {
     if (location.pathname === "/") setShowVideo(true);
