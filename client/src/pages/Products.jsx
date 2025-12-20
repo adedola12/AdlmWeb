@@ -87,7 +87,7 @@ export default function Products() {
   const [category, setCategory] = React.useState("All Products");
 
   // cart badge (localStorage-backed)
-  const [cartCount] = React.useState(() =>
+  const [cartCount, setCartCount] = React.useState(
     Number(localStorage.getItem("cartCount") || 0)
   );
 
@@ -197,6 +197,28 @@ export default function Products() {
       isPublished: !!p.isPublished,
       sort: p.sort ?? 0,
     });
+  }
+
+  /* -------------------- Add-to-cart (badge + storage) -------------------- */
+  function addToCart(p, months = 1) {
+    const nextCount = Number(localStorage.getItem("cartCount") || 0) + 1;
+    localStorage.setItem("cartCount", String(nextCount));
+    setCartCount(nextCount);
+
+    let items = [];
+    try {
+      items = JSON.parse(localStorage.getItem("cartItems") || "[]");
+      if (!Array.isArray(items)) items = [];
+    } catch {
+      items = [];
+    }
+    const i = items.findIndex((it) => it.productKey === p.key);
+    if (i >= 0) {
+      items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + months;
+    } else {
+      items.push({ productKey: p.key, qty: months, firstTime: false });
+    }
+    localStorage.setItem("cartItems", JSON.stringify(items));
   }
 
   function cancelEdit() {
@@ -351,10 +373,9 @@ export default function Products() {
               })
               .map((p, idx) => (
                 <ProductCard
-                  key={p._id || getProductKey(p)}
+                  key={p._id}
                   p={p}
                   idx={idx}
-                  coupons={activeCoupons}
                   isAdmin={isAdmin}
                   isEditing={isEditing}
                   startEdit={startEdit}
@@ -362,7 +383,7 @@ export default function Products() {
                   draft={draft}
                   setDraft={setDraft}
                   saveEdit={saveEdit}
-                  setShowModal={setShowModal}
+                  addToCart={addToCart}
                 />
               ))}
           </div>
@@ -396,7 +417,6 @@ export default function Products() {
 function ProductCard({
   p,
   idx,
-  coupons = [],
   isAdmin,
   isEditing,
   startEdit,
@@ -404,7 +424,7 @@ function ProductCard({
   draft,
   setDraft,
   saveEdit,
-  setShowModal,
+  addToCart,
 }) {
   const editing = isEditing(p._id);
   const cat = getCategory(p);
@@ -586,13 +606,14 @@ function ProductCard({
                   : "hover:bg-blue-50"
               }
             `}
-            onClick={() => !outOfStock && setShowModal(true)}
+            onClick={() =>
+              !outOfStock &&
+              addToCart(p, p.billingInterval === "yearly" ? 1 : 1)
+            }
             title="Add to Cart"
-            disabled={outOfStock}
           >
             Add to Cart
           </button>
-
           <Link
             className="rounded-md px-3 py-2 text-sm font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition active:animate-[pop_180ms_ease-out] ring-1 ring-blue-600/0"
             to={`/product/${encodeURIComponent(productKey)}`}

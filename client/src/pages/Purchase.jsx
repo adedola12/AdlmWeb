@@ -277,10 +277,10 @@ export default function Purchase() {
         }
       `}</style>
 
-      <ComingSoonModal
+      {/* <ComingSoonModal
         show={showComingSoonModal}
         onClose={closeComingSoonModal}
-      />
+      /> */}
 
       <div className="flex items-end justify-between gap-4">
         <div>
