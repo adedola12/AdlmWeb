@@ -11,14 +11,20 @@ router.use(requireAuth);
 /** POST /projects/:productKey  { name, items:[{sn,description,qty,unit}] } */
 router.post("/:productKey", requireEntitlementParam, async (req, res) => {
   const { productKey } = req.params;
-  const { name, items } = req.body || {};
+  const { name, items, clientProjectKey, fingerprint, mergeSameTypeLevel } =
+    req.body || {};
   if (!name) return res.status(400).json({ error: "name required" });
+
   const proj = await TakeoffProject.create({
     userId: req.user._id,
     productKey,
     name,
     items: Array.isArray(items) ? items : [],
+    clientProjectKey,
+    fingerprint,
+    mergeSameTypeLevel,
   });
+
   res.json(proj);
 });
 
