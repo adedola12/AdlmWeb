@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 const TITLES = {
   revit: "Revit Projects",
-  mep: "Revit MEP Projects",
+  revitmep: "Revit MEP Projects",
   planswift: "PlanSwift Projects",
 };
 
@@ -13,30 +13,42 @@ export default function ProjectsGeneric() {
   const { tool } = useParams(); // "revit" | "revitmep" | "planswift"
   const title = TITLES[tool] || "Projects";
   const { accessToken } = useAuth();
+
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
   const [searchParams] = useSearchParams();
 
+  const rowId = (r) => r?._id || r?.id || null;
+
   async function load() {
     setErr("");
     try {
       const list = await apiAuthed(`/projects/${tool}`, { token: accessToken });
-      setRows(list);
+      setRows(Array.isArray(list) ? list : []);
 
       const preselectId = searchParams.get("project");
-      const toOpen = preselectId
-        ? list.find((x) => x._id === preselectId)?._id
-        : list[0]?._id;
+      const firstId = rowId(list?.[0]);
+      const found = preselectId
+        ? list.find((x) => rowId(x) === preselectId)
+        : null;
 
-      if (toOpen) view(toOpen);
+      const toOpen = rowId(found) || firstId;
+
+      if (toOpen) await view(toOpen);
       else setSel(null);
     } catch (e) {
       setErr(e.message || "Failed to load projects");
+      setSel(null);
     }
   }
 
   async function view(id) {
+    if (!id || id === "undefined") {
+      setErr("Invalid project id");
+      return;
+    }
+
     setErr("");
     try {
       const p = await apiAuthed(`/projects/${tool}/${id}`, {
@@ -45,17 +57,21 @@ export default function ProjectsGeneric() {
       setSel(p);
     } catch (e) {
       setErr(e.message || "Failed to open project");
+      setSel(null);
     }
   }
 
   React.useEffect(() => {
-    load(); /* eslint-disable-next-line */
+    load(); // eslint-disable-next-line
   }, [accessToken, tool]);
 
   function copyId() {
-    if (!sel?._id) return;
-    navigator.clipboard.writeText(sel._id).catch(() => {});
+    const id = sel?._id || sel?.id;
+    if (!id) return;
+    navigator.clipboard.writeText(id).catch(() => {});
   }
+
+  const selectedId = sel?._id || sel?.id;
 
   return (
     <div className="grid md:grid-cols-3 gap-6">
@@ -66,22 +82,29 @@ export default function ProjectsGeneric() {
             Refresh
           </button>
         </div>
+
         {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
+
         <div className="mt-3 space-y-2">
-          {rows.map((r) => (
-            <button
-              key={r._id}
-              className={`w-full text-left p-2 border rounded transition hover:bg-slate-50 ${
-                sel?._id === r._id ? "bg-blue-50" : ""
-              }`}
-              onClick={() => view(r._id)}
-            >
-              <div className="font-medium">{r.name}</div>
-              <div className="text-xs text-slate-600">
-                {r.itemCount} items · {new Date(r.updatedAt).toLocaleString()}
-              </div>
-            </button>
-          ))}
+          {rows.map((r) => {
+            const id = rowId(r);
+            return (
+              <button
+                key={id || Math.random()}
+                className={`w-full text-left p-2 border rounded transition hover:bg-slate-50 ${
+                  selectedId === id ? "bg-blue-50" : ""
+                }`}
+                onClick={() => id && view(id)}
+                disabled={!id}
+              >
+                <div className="font-medium">{r.name}</div>
+                <div className="text-xs text-slate-600">
+                  {r.itemCount} items · {new Date(r.updatedAt).toLocaleString()}
+                </div>
+              </button>
+            );
+          })}
+
           {rows.length === 0 && (
             <div className="text-sm text-slate-600">No projects yet.</div>
           )}
@@ -113,7 +136,7 @@ export default function ProjectsGeneric() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sel.items.map((it, i) => (
+                  {(sel.items || []).map((it, i) => (
                     <tr key={i} className="border-b">
                       <td className="py-2 pr-4">{it.sn}</td>
                       <td className="py-2 pr-4">{it.description}</td>
@@ -127,8 +150,7 @@ export default function ProjectsGeneric() {
 
             <div className="text-xs text-slate-500 mt-3 space-y-1">
               <div>
-                Project ID: <code>{sel._id}</code> (use this in the {title}{" "}
-                plugin to open/update)
+                Project ID: <code>{selectedId}</code>
               </div>
               <div>
                 <b>Tip:</b> Paste this ID in your plugin’s “Open from Cloud”.
