@@ -135,6 +135,7 @@ app.use("/products", productsPublic);
 app.use("/admin/products", adminProducts);
 app.use("/admin/settings", adminSettings);
 app.use("/projects", projectRoutes);
+app.use("/api/projects", projectRoutes); // backward compatibility
 // app.use("/me/media", meMediaRouter); // ← old media route
 app.use("/me/media", meMediaRoutes);
 app.use("/me/orders", meOrdersRoutes);

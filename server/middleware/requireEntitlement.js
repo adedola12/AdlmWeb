@@ -1,6 +1,14 @@
 import dayjs from "dayjs";
 import { User } from "../models/User.js";
 
+function entitlementKeyFor(productKey) {
+  const k = String(productKey || "")
+    .trim()
+    .toLowerCase();
+  if (k === "revit-materials") return "revit";
+  return k;
+}
+
 /** requireEntitlement("revit" | "revitmep" | "planswift" | "rategen") */
 export function requireEntitlement(productKey) {
   return async (req, res, next) => {
@@ -17,8 +25,18 @@ export function requireEntitlement(productKey) {
 }
 
 /** Dynamic version: reads :productKey from route */
+// export async function requireEntitlementParam(req, res, next) {
+//   const productKey = req.params.productKey;
+//   if (!productKey) return res.status(400).json({ error: "productKey missing" });
+//   return requireEntitlement(productKey)(req, res, next);
+// }
+/** Dynamic version: reads :productKey from route */
 export async function requireEntitlementParam(req, res, next) {
-  const productKey = req.params.productKey;
-  if (!productKey) return res.status(400).json({ error: "productKey missing" });
+  const raw = req.params.productKey;
+  if (!raw) return res.status(400).json({ error: "productKey missing" });
+
+  const productKey = entitlementKeyFor(raw);
+  req.params.productKey = productKey; // normalize for downstream middleware usage
+
   return requireEntitlement(productKey)(req, res, next);
 }
