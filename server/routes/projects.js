@@ -50,16 +50,24 @@ router.post("/:productKey", requireEntitlementParam, async (req, res) => {
   res.json(proj);
 });
 
-
 /** GET /projects/:productKey  (mine, lightweight) */
 router.get("/:productKey", requireEntitlementParam, async (req, res) => {
-  const { productKey } = req.params;
+  const productKey = String(req.params.productKey || "").trim(); // keep your casing rule consistent
+
+  // ✅ Cast user id for aggregation match
+  const rawUserId = req.user?._id || req.user?.id;
+  if (!rawUserId || !mongoose.Types.ObjectId.isValid(rawUserId)) {
+    return res.status(401).json({ error: "Invalid user id in token" });
+  }
+  const userId = new mongoose.Types.ObjectId(rawUserId);
 
   const list = await TakeoffProject.aggregate([
-    { $match: { userId: req.user._id, productKey } },
+    { $match: { userId, productKey } },
     { $sort: { updatedAt: -1 } },
     {
       $project: {
+        _id: 0, // ✅ makes client easier
+        id: "$_id", // ✅ return id explicitly
         name: 1,
         updatedAt: 1,
         version: 1,
@@ -70,7 +78,6 @@ router.get("/:productKey", requireEntitlementParam, async (req, res) => {
 
   res.json(list);
 });
-
 
 /** GET /projects/:productKey/:id */
 router.get("/:productKey/:id", requireEntitlementParam, async (req, res) => {
@@ -135,6 +142,5 @@ router.put("/:productKey/:id", requireEntitlementParam, async (req, res) => {
 
   res.json(p);
 });
-
 
 export default router;
