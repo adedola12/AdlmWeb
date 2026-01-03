@@ -11,39 +11,66 @@ router.use(requireAuth);
 /** POST /projects/:productKey  { name, items:[{sn,description,qty,unit}] } */
 router.post("/:productKey", requireEntitlementParam, async (req, res) => {
   const { productKey } = req.params;
-  const { name, items, clientProjectKey, fingerprint, mergeSameTypeLevel } =
-    req.body || {};
+
+  const {
+    name,
+    items,
+    clientProjectKey,
+    fingerprint,
+    modelFingerprint, // ✅ NEW
+    mergeSameTypeLevel,
+    checklistCompositeKeys, // ✅ NEW
+  } = req.body || {};
+
   if (!name) return res.status(400).json({ error: "name required" });
 
   const proj = await TakeoffProject.create({
     userId: req.user._id,
     productKey,
-    name,
+    name: String(name).trim(),
+
     items: Array.isArray(items) ? items : [],
-    clientProjectKey,
-    fingerprint,
-    mergeSameTypeLevel,
+
+    clientProjectKey: clientProjectKey || "",
+    fingerprint: fingerprint || "",
+    modelFingerprint: modelFingerprint || "",
+
+    mergeSameTypeLevel:
+      typeof mergeSameTypeLevel === "boolean" ? mergeSameTypeLevel : true,
+
+    checklistCompositeKeys: Array.isArray(checklistCompositeKeys)
+      ? [
+          ...new Set(
+            checklistCompositeKeys.filter(Boolean).map((s) => String(s).trim())
+          ),
+        ]
+      : [],
   });
 
   res.json(proj);
 });
 
+
 /** GET /projects/:productKey  (mine, lightweight) */
 router.get("/:productKey", requireEntitlementParam, async (req, res) => {
   const { productKey } = req.params;
-  const list = await TakeoffProject.find({ userId: req.user._id, productKey })
-    .sort({ updatedAt: -1 })
-    .select("_id name items updatedAt version");
-  res.json(
-    list.map((p) => ({
-      _id: p._id,
-      name: p.name,
-      itemCount: p.items.length,
-      updatedAt: p.updatedAt,
-      version: p.version,
-    }))
-  );
+
+  const list = await TakeoffProject.aggregate([
+    { $match: { userId: req.user._id, productKey } },
+    { $sort: { updatedAt: -1 } },
+    {
+      $project: {
+        name: 1,
+        updatedAt: 1,
+        version: 1,
+        itemCount: { $size: "$items" },
+      },
+    },
+  ]);
+
+  res.json(list);
 });
+
 
 /** GET /projects/:productKey/:id */
 router.get("/:productKey/:id", requireEntitlementParam, async (req, res) => {
@@ -60,21 +87,54 @@ router.get("/:productKey/:id", requireEntitlementParam, async (req, res) => {
 /** PUT /projects/:productKey/:id  { name?, items, baseVersion } */
 router.put("/:productKey/:id", requireEntitlementParam, async (req, res) => {
   const { productKey, id } = req.params;
-  const { name, items, baseVersion } = req.body || {};
+
+  const {
+    name,
+    items,
+    baseVersion,
+
+    fingerprint, // ✅ NEW
+    modelFingerprint, // ✅ NEW
+    mergeSameTypeLevel, // ✅ NEW
+    checklistCompositeKeys, // ✅ NEW
+    clientProjectKey, // optional
+  } = req.body || {};
+
   const p = await TakeoffProject.findOne({
     _id: id,
     userId: req.user._id,
     productKey,
   });
   if (!p) return res.status(404).json({ error: "Not found" });
+
   if (typeof baseVersion === "number" && baseVersion !== p.version) {
     return res.status(409).json({ error: "Version conflict" });
   }
-  if (name !== undefined) p.name = name;
+
+  if (name !== undefined) p.name = String(name).trim();
   if (Array.isArray(items)) p.items = items;
+
+  if (fingerprint !== undefined) p.fingerprint = fingerprint || "";
+  if (modelFingerprint !== undefined)
+    p.modelFingerprint = modelFingerprint || "";
+  if (typeof mergeSameTypeLevel === "boolean")
+    p.mergeSameTypeLevel = mergeSameTypeLevel;
+  if (clientProjectKey !== undefined)
+    p.clientProjectKey = clientProjectKey || "";
+
+  if (Array.isArray(checklistCompositeKeys)) {
+    p.checklistCompositeKeys = [
+      ...new Set(
+        checklistCompositeKeys.filter(Boolean).map((s) => String(s).trim())
+      ),
+    ];
+  }
+
   p.version += 1;
   await p.save();
+
   res.json(p);
 });
+
 
 export default router;
