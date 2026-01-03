@@ -153,7 +153,7 @@ export default function ProjectsGeneric() {
                 Project ID: <code>{selectedId}</code>
               </div>
               <div>
-                <b>Tip:</b> Paste this ID in your plugin’s “Open from Cloud”.
+                <b>Tip:</b> View Recent project in your plugin UI (coming soon).
               </div>
             </div>
           </>
