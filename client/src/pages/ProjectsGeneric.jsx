@@ -1,16 +1,62 @@
+// src/pages/ProjectsGeneric.jsx
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 const TITLES = {
   revit: "Revit Projects",
   revitmep: "Revit MEP Projects",
   planswift: "PlanSwift Projects",
+
+  // ✅ new
+  "revit-materials": "Revit Materials",
+  "revit-material": "Revit Materials",
 };
 
+function normTool(t) {
+  return String(t || "")
+    .trim()
+    .toLowerCase();
+}
+
+function isMaterialsTool(tool) {
+  const t = normTool(tool);
+  return t === "revit-materials" || t === "revit-material";
+}
+
+// ✅ map UI route param -> backend endpoint
+function getEndpoints(tool) {
+  const t = normTool(tool);
+
+  // Materials projects are stored under productKey = "revit-materials"
+  // but your backend exposes them via: /projects/revit/materials
+  if (t === "revit-materials" || t === "revit-material") {
+    return {
+      list: `/projects/revit/materials`,
+      one: (id) => `/projects/revit/materials/${id}`,
+    };
+  }
+
+  // default generic
+  return {
+    list: `/projects/${t}`,
+    one: (id) => `/projects/${t}/${id}`,
+  };
+}
+
+function materialDescription(it) {
+  const takeoff = String(it?.takeoffLine || "").trim();
+  const mat = String(it?.materialName || "").trim();
+
+  if (takeoff || mat) return [takeoff, mat].filter(Boolean).join(" - ");
+
+  // fallback (just in case)
+  return String(it?.description || "").trim();
+}
+
 export default function ProjectsGeneric() {
-  const { tool } = useParams(); // "revit" | "revitmep" | "planswift"
+  const { tool } = useParams(); // "revit" | "revitmep" | "planswift" | "revit-materials"
   const title = TITLES[tool] || "Projects";
   const { accessToken } = useAuth();
 
@@ -19,18 +65,22 @@ export default function ProjectsGeneric() {
   const [err, setErr] = React.useState("");
   const [searchParams] = useSearchParams();
 
+  const endpoints = React.useMemo(() => getEndpoints(tool), [tool]);
+  const showMaterials = isMaterialsTool(tool);
+
   const rowId = (r) => r?._id || r?.id || null;
 
   async function load() {
     setErr("");
     try {
-      const list = await apiAuthed(`/projects/${tool}`, { token: accessToken });
-      setRows(Array.isArray(list) ? list : []);
+      const list = await apiAuthed(endpoints.list, { token: accessToken });
+      const safeList = Array.isArray(list) ? list : [];
+      setRows(safeList);
 
       const preselectId = searchParams.get("project");
-      const firstId = rowId(list?.[0]);
+      const firstId = rowId(safeList?.[0]);
       const found = preselectId
-        ? list.find((x) => rowId(x) === preselectId)
+        ? safeList.find((x) => rowId(x) === preselectId)
         : null;
 
       const toOpen = rowId(found) || firstId;
@@ -51,7 +101,7 @@ export default function ProjectsGeneric() {
 
     setErr("");
     try {
-      const p = await apiAuthed(`/projects/${tool}/${id}`, {
+      const p = await apiAuthed(endpoints.one(id), {
         token: accessToken,
       });
       setSel(p);
@@ -73,11 +123,39 @@ export default function ProjectsGeneric() {
 
   const selectedId = sel?._id || sel?.id;
 
+  const showRevitToggle = normTool(tool) === "revit" || isMaterialsTool(tool);
+
   return (
     <div className="grid md:grid-cols-3 gap-6">
       <div className="card md:col-span-1">
-        <div className="flex items-center justify-between">
-          <h1 className="font-semibold">{title}</h1>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="font-semibold">{title}</h1>
+
+            {/* ✅ Quick switch between Revit Takeoffs and Revit Materials */}
+            {showRevitToggle && (
+              <div className="mt-2 flex gap-2">
+                <Link
+                  to="/projects/revit"
+                  className={`btn btn-sm ${
+                    normTool(tool) === "revit" ? "btn-primary" : ""
+                  }`}
+                >
+                  Takeoffs
+                </Link>
+
+                <Link
+                  to="/projects/revit-materials"
+                  className={`btn btn-sm ${
+                    isMaterialsTool(tool) ? "btn-primary" : ""
+                  }`}
+                >
+                  Materials
+                </Link>
+              </div>
+            )}
+          </div>
+
           <button className="btn btn-sm" onClick={load}>
             Refresh
           </button>
@@ -139,8 +217,17 @@ export default function ProjectsGeneric() {
                   {(sel.items || []).map((it, i) => (
                     <tr key={i} className="border-b">
                       <td className="py-2 pr-4">{it.sn}</td>
-                      <td className="py-2 pr-4">{it.description}</td>
-                      <td className="py-2 pr-4">{Number(it.qty).toFixed(2)}</td>
+
+                      {/* ✅ Materials: TakeoffLine - MaterialName */}
+                      <td className="py-2 pr-4">
+                        {showMaterials
+                          ? materialDescription(it)
+                          : it.description}
+                      </td>
+
+                      <td className="py-2 pr-4">
+                        {Number(it.qty || 0).toFixed(2)}
+                      </td>
                       <td className="py-2 pr-4">{it.unit || ""}</td>
                     </tr>
                   ))}
