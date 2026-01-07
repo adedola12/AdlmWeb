@@ -210,7 +210,7 @@ export default function AboutADLM() {
     site: "https://images.unsplash.com/photo-1504306663385-cd3fee2e5af1?q=80&w=1600&auto=format&fit=crop",
     team1: dolapo,
     team2: richard,
-    team3: gladys,
+    // team3: gladys,
     team4:
       "https://images.unsplash.com/photo-1529070538774-1843cb3265df?q=80&w=1200&auto=format&fit=crop",
   };
@@ -300,12 +300,12 @@ export default function AboutADLM() {
       img: ph.team2,
       linkedin: "https://www.linkedin.com/in/richardenoch/",
     },
-    {
-      name: "Gladys Terungwa",
-      role: "Product Manager",
-      img: ph.team3,
-      linkedin: "https://www.linkedin.com/in/gladys-terungwa-9697b6313/",
-    },
+    // {
+    //   name: "Gladys Terungwa",
+    //   role: "Product Manager",
+    //   img: ph.team3,
+    //   linkedin: "https://www.linkedin.com/in/gladys-terungwa-9697b6313/",
+    // },
     {
       name: "Etti Taiwo",
       role: "Fullstack Developer",
