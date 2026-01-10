@@ -11,6 +11,82 @@ const MONTH_CHOICES = [
   { label: "1 year", value: 12 },
 ];
 
+function Badge({ label, tone = "slate" }) {
+  const toneClass =
+    tone === "yellow"
+      ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+      : tone === "blue"
+      ? "bg-blue-100 text-blue-800 border-blue-200"
+      : tone === "red"
+      ? "bg-red-100 text-red-800 border-red-200"
+      : tone === "green"
+      ? "bg-green-100 text-green-800 border-green-200"
+      : "bg-slate-100 text-slate-700 border-slate-200";
+
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium ${toneClass}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function getInstallState(p) {
+  const inst = p?.installation || {};
+  const status = String(inst.status || "").toLowerCase(); // "pending" | "complete" | ""
+  const entApplied = inst.entitlementsApplied; // true/false/undefined
+  const hasAppliedField = typeof entApplied === "boolean";
+
+  // Badge logic requested:
+  // - Pending: installation.status === "pending"
+  // - Completed but not applied: status === "complete" and entitlementsApplied === false
+  // - Legacy record: entitlementsApplied is missing (exists:false) OR status missing
+  if (status === "pending") {
+    return { label: "Pending", tone: "yellow" };
+  }
+
+  if (status === "complete" && hasAppliedField && entApplied === false) {
+    return { label: "Completed but not applied", tone: "red" };
+  }
+
+  if (!hasAppliedField || !status) {
+    return { label: "Legacy record", tone: "slate" };
+  }
+
+  // Optional: you might not see these in the list due to backend filter,
+  // but if you do, it's still nice to show.
+  if (status === "complete" && entApplied === true) {
+    return { label: "Completed", tone: "green" };
+  }
+
+  return { label: status || "Unknown", tone: "slate" };
+}
+
+function formatGrants(p) {
+  const grants = Array.isArray(p?.installation?.entitlementGrants)
+    ? p.installation.entitlementGrants
+    : [];
+
+  if (!grants.length) return { text: "—", count: 0 };
+
+  // Group months per productKey (in case of duplicates)
+  const agg = new Map();
+  for (const g of grants) {
+    const key = String(g?.productKey || "").trim();
+    const months = Number(g?.months || 0);
+    if (!key) continue;
+    agg.set(key, (agg.get(key) || 0) + (months > 0 ? months : 0));
+  }
+
+  const parts = Array.from(agg.entries()).map(([k, m]) => {
+    if (!m) return k;
+    return `${k} (${m}mo)`;
+  });
+
+  return { text: parts.join(" · "), count: parts.length };
+}
+
 export default function Admin() {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -35,12 +111,11 @@ export default function Admin() {
         apiAuthed(`/admin/installations`, { token: accessToken }),
       ]);
 
-      setUsers(uRes);
+      setUsers(uRes || []);
       setInstallations(iRes || []);
-
-      setPurchases(pRes);
+      setPurchases(pRes || []);
     } catch (e) {
-      setMsg(e.message);
+      setMsg(e?.message || "Failed to load admin data");
     } finally {
       setLoading(false);
     }
@@ -58,18 +133,19 @@ export default function Admin() {
       await load();
       setMsg(`Entitlement deleted for ${productKey}`);
     } catch (e) {
-      setMsg(e.message || "Failed to delete entitlement");
+      setMsg(e?.message || "Failed to delete entitlement");
     }
   }
 
-
   React.useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   async function updateEntitlement(email, productKey, months = 0, status) {
@@ -84,7 +160,7 @@ export default function Admin() {
       await load();
       setMsg("Entitlement updated");
     } catch (e) {
-      setMsg(e.message);
+      setMsg(e?.message || "Failed to update entitlement");
     }
   }
 
@@ -100,26 +176,25 @@ export default function Admin() {
       await load();
       setMsg("User status updated");
     } catch (e) {
-      setMsg(e.message);
+      setMsg(e?.message || "Failed to update user status");
     }
   }
 
-async function approvePurchase(id, months) {
-  setMsg("");
-  try {
-    const res = await apiAuthed(`/admin/purchases/${id}/approve`, {
-      token: accessToken,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ months }),
-    });
-    await load();
-    setMsg(res?.message || "Purchase approved");
-  } catch (e) {
-    setMsg(e.message);
+  async function approvePurchase(id, months) {
+    setMsg("");
+    try {
+      const res = await apiAuthed(`/admin/purchases/${id}/approve`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ months }),
+      });
+      await load();
+      setMsg(res?.message || "Purchase approved");
+    } catch (e) {
+      setMsg(e?.message || "Failed to approve purchase");
+    }
   }
-}
-
 
   async function rejectPurchase(id) {
     setMsg("");
@@ -131,13 +206,13 @@ async function approvePurchase(id, months) {
       await load();
       setMsg("Purchase rejected");
     } catch (e) {
-      setMsg(e.message);
+      setMsg(e?.message || "Failed to reject purchase");
     }
   }
 
   const activeRows = React.useMemo(() => {
     const rows = [];
-    users.forEach((u) => {
+    (users || []).forEach((u) => {
       (u.entitlements || []).forEach((e) => {
         if (e.status === "active") {
           rows.push({
@@ -150,6 +225,7 @@ async function approvePurchase(id, months) {
         }
       });
     });
+
     const rx = q ? new RegExp(q, "i") : null;
     return rx
       ? rows.filter(
@@ -178,7 +254,6 @@ async function approvePurchase(id, months) {
     );
 
     React.useEffect(() => {
-      // if tabs changed (search etc), keep active tab valid
       if (!productKeys.includes(activeProduct)) {
         setActiveProduct(productKeys[0] || "");
       }
@@ -187,7 +262,6 @@ async function approvePurchase(id, months) {
 
     const rows = productMap.get(activeProduct) || [];
 
-    // Sort users by expiry asc, then email
     const sortedRows = [...rows].sort((a, b) => {
       const ax = a.expiresAt ? new Date(a.expiresAt).getTime() : 0;
       const bx = b.expiresAt ? new Date(b.expiresAt).getTime() : 0;
@@ -195,7 +269,6 @@ async function approvePurchase(id, months) {
       return String(a.email || "").localeCompare(String(b.email || ""));
     });
 
-    // quick lookup for user details (role/disabled/username)
     const userByEmail = React.useMemo(() => {
       const m = new Map();
       (users || []).forEach((u) =>
@@ -206,7 +279,6 @@ async function approvePurchase(id, months) {
 
     return (
       <div className="space-y-4">
-        {/* Sub-tabs per software */}
         <div className="border-b">
           <nav className="flex gap-3 flex-wrap">
             {productKeys.map((pk) => {
@@ -230,7 +302,6 @@ async function approvePurchase(id, months) {
           </nav>
         </div>
 
-        {/* Table-like layout */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-slate-600">
@@ -257,7 +328,6 @@ async function approvePurchase(id, months) {
                     key={`${r.email}-${r.productKey}-${i}`}
                     className={`border-b ${disabledUser ? "opacity-60" : ""}`}
                   >
-                    {/* User */}
                     <td className="py-3 pr-3">
                       <div className="font-medium">{r.email}</div>
                       <div className="text-xs text-slate-500">
@@ -266,14 +336,12 @@ async function approvePurchase(id, months) {
                       </div>
                     </td>
 
-                    {/* Expiry */}
                     <td className="py-3 pr-3">
                       {r.expiresAt
                         ? dayjs(r.expiresAt).format("YYYY-MM-DD")
                         : "-"}
                     </td>
 
-                    {/* Renewal */}
                     <td className="py-3 pr-3">
                       <div className="flex items-center gap-2">
                         <select id={selId} className="input max-w-[140px]">
@@ -300,8 +368,6 @@ async function approvePurchase(id, months) {
                         </button>
                       </div>
                     </td>
-
-                    {/* Entitlement actions */}
 
                     <td className="py-3 pr-3">
                       <div className="flex items-center gap-2">
@@ -335,7 +401,6 @@ async function approvePurchase(id, months) {
                       </div>
                     </td>
 
-                    {/* Device */}
                     <td className="py-3 pr-3">
                       <button
                         className="btn btn-sm"
@@ -364,7 +429,6 @@ async function approvePurchase(id, months) {
                       </button>
                     </td>
 
-                    {/* User status */}
                     <td className="py-3 pr-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-600">
@@ -402,8 +466,22 @@ async function approvePurchase(id, months) {
     );
   }
 
+  // Sort installations by decidedAt desc (fallback createdAt)
+  const sortedInstallations = React.useMemo(() => {
+    const arr = Array.isArray(installations) ? [...installations] : [];
+    arr.sort((a, b) => {
+      const ax = a?.decidedAt ? new Date(a.decidedAt).getTime() : 0;
+      const bx = b?.decidedAt ? new Date(b.decidedAt).getTime() : 0;
+      if (ax !== bx) return bx - ax;
+      const ac = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bc = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bc - ac;
+    });
+    return arr;
+  }, [installations]);
+
   return (
-    <div className="space-y-6 ">
+    <div className="space-y-6">
       <div className="card">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold">Admin</h1>
@@ -420,7 +498,6 @@ async function approvePurchase(id, months) {
               Refresh
             </button>
 
-            {/* ✅ NEW */}
             <button
               className="btn btn-sm"
               onClick={() => navigate("/admin/coupons")}
@@ -445,6 +522,7 @@ async function approvePurchase(id, months) {
             >
               Pending ({purchases.length})
             </button>
+
             <button
               onClick={() => setTab("active")}
               className={`py-2 -mb-px border-b-2 transition ${
@@ -508,7 +586,6 @@ async function approvePurchase(id, months) {
                         </div>
                       </div>
 
-                      {/* Right-hand actions */}
                       <div className="flex gap-2 items-center">
                         {!isCart ? (
                           <>
@@ -555,7 +632,6 @@ async function approvePurchase(id, months) {
                       </div>
                     </div>
 
-                    {/* Cart line items (if any) */}
                     {isCart && (
                       <div className="rounded border bg-slate-50">
                         <div className="px-3 py-2 text-sm font-medium">
@@ -568,6 +644,7 @@ async function approvePurchase(id, months) {
                               ln.billingInterval === "yearly"
                                 ? (ln.qty || 0) * 12
                                 : ln.qty || 0;
+
                             return (
                               <div
                                 key={idx}
@@ -586,6 +663,7 @@ async function approvePurchase(id, months) {
                                     {months === 1 ? "" : "s"}
                                   </div>
                                 </div>
+
                                 <div className="text-right text-slate-700">
                                   <div>
                                     Unit: {p.currency}{" "}
@@ -616,8 +694,6 @@ async function approvePurchase(id, months) {
         </div>
       )}
 
-      {/* === TAB: Active Subscriptions === */}
-
       {tab === "active" && (
         <div className="card">
           <h2 className="font-semibold mb-3">Active Subscriptions</h2>
@@ -630,7 +706,6 @@ async function approvePurchase(id, months) {
             </div>
           ) : (
             (() => {
-              // Build product -> rows map
               const productMap = new Map();
               for (const row of activeRows) {
                 const key = String(row.productKey || "Unknown");
@@ -638,13 +713,10 @@ async function approvePurchase(id, months) {
                 productMap.get(key).push(row);
               }
 
-              // Sort product tabs (optional)
               const productKeys = Array.from(productMap.keys()).sort((a, b) =>
                 a.localeCompare(b)
               );
 
-              // local sub-tab state (per render) — keep it stable using React state
-              // NOTE: we must declare state outside IIFE, so we use a small helper closure below
               return (
                 <ActiveSubscriptionsByProduct
                   productKeys={productKeys}
@@ -666,55 +738,132 @@ async function approvePurchase(id, months) {
 
       {tab === "installations" && (
         <div className="card">
-          <h2 className="font-semibold mb-3">Pending Installations</h2>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="font-semibold">Installations</h2>
+            <div className="text-xs text-slate-500">
+              Shows installs that are pending OR completed but entitlements not
+              applied OR legacy records.
+            </div>
+          </div>
 
           {loading ? (
             <div className="text-sm text-slate-600">Loading…</div>
-          ) : installations.length === 0 ? (
+          ) : sortedInstallations.length === 0 ? (
             <div className="text-sm text-slate-600">
-              No pending installations.
+              No installations to review.
             </div>
           ) : (
             <div className="space-y-2">
-              {installations.map((p) => (
-                <div
-                  key={p._id}
-                  className="border rounded p-3 flex items-center justify-between gap-3"
-                >
-                  <div className="text-sm">
-                    <div>
-                      <b>{p.email}</b> · Approved purchase
+              {sortedInstallations.map((p) => {
+                const badge = getInstallState(p);
+                const grants = formatGrants(p);
+
+                const inst = p?.installation || {};
+                const canMarkComplete =
+                  String(inst.status || "").toLowerCase() !== "complete" ||
+                  inst.entitlementsApplied === false ||
+                  typeof inst.entitlementsApplied !== "boolean"; // legacy
+
+                return (
+                  <div
+                    key={p._id}
+                    className="border rounded p-3 flex items-start justify-between gap-4"
+                  >
+                    <div className="text-sm min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="font-medium truncate">
+                          {p.email || "Unknown email"}
+                        </div>
+                        <Badge label={badge.label} tone={badge.tone} />
+                        {p.currency && p.totalAmount != null && (
+                          <span className="text-xs text-slate-500">
+                            · {p.currency}{" "}
+                            {(p.totalAmount?.toLocaleString?.() ??
+                              p.totalAmount) ||
+                              ""}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-slate-600 mt-1">
+                        Approved:{" "}
+                        {p.decidedAt
+                          ? dayjs(p.decidedAt).format("YYYY-MM-DD HH:mm")
+                          : "—"}
+                      </div>
+
+                      <div className="mt-2">
+                        <div className="text-xs text-slate-500 mb-1">
+                          Pending product(s)
+                        </div>
+                        <div className="text-sm text-slate-800 break-words">
+                          {grants.text}
+                        </div>
+
+                        {Array.isArray(p?.lines) && p.lines.length > 0 && (
+                          <div className="text-xs text-slate-500 mt-1">
+                            Cart lines: {p.lines.length}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-2 text-xs text-slate-500">
+                        Status:{" "}
+                        <b className="text-slate-700">
+                          {String(inst.status || "—")}
+                        </b>
+                        {" · "}
+                        EntitlementsApplied:{" "}
+                        <b className="text-slate-700">
+                          {typeof inst.entitlementsApplied === "boolean"
+                            ? String(inst.entitlementsApplied)
+                            : "missing (legacy)"}
+                        </b>
+                      </div>
                     </div>
-                    <div className="text-slate-600">
-                      {p.decidedAt
-                        ? dayjs(p.decidedAt).format("YYYY-MM-DD HH:mm")
-                        : ""}
+
+                    <div className="shrink-0 flex flex-col items-end gap-2">
+                      <button
+                        className="btn"
+                        disabled={!canMarkComplete}
+                        title={
+                          canMarkComplete
+                            ? "Mark installation complete and apply entitlements"
+                            : "Already finalized"
+                        }
+                        onClick={async () => {
+                          setMsg("");
+                          try {
+                            const res = await apiAuthed(
+                              `/admin/installations/${p._id}/complete`,
+                              {
+                                token: accessToken,
+                                method: "POST",
+                              }
+                            );
+                            await load();
+                            setMsg(
+                              res?.message || "Installation marked complete"
+                            );
+                          } catch (e) {
+                            setMsg(e?.message || "Failed to mark complete");
+                          }
+                        }}
+                      >
+                        Mark complete
+                      </button>
+
+                      <div className="text-[11px] text-slate-500 text-right max-w-[240px]">
+                        {badge.label === "Pending"
+                          ? "After marking complete, subscription starts and coupon is finalized."
+                          : badge.label === "Completed but not applied"
+                          ? "This indicates a mismatch. Mark complete to apply entitlements."
+                          : "Legacy record: fields missing. Mark complete to normalize."}
+                      </div>
                     </div>
                   </div>
-
-                  <button
-                    className="btn"
-                    onClick={async () => {
-                      setMsg("");
-                      try {
-                        await apiAuthed(
-                          `/admin/installations/${p._id}/complete`,
-                          {
-                            token: accessToken,
-                            method: "POST",
-                          }
-                        );
-                        await load();
-                        setMsg("Installation marked complete");
-                      } catch (e) {
-                        setMsg(e.message || "Failed to mark complete");
-                      }
-                    }}
-                  >
-                    Mark complete
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
