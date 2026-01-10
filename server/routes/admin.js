@@ -115,16 +115,17 @@ router.post(
 
     const overrideMonths = Number(req.body?.months);
 
-    // Apply entitlements
+    // Build grants from purchase
+    const grants = [];
     if (Array.isArray(purchase.lines) && purchase.lines.length > 0) {
       purchase.lines.forEach((ln) => {
         const months =
           ln.billingInterval === "yearly" ? (ln.qty || 0) * 12 : ln.qty || 0;
-        if (months > 0) addMonthsToEntitlement(user, ln.productKey, months);
+        if (months > 0) grants.push({ productKey: ln.productKey, months });
       });
     } else if (purchase.productKey) {
       const months = overrideMonths || purchase.requestedMonths || 1;
-      addMonthsToEntitlement(user, purchase.productKey, months);
+      grants.push({ productKey: purchase.productKey, months });
       purchase.approvedMonths = months;
     } else {
       return res
@@ -132,8 +133,74 @@ router.post(
         .json({ error: "Nothing to approve for this purchase" });
     }
 
-    // Coupon redemption increments ONLY once (idempotent)
-    if (purchase.coupon?.couponId && !purchase.coupon.redeemedApplied) {
+    // Decide which products require installation.
+    // Rule: isCourse === true => no installation, apply immediately.
+    const keys = [...new Set(grants.map((g) => g.productKey).filter(Boolean))];
+    const prods = await Product.find({ key: { $in: keys } })
+      .select("key isCourse")
+      .lean();
+    const isCourseByKey = Object.fromEntries(
+      prods.map((p) => [p.key, !!p.isCourse])
+    );
+
+    const immediate = [];
+    const staged = [];
+
+    for (const g of grants) {
+      if (isCourseByKey[g.productKey]) immediate.push(g);
+      else staged.push(g);
+    }
+
+    // Apply immediate entitlements (courses)
+    if (immediate.length) {
+      immediate.forEach((g) =>
+        addMonthsToEntitlement(user, g.productKey, g.months)
+      );
+      await user.save();
+    }
+
+    // Update purchase status
+    purchase.status = "approved";
+    purchase.decidedBy = req.user.email;
+    purchase.decidedAt = new Date();
+
+    // Installation object
+    purchase.installation = purchase.installation || {};
+    purchase.installation.anydeskUrl =
+      purchase.installation.anydeskUrl ||
+      "https://anydesk.com/en/downloads/windows";
+    purchase.installation.installVideoUrl =
+      purchase.installation.installVideoUrl || "";
+
+    // Store staged grants for activation on installation completion
+    // IMPORTANT: Do not overwrite if already set (protect against double-approve edge cases)
+    if (!Array.isArray(purchase.installation.entitlementGrants)) {
+      purchase.installation.entitlementGrants = [];
+    }
+
+    // If staged items exist -> installation pending
+    if (staged.length > 0) {
+      purchase.installation.status = "pending";
+      purchase.installation.entitlementGrants = staged; // overwrite with the correct staged grants
+      purchase.installation.entitlementsApplied = false;
+      purchase.installation.entitlementsAppliedAt = null;
+    } else {
+      // No staged items => treat as complete instantly (course-only purchase)
+      purchase.installation.status = "complete";
+      purchase.installation.markedBy = req.user.email;
+      purchase.installation.markedAt = new Date();
+      purchase.installation.entitlementGrants = [];
+      purchase.installation.entitlementsApplied = true;
+      purchase.installation.entitlementsAppliedAt = new Date();
+    }
+
+    // ✅ Coupon redemption should NOT happen on approve if installation is pending.
+    // Only redeem instantly for course-only (no staged items).
+    if (
+      purchase.coupon?.couponId &&
+      !purchase.coupon.redeemedApplied &&
+      staged.length === 0
+    ) {
       await Coupon.updateOne(
         { _id: purchase.coupon.couponId },
         { $inc: { redeemedCount: 1 } }
@@ -141,60 +208,58 @@ router.post(
       purchase.coupon.redeemedApplied = true;
     }
 
-    await user.save();
-
-    purchase.status = "approved";
-    purchase.decidedBy = req.user.email;
-    purchase.decidedAt = new Date();
-
-    // mark installation as pending
-    purchase.installation = purchase.installation || {};
-    purchase.installation.status = "pending";
-    purchase.installation.anydeskUrl =
-      purchase.installation.anydeskUrl ||
-      "https://anydesk.com/en/downloads/windows";
-    purchase.installation.installVideoUrl =
-      purchase.installation.installVideoUrl || "";
-
     await purchase.save();
 
     // send email (safe)
     try {
+      const isPendingInstall = staged.length > 0;
+
       await sendMail({
         to: user.email,
-        subject: "ADLM Purchase Approved — Installation Pending",
+        subject: isPendingInstall
+          ? "ADLM Purchase Approved — Installation Pending"
+          : "ADLM Purchase Approved — Activated",
         html: `
-        <div style="font-family:Arial,sans-serif;line-height:1.5">
-          <h2>Your purchase has been approved ✅</h2>
-          <p>Your subscription is now active, and our team will proceed with software installation.</p>
-          <p><b>Next steps:</b></p>
-          <ol>
-            <li>Download AnyDesk: <a href="https://anydesk.com/en/downloads/windows">Click here</a></li>
-            <li>Send us your AnyDesk Address</li>
+          <div style="font-family:Arial,sans-serif;line-height:1.5">
+            <h2>Your purchase has been approved ✅</h2>
             ${
-              purchase.installation.installVideoUrl
-                ? `<li>Watch installation process video: <a href="${purchase.installation.installVideoUrl}">Watch</a></li>`
-                : ""
+              isPendingInstall
+                ? `<p>Your subscription will start after installation is completed by our team.</p>
+                   <p><b>Next steps:</b></p>
+                   <ol>
+                     <li>Download AnyDesk: <a href="https://anydesk.com/en/downloads/windows">Click here</a></li>
+                     <li>Send us your AnyDesk Address</li>
+                     ${
+                       purchase.installation.installVideoUrl
+                         ? `<li>Watch installation process video: <a href="${purchase.installation.installVideoUrl}">Watch</a></li>`
+                         : ""
+                     }
+                   </ol>`
+                : `<p>Your subscription is now active. You can start using your product immediately.</p>`
             }
-          </ol>
-          <p>Thank you for choosing ADLM.</p>
-        </div>
-      `,
+            <p>Thank you for choosing ADLM.</p>
+          </div>
+        `,
       });
     } catch (e) {
       console.error("[admin approve] sendMail failed:", e?.message || e);
     }
 
+    // Enroll can still happen on approve (especially for courses)
     await autoEnrollFromPurchase(purchase);
 
     return res.json({
       ok: true,
       purchase,
       entitlements: user.entitlements,
-      message: "Purchase approved and entitlements updated.",
+      message:
+        staged.length > 0
+          ? "Purchase approved. Entitlements will start after installation is completed."
+          : "Purchase approved and activated.",
     });
   }
 );
+
 
 router.post(
   "/purchases/:id/reject",
@@ -216,10 +281,26 @@ router.post(
 );
 
 router.get("/installations", requireAuth, requireAdmin, async (req, res) => {
-  const q = { status: "approved", "installation.status": "pending" };
+  const q = {
+    status: "approved",
+    $and: [
+      {
+        $or: [
+          { "installation.status": "pending" },
+          { "installation.entitlementsApplied": false },
+          { "installation.entitlementsApplied": { $exists: false } },
+        ],
+      },
+      // Optional guard: show only installs that actually have staged items
+      { "installation.entitlementGrants.0": { $exists: true } },
+    ],
+  };
+
   const list = await Purchase.find(q).sort({ decidedAt: -1 }).limit(500);
   return res.json(list);
 });
+
+
 
 router.post(
   "/installations/:id/complete",
@@ -230,14 +311,60 @@ router.post(
     if (!p) return res.status(404).json({ error: "Purchase not found" });
 
     p.installation = p.installation || {};
+
+    // idempotent: if already complete, still ensure entitlements applied if needed
+    const wasComplete = p.installation.status === "complete";
+
     p.installation.status = "complete";
     p.installation.markedBy = req.user.email;
     p.installation.markedAt = new Date();
 
+    const grants = Array.isArray(p.installation.entitlementGrants)
+      ? p.installation.entitlementGrants
+      : [];
+
+    // ✅ Apply entitlements only once
+    if (!p.installation.entitlementsApplied && grants.length > 0) {
+      const user = await User.findById(p.userId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      grants.forEach((g) => {
+        if (g?.productKey && Number(g?.months || 0) > 0) {
+          addMonthsToEntitlement(user, g.productKey, Number(g.months));
+        }
+      });
+
+      await user.save();
+
+      p.installation.entitlementsApplied = true;
+      p.installation.entitlementsAppliedAt = new Date();
+    } else if (!p.installation.entitlementsApplied && grants.length === 0) {
+      // nothing to apply; still mark as applied so we don't keep checking
+      p.installation.entitlementsApplied = true;
+      p.installation.entitlementsAppliedAt = new Date();
+    }
+
+    // ✅ Coupon redemption now happens here (the “sale complete” moment)
+    if (p.coupon?.couponId && !p.coupon.redeemedApplied) {
+      await Coupon.updateOne(
+        { _id: p.coupon.couponId },
+        { $inc: { redeemedCount: 1 } }
+      );
+      p.coupon.redeemedApplied = true;
+    }
+
     await p.save();
-    return res.json({ ok: true, purchase: p });
+
+    return res.json({
+      ok: true,
+      purchase: p,
+      message: wasComplete
+        ? "Installation already complete. Ensured entitlements/coupon are finalized."
+        : "Installation marked complete. Subscription started and coupon finalized.",
+    });
   }
 );
+
 
 router.post(
   "/users/reset-device",
@@ -259,5 +386,35 @@ router.post(
     return res.json({ ok: true });
   }
 );
+
+router.post(
+  "/users/entitlement/delete",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const { email, productKey } = req.body || {};
+    if (!email || !productKey)
+      return res.status(400).json({ error: "email and productKey required" });
+
+    const u = await User.findOne({ email });
+    if (!u) return res.status(404).json({ error: "User not found" });
+
+    const before = (u.entitlements || []).length;
+    u.entitlements = (u.entitlements || []).filter(
+      (e) => e.productKey !== productKey
+    );
+
+    // If nothing removed
+    if (u.entitlements.length === before) {
+      return res.status(404).json({ error: "Entitlement not found" });
+    }
+
+    u.refreshVersion = (u.refreshVersion || 0) + 1; // helps desktop refresh
+    await u.save();
+
+    return res.json({ ok: true, entitlements: u.entitlements });
+  }
+);
+
 
 export default router;
