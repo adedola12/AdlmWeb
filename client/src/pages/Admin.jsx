@@ -46,6 +46,23 @@ export default function Admin() {
     }
   }
 
+  async function deleteEntitlement(email, productKey) {
+    setMsg("");
+    try {
+      await apiAuthed(`/admin/users/entitlement/delete`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, productKey }),
+      });
+      await load();
+      setMsg(`Entitlement deleted for ${productKey}`);
+    } catch (e) {
+      setMsg(e.message || "Failed to delete entitlement");
+    }
+  }
+
+
   React.useEffect(() => {
     load();
   }, []);
@@ -87,21 +104,22 @@ export default function Admin() {
     }
   }
 
-  async function approvePurchase(id, months) {
-    setMsg("");
-    try {
-      await apiAuthed(`/admin/purchases/${id}/approve`, {
-        token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ months }),
-      });
-      await load();
-      setMsg("Purchase approved & entitlement applied");
-    } catch (e) {
-      setMsg(e.message);
-    }
+async function approvePurchase(id, months) {
+  setMsg("");
+  try {
+    const res = await apiAuthed(`/admin/purchases/${id}/approve`, {
+      token: accessToken,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ months }),
+    });
+    await load();
+    setMsg(res?.message || "Purchase approved");
+  } catch (e) {
+    setMsg(e.message);
   }
+}
+
 
   async function rejectPurchase(id) {
     setMsg("");
@@ -153,6 +171,7 @@ export default function Admin() {
     apiAuthed,
     load,
     setMsg,
+    deleteEntitlement,
   }) {
     const [activeProduct, setActiveProduct] = React.useState(
       productKeys[0] || ""
@@ -283,21 +302,37 @@ export default function Admin() {
                     </td>
 
                     {/* Entitlement actions */}
+
                     <td className="py-3 pr-3">
-                      <button
-                        className="btn btn-sm"
-                        title="Disable this entitlement"
-                        onClick={() =>
-                          updateEntitlement(
-                            r.email,
-                            r.productKey,
-                            0,
-                            "disabled"
-                          )
-                        }
-                      >
-                        Disable
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="btn btn-sm"
+                          title="Disable this entitlement"
+                          onClick={() =>
+                            updateEntitlement(
+                              r.email,
+                              r.productKey,
+                              0,
+                              "disabled"
+                            )
+                          }
+                        >
+                          Disable
+                        </button>
+
+                        <button
+                          className="btn btn-sm"
+                          title="Permanently remove entitlement"
+                          onClick={() => {
+                            const ok = window.confirm(
+                              `Delete entitlement ${r.productKey} for ${r.email}? This cannot be undone.`
+                            );
+                            if (ok) deleteEntitlement(r.email, r.productKey);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
 
                     {/* Device */}
@@ -621,6 +656,7 @@ export default function Admin() {
                   apiAuthed={apiAuthed}
                   load={load}
                   setMsg={setMsg}
+                  deleteEntitlement={deleteEntitlement}
                 />
               );
             })()
