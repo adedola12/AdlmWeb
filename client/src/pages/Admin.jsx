@@ -24,7 +24,6 @@ export default function Admin() {
 
   const [installations, setInstallations] = React.useState([]);
 
-
   async function load() {
     setLoading(true);
     setMsg("");
@@ -143,6 +142,230 @@ export default function Admin() {
         )
       : rows;
   }, [users, q]);
+
+  function ActiveSubscriptionsByProduct({
+    productKeys,
+    productMap,
+    users,
+    setDisabled,
+    updateEntitlement,
+    accessToken,
+    apiAuthed,
+    load,
+    setMsg,
+  }) {
+    const [activeProduct, setActiveProduct] = React.useState(
+      productKeys[0] || ""
+    );
+
+    React.useEffect(() => {
+      // if tabs changed (search etc), keep active tab valid
+      if (!productKeys.includes(activeProduct)) {
+        setActiveProduct(productKeys[0] || "");
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [productKeys.join("|")]);
+
+    const rows = productMap.get(activeProduct) || [];
+
+    // Sort users by expiry asc, then email
+    const sortedRows = [...rows].sort((a, b) => {
+      const ax = a.expiresAt ? new Date(a.expiresAt).getTime() : 0;
+      const bx = b.expiresAt ? new Date(b.expiresAt).getTime() : 0;
+      if (ax !== bx) return ax - bx;
+      return String(a.email || "").localeCompare(String(b.email || ""));
+    });
+
+    // quick lookup for user details (role/disabled/username)
+    const userByEmail = React.useMemo(() => {
+      const m = new Map();
+      (users || []).forEach((u) =>
+        m.set(String(u.email || "").toLowerCase(), u)
+      );
+      return m;
+    }, [users]);
+
+    return (
+      <div className="space-y-4">
+        {/* Sub-tabs per software */}
+        <div className="border-b">
+          <nav className="flex gap-3 flex-wrap">
+            {productKeys.map((pk) => {
+              const count = (productMap.get(pk) || []).length;
+              const active = pk === activeProduct;
+              return (
+                <button
+                  key={pk}
+                  onClick={() => setActiveProduct(pk)}
+                  className={`py-2 -mb-px border-b-2 transition text-sm ${
+                    active
+                      ? "border-blue-600 text-blue-700"
+                      : "border-transparent text-slate-600 hover:text-slate-800"
+                  }`}
+                  title={pk}
+                >
+                  {pk} <span className="text-slate-400">({count})</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Table-like layout */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-slate-600">
+              <tr className="border-b">
+                <th className="py-2 pr-3">User</th>
+                <th className="py-2 pr-3">Expiry</th>
+                <th className="py-2 pr-3">Renewal</th>
+                <th className="py-2 pr-3">Entitlement</th>
+                <th className="py-2 pr-3">Device</th>
+                <th className="py-2 pr-3">User Status</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {sortedRows.map((r, i) => {
+                const u =
+                  userByEmail.get(String(r.email || "").toLowerCase()) || {};
+                const disabledUser = !!u.disabled;
+
+                const selId = `renew-${activeProduct}-${i}`;
+
+                return (
+                  <tr
+                    key={`${r.email}-${r.productKey}-${i}`}
+                    className={`border-b ${disabledUser ? "opacity-60" : ""}`}
+                  >
+                    {/* User */}
+                    <td className="py-3 pr-3">
+                      <div className="font-medium">{r.email}</div>
+                      <div className="text-xs text-slate-500">
+                        {u.username ? `@${u.username} · ` : ""}
+                        {u.role ? `Role: ${u.role}` : ""}
+                      </div>
+                    </td>
+
+                    {/* Expiry */}
+                    <td className="py-3 pr-3">
+                      {r.expiresAt
+                        ? dayjs(r.expiresAt).format("YYYY-MM-DD")
+                        : "-"}
+                    </td>
+
+                    {/* Renewal */}
+                    <td className="py-3 pr-3">
+                      <div className="flex items-center gap-2">
+                        <select id={selId} className="input max-w-[140px]">
+                          {MONTH_CHOICES.map((m) => (
+                            <option key={m.value} value={m.value}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          className="btn btn-sm"
+                          title="Renew selected period"
+                          onClick={() =>
+                            updateEntitlement(
+                              r.email,
+                              r.productKey,
+                              Number(document.getElementById(selId).value),
+                              "active"
+                            )
+                          }
+                        >
+                          Renew
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Entitlement actions */}
+                    <td className="py-3 pr-3">
+                      <button
+                        className="btn btn-sm"
+                        title="Disable this entitlement"
+                        onClick={() =>
+                          updateEntitlement(
+                            r.email,
+                            r.productKey,
+                            0,
+                            "disabled"
+                          )
+                        }
+                      >
+                        Disable
+                      </button>
+                    </td>
+
+                    {/* Device */}
+                    <td className="py-3 pr-3">
+                      <button
+                        className="btn btn-sm"
+                        title="Reset device binding"
+                        onClick={async () => {
+                          setMsg("");
+                          try {
+                            await apiAuthed(`/admin/users/reset-device`, {
+                              token: accessToken,
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                email: r.email,
+                                productKey: r.productKey,
+                              }),
+                            });
+
+                            await load();
+                            setMsg(`Device lock reset for ${r.productKey}`);
+                          } catch (err) {
+                            setMsg(err?.message || "Failed to reset device");
+                          }
+                        }}
+                      >
+                        Reset Device
+                      </button>
+                    </td>
+
+                    {/* User status */}
+                    <td className="py-3 pr-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-600">
+                          {disabledUser ? "Disabled" : "Active"}
+                        </span>
+
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => setDisabled(r.email, !disabledUser)}
+                        >
+                          {disabledUser ? "Enable" : "Disable"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {sortedRows.length === 0 && (
+                <tr>
+                  <td className="py-4 text-slate-600" colSpan={6}>
+                    No users found under this subscription.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="text-xs text-slate-500">
+          Showing <b>{sortedRows.length}</b> active subscriptions for{" "}
+          <b>{activeProduct}</b>.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 ">
@@ -359,9 +582,11 @@ export default function Admin() {
       )}
 
       {/* === TAB: Active Subscriptions === */}
+
       {tab === "active" && (
         <div className="card">
           <h2 className="font-semibold mb-3">Active Subscriptions</h2>
+
           {loading ? (
             <div className="text-sm text-slate-600">Loading…</div>
           ) : activeRows.length === 0 ? (
@@ -369,137 +594,36 @@ export default function Admin() {
               No active subscriptions.
             </div>
           ) : (
-            <div className="space-y-3">
-              {users.map((u, idx) => {
-                const act = (u.entitlements || []).filter(
-                  (e) => e.status === "active"
-                );
-                if (act.length === 0) return null;
-                return (
-                  <div key={idx} className="border rounded p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-semibold">{u.email}</div>
-                        <div className="text-sm text-slate-600">
-                          {u.username ? `@${u.username} · ` : ""}
-                          Role: {u.role} · Disabled: {String(u.disabled)}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => setDisabled(u.email, !u.disabled)}
-                        >
-                          {u.disabled ? "Enable" : "Disable"}
-                        </button>
-                      </div>
-                    </div>
+            (() => {
+              // Build product -> rows map
+              const productMap = new Map();
+              for (const row of activeRows) {
+                const key = String(row.productKey || "Unknown");
+                if (!productMap.has(key)) productMap.set(key, []);
+                productMap.get(key).push(row);
+              }
 
-                    <div className="mt-3 space-y-2">
-                      {act.map((e, i) => {
-                        const selId = `renew-${idx}-${i}`;
-                        return (
-                          <div
-                            key={i}
-                            className="border rounded p-2 flex items-center justify-between"
-                          >
-                            <div className="text-sm">
-                              <div className="font-medium">{e.productKey}</div>
-                              <div className="text-slate-600">
-                                Expires:{" "}
-                                {e.expiresAt
-                                  ? dayjs(e.expiresAt).format("YYYY-MM-DD")
-                                  : "-"}
-                              </div>
-                            </div>
+              // Sort product tabs (optional)
+              const productKeys = Array.from(productMap.keys()).sort((a, b) =>
+                a.localeCompare(b)
+              );
 
-                            <div className="flex items-center gap-2">
-                              <select
-                                id={selId}
-                                className="input max-w-[140px]"
-                              >
-                                {MONTH_CHOICES.map((m) => (
-                                  <option key={m.value} value={m.value}>
-                                    {m.label}
-                                  </option>
-                                ))}
-                              </select>
-
-                              <button
-                                className="btn btn-sm"
-                                title="Renew selected period"
-                                onClick={() =>
-                                  updateEntitlement(
-                                    u.email,
-                                    e.productKey,
-                                    Number(
-                                      document.getElementById(selId).value
-                                    ),
-                                    "active"
-                                  )
-                                }
-                              >
-                                Renew
-                              </button>
-
-                              <button
-                                className="btn btn-sm"
-                                title="Disable this entitlement"
-                                onClick={() =>
-                                  updateEntitlement(
-                                    u.email,
-                                    e.productKey,
-                                    0,
-                                    "disabled"
-                                  )
-                                }
-                              >
-                                Disable
-                              </button>
-
-                              <button
-                                className="btn btn-sm"
-                                title="Reset device binding"
-                                onClick={async () => {
-                                  setMsg("");
-                                  try {
-                                    await apiAuthed(
-                                      `/admin/users/reset-device`,
-                                      {
-                                        token: accessToken,
-                                        method: "POST",
-                                        headers: {
-                                          "Content-Type": "application/json",
-                                        },
-                                        body: JSON.stringify({
-                                          email: u.email,
-                                          productKey: e.productKey,
-                                        }),
-                                      }
-                                    );
-
-                                    await load();
-                                    setMsg(
-                                      `Device lock reset for ${e.productKey}`
-                                    );
-                                  } catch (err) {
-                                    setMsg(
-                                      err?.message || "Failed to reset device"
-                                    );
-                                  }
-                                }}
-                              >
-                                Reset Device
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+              // local sub-tab state (per render) — keep it stable using React state
+              // NOTE: we must declare state outside IIFE, so we use a small helper closure below
+              return (
+                <ActiveSubscriptionsByProduct
+                  productKeys={productKeys}
+                  productMap={productMap}
+                  users={users}
+                  setDisabled={setDisabled}
+                  updateEntitlement={updateEntitlement}
+                  accessToken={accessToken}
+                  apiAuthed={apiAuthed}
+                  load={load}
+                  setMsg={setMsg}
+                />
+              );
+            })()
           )}
         </div>
       )}
