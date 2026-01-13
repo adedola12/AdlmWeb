@@ -1,6 +1,7 @@
 // server/routes/auth.js
 import express from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { ensureDb } from "../db.js";
 import { User } from "../models/User.js";
 import { Refresh } from "../models/Refresh.js";
@@ -19,6 +20,7 @@ const router = express.Router();
 
 /* -------------------- helpers -------------------- */
 const normalizeWhatsApp = (v) => (!v ? "" : String(v).replace(/[^\d+]/g, ""));
+
 async function findByIdentifier(identifier) {
   return (
     (await User.findOne({ email: identifier })) ||
@@ -31,8 +33,8 @@ function isPluginClient(req) {
   const h = (s) => (req.get(s) || "").toLowerCase();
 
   // Option A: explicit header from your Windows apps
-  //   e.g. X-ADLM-Client: rategen-win or revit-plugin
-  const kind = h("x-adlm-client"); // "rategen-win", "revit-plugin", etc.
+  //   e.g. X-ADLM-Client: planswift-plugin
+  const kind = h("x-adlm-client");
   if (kind && /win|plugin|desktop/i.test(kind)) return true;
 
   // Option B: fallback signal via body
@@ -45,6 +47,52 @@ function isPluginClient(req) {
   return false;
 }
 
+// If your expiresAt is saved like "YYYY-MM-DD", treat as end of that day (UTC)
+function normalizeExpiryMaybe(expValue) {
+  if (!expValue) return null;
+  const d = new Date(expValue);
+  if (isNaN(d.getTime())) return null;
+
+  if (typeof expValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(expValue)) {
+    d.setUTCHours(23, 59, 59, 999);
+  }
+  return d;
+}
+
+// Create offline license JWT (HS256) for plugin use
+function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
+  const secret =
+    process.env.LICENSE_JWT_SECRET || "super_license_secret_change_me";
+
+  // IMPORTANT: exp must NOT exceed entitlement expiry
+  const expMs = expiresAt?.getTime?.() || 0;
+  const expSec = expMs ? Math.floor(expMs / 1000) : null;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (!expSec || expSec <= nowSec) return null;
+
+  const payload = {
+    ver: 1,
+    sub: String(user._id),
+    email: user.email,
+    productKey: String(productKey || "").toLowerCase(),
+    deviceFingerprint: String(deviceFingerprint || ""),
+    entitlements: (user.entitlements || []).map((e) => ({
+      productKey: String(e.productKey || "").toLowerCase(),
+      status: e.status,
+      expiresAt: e.expiresAt || null,
+      deviceFingerprint: e.deviceFingerprint || null,
+    })),
+  };
+
+  return jwt.sign(payload, secret, {
+    algorithm: "HS256",
+    issuer: "adlm",
+    audience: "adlm-plugin",
+    expiresIn: expSec - nowSec, // exactly until entitlement expiry
+  });
+}
+
 /* -------------------- SIGNUP -------------------- */
 router.post("/signup", async (req, res) => {
   try {
@@ -55,7 +103,6 @@ router.post("/signup", async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: "email and password required" });
 
-    // enforce basic profile fields (optional)
     if (!firstName || !lastName || !whatsapp) {
       return res
         .status(400)
@@ -95,7 +142,6 @@ router.post("/signup", async (req, res) => {
       user.welcomeEmailSentAt = new Date();
       await user.save();
     } catch (mailErr) {
-      // Don't fail signup if email fails
       console.error("[/auth/signup] welcome mail error:", mailErr);
     }
 
@@ -137,6 +183,7 @@ router.post("/login", async (req, res) => {
 
     const { identifier, password, productKey, device_fingerprint } =
       req.body || {};
+
     if (!identifier || !password) {
       return res
         .status(400)
@@ -166,6 +213,14 @@ router.post("/login", async (req, res) => {
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
     const pluginLogin = isPluginClient(req);
+
+    // IMPORTANT: always define it (fixes ReferenceError)
+    let licenseToken = null;
+
+    // Keep these so we can sign license after checks pass
+    let chosenPk = null;
+    let chosenDfp = null;
+    let chosenExpiresAt = null;
 
     // ── Only for plugin/desktop logins: require entitlement + device binding ──
     if (pluginLogin) {
@@ -214,22 +269,9 @@ router.post("/login", async (req, res) => {
           const status = String(e.status || "")
             .trim()
             .toLowerCase();
-          const exp = e.expiresAt ? new Date(e.expiresAt) : null;
-          const expOk = exp && !isNaN(exp.getTime()) ? exp : null;
-
-          // If your expiresAt is saved like "YYYY-MM-DD", treat as end of that day (UTC)
-          // so it doesn't expire at 00:00.
-          if (
-            expOk &&
-            typeof e.expiresAt === "string" &&
-            /^\d{4}-\d{2}-\d{2}$/.test(e.expiresAt)
-          ) {
-            expOk.setUTCHours(23, 59, 59, 999);
-          }
-
+          const expOk = normalizeExpiryMaybe(e.expiresAt);
           const isActive = status === "active";
           const notExpired = expOk ? expOk.getTime() > now.getTime() : false;
-
           return { e, status, expOk, isActive, notExpired };
         })
         .sort((a, b) => {
@@ -246,16 +288,7 @@ router.post("/login", async (req, res) => {
       const status = String(ent.status || "")
         .trim()
         .toLowerCase();
-      let expiresAt = ent.expiresAt ? new Date(ent.expiresAt) : null;
-
-      if (
-        expiresAt &&
-        !isNaN(expiresAt.getTime()) &&
-        typeof ent.expiresAt === "string" &&
-        /^\d{4}-\d{2}-\d{2}$/.test(ent.expiresAt)
-      ) {
-        expiresAt.setUTCHours(23, 59, 59, 999);
-      }
+      const expiresAt = normalizeExpiryMaybe(ent.expiresAt);
 
       if (status !== "active") {
         return res.status(403).json({
@@ -266,11 +299,7 @@ router.post("/login", async (req, res) => {
         });
       }
 
-      if (
-        !expiresAt ||
-        isNaN(expiresAt.getTime()) ||
-        expiresAt.getTime() <= now.getTime()
-      ) {
+      if (!expiresAt || expiresAt.getTime() <= now.getTime()) {
         return res.status(403).json({
           error: "Your subscription has expired.",
           code: "SUBSCRIPTION_EXPIRED",
@@ -290,6 +319,10 @@ router.post("/login", async (req, res) => {
           code: "DEVICE_MISMATCH",
         });
       }
+
+      chosenPk = pk;
+      chosenDfp = dfp;
+      chosenExpiresAt = expiresAt;
     }
     // ── End plugin-only checks ──
 
@@ -319,9 +352,18 @@ router.post("/login", async (req, res) => {
     });
 
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
-    // res.json({ accessToken, user: payload });
-    res.json({ accessToken, user: payload, licenseToken });
 
+    // Generate offline license token ONLY for plugin clients (after entitlement/device binding is confirmed)
+    if (pluginLogin && chosenPk && chosenDfp && chosenExpiresAt) {
+      licenseToken = signLicenseToken({
+        user,
+        productKey: chosenPk,
+        deviceFingerprint: chosenDfp,
+        expiresAt: chosenExpiresAt,
+      });
+    }
+
+    return res.json({ accessToken, user: payload, licenseToken });
   } catch (err) {
     console.error("[/auth/login] error:", err);
     res.status(500).json({ error: "Login failed" });
@@ -336,9 +378,8 @@ router.post("/refresh", async (req, res) => {
     const token = req.cookies?.[REFRESH_COOKIE];
     if (!token) return res.status(401).json({ error: "No refresh cookie" });
 
-    let dec;
     try {
-      dec = verifyRefresh(token);
+      verifyRefresh(token);
     } catch {
       return res.status(401).json({ error: "Bad refresh token" });
     }
@@ -458,7 +499,6 @@ router.post("/password/reset", async (req, res) => {
         .status(429)
         .json({ error: "Too many attempts. Request a new code." });
 
-    // (String compare already done by query, but keep guard)
     if (String(code) !== String(rec.code)) {
       rec.attempts += 1;
       await rec.save();
@@ -470,7 +510,7 @@ router.post("/password/reset", async (req, res) => {
     rec.usedAt = new Date();
     await rec.save();
 
-    await Refresh.deleteMany({ userId: user._id }); // invalidate sessions
+    await Refresh.deleteMany({ userId: user._id });
     res.json({ ok: true });
   } catch (err) {
     console.error("[/auth/password/reset] error:", err);
