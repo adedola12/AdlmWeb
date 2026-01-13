@@ -131,7 +131,6 @@ router.post("/signup", async (req, res) => {
 });
 
 /* -------------------- LOGIN (web vs plugin) -------------------- */
-/* -------------------- LOGIN (web vs plugin) -------------------- */
 router.post("/login", async (req, res) => {
   try {
     await ensureDb();
@@ -320,7 +319,9 @@ router.post("/login", async (req, res) => {
     });
 
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
-    res.json({ accessToken, user: payload });
+    // res.json({ accessToken, user: payload });
+    res.json({ accessToken, user: payload, licenseToken });
+
   } catch (err) {
     console.error("[/auth/login] error:", err);
     res.status(500).json({ error: "Login failed" });
