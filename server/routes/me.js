@@ -7,7 +7,6 @@ import { ZONES, normalizeZone } from "../util/zones.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
 
-
 const router = express.Router();
 
 router.get("/", requireAuth, async (req, res) => {
@@ -40,11 +39,21 @@ router.get("/", requireAuth, async (req, res) => {
 /* used by desktop */
 router.get("/entitlements", requireAuth, async (req, res) => {
   const user = await User.findById(req.user._id, { entitlements: 1 }).lean();
+
+  const normalizeExpiry = (v) => {
+    if (!v) return null;
+    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      return `${v}T23:59:59.999Z`;
+    }
+    return v;
+  };
+
   const ent = (user?.entitlements || []).map((e) => ({
     productKey: e.productKey,
     status: e.status,
-    expiresAt: e.expiresAt || null,
+    expiresAt: normalizeExpiry(e.expiresAt),
   }));
+
   res.json(ent);
 });
 
@@ -135,8 +144,6 @@ router.get("/summary", requireAuth, async (req, res) => {
     entitlements,
     installations: installsEnriched,
   });
-
-
 });
 
 // Profile details
