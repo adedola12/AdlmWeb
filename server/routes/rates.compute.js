@@ -1,5 +1,6 @@
 import express from "express";
 import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
+import { computeRate } from "../services/rategen.computeEngine.js";
 
 const router = express.Router();
 
@@ -29,6 +30,31 @@ router.get("/compute-items", async (_req, res) => {
       })),
     }))
   );
+});
+
+/**
+ * POST /api/rates/compute
+ * body: { section, name, overheadPercent?, profitPercent?, priceMode? }
+ */
+router.post("/compute", async (req, res, next) => {
+  try {
+    const { section, name, overheadPercent, profitPercent, priceMode } = req.body || {};
+    if (!section || !name) {
+      return res.status(400).json({ error: "section and name are required" });
+    }
+
+    const result = await computeRate({
+      section,
+      name,
+      overheadPercent,
+      profitPercent,
+      priceMode: priceMode || "hybrid",
+    });
+
+    res.json({ ok: true, result });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;
