@@ -1,3 +1,4 @@
+// models/Purchase.js
 import mongoose from "mongoose";
 
 const LineSchema = new mongoose.Schema(
@@ -6,9 +7,18 @@ const LineSchema = new mongoose.Schema(
     name: { type: String, trim: true },
     billingInterval: { type: String, trim: true }, // "monthly" | "yearly"
     qty: { type: Number, default: 1, min: 1 },
-    unit: { type: Number, default: 0 }, // unit price in chosen currency
-    install: { type: Number, default: 0 }, // install fee in chosen currency
-    subtotal: { type: Number, default: 0 }, // unit*qty + install (chosen currency)
+    unit: { type: Number, default: 0 },
+    install: { type: Number, default: 0 },
+    subtotal: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+// ✅ NEW: entitlement grant schema (legacy-safe)
+const GrantSchema = new mongoose.Schema(
+  {
+    productKey: { type: String, trim: true, required: true },
+    months: { type: Number, required: true, min: 1 },
   },
   { _id: false }
 );
@@ -26,22 +36,22 @@ const PurchaseSchema = new mongoose.Schema(
       code: { type: String, trim: true, uppercase: true },
       type: { type: String, enum: ["percent", "fixed"] },
       value: { type: Number },
-      currency: { type: String, enum: ["NGN", "USD"] }, // for fixed coupons
+      currency: { type: String, enum: ["NGN", "USD"] },
       discountAmount: { type: Number, default: 0 },
       couponId: { type: mongoose.Schema.Types.ObjectId, ref: "Coupon" },
-      redeemedApplied: { type: Boolean, default: false }, // incremented only on approve/paid
+      redeemedApplied: { type: Boolean, default: false },
     },
 
     lines: { type: [LineSchema], default: [] },
 
-    paystackRef: { type: String, trim: true }, // returned from init
+    paystackRef: { type: String, trim: true },
     paid: { type: Boolean, default: false },
 
     // legacy compatibility
-    productKey: { type: String, trim: true }, // optional now
-    requestedMonths: { type: Number }, // optional now
+    productKey: { type: String, trim: true },
+    requestedMonths: { type: Number },
 
-    // ✅ FIX: was "installation = { ... }" (invalid JS). Must be "installation: { ... }"
+    // ✅ UPDATED installation schema (adds missing fields)
     installation: {
       status: {
         type: String,
@@ -56,9 +66,14 @@ const PurchaseSchema = new mongoose.Schema(
       address: { type: String, default: "" },
       markedBy: { type: String, default: "" },
       markedAt: { type: Date },
+
+      // ✅ these were missing (caused “legacy” + no entitlement applied)
+      entitlementGrants: { type: [GrantSchema], default: [] },
+      entitlementsApplied: { type: Boolean, default: false },
+      entitlementsAppliedAt: { type: Date },
     },
 
-    userConfirmedAt: { type: Date }, // optional
+    userConfirmedAt: { type: Date },
 
     status: {
       type: String,
@@ -73,6 +88,5 @@ const PurchaseSchema = new mongoose.Schema(
   { timestamps: true, minimize: false }
 );
 
-// ✅ Prevent model overwrite in dev/hot-reload
 export const Purchase =
   mongoose.models.Purchase || mongoose.model("Purchase", PurchaseSchema);
