@@ -20,10 +20,8 @@ const router = express.Router();
 router.use(requireAuth, requireAdmin);
 
 /* -------------------- helpers -------------------- */
-const asyncHandler =
-  (fn) =>
-  (req, res, next) =>
-    Promise.resolve(fn(req, res, next)).catch(next);
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
 
 function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
   userDoc.entitlements = userDoc.entitlements || [];
@@ -90,7 +88,10 @@ router.post(
       ent = {
         productKey,
         status: status || "active",
-        expiresAt: (months ? now.add(months, "month") : now.add(1, "month")).toDate(),
+        expiresAt: (months
+          ? now.add(months, "month")
+          : now.add(1, "month")
+        ).toDate(),
       };
       u.entitlements.push(ent);
     } else {
@@ -175,7 +176,9 @@ router.post(
 
     // Apply immediate entitlements (courses)
     if (immediate.length) {
-      immediate.forEach((g) => addMonthsToEntitlement(user, g.productKey, g.months));
+      immediate.forEach((g) =>
+        addMonthsToEntitlement(user, g.productKey, g.months)
+      );
       await user.save();
     }
 
@@ -264,7 +267,10 @@ router.post(
     try {
       await autoEnrollFromPurchase(purchase);
     } catch (e) {
-      console.error("[admin approve] autoEnrollFromPurchase failed:", e?.message || e);
+      console.error(
+        "[admin approve] autoEnrollFromPurchase failed:",
+        e?.message || e
+      );
     }
 
     return res.json({
@@ -342,7 +348,8 @@ router.post(
 
       grants.forEach((g) => {
         const m = Number(g?.months || 0);
-        if (g?.productKey && m > 0) addMonthsToEntitlement(user, g.productKey, m);
+        if (g?.productKey && m > 0)
+          addMonthsToEntitlement(user, g.productKey, m);
       });
 
       await user.save();
@@ -386,4 +393,37 @@ router.post(
 
     ent.deviceFingerprint = undefined;
     ent.deviceBoundAt = undefined;
-    u.refreshVersion = (u.refresh
+    u.refreshVersion = (u.refreshVersion || 0) + 1;
+
+    await u.save();
+    return res.json({ ok: true });
+  })
+);
+
+router.post(
+  "/users/entitlement/delete",
+  asyncHandler(async (req, res) => {
+    const { email, productKey } = req.body || {};
+    if (!email || !productKey)
+      return res.status(400).json({ error: "email and productKey required" });
+
+    const u = await User.findOne({ email });
+    if (!u) return res.status(404).json({ error: "User not found" });
+
+    const before = (u.entitlements || []).length;
+    u.entitlements = (u.entitlements || []).filter(
+      (e) => e.productKey !== productKey
+    );
+
+    if (u.entitlements.length === before) {
+      return res.status(404).json({ error: "Entitlement not found" });
+    }
+
+    u.refreshVersion = (u.refreshVersion || 0) + 1;
+    await u.save();
+
+    return res.json({ ok: true, entitlements: u.entitlements });
+  })
+);
+
+export default router;
