@@ -29,7 +29,7 @@ function normalizeSectionKey(raw) {
  * GET /rategen/compute/items?section=blockwork
  * Returns ComputeItemDefinition list for desktop.
  */
-router.get("/compute/items", async (req, res, next) => {
+router.get("/compute-items", async (req, res, next) => {
   try {
     await ensureDb();
 
@@ -85,7 +85,7 @@ router.get("/compute/items", async (req, res, next) => {
  * POST /rategen/compute/run
  * body: { section, name, overheadPercent?, profitPercent?, priceMode? }
  */
-router.post("/compute/run", async (req, res, next) => {
+router.post("/compute", async (req, res, next) => {
   try {
     await ensureDb();
 
@@ -113,12 +113,6 @@ router.post("/compute/run", async (req, res, next) => {
   }
 });
 
-/* ───────── Legacy aliases (optional for transition) ───────── */
-router.get("/compute-items", (req, res, next) =>
-  router.handle({ ...req, url: "/compute/items" }, res, next)
-);
-router.post("/compute", (req, res, next) =>
-  router.handle({ ...req, url: "/compute/run" }, res, next)
-);
+
 
 export default router;

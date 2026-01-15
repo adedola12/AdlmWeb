@@ -12,8 +12,9 @@ import { ensureMeta } from "../models/RateGenMeta.js";
 
 const router = express.Router();
 
-// Public to entitled users (not admin-key)
-router.use(requireAuth, requireEntitlement("rategen"));
+// ✅ IMPORTANT: scope auth ONLY to /library/*
+// so /rategen-v2/compute-items won't be blocked
+router.use("/library", requireAuth, requireEntitlement("rategen"));
 
 const DEFAULT_LIMIT = 250;
 const MAX_LIMIT = 1000;
@@ -50,11 +51,10 @@ function toComputeItemDefinition(x) {
     name: x.name,
     outputUnit: x.outputUnit || "m2",
 
-    // new (recommended)
     overheadPercentDefault: oh,
     profitPercentDefault: pf,
 
-    // legacy (if desktop expects a single P/O percent)
+    // legacy field
     poPercent: oh + pf,
 
     enabled: x.enabled !== false,
@@ -76,13 +76,11 @@ function toComputeItemDefinition(x) {
 }
 
 /**
- * GET /rategen/library/meta
- * Returns master library versions.
+ * GET /library/meta
  */
 router.get("/library/meta", async (_req, res, next) => {
   try {
     await ensureDb();
-
     const [m, l, c] = await Promise.all([
       ensureMeta("materials"),
       ensureMeta("labour"),
@@ -103,8 +101,7 @@ router.get("/library/meta", async (_req, res, next) => {
 });
 
 /**
- * GET /rategen/library/all
- * Full snapshot for offline-first clients.
+ * GET /library/all
  */
 router.get("/library/all", async (_req, res, next) => {
   try {
@@ -127,7 +124,6 @@ router.get("/library/all", async (_req, res, next) => {
       },
       materials,
       labours,
-      // NOTE: compute items are synced incrementally via /library/compute-items/sync
     });
   } catch (err) {
     next(err);
@@ -135,13 +131,7 @@ router.get("/library/all", async (_req, res, next) => {
 });
 
 /**
- * GET /rategen/library/compute-items/sync
- * Incremental sync with cursor paging + version.
- *
- * Query:
- *  - sinceVersion (optional): number
- *  - cursor (optional): "ISO_DATE|OBJECTID"
- *  - limit (optional): default 250, max 1000
+ * GET /library/compute-items/sync
  */
 router.get("/library/compute-items/sync", async (req, res, next) => {
   try {
@@ -151,7 +141,6 @@ router.get("/library/compute-items/sync", async (req, res, next) => {
     const sinceVersion = Number(req.query.sinceVersion || 0);
     const limit = clampInt(req.query.limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
 
-    // If client is on this version and has no cursor, it's up to date.
     if (
       sinceVersion > 0 &&
       sinceVersion === meta.version &&
@@ -179,7 +168,6 @@ router.get("/library/compute-items/sync", async (req, res, next) => {
         : { updatedAt: { $gt: cur.ts } };
     }
 
-    // IMPORTANT: do NOT filter enabled here — we want enabled:false as tombstones.
     const docs = await RateGenComputeItem.find(q)
       .sort({ updatedAt: 1, _id: 1 })
       .limit(limit)
