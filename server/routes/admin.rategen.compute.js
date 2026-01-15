@@ -1,123 +1,124 @@
 import express from "express";
-import { requireAdminKey } from "../middleware/requireAdminKey.js";
+import { ensureDb } from "../db.js";
+import { requireAuth } from "../middleware/auth.js";
+import { requireEntitlement } from "../middleware/requireEntitlement.js";
+
 import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
-import { RateGenMaterial } from "../models/RateGenMaterial.js";
-import { RateGenLabour } from "../models/RateGenLabour.js";
-import { bumpMeta } from "../models/RateGenMeta.js";
+import { computeRate } from "../services/rategen.computeEngine.js";
 
 const router = express.Router();
-router.use(requireAdminKey);
 
-/**
- * Helper: snapshot line info from libraries.
- * This is what guarantees admin-created compute items rebind on user side.
- */
-async function hydrateLines(lines = []) {
-  const matSNs = lines
-    .filter((l) => l.kind === "material" && l.refSn)
-    .map((l) => l.refSn);
-  const labSNs = lines
-    .filter((l) => l.kind === "labour" && l.refSn)
-    .map((l) => l.refSn);
+// entitled users only (same rule as library)
+router.use(requireAuth, requireEntitlement("rategen"));
 
-  const [materials, labours] = await Promise.all([
-    matSNs.length ? RateGenMaterial.find({ sn: { $in: matSNs } }).lean() : [],
-    labSNs.length ? RateGenLabour.find({ sn: { $in: labSNs } }).lean() : [],
-  ]);
+function toNum(v, fallback = 0) {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : fallback;
+}
 
-  const matBySn = new Map(materials.map((m) => [m.sn, m]));
-  const labBySn = new Map(labours.map((l) => [l.sn, l]));
-
-  return lines.map((l) => {
-    if (l.kind === "material" && l.refSn) {
-      const m = matBySn.get(l.refSn);
-      return {
-        ...l,
-        description: l.description || m?.name || "",
-        unit: l.unit || m?.unit || "",
-        refName: l.refName || m?.name || l.description || "",
-        refKey: l.refKey || m?.key || "",
-        unitPriceAtBuild: Number.isFinite(l.unitPriceAtBuild)
-          ? l.unitPriceAtBuild
-          : Number(m?.defaultUnitPrice || 0),
-      };
-    }
-    if (l.kind === "labour" && l.refSn) {
-      const lb = labBySn.get(l.refSn);
-      return {
-        ...l,
-        description: l.description || lb?.name || "",
-        unit: l.unit || lb?.unit || "",
-        refName: l.refName || lb?.name || l.description || "",
-        refKey: l.refKey || lb?.key || "",
-        unitPriceAtBuild: Number.isFinite(l.unitPriceAtBuild)
-          ? l.unitPriceAtBuild
-          : Number(lb?.defaultUnitPrice || 0),
-      };
-    }
-    // constant lines: keep as-is
-    return {
-      ...l,
-      unitPriceAtBuild: Number(l.unitPriceAtBuild || 0),
-      qtyPerUnit: Number(l.qtyPerUnit || 0),
-      factor: Number(l.factor ?? 1),
-    };
-  });
+function normalizeSectionKey(raw) {
+  const s = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (!s) return "";
+  if (s === "painting") return "paint";
+  return s;
 }
 
 /**
- * POST /admin/rategen/compute-items
- * body: { section, name, outputUnit?, overheadPercentDefault?, profitPercentDefault?, enabled?, lines[] }
+ * GET /rategen/compute/items?section=blockwork
+ * Returns ComputeItemDefinition list for desktop.
  */
-router.post("/compute-items", async (req, res, next) => {
+router.get("/compute/items", async (req, res, next) => {
   try {
-    const body = req.body || {};
-    if (!body.section || !body.name) {
-      return res.status(400).json({ error: "section and name are required" });
-    }
+    await ensureDb();
 
-    const hydrated = await hydrateLines(body.lines || []);
+    const q = { enabled: true };
+    const section = normalizeSectionKey(req.query.section);
+    if (section) q.section = section;
 
-    const doc = await RateGenComputeItem.findOneAndUpdate(
-      { section: body.section, name: body.name },
-      {
-        section: body.section,
-        name: body.name,
-        outputUnit: body.outputUnit || "m2",
-        overheadPercentDefault: Number(body.overheadPercentDefault ?? 10),
-        profitPercentDefault: Number(body.profitPercentDefault ?? 25),
-        enabled: body.enabled !== false,
-        notes: body.notes || "",
-        lines: hydrated,
-      },
-      { new: true, upsert: true }
+    const items = await RateGenComputeItem.find(q)
+      .sort({ section: 1, name: 1 })
+      .lean();
+
+    res.json(
+      items.map((x) => {
+        const oh = toNum(x.overheadPercentDefault, 10);
+        const pf = toNum(x.profitPercentDefault, 25);
+
+        return {
+          id: String(x._id),
+          section: x.section,
+          name: x.name,
+          outputUnit: x.outputUnit || "m2",
+
+          overheadPercentDefault: oh,
+          profitPercentDefault: pf,
+
+          // legacy single P/O
+          poPercent: oh + pf,
+
+          enabled: x.enabled !== false,
+          notes: x.notes || "",
+          updatedAt: x.updatedAt,
+
+          lines: (x.lines || []).map((l) => ({
+            kind: l.kind,
+            refSn: l.refSn ?? null,
+            refKey: l.refKey ?? null,
+            refName: l.refName ?? null,
+            description: l.description || "",
+            unit: l.unit || "",
+            unitPriceAtBuild: l.unitPriceAtBuild ?? null,
+            qtyPerUnit: l.qtyPerUnit ?? 0,
+            factor: l.factor ?? 1,
+          })),
+        };
+      })
     );
-
-    await bumpMeta(
-      "compute",
-      "admin",
-      `upsert compute ${body.section}/${body.name}`
-    );
-    res.json({ ok: true, item: doc });
   } catch (err) {
     next(err);
   }
 });
 
 /**
- * GET /admin/rategen/compute-items?section=Blockwork
+ * POST /rategen/compute/run
+ * body: { section, name, overheadPercent?, profitPercent?, priceMode? }
  */
-router.get("/compute-items", async (req, res, next) => {
+router.post("/compute/run", async (req, res, next) => {
   try {
-    const q = {};
-    if (req.query.section) q.section = req.query.section;
-    const items = await RateGenComputeItem.find(q)
-      .sort({ section: 1, name: 1 })
-      .lean();
-    res.json({ ok: true, items });
+    await ensureDb();
+
+    const { section, name, overheadPercent, profitPercent, priceMode } =
+      req.body || {};
+    const sec = normalizeSectionKey(section);
+    const nm = String(name || "").trim();
+
+    if (!sec || !nm) {
+      return res.status(400).json({ error: "section and name are required" });
+    }
+
+    const result = await computeRate({
+      section: sec,
+      name: nm,
+      overheadPercent:
+        overheadPercent != null ? toNum(overheadPercent) : undefined,
+      profitPercent: profitPercent != null ? toNum(profitPercent) : undefined,
+      priceMode: priceMode || "hybrid",
+    });
+
+    res.json({ ok: true, result });
   } catch (err) {
     next(err);
   }
 });
+
+/* ───────── Legacy aliases (optional for transition) ───────── */
+router.get("/compute-items", (req, res, next) =>
+  router.handle({ ...req, url: "/compute/items" }, res, next)
+);
+router.post("/compute", (req, res, next) =>
+  router.handle({ ...req, url: "/compute/run" }, res, next)
+);
 
 export default router;
