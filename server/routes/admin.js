@@ -1,33 +1,29 @@
+// server/routes/admin.js
 import express from "express";
 import dayjs from "dayjs";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js";
 import { Coupon } from "../models/Coupon.js";
+
+// ✅ FIX: Product was used but not imported (this caused "Product is not defined")
+import { Product } from "../models/Product.js";
+// If your Product model is default export instead, use:
+// import Product from "../models/Product.js";
+
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
-import { sendMail } from "../util/mailer.js"; // ✅ FIX: missing import
+import { sendMail } from "../util/mailer.js";
 
 const router = express.Router();
 
-router.get("/users", requireAuth, requireAdmin, async (req, res) => {
-  const { q } = req.query;
-  const find = {};
-  if (q) {
-    const rx = new RegExp(String(q).trim(), "i");
-    find.$or = [{ email: rx }, { username: rx }];
-  }
+// ✅ all endpoints here require admin
+router.use(requireAuth, requireAdmin);
 
-  const list = await User.find(find, {
-    email: 1,
-    username: 1,
-    role: 1,
-    disabled: 1,
-    entitlements: 1,
-    createdAt: 1,
-  }).sort({ createdAt: -1 });
-
-  return res.json(list);
-});
+/* -------------------- helpers -------------------- */
+const asyncHandler =
+  (fn) =>
+  (req, res, next) =>
+    Promise.resolve(fn(req, res, next)).catch(next);
 
 function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
   userDoc.entitlements = userDoc.entitlements || [];
@@ -53,28 +49,48 @@ function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
   }
 }
 
+/* -------------------- routes -------------------- */
+
+router.get(
+  "/users",
+  asyncHandler(async (req, res) => {
+    const { q } = req.query;
+    const find = {};
+    if (q) {
+      const rx = new RegExp(String(q).trim(), "i");
+      find.$or = [{ email: rx }, { username: rx }];
+    }
+
+    const list = await User.find(find, {
+      email: 1,
+      username: 1,
+      role: 1,
+      disabled: 1,
+      entitlements: 1,
+      createdAt: 1,
+    }).sort({ createdAt: -1 });
+
+    return res.json(list);
+  })
+);
+
 router.post(
   "/users/entitlement",
-  requireAuth,
-  requireAdmin,
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const { email, productKey, months = 0, status } = req.body || {};
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
 
     u.entitlements = u.entitlements || [];
-
     const now = dayjs();
+
     let ent = u.entitlements.find((e) => e.productKey === productKey);
 
     if (!ent) {
       ent = {
         productKey,
         status: status || "active",
-        expiresAt: (months
-          ? now.add(months, "month")
-          : now.add(1, "month")
-        ).toDate(),
+        expiresAt: (months ? now.add(months, "month") : now.add(1, "month")).toDate(),
       };
       u.entitlements.push(ent);
     } else {
@@ -90,21 +106,22 @@ router.post(
 
     await u.save();
     return res.json({ ok: true, entitlements: u.entitlements });
-  }
+  })
 );
 
-router.get("/purchases", requireAuth, requireAdmin, async (req, res) => {
-  const q = {};
-  if (req.query.status) q.status = req.query.status;
-  const list = await Purchase.find(q).sort({ createdAt: -1 }).limit(500);
-  return res.json(list);
-});
+router.get(
+  "/purchases",
+  asyncHandler(async (req, res) => {
+    const q = {};
+    if (req.query.status) q.status = req.query.status;
+    const list = await Purchase.find(q).sort({ createdAt: -1 }).limit(500);
+    return res.json(list);
+  })
+);
 
 router.post(
   "/purchases/:id/approve",
-  requireAuth,
-  requireAdmin,
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const purchase = await Purchase.findById(req.params.id);
     if (!purchase) return res.status(404).json({ error: "Purchase not found" });
     if (purchase.status !== "pending")
@@ -119,9 +136,11 @@ router.post(
     const grants = [];
     if (Array.isArray(purchase.lines) && purchase.lines.length > 0) {
       purchase.lines.forEach((ln) => {
-        const months =
-          ln.billingInterval === "yearly" ? (ln.qty || 0) * 12 : ln.qty || 0;
-        if (months > 0) grants.push({ productKey: ln.productKey, months });
+        const qty = Number(ln.qty || 0);
+        const months = ln.billingInterval === "yearly" ? qty * 12 : qty;
+        if (months > 0 && ln.productKey) {
+          grants.push({ productKey: ln.productKey, months });
+        }
       });
     } else if (purchase.productKey) {
       const months = overrideMonths || purchase.requestedMonths || 1;
@@ -136,11 +155,14 @@ router.post(
     // Decide which products require installation.
     // Rule: isCourse === true => no installation, apply immediately.
     const keys = [...new Set(grants.map((g) => g.productKey).filter(Boolean))];
+
+    // ✅ uses Product model (now imported)
     const prods = await Product.find({ key: { $in: keys } })
       .select("key isCourse")
       .lean();
+
     const isCourseByKey = Object.fromEntries(
-      prods.map((p) => [p.key, !!p.isCourse])
+      (prods || []).map((p) => [p.key, !!p.isCourse])
     );
 
     const immediate = [];
@@ -153,18 +175,16 @@ router.post(
 
     // Apply immediate entitlements (courses)
     if (immediate.length) {
-      immediate.forEach((g) =>
-        addMonthsToEntitlement(user, g.productKey, g.months)
-      );
+      immediate.forEach((g) => addMonthsToEntitlement(user, g.productKey, g.months));
       await user.save();
     }
 
     // Update purchase status
     purchase.status = "approved";
-    purchase.decidedBy = req.user.email;
+    purchase.decidedBy = req.user?.email || "admin";
     purchase.decidedAt = new Date();
 
-    // Installation object
+    // Installation object defaults
     purchase.installation = purchase.installation || {};
     purchase.installation.anydeskUrl =
       purchase.installation.anydeskUrl ||
@@ -172,30 +192,25 @@ router.post(
     purchase.installation.installVideoUrl =
       purchase.installation.installVideoUrl || "";
 
-    // Store staged grants for activation on installation completion
-    // IMPORTANT: Do not overwrite if already set (protect against double-approve edge cases)
     if (!Array.isArray(purchase.installation.entitlementGrants)) {
       purchase.installation.entitlementGrants = [];
     }
 
-    // If staged items exist -> installation pending
     if (staged.length > 0) {
       purchase.installation.status = "pending";
-      purchase.installation.entitlementGrants = staged; // overwrite with the correct staged grants
+      purchase.installation.entitlementGrants = staged; // store staged items
       purchase.installation.entitlementsApplied = false;
       purchase.installation.entitlementsAppliedAt = null;
     } else {
-      // No staged items => treat as complete instantly (course-only purchase)
       purchase.installation.status = "complete";
-      purchase.installation.markedBy = req.user.email;
+      purchase.installation.markedBy = req.user?.email || "admin";
       purchase.installation.markedAt = new Date();
       purchase.installation.entitlementGrants = [];
       purchase.installation.entitlementsApplied = true;
       purchase.installation.entitlementsAppliedAt = new Date();
     }
 
-    // ✅ Coupon redemption should NOT happen on approve if installation is pending.
-    // Only redeem instantly for course-only (no staged items).
+    // Coupon redemption: only redeem instantly for course-only purchases
     if (
       purchase.coupon?.couponId &&
       !purchase.coupon.redeemedApplied &&
@@ -210,7 +225,7 @@ router.post(
 
     await purchase.save();
 
-    // send email (safe)
+    // Send email (do not fail approval if email fails)
     try {
       const isPendingInstall = staged.length > 0;
 
@@ -245,8 +260,12 @@ router.post(
       console.error("[admin approve] sendMail failed:", e?.message || e);
     }
 
-    // Enroll can still happen on approve (especially for courses)
-    await autoEnrollFromPurchase(purchase);
+    // Enroll (safe)
+    try {
+      await autoEnrollFromPurchase(purchase);
+    } catch (e) {
+      console.error("[admin approve] autoEnrollFromPurchase failed:", e?.message || e);
+    }
 
     return res.json({
       ok: true,
@@ -257,94 +276,84 @@ router.post(
           ? "Purchase approved. Entitlements will start after installation is completed."
           : "Purchase approved and activated.",
     });
-  }
+  })
 );
-
 
 router.post(
   "/purchases/:id/reject",
-  requireAuth,
-  requireAdmin,
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const p = await Purchase.findById(req.params.id);
     if (!p) return res.status(404).json({ error: "Purchase not found" });
     if (p.status !== "pending")
       return res.status(400).json({ error: "Purchase not pending" });
 
     p.status = "rejected";
-    p.decidedBy = req.user.email;
+    p.decidedBy = req.user?.email || "admin";
     p.decidedAt = new Date();
     await p.save();
 
     return res.json({ ok: true, purchase: p });
-  }
+  })
 );
 
-router.get("/installations", requireAuth, requireAdmin, async (req, res) => {
-  const q = {
-    status: "approved",
-    $and: [
-      {
-        $or: [
-          { "installation.status": "pending" },
-          { "installation.entitlementsApplied": false },
-          { "installation.entitlementsApplied": { $exists: false } },
-        ],
-      },
-      // Optional guard: show only installs that actually have staged items
-      { "installation.entitlementGrants.0": { $exists: true } },
-    ],
-  };
+router.get(
+  "/installations",
+  asyncHandler(async (req, res) => {
+    const q = {
+      status: "approved",
+      $and: [
+        {
+          $or: [
+            { "installation.status": "pending" },
+            { "installation.entitlementsApplied": false },
+            { "installation.entitlementsApplied": { $exists: false } },
+          ],
+        },
+        { "installation.entitlementGrants.0": { $exists: true } },
+      ],
+    };
 
-  const list = await Purchase.find(q).sort({ decidedAt: -1 }).limit(500);
-  return res.json(list);
-});
-
-
+    const list = await Purchase.find(q).sort({ decidedAt: -1 }).limit(500);
+    return res.json(list);
+  })
+);
 
 router.post(
   "/installations/:id/complete",
-  requireAuth,
-  requireAdmin,
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const p = await Purchase.findById(req.params.id);
     if (!p) return res.status(404).json({ error: "Purchase not found" });
 
     p.installation = p.installation || {};
 
-    // idempotent: if already complete, still ensure entitlements applied if needed
     const wasComplete = p.installation.status === "complete";
 
     p.installation.status = "complete";
-    p.installation.markedBy = req.user.email;
+    p.installation.markedBy = req.user?.email || "admin";
     p.installation.markedAt = new Date();
 
     const grants = Array.isArray(p.installation.entitlementGrants)
       ? p.installation.entitlementGrants
       : [];
 
-    // ✅ Apply entitlements only once
     if (!p.installation.entitlementsApplied && grants.length > 0) {
       const user = await User.findById(p.userId);
       if (!user) return res.status(404).json({ error: "User not found" });
 
       grants.forEach((g) => {
-        if (g?.productKey && Number(g?.months || 0) > 0) {
-          addMonthsToEntitlement(user, g.productKey, Number(g.months));
-        }
+        const m = Number(g?.months || 0);
+        if (g?.productKey && m > 0) addMonthsToEntitlement(user, g.productKey, m);
       });
 
       await user.save();
-
       p.installation.entitlementsApplied = true;
       p.installation.entitlementsAppliedAt = new Date();
     } else if (!p.installation.entitlementsApplied && grants.length === 0) {
-      // nothing to apply; still mark as applied so we don't keep checking
       p.installation.entitlementsApplied = true;
       p.installation.entitlementsAppliedAt = new Date();
     }
 
-    // ✅ Coupon redemption now happens here (the “sale complete” moment)
+    // Coupon redemption now finalizes here
     if (p.coupon?.couponId && !p.coupon.redeemedApplied) {
       await Coupon.updateOne(
         { _id: p.coupon.couponId },
@@ -362,15 +371,12 @@ router.post(
         ? "Installation already complete. Ensured entitlements/coupon are finalized."
         : "Installation marked complete. Subscription started and coupon finalized.",
     });
-  }
+  })
 );
-
 
 router.post(
   "/users/reset-device",
-  requireAuth,
-  requireAdmin,
-  async (req, res) => {
+  asyncHandler(async (req, res) => {
     const { email, productKey } = req.body || {};
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
@@ -380,41 +386,4 @@ router.post(
 
     ent.deviceFingerprint = undefined;
     ent.deviceBoundAt = undefined;
-    u.refreshVersion = (u.refreshVersion || 0) + 1;
-
-    await u.save();
-    return res.json({ ok: true });
-  }
-);
-
-router.post(
-  "/users/entitlement/delete",
-  requireAuth,
-  requireAdmin,
-  async (req, res) => {
-    const { email, productKey } = req.body || {};
-    if (!email || !productKey)
-      return res.status(400).json({ error: "email and productKey required" });
-
-    const u = await User.findOne({ email });
-    if (!u) return res.status(404).json({ error: "User not found" });
-
-    const before = (u.entitlements || []).length;
-    u.entitlements = (u.entitlements || []).filter(
-      (e) => e.productKey !== productKey
-    );
-
-    // If nothing removed
-    if (u.entitlements.length === before) {
-      return res.status(404).json({ error: "Entitlement not found" });
-    }
-
-    u.refreshVersion = (u.refreshVersion || 0) + 1; // helps desktop refresh
-    await u.save();
-
-    return res.json({ ok: true, entitlements: u.entitlements });
-  }
-);
-
-
-export default router;
+    u.refreshVersion = (u.refresh
