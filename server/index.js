@@ -20,6 +20,8 @@ import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
+import adminRateGenCompute from "./routes/admin.rategen.compute.js";
+import ratesCompute from "./routes/rates.compute.js";
 
 import meMediaRoutes from "./routes/me-media.js";
 import rategenRouter from "./routes/rategen.js";
@@ -145,6 +147,8 @@ app.use("/admin/courses", adminCoursesRouter);
 app.use("/me/courses", meCoursesRouter);
 app.use("/admin/course-grading", adminCourseGradingRouter);
 app.use("/admin/bunny", adminBunny);
+app.use("/admin/rategen", adminRateGenCompute);
+app.use("/api/rates", ratesCompute);
 
 app.use("/trainings", trainingsPublic);
 app.use("/admin/trainings", adminTrainings);
