@@ -39,6 +39,11 @@ import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
+import adminRateGenLibrary from "./routes/admin.rategen.library.js";
+import rategenLibraryPublic from "./routes/rategen.library.js";
+import { requireAdmin } from "./middleware/auth.js";
+import { requireAdminKey } from "./middleware/requireAdminKey.js";
+
 
 const app = express();
 app.get("/__debug/db", (_req, res) => {
@@ -142,6 +147,7 @@ app.use("/api/projects", projectRoutes); // backward compatibility
 app.use("/me/media", meMediaRoutes);
 app.use("/me/orders", meOrdersRoutes);
 app.use("/rategen", rategenRouter);
+app.use("/rategen", rategenLibraryPublic);
 app.use("/admin/rategen", adminRateGen);
 app.use("/admin/courses", adminCoursesRouter);
 app.use("/me/courses", meCoursesRouter);
@@ -149,6 +155,7 @@ app.use("/admin/course-grading", adminCourseGradingRouter);
 app.use("/admin/bunny", adminBunny);
 app.use("/admin/rategen", adminRateGenCompute);
 app.use("/api/rates", ratesCompute);
+app.use("/admin/rategen", adminRateGenLibrary, requireAdminKey);
 
 app.use("/trainings", trainingsPublic);
 app.use("/admin/trainings", adminTrainings);

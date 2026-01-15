@@ -259,6 +259,10 @@ export default function Profile() {
               <Link to="/admin/trainings" className="btn">
                 Add / manage trainings & events
               </Link>
+              {/* ✅ NEW: Build / Add Rate Library */}
+              <Link to="/admin/rategen/add-rate" className="btn">
+                Build / Add rates (Rate Library)
+              </Link>
               <a href="/admin/learn" className="btn">
                 Video upload / courses
               </a>
