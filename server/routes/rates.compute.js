@@ -1,25 +1,40 @@
-// server/routes/rates.compute.js
 import express from "express";
 import { ensureDb } from "../db.js";
+import { requireAuth } from "../middleware/auth.js";
+import { requireEntitlement } from "../middleware/requireEntitlement.js";
+
 import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
 import { computeRate } from "../services/rategen.computeEngine.js";
 
 const router = express.Router();
 
-const toNum = (v) => {
-  const n = Number(String(v ?? "").replace(/,/g, ""));
-  return Number.isFinite(n) ? n : 0;
-};
+// entitled users only (same rule as library)
+router.use(requireAuth, requireEntitlement("rategen"));
 
-// GET /api/rates/compute-items?section=blockwork
-router.get("/compute-items", async (req, res, next) => {
+function toNum(v, fallback = 0) {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeSectionKey(raw) {
+  const s = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (!s) return "";
+  if (s === "painting") return "paint";
+  return s;
+}
+
+/**
+ * GET /rategen/compute/items?section=blockwork
+ * Returns ComputeItemDefinition list for desktop.
+ */
+router.get("/compute/items", async (req, res, next) => {
   try {
     await ensureDb();
 
     const q = { enabled: true };
-
-    // optional filtering (helps desktop refresh only one view)
-    const section = String(req.query.section || "").trim();
+    const section = normalizeSectionKey(req.query.section);
     if (section) q.section = section;
 
     const items = await RateGenComputeItem.find(q)
@@ -28,8 +43,8 @@ router.get("/compute-items", async (req, res, next) => {
 
     res.json(
       items.map((x) => {
-        const oh = toNum(x.overheadPercentDefault ?? 10);
-        const pf = toNum(x.profitPercentDefault ?? 25);
+        const oh = toNum(x.overheadPercentDefault, 10);
+        const pf = toNum(x.profitPercentDefault, 25);
 
         return {
           id: String(x._id),
@@ -37,11 +52,10 @@ router.get("/compute-items", async (req, res, next) => {
           name: x.name,
           outputUnit: x.outputUnit || "m2",
 
-          // recommended (new)
           overheadPercentDefault: oh,
           profitPercentDefault: pf,
 
-          // legacy (if desktop expects one P/O)
+          // legacy single P/O
           poPercent: oh + pf,
 
           enabled: x.enabled !== false,
@@ -55,8 +69,7 @@ router.get("/compute-items", async (req, res, next) => {
             refName: l.refName ?? null,
             description: l.description || "",
             unit: l.unit || "",
-            unitPriceAtBuild:
-              l.unitPriceAtBuild != null ? Number(l.unitPriceAtBuild) : null,
+            unitPriceAtBuild: l.unitPriceAtBuild ?? null,
             qtyPerUnit: l.qtyPerUnit ?? 0,
             factor: l.factor ?? 1,
           })),
@@ -69,23 +82,25 @@ router.get("/compute-items", async (req, res, next) => {
 });
 
 /**
- * POST /api/rates/compute
+ * POST /rategen/compute/run
  * body: { section, name, overheadPercent?, profitPercent?, priceMode? }
  */
-router.post("/compute", async (req, res, next) => {
+router.post("/compute/run", async (req, res, next) => {
   try {
     await ensureDb();
 
     const { section, name, overheadPercent, profitPercent, priceMode } =
       req.body || {};
+    const sec = normalizeSectionKey(section);
+    const nm = String(name || "").trim();
 
-    if (!section || !name) {
+    if (!sec || !nm) {
       return res.status(400).json({ error: "section and name are required" });
     }
 
     const result = await computeRate({
-      section: String(section).trim(),
-      name: String(name).trim(),
+      section: sec,
+      name: nm,
       overheadPercent:
         overheadPercent != null ? toNum(overheadPercent) : undefined,
       profitPercent: profitPercent != null ? toNum(profitPercent) : undefined,
@@ -97,5 +112,13 @@ router.post("/compute", async (req, res, next) => {
     next(err);
   }
 });
+
+/* ───────── Legacy aliases (optional for transition) ───────── */
+router.get("/compute-items", (req, res, next) =>
+  router.handle({ ...req, url: "/compute/items" }, res, next)
+);
+router.post("/compute", (req, res, next) =>
+  router.handle({ ...req, url: "/compute/run" }, res, next)
+);
 
 export default router;

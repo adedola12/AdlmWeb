@@ -5,7 +5,7 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
-import mongoose from "mongoose"; // ← add this
+import mongoose from "mongoose";
 import { connectDB } from "./db.js";
 
 // routes
@@ -20,15 +20,8 @@ import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
-import adminRateGenCompute from "./routes/admin.rategen.compute.js";
-import ratesCompute from "./routes/rates.compute.js";
 
 import meMediaRoutes from "./routes/me-media.js";
-import rategenRouter from "./routes/rategen.js";
-import adminRateGen from "./routes/admin.rategen.js";
-import adminCoursesRouter from "./routes/adminCourses.js";
-import meCoursesRouter from "./routes/meCourses.js";
-import adminCourseGradingRouter from "./routes/adminCourseGrading.js";
 import webhooksRouter from "./routes/webhooks.js";
 import adminBunny from "./routes/adminBunny.js";
 import trainingsPublic from "./routes/trainings.js";
@@ -39,19 +32,25 @@ import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
-import adminRateGenLibrary from "./routes/admin.rategen.library.js";
-import rategenLibraryPublic from "./routes/rategen.library.js";
-import { requireAdmin } from "./middleware/auth.js";
-import { requireAdminKey } from "./middleware/requireAdminKey.js";
-import adminRateGenRates from "./routes/admin.rategen.rates.js";
 
+/* -------------------- RateGen (LEGACY) -------------------- */
+import rategenRouter from "./routes/rategen.js"; // legacy public rategen
+import adminRateGen from "./routes/admin.rategen.js"; // legacy admin rategen
 
+/* -------------------- RateGen (NEW / v2) -------------------- */
+import rategenLibraryPublic from "./routes/rategen.library.js"; // new public library sync/meta
+import ratesCompute from "./routes/rates.compute.js"; // public compute endpoints (legacy name)
+import adminRateGenLibrary from "./routes/admin.rategen.library.js"; // admin library management
+import adminRateGenRates from "./routes/admin.rategen.rates.js"; // admin rate library
+import adminRateGenCompute from "./routes/admin.rategen.compute.js"; // admin compute items (admin-key)
 
 const app = express();
+
 app.get("/__debug/db", (_req, res) => {
   const c = mongoose?.connection || {};
   res.json({ dbName: c.name, host: c.host, ok: c.readyState === 1 });
 });
+
 app.set("trust proxy", 1);
 
 // security / parsing
@@ -92,8 +91,8 @@ app.use(
 );
 
 app.use(cookieParser());
-app.use(express.json()); // expects valid JSON when Content-Type: application/json
-app.use(express.urlencoded({ extended: false })); // allows form posts too
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 app.use(morgan("dev"));
 
 /* -------- CORS (allow cookies) -------- */
@@ -119,6 +118,7 @@ const corsOptions = {
     "X-Requested-With",
   ],
 };
+
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
@@ -129,7 +129,7 @@ app.get("/", (_req, res) =>
 
 app.use("/webhooks", webhooksRouter);
 
-/* -------- API -------- */
+/* -------- Core API -------- */
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
 app.use("/admin", adminRoutes);
@@ -143,30 +143,50 @@ app.use("/admin/coupons", adminCoupons);
 app.use("/products", productsPublic);
 app.use("/admin/products", adminProducts);
 app.use("/admin/settings", adminSettings);
+
 app.use("/projects", projectRoutes);
 app.use("/api/projects", projectRoutes); // backward compatibility
-// app.use("/me/media", meMediaRouter); // ← old media route
+
 app.use("/me/media", meMediaRoutes);
 app.use("/me/orders", meOrdersRoutes);
-app.use("/rategen", rategenRouter);
-app.use("/rategen", rategenLibraryPublic);
-app.use("/admin/rategen", adminRateGen);
-app.use("/admin/courses", adminCoursesRouter);
-app.use("/admin/rategen", adminRateGenRates);
 
-app.use("/me/courses", meCoursesRouter);
-app.use("/admin/course-grading", adminCourseGradingRouter);
 app.use("/admin/bunny", adminBunny);
-app.use("/admin/rategen", adminRateGenCompute);
-app.use("/api/rates", ratesCompute);
-app.use("/admin/rategen", requireAdminKey, adminRateGenLibrary);
 
 app.use("/trainings", trainingsPublic);
 app.use("/admin/trainings", adminTrainings);
 
 app.use("/showcase", showcasePublic);
 app.use("/admin/showcase", adminShowcase);
+
 app.use("/helpbot", helpbotRoutes);
+
+/* ===================================================================
+   ✅ RATEGEN ROUTES — CLEAN & NON-CONFLICTING
+   =================================================================== */
+
+/* -------- LEGACY (keep working, but don't add new stuff here) -------- */
+app.use("/rategen", rategenRouter); // legacy public
+app.use("/admin/rategen", adminRateGen); // legacy admin
+
+/* -------- NEW / v2 PUBLIC --------
+   - Your new clients should call /rategen-v2/...
+   - No more mounting multiple routers on /rategen
+*/
+app.use("/rategen-v2", rategenLibraryPublic); // e.g. /rategen-v2/library/meta
+app.use("/rategen-v2", ratesCompute); // e.g. /rategen-v2/compute-items, /rategen-v2/compute
+
+/* -------- NEW / v2 ADMIN (web admin access token / session) -------- */
+app.use("/admin/rategen-v2", adminRateGenLibrary); // e.g. /admin/rategen-v2/library/...
+app.use("/admin/rategen-v2", adminRateGenRates); // e.g. /admin/rategen-v2/rates
+
+/* -------- ADMIN COMPUTE (admin-key) -------- */
+app.use("/admin/rategen-compute", adminRateGenCompute); // e.g. /admin/rategen-compute/items
+
+/* -------- LEGACY ALIASES (optional) --------
+   Keep ONLY while old Windows builds still point here.
+   Delete later when you fully migrate.
+*/
+app.use("/api/rates", ratesCompute); // legacy alias for compute endpoints
 
 /* -------- helpful error for bad JSON -------- */
 app.use((err, _req, res, next) => {
