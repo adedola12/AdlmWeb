@@ -1,3 +1,4 @@
+// server/routes/rategen.library.js
 import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
@@ -11,7 +12,7 @@ import { ensureMeta } from "../models/RateGenMeta.js";
 
 const router = express.Router();
 
-// "Public" to entitled users (not admin-key)
+// Public to entitled users (not admin-key)
 router.use(requireAuth, requireEntitlement("rategen"));
 
 const DEFAULT_LIMIT = 250;
@@ -53,7 +54,7 @@ function toComputeItemDefinition(x) {
     overheadPercentDefault: oh,
     profitPercentDefault: pf,
 
-    // legacy (if your desktop expects a single P/O percent)
+    // legacy (if desktop expects a single P/O percent)
     poPercent: oh + pf,
 
     enabled: x.enabled !== false,
@@ -81,6 +82,7 @@ function toComputeItemDefinition(x) {
 router.get("/library/meta", async (_req, res, next) => {
   try {
     await ensureDb();
+
     const [m, l, c] = await Promise.all([
       ensureMeta("materials"),
       ensureMeta("labour"),
@@ -125,6 +127,7 @@ router.get("/library/all", async (_req, res, next) => {
       },
       materials,
       labours,
+      // NOTE: compute items are synced incrementally via /library/compute-items/sync
     });
   } catch (err) {
     next(err);
@@ -148,7 +151,7 @@ router.get("/library/compute-items/sync", async (req, res, next) => {
     const sinceVersion = Number(req.query.sinceVersion || 0);
     const limit = clampInt(req.query.limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
 
-    // If client says it's already on this version and has no cursor, it's up to date.
+    // If client is on this version and has no cursor, it's up to date.
     if (
       sinceVersion > 0 &&
       sinceVersion === meta.version &&

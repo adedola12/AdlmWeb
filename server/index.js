@@ -43,6 +43,8 @@ import adminRateGenLibrary from "./routes/admin.rategen.library.js";
 import rategenLibraryPublic from "./routes/rategen.library.js";
 import { requireAdmin } from "./middleware/auth.js";
 import { requireAdminKey } from "./middleware/requireAdminKey.js";
+import adminRateGenRates from "./routes/admin.rategen.rates.js";
+
 
 
 const app = express();
@@ -150,12 +152,14 @@ app.use("/rategen", rategenRouter);
 app.use("/rategen", rategenLibraryPublic);
 app.use("/admin/rategen", adminRateGen);
 app.use("/admin/courses", adminCoursesRouter);
+app.use("/admin/rategen", adminRateGenRates);
+
 app.use("/me/courses", meCoursesRouter);
 app.use("/admin/course-grading", adminCourseGradingRouter);
 app.use("/admin/bunny", adminBunny);
 app.use("/admin/rategen", adminRateGenCompute);
 app.use("/api/rates", ratesCompute);
-app.use("/admin/rategen", adminRateGenLibrary, requireAdminKey);
+app.use("/admin/rategen", requireAdminKey, adminRateGenLibrary);
 
 app.use("/trainings", trainingsPublic);
 app.use("/admin/trainings", adminTrainings);

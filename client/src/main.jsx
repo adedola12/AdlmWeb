@@ -40,6 +40,8 @@ import AdminShowcase from "./pages/AdminShowcase.jsx";
 import TrainingDetail from "./pages/TrainingDetail.jsx";
 import AdminCoupons from "./pages/AdminCoupons.jsx";
 import Support from "./pages/Support.jsx";
+import AdminAddRate from "./pages/AdminAddRate.jsx";
+
 
 const router = createBrowserRouter([
   {
@@ -84,6 +86,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <AdminCoupons />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "/admin/rategen/add-rate",
+        element: (
+          <AdminRoute>
+            <AdminAddRate />
           </AdminRoute>
         ),
       },

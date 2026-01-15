@@ -4,18 +4,16 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
 const SECTIONS = [
-  { key: "preliminaries", label: "Preliminaries" },
-  { key: "substructure", label: "Substructure" },
-  { key: "superstructure", label: "Superstructure" },
-  { key: "blockwork", label: "Blockwork" },
+  { key: "ground", label: "Groundwork" },
   { key: "concrete", label: "Concrete Works" },
-  { key: "plastering", label: "Plastering / Rendering" },
+  { key: "blockwork", label: "Blockwork" },
   { key: "finishes", label: "Finishes" },
   { key: "roofing", label: "Roofing" },
-  { key: "doors_windows", label: "Doors & Windows" },
-  { key: "mep", label: "MEP (Mechanical/Electrical/Plumbing)" },
-  { key: "external", label: "External Works" },
+  { key: "doors_windows", label: "Windows & Doors" },
+  { key: "paint", label: "Painting" },
+  { key: "steelwork", label: "Steelwork" },
 ];
+
 
 const toNum = (v) => {
   const n = Number(String(v ?? "").replace(/,/g, ""));
