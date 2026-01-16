@@ -1,15 +1,16 @@
 // server/routes/admin.rategen.rates.js
 import express from "express";
 import mongoose from "mongoose";
-import { ensureDb } from "../db.js";
-import { requireAdmin } from "../middleware/auth.js";
 import { RateGenRate } from "../models/RateGenRate.js";
+import { requireAdmin } from "../middleware/auth.js";
+import { ensureDb } from "../db.js";
 
 const router = express.Router();
 
-// Admin JWT only (NOT x-admin-key)
+// all endpoints here require admin (role-based, not x-admin-key)
 router.use(requireAdmin);
 
+/** canonical section keys */
 const ALLOWED_SECTION_KEYS = new Set([
   "ground",
   "concrete",
@@ -32,17 +33,16 @@ const SECTION_LABELS = {
   steelwork: "Steelwork",
 };
 
-function toNum(v, fallback = 0) {
+const toNum = (v, fallback = 0) => {
   const n = Number(String(v ?? "").replace(/,/g, ""));
   return Number.isFinite(n) ? n : fallback;
-}
+};
 
 function normalizeSectionKey(raw) {
   const s = String(raw || "")
     .trim()
     .toLowerCase();
   if (!s) return "";
-
   if (s === "painting") return "paint";
   if (s.includes("door") || s.includes("window")) return "doors_windows";
   if (s.includes("steel")) return "steelwork";
@@ -52,58 +52,8 @@ function normalizeSectionKey(raw) {
   if (s.includes("concrete")) return "concrete";
   if (s.includes("finish")) return "finishes";
   if (s.includes("block")) return "blockwork";
-
   return s;
 }
-
-function getUserObjectId(req) {
-  const raw = req.user?.id || req.user?._id || req.user?.userId || null;
-  const s = raw ? String(raw) : "";
-  return mongoose.isValidObjectId(s)
-    ? new mongoose.Types.ObjectId(s)
-    : undefined;
-}
-
-function sanitizeBreakdown(breakdownRaw) {
-  const raw = Array.isArray(breakdownRaw) ? breakdownRaw : [];
-
-  const breakdown = raw
-    .map((l) => {
-      const componentName = String(l?.componentName || "").trim();
-      const quantity = toNum(l?.quantity);
-      const unit = String(l?.unit || "").trim();
-      const unitPrice = toNum(l?.unitPrice);
-
-      const lineTotal = quantity * unitPrice;
-
-      // ✅ keep optional link metadata (won't break if schema is non-strict)
-      const refKind = l?.refKind ? String(l.refKind).trim() : null; // "material" | "labour"
-      const refSn = l?.refSn != null ? toNum(l.refSn) : null;
-      const refName = l?.refName ? String(l.refName).trim() : null;
-
-      return {
-        componentName,
-        quantity,
-        unit,
-        unitPrice,
-        lineTotal,
-        totalPrice: lineTotal,
-
-        // optional linkage
-        refKind,
-        refSn,
-        refName,
-      };
-    })
-    .filter((l) => l.componentName);
-
-  const breakdownNet = breakdown.reduce(
-    (sum, l) => sum + toNum(l.lineTotal),
-    0
-  );
-  return { breakdown, breakdownNet };
-}
-
 
 /**
  * GET /admin/rategen-v2/rates?sectionKey=ground&limit=500
@@ -113,17 +63,24 @@ router.get("/rates", async (req, res, next) => {
     await ensureDb();
 
     const sectionKey = normalizeSectionKey(req.query.sectionKey);
-    const limit = Math.min(1000, Math.max(1, toNum(req.query.limit, 500)));
+    if (sectionKey && !ALLOWED_SECTION_KEYS.has(sectionKey)) {
+      return res.status(400).json({
+        error: `Invalid sectionKey '${sectionKey}'. Allowed: ${Array.from(
+          ALLOWED_SECTION_KEYS
+        ).join(", ")}`,
+      });
+    }
 
+    const limit = Math.min(1000, Math.max(1, toNum(req.query.limit, 500)));
     const q = {};
     if (sectionKey) q.sectionKey = sectionKey;
 
     const items = await RateGenRate.find(q)
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1, _id: -1 })
       .limit(limit)
       .lean();
 
-    return res.json({ ok: true, items });
+    res.json({ ok: true, items });
   } catch (err) {
     next(err);
   }
@@ -150,6 +107,7 @@ router.post("/rates", async (req, res, next) => {
     const sectionLabel = String(
       SECTION_LABELS[sectionKey] || b.sectionLabel || ""
     ).trim();
+
     const description = String(b.description || "").trim();
     const unit = String(b.unit || "").trim();
 
@@ -157,17 +115,50 @@ router.post("/rates", async (req, res, next) => {
       return res.status(400).json({ error: "description is required" });
     if (!unit) return res.status(400).json({ error: "unit is required" });
 
-    const { breakdown, breakdownNet } = sanitizeBreakdown(b.breakdown);
-    const netCost = breakdownNet > 0 ? breakdownNet : toNum(b.netCost);
+    const breakdownRaw = Array.isArray(b.breakdown) ? b.breakdown : [];
+    const breakdown = breakdownRaw
+      .map((l) => {
+        const componentName = String(l?.componentName || "").trim();
+        const quantity = toNum(l?.quantity, 0);
+        const unitLine = String(l?.unit || "").trim();
+        const unitPrice = toNum(l?.unitPrice, 0);
+
+        const lineTotal =
+          toNum(l?.lineTotal, 0) > 0
+            ? toNum(l?.lineTotal, 0)
+            : quantity * unitPrice;
+
+        return {
+          componentName,
+          quantity,
+          unit: unitLine,
+          unitPrice,
+          lineTotal,
+
+          // optional refs (safe if schema ignores unknown)
+          refKind: l?.refKind ?? null,
+          refSn: l?.refSn ?? null,
+          refName: l?.refName ?? null,
+        };
+      })
+      .filter((l) => l.componentName);
+
+    const breakdownNet = breakdown.reduce(
+      (sum, l) => sum + toNum(l.lineTotal, 0),
+      0
+    );
+    const netCost = breakdownNet > 0 ? breakdownNet : toNum(b.netCost, 0);
 
     if (!(netCost > 0)) {
       return res.status(400).json({
-        error: "netCost must be > 0 (use breakdown or provide netCost).",
+        error: "netCost must be > 0 (use breakdown lines or provide netCost).",
       });
     }
 
-    const overheadPercent = toNum(b.overheadPercent, 10);
-    const profitPercent = toNum(b.profitPercent, 25);
+    const overheadPercent =
+      b.overheadPercent != null ? toNum(b.overheadPercent, 10) : 10;
+    const profitPercent =
+      b.profitPercent != null ? toNum(b.profitPercent, 25) : 25;
 
     const overheadValue = (netCost * overheadPercent) / 100;
     const profitValue = (netCost * profitPercent) / 100;
@@ -178,149 +169,26 @@ router.post("/rates", async (req, res, next) => {
       b.itemNo === null ||
       String(b.itemNo).trim() === ""
         ? undefined
-        : toNum(b.itemNo);
-
-    const userObjId = getUserObjectId(req);
+        : toNum(b.itemNo, 0);
 
     const doc = await RateGenRate.create({
       sectionKey,
       sectionLabel,
       itemNo,
-      code: b.code ? String(b.code).trim() : undefined,
       description,
       unit,
-
       netCost,
       overheadPercent,
       profitPercent,
       overheadValue,
       profitValue,
       totalCost,
-
       breakdown,
-
-      createdBy: userObjId,
-      updatedBy: userObjId,
+      createdBy: req.user?._id || req.user?.id || null,
+      updatedBy: req.user?._id || req.user?.id || null,
     });
 
-    return res.json({ ok: true, item: doc });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * PATCH /admin/rategen-v2/rates/:id  (EDIT / UPDATE)
- */
-router.patch("/rates/:id", async (req, res, next) => {
-  try {
-    await ensureDb();
-
-    const { id } = req.params;
-    if (!mongoose.isValidObjectId(id))
-      return res.status(400).json({ error: "Invalid id" });
-
-    const existing = await RateGenRate.findById(id);
-    if (!existing) return res.status(404).json({ error: "Rate not found" });
-
-    const b = req.body || {};
-
-    const sectionKey = b.sectionKey
-      ? normalizeSectionKey(b.sectionKey)
-      : existing.sectionKey;
-    if (!ALLOWED_SECTION_KEYS.has(sectionKey)) {
-      return res.status(400).json({
-        error: `Invalid sectionKey '${sectionKey}'. Allowed: ${Array.from(
-          ALLOWED_SECTION_KEYS
-        ).join(", ")}`,
-      });
-    }
-
-    const sectionLabel = String(
-      SECTION_LABELS[sectionKey] ||
-        b.sectionLabel ||
-        existing.sectionLabel ||
-        ""
-    ).trim();
-
-    const description = String(
-      b.description ?? existing.description ?? ""
-    ).trim();
-    const unit = String(b.unit ?? existing.unit ?? "").trim();
-
-    if (!description)
-      return res.status(400).json({ error: "description is required" });
-    if (!unit) return res.status(400).json({ error: "unit is required" });
-
-    const breakdownInput =
-      b.breakdown != null ? b.breakdown : existing.breakdown;
-    const { breakdown, breakdownNet } = sanitizeBreakdown(breakdownInput);
-
-    const fallbackNet = toNum(existing.netCost, 0);
-    const netCost =
-      breakdownNet > 0
-        ? breakdownNet
-        : b.netCost != null
-        ? toNum(b.netCost, fallbackNet)
-        : fallbackNet;
-
-    if (!(netCost > 0)) {
-      return res.status(400).json({
-        error: "netCost must be > 0 (use breakdown or provide netCost).",
-      });
-    }
-
-    const overheadPercent =
-      b.overheadPercent != null
-        ? toNum(b.overheadPercent, 10)
-        : toNum(existing.overheadPercent, 10);
-
-    const profitPercent =
-      b.profitPercent != null
-        ? toNum(b.profitPercent, 25)
-        : toNum(existing.profitPercent, 25);
-
-    const overheadValue = (netCost * overheadPercent) / 100;
-    const profitValue = (netCost * profitPercent) / 100;
-    const totalCost = netCost + overheadValue + profitValue;
-
-    const itemNo =
-      b.itemNo === undefined || b.itemNo === null
-        ? existing.itemNo
-        : String(b.itemNo).trim() === ""
-        ? undefined
-        : toNum(b.itemNo);
-
-    const userObjId = getUserObjectId(req);
-
-    const updated = await RateGenRate.findByIdAndUpdate(
-      id,
-      {
-        sectionKey,
-        sectionLabel,
-        itemNo,
-        code:
-          b.code != null
-            ? String(b.code || "").trim() || undefined
-            : existing.code,
-        description,
-        unit,
-
-        netCost,
-        overheadPercent,
-        profitPercent,
-        overheadValue,
-        profitValue,
-        totalCost,
-
-        breakdown,
-
-        updatedBy: userObjId,
-      },
-      { new: true }
-    ).lean();
-
-    return res.json({ ok: true, item: updated });
+    res.json({ ok: true, item: doc });
   } catch (err) {
     next(err);
   }
@@ -334,13 +202,14 @@ router.delete("/rates/:id", async (req, res, next) => {
     await ensureDb();
 
     const { id } = req.params;
-    if (!mongoose.isValidObjectId(id))
+    if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: "Invalid id" });
+    }
 
     const deleted = await RateGenRate.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ error: "Rate not found" });
 
-    return res.json({ ok: true });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
