@@ -14,11 +14,13 @@ const SECTIONS = [
   { key: "steelwork", label: "Steelwork" },
 ];
 
-
 const toNum = (v) => {
   const n = Number(String(v ?? "").replace(/,/g, ""));
   return Number.isFinite(n) ? n : 0;
 };
+
+// ✅ v2 admin base (matches server/index.js)
+const ADMIN_RATEGEN_V2_BASE = "/admin/rategen-v2";
 
 export default function AdminAddRate() {
   const { accessToken } = useAuth();
@@ -74,10 +76,8 @@ export default function AdminAddRate() {
     setLoadingExisting(true);
     try {
       const res = await apiAuthed(
-        `/admin/rategen/rates?sectionKey=${encodeURIComponent(sk)}`,
-        {
-          token: accessToken,
-        }
+        `${ADMIN_RATEGEN_V2_BASE}/rates?sectionKey=${encodeURIComponent(sk)}`,
+        { token: accessToken }
       );
       setExisting(Array.isArray(res?.items) ? res.items : []);
     } catch (e) {
@@ -126,28 +126,14 @@ export default function AdminAddRate() {
     e.preventDefault();
     setMsg("");
 
-    if (!accessToken) {
-      setMsg("❌ Missing access token.");
-      return;
-    }
-    if (!sectionKey) {
-      setMsg("❌ Please select a Section of Work.");
-      return;
-    }
-    if (!description.trim()) {
-      setMsg("❌ Description is required.");
-      return;
-    }
-    if (!unit.trim()) {
-      setMsg("❌ Unit is required.");
-      return;
-    }
-    if (!(netCost > 0)) {
-      setMsg(
-        "❌ Net cost must be greater than 0 (use breakdown lines or manual net cost)."
+    if (!accessToken) return setMsg("❌ Missing access token.");
+    if (!sectionKey) return setMsg("❌ Please select a Section of Work.");
+    if (!description.trim()) return setMsg("❌ Description is required.");
+    if (!unit.trim()) return setMsg("❌ Unit is required.");
+    if (!(netCost > 0))
+      return setMsg(
+        "❌ Net cost must be > 0 (use breakdown or manual net cost)."
       );
-      return;
-    }
 
     const cleanedLines = lines
       .map((l) => ({
@@ -172,7 +158,7 @@ export default function AdminAddRate() {
 
     setSaving(true);
     try {
-      const res = await apiAuthed("/admin/rategen/rates", {
+      const res = await apiAuthed(`${ADMIN_RATEGEN_V2_BASE}/rates`, {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -183,9 +169,8 @@ export default function AdminAddRate() {
       resetForm();
 
       // refresh list for this section
-      if (sectionKey) {
+      if (sectionKey)
         setExisting((prev) => [res?.item, ...prev].filter(Boolean));
-      }
     } catch (e2) {
       setMsg(`❌ ${e2?.message || "Failed to save rate"}`);
     } finally {
@@ -194,12 +179,10 @@ export default function AdminAddRate() {
   }
 
   async function deleteRate(id) {
-    if (!accessToken) return;
-    if (!id) return;
+    if (!accessToken || !id) return;
     setMsg("");
-
     try {
-      await apiAuthed(`/admin/rategen/rates/${id}`, {
+      await apiAuthed(`${ADMIN_RATEGEN_V2_BASE}/rates/${id}`, {
         token: accessToken,
         method: "DELETE",
       });
@@ -276,7 +259,6 @@ export default function AdminAddRate() {
           />
         </div>
 
-        {/* Breakdown Builder */}
         <div className="border rounded-lg p-3 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div>
@@ -370,7 +352,6 @@ export default function AdminAddRate() {
           </div>
         </div>
 
-        {/* Manual net cost (fallback) */}
         <div className="grid md:grid-cols-3 gap-3">
           <div>
             <label className="form-label">
@@ -411,7 +392,6 @@ export default function AdminAddRate() {
           </div>
         </div>
 
-        {/* Live totals */}
         <div className="grid md:grid-cols-4 gap-3">
           <div className="border rounded-lg p-3">
             <div className="text-xs text-slate-600">Net Cost</div>
@@ -442,7 +422,6 @@ export default function AdminAddRate() {
         </button>
       </form>
 
-      {/* Existing rates for this section */}
       <div className="card">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-semibold">Existing Rates (selected section)</h2>
