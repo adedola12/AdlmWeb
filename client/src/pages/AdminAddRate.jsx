@@ -37,7 +37,6 @@ function evalFormula(input, ctx) {
   const s0 = String(input ?? "").trim();
   if (!s0) return { value: 0, error: null };
 
-  // numeric direct
   if (!s0.startsWith("=")) {
     return { value: toNum(s0, 0), error: null };
   }
@@ -47,14 +46,12 @@ function evalFormula(input, ctx) {
   // Convert "3%" => "(3/100)"
   expr = expr.replace(/(\d+(?:\.\d+)?)\s*%/g, "($1/100)");
 
-  // Replace variables (longest first to avoid partial replacements)
   const keys = Object.keys(ctx).sort((a, b) => b.length - a.length);
   for (const k of keys) {
     const v = toNum(ctx[k], 0);
     expr = expr.replace(new RegExp(escapeRegExp(k), "gi"), String(v));
   }
 
-  // Only allow safe characters after substitution
   const safe = /^[0-9+\-*/().\s]+$/;
   if (!safe.test(expr)) {
     return { value: 0, error: "Invalid characters in formula" };
@@ -94,6 +91,7 @@ function computeBreakdown(lines, manualNetCostStr, ohPct, prPct) {
       "Total Cost": totalCost,
       "Overhead %": ohPct,
       "Profit %": prPct,
+
       NetCost: netCost,
       NETCOST: netCost,
       NET: netCost,
@@ -172,7 +170,6 @@ export default function AdminAddRate() {
   const [overheadPercent, setOverheadPercent] = React.useState("10");
   const [profitPercent, setProfitPercent] = React.useState("25");
 
-  // breakdown lines now carry link fields too
   const [lines, setLines] = React.useState([
     {
       componentName: "",
@@ -187,6 +184,7 @@ export default function AdminAddRate() {
 
   const [existing, setExisting] = React.useState([]);
   const [loadingExisting, setLoadingExisting] = React.useState(false);
+  const [existingErr, setExistingErr] = React.useState("");
 
   const [saving, setSaving] = React.useState(false);
   const [msg, setMsg] = React.useState("");
@@ -200,26 +198,41 @@ export default function AdminAddRate() {
   );
 
   // =========================
-  // ✅ Master library (south_west default)
+  // Master library
   // =========================
   const [libLoading, setLibLoading] = React.useState(false);
   const [libErr, setLibErr] = React.useState("");
-  const [libFlat, setLibFlat] = React.useState([]); // [{kind, description, unit, price, sn, k}]
+  const [libFlat, setLibFlat] = React.useState([]);
 
   React.useEffect(() => {
     if (!accessToken) return;
 
     let alive = true;
+
     (async () => {
       setLibErr("");
       setLibLoading(true);
+
       try {
-        const res = await apiAuthed(
+        const tryUrls = [
           `${ADMIN_RATEGEN_V2_BASE}/master?zone=south_west`,
-          {
-            token: accessToken,
+          `/rategen/master?zone=south_west`,
+        ];
+
+        let res = null;
+        let lastErr = null;
+
+        for (const url of tryUrls) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            res = await apiAuthed(url, { token: accessToken });
+            break;
+          } catch (e) {
+            lastErr = e;
           }
-        );
+        }
+
+        if (!res) throw lastErr || new Error("Failed to fetch master library");
 
         const mats = Array.isArray(res?.materials) ? res.materials : [];
         const labs = Array.isArray(res?.labour) ? res.labour : [];
@@ -243,7 +256,6 @@ export default function AdminAddRate() {
           })),
         ].filter((x) => x.description);
 
-        // sort for nicer suggestion order
         flat.sort((a, b) => a.description.localeCompare(b.description));
 
         if (alive) setLibFlat(flat);
@@ -262,7 +274,6 @@ export default function AdminAddRate() {
   function getSuggestions(query) {
     const q = normKey(query);
     if (!q || q.length < 2) return [];
-    // fast contains match
     const hits = libFlat.filter((x) => x.k.includes(q));
     return hits.slice(0, 10);
   }
@@ -288,20 +299,28 @@ export default function AdminAddRate() {
   }
 
   // =========================
-  // existing rates
+  // ✅ Existing rates (FIXED)
+  // - Load ALL rates if sectionKey is empty
+  // - Filter when section is selected
   // =========================
   async function loadExistingRates(sk) {
-    if (!sk || !accessToken) return;
+    if (!accessToken) return;
+
     setLoadingExisting(true);
+    setExistingErr("");
+
     try {
-      const res = await apiAuthed(
-        `${ADMIN_RATEGEN_V2_BASE}/rates?sectionKey=${encodeURIComponent(sk)}`,
-        { token: accessToken }
-      );
+      const qs = sk
+        ? `?sectionKey=${encodeURIComponent(sk)}&limit=500`
+        : `?limit=500`;
+      const res = await apiAuthed(`${ADMIN_RATEGEN_V2_BASE}/rates${qs}`, {
+        token: accessToken,
+      });
+
       setExisting(Array.isArray(res?.items) ? res.items : []);
     } catch (e) {
       setExisting([]);
-      setMsg(e?.message || "Failed to load existing rates");
+      setExistingErr(e?.message || "Failed to load existing rates");
     } finally {
       setLoadingExisting(false);
     }
@@ -310,7 +329,7 @@ export default function AdminAddRate() {
   React.useEffect(() => {
     setMsg("");
     setExisting([]);
-    if (sectionKey) loadExistingRates(sectionKey);
+    if (accessToken) loadExistingRates(sectionKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionKey, accessToken]);
 
@@ -418,10 +437,11 @@ export default function AdminAddRate() {
       return setMsg("❌ Net cost must be > 0 (use breakdown or manual net).");
 
     const bad = calc.errorsByIndex.find((x) => x);
-    if (bad)
+    if (bad) {
       return setMsg(
         "❌ One or more Unit Price formulas are invalid. Fix them before saving."
       );
+    }
 
     const cleanedLines = lines
       .map((l, i) => ({
@@ -430,7 +450,6 @@ export default function AdminAddRate() {
         unit: String(l.unit || "").trim(),
         unitPrice: toNum(calc.unitPrices[i], 0),
 
-        // ✅ link meta (optional)
         refKind: l.refKind || null,
         refSn: l.refSn != null ? Number(l.refSn) : null,
         refName: l.refName || null,
@@ -463,15 +482,11 @@ export default function AdminAddRate() {
         );
 
         setMsg("✅ Rate updated.");
-        setExisting((prev) => {
-          const updated = res?.item;
-          if (!updated) return prev;
-          const next = prev.map((x) => (x._id === updated._id ? updated : x));
-          return [updated, ...next.filter((x) => x._id !== updated._id)];
-        });
         resetForm();
+        // reload list (keeps filter)
+        loadExistingRates(sectionKey);
       } else {
-        const res = await apiAuthed(`${ADMIN_RATEGEN_V2_BASE}/rates`, {
+        await apiAuthed(`${ADMIN_RATEGEN_V2_BASE}/rates`, {
           token: accessToken,
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -480,8 +495,7 @@ export default function AdminAddRate() {
 
         setMsg("✅ Rate saved to library.");
         resetForm();
-        if (sectionKey)
-          setExisting((prev) => [res?.item, ...prev].filter(Boolean));
+        loadExistingRates(sectionKey);
       }
     } catch (e2) {
       setMsg(`❌ ${e2?.message || "Failed to save rate"}`);
@@ -501,13 +515,17 @@ export default function AdminAddRate() {
         token: accessToken,
         method: "DELETE",
       });
-      setExisting((prev) => prev.filter((x) => x._id !== id));
       setMsg("🗑️ Rate deleted.");
       if (editingId === id) resetForm();
+      loadExistingRates(sectionKey);
     } catch (e) {
       setMsg(`❌ ${e?.message || "Failed to delete rate"}`);
     }
   }
+
+  const existingTitle = sectionKey
+    ? `Existing Rates (${sectionLabel || sectionKey})`
+    : "Existing Rates (all sections)";
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -524,10 +542,10 @@ export default function AdminAddRate() {
 
             <div className="text-xs text-slate-500 mt-2">
               {libLoading
-                ? "Loading master library..."
+                ? "⏳ Fetching Master Library..."
                 : libErr
                 ? `⚠️ ${libErr}`
-                : `✅ Master library loaded: ${libFlat.length} items`}
+                : `✅ Fetched Master Library: ${libFlat.length} items`}
             </div>
           </div>
 
@@ -563,7 +581,7 @@ export default function AdminAddRate() {
               onChange={(e) => setSectionKey(e.target.value)}
               disabled={saving}
             >
-              <option value="">— Select section —</option>
+              <option value="">— All sections (no filter) —</option>
               {SECTIONS.map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}
@@ -635,8 +653,10 @@ export default function AdminAddRate() {
               const unitPriceCalc = toNum(calc.unitPrices[i], 0);
               const err = calc.errorsByIndex[i];
 
+              const qk = normKey(l.componentName);
               const suggestions =
                 openSuggestFor === i ? getSuggestions(l.componentName) : [];
+
               const linkedTag =
                 l.refKind === "material"
                   ? "Material"
@@ -644,12 +664,13 @@ export default function AdminAddRate() {
                   ? "Labour"
                   : null;
 
+              const showDropdown = openSuggestFor === i;
+
               return (
                 <div
                   key={i}
                   className="grid md:grid-cols-12 gap-2 items-center"
                 >
-                  {/* Component name + suggestions */}
                   <div className="md:col-span-5 relative">
                     <div className="flex items-center gap-2">
                       <input
@@ -669,44 +690,66 @@ export default function AdminAddRate() {
                           setTimeout(
                             () =>
                               setOpenSuggestFor((x) => (x === i ? null : x)),
-                            120
+                            140
                           )
                         }
                         placeholder="Component name (search materials/labour...)"
                         disabled={saving}
                       />
-                      {linkedTag && (
+
+                      {linkedTag ? (
                         <span className="text-[11px] px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 whitespace-nowrap">
                           Linked: {linkedTag}
                         </span>
-                      )}
+                      ) : libLoading && showDropdown ? (
+                        <span className="text-[11px] px-2 py-1 rounded bg-slate-50 border border-slate-200 text-slate-600 whitespace-nowrap">
+                          Fetching...
+                        </span>
+                      ) : null}
                     </div>
 
-                    {openSuggestFor === i && suggestions.length > 0 && (
+                    {showDropdown && (
                       <div className="absolute z-20 mt-1 w-full rounded-md border bg-white shadow-lg max-h-64 overflow-auto">
-                        {suggestions.map((sug, idx) => (
-                          <div
-                            key={`${sug.kind}-${sug.sn}-${idx}`}
-                            className="px-3 py-2 hover:bg-slate-50 cursor-pointer"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              applySuggestion(i, sug);
-                            }}
-                          >
-                            <div className="text-sm font-medium">
-                              {sug.description}
-                            </div>
-                            <div className="text-xs text-slate-600">
-                              {sug.kind.toUpperCase()} · {sug.unit || "-"} ·{" "}
-                              {toNum(sug.price).toFixed(2)}
-                            </div>
+                        {libLoading ? (
+                          <div className="px-3 py-3 text-sm text-slate-600">
+                            ⏳ Fetching Master Library...
                           </div>
-                        ))}
+                        ) : libErr ? (
+                          <div className="px-3 py-3 text-sm text-amber-700">
+                            ⚠️ {libErr}
+                          </div>
+                        ) : qk.length >= 2 && suggestions.length === 0 ? (
+                          <div className="px-3 py-3 text-sm text-slate-600">
+                            No match in Master Library (try another keyword).
+                          </div>
+                        ) : suggestions.length > 0 ? (
+                          suggestions.map((sug, idx) => (
+                            <div
+                              key={`${sug.kind}-${sug.sn}-${idx}`}
+                              className="px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                applySuggestion(i, sug);
+                              }}
+                            >
+                              <div className="text-sm font-medium">
+                                {sug.description}
+                              </div>
+                              <div className="text-xs text-slate-600">
+                                {sug.kind.toUpperCase()} · {sug.unit || "-"} ·{" "}
+                                {toNum(sug.price).toFixed(2)}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-3 py-3 text-sm text-slate-500">
+                            Start typing to search master materials/labour...
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* Qty */}
                   <div className="md:col-span-2">
                     <input
                       className="input"
@@ -720,7 +763,6 @@ export default function AdminAddRate() {
                     />
                   </div>
 
-                  {/* Unit (auto-filled) */}
                   <div className="md:col-span-2">
                     <input
                       className="input"
@@ -731,7 +773,6 @@ export default function AdminAddRate() {
                     />
                   </div>
 
-                  {/* Unit price (auto-filled, still editable / can be formula) */}
                   <div className="md:col-span-2">
                     <input
                       className={`input ${err ? "border-red-400" : ""}`}
@@ -751,7 +792,6 @@ export default function AdminAddRate() {
                     </div>
                   </div>
 
-                  {/* Total + remove */}
                   <div className="md:col-span-1 flex items-center justify-between gap-2">
                     <span className="text-xs text-slate-600">
                       {lineTotal.toFixed(2)}
@@ -854,25 +894,28 @@ export default function AdminAddRate() {
 
       <div className="card">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold">Existing Rates (selected section)</h2>
+          <h2 className="font-semibold">{existingTitle}</h2>
           {loadingExisting && (
             <span className="text-xs text-slate-600">Loading…</span>
           )}
         </div>
 
-        {!sectionKey ? (
-          <div className="text-sm text-slate-600 mt-2">
-            Select a section to view saved rates.
+        {!sectionKey && (
+          <div className="text-xs text-slate-500 mt-1">
+            Showing latest rates across all sections. Select a section to
+            filter.
           </div>
+        )}
+
+        {existingErr ? (
+          <div className="text-sm text-red-600 mt-2">❌ {existingErr}</div>
         ) : existing.length === 0 ? (
-          <div className="text-sm text-slate-600 mt-2">
-            No rates saved under this section yet.
-          </div>
+          <div className="text-sm text-slate-600 mt-2">No rates found.</div>
         ) : (
           <div className="mt-3 space-y-2">
             {existing.map((r) => (
               <div
-                key={r._id}
+                key={String(r._id)}
                 className="border rounded-lg p-3 flex items-start justify-between gap-3"
               >
                 <div className="min-w-0">
@@ -881,7 +924,8 @@ export default function AdminAddRate() {
                     {r.description}
                   </div>
                   <div className="text-xs text-slate-600 mt-1">
-                    Unit: {r.unit} · Net: {toNum(r.netCost).toFixed(2)} · OH{" "}
+                    Section: {r.sectionLabel || r.sectionKey} · Unit: {r.unit} ·
+                    Net: {toNum(r.netCost).toFixed(2)} · OH{" "}
                     {toNum(r.overheadPercent).toFixed(2)}% · Profit{" "}
                     {toNum(r.profitPercent).toFixed(2)}% · Total:{" "}
                     {toNum(r.totalCost).toFixed(2)}
