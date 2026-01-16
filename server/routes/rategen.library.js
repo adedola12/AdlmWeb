@@ -1,9 +1,9 @@
 // server/routes/rategen.library.js
 import express from "express";
 import mongoose from "mongoose";
+import { ensureDb } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlement } from "../middleware/requireEntitlement.js";
-import { ensureDb } from "../db.js";
 
 import { RateGenMaterial } from "../models/RateGenMaterial.js";
 import { RateGenLabour } from "../models/RateGenLabour.js";
@@ -12,12 +12,23 @@ import { ensureMeta } from "../models/RateGenMeta.js";
 
 const router = express.Router();
 
-// ✅ IMPORTANT: scope auth ONLY to /library/*
-// so /rategen-v2/compute-items won't be blocked
+/**
+ * ✅ IMPORTANT
+ * This router is mounted at /rategen-v2 (or /rategen).
+ * We MUST NOT requireAuth globally here, otherwise it will block other routers
+ * mounted on the same prefix (e.g. compute routes).
+ *
+ * So we scope auth ONLY to /library/*
+ */
 router.use("/library", requireAuth, requireEntitlement("rategen"));
 
 const DEFAULT_LIMIT = 250;
 const MAX_LIMIT = 1000;
+
+function toNum(v, fallback = 0) {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : fallback;
+}
 
 function clampInt(v, min, max, fallback) {
   const n = Number(v);
@@ -31,6 +42,7 @@ function buildCursor(updatedAt, id) {
 
 function parseCursor(cursor) {
   if (!cursor) return null;
+
   const [tsRaw, idRaw] = String(cursor).split("|");
   const ts = new Date(tsRaw);
   if (!tsRaw || Number.isNaN(ts.getTime())) return null;
@@ -42,8 +54,8 @@ function parseCursor(cursor) {
 }
 
 function toComputeItemDefinition(x) {
-  const oh = Number(x.overheadPercentDefault ?? 10);
-  const pf = Number(x.profitPercentDefault ?? 25);
+  const oh = toNum(x.overheadPercentDefault, 10);
+  const pf = toNum(x.profitPercentDefault, 25);
 
   return {
     id: String(x._id),
@@ -54,7 +66,7 @@ function toComputeItemDefinition(x) {
     overheadPercentDefault: oh,
     profitPercentDefault: pf,
 
-    // legacy field
+    // legacy field (some clients expect single P/O)
     poPercent: oh + pf,
 
     enabled: x.enabled !== false,
@@ -77,17 +89,19 @@ function toComputeItemDefinition(x) {
 
 /**
  * GET /library/meta
+ * -> /rategen-v2/library/meta (when mounted at /rategen-v2)
  */
 router.get("/library/meta", async (_req, res, next) => {
   try {
     await ensureDb();
+
     const [m, l, c] = await Promise.all([
       ensureMeta("materials"),
       ensureMeta("labour"),
       ensureMeta("compute"),
     ]);
 
-    res.json({
+    return res.json({
       ok: true,
       meta: {
         materials: { version: m.version, updatedAt: m.updatedAt },
@@ -102,6 +116,7 @@ router.get("/library/meta", async (_req, res, next) => {
 
 /**
  * GET /library/all
+ * Full snapshot for offline-first clients
  */
 router.get("/library/all", async (_req, res, next) => {
   try {
@@ -115,7 +130,7 @@ router.get("/library/all", async (_req, res, next) => {
       RateGenLabour.find({ enabled: true }).sort({ sn: 1 }).lean(),
     ]);
 
-    res.json({
+    return res.json({
       ok: true,
       meta: {
         materialsVersion: mMeta.version,
@@ -132,15 +147,24 @@ router.get("/library/all", async (_req, res, next) => {
 
 /**
  * GET /library/compute-items/sync
+ * Incremental sync with cursor paging + version
+ *
+ * Query:
+ *  - sinceVersion (optional): number
+ *  - cursor (optional): "ISO_DATE|OBJECTID"
+ *  - limit (optional): default 250, max 1000
+ *
+ * NOTE: do NOT filter enabled:true here — enabled:false is needed as tombstones
  */
 router.get("/library/compute-items/sync", async (req, res, next) => {
   try {
     await ensureDb();
 
     const meta = await ensureMeta("compute");
-    const sinceVersion = Number(req.query.sinceVersion || 0);
+    const sinceVersion = toNum(req.query.sinceVersion, 0);
     const limit = clampInt(req.query.limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
 
+    // client already up to date (no cursor)
     if (
       sinceVersion > 0 &&
       sinceVersion === meta.version &&
@@ -156,6 +180,7 @@ router.get("/library/compute-items/sync", async (req, res, next) => {
     }
 
     const cur = parseCursor(req.query.cursor);
+
     let q = {};
     if (cur?.ts) {
       q = cur.id
@@ -181,7 +206,7 @@ router.get("/library/compute-items/sync", async (req, res, next) => {
           )
         : null;
 
-    res.json({
+    return res.json({
       ok: true,
       meta: { version: meta.version, updatedAt: meta.updatedAt },
       items: docs.map(toComputeItemDefinition),

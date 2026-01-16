@@ -176,11 +176,14 @@ app.use("/rategen-v2", rategenLibraryPublic); // e.g. /rategen-v2/library/meta
 app.use("/rategen-v2", ratesCompute); // e.g. /rategen-v2/compute-items, /rategen-v2/compute
 
 /* -------- NEW / v2 ADMIN (web admin access token / session) -------- */
-app.use("/admin/rategen-v2", adminRateGenLibrary); // e.g. /admin/rategen-v2/library/...
-app.use("/admin/rategen-v2", adminRateGenRates); // e.g. /admin/rategen-v2/rates
+app.use("/admin/rategen-v2", adminRateGenRates); // ✅ /admin/rategen-v2/rates
+
+// ✅ move library router under /library so it doesn't intercept /rates
+app.use("/admin/rategen-v2/library", adminRateGenLibrary); // /admin/rategen-v2/library/...
 
 /* -------- ADMIN COMPUTE (admin-key) -------- */
-app.use("/admin/rategen-compute", adminRateGenCompute); // e.g. /admin/rategen-compute/items
+app.use("/admin/rategen-compute", adminRateGenCompute); // stays admin-key protected
+
 
 /* -------- LEGACY ALIASES (optional) --------
    Keep ONLY while old Windows builds still point here.
