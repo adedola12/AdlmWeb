@@ -7,10 +7,9 @@ import { RateGenRate } from "../models/RateGenRate.js";
 
 const router = express.Router();
 
-// All endpoints require admin JWT (NOT x-admin-key)
+// Admin JWT only (NOT x-admin-key)
 router.use(requireAdmin);
 
-/** Canonical section keys */
 const ALLOWED_SECTION_KEYS = new Set([
   "ground",
   "concrete",
@@ -22,7 +21,6 @@ const ALLOWED_SECTION_KEYS = new Set([
   "steelwork",
 ]);
 
-/** Canonical labels (server-controlled) */
 const SECTION_LABELS = {
   ground: "Groundwork",
   concrete: "Concrete Works",
@@ -45,7 +43,6 @@ function normalizeSectionKey(raw) {
     .toLowerCase();
   if (!s) return "";
 
-  // Accept common aliases
   if (s === "painting") return "paint";
   if (s.includes("door") || s.includes("window")) return "doors_windows";
   if (s.includes("steel")) return "steelwork";
@@ -60,7 +57,7 @@ function normalizeSectionKey(raw) {
 }
 
 function getUserObjectId(req) {
-  const raw = req.user?.id || req.user?._id || req.user?.userId || null;
+  const raw = req.user?.id || req.user?._id || null;
   const s = raw ? String(raw) : "";
   return mongoose.isValidObjectId(s)
     ? new mongoose.Types.ObjectId(s)
@@ -84,7 +81,8 @@ router.get("/rates", async (req, res, next) => {
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean();
-    res.json({ ok: true, items });
+
+    return res.json({ ok: true, items });
   } catch (err) {
     next(err);
   }
@@ -92,15 +90,14 @@ router.get("/rates", async (req, res, next) => {
 
 /**
  * POST /admin/rategen-v2/rates
- * body: { sectionKey, sectionLabel?, itemNo?, code?, description, unit, netCost?, overheadPercent?, profitPercent?, breakdown? }
  */
 router.post("/rates", async (req, res, next) => {
   try {
     await ensureDb();
 
     const b = req.body || {};
-
     const sectionKey = normalizeSectionKey(b.sectionKey);
+
     if (!ALLOWED_SECTION_KEYS.has(sectionKey)) {
       return res.status(400).json({
         error: `Invalid sectionKey '${sectionKey}'. Allowed: ${Array.from(
@@ -115,13 +112,11 @@ router.post("/rates", async (req, res, next) => {
     const description = String(b.description || "").trim();
     const unit = String(b.unit || "").trim();
 
-    if (!sectionLabel)
-      return res.status(400).json({ error: "sectionLabel is required" });
     if (!description)
       return res.status(400).json({ error: "description is required" });
     if (!unit) return res.status(400).json({ error: "unit is required" });
 
-    // Breakdown
+    // Breakdown -> compute net cost if breakdown exists
     const breakdownRaw = Array.isArray(b.breakdown) ? b.breakdown : [];
     const breakdown = breakdownRaw
       .map((l) => {
@@ -145,9 +140,8 @@ router.post("/rates", async (req, res, next) => {
       (sum, l) => sum + toNum(l.totalPrice),
       0
     );
-
-    // Net cost = breakdown total if breakdown exists, else manual netCost
     const netCost = breakdownNet > 0 ? breakdownNet : toNum(b.netCost);
+
     if (!(netCost > 0)) {
       return res.status(400).json({
         error: "netCost must be > 0 (use breakdown or provide netCost).",
@@ -174,15 +168,12 @@ router.post("/rates", async (req, res, next) => {
       sectionKey,
       sectionLabel,
       itemNo,
-      code: b.code ? String(b.code).trim() : undefined,
       description,
       unit,
 
       netCost,
       overheadPercent,
       profitPercent,
-
-      // if your schema has these fields, they'll save; if not, mongoose will ignore (strict)
       overheadValue,
       profitValue,
       totalCost,
@@ -193,7 +184,7 @@ router.post("/rates", async (req, res, next) => {
       updatedBy: userObjId,
     });
 
-    res.json({ ok: true, item: doc });
+    return res.json({ ok: true, item: doc });
   } catch (err) {
     next(err);
   }
@@ -214,7 +205,7 @@ router.delete("/rates/:id", async (req, res, next) => {
     const deleted = await RateGenRate.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ error: "Rate not found" });
 
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (err) {
     next(err);
   }
