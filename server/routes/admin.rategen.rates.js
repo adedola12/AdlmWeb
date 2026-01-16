@@ -66,15 +66,21 @@ function getUserObjectId(req) {
 
 function sanitizeBreakdown(breakdownRaw) {
   const raw = Array.isArray(breakdownRaw) ? breakdownRaw : [];
+
   const breakdown = raw
     .map((l) => {
       const componentName = String(l?.componentName || "").trim();
       const quantity = toNum(l?.quantity);
       const unit = String(l?.unit || "").trim();
       const unitPrice = toNum(l?.unitPrice);
+
       const lineTotal = quantity * unitPrice;
 
-      // include BOTH names to survive schema differences
+      // ✅ keep optional link metadata (won't break if schema is non-strict)
+      const refKind = l?.refKind ? String(l.refKind).trim() : null; // "material" | "labour"
+      const refSn = l?.refSn != null ? toNum(l.refSn) : null;
+      const refName = l?.refName ? String(l.refName).trim() : null;
+
       return {
         componentName,
         quantity,
@@ -82,6 +88,11 @@ function sanitizeBreakdown(breakdownRaw) {
         unitPrice,
         lineTotal,
         totalPrice: lineTotal,
+
+        // optional linkage
+        refKind,
+        refSn,
+        refName,
       };
     })
     .filter((l) => l.componentName);
@@ -92,6 +103,7 @@ function sanitizeBreakdown(breakdownRaw) {
   );
   return { breakdown, breakdownNet };
 }
+
 
 /**
  * GET /admin/rategen-v2/rates?sectionKey=ground&limit=500
