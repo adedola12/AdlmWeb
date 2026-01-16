@@ -43,6 +43,8 @@ import ratesCompute from "./routes/rates.compute.js"; // public compute endpoint
 import adminRateGenLibrary from "./routes/admin.rategen.library.js"; // admin library management
 import adminRateGenRates from "./routes/admin.rategen.rates.js"; // admin rate library
 import adminRateGenCompute from "./routes/admin.rategen.compute.js"; // admin compute items (admin-key)
+import adminRateGenMaster from "./routes/admin.rategen.master.js";
+
 
 const app = express();
 
@@ -177,9 +179,11 @@ app.use("/rategen-v2", ratesCompute); // e.g. /rategen-v2/compute-items, /ratege
 
 /* -------- NEW / v2 ADMIN (web admin access token / session) -------- */
 app.use("/admin/rategen-v2", adminRateGenRates); // ✅ /admin/rategen-v2/rates
+app.use("/admin/rategen-v2", adminRateGenMaster);
 
 // ✅ move library router under /library so it doesn't intercept /rates
 app.use("/admin/rategen-v2/library", adminRateGenLibrary); // /admin/rategen-v2/library/...
+
 
 /* -------- ADMIN COMPUTE (admin-key) -------- */
 app.use("/admin/rategen-compute", adminRateGenCompute); // stays admin-key protected

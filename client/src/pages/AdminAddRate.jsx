@@ -51,7 +51,6 @@ function evalFormula(input, ctx) {
   const keys = Object.keys(ctx).sort((a, b) => b.length - a.length);
   for (const k of keys) {
     const v = toNum(ctx[k], 0);
-    // replace case-insensitively
     expr = expr.replace(new RegExp(escapeRegExp(k), "gi"), String(v));
   }
 
@@ -68,7 +67,7 @@ function evalFormula(input, ctx) {
     if (!Number.isFinite(val))
       return { value: 0, error: "Formula returned NaN" };
     return { value: val, error: null };
-  } catch (e) {
+  } catch {
     return { value: 0, error: "Failed to evaluate formula" };
   }
 }
@@ -79,7 +78,6 @@ function computeBreakdown(lines, manualNetCostStr, ohPct, prPct) {
   let lineTotals = lines.map((_, i) => qtys[i] * unitPrices[i]);
   let errorsByIndex = lines.map(() => null);
 
-  // iterative evaluation (helps formulas that reference other lines)
   for (let iter = 0; iter < 6; iter++) {
     const breakdownNet = lineTotals.reduce((s, x) => s + toNum(x, 0), 0);
     const netCost =
@@ -96,8 +94,6 @@ function computeBreakdown(lines, manualNetCostStr, ohPct, prPct) {
       "Total Cost": totalCost,
       "Overhead %": ohPct,
       "Profit %": prPct,
-
-      // aliases
       NetCost: netCost,
       NETCOST: netCost,
       NET: netCost,
@@ -106,7 +102,6 @@ function computeBreakdown(lines, manualNetCostStr, ohPct, prPct) {
       Total: totalCost,
     };
 
-    // add component name variables -> line total
     lines.forEach((l, idx) => {
       const nm = String(l.componentName || "").trim();
       if (!nm) return;
@@ -114,7 +109,6 @@ function computeBreakdown(lines, manualNetCostStr, ohPct, prPct) {
       for (const a of aliases) ctx[a] = lineTotals[idx];
     });
 
-    // recompute unit prices + totals
     const nextUnitPrices = [...unitPrices];
     const nextTotals = [...lineTotals];
     const nextErrors = [...errorsByIndex];
@@ -150,39 +144,50 @@ function computeBreakdown(lines, manualNetCostStr, ohPct, prPct) {
   };
 }
 
+// --- library helpers ---
+const norm = (s) =>
+  String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const normKey = (s) => norm(s).replace(/\s+/g, "");
+
 export default function AdminAddRate() {
   const { accessToken } = useAuth();
 
-  // edit state
   const [editingId, setEditingId] = React.useState(null);
 
-  // selection
   const [sectionKey, setSectionKey] = React.useState("");
   const sectionLabel = React.useMemo(
     () => SECTIONS.find((s) => s.key === sectionKey)?.label || "",
     [sectionKey]
   );
 
-  // main fields
   const [itemNo, setItemNo] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [unit, setUnit] = React.useState("m2");
 
-  // net + P/O inputs
   const [manualNetCost, setManualNetCost] = React.useState("");
   const [overheadPercent, setOverheadPercent] = React.useState("10");
   const [profitPercent, setProfitPercent] = React.useState("25");
 
-  // breakdown builder
+  // breakdown lines now carry link fields too
   const [lines, setLines] = React.useState([
-    { componentName: "", quantity: "", unit: "", unitPrice: "" },
+    {
+      componentName: "",
+      quantity: "",
+      unit: "",
+      unitPrice: "",
+      refKind: null,
+      refSn: null,
+      refName: null,
+    },
   ]);
 
-  // list existing for selected section
   const [existing, setExisting] = React.useState([]);
   const [loadingExisting, setLoadingExisting] = React.useState(false);
 
-  // ui state
   const [saving, setSaving] = React.useState(false);
   const [msg, setMsg] = React.useState("");
 
@@ -194,6 +199,97 @@ export default function AdminAddRate() {
     [lines, manualNetCost, ohPct, prPct]
   );
 
+  // =========================
+  // ✅ Master library (south_west default)
+  // =========================
+  const [libLoading, setLibLoading] = React.useState(false);
+  const [libErr, setLibErr] = React.useState("");
+  const [libFlat, setLibFlat] = React.useState([]); // [{kind, description, unit, price, sn, k}]
+
+  React.useEffect(() => {
+    if (!accessToken) return;
+
+    let alive = true;
+    (async () => {
+      setLibErr("");
+      setLibLoading(true);
+      try {
+        const res = await apiAuthed(
+          `${ADMIN_RATEGEN_V2_BASE}/master?zone=south_west`,
+          {
+            token: accessToken,
+          }
+        );
+
+        const mats = Array.isArray(res?.materials) ? res.materials : [];
+        const labs = Array.isArray(res?.labour) ? res.labour : [];
+
+        const flat = [
+          ...mats.map((x) => ({
+            kind: "material",
+            description: x.description || "",
+            unit: x.unit || "",
+            price: toNum(x.price, 0),
+            sn: x.sn ?? null,
+            k: normKey(x.description || ""),
+          })),
+          ...labs.map((x) => ({
+            kind: "labour",
+            description: x.description || "",
+            unit: x.unit || "",
+            price: toNum(x.price, 0),
+            sn: x.sn ?? null,
+            k: normKey(x.description || ""),
+          })),
+        ].filter((x) => x.description);
+
+        // sort for nicer suggestion order
+        flat.sort((a, b) => a.description.localeCompare(b.description));
+
+        if (alive) setLibFlat(flat);
+      } catch (e) {
+        if (alive) setLibErr(e?.message || "Failed to load master library");
+      } finally {
+        if (alive) setLibLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [accessToken]);
+
+  function getSuggestions(query) {
+    const q = normKey(query);
+    if (!q || q.length < 2) return [];
+    // fast contains match
+    const hits = libFlat.filter((x) => x.k.includes(q));
+    return hits.slice(0, 10);
+  }
+
+  const [openSuggestFor, setOpenSuggestFor] = React.useState(null);
+
+  function applySuggestion(i, item) {
+    setLines((prev) =>
+      prev.map((x, idx) => {
+        if (idx !== i) return x;
+        return {
+          ...x,
+          componentName: item.description,
+          unit: item.unit || "",
+          unitPrice: String(item.price ?? ""),
+          refKind: item.kind,
+          refSn: item.sn ?? null,
+          refName: item.description,
+        };
+      })
+    );
+    setOpenSuggestFor(null);
+  }
+
+  // =========================
+  // existing rates
+  // =========================
   async function loadExistingRates(sk) {
     if (!sk || !accessToken) return;
     setLoadingExisting(true);
@@ -227,7 +323,15 @@ export default function AdminAddRate() {
   function addLine() {
     setLines((prev) => [
       ...prev,
-      { componentName: "", quantity: "", unit: "", unitPrice: "" },
+      {
+        componentName: "",
+        quantity: "",
+        unit: "",
+        unitPrice: "",
+        refKind: null,
+        refSn: null,
+        refName: null,
+      },
     ]);
   }
 
@@ -243,7 +347,17 @@ export default function AdminAddRate() {
     setManualNetCost("");
     setOverheadPercent("10");
     setProfitPercent("25");
-    setLines([{ componentName: "", quantity: "", unit: "", unitPrice: "" }]);
+    setLines([
+      {
+        componentName: "",
+        quantity: "",
+        unit: "",
+        unitPrice: "",
+        refKind: null,
+        refSn: null,
+        refName: null,
+      },
+    ]);
   }
 
   function startEdit(r) {
@@ -269,11 +383,24 @@ export default function AdminAddRate() {
           quantity: l.quantity != null ? String(l.quantity) : "",
           unit: l.unit || "",
           unitPrice: l.unitPrice != null ? String(l.unitPrice) : "",
+          refKind: l.refKind ?? null,
+          refSn: l.refSn ?? null,
+          refName: l.refName ?? null,
         }))
       );
     } else {
       setManualNetCost(r?.netCost != null ? String(r.netCost) : "");
-      setLines([{ componentName: "", quantity: "", unit: "", unitPrice: "" }]);
+      setLines([
+        {
+          componentName: "",
+          quantity: "",
+          unit: "",
+          unitPrice: "",
+          refKind: null,
+          refSn: null,
+          refName: null,
+        },
+      ]);
     }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -290,7 +417,6 @@ export default function AdminAddRate() {
     if (!(calc.netCost > 0))
       return setMsg("❌ Net cost must be > 0 (use breakdown or manual net).");
 
-    // If any formula is invalid, block save (so you don’t store wrong values)
     const bad = calc.errorsByIndex.find((x) => x);
     if (bad)
       return setMsg(
@@ -302,7 +428,12 @@ export default function AdminAddRate() {
         componentName: String(l.componentName || "").trim(),
         quantity: toNum(l.quantity, 0),
         unit: String(l.unit || "").trim(),
-        unitPrice: toNum(calc.unitPrices[i], 0), // ✅ evaluated value
+        unitPrice: toNum(calc.unitPrices[i], 0),
+
+        // ✅ link meta (optional)
+        refKind: l.refKind || null,
+        refSn: l.refSn != null ? Number(l.refSn) : null,
+        refName: l.refName || null,
       }))
       .filter((l) => l.componentName && (l.quantity > 0 || l.unitPrice > 0));
 
@@ -336,7 +467,6 @@ export default function AdminAddRate() {
           const updated = res?.item;
           if (!updated) return prev;
           const next = prev.map((x) => (x._id === updated._id ? updated : x));
-          // move updated to top
           return [updated, ...next.filter((x) => x._id !== updated._id)];
         });
         resetForm();
@@ -388,14 +518,17 @@ export default function AdminAddRate() {
               Admin · Build Rate Library
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              Select a section of work, build the rate (breakdown or manual
-              net), set Profit/Overhead, and save.
+              Component Name links to Material/Labour master library (South West
+              default).
             </p>
-            <p className="text-xs text-slate-500 mt-2">
-              Unit Price formula examples:{" "}
-              <span className="font-mono">=3%*Labour Cost</span>,{" "}
-              <span className="font-mono">=10%*(Net Cost)</span>
-            </p>
+
+            <div className="text-xs text-slate-500 mt-2">
+              {libLoading
+                ? "Loading master library..."
+                : libErr
+                ? `⚠️ ${libErr}`
+                : `✅ Master library loaded: ${libFlat.length} items`}
+            </div>
           </div>
 
           {editingId && (
@@ -478,14 +611,12 @@ export default function AdminAddRate() {
         <div className="border rounded-lg p-3 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <div className="font-semibold">Breakdown builder (optional)</div>
-              <div className="text-xs text-slate-600">
-                If breakdown totals &gt; 0, Net Cost is computed from breakdown
-                automatically.
+              <div className="font-semibold">
+                Breakdown builder (linked to master library)
               </div>
-              <div className="text-xs text-slate-500 mt-1">
-                Unit Price can be number or formula starting with <b>=</b> (e.g.{" "}
-                <span className="font-mono">=3%*Labour Cost</span>)
+              <div className="text-xs text-slate-600">
+                Type Component Name → pick match → Name/Unit/UnitPrice
+                auto-fills (you only enter Qty).
               </div>
             </div>
             <button
@@ -504,23 +635,78 @@ export default function AdminAddRate() {
               const unitPriceCalc = toNum(calc.unitPrices[i], 0);
               const err = calc.errorsByIndex[i];
 
+              const suggestions =
+                openSuggestFor === i ? getSuggestions(l.componentName) : [];
+              const linkedTag =
+                l.refKind === "material"
+                  ? "Material"
+                  : l.refKind === "labour"
+                  ? "Labour"
+                  : null;
+
               return (
                 <div
                   key={i}
                   className="grid md:grid-cols-12 gap-2 items-center"
                 >
-                  <div className="md:col-span-5">
-                    <input
-                      className="input"
-                      value={l.componentName}
-                      onChange={(e) =>
-                        updateLine(i, { componentName: e.target.value })
-                      }
-                      placeholder="Component name (e.g. Labour Cost)"
-                      disabled={saving}
-                    />
+                  {/* Component name + suggestions */}
+                  <div className="md:col-span-5 relative">
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="input w-full"
+                        value={l.componentName}
+                        onChange={(e) => {
+                          updateLine(i, {
+                            componentName: e.target.value,
+                            refKind: null,
+                            refSn: null,
+                            refName: null,
+                          });
+                          setOpenSuggestFor(i);
+                        }}
+                        onFocus={() => setOpenSuggestFor(i)}
+                        onBlur={() =>
+                          setTimeout(
+                            () =>
+                              setOpenSuggestFor((x) => (x === i ? null : x)),
+                            120
+                          )
+                        }
+                        placeholder="Component name (search materials/labour...)"
+                        disabled={saving}
+                      />
+                      {linkedTag && (
+                        <span className="text-[11px] px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 whitespace-nowrap">
+                          Linked: {linkedTag}
+                        </span>
+                      )}
+                    </div>
+
+                    {openSuggestFor === i && suggestions.length > 0 && (
+                      <div className="absolute z-20 mt-1 w-full rounded-md border bg-white shadow-lg max-h-64 overflow-auto">
+                        {suggestions.map((sug, idx) => (
+                          <div
+                            key={`${sug.kind}-${sug.sn}-${idx}`}
+                            className="px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              applySuggestion(i, sug);
+                            }}
+                          >
+                            <div className="text-sm font-medium">
+                              {sug.description}
+                            </div>
+                            <div className="text-xs text-slate-600">
+                              {sug.kind.toUpperCase()} · {sug.unit || "-"} ·{" "}
+                              {toNum(sug.price).toFixed(2)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
+                  {/* Qty */}
                   <div className="md:col-span-2">
                     <input
                       className="input"
@@ -534,6 +720,7 @@ export default function AdminAddRate() {
                     />
                   </div>
 
+                  {/* Unit (auto-filled) */}
                   <div className="md:col-span-2">
                     <input
                       className="input"
@@ -544,6 +731,7 @@ export default function AdminAddRate() {
                     />
                   </div>
 
+                  {/* Unit price (auto-filled, still editable / can be formula) */}
                   <div className="md:col-span-2">
                     <input
                       className={`input ${err ? "border-red-400" : ""}`}
@@ -553,7 +741,6 @@ export default function AdminAddRate() {
                       }
                       placeholder="Unit price (or =formula)"
                       disabled={saving}
-                      // ✅ must be text to allow formulas
                       inputMode="text"
                     />
                     <div className="text-[11px] text-slate-500 mt-1">
@@ -564,6 +751,7 @@ export default function AdminAddRate() {
                     </div>
                   </div>
 
+                  {/* Total + remove */}
                   <div className="md:col-span-1 flex items-center justify-between gap-2">
                     <span className="text-xs text-slate-600">
                       {lineTotal.toFixed(2)}
