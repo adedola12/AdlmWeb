@@ -32,6 +32,15 @@ function Table({ rows }) {
   );
 }
 
+/** localStorage key matches your updates page */
+const LAST_SEEN_KEY = "rategen_updates_last_seen_at";
+
+function getLastSeenMs() {
+  const raw = localStorage.getItem(LAST_SEEN_KEY);
+  const ms = raw ? Number(raw) : 0;
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 export default function RateGenLibrary() {
   const { accessToken } = useAuth();
   const [tab, setTab] = React.useState("materials");
@@ -39,11 +48,46 @@ export default function RateGenLibrary() {
   const [mine, setMine] = React.useState(null); // { materials, labour, version }
   const [err, setErr] = React.useState("");
   const [zone, setZone] = React.useState("");
-
   const navigate = useNavigate();
 
   // NEW: search text
   const [search, setSearch] = React.useState("");
+
+  // ✅ Updates count
+  const [updatesCount, setUpdatesCount] = React.useState(0);
+  const [updatesLoading, setUpdatesLoading] = React.useState(false);
+
+  async function loadUpdatesCount() {
+    if (!accessToken) return;
+
+    setUpdatesLoading(true);
+    try {
+      // pulls latest rates; we only need count of "new since last seen"
+      const res = await apiAuthed(
+        "/rategen-v2/library/rates/updates?limit=200",
+        {
+          token: accessToken,
+        }
+      );
+
+      const items = Array.isArray(res?.items) ? res.items : [];
+      const lastSeenMs = getLastSeenMs();
+
+      // count new items since last seen (use updatedAt or createdAt)
+      const n = items.filter((x) => {
+        const ts = x?.updatedAt || x?.createdAt || null;
+        const ms = ts ? new Date(ts).getTime() : 0;
+        return ms > lastSeenMs;
+      }).length;
+
+      setUpdatesCount(n);
+    } catch {
+      // don't block the page if updates endpoint fails
+      setUpdatesCount(0);
+    } finally {
+      setUpdatesLoading(false);
+    }
+  }
 
   async function load() {
     if (!accessToken) {
@@ -66,6 +110,19 @@ export default function RateGenLibrary() {
 
   React.useEffect(() => {
     load(); // eslint-disable-next-line
+  }, [accessToken]);
+
+  // ✅ load updates count on mount + when token changes
+  React.useEffect(() => {
+    loadUpdatesCount(); // eslint-disable-next-line
+  }, [accessToken]);
+
+  // optional: refresh count every 45s (lightweight)
+  React.useEffect(() => {
+    if (!accessToken) return;
+    const t = setInterval(() => loadUpdatesCount(), 45000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line
   }, [accessToken]);
 
   const tabs = [
@@ -108,10 +165,12 @@ export default function RateGenLibrary() {
       })
     : allRows;
 
+  const hasNew = updatesCount > 0;
+
   return (
     <div className="space-y-4">
       <div className="card">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h1 className="font-semibold">RateGen Library</h1>
             {zone && (
@@ -121,15 +180,63 @@ export default function RateGenLibrary() {
               </div>
             )}
           </div>
-          <button className="btn btn-sm" onClick={load}>
-            Refresh
-          </button>
-          <button
-            className="btn btn-sm"
-            onClick={() => navigate("/rategen/updates")}
-          >
-            Updates
-          </button>
+
+          {/* ✅ Mobile-friendly action row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                load();
+                loadUpdatesCount();
+              }}
+            >
+              Refresh
+            </button>
+
+            {/* ✅ Improved Updates button */}
+            <button
+              onClick={() => navigate("/rategen/updates")}
+              className={[
+                "relative inline-flex items-center gap-2",
+                "rounded-full px-3 py-2 text-sm font-medium",
+                "border shadow-sm transition",
+                "active:scale-[0.99]",
+                hasNew
+                  ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                "focus:outline-none focus:ring-2 focus:ring-blue-500/40",
+              ].join(" ")}
+              aria-label="Open RateGen updates"
+            >
+              <span className="inline-flex items-center gap-2">
+                {/* tiny dot when new */}
+                <span
+                  className={[
+                    "h-2 w-2 rounded-full",
+                    hasNew ? "bg-blue-600" : "bg-slate-300",
+                  ].join(" ")}
+                />
+                <span>Updates</span>
+              </span>
+
+              {/* badge */}
+              <span
+                className={[
+                  "min-w-[28px] h-6 px-2",
+                  "inline-flex items-center justify-center",
+                  "rounded-full text-xs font-semibold",
+                  hasNew
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-100 text-slate-700",
+                ].join(" ")}
+                title={
+                  hasNew ? `${updatesCount} new update(s)` : "No new updates"
+                }
+              >
+                {updatesLoading ? "…" : updatesCount}
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="mt-3 border-b">
