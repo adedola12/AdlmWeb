@@ -195,10 +195,10 @@ export default function AdminRateGen() {
           <colgroup>
             <col style={{ width: `${SN_WIDTH}px` }} />
             <col style={{ width: `${nameWidth}px` }} />
-            <col /> {/* Unit */}
-            <col /> {/* Category */}
-            {zones.map((_z, i) => (
-              <col key={i} style={{ minWidth: 110 }} />
+            <col />
+            <col />
+            {zones.map((z) => (
+              <col key={z.key} style={{ minWidth: 110 }} />
             ))}
           </colgroup>
 

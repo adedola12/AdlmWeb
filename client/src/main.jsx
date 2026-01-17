@@ -42,6 +42,7 @@ import AdminCoupons from "./pages/AdminCoupons.jsx";
 import Support from "./pages/Support.jsx";
 import AdminAddRate from "./pages/AdminAddRate.jsx";
 import RateGenUpdates from "./pages/RateGenUpdates.jsx";
+import AdminRateGenMaster from "./pages/AdminRateGenMaster";
 
 
 
@@ -96,6 +97,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <AdminAddRate />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "/admin/rategen-master",
+        element: (
+          <AdminRoute>
+            <AdminRateGenMaster />
           </AdminRoute>
         ),
       },

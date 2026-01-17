@@ -45,7 +45,6 @@ import adminRateGenRates from "./routes/admin.rategen.rates.js"; // admin rate l
 import adminRateGenCompute from "./routes/admin.rategen.compute.js"; // admin compute items (admin-key)
 import adminRateGenMaster from "./routes/admin.rategen.master.js";
 
-
 const app = express();
 
 app.get("/__debug/db", (_req, res) => {
@@ -184,10 +183,8 @@ app.use("/admin/rategen-v2", adminRateGenMaster);
 // ✅ move library router under /library so it doesn't intercept /rates
 app.use("/admin/rategen-v2/library", adminRateGenLibrary); // /admin/rategen-v2/library/...
 
-
 /* -------- ADMIN COMPUTE (admin-key) -------- */
 app.use("/admin/rategen-compute", adminRateGenCompute); // stays admin-key protected
-
 
 /* -------- LEGACY ALIASES (optional) --------
    Keep ONLY while old Windows builds still point here.
