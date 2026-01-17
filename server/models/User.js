@@ -39,7 +39,13 @@ const UserSchema = new mongoose.Schema(
       default: null,
     },
     passwordHash: String,
-    role: { type: String, enum: ["user", "admin"], default: "user" },
+
+    role: {
+      type: String,
+      enum: ["user", "mini_admin", "admin"],
+      default: "user",
+    },
+
     disabled: { type: Boolean, default: false },
     entitlements: [EntitlementSchema],
     refreshVersion: { type: Number, default: 1 },

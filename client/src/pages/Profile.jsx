@@ -3,6 +3,7 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { Link } from "react-router-dom";
+import { isAdmin, isStaff } from "../utils/roles.js";
 
 export default function Profile() {
   const { user, setAuth, accessToken } = useAuth();
@@ -218,7 +219,6 @@ export default function Profile() {
           </button>
         </form>
       </div>
-
       <div>
         <label className="form-label">Location (Geopolitical Zone)</label>
         <select
@@ -250,33 +250,37 @@ export default function Profile() {
           <a href="/login?reset=1" className="btn">
             Forgot password
           </a>
-          {user?.role === "admin" && (
+
+          {/* ✅ Full admin only */}
+          {isAdmin(user) && (
+            <a href="/admin" className="btn">
+              Admin dashboard
+            </a>
+          )}
+
+          {/* ✅ Staff (admin + mini_admin) — only allowed tools */}
+          {isStaff(user) && (
             <>
-              <a href="/admin" className="btn">
-                Admin dashboard
-              </a>
-              {/* ✅ NEW: Admin Trainings/Events */}
               <Link to="/admin/trainings" className="btn">
                 Add / manage trainings & events
               </Link>
-              {/* ✅ NEW: Build / Add Rate Library */}
+
               <Link to="/admin/rategen/add-rate" className="btn">
                 Build / Add rates (Rate Library)
               </Link>
+
               <a href="/admin/learn" className="btn">
                 Video upload / courses
               </a>
+
               <a href="/admin/rategen" className="btn">
                 Update material & labour prices
               </a>
+
               <a href="/admin/courses" className="btn">
                 Admin · Courses
               </a>
-              <a href="/admin/course-grading" className="btn">
-                Course grading
-              </a>
 
-              {/* NEW: Admin add/view testimonials button */}
               <a href="/admin/showcase" className="btn">
                 Add / manage testimonials
               </a>
