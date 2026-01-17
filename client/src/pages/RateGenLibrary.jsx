@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
@@ -38,6 +39,8 @@ export default function RateGenLibrary() {
   const [mine, setMine] = React.useState(null); // { materials, labour, version }
   const [err, setErr] = React.useState("");
   const [zone, setZone] = React.useState("");
+
+  const navigate = useNavigate();
 
   // NEW: search text
   const [search, setSearch] = React.useState("");
@@ -120,6 +123,12 @@ export default function RateGenLibrary() {
           </div>
           <button className="btn btn-sm" onClick={load}>
             Refresh
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={() => navigate("/rategen/updates")}
+          >
+            Updates
           </button>
         </div>
 

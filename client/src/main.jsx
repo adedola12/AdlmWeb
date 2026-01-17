@@ -41,6 +41,8 @@ import TrainingDetail from "./pages/TrainingDetail.jsx";
 import AdminCoupons from "./pages/AdminCoupons.jsx";
 import Support from "./pages/Support.jsx";
 import AdminAddRate from "./pages/AdminAddRate.jsx";
+import RateGenUpdates from "./pages/RateGenUpdates.jsx";
+
 
 
 const router = createBrowserRouter([
@@ -157,6 +159,15 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      {
+        path: "rategen/updates",
+        element: (
+          <ProtectedRoute>
+            <RateGenUpdates />
+          </ProtectedRoute>
+        ),
+      },
+
       {
         path: "admin/showcase",
         element: (

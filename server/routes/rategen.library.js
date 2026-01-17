@@ -108,6 +108,9 @@ function toRateDefinition(r) {
     overheadValue: r.overheadValue ?? 0,
     profitValue: r.profitValue ?? 0,
     totalCost: r.totalCost ?? 0,
+
+    // ✅ add these (safe for existing clients)
+    createdAt: r.createdAt,
     updatedAt: r.updatedAt,
 
     breakdown: Array.isArray(r.breakdown)
@@ -120,7 +123,6 @@ function toRateDefinition(r) {
             l.lineTotal ??
             l.totalPrice ??
             (l.quantity ?? 0) * (l.unitPrice ?? 0),
-
           refKind: l.refKind ?? null,
           refSn: l.refSn ?? null,
           refName: l.refName ?? null,
@@ -128,6 +130,7 @@ function toRateDefinition(r) {
       : [],
   };
 }
+
 
 /**
  * GET /library/meta
@@ -305,5 +308,45 @@ router.get("/library/rates/sync", async (req, res, next) => {
     next(err);
   }
 });
+
+/**
+ * ✅ NEW: GET /library/rates/updates
+ * Latest-first endpoint for notification feed.
+ * Query:
+ *  - limit=60 (optional)
+ *  - sectionKey=ground (optional)
+ *  - since=ISO_DATE (optional) => return only items updated after this time
+ */
+router.get("/library/rates/updates", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const limit = clampInt(req.query.limit, 1, MAX_LIMIT, 60);
+
+    const sectionKey = normalizeSectionKey(req.query.sectionKey);
+    const sinceRaw = req.query.since ? String(req.query.since) : "";
+    const since = sinceRaw ? new Date(sinceRaw) : null;
+
+    const q = {};
+    if (sectionKey) q.sectionKey = sectionKey;
+
+    if (since && !Number.isNaN(since.getTime())) {
+      q.updatedAt = { $gt: since };
+    }
+
+    const docs = await RateGenRate.find(q)
+      .sort({ updatedAt: -1, _id: -1 })   // ✅ latest first
+      .limit(limit)
+      .lean();
+
+    res.json({
+      ok: true,
+      items: docs.map(toRateDefinition),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 export default router;
