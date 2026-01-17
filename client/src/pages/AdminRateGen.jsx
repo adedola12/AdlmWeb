@@ -1,6 +1,8 @@
 import React from "react";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
+import { useNavigate } from "react-router-dom";
+
 
 const KIND = { materials: "material", labour: "labour" };
 const PAGE_SIZE = 30;
@@ -15,6 +17,8 @@ export default function AdminRateGen() {
   const [msg, setMsg] = React.useState("");
 
   const [page, setPage] = React.useState(1);
+  const navigate = useNavigate();
+
 
   // sticky widths
   const SN_WIDTH = 56;
@@ -175,6 +179,20 @@ export default function AdminRateGen() {
             >
               Search
             </button>
+
+            <button
+              className="btn flex-1 xs:flex-none"
+              onClick={() =>
+                navigate(`/admin/rategen-master?kind=${KIND[tab]}&add=1`)
+              }
+              disabled={busy}
+              title={`Add a new ${
+                tab === "materials" ? "material" : "labour"
+              } to master library`}
+            >
+              + Add {tab === "materials" ? "Material" : "Labour"}
+            </button>
+
             <button
               className="btn flex-1 xs:flex-none"
               onClick={saveAll}

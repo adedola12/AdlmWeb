@@ -1,51 +1,44 @@
+// src/pages/AdminRateGenMaster.jsx
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
-type Zone = { key: string; label: string };
-
-type GridRow = {
-  sn?: number;
-  name: string;
-  unit: string;
-  category: string;
-  prices: Record<string, number>;
-  source?: string; // optional (from server)
-  _dirty?: boolean; // local only
-};
-
-type GridResponse = {
-  rows: GridRow[];
-  zones: Zone[];
-  kind: "material" | "labour";
-};
-
-function norm(s: any) {
-  return String(s ?? "").trim();
+function norm(v) {
+  return String(v ?? "").trim();
 }
 
-function money(n: any) {
-  const x = Number(n || 0);
+function money(v) {
+  const x = Number(v ?? 0);
   return Number.isFinite(x) ? x : 0;
 }
 
 export default function AdminRateGenMaster() {
   const { accessToken } = useAuth();
+  const navigate = useNavigate();
+  const [sp] = useSearchParams();
 
-  const [kind, setKind] = React.useState<"material" | "labour">("material");
-  const [zones, setZones] = React.useState<Zone[]>([]);
-  const [rows, setRows] = React.useState<GridRow[]>([]);
+  // ✅ read query params INSIDE component
+  const qpKindRaw = (sp.get("kind") || "material").toLowerCase();
+  const qpKind = qpKindRaw === "labour" ? "labour" : "material";
+  const qpAdd = sp.get("add") === "1";
+
+  // ✅ initialize kind from URL once
+  const [kind, setKind] = React.useState(qpKind);
+
+  const [zones, setZones] = React.useState([]);
+  const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [err, setErr] = React.useState("");
   const [notice, setNotice] = React.useState("");
 
   const [search, setSearch] = React.useState("");
-  const [activeZone, setActiveZone] = React.useState<string>("");
+  const [activeZone, setActiveZone] = React.useState("");
   const [showAllZones, setShowAllZones] = React.useState(false);
 
-  // NEW: show all vs web-added items
-  const [sourceFilter, setSourceFilter] = React.useState<"" | "web">("");
+  // optional: UI-only filter (won't work unless server returns/stores "source")
+  const [sourceFilter, setSourceFilter] = React.useState(""); // "" | "web"
 
   // Add modal
   const [openAdd, setOpenAdd] = React.useState(false);
@@ -53,27 +46,37 @@ export default function AdminRateGenMaster() {
   const [newUnit, setNewUnit] = React.useState("");
   const [newCategory, setNewCategory] = React.useState("");
 
-  // NEW: single price mode vs per-zone
   const [singlePriceMode, setSinglePriceMode] = React.useState(true);
-  const [newPrice, setNewPrice] = React.useState<number>(0);
-  const [newPricesByZone, setNewPricesByZone] = React.useState<
-    Record<string, number>
-  >({});
+  const [newPrice, setNewPrice] = React.useState(0);
+  const [newPricesByZone, setNewPricesByZone] = React.useState({});
 
   const dirtyCount = React.useMemo(
-    () => rows.filter((r) => r._dirty).length,
+    () => rows.filter((r) => r && r._dirty).length,
     [rows]
   );
+
+  function setKindAndUrl(k) {
+    const next = k === "labour" ? "labour" : "material";
+    setKind(next);
+    // keep URL in sync (also clears any ?add=1)
+    navigate(`/admin/rategen-master?kind=${next}`, { replace: true });
+  }
 
   async function loadZonesOnly() {
     if (!accessToken) return;
     const z = await apiAuthed("/admin/rategen/zones", { token: accessToken });
     const arr = Array.isArray(z) ? z : z?.zones || [];
-    setZones(arr);
-    if (!activeZone && arr?.[0]?.key) setActiveZone(arr[0].key);
 
-    // initialize per-zone add inputs
-    const init: Record<string, number> = {};
+    setZones(arr);
+
+    // ensure activeZone is valid
+    setActiveZone((prev) => {
+      if (prev && arr.some((x) => x.key === prev)) return prev;
+      return arr?.[0]?.key || "";
+    });
+
+    // init per-zone add map
+    const init = {};
     for (const zz of arr) init[zz.key] = 0;
     setNewPricesByZone(init);
   }
@@ -83,6 +86,7 @@ export default function AdminRateGenMaster() {
       setErr("You’re signed out. Please sign in again.");
       return;
     }
+
     setErr("");
     setNotice("");
     setLoading(true);
@@ -91,95 +95,71 @@ export default function AdminRateGenMaster() {
       const qs = new URLSearchParams();
       qs.set("kind", kind);
       if (search.trim()) qs.set("search", search.trim());
-      if (sourceFilter) qs.set("source", sourceFilter);
+      if (sourceFilter) qs.set("source", sourceFilter); // harmless if server ignores
 
-      const res: GridResponse = await apiAuthed(
-        `/admin/rategen/grid?${qs.toString()}`,
-        { token: accessToken }
-      );
+      const res = await apiAuthed(`/admin/rategen/grid?${qs.toString()}`, {
+        token: accessToken,
+      });
 
-      setZones(res.zones || []);
-      if (!activeZone && res.zones?.[0]?.key) setActiveZone(res.zones[0].key);
+      const z = Array.isArray(res?.zones) ? res.zones : [];
+      const r = Array.isArray(res?.rows) ? res.rows : [];
 
-      const zoneKeys = (res.zones || []).map((z) => z.key);
+      setZones(z);
 
-      const fixed = (res.rows || []).map((r) => {
-        const prices: Record<string, number> = { ...(r.prices || {}) };
-        for (const z of zoneKeys) if (!(z in prices)) prices[z] = 0;
+      setActiveZone((prev) => {
+        if (prev && z.some((x) => x.key === prev)) return prev;
+        return z?.[0]?.key || "";
+      });
+
+      const zoneKeys = z.map((x) => x.key);
+
+      const fixed = r.map((row) => {
+        const prices = { ...(row?.prices || {}) };
+        for (const zk of zoneKeys) {
+          if (!(zk in prices)) prices[zk] = 0;
+        }
         return {
-          ...r,
-          name: norm(r.name),
-          unit: norm(r.unit),
-          category: norm(r.category),
+          ...row,
+          name: norm(row?.name),
+          unit: norm(row?.unit),
+          category: norm(row?.category),
           prices,
           _dirty: false,
         };
       });
 
       setRows(fixed);
-    } catch (e: any) {
+    } catch (e) {
       setErr(e?.message || "Failed to load master grid");
     } finally {
       setLoading(false);
     }
   }
 
+  // ✅ load zones once
   React.useEffect(() => {
-    loadZonesOnly();
+    loadZonesOnly().catch(() => {});
     // eslint-disable-next-line
   }, [accessToken]);
 
+  // ✅ if URL kind changes, sync state
   React.useEffect(() => {
-    loadGrid();
+    if (qpKind !== kind) setKind(qpKind);
+    // eslint-disable-next-line
+  }, [qpKind]);
+
+  // ✅ load grid when kind/filter changes
+  React.useEffect(() => {
+    loadGrid().catch(() => {});
     // eslint-disable-next-line
   }, [kind, sourceFilter]);
 
-  // light debounce on search
+  // ✅ debounce search
   React.useEffect(() => {
-    const t = setTimeout(() => loadGrid(), 350);
+    const t = setTimeout(() => loadGrid().catch(() => {}), 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line
   }, [search]);
-
-  function updateField(
-    idx: number,
-    key: "name" | "unit" | "category",
-    value: string
-  ) {
-    setRows((prev) => {
-      const next = [...prev];
-      const row = { ...next[idx] };
-      row[key] = value;
-      row._dirty = true;
-      next[idx] = row;
-      return next;
-    });
-  }
-
-  function updatePrice(idx: number, zoneKey: string, value: number) {
-    setRows((prev) => {
-      const next = [...prev];
-      const row = { ...next[idx] };
-      row.prices = { ...(row.prices || {}), [zoneKey]: money(value) };
-      row._dirty = true;
-      next[idx] = row;
-      return next;
-    });
-  }
-
-  function copyZoneToAll(idx: number, zoneKey: string) {
-    setRows((prev) => {
-      const next = [...prev];
-      const row = { ...next[idx] };
-      const v = money(row.prices?.[zoneKey] ?? 0);
-      const p = { ...(row.prices || {}) };
-      for (const z of zones) p[z.key] = v;
-      row.prices = p;
-      row._dirty = true;
-      next[idx] = row;
-      return next;
-    });
-  }
 
   function openAddModal() {
     setNewName("");
@@ -189,49 +169,97 @@ export default function AdminRateGenMaster() {
     setSinglePriceMode(true);
     setNewPrice(0);
 
-    const init: Record<string, number> = {};
+    const init = {};
     for (const z of zones) init[z.key] = 0;
     setNewPricesByZone(init);
 
     setOpenAdd(true);
   }
 
-  // keep per-zone map in sync when in single mode
+  // ✅ auto-open modal if ?add=1 (after zones available)
+  React.useEffect(() => {
+    if (!qpAdd) return;
+    if (!zones.length) return;
+
+    // ensure kind matches URL
+    if (kind !== qpKind) setKind(qpKind);
+
+    openAddModal();
+
+    // clear add=1 so refresh doesn't reopen
+    navigate(`/admin/rategen-master?kind=${qpKind}`, { replace: true });
+    // eslint-disable-next-line
+  }, [qpAdd, zones.length]);
+
+  // keep per-zone prices synced in single mode
   React.useEffect(() => {
     if (!singlePriceMode) return;
     setNewPricesByZone((prev) => {
-      const next = { ...prev };
+      const next = { ...(prev || {}) };
       for (const z of zones) next[z.key] = money(newPrice);
       return next;
     });
     // eslint-disable-next-line
   }, [newPrice, singlePriceMode, zones.length]);
 
+  function updateField(idx, key, value) {
+    setRows((prev) => {
+      const next = [...prev];
+      const row = { ...(next[idx] || {}) };
+      row[key] = value;
+      row._dirty = true;
+      next[idx] = row;
+      return next;
+    });
+  }
+
+  function updatePrice(idx, zoneKey, value) {
+    setRows((prev) => {
+      const next = [...prev];
+      const row = { ...(next[idx] || {}) };
+      row.prices = { ...(row.prices || {}), [zoneKey]: money(value) };
+      row._dirty = true;
+      next[idx] = row;
+      return next;
+    });
+  }
+
+  function copyZoneToAll(idx, zoneKey) {
+    setRows((prev) => {
+      const next = [...prev];
+      const row = { ...(next[idx] || {}) };
+      const v = money(row?.prices?.[zoneKey] ?? 0);
+      const p = { ...(row.prices || {}) };
+      for (const z of zones) p[z.key] = v;
+      row.prices = p;
+      row._dirty = true;
+      next[idx] = row;
+      return next;
+    });
+  }
+
   function addRowLocal() {
     const name = norm(newName);
     if (!name) return;
 
     const exists = rows.some(
-      (r) => norm(r.name).toLowerCase() === name.toLowerCase()
+      (r) => norm(r?.name).toLowerCase() === name.toLowerCase()
     );
     if (exists) {
       alert("That name already exists. Use search to edit it.");
       return;
     }
 
-    const prices: Record<string, number> = {};
+    const prices = {};
     for (const z of zones) prices[z.key] = money(newPricesByZone?.[z.key] ?? 0);
 
-    // if singlePriceMode and activeZone exists, ensure active zone uses newPrice
-    if (singlePriceMode && activeZone) prices[activeZone] = money(newPrice);
-
-    const row: GridRow = {
+    const row = {
       name,
       unit: norm(newUnit),
       category: norm(newCategory),
       prices,
       _dirty: true,
-      source: "web",
+      source: "web", // UI-only unless server stores it
     };
 
     setRows((prev) => [row, ...prev]);
@@ -240,34 +268,37 @@ export default function AdminRateGenMaster() {
 
   async function saveAll() {
     if (!accessToken) return;
+
     setErr("");
     setNotice("");
     setSaving(true);
 
     try {
       const payloadRows = rows.map((r) => ({
-        name: norm(r.name),
-        unit: norm(r.unit),
-        category: norm(r.category),
-        prices: r.prices || {},
+        name: norm(r?.name),
+        unit: norm(r?.unit),
+        category: norm(r?.category),
+        prices: r?.prices || {},
+        // source: r?.source, // only include if your backend stores it
       }));
 
       await apiAuthed("/admin/rategen/grid", {
         token: accessToken,
         method: "PUT",
-        body: { kind, rows: payloadRows },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, rows: payloadRows }),
       });
 
       setRows((prev) => prev.map((r) => ({ ...r, _dirty: false })));
       setNotice("✅ Saved to Mongo successfully.");
-    } catch (e: any) {
+    } catch (e) {
       setErr(e?.message || "Save failed");
     } finally {
       setSaving(false);
     }
   }
 
-  async function deleteRow(name: string) {
+  async function deleteRow(name) {
     if (!accessToken) return;
 
     const ok = window.confirm(
@@ -277,21 +308,24 @@ export default function AdminRateGenMaster() {
 
     setErr("");
     setNotice("");
+
     try {
+      // NOTE: this requires you to implement DELETE on /admin/rategen/grid in backend
       const res = await apiAuthed("/admin/rategen/grid", {
         token: accessToken,
         method: "DELETE",
-        body: { kind, name }, // deletes across zones
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, name }),
       });
 
       setRows((prev) =>
         prev.filter(
-          (r) => norm(r.name).toLowerCase() !== norm(name).toLowerCase()
+          (r) => norm(r?.name).toLowerCase() !== norm(name).toLowerCase()
         )
       );
       setNotice(`🗑️ Deleted (${res?.deleted ?? 0} docs).`);
-    } catch (e: any) {
-      setErr(e?.message || "Delete failed");
+    } catch (e) {
+      setErr(e?.message || "Delete failed (is DELETE route implemented?)");
     }
   }
 
@@ -323,7 +357,8 @@ export default function AdminRateGenMaster() {
                     ? "bg-blue-600 text-white"
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
-                onClick={() => setKind("material")}
+                onClick={() => setKindAndUrl("material")}
+                type="button"
               >
                 Materials
               </button>
@@ -334,13 +369,13 @@ export default function AdminRateGenMaster() {
                     ? "bg-blue-600 text-white"
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
-                onClick={() => setKind("labour")}
+                onClick={() => setKindAndUrl("labour")}
+                type="button"
               >
                 Labour
               </button>
             </div>
 
-            {/* NEW: All vs Web-added */}
             <div className="inline-flex rounded-full border border-slate-200 bg-white p-1">
               <button
                 className={[
@@ -350,6 +385,7 @@ export default function AdminRateGenMaster() {
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
                 onClick={() => setSourceFilter("")}
+                type="button"
               >
                 All
               </button>
@@ -361,7 +397,8 @@ export default function AdminRateGenMaster() {
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
                 onClick={() => setSourceFilter("web")}
-                title="Show items created from this web admin screen"
+                title="Show items created from this web admin screen (requires backend support)"
+                type="button"
               >
                 Web-added
               </button>
@@ -371,11 +408,12 @@ export default function AdminRateGenMaster() {
               className="btn btn-sm"
               onClick={loadGrid}
               disabled={loading}
+              type="button"
             >
               {loading ? "Loading…" : "Refresh"}
             </button>
 
-            <button className="btn btn-sm" onClick={openAddModal}>
+            <button className="btn btn-sm" onClick={openAddModal} type="button">
               + Add {kind === "material" ? "Material" : "Labour"}
             </button>
 
@@ -392,6 +430,7 @@ export default function AdminRateGenMaster() {
               title={
                 dirtyCount ? `${dirtyCount} pending change(s)` : "No changes"
               }
+              type="button"
             >
               <span>Save</span>
               <span
@@ -481,13 +520,6 @@ export default function AdminRateGenMaster() {
                         r._dirty ? "border-emerald-300" : "border-slate-300",
                       ].join(" ")}
                     />
-                    {r.source === "web" && (
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5">
-                          web-added
-                        </span>
-                      </div>
-                    )}
                   </td>
 
                   <td className="py-2 pr-3">
@@ -535,6 +567,7 @@ export default function AdminRateGenMaster() {
                           className="text-xs text-blue-700 hover:underline"
                           onClick={() => copyZoneToAll(idx, z)}
                           title="Copy this zone price to all zones"
+                          type="button"
                         >
                           Copy→All
                         </button>
@@ -548,6 +581,7 @@ export default function AdminRateGenMaster() {
                         className="text-xs text-red-600 hover:text-red-700"
                         onClick={() => deleteRow(r.name)}
                         title="Delete from DB (all zones)"
+                        type="button"
                       >
                         Delete
                       </button>
@@ -592,13 +626,6 @@ export default function AdminRateGenMaster() {
                 <div className="text-xs text-slate-600 mt-1">
                   Unit: {r.unit || "—"} • Category: {r.category || "—"}
                 </div>
-                {r.source === "web" && (
-                  <div className="mt-2">
-                    <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                      web-added
-                    </span>
-                  </div>
-                )}
               </div>
               {r._dirty && (
                 <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
@@ -654,6 +681,7 @@ export default function AdminRateGenMaster() {
                 <button
                   className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"
                   onClick={() => copyZoneToAll(idx, activeZone)}
+                  type="button"
                 >
                   Copy All
                 </button>
@@ -663,6 +691,7 @@ export default function AdminRateGenMaster() {
                 <button
                   className="text-xs text-red-600"
                   onClick={() => deleteRow(r.name)}
+                  type="button"
                 >
                   Delete
                 </button>
@@ -698,6 +727,7 @@ export default function AdminRateGenMaster() {
               <button
                 className="text-slate-600 hover:text-slate-900"
                 onClick={() => setOpenAdd(false)}
+                type="button"
               >
                 ✕
               </button>
@@ -802,7 +832,7 @@ export default function AdminRateGenMaster() {
                           value={money(newPricesByZone?.[z.key] ?? 0)}
                           onChange={(e) =>
                             setNewPricesByZone((p) => ({
-                              ...p,
+                              ...(p || {}),
                               [z.key]: Number(e.target.value),
                             }))
                           }
@@ -818,6 +848,7 @@ export default function AdminRateGenMaster() {
                 <button
                   className="btn btn-sm"
                   onClick={() => setOpenAdd(false)}
+                  type="button"
                 >
                   Cancel
                 </button>
@@ -825,6 +856,7 @@ export default function AdminRateGenMaster() {
                   className="btn btn-sm"
                   onClick={addRowLocal}
                   disabled={!norm(newName)}
+                  type="button"
                 >
                   Add to list
                 </button>
