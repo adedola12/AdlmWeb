@@ -24,7 +24,8 @@ export default function AdminRateGenMaster() {
   const qpAdd = sp.get("add") === "1";
 
   // ✅ initialize kind from URL once
-  const [kind, setKind] = React.useState(qpKind);
+  // const [kind, setKind] = React.useState(qpKind);
+  const kind = qpKind; // always derived from URL
 
   const [zones, setZones] = React.useState([]);
   const [rows, setRows] = React.useState([]);
@@ -55,10 +56,15 @@ export default function AdminRateGenMaster() {
     [rows]
   );
 
+  // function setKindAndUrl(k) {
+  //   const next = k === "labour" ? "labour" : "material";
+  //   setKind(next);
+  //   // keep URL in sync (also clears any ?add=1)
+  //   navigate(`/admin/rategen-master?kind=${next}`, { replace: true });
+  // }
+
   function setKindAndUrl(k) {
     const next = k === "labour" ? "labour" : "material";
-    setKind(next);
-    // keep URL in sync (also clears any ?add=1)
     navigate(`/admin/rategen-master?kind=${next}`, { replace: true });
   }
 
@@ -201,6 +207,17 @@ export default function AdminRateGenMaster() {
     });
     // eslint-disable-next-line
   }, [newPrice, singlePriceMode, zones.length]);
+
+  React.useEffect(() => {
+    const onPageHide = (e) => {
+      // If the page is going into bfcache, Chrome sets persisted=true
+      if (e.persisted) {
+        // no-op; just having a handler often prevents bfcache for some cases
+      }
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
 
   function updateField(idx, key, value) {
     setRows((prev) => {
