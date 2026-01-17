@@ -42,9 +42,7 @@ import AdminCoupons from "./pages/AdminCoupons.jsx";
 import Support from "./pages/Support.jsx";
 import AdminAddRate from "./pages/AdminAddRate.jsx";
 import RateGenUpdates from "./pages/RateGenUpdates.jsx";
-import AdminRateGenMaster from "./pages/AdminRateGenMaster";
-
-
+import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 
 const router = createBrowserRouter([
   {
