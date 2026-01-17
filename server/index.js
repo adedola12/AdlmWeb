@@ -91,12 +91,9 @@ app.use(
   })
 );
 
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(morgan("dev"));
+app.set("trust proxy", 1);
 
-/* -------- CORS (allow cookies) -------- */
+/* -------- CORS (MUST be BEFORE body parsers) -------- */
 const whitelist = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
@@ -108,7 +105,7 @@ const corsOptions = {
     if (whitelist.includes(origin)) return cb(null, true);
     if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
     if (/\.vercel\.app$/.test(origin)) return cb(null, true);
-    cb(new Error(`Not allowed by CORS: ${origin}`));
+    return cb(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -121,7 +118,69 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+app.options("*", cors(corsOptions));
+
+/* -------- security -------- */
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "https://js.paystack.co",
+          "https://checkout.flutterwave.com",
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        fontSrc: ["'self'", "https:", "data:"],
+        connectSrc: [
+          "'self'",
+          "https://api.paystack.co",
+          "https://api.flutterwave.com",
+          "https://api.cloudinary.com",
+        ],
+        frameSrc: [
+          "https://js.paystack.co",
+          "https://checkout.flutterwave.com",
+        ],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    hsts: process.env.NODE_ENV === "production",
+  })
+);
+
+app.use(cookieParser());
+
+// ✅ increase payload limit (materials is usually bigger)
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+
+app.use(morgan("dev"));
+
+// ✅ show correct errors instead of hiding them behind "500"
+app.use((err, _req, res, next) => {
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({
+      error:
+        "Payload too large. Increase server JSON limit or send only changed rows.",
+    });
+  }
+  if (err?.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "Invalid JSON body." });
+  }
+  if (err && /Not allowed by CORS/.test(err.message)) {
+    return res.status(403).json({ error: err.message });
+  }
+  next(err);
+});
 
 /* -------- root -------- */
 app.get("/", (_req, res) =>
