@@ -248,7 +248,7 @@ router.post("/login", async (req, res) => {
         (e) =>
           String(e.productKey || "")
             .trim()
-            .toLowerCase() === pk
+            .toLowerCase() === pk,
       );
 
       if (!entList.length) {
@@ -515,6 +515,38 @@ router.post("/password/reset", async (req, res) => {
   } catch (err) {
     console.error("[/auth/password/reset] error:", err);
     res.status(500).json({ error: "Reset failed" });
+  }
+});
+
+/* -------------------- APP LOOKUP (FREE APPS) -------------------- */
+/**
+ * For free desktop apps: verify user exists (no password), return basic profile.
+ * This does NOT return tokens.
+ */
+router.post("/app/lookup", async (req, res) => {
+  try {
+    await ensureDb();
+    const { identifier } = req.body || {};
+    if (!identifier)
+      return res.status(400).json({ error: "identifier required" });
+
+    const user = await findByIdentifier(String(identifier).trim());
+    if (!user) return res.json({ exists: false });
+
+    return res.json({
+      exists: true,
+      user: {
+        _id: String(user._id),
+        email: user.email || "",
+        username: user.username || "",
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        avatarUrl: user.avatarUrl || "",
+      },
+    });
+  } catch (err) {
+    console.error("[/auth/app/lookup] error:", err);
+    res.status(500).json({ error: "Lookup failed" });
   }
 });
 
