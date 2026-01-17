@@ -274,13 +274,14 @@ export default function AdminRateGenMaster() {
     setSaving(true);
 
     try {
-      const payloadRows = rows.map((r) => ({
-        name: norm(r?.name),
-        unit: norm(r?.unit),
-        category: norm(r?.category),
-        prices: r?.prices || {},
-        // source: r?.source, // only include if your backend stores it
-      }));
+      const payloadRows = rows
+        .filter((r) => r?._dirty)
+        .map((r) => ({
+          name: norm(r?.name),
+          unit: norm(r?.unit),
+          category: norm(r?.category),
+          prices: r?.prices || {},
+        }));
 
       await apiAuthed("/admin/rategen/grid", {
         token: accessToken,
