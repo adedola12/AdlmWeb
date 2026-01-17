@@ -1,9 +1,13 @@
+// server/routes/admin.trainings.js
 import express from "express";
 import { Training } from "../models/Training.js";
-import { requireAdmin } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
+import { requireStaff } from "../middleware/roles.js";
 
 const router = express.Router();
-// router.use(requireAdmin);
+
+// ✅ must be AFTER router is created
+router.use(requireAuth, requireStaff);
 
 router.get("/", async (_req, res) => {
   try {
@@ -27,15 +31,10 @@ router.post("/", async (req, res) => {
       venue,
       attendees,
       tags,
+      imageUrls, // ✅ new
+      imageUrl, // ✅ legacy fallback
+    } = req.body || {};
 
-      // ✅ prefer new field
-      imageUrls,
-
-      // ✅ old field for backward compatibility
-      imageUrl,
-    } = req.body;
-
-    // Normalize: accept either imageUrls[] or imageUrl
     const normalizedImageUrls =
       Array.isArray(imageUrls) && imageUrls.length
         ? imageUrls.filter(Boolean)
@@ -56,9 +55,7 @@ router.post("/", async (req, res) => {
       country,
       venue,
       attendees: attendees || 0,
-      tags: (tags || []).map((t) => t.trim()).filter(Boolean),
-
-      // ✅ store multiple
+      tags: (tags || []).map((t) => String(t).trim()).filter(Boolean),
       imageUrls: normalizedImageUrls,
     });
 

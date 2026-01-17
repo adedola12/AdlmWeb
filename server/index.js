@@ -6,6 +6,8 @@ import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
+import path from "path";
+import { fileURLToPath } from "url";
 import { connectDB } from "./db.js";
 
 // routes
@@ -34,64 +36,28 @@ import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 
 /* -------------------- RateGen (LEGACY) -------------------- */
-import rategenRouter from "./routes/rategen.js"; // legacy public rategen
-import adminRateGen from "./routes/admin.rategen.js"; // legacy admin rategen
+import rategenRouter from "./routes/rategen.js";
+import adminRateGen from "./routes/admin.rategen.js";
 
 /* -------------------- RateGen (NEW / v2) -------------------- */
-import rategenLibraryPublic from "./routes/rategen.library.js"; // new public library sync/meta
-import ratesCompute from "./routes/rates.compute.js"; // public compute endpoints (legacy name)
-import adminRateGenLibrary from "./routes/admin.rategen.library.js"; // admin library management
-import adminRateGenRates from "./routes/admin.rategen.rates.js"; // admin rate library
-import adminRateGenCompute from "./routes/admin.rategen.compute.js"; // admin compute items (admin-key)
+import rategenLibraryPublic from "./routes/rategen.library.js";
+import ratesCompute from "./routes/rates.compute.js";
+import adminRateGenLibrary from "./routes/admin.rategen.library.js";
+import adminRateGenRates from "./routes/admin.rategen.rates.js";
+import adminRateGenCompute from "./routes/admin.rategen.compute.js";
 import adminRateGenMaster from "./routes/admin.rategen.master.js";
 
 const app = express();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.set("trust proxy", 1);
 
 app.get("/__debug/db", (_req, res) => {
   const c = mongoose?.connection || {};
   res.json({ dbName: c.name, host: c.host, ok: c.readyState === 1 });
 });
-
-app.set("trust proxy", 1);
-
-// security / parsing
-app.use(
-  helmet({
-    crossOriginResourcePolicy: false,
-    contentSecurityPolicy: {
-      useDefaults: true,
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "https://js.paystack.co",
-          "https://checkout.flutterwave.com",
-        ],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https:"],
-        fontSrc: ["'self'", "https:", "data:"],
-        connectSrc: [
-          "'self'",
-          "https://api.paystack.co",
-          "https://api.flutterwave.com",
-          "https://api.cloudinary.com",
-        ],
-        frameSrc: [
-          "https://js.paystack.co",
-          "https://checkout.flutterwave.com",
-        ],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-        frameAncestors: ["'none'"],
-      },
-    },
-    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-    hsts: process.env.NODE_ENV === "production",
-  })
-);
-
-app.set("trust proxy", 1);
 
 /* -------- CORS (MUST be BEFORE body parsers) -------- */
 const whitelist = (process.env.CORS_ORIGINS || "")
@@ -118,7 +84,13 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+
+/**
+ * ✅ CRITICAL FIX (Express + path-to-regexp v6):
+ * Don't use "*" or "/*" strings here.
+ * Use RegExp to match all OPTIONS.
+ */
+app.options(/.*/, cors(corsOptions));
 
 /* -------- security -------- */
 app.use(
@@ -158,14 +130,11 @@ app.use(
 );
 
 app.use(cookieParser());
-
-// ✅ increase payload limit (materials is usually bigger)
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
-
 app.use(morgan("dev"));
 
-// ✅ show correct errors instead of hiding them behind "500"
+/* -------- helpful error handling -------- */
 app.use((err, _req, res, next) => {
   if (err?.type === "entity.too.large") {
     return res.status(413).json({
@@ -192,81 +161,73 @@ app.use("/webhooks", webhooksRouter);
 /* -------- Core API -------- */
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
-app.use("/admin", adminRoutes);
 app.use("/purchase", purchaseRoutes);
+
 app.use("/learn", learnPublic);
-app.use("/admin/learn", adminLearn);
-app.use("/admin/media", adminMediaRoutes);
-app.use("/coupons", couponsPublic);
-app.use("/admin/coupons", adminCoupons);
-
 app.use("/products", productsPublic);
-app.use("/admin/products", adminProducts);
-app.use("/admin/settings", adminSettings);
-
 app.use("/projects", projectRoutes);
-app.use("/api/projects", projectRoutes); // backward compatibility
+app.use("/api/projects", projectRoutes);
 
 app.use("/me/media", meMediaRoutes);
 app.use("/me/orders", meOrdersRoutes);
 
-app.use("/admin/bunny", adminBunny);
-
 app.use("/trainings", trainingsPublic);
-app.use("/admin/trainings", adminTrainings);
-
 app.use("/showcase", showcasePublic);
-app.use("/admin/showcase", adminShowcase);
-
+app.use("/coupons", couponsPublic);
 app.use("/helpbot", helpbotRoutes);
 
 /* ===================================================================
-   ✅ RATEGEN ROUTES — CLEAN & NON-CONFLICTING
+   ✅ ADMIN ROUTES (ORDER MATTERS!)
+   Put specific admin routes BEFORE "/admin" router
    =================================================================== */
 
-/* -------- LEGACY (keep working, but don't add new stuff here) -------- */
-app.use("/rategen", rategenRouter); // legacy public
-app.use("/admin/rategen", adminRateGen); // legacy admin
+app.use("/admin/learn", adminLearn);
+app.use("/admin/media", adminMediaRoutes);
 
-/* -------- NEW / v2 PUBLIC --------
-   - Your new clients should call /rategen-v2/...
-   - No more mounting multiple routers on /rategen
-*/
-app.use("/rategen-v2", rategenLibraryPublic); // e.g. /rategen-v2/library/meta
-app.use("/rategen-v2", ratesCompute); // e.g. /rategen-v2/compute-items, /rategen-v2/compute
+app.use("/admin/trainings", adminTrainings);
+app.use("/admin/showcase", adminShowcase);
 
-/* -------- NEW / v2 ADMIN (web admin access token / session) -------- */
-app.use("/admin/rategen-v2", adminRateGenRates); // ✅ /admin/rategen-v2/rates
+app.use("/admin/coupons", adminCoupons);
+app.use("/admin/products", adminProducts);
+app.use("/admin/settings", adminSettings);
+
+app.use("/admin/bunny", adminBunny);
+
+/* -------------------- RateGen routes -------------------- */
+/* LEGACY */
+app.use("/rategen", rategenRouter);
+app.use("/admin/rategen", adminRateGen);
+
+/* NEW / v2 PUBLIC */
+app.use("/rategen-v2", rategenLibraryPublic);
+app.use("/rategen-v2", ratesCompute);
+
+/* NEW / v2 ADMIN */
+app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
+app.use("/admin/rategen-v2/library", adminRateGenLibrary);
 
-// ✅ move library router under /library so it doesn't intercept /rates
-app.use("/admin/rategen-v2/library", adminRateGenLibrary); // /admin/rategen-v2/library/...
+/* ADMIN COMPUTE (admin-key) */
+app.use("/admin/rategen-compute", adminRateGenCompute);
 
-/* -------- ADMIN COMPUTE (admin-key) -------- */
-app.use("/admin/rategen-compute", adminRateGenCompute); // stays admin-key protected
+/* legacy alias */
+app.use("/api/rates", ratesCompute);
 
-/* -------- LEGACY ALIASES (optional) --------
-   Keep ONLY while old Windows builds still point here.
-   Delete later when you fully migrate.
-*/
-app.use("/api/rates", ratesCompute); // legacy alias for compute endpoints
+/* ✅ Admin dashboard router LAST */
+app.use("/admin", adminRoutes);
 
-/* -------- helpful error for bad JSON -------- */
-app.use((err, _req, res, next) => {
-  if (err?.type === "entity.parse.failed") {
-    return res.status(400).json({
-      error:
-        'Invalid JSON body. Send application/json like {"identifier":"you@example.com","password":"..."}',
-    });
-  }
-  if (err && /Not allowed by CORS/.test(err.message)) {
-    return res.status(403).json({ error: err.message });
-  }
-  next(err);
-});
+/* -------- production SPA hosting (optional) -------- */
+if (process.env.NODE_ENV === "production") {
+  const dist = path.join(__dirname, "client", "dist");
+  app.use(express.static(dist));
 
-/* -------- static + 404 + generic -------- */
-app.use(express.static("client/dist"));
+  // ✅ CRITICAL FIX: use RegExp, NOT "*" or "/*"
+  app.get(/.*/, (_req, res) => {
+    res.sendFile(path.join(dist, "index.html"));
+  });
+}
+
+/* -------- 404 + generic -------- */
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 app.use((err, _req, res, _next) => {
   console.error(err);
