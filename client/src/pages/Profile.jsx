@@ -1,16 +1,22 @@
 // src/pages/Profile.jsx
 import React from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import { Link } from "react-router-dom";
 import { isAdmin, isStaff } from "../utils/roles.js";
 
 export default function Profile() {
+  const navigate = useNavigate();
   const { user, setAuth, accessToken } = useAuth();
+
+  const staff = isStaff(user);
+  const admin = isAdmin(user);
+
   const [username, setUsername] = React.useState(user?.username || "");
   const [avatarUrl, setAvatarUrl] = React.useState(user?.avatarUrl || "");
   const [msg, setMsg] = React.useState("");
   const [imgErr, setImgErr] = React.useState(false);
+
   const [zone, setZone] = React.useState("");
   const [zones, setZones] = React.useState([]); // from server labels
 
@@ -20,33 +26,52 @@ export default function Profile() {
   const fileRef = React.useRef(null);
 
   React.useEffect(() => {
+    setImgErr(false);
+  }, [avatarUrl]);
+
+  React.useEffect(() => {
     if (!accessToken) return;
+
     (async () => {
       try {
         const res = await apiAuthed("/me/profile", { token: accessToken });
-        setUsername(res.username || "");
-        setAvatarUrl(res.avatarUrl || "");
-        setZone(res.zone || "");
-        setZones(res.zones || []);
+
+        setUsername(res?.username || user?.username || "");
+        setAvatarUrl(res?.avatarUrl || user?.avatarUrl || "");
+        setZone(res?.zone || "");
+        setZones(Array.isArray(res?.zones) ? res.zones : []);
       } catch (e) {
-        setMsg(e.message);
+        setMsg(e?.message || "Failed to load profile.");
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
   async function saveProfile(next = {}) {
     const body = { username, avatarUrl, zone, ...next };
+
     const res = await apiAuthed("/me/profile", {
       token: accessToken,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    setAuth((prev) => ({ ...prev, user: { ...prev.user, ...res.user } }));
+
+    // server might return { user } or the updated fields directly
+    const updatedUser = res?.user || res;
+
+    // keep auth store synced
+    setAuth((prev) => ({
+      ...prev,
+      user: { ...(prev?.user || {}), ...(updatedUser || {}) },
+    }));
+
+    return updatedUser;
   }
 
   async function uploadToCloudinary(file) {
     if (!file) return null;
+
     setUploading(true);
     setPct(0);
     setMsg("Requesting upload ticket…");
@@ -77,10 +102,13 @@ export default function Profile() {
       const secureUrl = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", endpoint);
+
         xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable)
+          if (ev.lengthComputable) {
             setPct(Math.round((ev.loaded / ev.total) * 100));
+          }
         };
+
         xhr.onload = () => {
           try {
             const json = JSON.parse(xhr.responseText || "{}");
@@ -89,14 +117,15 @@ export default function Profile() {
             } else {
               reject(
                 new Error(
-                  json?.error?.message || `Upload failed (${xhr.status})`
-                )
+                  json?.error?.message || `Upload failed (${xhr.status})`,
+                ),
               );
             }
           } catch {
             reject(new Error(`Upload failed (${xhr.status})`));
           }
         };
+
         xhr.onerror = () => reject(new Error("Network error during upload"));
         xhr.send(fd);
       });
@@ -111,18 +140,23 @@ export default function Profile() {
   async function onPickFile(e) {
     const f = e.target.files?.[0];
     if (!f) return;
+
     setMsg(`Uploading ${f.name}…`);
     setImgErr(false);
+
     try {
       const url = await uploadToCloudinary(f);
       if (!url) throw new Error("No URL returned");
+
       // cache-bust so the <img> always refetches the new file
       const withBust = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
-      setAvatarUrl(withBust);
+
+      setAvatarUrl(withBust); // show immediately
       await saveProfile({ avatarUrl: url }); // store clean URL in DB
+
       setMsg("✅ Profile image updated.");
     } catch (err) {
-      setMsg(`❌ ${err.message || "Upload error"}`);
+      setMsg(`❌ ${err?.message || "Upload error"}`);
     } finally {
       if (fileRef.current) fileRef.current.value = "";
     }
@@ -132,33 +166,51 @@ export default function Profile() {
     e.preventDefault();
     setMsg("");
     setImgErr(false);
+
+    if (!accessToken) {
+      setMsg("Missing access token.");
+      return;
+    }
+
     try {
       await saveProfile();
       setMsg("Profile updated.");
     } catch (e2) {
-      setMsg(e2.message);
+      setMsg(e2?.message || "Failed to update profile.");
     }
   }
 
   const placeholder = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-    user?.email || "A"
+    user?.email || "A",
   )}`;
 
   const imgSrc = (avatarUrl || "").trim() || placeholder;
+  const finalImgSrc = imgErr ? placeholder : imgSrc;
+
+  // robust zone option mapping (supports {key,label} or strings)
+  const zoneOptions = (Array.isArray(zones) ? zones : []).map((z) => {
+    const key =
+      (z && typeof z === "object" ? z.key || z.value || z.id : z) ?? "";
+    const label =
+      (z && typeof z === "object" ? z.label || z.name || z.key : z) ?? "";
+    return { key: String(key), label: String(label) };
+  });
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
+      {/* PROFILE CARD */}
       <div className="card">
         <h1 className="text-xl font-semibold mb-4">Profile</h1>
 
         <div className="flex items-center gap-4 mb-4">
           <img
-            key={imgSrc} // force reload when URL changes
-            src={imgSrc}
+            key={finalImgSrc} // force reload when URL changes
+            src={finalImgSrc}
             onError={() => setImgErr(true)}
             className="w-16 h-16 rounded-full border object-cover bg-slate-100"
             alt="Profile"
           />
+
           <div className="flex-1">
             <div className="text-sm text-slate-600">{user?.email}</div>
 
@@ -191,10 +243,10 @@ export default function Profile() {
                 </div>
               )}
             </div>
+
             {imgErr && (
               <div className="mt-2 text-xs text-red-600">
-                Couldn’t load the image. Make sure the Cloudinary URL is public
-                and correct.
+                Couldn’t load the image. Showing fallback avatar.
               </div>
             )}
           </div>
@@ -210,56 +262,62 @@ export default function Profile() {
             />
           </div>
 
+          <div>
+            <label className="form-label">Location (Geopolitical Zone)</label>
+            <select
+              className="input"
+              value={zone || ""}
+              onChange={(e) => setZone(e.target.value)}
+            >
+              <option value="">— Select zone —</option>
+              {zoneOptions.map((z) => (
+                <option key={z.key} value={z.key}>
+                  {z.label}
+                </option>
+              ))}
+            </select>
+
+            <p className="text-xs text-slate-500 mt-1">
+              Your RateGen prices will default to this zone when you sign in.{" "}
+              <Link to="/rategen" className="underline">
+                View Prices
+              </Link>
+            </p>
+          </div>
+
           {msg && <div className="text-sm">{msg}</div>}
           {!accessToken && (
             <div className="text-sm text-red-600">Missing access token</div>
           )}
+
           <button className="btn w-full" disabled={!accessToken || uploading}>
             Save
           </button>
         </form>
       </div>
-      <div>
-        <label className="form-label">Location (Geopolitical Zone)</label>
-        <select
-          className="input"
-          value={zone || ""}
-          onChange={(e) => setZone(e.target.value)}
-        >
-          <option value="">— Select zone —</option>
-          {zones.map((z) => (
-            <option key={z.key} value={z.key}>
-              {z.label}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-slate-500 mt-1">
-          Your RateGen prices will default to this zone when you sign in.
-          <span>
-            <Link to="/rategen"> View Prices </Link>
-          </span>
-        </p>
-      </div>
 
+      {/* SECURITY + ADMIN CARD */}
       <div className="card">
         <h2 className="font-semibold mb-3">Security & Admin</h2>
+
         <div className="flex gap-2 flex-wrap">
-          <a href="/change-password" className="btn">
+          <Link to="/change-password" className="btn">
             Change password
-          </a>
-          <a href="/login?reset=1" className="btn">
+          </Link>
+
+          <Link to="/login?reset=1" className="btn">
             Forgot password
-          </a>
+          </Link>
 
           {/* ✅ Full admin only */}
-          {isAdmin(user) && (
-            <a href="/admin" className="btn">
+          {admin && (
+            <Link to="/admin" className="btn">
               Admin dashboard
-            </a>
+            </Link>
           )}
 
-          {/* ✅ Staff (admin + mini_admin) — only allowed tools */}
-          {isStaff(user) && (
+          {/* ✅ Staff tools (admin + mini_admin) */}
+          {staff && (
             <>
               <Link to="/admin/trainings" className="btn">
                 Add / manage trainings & events
@@ -269,24 +327,56 @@ export default function Profile() {
                 Build / Add rates (Rate Library)
               </Link>
 
-              <a href="/admin/learn" className="btn">
+              <Link to="/admin/learn" className="btn">
                 Video upload / courses
-              </a>
+              </Link>
 
-              <a href="/admin/rategen" className="btn">
+              <Link to="/admin/rategen" className="btn">
                 Update material & labour prices
-              </a>
+              </Link>
 
-              <a href="/admin/courses" className="btn">
+              <Link to="/admin/courses" className="btn">
                 Admin · Courses
-              </a>
+              </Link>
 
-              <a href="/admin/showcase" className="btn">
+              <Link to="/admin/showcase" className="btn">
                 Add / manage testimonials
-              </a>
+              </Link>
             </>
           )}
         </div>
+
+        {/* ✅ NEW: Admin tools panel with Freebies button (fixes navigate + isStaff usage) */}
+        {staff && (
+          <div className="mt-4 rounded-xl border bg-white p-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div className="font-semibold">Admin Tools</div>
+                <div className="text-xs text-slate-500">
+                  Quick access to admin management pages
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => navigate("/admin/freebies")}
+                >
+                  Add Freebies
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => navigate("/admin/coupons")}
+                >
+                  Coupons
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

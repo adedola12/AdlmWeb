@@ -46,6 +46,10 @@ import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 
+import Freebies from "./pages/Freebies.jsx";
+import AdminFreebies from "./pages/AdminFreebies.jsx";
+
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -86,6 +90,23 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      {
+        path: "freebies",
+        element: (
+          <ProtectedRoute>
+            <Freebies />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/freebies",
+        element: (
+          <AdminRoute roles={["admin", "mini_admin"]}>
+            <AdminFreebies />
+          </AdminRoute>
+        ),
+      },
+
       {
         path: "profile",
         element: (

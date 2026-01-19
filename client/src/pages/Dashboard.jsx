@@ -130,7 +130,7 @@ export default function Dashboard() {
             limit: 10,
             hasPrev: ordersPage > 1,
             hasNext: false,
-          }
+          },
         );
       } catch (e) {
         setOrdersErr(e.message || "Failed to load orders");
@@ -182,8 +182,8 @@ export default function Dashboard() {
 
     navigate(
       `/purchase?product=${encodeURIComponent(
-        s.productKey
-      )}&months=${qty}&return=/dashboard`
+        s.productKey,
+      )}&months=${qty}&return=/dashboard`,
     );
   }
 
@@ -355,11 +355,17 @@ export default function Dashboard() {
 
               <div className="mt-4 flex gap-2">
                 <div className="mt-4">
-                  <button
+                  {/* <button
                     className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
                     onClick={() => navigate("/products")}
                   >
                     Upgrade Plan
+                  </button> */}
+                  <button
+                    className="text-left bg-blue-600 text-white text-sm py-2 px-3 rounded-md hover:bg-slate-50 hover:text-black transition"
+                    onClick={() => navigate("/freebies")}
+                  >
+                    ADLM Freebies
                   </button>
                 </div>
               </div>
@@ -646,17 +652,17 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
           const statusLabel = o.paid
             ? "Paid"
             : o.status === "approved"
-            ? "Approved"
-            : o.status === "rejected"
-            ? "Rejected"
-            : "Awaiting admin approval";
+              ? "Approved"
+              : o.status === "rejected"
+                ? "Rejected"
+                : "Awaiting admin approval";
 
           const statusPill =
             o.paid || o.status === "approved"
               ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
               : o.status === "rejected"
-              ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
-              : "bg-amber-50 text-amber-800 ring-1 ring-amber-100";
+                ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+                : "bg-amber-50 text-amber-800 ring-1 ring-amber-100";
 
           return (
             <div
@@ -707,7 +713,7 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
                               {ln.productKey}
                               {ln.install
                                 ? ` • Install: ${o.currency} ${Number(
-                                    ln.install
+                                    ln.install,
                                   ).toLocaleString()}`
                                 : ""}
                             </div>

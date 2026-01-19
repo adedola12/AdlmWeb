@@ -505,6 +505,15 @@ export default function Admin() {
             >
               AddCoupon
             </button>
+
+            {/* ✅ NEW: Admin Freebies button */}
+            <button
+              className="btn btn-sm"
+              onClick={() => navigate("/admin/freebies")}
+              title="Create / manage freebies"
+            >
+              AddFreebie
+            </button>
           </div>
         </div>
 
@@ -606,8 +615,8 @@ export default function Admin() {
                                 approvePurchase(
                                   p._id,
                                   Number(
-                                    document.getElementById(`m-${p._id}`).value
-                                  )
+                                    document.getElementById(`m-${p._id}`).value,
+                                  ),
                                 )
                               }
                             >
@@ -714,7 +723,7 @@ export default function Admin() {
               }
 
               const productKeys = Array.from(productMap.keys()).sort((a, b) =>
-                a.localeCompare(b)
+                a.localeCompare(b),
               );
 
               return (
@@ -839,11 +848,11 @@ export default function Admin() {
                               {
                                 token: accessToken,
                                 method: "POST",
-                              }
+                              },
                             );
                             await load();
                             setMsg(
-                              res?.message || "Installation marked complete"
+                              res?.message || "Installation marked complete",
                             );
                           } catch (e) {
                             setMsg(e?.message || "Failed to mark complete");
@@ -857,8 +866,8 @@ export default function Admin() {
                         {badge.label === "Pending"
                           ? "After marking complete, subscription starts and coupon is finalized."
                           : badge.label === "Completed but not applied"
-                          ? "This indicates a mismatch. Mark complete to apply entitlements."
-                          : "Legacy record: fields missing. Mark complete to normalize."}
+                            ? "This indicates a mismatch. Mark complete to apply entitlements."
+                            : "Legacy record: fields missing. Mark complete to normalize."}
                       </div>
                     </div>
                   </div>
