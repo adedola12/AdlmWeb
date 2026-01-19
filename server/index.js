@@ -47,6 +47,10 @@ import adminRateGenRates from "./routes/admin.rategen.rates.js";
 import adminRateGenCompute from "./routes/admin.rategen.compute.js";
 import adminRateGenMaster from "./routes/admin.rategen.master.js";
 
+import freebiesPublic from "./routes/freebies.js";
+import adminFreebies from "./routes/admin.freebies.js";
+
+
 const app = express();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -215,6 +219,10 @@ app.use("/api/rates", ratesCompute);
 
 /* ✅ Admin dashboard router LAST */
 app.use("/admin", adminRoutes);
+
+app.use("/freebies", freebiesPublic);
+app.use("/admin/freebies", adminFreebies);
+
 
 /* -------- production SPA hosting (optional) -------- */
 if (process.env.NODE_ENV === "production") {
