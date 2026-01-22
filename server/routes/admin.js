@@ -48,9 +48,19 @@ function addMonthsToEntitlement(
   productKey,
   monthsToAdd,
   seatsToSet = 1,
+  meta = {},
 ) {
   userDoc.entitlements = userDoc.entitlements || [];
   const now = dayjs();
+
+  const licenseType =
+    String(meta?.licenseType || "personal").toLowerCase() === "organization"
+      ? "organization"
+      : "personal";
+  const organizationName =
+    licenseType === "organization"
+      ? String(meta?.organizationName || "").trim()
+      : "";
 
   let ent = userDoc.entitlements.find((e) => e.productKey === productKey);
 
@@ -61,6 +71,10 @@ function addMonthsToEntitlement(
       seats: Math.max(seatsToSet, 1),
       expiresAt: now.add(monthsToAdd, "month").toDate(),
       devices: [],
+
+      // ✅ NEW (safe to add)
+      licenseType,
+      organizationName: organizationName || undefined,
     });
   } else {
     normalizeLegacyEnt(ent);
@@ -73,6 +87,14 @@ function addMonthsToEntitlement(
     ent.status = "active";
     ent.expiresAt = base.add(monthsToAdd, "month").toDate();
     ent.seats = Math.max(Number(ent.seats || 1), Math.max(seatsToSet, 1));
+
+    // ✅ NEW: upgrade to org if any org purchase happens
+    if (licenseType === "organization") {
+      ent.licenseType = "organization";
+      if (organizationName) ent.organizationName = organizationName;
+    } else {
+      ent.licenseType = ent.licenseType || "personal";
+    }
   }
 }
 
@@ -84,12 +106,29 @@ function normalizeGrants(grants) {
     const m = Number(g?.months || 0);
     const s = Math.max(Number(g?.seats || 1), 1);
 
+    const lt =
+      String(g?.licenseType || "personal").toLowerCase() === "organization"
+        ? "organization"
+        : "personal";
+    const orgName = String(g?.organizationName || "").trim();
+
     if (!k || !Number.isFinite(m) || m <= 0) continue;
 
-    const prev = map.get(k) || { months: 0, seats: 1 };
+    const prev = map.get(k) || {
+      months: 0,
+      seats: 1,
+      licenseType: "personal",
+      organizationName: "",
+    };
+
     map.set(k, {
-      months: prev.months + m, // you can change to Math.max if you prefer
+      months: prev.months + m,
       seats: Math.max(prev.seats, s),
+      licenseType:
+        prev.licenseType === "organization" || lt === "organization"
+          ? "organization"
+          : "personal",
+      organizationName: prev.organizationName || orgName || "",
     });
   }
 
@@ -97,6 +136,8 @@ function normalizeGrants(grants) {
     productKey,
     months: v.months,
     seats: v.seats,
+    licenseType: v.licenseType,
+    organizationName: v.organizationName,
   }));
 }
 
@@ -104,10 +145,17 @@ function normalizeGrants(grants) {
 function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
   const grants = [];
 
+  const purchaseLicenseType =
+    String(purchase?.licenseType || "personal").toLowerCase() === "organization"
+      ? "organization"
+      : "personal";
+  const purchaseOrgName = String(purchase?.organization?.name || "").trim();
+
   if (Array.isArray(purchase.lines) && purchase.lines.length > 0) {
     for (const ln of purchase.lines) {
       const productKey = String(ln?.productKey || "").trim();
       const seats = Math.max(Number(ln?.qty || 1), 1);
+
       const periods = Math.max(Number(ln?.periods || 1), 1);
       const interval = normInterval(ln?.billingInterval);
 
@@ -116,7 +164,20 @@ function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
       const intervalMonths = interval === "yearly" ? 12 : 1;
       const months = periods * intervalMonths;
 
-      grants.push({ productKey, months, seats });
+      const lt =
+        String(ln?.licenseType || purchaseLicenseType).toLowerCase() ===
+        "organization"
+          ? "organization"
+          : "personal";
+
+      grants.push({
+        productKey,
+        months,
+        seats,
+        licenseType: lt,
+        organizationName:
+          purchaseOrgName || String(ln?.organizationName || "").trim(),
+      });
     }
   } else if (purchase.productKey) {
     const months =
@@ -129,6 +190,8 @@ function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
       productKey: String(purchase.productKey).trim(),
       months,
       seats: 1,
+      licenseType: purchaseLicenseType,
+      organizationName: purchaseOrgName,
     });
   }
 
@@ -209,9 +272,12 @@ router.post(
     // Apply course entitlements immediately
     if (immediate.length) {
       immediate.forEach((g) =>
-        // addMonthsToEntitlement(user, g.productKey, g.months),
-        addMonthsToEntitlement(user, g.productKey, g.months, g.seats),
+        addMonthsToEntitlement(user, g.productKey, g.months, g.seats, {
+          licenseType: g.licenseType,
+          organizationName: g.organizationName,
+        }),
       );
+
       await user.save();
     }
 
@@ -351,8 +417,12 @@ router.post(
       if (!user) return res.status(404).json({ error: "User not found" });
 
       installGrants.forEach((g) =>
-        addMonthsToEntitlement(user, g.productKey, Number(g.months), g.seats),
+        addMonthsToEntitlement(user, g.productKey, Number(g.months), g.seats, {
+          licenseType: g.licenseType,
+          organizationName: g.organizationName,
+        }),
       );
+
       await user.save();
 
       p.installation.entitlementsApplied = true;
@@ -620,6 +690,5 @@ router.post(
     });
   }),
 );
-
 
 export default router;

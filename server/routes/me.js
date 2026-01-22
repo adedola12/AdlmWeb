@@ -80,8 +80,14 @@ function toEntitlementV2(ent) {
     productKey: ent.productKey,
     status: ent.status,
     expiresAt: normalizeExpiry(ent.expiresAt),
+
     seats: Math.max(parseInt(ent.seats || 1, 10), 1),
     seatsUsed: act.length,
+
+    // ✅ NEW
+    licenseType: ent.licenseType || "personal",
+    organizationName: ent.organizationName || "",
+
     devices: act.map((d) => ({
       fingerprint: maskFp(d.fingerprint),
       name: d.name || "",

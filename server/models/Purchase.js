@@ -7,12 +7,10 @@ const LineSchema = new mongoose.Schema(
     name: { type: String, trim: true },
     billingInterval: { type: String, trim: true }, // "monthly" | "yearly"
 
-    // ✅ qty = seats (how many PCs)
+    // qty = seats
     qty: { type: Number, default: 1, min: 1 },
 
-    // ✅ NEW: how many billing periods purchased (NOT seats)
-    // monthly => periods=1 means 1 month
-    // yearly  => periods=1 means 1 year
+    // periods = how many billing periods (not seats)
     periods: { type: Number, default: 1, min: 1 },
 
     licenseType: {
@@ -21,6 +19,8 @@ const LineSchema = new mongoose.Schema(
       default: "personal",
     },
 
+    organizationName: { type: String, trim: true },
+
     unit: { type: Number, default: 0 },
     install: { type: Number, default: 0 },
     subtotal: { type: Number, default: 0 },
@@ -28,12 +28,11 @@ const LineSchema = new mongoose.Schema(
   { _id: false },
 );
 
-// ✅ UPDATED: include seats in staged grants (legacy-safe)
 const GrantSchema = new mongoose.Schema(
   {
     productKey: { type: String, trim: true, required: true },
     months: { type: Number, required: true, min: 1 },
-    seats: { type: Number, default: 1, min: 1 }, // ✅ NEW
+    seats: { type: Number, default: 1, min: 1 },
   },
   { _id: false },
 );
@@ -44,8 +43,21 @@ const PurchaseSchema = new mongoose.Schema(
     email: { type: String, trim: true, lowercase: true, index: true },
 
     currency: { type: String, enum: ["NGN", "USD"], default: "NGN" },
-    totalAmount: { type: Number, default: 0 },
+
+    licenseType: {
+      type: String,
+      enum: ["personal", "organization"],
+      default: "personal",
+    },
+
+    organization: {
+      name: { type: String, trim: true },
+      email: { type: String, trim: true, lowercase: true },
+      phone: { type: String, trim: true },
+    },
+
     totalBeforeDiscount: { type: Number, default: 0 },
+    totalAmount: { type: Number, default: 0 },
 
     coupon: {
       code: { type: String, trim: true, uppercase: true },
@@ -66,7 +78,6 @@ const PurchaseSchema = new mongoose.Schema(
     productKey: { type: String, trim: true },
     requestedMonths: { type: Number },
 
-    // ✅ UPDATED installation schema (adds missing fields)
     installation: {
       status: {
         type: String,
@@ -82,7 +93,6 @@ const PurchaseSchema = new mongoose.Schema(
       markedBy: { type: String, default: "" },
       markedAt: { type: Date },
 
-      // ✅ these were missing (caused “legacy” + no entitlement applied)
       entitlementGrants: { type: [GrantSchema], default: [] },
       entitlementsApplied: { type: Boolean, default: false },
       entitlementsAppliedAt: { type: Date },
@@ -90,6 +100,7 @@ const PurchaseSchema = new mongoose.Schema(
 
     userConfirmedAt: { type: Date },
 
+    // ✅ keep ONLY ONE status field
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],

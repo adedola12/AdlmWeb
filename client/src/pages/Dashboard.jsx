@@ -5,6 +5,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useNavigate } from "react-router-dom";
+import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 
 dayjs.extend(relativeTime);
 
@@ -54,6 +55,51 @@ function getSubscriptionState(s) {
   };
 }
 
+function sumSeatsFromLines(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return null;
+  let total = 0;
+  for (const ln of lines) {
+    const seats = Math.max(parseInt(ln?.qty ?? 1, 10) || 1, 1);
+    total += seats;
+  }
+  return total || null;
+}
+
+function formatPendingProducts(p) {
+  // prefer entitlementGrants if present (new)
+  const grants = Array.isArray(p?.installation?.entitlementGrants)
+    ? p.installation.entitlementGrants
+    : [];
+
+  if (grants.length) {
+    const parts = grants
+      .map((g) => {
+        const key = String(g?.productKey || "").trim();
+        const months = Number(g?.months || 0);
+        const seats = Math.max(parseInt(g?.seats ?? 1, 10) || 1, 1);
+        if (!key) return null;
+        const bits = [];
+        if (months) bits.push(`${months}mo`);
+        if (seats !== 1) bits.push(`${seats} seats`);
+        return bits.length ? `${key} (${bits.join(" · ")})` : key;
+      })
+      .filter(Boolean);
+
+    return parts.length ? parts.join(" · ") : "—";
+  }
+
+  // fallback to cart line names
+  if (Array.isArray(p?.lines) && p.lines.length) {
+    return p.lines
+      .map((ln) => ln?.name || ln?.productKey)
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  // final fallback
+  return p?.productKey || "—";
+}
+
 /* ---------------- page ---------------- */
 
 export default function Dashboard() {
@@ -62,7 +108,7 @@ export default function Dashboard() {
   const [courses, setCourses] = React.useState(null);
   const [err, setErr] = React.useState("");
   const [loadingSummary, setLoadingSummary] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState("subscriptions"); // "products" | "subscriptions" | "learning" | "orders"
+  const [activeTab, setActiveTab] = React.useState("subscriptions");
   const [orders, setOrders] = React.useState([]);
   const [ordersPage, setOrdersPage] = React.useState(1);
   const [ordersPagination, setOrdersPagination] = React.useState({
@@ -140,13 +186,11 @@ export default function Dashboard() {
     })();
   }, [activeTab, accessToken, ordersPage]);
 
-  // Fallback safe getters
   const activeProductsCount =
     summary?.products?.filter?.((p) => p.isActive !== false)?.length ??
     (summary?.entitlements || []).filter((e) => !e.isCourse).length ??
     0;
 
-  // ✅ exclude expired even when backend says "active"
   const activeSubscriptionsCount = (summary?.entitlements || []).filter((e) => {
     if (e.isCourse) return false;
     if ((e.status || "").toLowerCase() !== "active") return false;
@@ -170,13 +214,8 @@ export default function Dashboard() {
     navigate(`/product/${e.productKey}`);
   }
 
-  // ✅ NEW: Manage (renew) -> take user to purchase page with product pre-selected
   function manageSubscription(s) {
     if (!s?.productKey) return;
-
-    // pick a reasonable default renewal duration:
-    // - yearly products: 1 year
-    // - monthly products: 1 month
     const interval = (s.billingInterval || "monthly").toLowerCase();
     const qty = interval === "yearly" ? 1 : 1;
 
@@ -291,7 +330,7 @@ export default function Dashboard() {
                 <SubscriptionsTab
                   entitlements={summary?.entitlements || []}
                   onOpen={openProduct}
-                  onManage={manageSubscription} // ✅ pass handler
+                  onManage={manageSubscription}
                 />
               )}
 
@@ -316,7 +355,6 @@ export default function Dashboard() {
           </div>
 
           <aside className="space-y-4">
-            {/* keep your right column as-is */}
             <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-4 card-hover">
               <div className="flex items-start gap-3">
                 <div className="flex-1">
@@ -353,21 +391,13 @@ export default function Dashboard() {
                 </ul>
               </div>
 
-              <div className="mt-4 flex gap-2">
-                <div className="mt-4">
-                  {/* <button
-                    className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
-                    onClick={() => navigate("/products")}
-                  >
-                    Upgrade Plan
-                  </button> */}
-                  <button
-                    className="text-left bg-blue-600 text-white text-sm py-2 px-3 rounded-md hover:bg-slate-50 hover:text-black transition"
-                    onClick={() => navigate("/freebies")}
-                  >
-                    ADLM Freebies
-                  </button>
-                </div>
+              <div className="mt-4">
+                <button
+                  className="text-left bg-blue-600 text-white text-sm py-2 px-3 rounded-md hover:bg-slate-50 hover:text-black transition"
+                  onClick={() => navigate("/freebies")}
+                >
+                  ADLM Freebies
+                </button>
               </div>
             </div>
 
@@ -505,18 +535,30 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
         const st = getSubscriptionState(s);
         const expired = isExpiredSub(s);
 
+        const lt = String(s.licenseType || "personal").toLowerCase();
+        const seats = lt === "organization" ? s.seats : null;
+
         return (
           <div
             key={i}
             className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-sm"
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm text-slate-500">{s.productKey}</div>
                 <div className="font-semibold mt-1">
                   {s.productName || s.productKey}
                 </div>
-                <div className="text-xs text-slate-400 mt-1">
+
+                <div className="mt-2">
+                  <OrganizationBadge
+                    licenseType={lt}
+                    organizationName={s.organizationName}
+                    seats={seats}
+                  />
+                </div>
+
+                <div className="text-xs text-slate-400 mt-2">
                   {s.billingInterval ? `${s.billingInterval}` : ""}
                   {s.installFee
                     ? ` · Install: ₦${Number(s.installFee).toLocaleString()}`
@@ -549,7 +591,6 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
                 Open
               </button>
 
-              {/* ✅ Manage now routes to renewal purchase page */}
               <button
                 className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
                 onClick={() => onManage?.(s)}
@@ -664,6 +705,10 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
                 ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
                 : "bg-amber-50 text-amber-800 ring-1 ring-amber-100";
 
+          const lt = String(o.licenseType || "personal").toLowerCase();
+          const seats =
+            lt === "organization" ? sumSeatsFromLines(o.lines) : null;
+
           return (
             <div
               key={o._id}
@@ -677,9 +722,18 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
                   <div className="mt-1 text-xs text-slate-500">
                     {dateText} {timeAgo ? `• ${timeAgo}` : ""}
                   </div>
+
+                  <div className="mt-2">
+                    <OrganizationBadge
+                      licenseType={lt}
+                      organization={o.organization}
+                      organizationName={o?.organization?.name}
+                      seats={seats}
+                    />
+                  </div>
                 </div>
 
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <span
                     className={`inline-flex px-2 py-0.5 rounded-full text-xs ${statusPill}`}
                   >
@@ -724,13 +778,19 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
                               Billing:
                             </span>
                             {ln.billingInterval || "-"}
+                            <div className="text-xs text-slate-500">
+                              Periods: {ln.periods || 1}{" "}
+                              {ln.billingInterval === "yearly"
+                                ? "year(s)"
+                                : "month(s)"}
+                            </div>
                           </div>
 
                           <div className="sm:col-span-1 text-slate-700 mt-1 sm:mt-0 sm:text-right">
                             <span className="sm:hidden text-xs text-slate-500 mr-2">
                               Qty:
                             </span>
-                            {ln.qty || 1}
+                            {ln.qty || 1} seat(s)
                           </div>
 
                           <div className="sm:col-span-2 font-medium text-slate-900 mt-1 sm:mt-0 sm:text-right">
@@ -812,31 +872,16 @@ function InstallationsTab({ installations = [] }) {
     return <div className="text-sm text-slate-600">No installations yet.</div>;
   }
 
-  const getProductLabel = (p) =>
-    // prefer explicit fields if your backend provides them
-    p?.productName ||
-    p?.product?.name ||
-    p?.entitlement?.productName ||
-    p?.subscription?.productName ||
-    // fallback to product key
-    p?.productKey ||
-    p?.product?.key ||
-    p?.entitlement?.productKey ||
-    p?.subscription?.productKey ||
-    // last resort
-    "your product";
-
   return (
     <div className="space-y-3">
       {installations.map((p) => {
-        const st = p?.installation?.status || "none";
+        const st = String(p?.installation?.status || "none").toLowerCase();
         const isPending = st === "pending";
-        const firstLine = Array.isArray(p.lines) ? p.lines[0] : null;
-        const productLabel =
-          firstLine?.name ||
-          firstLine?.productKey ||
-          p.productKey ||
-          "your product";
+
+        const lt = String(p.licenseType || "personal").toLowerCase();
+        const seats = lt === "organization" ? sumSeatsFromLines(p.lines) : null;
+
+        const pendingProducts = formatPendingProducts(p);
 
         return (
           <div
@@ -844,14 +889,28 @@ function InstallationsTab({ installations = [] }) {
             className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-sm"
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-semibold">
-                  Installation for{" "}
-                  {p.installationProductName || p.installationProductKey}
+              <div className="min-w-0">
+                <div className="font-semibold">Installation request</div>
+
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <OrganizationBadge
+                    licenseType={lt}
+                    organization={p.organization}
+                    organizationName={p?.organization?.name}
+                    seats={seats}
+                  />
+                  <span className="text-xs text-slate-500">
+                    {p.decidedAt ? dayjs(p.decidedAt).format("YYYY-MM-DD") : ""}
+                  </span>
                 </div>
 
-                <div className="text-xs text-slate-500">
-                  {p.decidedAt ? dayjs(p.decidedAt).format("YYYY-MM-DD") : ""}
+                <div className="mt-3">
+                  <div className="text-xs text-slate-500 mb-1">
+                    Pending product(s)
+                  </div>
+                  <div className="text-sm text-slate-800 break-words">
+                    {pendingProducts}
+                  </div>
                 </div>
               </div>
 
