@@ -28,19 +28,43 @@ const normInterval = (v) =>
     .toLowerCase()
     .trim();
 
-function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
-  userDoc.entitlements = userDoc.entitlements || [];
+function normalizeLegacyEnt(ent) {
+  if (!ent.seats || ent.seats < 1) ent.seats = 1;
+  if (!Array.isArray(ent.devices)) ent.devices = [];
 
+  if (ent.devices.length === 0 && ent.deviceFingerprint) {
+    ent.devices.push({
+      fingerprint: ent.deviceFingerprint,
+      name: "",
+      boundAt: ent.deviceBoundAt || new Date(),
+      lastSeenAt: new Date(),
+      revokedAt: null,
+    });
+  }
+}
+
+function addMonthsToEntitlement(
+  userDoc,
+  productKey,
+  monthsToAdd,
+  seatsToSet = 1,
+) {
+  userDoc.entitlements = userDoc.entitlements || [];
   const now = dayjs();
+
   let ent = userDoc.entitlements.find((e) => e.productKey === productKey);
 
   if (!ent) {
     userDoc.entitlements.push({
       productKey,
       status: "active",
+      seats: Math.max(seatsToSet, 1),
       expiresAt: now.add(monthsToAdd, "month").toDate(),
+      devices: [],
     });
   } else {
+    normalizeLegacyEnt(ent);
+
     const base =
       ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
         ? dayjs(ent.expiresAt)
@@ -48,20 +72,31 @@ function addMonthsToEntitlement(userDoc, productKey, monthsToAdd) {
 
     ent.status = "active";
     ent.expiresAt = base.add(monthsToAdd, "month").toDate();
+    ent.seats = Math.max(Number(ent.seats || 1), Math.max(seatsToSet, 1));
   }
 }
 
 function normalizeGrants(grants) {
   const map = new Map();
+
   for (const g of Array.isArray(grants) ? grants : []) {
     const k = String(g?.productKey || "").trim();
     const m = Number(g?.months || 0);
+    const s = Math.max(Number(g?.seats || 1), 1);
+
     if (!k || !Number.isFinite(m) || m <= 0) continue;
-    map.set(k, (map.get(k) || 0) + m);
+
+    const prev = map.get(k) || { months: 0, seats: 1 };
+    map.set(k, {
+      months: prev.months + m, // you can change to Math.max if you prefer
+      seats: Math.max(prev.seats, s),
+    });
   }
-  return [...map.entries()].map(([productKey, months]) => ({
+
+  return [...map.entries()].map(([productKey, v]) => ({
     productKey,
-    months,
+    months: v.months,
+    seats: v.seats,
   }));
 }
 
@@ -72,13 +107,16 @@ function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
   if (Array.isArray(purchase.lines) && purchase.lines.length > 0) {
     for (const ln of purchase.lines) {
       const productKey = String(ln?.productKey || "").trim();
-      const qty = Number(ln?.qty || 0);
+      const seats = Math.max(Number(ln?.qty || 1), 1);
+      const periods = Math.max(Number(ln?.periods || 1), 1);
       const interval = normInterval(ln?.billingInterval);
 
-      if (!productKey || !Number.isFinite(qty) || qty <= 0) continue;
+      if (!productKey) continue;
 
-      const months = interval === "yearly" ? qty * 12 : qty;
-      if (months > 0) grants.push({ productKey, months });
+      const intervalMonths = interval === "yearly" ? 12 : 1;
+      const months = periods * intervalMonths;
+
+      grants.push({ productKey, months, seats });
     }
   } else if (purchase.productKey) {
     const months =
@@ -87,7 +125,11 @@ function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
       Number(purchase.requestedMonths || 0) ||
       1;
 
-    grants.push({ productKey: String(purchase.productKey).trim(), months });
+    grants.push({
+      productKey: String(purchase.productKey).trim(),
+      months,
+      seats: 1,
+    });
   }
 
   return normalizeGrants(grants);
@@ -122,7 +164,7 @@ router.get(
     }).sort({ createdAt: -1 });
 
     return res.json(list);
-  })
+  }),
 );
 
 router.get(
@@ -132,7 +174,7 @@ router.get(
     if (req.query.status) q.status = req.query.status;
     const list = await Purchase.find(q).sort({ createdAt: -1 }).limit(500);
     return res.json(list);
-  })
+  }),
 );
 
 router.post(
@@ -167,7 +209,8 @@ router.post(
     // Apply course entitlements immediately
     if (immediate.length) {
       immediate.forEach((g) =>
-        addMonthsToEntitlement(user, g.productKey, g.months)
+        // addMonthsToEntitlement(user, g.productKey, g.months),
+        addMonthsToEntitlement(user, g.productKey, g.months, g.seats),
       );
       await user.save();
     }
@@ -207,7 +250,7 @@ router.post(
     ) {
       await Coupon.updateOne(
         { _id: purchase.coupon.couponId },
-        { $inc: { redeemedCount: 1 } }
+        { $inc: { redeemedCount: 1 } },
       );
       purchase.coupon.redeemedApplied = true;
     }
@@ -243,7 +286,7 @@ router.post(
     } catch (e) {
       console.error(
         "[admin approve] autoEnrollFromPurchase failed:",
-        e?.message || e
+        e?.message || e,
       );
     }
 
@@ -256,7 +299,7 @@ router.post(
           ? "Purchase approved. Entitlements will start after installation is completed."
           : "Purchase approved and activated.",
     });
-  })
+  }),
 );
 
 router.get(
@@ -274,7 +317,7 @@ router.get(
 
     const list = await Purchase.find(q).sort({ decidedAt: -1 }).limit(500);
     return res.json(list);
-  })
+  }),
 );
 
 router.post(
@@ -308,7 +351,7 @@ router.post(
       if (!user) return res.status(404).json({ error: "User not found" });
 
       installGrants.forEach((g) =>
-        addMonthsToEntitlement(user, g.productKey, Number(g.months))
+        addMonthsToEntitlement(user, g.productKey, Number(g.months), g.seats),
       );
       await user.save();
 
@@ -327,7 +370,7 @@ router.post(
     if (p.coupon?.couponId && !p.coupon.redeemedApplied) {
       await Coupon.updateOne(
         { _id: p.coupon.couponId },
-        { $inc: { redeemedCount: 1 } }
+        { $inc: { redeemedCount: 1 } },
       );
       p.coupon.redeemedApplied = true;
     }
@@ -342,7 +385,7 @@ router.post(
         ? "Installation already complete. Ensured entitlements/coupon are finalized."
         : "Installation marked complete. Subscription started and coupon finalized.",
     });
-  })
+  }),
 );
 
 router.post(
@@ -380,7 +423,7 @@ router.post(
 
     await u.save();
     return res.json({ ok: true, entitlements: u.entitlements });
-  })
+  }),
 );
 
 router.post(
@@ -397,7 +440,7 @@ router.post(
     await p.save();
 
     return res.json({ ok: true, purchase: p });
-  })
+  }),
 );
 
 router.post(
@@ -412,11 +455,12 @@ router.post(
 
     ent.deviceFingerprint = undefined;
     ent.deviceBoundAt = undefined;
+    ent.devices = []; // ✅ NEW
     u.refreshVersion = (u.refreshVersion || 0) + 1;
 
     await u.save();
     return res.json({ ok: true });
-  })
+  }),
 );
 
 router.post(
@@ -431,7 +475,7 @@ router.post(
 
     const before = (u.entitlements || []).length;
     u.entitlements = (u.entitlements || []).filter(
-      (e) => e.productKey !== productKey
+      (e) => e.productKey !== productKey,
     );
 
     if (u.entitlements.length === before) {
@@ -442,7 +486,140 @@ router.post(
     await u.save();
 
     return res.json({ ok: true, entitlements: u.entitlements });
-  })
+  }),
 );
+
+function activeDevices(ent) {
+  return (ent.devices || []).filter((d) => !d.revokedAt);
+}
+
+router.get(
+  "/users/devices",
+  asyncHandler(async (req, res) => {
+    const email = String(req.query.email || "")
+      .trim()
+      .toLowerCase();
+    const productKey = String(req.query.productKey || "").trim();
+
+    if (!email || !productKey) {
+      return res.status(400).json({ error: "email and productKey required" });
+    }
+
+    const u = await User.findOne({ email });
+    if (!u) return res.status(404).json({ error: "User not found" });
+
+    const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
+    if (!ent) return res.status(404).json({ error: "Entitlement not found" });
+
+    normalizeLegacyEnt(ent);
+    await u.save();
+
+    return res.json({
+      ok: true,
+      productKey,
+      seats: ent.seats || 1,
+      seatsUsed: activeDevices(ent).length,
+      devices: (ent.devices || []).map((d) => ({
+        fingerprint: d.fingerprint, // admin can see full fingerprint
+        name: d.name || "",
+        boundAt: d.boundAt || null,
+        lastSeenAt: d.lastSeenAt || null,
+        revokedAt: d.revokedAt || null,
+      })),
+    });
+  }),
+);
+
+router.post(
+  "/users/device/revoke",
+  asyncHandler(async (req, res) => {
+    const email = String(req.body?.email || "")
+      .trim()
+      .toLowerCase();
+    const productKey = String(req.body?.productKey || "").trim();
+    const fingerprint = String(req.body?.fingerprint || "").trim();
+
+    if (!email || !productKey || !fingerprint) {
+      return res
+        .status(400)
+        .json({ error: "email, productKey, fingerprint required" });
+    }
+
+    const u = await User.findOne({ email });
+    if (!u) return res.status(404).json({ error: "User not found" });
+
+    const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
+    if (!ent) return res.status(404).json({ error: "Entitlement not found" });
+
+    normalizeLegacyEnt(ent);
+
+    const dev = (ent.devices || []).find(
+      (d) => d.fingerprint === fingerprint && !d.revokedAt,
+    );
+    if (!dev) return res.status(404).json({ error: "Device not active" });
+
+    dev.revokedAt = new Date();
+    u.refreshVersion = (u.refreshVersion || 0) + 1;
+    await u.save();
+
+    return res.json({
+      ok: true,
+      message: "Device revoked",
+      seats: ent.seats || 1,
+      seatsUsed: activeDevices(ent).length,
+    });
+  }),
+);
+
+router.post(
+  "/users/device/delete",
+  asyncHandler(async (req, res) => {
+    const email = String(req.body?.email || "")
+      .trim()
+      .toLowerCase();
+    const productKey = String(req.body?.productKey || "").trim();
+    const fingerprint = String(req.body?.fingerprint || "").trim();
+
+    if (!email || !productKey || !fingerprint) {
+      return res
+        .status(400)
+        .json({ error: "email, productKey, fingerprint required" });
+    }
+
+    const u = await User.findOne({ email });
+    if (!u) return res.status(404).json({ error: "User not found" });
+
+    const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
+    if (!ent) return res.status(404).json({ error: "Entitlement not found" });
+
+    normalizeLegacyEnt(ent);
+
+    const before = (ent.devices || []).length;
+    ent.devices = (ent.devices || []).filter(
+      (d) => d.fingerprint !== fingerprint,
+    );
+
+    if ((ent.devices || []).length === before) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+
+    // keep legacy fields consistent
+    if (ent.deviceFingerprint === fingerprint) {
+      ent.deviceFingerprint = ent.devices?.[0]?.fingerprint;
+      ent.deviceBoundAt = ent.devices?.[0]?.boundAt || undefined;
+    }
+
+    u.refreshVersion = (u.refreshVersion || 0) + 1;
+    await u.save();
+
+    return res.json({
+      ok: true,
+      message: "Device deleted",
+      seats: ent.seats || 1,
+      seatsUsed: activeDevices(ent).length,
+    });
+  }),
+);
+
 
 export default router;

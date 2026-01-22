@@ -6,21 +6,36 @@ const LineSchema = new mongoose.Schema(
     productKey: { type: String, trim: true },
     name: { type: String, trim: true },
     billingInterval: { type: String, trim: true }, // "monthly" | "yearly"
+
+    // ✅ qty = seats (how many PCs)
     qty: { type: Number, default: 1, min: 1 },
+
+    // ✅ NEW: how many billing periods purchased (NOT seats)
+    // monthly => periods=1 means 1 month
+    // yearly  => periods=1 means 1 year
+    periods: { type: Number, default: 1, min: 1 },
+
+    licenseType: {
+      type: String,
+      enum: ["personal", "organization"],
+      default: "personal",
+    },
+
     unit: { type: Number, default: 0 },
     install: { type: Number, default: 0 },
     subtotal: { type: Number, default: 0 },
   },
-  { _id: false }
+  { _id: false },
 );
 
-// ✅ NEW: entitlement grant schema (legacy-safe)
+// ✅ UPDATED: include seats in staged grants (legacy-safe)
 const GrantSchema = new mongoose.Schema(
   {
     productKey: { type: String, trim: true, required: true },
     months: { type: Number, required: true, min: 1 },
+    seats: { type: Number, default: 1, min: 1 }, // ✅ NEW
   },
-  { _id: false }
+  { _id: false },
 );
 
 const PurchaseSchema = new mongoose.Schema(
@@ -85,7 +100,7 @@ const PurchaseSchema = new mongoose.Schema(
     decidedAt: { type: Date },
     approvedMonths: { type: Number },
   },
-  { timestamps: true, minimize: false }
+  { timestamps: true, minimize: false },
 );
 
 export const Purchase =

@@ -49,6 +49,7 @@ import adminRateGenMaster from "./routes/admin.rategen.master.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
+import entitlementsRouter from "./routes/entitlements.js";
 
 
 const app = express();
@@ -222,6 +223,8 @@ app.use("/admin", adminRoutes);
 
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
+
+app.use("/api/entitlements", entitlementsRouter);
 
 
 /* -------- production SPA hosting (optional) -------- */

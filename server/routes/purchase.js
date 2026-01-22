@@ -31,7 +31,6 @@ router.post("/", requireAuth, async (req, res) => {
   });
 });
 
-// CART checkout -> Manual flow (coupon supported)
 router.post("/cart", requireAuth, async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
@@ -46,28 +45,25 @@ router.post("/cart", requireAuth, async (req, res) => {
     const keys = [...new Set(items.map((i) => i.productKey).filter(Boolean))];
     if (!keys.length) return res.status(400).json({ error: "Invalid items" });
 
-    const products = await Product.find({
-      key: { $in: keys },
-      isPublished: true,
-    }).lean();
-
+    const products = await Product.find({ key: { $in: keys }, isPublished: true }).lean();
     const byKey = Object.fromEntries(products.map((p) => [p.key, p]));
     const fx = await getFxRate();
 
     const lines = [];
     let total = 0;
 
-    // 1) build lines + compute subtotal FIRST
     for (const i of items) {
       const p = byKey[i.productKey];
-      if (!p) {
-        return res
-          .status(400)
-          .json({ error: `Invalid product: ${i.productKey}` });
-      }
+      if (!p) return res.status(400).json({ error: `Invalid product: ${i.productKey}` });
 
-      const qty = Math.max(parseInt(i.qty || 1, 10), 1);
+      const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10), 1);
+      const periods = Math.max(parseInt(i.periods ?? 1, 10), 1);
       const firstTime = !!i.firstTime;
+
+      const licenseType =
+        String(i.licenseType || "personal").toLowerCase() === "organization"
+          ? "organization"
+          : "personal";
 
       const unitNGN =
         p.billingInterval === "yearly"
@@ -81,10 +77,7 @@ router.post("/cart", requireAuth, async (req, res) => {
 
       if (currency === "USD") {
         const ovUnit =
-          p.billingInterval === "yearly"
-            ? p.price?.yearlyUSD
-            : p.price?.monthlyUSD;
-
+          p.billingInterval === "yearly" ? p.price?.yearlyUSD : p.price?.monthlyUSD;
         const ovInstall = p.price?.installUSD;
 
         unit = ovUnit != null ? Number(ovUnit) : unitNGN * fx;
@@ -97,14 +90,17 @@ router.post("/cart", requireAuth, async (req, res) => {
         install = Math.round(install);
       }
 
-      const recurring = unit * qty;
+      // ✅ recurring is per-seat per-period
+      const recurring = unit * seats * periods;
       const lineTotal = recurring + install;
 
       lines.push({
         productKey: p.key,
         name: p.name,
         billingInterval: p.billingInterval,
-        qty,
+        qty: seats,
+        periods,
+        licenseType,
         unit,
         install,
         subtotal:
@@ -116,7 +112,6 @@ router.post("/cart", requireAuth, async (req, res) => {
       total += lineTotal;
     }
 
-    // normalize totals
     total =
       currency === "USD"
         ? Math.round((total + Number.EPSILON) * 100) / 100
@@ -124,7 +119,6 @@ router.post("/cart", requireAuth, async (req, res) => {
 
     const totalBeforeDiscount = total;
 
-    // 2) validate coupon using REAL subtotal
     const couponRes = await validateAndComputeDiscount({
       code: couponCode,
       currency,
@@ -137,15 +131,9 @@ router.post("/cart", requireAuth, async (req, res) => {
 
     const totalAfterDiscount =
       currency === "USD"
-        ? Math.max(
-            Math.round(
-              (totalBeforeDiscount - discount + Number.EPSILON) * 100
-            ) / 100,
-            0
-          )
+        ? Math.max(Math.round((totalBeforeDiscount - discount + Number.EPSILON) * 100) / 100, 0)
         : Math.max(Math.round(totalBeforeDiscount - discount), 0);
 
-    // 3) save purchase
     const purchase = await Purchase.create({
       userId: req.user._id,
       email: req.user.email,
@@ -184,6 +172,7 @@ router.post("/cart", requireAuth, async (req, res) => {
     return res.status(500).json({ error: e.message || "Cart purchase failed" });
   }
 });
+
 
 // verify endpoint (Thank-You page)
 router.get("/verify", async (req, res) => {
