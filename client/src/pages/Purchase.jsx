@@ -1,4 +1,3 @@
-// src/pages/Purchase.jsx
 import React from "react";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
@@ -7,7 +6,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 
 const fmt = (n, currency = "USD") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
-    n || 0
+    n || 0,
   );
 
 function getProductKey(p) {
@@ -23,17 +22,35 @@ function readCartItems() {
   }
 }
 
+function readCartMeta() {
+  try {
+    return JSON.parse(localStorage.getItem("cartMeta") || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCartMeta(meta) {
+  localStorage.setItem("cartMeta", JSON.stringify(meta || {}));
+}
+
 function clearCartStorage() {
   localStorage.setItem("cartItems", "[]");
   localStorage.setItem("cartCount", "0");
+  localStorage.setItem("cartMeta", "{}");
 }
 
 export default function Purchase() {
   const { accessToken } = useAuth();
-
   const [products, setProducts] = React.useState([]);
-  const [cart, setCart] = React.useState({}); // { [productKey]: { qty, firstTime } }
+
+  // cart entry: { periods, seats, firstTime }
+  const [cart, setCart] = React.useState({});
   const [currency, setCurrency] = React.useState("NGN");
+
+  // ✅ NEW: purchase-level license type + org details
+  const [licenseType, setLicenseType] = React.useState("personal"); // "personal" | "organization"
+  const [org, setOrg] = React.useState({ name: "", email: "", phone: "" });
 
   const [couponCode, setCouponCode] = React.useState("");
   const [couponInfo, setCouponInfo] = React.useState(null);
@@ -49,6 +66,13 @@ export default function Purchase() {
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
 
+  // ---------- money helpers (match backend rounding) ----------
+  const round2 = (x) =>
+    Math.round((Number(x || 0) + Number.EPSILON) * 100) / 100;
+  const money = (x) =>
+    currency === "USD" ? round2(x) : Math.round(Number(x || 0));
+
+  // ---------- load products ----------
   React.useEffect(() => {
     (async () => {
       try {
@@ -64,40 +88,84 @@ export default function Purchase() {
     })();
   }, []);
 
-  // Prefill from ?product=KEY&months=N
-  React.useEffect(() => {
-    const k = (qs.get("product") || "").trim();
-    const m = Math.max(parseInt(qs.get("months") || "1", 10), 1);
-    if (!k) return;
-    setCart((c) => (c[k] ? c : { ...c, [k]: { qty: m, firstTime: false } }));
-  }, [qs]);
-
-  // Prefill from localStorage cartItems after products load
+  // ---------- restore cart + meta after products load ----------
   React.useEffect(() => {
     if (!products.length) return;
 
+    // restore meta
+    const meta = readCartMeta();
+    const lt =
+      String(meta?.licenseType || "personal").toLowerCase() === "organization"
+        ? "organization"
+        : "personal";
+    setLicenseType(lt);
+    setOrg({
+      name: String(meta?.org?.name || ""),
+      email: String(meta?.org?.email || ""),
+      phone: String(meta?.org?.phone || ""),
+    });
+
+    // restore items
     const arr = readCartItems();
     if (!arr.length) return;
 
     setCart(() => {
       const next = {};
-      arr.forEach(({ productKey, qty, firstTime }) => {
-        const k = String(productKey || "").trim();
+      arr.forEach((it) => {
+        const k = String(it.productKey || "").trim();
         if (!k) return;
+
+        // legacy support: old cart stored { qty } meaning "months/years"
+        const periods = Math.max(parseInt(it.periods ?? it.qty ?? 1, 10), 1);
+        const seats = Math.max(parseInt(it.seats ?? 1, 10), 1);
+
         next[k] = {
-          qty: Math.max(parseInt(qty || 1, 10), 1),
-          firstTime: !!firstTime,
+          periods,
+          seats: lt === "organization" ? seats : 1,
+          firstTime: !!it.firstTime,
         };
       });
       return next;
     });
   }, [products.length]);
 
+  // Prefill from ?product=KEY&periods=N  (kept old param "months" for compatibility)
+  React.useEffect(() => {
+    const k = (qs.get("product") || "").trim();
+    const p = Math.max(
+      parseInt(qs.get("periods") || qs.get("months") || "1", 10),
+      1,
+    );
+    if (!k) return;
+
+    setCart((c) =>
+      c[k]
+        ? c
+        : {
+            ...c,
+            [k]: {
+              periods: p,
+              seats: licenseType === "organization" ? 1 : 1,
+              firstTime: false,
+            },
+          },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qs]);
+
   function updateItem(key, patch) {
-    setCart((c) => ({
-      ...c,
-      [key]: { ...(c[key] || { qty: 1, firstTime: false }), ...patch },
-    }));
+    setCart((c) => {
+      const cur = c[key] || { periods: 1, seats: 1, firstTime: false };
+      const next = { ...cur, ...patch };
+
+      next.periods = Math.max(parseInt(next.periods || 1, 10), 1);
+      next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
+
+      // force seats=1 for personal
+      if (licenseType !== "organization") next.seats = 1;
+
+      return { ...c, [key]: next };
+    });
   }
 
   function toggleInCart(key) {
@@ -107,7 +175,14 @@ export default function Purchase() {
             const { [key]: _, ...rest } = c;
             return rest;
           })()
-        : { ...c, [key]: { qty: 1, firstTime: false } }
+        : {
+            ...c,
+            [key]: {
+              periods: 1,
+              seats: licenseType === "organization" ? 1 : 1,
+              firstTime: false,
+            },
+          },
     );
   }
 
@@ -118,75 +193,49 @@ export default function Purchase() {
     const install =
       currency === "USD" ? p.price?.installUSD : p.price?.installNGN;
 
-    return {
-      monthly: Number(monthly || 0),
-      yearly: Number(yearly || 0),
-      install: Number(install || 0),
-    };
+    // match backend: USD 2dp, NGN integer
+    const m = money(monthly || 0);
+    const y = money(yearly || 0);
+    const i = money(install || 0);
+
+    return { monthly: m, yearly: y, install: i };
   }
 
-  function normalizeMoney(n) {
-    const x = Number(n || 0);
-    return currency === "USD"
-      ? Math.round((x + Number.EPSILON) * 100) / 100
-      : Math.round(x);
-  }
+  function lineCalc(p, entry) {
+    if (!entry) return { recurring: 0, install: 0, total: 0 };
 
-  function priceForQuantity(p, qty, firstTime) {
     const { monthly, yearly, install } = getPrices(p);
-    let total = 0;
-    let note = "";
+    const unit = p.billingInterval === "yearly" ? yearly : monthly;
 
-    if (p.billingInterval === "yearly") {
-      total = yearly * qty;
-      note = `${qty} yr × ${fmt(yearly, currency)}`;
-    } else {
-      const years = Math.floor(qty / 12);
-      const rem = qty % 12;
+    const periods = Math.max(parseInt(entry.periods || 1, 10), 1);
+    const seats =
+      licenseType === "organization"
+        ? Math.max(parseInt(entry.seats || 1, 10), 1)
+        : 1;
 
-      if (years > 0) {
-        total += years * yearly;
-        note = `${years}× yearly`;
-      }
-
-      if (rem >= 6) {
-        const discounted = rem * monthly * 0.85;
-        total += discounted;
-        note += note ? ` + ${rem} mo @15% off` : `${rem} mo @15% off`;
-      } else if (rem > 0) {
-        total += rem * monthly;
-        note += note ? ` + ${rem} mo` : `${rem} mo`;
-      }
-    }
-
-    if (firstTime) total += install || 0;
+    const recurring = money(unit * seats * periods);
+    const installFee = entry.firstTime ? money(install) : 0;
 
     return {
-      total: normalizeMoney(total),
-      note: note || (p.billingInterval === "yearly" ? "yearly" : "monthly"),
+      recurring,
+      install: installFee,
+      total: money(recurring + installFee),
+      unit,
+      seats,
+      periods,
     };
   }
 
-  function lineSubtotal(p, entry) {
-    if (!entry) return 0;
-    const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
-    return priceForQuantity(p, qty, !!entry.firstTime).total;
-  }
+  const chosen = products.filter((p) => !!cart[getProductKey(p)]);
 
-  // ✅ Match products against cart keys using safe key resolver
-  const chosen = products.filter((p) => {
-    const k = getProductKey(p);
-    return !!cart[k];
-  });
-
-  const total = normalizeMoney(
+  const total = money(
     chosen.reduce((sum, p) => {
       const k = getProductKey(p);
-      return sum + lineSubtotal(p, cart[k]);
-    }, 0)
+      return sum + lineCalc(p, cart[k]).total;
+    }, 0),
   );
 
-  const grandTotal = normalizeMoney(Math.max(total - Number(discount || 0), 0));
+  const grandTotal = money(Math.max(total - Number(discount || 0), 0));
   const productKeys = chosen.map((p) => getProductKey(p));
 
   async function applyCoupon() {
@@ -214,7 +263,7 @@ export default function Purchase() {
       });
 
       setCouponInfo(out.coupon || null);
-      setDiscount(normalizeMoney(out.discount || 0));
+      setDiscount(money(out.discount || 0));
     } catch (e) {
       setCouponInfo(null);
       setDiscount(0);
@@ -222,18 +271,42 @@ export default function Purchase() {
     }
   }
 
-  // ✅ Persist cart -> localStorage anytime cart changes (so badge + reload stays consistent)
+  // Persist cart + meta
   React.useEffect(() => {
     const items = Object.entries(cart).map(([productKey, entry]) => ({
       productKey,
-      qty: Math.max(parseInt(entry?.qty || 1, 10), 1),
+      periods: Math.max(parseInt(entry?.periods || 1, 10), 1),
+      seats:
+        licenseType === "organization"
+          ? Math.max(parseInt(entry?.seats || 1, 10), 1)
+          : 1,
       firstTime: !!entry?.firstTime,
     }));
 
     localStorage.setItem("cartItems", JSON.stringify(items));
-    const totalQty = items.reduce((sum, it) => sum + Number(it.qty || 0), 0);
-    localStorage.setItem("cartCount", String(totalQty));
-  }, [cart]);
+    localStorage.setItem("cartCount", String(items.length));
+
+    writeCartMeta({
+      licenseType,
+      org:
+        licenseType === "organization"
+          ? org
+          : { name: "", email: "", phone: "" },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, licenseType, org.name, org.email, org.phone]);
+
+  // If they switch back to personal, force all seats=1
+  React.useEffect(() => {
+    if (licenseType === "organization") return;
+    setCart((c) => {
+      const next = {};
+      Object.entries(c).forEach(([k, v]) => {
+        next[k] = { ...v, seats: 1 };
+      });
+      return next;
+    });
+  }, [licenseType]);
 
   async function createPendingPurchaseAndShowModal() {
     if (!chosen.length) return;
@@ -242,12 +315,26 @@ export default function Purchase() {
     setMsg("");
 
     try {
+      if (licenseType === "organization") {
+        const name = String(org.name || "").trim();
+        if (!name) {
+          setSubmitting(false);
+          setMsg("Organization name is required for organization purchase.");
+          return;
+        }
+      }
+
       const items = chosen.map((p) => {
         const k = getProductKey(p);
         const entry = cart[k];
+
         return {
           productKey: k,
-          qty: Math.max(parseInt(entry.qty || 1, 10), 1),
+          seats:
+            licenseType === "organization"
+              ? Math.max(parseInt(entry.seats || 1, 10), 1)
+              : 1,
+          periods: Math.max(parseInt(entry.periods || 1, 10), 1),
           firstTime: !!entry.firstTime,
         };
       });
@@ -260,6 +347,10 @@ export default function Purchase() {
           currency,
           items,
           couponCode: couponCode.trim(),
+
+          // ✅ NEW
+          licenseType,
+          organization: licenseType === "organization" ? org : null,
         }),
       });
 
@@ -302,8 +393,11 @@ export default function Purchase() {
     }
   }
 
+  const anyInstall = chosen.some((p) => !!cart[getProductKey(p)]?.firstTime);
+  const showOrgPanel = licenseType === "organization";
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <style>{`
         .clamp-2{
           display:-webkit-box;
@@ -313,27 +407,95 @@ export default function Purchase() {
         }
       `}</style>
 
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Subscribe</h1>
           <p className="text-sm text-slate-600">
-            Select products, duration, and if you’re a first-time user
-            (installation fee applies).
+            Select products, duration, seats (for organization), and
+            installation.
           </p>
         </div>
 
-        <label className="text-sm">
-          <div className="mb-1">Currency</div>
-          <select
-            className="input"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-          >
-            <option value="NGN">NGN (₦)</option>
-            <option value="USD">USD ($)</option>
-          </select>
-        </label>
+        <div className="flex items-end gap-3 flex-wrap">
+          <label className="text-sm">
+            <div className="mb-1">Currency</div>
+            <select
+              className="input"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+            >
+              <option value="NGN">NGN (₦)</option>
+              <option value="USD">USD ($)</option>
+            </select>
+          </label>
+
+          <label className="text-sm">
+            <div className="mb-1">Purchase for</div>
+            <select
+              className="input"
+              value={licenseType}
+              onChange={(e) =>
+                setLicenseType(
+                  e.target.value === "organization"
+                    ? "organization"
+                    : "personal",
+                )
+              }
+            >
+              <option value="personal">Personal</option>
+              <option value="organization">Organization</option>
+            </select>
+          </label>
+        </div>
       </div>
+
+      {showOrgPanel && (
+        <div className="card">
+          <h2 className="font-semibold mb-2">Organization details</h2>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <label className="text-sm">
+              Organization name <span className="text-rose-600">*</span>
+              <input
+                className="input mt-1"
+                value={org.name}
+                onChange={(e) =>
+                  setOrg((o) => ({ ...o, name: e.target.value }))
+                }
+                placeholder="e.g. ADLM Studio"
+              />
+            </label>
+
+            <label className="text-sm">
+              Organization email (optional)
+              <input
+                className="input mt-1"
+                value={org.email}
+                onChange={(e) =>
+                  setOrg((o) => ({ ...o, email: e.target.value }))
+                }
+                placeholder="accounts@company.com"
+              />
+            </label>
+
+            <label className="text-sm">
+              Phone (optional)
+              <input
+                className="input mt-1"
+                value={org.phone}
+                onChange={(e) =>
+                  setOrg((o) => ({ ...o, phone: e.target.value }))
+                }
+                placeholder="+234..."
+              />
+            </label>
+          </div>
+
+          <div className="text-xs text-slate-500 mt-2">
+            Seats you choose on each product will be treated as number of
+            users/devices your organization needs.
+          </div>
+        </div>
+      )}
 
       {/* Catalog */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -343,14 +505,15 @@ export default function Purchase() {
           const inCart = !!entry;
 
           const qtyLabel = p.billingInterval === "yearly" ? "Years" : "Months";
-          const { monthly, yearly } = getPrices(p);
+          const { monthly, yearly, install } = getPrices(p);
+          const unitShown = p.billingInterval === "yearly" ? yearly : monthly;
+
+          const calc = inCart ? lineCalc(p, entry) : null;
 
           return (
             <div
               key={p._id || k}
-              className={`border rounded p-3 ${
-                inCart ? "ring-2 ring-blue-500" : ""
-              }`}
+              className={`border rounded p-3 ${inCart ? "ring-2 ring-blue-500" : ""}`}
             >
               <div className="font-medium">{p.name}</div>
               <div className="text-sm text-slate-600 clamp-2">{p.blurb}</div>
@@ -361,15 +524,18 @@ export default function Purchase() {
               </div>
 
               <div className="text-sm mt-2">
-                Current ({currency}):{" "}
+                Price:{" "}
                 <span className="font-medium">
-                  {fmt(
-                    p.billingInterval === "yearly" ? yearly : monthly,
-                    currency
-                  )}{" "}
-                  / {p.billingInterval === "yearly" ? "year" : "month"}
+                  {fmt(unitShown, currency)} /{" "}
+                  {p.billingInterval === "yearly" ? "year" : "month"}
                 </span>
               </div>
+
+              {!!install && (
+                <div className="text-xs text-slate-500 mt-1">
+                  Install fee (first time): {fmt(install, currency)}
+                </div>
+              )}
 
               <div className="mt-3 flex items-center gap-2">
                 <button className="btn btn-sm" onClick={() => toggleInCart(k)}>
@@ -380,14 +546,33 @@ export default function Purchase() {
               {inCart && (
                 <div className="mt-3 space-y-2">
                   <label className="block text-sm">
-                    {qtyLabel}
+                    {qtyLabel} (periods)
                     <input
                       type="number"
                       min="1"
                       className="input mt-1"
-                      value={entry.qty}
-                      onChange={(e) => updateItem(k, { qty: e.target.value })}
+                      value={entry.periods}
+                      onChange={(e) =>
+                        updateItem(k, { periods: e.target.value })
+                      }
                     />
+                  </label>
+
+                  <label className="block text-sm">
+                    Seats
+                    <input
+                      type="number"
+                      min="1"
+                      className="input mt-1"
+                      value={licenseType === "organization" ? entry.seats : 1}
+                      disabled={licenseType !== "organization"}
+                      onChange={(e) => updateItem(k, { seats: e.target.value })}
+                    />
+                    {licenseType !== "organization" && (
+                      <div className="text-xs text-slate-500 mt-1">
+                        Seats is locked to 1 for personal purchases.
+                      </div>
+                    )}
                   </label>
 
                   <label className="flex items-center gap-2 text-sm">
@@ -401,26 +586,34 @@ export default function Purchase() {
                     First-time user? (add install fee)
                   </label>
 
-                  {(() => {
-                    const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
-                    const { total: sub, note } = priceForQuantity(
-                      p,
-                      qty,
-                      entry.firstTime
-                    );
-                    return (
-                      <div className="text-sm">
+                  {calc && (
+                    <div className="text-sm space-y-1">
+                      <div className="text-xs text-slate-500">
+                        {licenseType === "organization"
+                          ? "Organization license"
+                          : "Personal license"}
+                        {showOrgPanel && org.name ? ` · ${org.name}` : ""}
+                      </div>
+
+                      <div className="text-xs text-slate-500">
+                        {fmt(calc.unit, currency)} × {calc.seats} seat(s) ×{" "}
+                        {calc.periods} period(s)
+                      </div>
+
+                      <div>
                         Subtotal:{" "}
                         <span className="font-semibold">
-                          {fmt(sub, currency)}
-                        </span>{" "}
-                        <span className="ml-2 text-xs text-slate-600">
-                          ({note}
-                          {entry.firstTime ? " + install" : ""})
+                          {fmt(calc.total, currency)}
                         </span>
+                        {entry.firstTime ? (
+                          <span className="text-xs text-slate-500">
+                            {" "}
+                            (incl. install)
+                          </span>
+                        ) : null}
                       </div>
-                    );
-                  })()}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -436,26 +629,55 @@ export default function Purchase() {
           <div className="text-sm text-slate-600">No items selected.</div>
         ) : (
           <>
-            <div className="space-y-2 text-sm">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="text-sm text-slate-700">
+                <div className="font-medium">
+                  License:{" "}
+                  {licenseType === "organization" ? "Organization" : "Personal"}
+                </div>
+                {showOrgPanel && (
+                  <div className="text-xs text-slate-500">
+                    Org:{" "}
+                    {org.name ? (
+                      <b className="text-slate-700">{org.name}</b>
+                    ) : (
+                      "— (required)"
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {anyInstall && (
+                <div className="text-xs text-slate-500">
+                  Some items include <b>installation fee</b>.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 space-y-2 text-sm">
               {chosen.map((p) => {
                 const k = getProductKey(p);
                 const entry = cart[k];
-                const qty = Math.max(parseInt(entry.qty || 1, 10), 1);
-                const { total: lineTotal, note } = priceForQuantity(
-                  p,
-                  qty,
-                  entry.firstTime
-                );
-                const qtyLabel = p.billingInterval === "yearly" ? "yr" : "mo";
+                const calc = lineCalc(p, entry);
+
+                const periodLabel =
+                  p.billingInterval === "yearly" ? "yr" : "mo";
 
                 return (
-                  <div key={k} className="flex items-center justify-between">
-                    <div>
-                      {p.name} · {qty} {qtyLabel} ({note})
-                      {entry.firstTime && " + install"}
+                  <div
+                    key={k}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate">
+                        {p.name} · {calc.periods} {periodLabel} · {calc.seats}{" "}
+                        seat(s)
+                        {entry.firstTime ? " + install" : ""}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">{k}</div>
                     </div>
                     <div className="font-medium">
-                      {fmt(lineTotal, currency)}
+                      {fmt(calc.total, currency)}
                     </div>
                   </div>
                 );
@@ -566,6 +788,8 @@ export default function Purchase() {
                 {submitting ? "Confirming…" : "I have paid"}
               </button>
             </div>
+
+            {msg && <div className="text-sm mt-3">{msg}</div>}
           </div>
         </div>
       )}

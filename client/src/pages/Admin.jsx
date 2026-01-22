@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 
 const MONTH_CHOICES = [
   { label: "1 month", value: 1 },
@@ -16,12 +17,12 @@ function Badge({ label, tone = "slate" }) {
     tone === "yellow"
       ? "bg-yellow-100 text-yellow-800 border-yellow-200"
       : tone === "blue"
-      ? "bg-blue-100 text-blue-800 border-blue-200"
-      : tone === "red"
-      ? "bg-red-100 text-red-800 border-red-200"
-      : tone === "green"
-      ? "bg-green-100 text-green-800 border-green-200"
-      : "bg-slate-100 text-slate-700 border-slate-200";
+        ? "bg-blue-100 text-blue-800 border-blue-200"
+        : tone === "red"
+          ? "bg-red-100 text-red-800 border-red-200"
+          : tone === "green"
+            ? "bg-green-100 text-green-800 border-green-200"
+            : "bg-slate-100 text-slate-700 border-slate-200";
 
   return (
     <span
@@ -38,29 +39,36 @@ function getInstallState(p) {
   const entApplied = inst.entitlementsApplied; // true/false/undefined
   const hasAppliedField = typeof entApplied === "boolean";
 
-  // Badge logic requested:
-  // - Pending: installation.status === "pending"
-  // - Completed but not applied: status === "complete" and entitlementsApplied === false
-  // - Legacy record: entitlementsApplied is missing (exists:false) OR status missing
-  if (status === "pending") {
-    return { label: "Pending", tone: "yellow" };
-  }
+  if (status === "pending") return { label: "Pending", tone: "yellow" };
 
   if (status === "complete" && hasAppliedField && entApplied === false) {
     return { label: "Completed but not applied", tone: "red" };
   }
 
-  if (!hasAppliedField || !status) {
+  if (!hasAppliedField || !status)
     return { label: "Legacy record", tone: "slate" };
-  }
 
-  // Optional: you might not see these in the list due to backend filter,
-  // but if you do, it's still nice to show.
   if (status === "complete" && entApplied === true) {
     return { label: "Completed", tone: "green" };
   }
 
   return { label: status || "Unknown", tone: "slate" };
+}
+
+function sumSeatsFromLines(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return null;
+  let total = 0;
+  for (const ln of lines) {
+    const seats = Math.max(parseInt(ln?.qty ?? 1, 10) || 1, 1);
+    total += seats;
+  }
+  return total || null;
+}
+
+function monthsFromLine(ln) {
+  const periods = Math.max(parseInt(ln?.periods ?? 1, 10) || 1, 1);
+  const interval = String(ln?.billingInterval || "monthly").toLowerCase();
+  return (interval === "yearly" ? 12 : 1) * periods;
 }
 
 function formatGrants(p) {
@@ -70,18 +78,26 @@ function formatGrants(p) {
 
   if (!grants.length) return { text: "—", count: 0 };
 
-  // Group months per productKey (in case of duplicates)
+  // aggregate per productKey (sum months; keep max seats seen)
   const agg = new Map();
+
   for (const g of grants) {
     const key = String(g?.productKey || "").trim();
     const months = Number(g?.months || 0);
+    const seats = Math.max(parseInt(g?.seats ?? 1, 10) || 1, 1);
     if (!key) continue;
-    agg.set(key, (agg.get(key) || 0) + (months > 0 ? months : 0));
+
+    const cur = agg.get(key) || { months: 0, seats: 1 };
+    cur.months += months > 0 ? months : 0;
+    cur.seats = Math.max(cur.seats, seats);
+    agg.set(key, cur);
   }
 
-  const parts = Array.from(agg.entries()).map(([k, m]) => {
-    if (!m) return k;
-    return `${k} (${m}mo)`;
+  const parts = Array.from(agg.entries()).map(([k, v]) => {
+    const bits = [];
+    if (v.months) bits.push(`${v.months}mo`);
+    if (v.seats && v.seats !== 1) bits.push(`${v.seats} seats`);
+    return bits.length ? `${k} (${bits.join(" · ")})` : k;
   });
 
   return { text: parts.join(" · "), count: parts.length };
@@ -97,7 +113,6 @@ export default function Admin() {
   const [q, setQ] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
-
   const [installations, setInstallations] = React.useState([]);
 
   async function load() {
@@ -183,12 +198,18 @@ export default function Admin() {
   async function approvePurchase(id, months) {
     setMsg("");
     try {
+      const bodyObj =
+        typeof months === "number" && Number.isFinite(months) && months > 0
+          ? { months }
+          : {};
+
       const res = await apiAuthed(`/admin/purchases/${id}/approve`, {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ months }),
+        body: JSON.stringify(bodyObj),
       });
+
       await load();
       setMsg(res?.message || "Purchase approved");
     } catch (e) {
@@ -232,7 +253,7 @@ export default function Admin() {
           (r) =>
             rx.test(r.email || "") ||
             rx.test(r.username || "") ||
-            rx.test(r.productKey || "")
+            rx.test(r.productKey || ""),
         )
       : rows;
   }, [users, q]);
@@ -250,7 +271,7 @@ export default function Admin() {
     deleteEntitlement,
   }) {
     const [activeProduct, setActiveProduct] = React.useState(
-      productKeys[0] || ""
+      productKeys[0] || "",
     );
 
     React.useEffect(() => {
@@ -272,7 +293,7 @@ export default function Admin() {
     const userByEmail = React.useMemo(() => {
       const m = new Map();
       (users || []).forEach((u) =>
-        m.set(String(u.email || "").toLowerCase(), u)
+        m.set(String(u.email || "").toLowerCase(), u),
       );
       return m;
     }, [users]);
@@ -360,7 +381,7 @@ export default function Admin() {
                               r.email,
                               r.productKey,
                               Number(document.getElementById(selId).value),
-                              "active"
+                              "active",
                             )
                           }
                         >
@@ -379,7 +400,7 @@ export default function Admin() {
                               r.email,
                               r.productKey,
                               0,
-                              "disabled"
+                              "disabled",
                             )
                           }
                         >
@@ -391,7 +412,7 @@ export default function Admin() {
                           title="Permanently remove entitlement"
                           onClick={() => {
                             const ok = window.confirm(
-                              `Delete entitlement ${r.productKey} for ${r.email}? This cannot be undone.`
+                              `Delete entitlement ${r.productKey} for ${r.email}? This cannot be undone.`,
                             );
                             if (ok) deleteEntitlement(r.email, r.productKey);
                           }}
@@ -466,7 +487,6 @@ export default function Admin() {
     );
   }
 
-  // Sort installations by decidedAt desc (fallback createdAt)
   const sortedInstallations = React.useMemo(() => {
     const arr = Array.isArray(installations) ? [...installations] : [];
     arr.sort((a, b) => {
@@ -506,7 +526,6 @@ export default function Admin() {
               AddCoupon
             </button>
 
-            {/* ✅ NEW: Admin Freebies button */}
             <button
               className="btn btn-sm"
               onClick={() => navigate("/admin/freebies")}
@@ -560,6 +579,7 @@ export default function Admin() {
       {tab === "pending" && (
         <div className="card">
           <h2 className="font-semibold mb-3">Pending Purchases</h2>
+
           {loading ? (
             <div className="text-sm text-slate-600">Loading…</div>
           ) : purchases.length === 0 ? (
@@ -569,23 +589,38 @@ export default function Admin() {
               {purchases.map((p) => {
                 const isCart = Array.isArray(p.lines) && p.lines.length > 0;
 
+                const lt = String(p.licenseType || "personal").toLowerCase();
+                const orgName = p?.organization?.name || "";
+                const seats =
+                  lt === "organization" ? sumSeatsFromLines(p.lines) : null;
+
                 return (
                   <div
                     key={p._id}
                     className="border rounded p-3 flex flex-col gap-3"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm">
-                        <div>
-                          <b>{p.email}</b>{" "}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-sm min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <b className="truncate">{p.email}</b>
+                          <OrganizationBadge
+                            licenseType={lt}
+                            organization={p.organization}
+                            organizationName={orgName}
+                            seats={seats}
+                          />
+                        </div>
+
+                        <div className="text-slate-600 mt-1">
                           {isCart ? (
-                            <>submitted a cart</>
+                            <>Submitted a cart</>
                           ) : (
                             <>
-                              requested <b>{p.productKey}</b>
+                              Requested <b>{p.productKey}</b>
                             </>
                           )}
                         </div>
+
                         <div className="text-slate-600">
                           Requested:{" "}
                           {p.requestedMonths
@@ -595,7 +630,7 @@ export default function Admin() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2 items-center">
+                      <div className="flex gap-2 items-center shrink-0">
                         {!isCart ? (
                           <>
                             <select
@@ -609,6 +644,7 @@ export default function Admin() {
                                 </option>
                               ))}
                             </select>
+
                             <button
                               className="btn"
                               onClick={() =>
@@ -647,40 +683,75 @@ export default function Admin() {
                           Cart · {p.currency}{" "}
                           {p.totalAmount?.toLocaleString?.() ?? p.totalAmount}
                         </div>
+
                         <div className="divide-y">
                           {p.lines.map((ln, idx) => {
-                            const months =
-                              ln.billingInterval === "yearly"
-                                ? (ln.qty || 0) * 12
-                                : ln.qty || 0;
+                            const periods = Math.max(
+                              parseInt(ln?.periods ?? 1, 10) || 1,
+                              1,
+                            );
+                            const months = monthsFromLine(ln); // ✅ uses periods
+                            const seatsLine = Math.max(
+                              parseInt(ln?.qty ?? 1, 10) || 1,
+                              1,
+                            );
+                            const ltype = String(
+                              ln.licenseType || p.licenseType || "personal",
+                            ).toLowerCase();
 
                             return (
                               <div
                                 key={idx}
-                                className="px-3 py-2 text-sm flex items-center justify-between"
+                                className="px-3 py-2 text-sm flex items-start justify-between gap-3"
                               >
-                                <div>
-                                  <div className="font-medium">
+                                <div className="min-w-0">
+                                  <div className="font-medium truncate">
                                     {ln.name || ln.productKey}
                                   </div>
-                                  <div className="text-slate-600">
-                                    {ln.billingInterval} · qty {ln.qty}{" "}
-                                    {ln.billingInterval === "yearly"
-                                      ? "(years)"
-                                      : "(months)"}{" "}
-                                    · adds <b>{months}</b> month
-                                    {months === 1 ? "" : "s"}
+
+                                  <div className="text-slate-600 text-xs mt-1 flex flex-wrap items-center gap-2">
+                                    <span className="capitalize">
+                                      {ln.billingInterval}
+                                    </span>
+                                    <span>
+                                      · seats <b>{seatsLine}</b>
+                                    </span>
+                                    <span>
+                                      · periods <b>{periods}</b>
+                                    </span>
+                                    <span>
+                                      · adds <b>{months}</b> month
+                                      {months === 1 ? "" : "s"}{" "}
+                                      <span className="text-slate-500">
+                                        (per seat)
+                                      </span>
+                                    </span>
+                                    <span>·</span>
+                                    <OrganizationBadge
+                                      licenseType={ltype}
+                                      organizationName={
+                                        ln.organizationName ||
+                                        p?.organization?.name
+                                      }
+                                      seats={
+                                        ltype === "organization"
+                                          ? seatsLine
+                                          : null
+                                      }
+                                      className="ml-0"
+                                    />
                                   </div>
                                 </div>
 
-                                <div className="text-right text-slate-700">
+                                <div className="text-right text-slate-700 shrink-0">
                                   <div>
                                     Unit: {p.currency}{" "}
                                     {ln.unit?.toLocaleString?.() ?? ln.unit}
                                   </div>
                                   {ln.install > 0 && (
                                     <div className="text-xs">
-                                      Install: {p.currency} {ln.install}
+                                      Install: {p.currency}{" "}
+                                      {Number(ln.install || 0).toLocaleString()}
                                     </div>
                                   )}
                                   <div className="font-semibold">
@@ -767,11 +838,15 @@ export default function Admin() {
                 const badge = getInstallState(p);
                 const grants = formatGrants(p);
 
+                const lt = String(p.licenseType || "personal").toLowerCase();
+                const seats =
+                  lt === "organization" ? sumSeatsFromLines(p.lines) : null;
+
                 const inst = p?.installation || {};
                 const canMarkComplete =
                   String(inst.status || "").toLowerCase() !== "complete" ||
                   inst.entitlementsApplied === false ||
-                  typeof inst.entitlementsApplied !== "boolean"; // legacy
+                  typeof inst.entitlementsApplied !== "boolean";
 
                 return (
                   <div
@@ -783,7 +858,13 @@ export default function Admin() {
                         <div className="font-medium truncate">
                           {p.email || "Unknown email"}
                         </div>
+                        <OrganizationBadge
+                          licenseType={lt}
+                          organization={p.organization}
+                          seats={seats}
+                        />
                         <Badge label={badge.label} tone={badge.tone} />
+
                         {p.currency && p.totalAmount != null && (
                           <span className="text-xs text-slate-500">
                             · {p.currency}{" "}

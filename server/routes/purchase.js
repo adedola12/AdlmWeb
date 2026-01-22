@@ -31,11 +31,183 @@ router.post("/", requireAuth, async (req, res) => {
   });
 });
 
+// router.post("/cart", requireAuth, async (req, res) => {
+//   try {
+//     const items = Array.isArray(req.body?.items) ? req.body.items : [];
+//     const currency = String(req.body?.currency || "NGN").toUpperCase();
+//     const couponCode = String(req.body?.couponCode || "").trim();
+
+//     if (!items.length) return res.status(400).json({ error: "items required" });
+//     if (!["NGN", "USD"].includes(currency)) {
+//       return res.status(400).json({ error: "currency must be NGN or USD" });
+//     }
+
+//     const keys = [...new Set(items.map((i) => i.productKey).filter(Boolean))];
+//     if (!keys.length) return res.status(400).json({ error: "Invalid items" });
+
+//     const products = await Product.find({ key: { $in: keys }, isPublished: true }).lean();
+//     const byKey = Object.fromEntries(products.map((p) => [p.key, p]));
+//     const fx = await getFxRate();
+
+//     const lines = [];
+//     let total = 0;
+
+//     for (const i of items) {
+//       const p = byKey[i.productKey];
+//       if (!p) return res.status(400).json({ error: `Invalid product: ${i.productKey}` });
+
+//       const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10), 1);
+//       const periods = Math.max(parseInt(i.periods ?? 1, 10), 1);
+//       const firstTime = !!i.firstTime;
+
+//       const licenseType =
+//         String(i.licenseType || "personal").toLowerCase() === "organization"
+//           ? "organization"
+//           : "personal";
+
+//       const unitNGN =
+//         p.billingInterval === "yearly"
+//           ? Number(p.price?.yearlyNGN || 0)
+//           : Number(p.price?.monthlyNGN || 0);
+
+//       const installNGN = firstTime ? Number(p.price?.installNGN || 0) : 0;
+
+//       let unit = unitNGN;
+//       let install = installNGN;
+
+//       if (currency === "USD") {
+//         const ovUnit =
+//           p.billingInterval === "yearly" ? p.price?.yearlyUSD : p.price?.monthlyUSD;
+//         const ovInstall = p.price?.installUSD;
+
+//         unit = ovUnit != null ? Number(ovUnit) : unitNGN * fx;
+//         install = ovInstall != null ? Number(ovInstall) : installNGN * fx;
+
+//         unit = Math.round((unit + Number.EPSILON) * 100) / 100;
+//         install = Math.round((install + Number.EPSILON) * 100) / 100;
+//       } else {
+//         unit = Math.round(unit);
+//         install = Math.round(install);
+//       }
+
+//       // ✅ recurring is per-seat per-period
+//       const recurring = unit * seats * periods;
+//       const lineTotal = recurring + install;
+
+//       lines.push({
+//         productKey: p.key,
+//         name: p.name,
+//         billingInterval: p.billingInterval,
+//         qty: seats,
+//         periods,
+//         licenseType,
+//         unit,
+//         install,
+//         subtotal:
+//           currency === "USD"
+//             ? Math.round((lineTotal + Number.EPSILON) * 100) / 100
+//             : Math.round(lineTotal),
+//       });
+
+//       total += lineTotal;
+//     }
+
+//     total =
+//       currency === "USD"
+//         ? Math.round((total + Number.EPSILON) * 100) / 100
+//         : Math.max(Math.round(total), 0);
+
+//     const totalBeforeDiscount = total;
+
+//     const couponRes = await validateAndComputeDiscount({
+//       code: couponCode,
+//       currency,
+//       subtotal: totalBeforeDiscount,
+//     });
+
+//     if (!couponRes.ok) return res.status(400).json({ error: couponRes.error });
+
+//     const discount = Number(couponRes.discount || 0);
+
+//     const totalAfterDiscount =
+//       currency === "USD"
+//         ? Math.max(Math.round((totalBeforeDiscount - discount + Number.EPSILON) * 100) / 100, 0)
+//         : Math.max(Math.round(totalBeforeDiscount - discount), 0);
+
+//     const purchase = await Purchase.create({
+//       userId: req.user._id,
+//       email: req.user.email,
+//       currency,
+//       totalBeforeDiscount,
+//       totalAmount: totalAfterDiscount,
+//       lines,
+//       status: "pending",
+//       coupon: couponRes.coupon
+//         ? {
+//             code: couponRes.coupon.code,
+//             type: couponRes.coupon.type,
+//             value: couponRes.coupon.value,
+//             currency: couponRes.coupon.currency,
+//             discountAmount: discount,
+//             couponId: couponRes.coupon._id,
+//             redeemedApplied: false,
+//           }
+//         : undefined,
+//     });
+
+//     return res.json({
+//       ok: true,
+//       purchaseId: purchase._id,
+//       lines,
+//       totalBeforeDiscount,
+//       discount,
+//       total: totalAfterDiscount,
+//       currency,
+//       coupon: purchase.coupon?.code ? { code: purchase.coupon.code } : null,
+//       paystack: null,
+//       message:
+//         "Manual payment requested. Please pay to the provided account and click 'I have paid' in the client UI. Admin will verify.",
+//     });
+//   } catch (e) {
+//     return res.status(500).json({ error: e.message || "Cart purchase failed" });
+//   }
+// });
+
 router.post("/cart", requireAuth, async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
     const currency = String(req.body?.currency || "NGN").toUpperCase();
     const couponCode = String(req.body?.couponCode || "").trim();
+
+    // ✅ NEW
+    const purchaseLicenseType =
+      String(req.body?.licenseType || "personal").toLowerCase() ===
+      "organization"
+        ? "organization"
+        : "personal";
+
+    const orgIn = req.body?.organization || null;
+    let organization = undefined;
+
+    if (purchaseLicenseType === "organization") {
+      const name = String(orgIn?.name || "").trim();
+      if (!name) {
+        return res
+          .status(400)
+          .json({
+            error: "organization.name is required for organization purchases",
+          });
+      }
+
+      organization = {
+        name,
+        email:
+          String(orgIn?.email || "")
+            .trim()
+            .toLowerCase() || undefined,
+        phone: String(orgIn?.phone || "").trim() || undefined,
+      };
+    }
 
     if (!items.length) return res.status(400).json({ error: "items required" });
     if (!["NGN", "USD"].includes(currency)) {
@@ -45,7 +217,10 @@ router.post("/cart", requireAuth, async (req, res) => {
     const keys = [...new Set(items.map((i) => i.productKey).filter(Boolean))];
     if (!keys.length) return res.status(400).json({ error: "Invalid items" });
 
-    const products = await Product.find({ key: { $in: keys }, isPublished: true }).lean();
+    const products = await Product.find({
+      key: { $in: keys },
+      isPublished: true,
+    }).lean();
     const byKey = Object.fromEntries(products.map((p) => [p.key, p]));
     const fx = await getFxRate();
 
@@ -54,16 +229,15 @@ router.post("/cart", requireAuth, async (req, res) => {
 
     for (const i of items) {
       const p = byKey[i.productKey];
-      if (!p) return res.status(400).json({ error: `Invalid product: ${i.productKey}` });
+      if (!p)
+        return res
+          .status(400)
+          .json({ error: `Invalid product: ${i.productKey}` });
 
+      // ✅ seats + periods
       const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10), 1);
       const periods = Math.max(parseInt(i.periods ?? 1, 10), 1);
       const firstTime = !!i.firstTime;
-
-      const licenseType =
-        String(i.licenseType || "personal").toLowerCase() === "organization"
-          ? "organization"
-          : "personal";
 
       const unitNGN =
         p.billingInterval === "yearly"
@@ -77,7 +251,9 @@ router.post("/cart", requireAuth, async (req, res) => {
 
       if (currency === "USD") {
         const ovUnit =
-          p.billingInterval === "yearly" ? p.price?.yearlyUSD : p.price?.monthlyUSD;
+          p.billingInterval === "yearly"
+            ? p.price?.yearlyUSD
+            : p.price?.monthlyUSD;
         const ovInstall = p.price?.installUSD;
 
         unit = ovUnit != null ? Number(ovUnit) : unitNGN * fx;
@@ -98,9 +274,13 @@ router.post("/cart", requireAuth, async (req, res) => {
         productKey: p.key,
         name: p.name,
         billingInterval: p.billingInterval,
+
         qty: seats,
-        periods,
-        licenseType,
+        periods, // ✅ keep it
+
+        licenseType: purchaseLicenseType,
+        organizationName: organization?.name || undefined,
+
         unit,
         install,
         subtotal:
@@ -131,17 +311,29 @@ router.post("/cart", requireAuth, async (req, res) => {
 
     const totalAfterDiscount =
       currency === "USD"
-        ? Math.max(Math.round((totalBeforeDiscount - discount + Number.EPSILON) * 100) / 100, 0)
+        ? Math.max(
+            Math.round(
+              (totalBeforeDiscount - discount + Number.EPSILON) * 100,
+            ) / 100,
+            0,
+          )
         : Math.max(Math.round(totalBeforeDiscount - discount), 0);
 
     const purchase = await Purchase.create({
       userId: req.user._id,
       email: req.user.email,
+
       currency,
       totalBeforeDiscount,
       totalAmount: totalAfterDiscount,
+
+      // ✅ NEW
+      licenseType: purchaseLicenseType,
+      organization,
+
       lines,
       status: "pending",
+
       coupon: couponRes.coupon
         ? {
             code: couponRes.coupon.code,
@@ -172,6 +364,7 @@ router.post("/cart", requireAuth, async (req, res) => {
     return res.status(500).json({ error: e.message || "Cart purchase failed" });
   }
 });
+
 
 
 // verify endpoint (Thank-You page)
