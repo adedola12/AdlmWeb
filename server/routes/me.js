@@ -9,12 +9,93 @@ import { Purchase } from "../models/Purchase.js";
 
 const router = express.Router();
 
+function normalizeExpiry(v) {
+  if (!v) return null;
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    return `${v}T23:59:59.999Z`;
+  }
+  return v;
+}
+
+function maskFp(fp) {
+  const s = String(fp || "");
+  if (!s) return "";
+  if (s.length <= 10) return s;
+  return `${s.slice(0, 5)}…${s.slice(-4)}`;
+}
+
+function normalizeLegacyEntitlement(ent) {
+  if (!ent) return ent;
+
+  if (!ent.seats || ent.seats < 1) ent.seats = 1;
+  if (!Array.isArray(ent.devices)) ent.devices = [];
+
+  // migrate old single-device binding into devices[]
+  if (ent.devices.length === 0 && ent.deviceFingerprint) {
+    ent.devices.push({
+      fingerprint: ent.deviceFingerprint,
+      name: "",
+      boundAt: ent.deviceBoundAt || new Date(),
+      lastSeenAt: new Date(),
+      revokedAt: null,
+    });
+  }
+
+  return ent;
+}
+
+function activeDevices(ent) {
+  return (ent.devices || []).filter((d) => !d.revokedAt);
+}
+
+async function ensureUserEntitlementsMigrated(userDoc) {
+  let changed = false;
+  userDoc.entitlements = userDoc.entitlements || [];
+
+  for (const ent of userDoc.entitlements) {
+    const beforeSeats = ent.seats;
+    const beforeDevicesLen = Array.isArray(ent.devices)
+      ? ent.devices.length
+      : -1;
+
+    normalizeLegacyEntitlement(ent);
+
+    const afterSeats = ent.seats;
+    const afterDevicesLen = Array.isArray(ent.devices)
+      ? ent.devices.length
+      : -1;
+
+    if (beforeSeats !== afterSeats || beforeDevicesLen !== afterDevicesLen) {
+      changed = true;
+    }
+  }
+
+  if (changed) await userDoc.save();
+}
+
+function toEntitlementV2(ent) {
+  normalizeLegacyEntitlement(ent);
+  const act = activeDevices(ent);
+  return {
+    productKey: ent.productKey,
+    status: ent.status,
+    expiresAt: normalizeExpiry(ent.expiresAt),
+    seats: Math.max(parseInt(ent.seats || 1, 10), 1),
+    seatsUsed: act.length,
+    devices: act.map((d) => ({
+      fingerprint: maskFp(d.fingerprint),
+      name: d.name || "",
+      boundAt: d.boundAt || null,
+      lastSeenAt: d.lastSeenAt || null,
+    })),
+  };
+}
+
 router.get("/", requireAuth, async (req, res) => {
-  // include new fields from JWT (they are added in auth payload)
+  // Keep legacy response fields for compatibility…
   const {
     email,
     role,
-    entitlements,
     username,
     avatarUrl,
     zone,
@@ -23,30 +104,35 @@ router.get("/", requireAuth, async (req, res) => {
     whatsapp,
   } = req.user;
 
+  // …but also include live entitlement counts from DB (so dashboard is accurate)
+  const user = await User.findById(req.user._id, {
+    entitlements: 1,
+    refreshVersion: 1,
+  });
+  if (user) await ensureUserEntitlementsMigrated(user);
+
+  const entitlementsV2 = user
+    ? (user.entitlements || []).map(toEntitlementV2)
+    : [];
+
   return res.json({
     email,
     role,
     username,
     avatarUrl,
     zone,
-    entitlements,
+    entitlements: req.user.entitlements, // legacy payload (do not break old clients)
+    entitlementsV2, // ✅ new dashboard-ready payload
+    refreshVersion: user?.refreshVersion || 1,
     firstName: firstName || "",
     lastName: lastName || "",
     whatsapp: whatsapp || "",
   });
 });
 
-/* used by desktop */
+/* used by desktop (legacy shape kept) */
 router.get("/entitlements", requireAuth, async (req, res) => {
   const user = await User.findById(req.user._id, { entitlements: 1 }).lean();
-
-  const normalizeExpiry = (v) => {
-    if (!v) return null;
-    if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
-      return `${v}T23:59:59.999Z`;
-    }
-    return v;
-  };
 
   const ent = (user?.entitlements || []).map((e) => ({
     productKey: e.productKey,
@@ -57,21 +143,28 @@ router.get("/entitlements", requireAuth, async (req, res) => {
   res.json(ent);
 });
 
+/* ✅ NEW: used by web/org dashboard to see device usage */
+router.get("/entitlements-v2", requireAuth, async (req, res) => {
+  const user = await User.findById(req.user._id, { entitlements: 1 });
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  await ensureUserEntitlementsMigrated(user);
+
+  return res.json({
+    ok: true,
+    entitlements: (user.entitlements || []).map(toEntitlementV2),
+  });
+});
+
 /* web summary */
 router.get("/summary", requireAuth, async (req, res) => {
-  const user = await User.findById(req.user._id, {
-    entitlements: 1,
-    email: 1,
-  }).lean();
-  // const ent = (user?.entitlements || []).map((e) => ({
-  //   productKey: e.productKey,
-  //   status: e.status,
-  //   expiresAt: e.expiresAt || null,
-  //   isExpired: e.expiresAt ? dayjs(e.expiresAt).isBefore(dayjs()) : true,
-  // }));
+  const user = await User.findById(req.user._id, { entitlements: 1, email: 1 });
+  if (!user) return res.status(404).json({ error: "User missing" });
+
+  await ensureUserEntitlementsMigrated(user);
 
   const ents = (user.entitlements || []).map((e) => ({
-    ...e,
+    ...toEntitlementV2(e), // ✅ seats + devices
     isCourse: false,
   }));
 
@@ -80,6 +173,7 @@ router.get("/summary", requireAuth, async (req, res) => {
     .select("key isCourse")
     .lean();
   const byKey = Object.fromEntries(prods.map((p) => [p.key, !!p.isCourse]));
+
   const entitlements = ents.map((e) => ({
     ...e,
     isCourse: !!byKey[e.productKey],
@@ -99,22 +193,21 @@ router.get("/summary", requireAuth, async (req, res) => {
       decidedAt: 1,
       totalAmount: 1,
       currency: 1,
-    }
+    },
   )
     .sort({ decidedAt: -1 })
     .lean();
 
-  // build a set of productKeys from installs (prefer lines, fallback to root productKey)
   const installKeys = Array.from(
     new Set(
       installs
         .flatMap((p) =>
           Array.isArray(p.lines) && p.lines.length
             ? p.lines.map((l) => l.productKey)
-            : [p.productKey]
+            : [p.productKey],
         )
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
 
   const installProducts = await Product.find({ key: { $in: installKeys } })
@@ -122,11 +215,10 @@ router.get("/summary", requireAuth, async (req, res) => {
     .lean();
 
   const prodNameByKey = Object.fromEntries(
-    installProducts.map((x) => [x.key, x.name])
+    installProducts.map((x) => [x.key, x.name]),
   );
 
   const installsEnriched = installs.map((p) => {
-    // If multiple lines exist, pick the first (or you can join them)
     const firstLine =
       Array.isArray(p.lines) && p.lines.length ? p.lines[0] : null;
     const key = firstLine?.productKey || p.productKey || "";
@@ -140,7 +232,7 @@ router.get("/summary", requireAuth, async (req, res) => {
   });
 
   return res.json({
-    email: user?.email,
+    email: user.email,
     entitlements,
     installations: installsEnriched,
   });
@@ -150,6 +242,7 @@ router.get("/summary", requireAuth, async (req, res) => {
 router.get("/profile", requireAuth, async (req, res) => {
   const u = await User.findById(req.user._id).lean();
   if (!u) return res.status(404).json({ error: "User missing" });
+
   const {
     email,
     username,
@@ -160,6 +253,7 @@ router.get("/profile", requireAuth, async (req, res) => {
     lastName,
     whatsapp,
   } = u;
+
   return res.json({
     email,
     username,
@@ -202,7 +296,6 @@ router.post("/profile", requireAuth, async (req, res) => {
 
   await u.save();
 
-  // return updated user subset
   return res.json({
     user: {
       email: u.email,
