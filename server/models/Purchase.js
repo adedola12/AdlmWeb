@@ -28,14 +28,25 @@ const LineSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// models/Purchase.js (patch)
+
 const GrantSchema = new mongoose.Schema(
   {
     productKey: { type: String, trim: true, required: true },
     months: { type: Number, required: true, min: 1 },
     seats: { type: Number, default: 1, min: 1 },
+
+    // ✅ add these so admin.js + UI can persist org metadata
+    licenseType: {
+      type: String,
+      enum: ["personal", "organization"],
+      default: "personal",
+    },
+    organizationName: { type: String, trim: true },
   },
-  { _id: false },
+  { _id: false }
 );
+
 
 const PurchaseSchema = new mongoose.Schema(
   {

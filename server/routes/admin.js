@@ -5,12 +5,7 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js";
 import { Coupon } from "../models/Coupon.js";
-
-// ✅ FIX: Product was used but not imported (this caused "Product is not defined")
 import { Product } from "../models/Product.js";
-// If your Product model is default export instead, use:
-// import Product from "../models/Product.js";
-
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 import { sendMail } from "../util/mailer.js";
 
@@ -72,7 +67,7 @@ function addMonthsToEntitlement(
       expiresAt: now.add(monthsToAdd, "month").toDate(),
       devices: [],
 
-      // ✅ NEW (safe to add)
+      // ✅ NEW
       licenseType,
       organizationName: organizationName || undefined,
     });
@@ -88,7 +83,7 @@ function addMonthsToEntitlement(
     ent.expiresAt = base.add(monthsToAdd, "month").toDate();
     ent.seats = Math.max(Number(ent.seats || 1), Math.max(seatsToSet, 1));
 
-    // ✅ NEW: upgrade to org if any org purchase happens
+    // ✅ keep org metadata if any org purchase happens
     if (licenseType === "organization") {
       ent.licenseType = "organization";
       if (organizationName) ent.organizationName = organizationName;
@@ -98,8 +93,18 @@ function addMonthsToEntitlement(
   }
 }
 
-function normalizeGrants(grants) {
+/**
+ * Normalize grants, legacy-safe.
+ * Also allows "defaults" so if saved grants are missing license/org, we can fill from purchase.
+ */
+function normalizeGrants(grants, defaults = {}) {
   const map = new Map();
+
+  const defLt =
+    String(defaults.licenseType || "personal").toLowerCase() === "organization"
+      ? "organization"
+      : "personal";
+  const defOrg = String(defaults.organizationName || "").trim();
 
   for (const g of Array.isArray(grants) ? grants : []) {
     const k = String(g?.productKey || "").trim();
@@ -107,18 +112,18 @@ function normalizeGrants(grants) {
     const s = Math.max(Number(g?.seats || 1), 1);
 
     const lt =
-      String(g?.licenseType || "personal").toLowerCase() === "organization"
+      String(g?.licenseType || defLt).toLowerCase() === "organization"
         ? "organization"
         : "personal";
-    const orgName = String(g?.organizationName || "").trim();
+    const orgName = String(g?.organizationName || defOrg).trim();
 
     if (!k || !Number.isFinite(m) || m <= 0) continue;
 
     const prev = map.get(k) || {
       months: 0,
       seats: 1,
-      licenseType: "personal",
-      organizationName: "",
+      licenseType: defLt,
+      organizationName: defOrg,
     };
 
     map.set(k, {
@@ -195,7 +200,10 @@ function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
     });
   }
 
-  return normalizeGrants(grants);
+  return normalizeGrants(grants, {
+    licenseType: purchaseLicenseType,
+    organizationName: purchaseOrgName,
+  });
 }
 
 async function getIsCourseMap(keys) {
@@ -227,6 +235,27 @@ router.get(
     }).sort({ createdAt: -1 });
 
     return res.json(list);
+  }),
+);
+
+router.post(
+  "/users/disable",
+  asyncHandler(async (req, res) => {
+    const email = String(req.body?.email || "")
+      .trim()
+      .toLowerCase();
+    const disabled = !!req.body?.disabled;
+
+    if (!email) return res.status(400).json({ error: "email required" });
+
+    const u = await User.findOne({ email });
+    if (!u) return res.status(404).json({ error: "User not found" });
+
+    u.disabled = disabled;
+    u.refreshVersion = (u.refreshVersion || 0) + 1;
+    await u.save();
+
+    return res.json({ ok: true, disabled: u.disabled });
   }),
 );
 
@@ -277,11 +306,9 @@ router.post(
           organizationName: g.organizationName,
         }),
       );
-
       await user.save();
     }
 
-    // Purchase status
     purchase.status = "approved";
     purchase.decidedBy = req.user?.email || "admin";
     purchase.decidedAt = new Date();
@@ -296,7 +323,11 @@ router.post(
 
     if (staged.length > 0) {
       purchase.installation.status = "pending";
-      purchase.installation.entitlementGrants = staged;
+      // ✅ store normalized grants (schema must include licenseType/orgName)
+      purchase.installation.entitlementGrants = normalizeGrants(staged, {
+        licenseType: purchase.licenseType,
+        organizationName: purchase.organization?.name,
+      });
       purchase.installation.entitlementsApplied = false;
       purchase.installation.entitlementsAppliedAt = null;
     } else {
@@ -368,10 +399,26 @@ router.post(
   }),
 );
 
+router.post(
+  "/purchases/:id/reject",
+  asyncHandler(async (req, res) => {
+    const p = await Purchase.findById(req.params.id);
+    if (!p) return res.status(404).json({ error: "Purchase not found" });
+    if (p.status !== "pending")
+      return res.status(400).json({ error: "Purchase not pending" });
+
+    p.status = "rejected";
+    p.decidedBy = req.user?.email || "admin";
+    p.decidedAt = new Date();
+    await p.save();
+
+    return res.json({ ok: true, purchase: p });
+  }),
+);
+
 router.get(
   "/installations",
   asyncHandler(async (req, res) => {
-    // ✅ include legacy installs too (no entitlementGrants requirement)
     const q = {
       status: "approved",
       $or: [
@@ -395,15 +442,24 @@ router.post(
     p.installation = p.installation || {};
     const wasComplete = p.installation.status === "complete";
 
+    const purchaseLicenseType =
+      String(p.licenseType || "personal").toLowerCase() === "organization"
+        ? "organization"
+        : "personal";
+    const purchaseOrgName = String(p.organization?.name || "").trim();
+
     // ✅ If grants missing (legacy), rebuild from purchase lines/productKey
-    let grants = normalizeGrants(p.installation.entitlementGrants);
+    let grants = normalizeGrants(p.installation.entitlementGrants, {
+      licenseType: purchaseLicenseType,
+      organizationName: purchaseOrgName,
+    });
+
     if (grants.length === 0) {
       grants = buildGrantsFromPurchase(p, 0);
-      // store back so UI stops showing "—"
       p.installation.entitlementGrants = grants;
     }
 
-    // Only apply NON-COURSE items on installation complete (prevents doubling courses)
+    // Only apply NON-COURSE items on installation complete
     const keys = [...new Set(grants.map((g) => g.productKey).filter(Boolean))];
     const isCourseByKey = await getIsCourseMap(keys);
     const installGrants = grants.filter((g) => !isCourseByKey[g.productKey]);
@@ -412,14 +468,17 @@ router.post(
     p.installation.markedBy = req.user?.email || "admin";
     p.installation.markedAt = new Date();
 
-    if (!p.installation.entitlementsApplied && installGrants.length > 0) {
+    if (
+      p.installation.entitlementsApplied !== true &&
+      installGrants.length > 0
+    ) {
       const user = await User.findById(p.userId);
       if (!user) return res.status(404).json({ error: "User not found" });
 
       installGrants.forEach((g) =>
         addMonthsToEntitlement(user, g.productKey, Number(g.months), g.seats, {
-          licenseType: g.licenseType,
-          organizationName: g.organizationName,
+          licenseType: g.licenseType || purchaseLicenseType,
+          organizationName: g.organizationName || purchaseOrgName,
         }),
       );
 
@@ -428,10 +487,9 @@ router.post(
       p.installation.entitlementsApplied = true;
       p.installation.entitlementsAppliedAt = new Date();
     } else if (
-      !p.installation.entitlementsApplied &&
+      p.installation.entitlementsApplied !== true &&
       installGrants.length === 0
     ) {
-      // nothing to apply (course-only or truly empty)
       p.installation.entitlementsApplied = true;
       p.installation.entitlementsAppliedAt = new Date();
     }
@@ -461,7 +519,15 @@ router.post(
 router.post(
   "/users/entitlement",
   asyncHandler(async (req, res) => {
-    const { email, productKey, months = 0, status } = req.body || {};
+    const {
+      email,
+      productKey,
+      months = 0,
+      status,
+      seats,
+      licenseType,
+      organizationName,
+    } = req.body || {};
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
 
@@ -470,17 +536,28 @@ router.post(
 
     let ent = u.entitlements.find((e) => e.productKey === productKey);
 
+    const lt =
+      String(licenseType || "personal").toLowerCase() === "organization"
+        ? "organization"
+        : "personal";
+    const org =
+      lt === "organization" ? String(organizationName || "").trim() : "";
+
     if (!ent) {
       ent = {
         productKey,
         status: status || "active",
+        seats: Math.max(Number(seats || 1), 1),
         expiresAt: (months
           ? now.add(months, "month")
           : now.add(1, "month")
         ).toDate(),
+        licenseType: lt,
+        organizationName: org || undefined,
       };
       u.entitlements.push(ent);
     } else {
+      normalizeLegacyEnt(ent);
       if (typeof status === "string") ent.status = status;
       if (months > 0) {
         const base =
@@ -489,27 +566,19 @@ router.post(
             : now;
         ent.expiresAt = base.add(months, "month").toDate();
       }
+      if (seats != null)
+        ent.seats = Math.max(
+          Number(ent.seats || 1),
+          Math.max(Number(seats || 1), 1),
+        );
+      if (lt === "organization") {
+        ent.licenseType = "organization";
+        if (org) ent.organizationName = org;
+      }
     }
 
     await u.save();
     return res.json({ ok: true, entitlements: u.entitlements });
-  }),
-);
-
-router.post(
-  "/purchases/:id/reject",
-  asyncHandler(async (req, res) => {
-    const p = await Purchase.findById(req.params.id);
-    if (!p) return res.status(404).json({ error: "Purchase not found" });
-    if (p.status !== "pending")
-      return res.status(400).json({ error: "Purchase not pending" });
-
-    p.status = "rejected";
-    p.decidedBy = req.user?.email || "admin";
-    p.decidedAt = new Date();
-    await p.save();
-
-    return res.json({ ok: true, purchase: p });
   }),
 );
 
@@ -525,7 +594,7 @@ router.post(
 
     ent.deviceFingerprint = undefined;
     ent.deviceBoundAt = undefined;
-    ent.devices = []; // ✅ NEW
+    ent.devices = [];
     u.refreshVersion = (u.refreshVersion || 0) + 1;
 
     await u.save();
@@ -590,7 +659,7 @@ router.get(
       seats: ent.seats || 1,
       seatsUsed: activeDevices(ent).length,
       devices: (ent.devices || []).map((d) => ({
-        fingerprint: d.fingerprint, // admin can see full fingerprint
+        fingerprint: d.fingerprint,
         name: d.name || "",
         boundAt: d.boundAt || null,
         lastSeenAt: d.lastSeenAt || null,
