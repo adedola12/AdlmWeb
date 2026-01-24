@@ -35,10 +35,50 @@ function Badge({ label, tone = "slate" }) {
 
 /* ------------------ helpers (UI) ------------------ */
 
-function inferLicenseType(licenseType, seats) {
-  const s = Math.max(Number(seats || 1), 1);
+function inferLicenseType(licenseType, seats, organizationName) {
   const lt = String(licenseType || "").toLowerCase();
-  return lt === "organization" || s > 1 ? "organization" : "personal";
+  if (lt === "organization" || lt === "personal") return lt;
+
+  // legacy fallback (only infer org if orgName exists)
+  const org = String(organizationName || "").trim();
+  if (org) return "organization";
+
+  // do NOT infer org from seats alone (legacy qty can be months)
+  return "personal";
+}
+
+function maxSeatsFromLines(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return null;
+  let max = 1;
+  for (const ln of lines) {
+    const seats = Math.max(parseInt(ln?.qty ?? 1, 10) || 1, 1);
+    if (seats > max) max = seats;
+  }
+  return max || 1;
+}
+
+function seatsForPurchaseBadge(p) {
+  const purchaseOrgName = String(p?.organization?.name || "").trim();
+  const lt = inferLicenseType(p?.licenseType, 1, purchaseOrgName);
+
+  // personal purchase badge should always show 1 seat
+  if (lt === "personal") return 1;
+
+  // org badge: use MAX seats across lines/grants (not SUM)
+  const fromLines = maxSeatsFromLines(p?.lines);
+  const fromGrants = (() => {
+    const grants = Array.isArray(p?.installation?.entitlementGrants)
+      ? p.installation.entitlementGrants
+      : [];
+    let max = 1;
+    for (const g of grants) {
+      const s = Math.max(parseInt(g?.seats ?? 1, 10) || 1, 1);
+      if (s > max) max = s;
+    }
+    return max;
+  })();
+
+  return Math.max(fromLines || 1, fromGrants || 1);
 }
 
 function countActiveDevices(ent) {
@@ -871,8 +911,12 @@ export default function Admin() {
               {purchases.map((p) => {
                 const isCart = Array.isArray(p.lines) && p.lines.length > 0;
 
-                const seatsTotal = sumSeatsFromLines(p.lines) || 1;
-                const lt = inferLicenseType(p.licenseType, seatsTotal);
+                const seatsTotal = seatsForPurchaseBadge(p);
+                const lt = inferLicenseType(
+                  p.licenseType,
+                  seatsTotal,
+                  p?.organization?.name,
+                );
 
                 return (
                   <div
@@ -1118,8 +1162,12 @@ export default function Admin() {
                 const badge = getInstallState(p);
                 const grants = formatGrants(p);
 
-                const seatsTotal = sumSeatsFromLines(p.lines) || 1;
-                const lt = inferLicenseType(p.licenseType, seatsTotal);
+                const seatsTotal = seatsForPurchaseBadge(p);
+                const lt = inferLicenseType(
+                  p.licenseType,
+                  seatsTotal,
+                  p?.organization?.name,
+                );
 
                 const inst = p?.installation || {};
                 const canMarkComplete =
