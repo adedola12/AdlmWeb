@@ -705,9 +705,19 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
                 ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
                 : "bg-amber-50 text-amber-800 ring-1 ring-amber-100";
 
-          const lt = String(o.licenseType || "personal").toLowerCase();
-          const seats =
-            lt === "organization" ? sumSeatsFromLines(o.lines) : null;
+          const seats = sumSeatsFromLines(o.lines) || 1;
+          const lt =
+            String(o.licenseType || "").toLowerCase() === "organization" ||
+            seats > 1
+              ? "organization"
+              : "personal";
+
+          <OrganizationBadge
+            licenseType={lt}
+            organization={o.organization}
+            organizationName={o?.organization?.name}
+            seats={seats}
+          />;
 
           return (
             <div
