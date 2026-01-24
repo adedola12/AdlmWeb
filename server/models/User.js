@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 
 const DeviceBindingSchema = new mongoose.Schema(
   {
-    fingerprint: { type: String, required: true },
+    fingerprint: { type: String, required: true, trim: true },
     name: { type: String, default: "" }, // e.g. "Accounts-Laptop-01"
     boundAt: { type: Date, default: Date.now },
     lastSeenAt: { type: Date, default: Date.now },
@@ -14,7 +14,7 @@ const DeviceBindingSchema = new mongoose.Schema(
 
 const EntitlementSchema = new mongoose.Schema(
   {
-    productKey: { type: String, required: true },
+    productKey: { type: String, required: true, trim: true, lowercase: true },
 
     status: {
       type: String,
@@ -24,12 +24,20 @@ const EntitlementSchema = new mongoose.Schema(
 
     expiresAt: { type: Date },
 
-    // ✅ NEW: seat-based licensing
+    // ✅ Seat-based licensing
     seats: { type: Number, default: 1, min: 1 },
     devices: { type: [DeviceBindingSchema], default: [] },
 
+    // ✅ NEW (used by your admin.js + auth.js logic)
+    licenseType: {
+      type: String,
+      enum: ["personal", "organization"],
+      default: "personal",
+    },
+    organizationName: { type: String, trim: true, default: "" },
+
     // ✅ LEGACY (keep so old docs still load)
-    deviceFingerprint: { type: String },
+    deviceFingerprint: { type: String, trim: true },
     deviceBoundAt: { type: Date },
   },
   { _id: false },
@@ -37,13 +45,28 @@ const EntitlementSchema = new mongoose.Schema(
 
 const UserSchema = new mongoose.Schema(
   {
-    email: { type: String, index: true, unique: true },
-    username: { type: String, index: true, unique: true, sparse: true },
-    avatarUrl: String,
+    email: {
+      type: String,
+      index: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
 
-    firstName: { type: String, default: "" },
-    lastName: { type: String, default: "" },
-    whatsapp: { type: String, default: "" },
+    // keep sparse unique so old docs without username don't collide
+    username: {
+      type: String,
+      index: true,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
+
+    avatarUrl: { type: String, default: "" },
+
+    firstName: { type: String, default: "", trim: true },
+    lastName: { type: String, default: "", trim: true },
+    whatsapp: { type: String, default: "", trim: true },
 
     zone: {
       type: String,
@@ -58,7 +81,7 @@ const UserSchema = new mongoose.Schema(
       default: null,
     },
 
-    passwordHash: String,
+    passwordHash: { type: String, default: "" },
 
     role: {
       type: String,
@@ -67,7 +90,9 @@ const UserSchema = new mongoose.Schema(
     },
 
     disabled: { type: Boolean, default: false },
+
     entitlements: { type: [EntitlementSchema], default: [] },
+
     refreshVersion: { type: Number, default: 1 },
     welcomeEmailSentAt: { type: Date, default: null },
   },

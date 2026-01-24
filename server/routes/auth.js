@@ -22,9 +22,10 @@ const router = express.Router();
 const normalizeWhatsApp = (v) => (!v ? "" : String(v).replace(/[^\d+]/g, ""));
 
 async function findByIdentifier(identifier) {
+  const id = String(identifier || "").trim();
   return (
-    (await User.findOne({ email: identifier })) ||
-    (await User.findOne({ username: identifier }))
+    (await User.findOne({ email: id })) ||
+    (await User.findOne({ username: id }))
   );
 }
 
@@ -33,7 +34,7 @@ function isPluginClient(req) {
   const h = (s) => (req.get(s) || "").toLowerCase();
 
   // Option A: explicit header from your Windows apps
-  //   e.g. X-ADLM-Client: planswift-plugin
+  // e.g. X-ADLM-Client: planswift-plugin
   const kind = h("x-adlm-client");
   if (kind && /win|plugin|desktop/i.test(kind)) return true;
 
@@ -43,7 +44,6 @@ function isPluginClient(req) {
   // Option C: if request sends a device fingerprint at all, assume plugin
   if (req.body?.device_fingerprint) return true;
 
-  // Otherwise assume website
   return false;
 }
 
@@ -59,37 +59,159 @@ function normalizeExpiryMaybe(expValue) {
   return d;
 }
 
+/** Legacy -> devices[] migration */
+function normalizeLegacyEnt(ent) {
+  if (!ent) return;
+  if (!ent.seats || ent.seats < 1) ent.seats = 1;
+  if (!Array.isArray(ent.devices)) ent.devices = [];
+
+  // migrate legacy single-device -> devices[]
+  if (ent.devices.length === 0 && ent.deviceFingerprint) {
+    ent.devices.push({
+      fingerprint: ent.deviceFingerprint,
+      name: "",
+      boundAt: ent.deviceBoundAt || new Date(),
+      lastSeenAt: new Date(),
+      revokedAt: null,
+    });
+  }
+}
+
+function activeDevices(ent) {
+  return (ent?.devices || []).filter((d) => !d.revokedAt);
+}
+
+/**
+ * Enforce device rules:
+ * - personal (single-seat): only 1 device
+ * - organization OR seats>1: allow up to `seats` devices
+ *
+ * Returns { ok:true } or { ok:false, status, code, error }
+ */
+function enforceDeviceBinding(ent, incomingFingerprint) {
+  const fp = String(incomingFingerprint || "").trim();
+  if (!fp) {
+    return {
+      ok: false,
+      status: 400,
+      code: "DFP_REQUIRED",
+      error: "device_fingerprint required",
+    };
+  }
+
+  normalizeLegacyEnt(ent);
+
+  const seats = Math.max(Number(ent.seats || 1), 1);
+  const isOrg =
+    String(ent.licenseType || "").toLowerCase() === "organization" || seats > 1;
+
+  // ✅ MULTI-DEVICE PATH
+  if (isOrg) {
+    const act = activeDevices(ent);
+    const exists = act.find((d) => d.fingerprint === fp);
+
+    if (exists) {
+      exists.lastSeenAt = new Date();
+      return { ok: true, changed: true }; // lastSeen update
+    }
+
+    if (act.length < seats) {
+      ent.devices.push({
+        fingerprint: fp,
+        name: "",
+        boundAt: new Date(),
+        lastSeenAt: new Date(),
+        revokedAt: null,
+      });
+
+      // keep legacy fields populated for backward compatibility
+      if (!ent.deviceFingerprint) ent.deviceFingerprint = fp;
+      if (!ent.deviceBoundAt) ent.deviceBoundAt = new Date();
+
+      return { ok: true, changed: true };
+    }
+
+    return {
+      ok: false,
+      status: 403,
+      code: "DEVICE_LIMIT_REACHED",
+      error: "Device limit reached for this subscription.",
+    };
+  }
+
+  // ✅ SINGLE-DEVICE PATH (personal / seats=1)
+  if (ent.deviceFingerprint && ent.deviceFingerprint !== fp) {
+    return {
+      ok: false,
+      status: 403,
+      code: "DEVICE_MISMATCH",
+      error: "This subscription is already bound to another device.",
+    };
+  }
+
+  // bind if not yet bound
+  if (!ent.deviceFingerprint) {
+    ent.deviceFingerprint = fp;
+    ent.deviceBoundAt = new Date();
+  }
+
+  // also keep devices[] in sync for admin UI
+  const act = activeDevices(ent);
+  if (!act.some((d) => d.fingerprint === fp)) {
+    ent.devices.push({
+      fingerprint: fp,
+      name: "",
+      boundAt: ent.deviceBoundAt || new Date(),
+      lastSeenAt: new Date(),
+      revokedAt: null,
+    });
+  } else {
+    // update last seen for single-seat too
+    const d = act.find((d) => d.fingerprint === fp);
+    if (d) d.lastSeenAt = new Date();
+  }
+
+  return { ok: true, changed: true };
+}
+
 // Create offline license JWT (HS256) for plugin use
 function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
   const secret =
     process.env.LICENSE_JWT_SECRET || "super_license_secret_change_me";
 
-  // IMPORTANT: exp must NOT exceed entitlement expiry
   const expMs = expiresAt?.getTime?.() || 0;
   const expSec = expMs ? Math.floor(expMs / 1000) : null;
 
   const nowSec = Math.floor(Date.now() / 1000);
   if (!expSec || expSec <= nowSec) return null;
 
+  const chosenPk = String(productKey || "").toLowerCase();
+  const dfp = String(deviceFingerprint || "");
+
   const payload = {
     ver: 1,
     sub: String(user._id),
     email: user.email,
-    productKey: String(productKey || "").toLowerCase(),
-    deviceFingerprint: String(deviceFingerprint || ""),
-    entitlements: (user.entitlements || []).map((e) => ({
-      productKey: String(e.productKey || "").toLowerCase(),
-      status: e.status,
-      expiresAt: e.expiresAt || null,
-      deviceFingerprint: e.deviceFingerprint || null,
-    })),
+    productKey: chosenPk,
+    deviceFingerprint: dfp,
+
+    // Important: for the chosen productKey, embed THIS device fingerprint
+    entitlements: (user.entitlements || []).map((e) => {
+      const pk = String(e.productKey || "").toLowerCase();
+      return {
+        productKey: pk,
+        status: e.status,
+        expiresAt: e.expiresAt || null,
+        deviceFingerprint: pk === chosenPk ? dfp : e.deviceFingerprint || null,
+      };
+    }),
   };
 
   return jwt.sign(payload, secret, {
     algorithm: "HS256",
     issuer: "adlm",
     audience: "adlm-plugin",
-    expiresIn: expSec - nowSec, // exactly until entitlement expiry
+    expiresIn: expSec - nowSec, // until entitlement expiry
   });
 }
 
@@ -181,8 +303,9 @@ router.post("/login", async (req, res) => {
   try {
     await ensureDb();
 
-    const { identifier, password, productKey, device_fingerprint } =
-      req.body || {};
+    const { identifier, password } = req.body || {};
+    const productKeyIn = req.body?.productKey;
+    const dfpIn = req.body?.device_fingerprint;
 
     if (!identifier || !password) {
       return res
@@ -214,20 +337,17 @@ router.post("/login", async (req, res) => {
 
     const pluginLogin = isPluginClient(req);
 
-    // IMPORTANT: always define it (fixes ReferenceError)
+    // for plugin license token signing
     let licenseToken = null;
-
-    // Keep these so we can sign license after checks pass
     let chosenPk = null;
     let chosenDfp = null;
     let chosenExpiresAt = null;
 
-    // ── Only for plugin/desktop logins: require entitlement + device binding ──
     if (pluginLogin) {
-      const pk = String(productKey || "")
+      const pk = String(productKeyIn || "")
         .trim()
         .toLowerCase();
-      const dfp = String(device_fingerprint || "").trim();
+      const dfp = String(dfpIn || "").trim();
 
       if (!pk) {
         return res.status(400).json({
@@ -235,7 +355,6 @@ router.post("/login", async (req, res) => {
           code: "PRODUCT_KEY_REQUIRED",
         });
       }
-
       if (!dfp) {
         return res.status(400).json({
           error: "device_fingerprint required",
@@ -308,23 +427,21 @@ router.post("/login", async (req, res) => {
         });
       }
 
-      // one-device binding
-      if (!ent.deviceFingerprint) {
-        ent.deviceFingerprint = dfp;
-        ent.deviceBoundAt = now;
-        needsSave = true;
-      } else if (ent.deviceFingerprint !== dfp) {
-        return res.status(403).json({
-          error: "This subscription is already bound to another device.",
-          code: "DEVICE_MISMATCH",
-        });
+      // ✅ seat-aware multi-device binding
+      const bind = enforceDeviceBinding(ent, dfp);
+      if (!bind.ok) {
+        return res
+          .status(bind.status)
+          .json({ error: bind.error, code: bind.code });
       }
+
+      // persist lastSeen / devices[] / legacy fields
+      needsSave = true;
 
       chosenPk = pk;
       chosenDfp = dfp;
       chosenExpiresAt = expiresAt;
     }
-    // ── End plugin-only checks ──
 
     if (needsSave) await user.save();
 
@@ -353,7 +470,7 @@ router.post("/login", async (req, res) => {
 
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
 
-    // Generate offline license token ONLY for plugin clients (after entitlement/device binding is confirmed)
+    // offline license token ONLY for plugin clients
     if (pluginLogin && chosenPk && chosenDfp && chosenExpiresAt) {
       licenseToken = signLicenseToken({
         user,
