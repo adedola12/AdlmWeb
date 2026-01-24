@@ -22,10 +22,68 @@ const normInterval = (v) =>
   String(v || "monthly")
     .toLowerCase()
     .trim();
-function inferLicenseTypeFromSeats(licenseType, seats) {
-  const s = Math.max(Number(seats || 1), 1);
+
+function hasOrgMeta({ licenseType, organizationName, organization } = {}) {
   const lt = String(licenseType || "").toLowerCase();
-  return lt === "organization" || s > 1 ? "organization" : "personal";
+  const org1 = String(organizationName || "").trim();
+  const org2 = String(organization?.name || "").trim();
+  return lt === "organization" || !!org1 || !!org2;
+}
+
+function inferLicenseTypeFromMeta(licenseType, organizationName, organization) {
+  return hasOrgMeta({ licenseType, organizationName, organization })
+    ? "organization"
+    : "personal";
+}
+
+function lineHasPeriods(ln) {
+  return Object.prototype.hasOwnProperty.call(ln || {}, "periods");
+}
+
+/**
+ * Parse a purchase line into a normalized grant, with legacy fix:
+ * - If personal + no periods field + qty > 1 => qty was duration (periods), NOT seats.
+ */
+function parseLineForGrant(purchase, ln) {
+  const productKey = String(ln?.productKey || "").trim();
+  if (!productKey) return null;
+
+  const interval = normInterval(ln?.billingInterval);
+  const intervalMonths = interval === "yearly" ? 12 : 1;
+
+  const purchaseOrgName = String(purchase?.organization?.name || "").trim();
+  const lineOrgName = String(ln?.organizationName || "").trim();
+
+  const lt = inferLicenseTypeFromMeta(
+    ln?.licenseType || purchase?.licenseType,
+    lineOrgName || purchaseOrgName,
+    purchase?.organization,
+  );
+
+  const rawQty = Math.max(Number(ln?.qty ?? 1), 1);
+
+  const hasPeriods = lineHasPeriods(ln);
+  const rawPeriods = hasPeriods ? Math.max(Number(ln?.periods ?? 1), 1) : 1;
+
+  let seats = lt === "organization" ? rawQty : 1;
+  let periods = rawPeriods;
+
+  // ✅ legacy fix: personal duration stored in qty
+  if (lt === "personal" && !hasPeriods && rawQty > 1) {
+    periods = rawQty;
+    seats = 1;
+  }
+
+  const months = periods * intervalMonths;
+
+  return {
+    productKey,
+    months,
+    seats,
+    licenseType: lt,
+    organizationName:
+      lt === "organization" ? purchaseOrgName || lineOrgName : "",
+  };
 }
 
 function normalizeLegacyEnt(ent) {
@@ -34,11 +92,29 @@ function normalizeLegacyEnt(ent) {
   if (!ent.seats || ent.seats < 1) ent.seats = 1;
   if (!Array.isArray(ent.devices)) ent.devices = [];
 
-  // ✅ infer correct licenseType from seats (fix wrong "personal" on multi-seat)
-  const seats = Math.max(Number(ent.seats || 1), 1);
-  const inferred = inferLicenseTypeFromSeats(ent.licenseType, seats);
-  ent.licenseType = inferred;
+  const orgName = String(ent.organizationName || "").trim();
+  const ltRaw = String(ent.licenseType || "").toLowerCase();
 
+  // infer ONLY from orgName if missing/invalid
+  if (ltRaw !== "personal" && ltRaw !== "organization") {
+    ent.licenseType = orgName ? "organization" : "personal";
+  }
+
+  // If marked org but no orgName + legacy single-device fingerprint -> likely personal legacy
+  if (
+    ent.licenseType === "organization" &&
+    !orgName &&
+    ent.seats > 1 &&
+    (!!ent.deviceFingerprint || (ent.devices || []).length <= 1)
+  ) {
+    ent.licenseType = "personal";
+    ent.seats = 1;
+  }
+
+  // Personal must not have multi-seat
+  if (ent.licenseType === "personal" && ent.seats > 1) ent.seats = 1;
+
+  // legacy fallback deviceFingerprint -> devices[]
   if (ent.devices.length === 0 && ent.deviceFingerprint) {
     ent.devices.push({
       fingerprint: ent.deviceFingerprint,
@@ -60,13 +136,18 @@ function addMonthsToEntitlement(
   userDoc.entitlements = userDoc.entitlements || [];
   const now = dayjs();
 
-  const seatsFinal = Math.max(Number(seatsToSet || 1), 1);
+  const metaLt = inferLicenseTypeFromMeta(
+    meta?.licenseType,
+    meta?.organizationName,
+    meta?.organization,
+  );
 
-  // ✅ if seats > 1 => organization (even if meta says personal)
-  const licenseType = inferLicenseTypeFromSeats(meta?.licenseType, seatsFinal);
+  // org can have seats, personal is always 1
+  const seatsFinal =
+    metaLt === "organization" ? Math.max(Number(seatsToSet || 1), 1) : 1;
 
   const organizationName =
-    licenseType === "organization"
+    metaLt === "organization"
       ? String(meta?.organizationName || "").trim()
       : "";
 
@@ -79,51 +160,62 @@ function addMonthsToEntitlement(
       seats: seatsFinal,
       expiresAt: now.add(monthsToAdd, "month").toDate(),
       devices: [],
-      licenseType,
+      licenseType: metaLt,
       organizationName: organizationName || undefined,
     });
-  } else {
-    normalizeLegacyEnt(ent);
+    return;
+  }
 
-    const base =
-      ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
-        ? dayjs(ent.expiresAt)
-        : now;
+  normalizeLegacyEnt(ent);
 
-    ent.status = "active";
-    ent.expiresAt = base.add(monthsToAdd, "month").toDate();
+  const base =
+    ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
+      ? dayjs(ent.expiresAt)
+      : now;
+
+  ent.status = "active";
+  ent.expiresAt = base.add(monthsToAdd, "month").toDate();
+
+  // org is "sticky" (don’t accidentally downgrade)
+  const targetLt = ent.licenseType === "organization" ? "organization" : metaLt;
+
+  if (targetLt === "organization") {
+    ent.licenseType = "organization";
     ent.seats = Math.max(Number(ent.seats || 1), seatsFinal);
-
-    // ✅ keep org metadata consistent
-    ent.licenseType = inferLicenseTypeFromSeats(ent.licenseType, ent.seats);
-
-    if (ent.licenseType === "organization") {
-      if (organizationName) ent.organizationName = organizationName;
-    }
+    if (organizationName) ent.organizationName = organizationName;
+  } else {
+    ent.licenseType = "personal";
+    ent.seats = 1;
+    ent.organizationName = undefined;
   }
 }
 
 /**
- * Normalize grants and also infer org if seats > 1.
+ * Normalize + merge grants by productKey.
+ * IMPORTANT: do NOT infer org from seats alone (legacy qty can be duration).
  */
 function normalizeGrants(grants, defaults = {}) {
   const map = new Map();
 
-  const defLt = inferLicenseTypeFromSeats(
-    defaults.licenseType,
-    defaults.seats || 1,
-  );
   const defOrg = String(defaults.organizationName || "").trim();
+  const defLt = inferLicenseTypeFromMeta(
+    defaults.licenseType,
+    defOrg,
+    defaults.organization,
+  );
 
   for (const g of Array.isArray(grants) ? grants : []) {
     const k = String(g?.productKey || "").trim();
     const m = Number(g?.months || 0);
-    const s = Math.max(Number(g?.seats || 1), 1);
 
     if (!k || !Number.isFinite(m) || m <= 0) continue;
 
-    const lt = inferLicenseTypeFromSeats(g?.licenseType || defLt, s);
     const orgName = String(g?.organizationName || defOrg).trim();
+
+    const lt = inferLicenseTypeFromMeta(g?.licenseType || defLt, orgName, null);
+
+    const sRaw = Math.max(Number(g?.seats || 1), 1);
+    const s = lt === "organization" ? sRaw : 1;
 
     const prev = map.get(k) || {
       months: 0,
@@ -132,19 +224,25 @@ function normalizeGrants(grants, defaults = {}) {
       organizationName: defOrg,
     };
 
-    const nextSeats = Math.max(prev.seats, s);
-    const nextLt = inferLicenseTypeFromSeats(
+    const mergedOrgName = String(
+      prev.organizationName || orgName || defOrg,
+    ).trim();
+
+    const mergedLt = inferLicenseTypeFromMeta(
       prev.licenseType === "organization" || lt === "organization"
         ? "organization"
         : "personal",
-      nextSeats,
+      mergedOrgName,
+      null,
     );
+
+    const nextSeats = mergedLt === "organization" ? Math.max(prev.seats, s) : 1;
 
     map.set(k, {
       months: prev.months + m,
       seats: nextSeats,
-      licenseType: nextLt,
-      organizationName: prev.organizationName || orgName || "",
+      licenseType: mergedLt,
+      organizationName: mergedLt === "organization" ? mergedOrgName : "",
     });
   }
 
@@ -157,50 +255,30 @@ function normalizeGrants(grants, defaults = {}) {
   }));
 }
 
-// Legacy-safe: build grants from purchase lines OR legacy fields
 function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
   const grants = [];
 
-  const purchaseSeats = Array.isArray(purchase?.lines)
-    ? purchase.lines.reduce(
-        (acc, ln) => acc + Math.max(Number(ln?.qty || 1), 1),
-        0,
-      )
-    : 1;
-
-  // ✅ infer purchase license by seats too
-  const purchaseLicenseType = inferLicenseTypeFromSeats(
-    purchase?.licenseType,
-    purchaseSeats,
-  );
   const purchaseOrgName = String(purchase?.organization?.name || "").trim();
+  const purchaseLt = inferLicenseTypeFromMeta(
+    purchase?.licenseType,
+    purchaseOrgName,
+    purchase?.organization,
+  );
 
   if (Array.isArray(purchase.lines) && purchase.lines.length > 0) {
     for (const ln of purchase.lines) {
-      const productKey = String(ln?.productKey || "").trim();
-      const seats = Math.max(Number(ln?.qty || 1), 1);
-
-      const periods = Math.max(Number(ln?.periods || 1), 1);
-      const interval = normInterval(ln?.billingInterval);
-
-      if (!productKey) continue;
-
-      const intervalMonths = interval === "yearly" ? 12 : 1;
-      const months = periods * intervalMonths;
-
-      // ✅ if line seats > 1 => org
-      const lt = inferLicenseTypeFromSeats(
-        ln?.licenseType || purchaseLicenseType,
-        seats,
-      );
+      const parsed = parseLineForGrant(purchase, ln);
+      if (!parsed) continue;
 
       grants.push({
-        productKey,
-        months,
-        seats,
-        licenseType: lt,
+        productKey: parsed.productKey,
+        months: parsed.months,
+        seats: parsed.seats,
+        licenseType: parsed.licenseType,
         organizationName:
-          purchaseOrgName || String(ln?.organizationName || "").trim(),
+          parsed.licenseType === "organization"
+            ? parsed.organizationName || purchaseOrgName
+            : "",
       });
     }
   } else if (purchase.productKey) {
@@ -214,18 +292,17 @@ function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
       productKey: String(purchase.productKey).trim(),
       months,
       seats: 1,
-      licenseType: purchaseLicenseType,
-      organizationName: purchaseOrgName,
+      licenseType: purchaseLt,
+      organizationName: purchaseLt === "organization" ? purchaseOrgName : "",
     });
   }
 
   return normalizeGrants(grants, {
-    licenseType: purchaseLicenseType,
+    licenseType: purchaseLt,
     organizationName: purchaseOrgName,
-    seats: purchaseSeats,
+    organization: purchase?.organization,
   });
 }
-
 
 async function getIsCourseMap(keys) {
   if (!keys?.length) return {};
@@ -344,10 +421,10 @@ router.post(
 
     if (staged.length > 0) {
       purchase.installation.status = "pending";
-      // ✅ store normalized grants (schema must include licenseType/orgName)
       purchase.installation.entitlementGrants = normalizeGrants(staged, {
         licenseType: purchase.licenseType,
         organizationName: purchase.organization?.name,
+        organization: purchase?.organization,
       });
       purchase.installation.entitlementsApplied = false;
       purchase.installation.entitlementsAppliedAt = null;
@@ -463,18 +540,21 @@ router.post(
     p.installation = p.installation || {};
     const wasComplete = p.installation.status === "complete";
 
-    const purchaseLicenseType =
-      String(p.licenseType || "personal").toLowerCase() === "organization"
-        ? "organization"
-        : "personal";
     const purchaseOrgName = String(p.organization?.name || "").trim();
+    const purchaseLt = inferLicenseTypeFromMeta(
+      p.licenseType,
+      purchaseOrgName,
+      p.organization,
+    );
 
-    // ✅ If grants missing (legacy), rebuild from purchase lines/productKey
+    // ✅ normalize whatever is stored
     let grants = normalizeGrants(p.installation.entitlementGrants, {
-      licenseType: purchaseLicenseType,
+      licenseType: purchaseLt,
       organizationName: purchaseOrgName,
+      organization: p.organization,
     });
 
+    // ✅ If grants missing (legacy), rebuild from purchase lines/productKey
     if (grants.length === 0) {
       grants = buildGrantsFromPurchase(p, 0);
       p.installation.entitlementGrants = grants;
@@ -498,7 +578,7 @@ router.post(
 
       installGrants.forEach((g) =>
         addMonthsToEntitlement(user, g.productKey, Number(g.months), g.seats, {
-          licenseType: g.licenseType || purchaseLicenseType,
+          licenseType: g.licenseType || purchaseLt,
           organizationName: g.organizationName || purchaseOrgName,
         }),
       );
@@ -549,6 +629,7 @@ router.post(
       licenseType,
       organizationName,
     } = req.body || {};
+
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
 
@@ -557,29 +638,30 @@ router.post(
 
     let ent = u.entitlements.find((e) => e.productKey === productKey);
 
-    const lt =
-      String(licenseType || "personal").toLowerCase() === "organization"
-        ? "organization"
-        : "personal";
-    const org =
-      lt === "organization" ? String(organizationName || "").trim() : "";
+    const org = String(organizationName || "").trim();
+    const lt = inferLicenseTypeFromMeta(licenseType, org, null);
+
+    const seatsFinal =
+      lt === "organization" ? Math.max(Number(seats || 1), 1) : 1;
 
     if (!ent) {
       ent = {
         productKey,
         status: status || "active",
-        seats: Math.max(Number(seats || 1), 1),
+        seats: seatsFinal,
         expiresAt: (months
           ? now.add(months, "month")
           : now.add(1, "month")
         ).toDate(),
         licenseType: lt,
-        organizationName: org || undefined,
+        organizationName: lt === "organization" ? org || undefined : undefined,
       };
       u.entitlements.push(ent);
     } else {
       normalizeLegacyEnt(ent);
+
       if (typeof status === "string") ent.status = status;
+
       if (months > 0) {
         const base =
           ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
@@ -587,14 +669,18 @@ router.post(
             : now;
         ent.expiresAt = base.add(months, "month").toDate();
       }
-      if (seats != null)
-        ent.seats = Math.max(
-          Number(ent.seats || 1),
-          Math.max(Number(seats || 1), 1),
-        );
-      if (lt === "organization") {
+
+      // org is sticky; don’t downgrade unintentionally
+      const targetLt = ent.licenseType === "organization" ? "organization" : lt;
+
+      if (targetLt === "organization") {
         ent.licenseType = "organization";
+        ent.seats = Math.max(Number(ent.seats || 1), seatsFinal);
         if (org) ent.organizationName = org;
+      } else {
+        ent.licenseType = "personal";
+        ent.seats = 1;
+        ent.organizationName = undefined;
       }
     }
 
