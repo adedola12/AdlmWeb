@@ -33,25 +33,41 @@ function Badge({ label, tone = "slate" }) {
   );
 }
 
+/* ------------------ helpers (UI) ------------------ */
+
+function inferLicenseType(licenseType, seats) {
+  const s = Math.max(Number(seats || 1), 1);
+  const lt = String(licenseType || "").toLowerCase();
+  return lt === "organization" || s > 1 ? "organization" : "personal";
+}
+
+function countActiveDevices(ent) {
+  const devs = Array.isArray(ent?.devices) ? ent.devices : [];
+  const used = devs.filter((d) => !d?.revokedAt).length;
+  if (used > 0) return used;
+  // legacy fallback
+  return ent?.deviceFingerprint ? 1 : 0;
+}
+
+function isEntExpired(ent) {
+  if (!ent?.expiresAt) return false;
+  const end = dayjs(ent.expiresAt).endOf("day");
+  return end.isValid() && end.isBefore(dayjs());
+}
+
 function getInstallState(p) {
   const inst = p?.installation || {};
-  const status = String(inst.status || "").toLowerCase(); // "pending" | "complete" | ""
-  const entApplied = inst.entitlementsApplied; // true/false/undefined
+  const status = String(inst.status || "").toLowerCase();
+  const entApplied = inst.entitlementsApplied;
   const hasAppliedField = typeof entApplied === "boolean";
 
   if (status === "pending") return { label: "Pending", tone: "yellow" };
-
-  if (status === "complete" && hasAppliedField && entApplied === false) {
+  if (status === "complete" && hasAppliedField && entApplied === false)
     return { label: "Completed but not applied", tone: "red" };
-  }
-
   if (!hasAppliedField || !status)
     return { label: "Legacy record", tone: "slate" };
-
-  if (status === "complete" && entApplied === true) {
+  if (status === "complete" && entApplied === true)
     return { label: "Completed", tone: "green" };
-  }
-
   return { label: status || "Unknown", tone: "slate" };
 }
 
@@ -78,9 +94,7 @@ function formatGrants(p) {
 
   if (!grants.length) return { text: "—", count: 0 };
 
-  // aggregate per productKey (sum months; keep max seats seen)
   const agg = new Map();
-
   for (const g of grants) {
     const key = String(g?.productKey || "").trim();
     const months = Number(g?.months || 0);
@@ -103,6 +117,215 @@ function formatGrants(p) {
   return { text: parts.join(" · "), count: parts.length };
 }
 
+/* ------------------ Devices Modal ------------------ */
+
+function DevicesModal({
+  open,
+  onClose,
+  email,
+  productKey,
+  token,
+  refreshParent,
+  setMsg,
+}) {
+  const [loading, setLoading] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  const [data, setData] = React.useState(null);
+
+  async function load() {
+    if (!open || !email || !productKey) return;
+    setLoading(true);
+    setErr("");
+    try {
+      const res = await apiAuthed(
+        `/admin/users/devices?email=${encodeURIComponent(email)}&productKey=${encodeURIComponent(productKey)}`,
+        { token },
+      );
+      setData(res);
+    } catch (e) {
+      setErr(e?.message || "Failed to load devices");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  React.useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, email, productKey]);
+
+  if (!open) return null;
+
+  const seats = data?.seats || 1;
+  const seatsUsed = data?.seatsUsed || 0;
+  const devices = Array.isArray(data?.devices) ? data.devices : [];
+
+  async function revoke(fp) {
+    setMsg("");
+    try {
+      await apiAuthed(`/admin/users/device/revoke`, {
+        token,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, productKey, fingerprint: fp }),
+      });
+      await load();
+      await refreshParent?.();
+      setMsg("Device revoked");
+    } catch (e) {
+      setMsg(e?.message || "Failed to revoke");
+    }
+  }
+
+  async function del(fp) {
+    setMsg("");
+    try {
+      await apiAuthed(`/admin/users/device/delete`, {
+        token,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, productKey, fingerprint: fp }),
+      });
+      await load();
+      await refreshParent?.();
+      setMsg("Device deleted");
+    } catch (e) {
+      setMsg(e?.message || "Failed to delete");
+    }
+  }
+
+  async function resetAll() {
+    setMsg("");
+    try {
+      await apiAuthed(`/admin/users/reset-device`, {
+        token,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, productKey }),
+      });
+      await load();
+      await refreshParent?.();
+      setMsg("All devices reset");
+    } catch (e) {
+      setMsg(e?.message || "Failed to reset devices");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-3xl rounded-xl shadow-lg ring-1 ring-slate-200 overflow-hidden">
+          <div className="px-4 py-3 border-b flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-semibold truncate">Devices</div>
+              <div className="text-xs text-slate-500 mt-0.5 truncate">
+                {email} · {productKey} · {seatsUsed}/{seats} used
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button className="btn btn-sm" onClick={resetAll}>
+                Reset all
+              </button>
+              <button className="btn btn-sm" onClick={onClose}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4">
+            {loading ? (
+              <div className="text-sm text-slate-600">Loading…</div>
+            ) : err ? (
+              <div className="text-sm text-red-600">{err}</div>
+            ) : devices.length === 0 ? (
+              <div className="text-sm text-slate-600">
+                No devices bound yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-slate-600">
+                    <tr className="border-b">
+                      <th className="py-2 pr-3">Fingerprint</th>
+                      <th className="py-2 pr-3">Name</th>
+                      <th className="py-2 pr-3">Bound</th>
+                      <th className="py-2 pr-3">Last seen</th>
+                      <th className="py-2 pr-3">Status</th>
+                      <th className="py-2 pr-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {devices.map((d) => {
+                      const revoked = !!d.revokedAt;
+                      return (
+                        <tr key={d.fingerprint} className="border-b">
+                          <td className="py-2 pr-3 font-mono text-xs break-all">
+                            {d.fingerprint}
+                          </td>
+                          <td className="py-2 pr-3">{d.name || "—"}</td>
+                          <td className="py-2 pr-3">
+                            {d.boundAt
+                              ? dayjs(d.boundAt).format("YYYY-MM-DD HH:mm")
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {d.lastSeenAt
+                              ? dayjs(d.lastSeenAt).format("YYYY-MM-DD HH:mm")
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {revoked ? (
+                              <Badge label="Revoked" tone="red" />
+                            ) : (
+                              <Badge label="Active" tone="green" />
+                            )}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <div className="flex gap-2 justify-end">
+                              {!revoked && (
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() => revoke(d.fingerprint)}
+                                >
+                                  Revoke
+                                </button>
+                              )}
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => {
+                                  const ok = window.confirm(
+                                    "Delete this device record?",
+                                  );
+                                  if (ok) del(d.fingerprint);
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="px-4 py-3 border-t text-xs text-slate-500">
+            Tip: “Revoke” keeps history but frees a seat. “Delete” removes the
+            record completely.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------ main page ------------------ */
+
 export default function Admin() {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
@@ -114,6 +337,12 @@ export default function Admin() {
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
   const [installations, setInstallations] = React.useState([]);
+
+  const [devicesModal, setDevicesModal] = React.useState({
+    open: false,
+    email: "",
+    productKey: "",
+  });
 
   async function load() {
     setLoading(true);
@@ -235,15 +464,26 @@ export default function Admin() {
     const rows = [];
     (users || []).forEach((u) => {
       (u.entitlements || []).forEach((e) => {
-        if (e.status === "active") {
-          rows.push({
-            email: u.email,
-            username: u.username,
-            productKey: e.productKey,
-            expiresAt: e.expiresAt,
-            status: e.status,
-          });
-        }
+        const status = String(e?.status || "").toLowerCase();
+        if (status !== "active") return;
+        if (isEntExpired(e)) return; // ✅ don't count expired as active
+
+        const seats = Math.max(Number(e?.seats || 1), 1);
+        const lt = inferLicenseType(e?.licenseType, seats);
+        const orgName =
+          lt === "organization" ? String(e?.organizationName || "").trim() : "";
+
+        rows.push({
+          email: u.email,
+          username: u.username,
+          productKey: e.productKey,
+          expiresAt: e.expiresAt,
+          status: e.status,
+          seats,
+          licenseType: lt,
+          organizationName: orgName,
+          seatsUsed: countActiveDevices(e),
+        });
       });
     });
 
@@ -265,19 +505,18 @@ export default function Admin() {
     setDisabled,
     updateEntitlement,
     accessToken,
-    apiAuthed,
     load,
     setMsg,
     deleteEntitlement,
+    onOpenDevices,
   }) {
     const [activeProduct, setActiveProduct] = React.useState(
       productKeys[0] || "",
     );
 
     React.useEffect(() => {
-      if (!productKeys.includes(activeProduct)) {
+      if (!productKeys.includes(activeProduct))
         setActiveProduct(productKeys[0] || "");
-      }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [productKeys.join("|")]);
 
@@ -298,12 +537,32 @@ export default function Admin() {
       return m;
     }, [users]);
 
+    const totals = React.useMemo(() => {
+      const t = { subs: 0, seats: 0, used: 0 };
+      for (const r of rows) {
+        t.subs += 1;
+        t.seats += Math.max(Number(r.seats || 1), 1);
+        t.used += Math.max(Number(r.seatsUsed || 0), 0);
+      }
+      return t;
+    }, [rows]);
+
     return (
       <div className="space-y-4">
         <div className="border-b">
           <nav className="flex gap-3 flex-wrap">
             {productKeys.map((pk) => {
-              const count = (productMap.get(pk) || []).length;
+              const list = productMap.get(pk) || [];
+              const subs = list.length;
+              const seats = list.reduce(
+                (acc, r) => acc + Math.max(Number(r.seats || 1), 1),
+                0,
+              );
+              const used = list.reduce(
+                (acc, r) => acc + Math.max(Number(r.seatsUsed || 0), 0),
+                0,
+              );
+
               const active = pk === activeProduct;
               return (
                 <button
@@ -314,9 +573,9 @@ export default function Admin() {
                       ? "border-blue-600 text-blue-700"
                       : "border-transparent text-slate-600 hover:text-slate-800"
                   }`}
-                  title={pk}
+                  title={`${subs} subscriptions · ${seats} seats · ${used} devices used`}
                 >
-                  {pk} <span className="text-slate-400">({count})</span>
+                  {pk} <span className="text-slate-400">({subs})</span>
                 </button>
               );
             })}
@@ -328,10 +587,11 @@ export default function Admin() {
             <thead className="text-left text-slate-600">
               <tr className="border-b">
                 <th className="py-2 pr-3">User</th>
+                <th className="py-2 pr-3">Subscription</th>
                 <th className="py-2 pr-3">Expiry</th>
+                <th className="py-2 pr-3">Devices</th>
                 <th className="py-2 pr-3">Renewal</th>
                 <th className="py-2 pr-3">Entitlement</th>
-                <th className="py-2 pr-3">Device</th>
                 <th className="py-2 pr-3">User Status</th>
               </tr>
             </thead>
@@ -358,9 +618,58 @@ export default function Admin() {
                     </td>
 
                     <td className="py-3 pr-3">
+                      <OrganizationBadge
+                        licenseType={r.licenseType}
+                        organizationName={r.organizationName}
+                        seats={r.seats}
+                      />
+                    </td>
+
+                    <td className="py-3 pr-3">
                       {r.expiresAt
                         ? dayjs(r.expiresAt).format("YYYY-MM-DD")
                         : "-"}
+                    </td>
+
+                    <td className="py-3 pr-3">
+                      <div className="text-xs text-slate-700">
+                        <b>{r.seatsUsed}</b> / {r.seats} used
+                      </div>
+
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => onOpenDevices(r.email, r.productKey)}
+                          title="View bound devices"
+                        >
+                          View
+                        </button>
+
+                        <button
+                          className="btn btn-sm"
+                          title="Reset all devices for this entitlement"
+                          onClick={async () => {
+                            setMsg("");
+                            try {
+                              await apiAuthed(`/admin/users/reset-device`, {
+                                token: accessToken,
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  email: r.email,
+                                  productKey: r.productKey,
+                                }),
+                              });
+                              await load();
+                              setMsg(`Device lock reset for ${r.productKey}`);
+                            } catch (err) {
+                              setMsg(err?.message || "Failed to reset device");
+                            }
+                          }}
+                        >
+                          Reset
+                        </button>
+                      </div>
                     </td>
 
                     <td className="py-3 pr-3">
@@ -423,34 +732,6 @@ export default function Admin() {
                     </td>
 
                     <td className="py-3 pr-3">
-                      <button
-                        className="btn btn-sm"
-                        title="Reset device binding"
-                        onClick={async () => {
-                          setMsg("");
-                          try {
-                            await apiAuthed(`/admin/users/reset-device`, {
-                              token: accessToken,
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                email: r.email,
-                                productKey: r.productKey,
-                              }),
-                            });
-
-                            await load();
-                            setMsg(`Device lock reset for ${r.productKey}`);
-                          } catch (err) {
-                            setMsg(err?.message || "Failed to reset device");
-                          }
-                        }}
-                      >
-                        Reset Device
-                      </button>
-                    </td>
-
-                    <td className="py-3 pr-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-600">
                           {disabledUser ? "Disabled" : "Active"}
@@ -470,7 +751,7 @@ export default function Admin() {
 
               {sortedRows.length === 0 && (
                 <tr>
-                  <td className="py-4 text-slate-600" colSpan={6}>
+                  <td className="py-4 text-slate-600" colSpan={7}>
                     No users found under this subscription.
                   </td>
                 </tr>
@@ -480,8 +761,9 @@ export default function Admin() {
         </div>
 
         <div className="text-xs text-slate-500">
-          Showing <b>{sortedRows.length}</b> active subscriptions for{" "}
-          <b>{activeProduct}</b>.
+          Showing <b>{totals.subs}</b> active subscriptions for{" "}
+          <b>{activeProduct}</b> · <b>{totals.seats}</b> seats total ·{" "}
+          <b>{totals.used}</b> devices used.
         </div>
       </div>
     );
@@ -589,10 +871,8 @@ export default function Admin() {
               {purchases.map((p) => {
                 const isCart = Array.isArray(p.lines) && p.lines.length > 0;
 
-                const lt = String(p.licenseType || "personal").toLowerCase();
-                const orgName = p?.organization?.name || "";
-                const seats =
-                  lt === "organization" ? sumSeatsFromLines(p.lines) : null;
+                const seatsTotal = sumSeatsFromLines(p.lines) || 1;
+                const lt = inferLicenseType(p.licenseType, seatsTotal);
 
                 return (
                   <div
@@ -606,8 +886,8 @@ export default function Admin() {
                           <OrganizationBadge
                             licenseType={lt}
                             organization={p.organization}
-                            organizationName={orgName}
-                            seats={seats}
+                            organizationName={p?.organization?.name}
+                            seats={seatsTotal}
                           />
                         </div>
 
@@ -690,14 +970,16 @@ export default function Admin() {
                               parseInt(ln?.periods ?? 1, 10) || 1,
                               1,
                             );
-                            const months = monthsFromLine(ln); // ✅ uses periods
+                            const months = monthsFromLine(ln);
                             const seatsLine = Math.max(
                               parseInt(ln?.qty ?? 1, 10) || 1,
                               1,
                             );
-                            const ltype = String(
-                              ln.licenseType || p.licenseType || "personal",
-                            ).toLowerCase();
+
+                            const inferredLineLt = inferLicenseType(
+                              ln?.licenseType || p.licenseType,
+                              seatsLine,
+                            );
 
                             return (
                               <div
@@ -728,16 +1010,12 @@ export default function Admin() {
                                     </span>
                                     <span>·</span>
                                     <OrganizationBadge
-                                      licenseType={ltype}
+                                      licenseType={inferredLineLt}
                                       organizationName={
                                         ln.organizationName ||
                                         p?.organization?.name
                                       }
-                                      seats={
-                                        ltype === "organization"
-                                          ? seatsLine
-                                          : null
-                                      }
+                                      seats={seatsLine}
                                       className="ml-0"
                                     />
                                   </div>
@@ -805,10 +1083,12 @@ export default function Admin() {
                   setDisabled={setDisabled}
                   updateEntitlement={updateEntitlement}
                   accessToken={accessToken}
-                  apiAuthed={apiAuthed}
                   load={load}
                   setMsg={setMsg}
                   deleteEntitlement={deleteEntitlement}
+                  onOpenDevices={(email, productKey) =>
+                    setDevicesModal({ open: true, email, productKey })
+                  }
                 />
               );
             })()
@@ -838,9 +1118,8 @@ export default function Admin() {
                 const badge = getInstallState(p);
                 const grants = formatGrants(p);
 
-                const lt = String(p.licenseType || "personal").toLowerCase();
-                const seats =
-                  lt === "organization" ? sumSeatsFromLines(p.lines) : null;
+                const seatsTotal = sumSeatsFromLines(p.lines) || 1;
+                const lt = inferLicenseType(p.licenseType, seatsTotal);
 
                 const inst = p?.installation || {};
                 const canMarkComplete =
@@ -861,7 +1140,8 @@ export default function Admin() {
                         <OrganizationBadge
                           licenseType={lt}
                           organization={p.organization}
-                          seats={seats}
+                          organizationName={p?.organization?.name}
+                          seats={seatsTotal}
                         />
                         <Badge label={badge.label} tone={badge.tone} />
 
@@ -889,7 +1169,6 @@ export default function Admin() {
                         <div className="text-sm text-slate-800 break-words">
                           {grants.text}
                         </div>
-
                         {Array.isArray(p?.lines) && p.lines.length > 0 && (
                           <div className="text-xs text-slate-500 mt-1">
                             Cart lines: {p.lines.length}
@@ -958,6 +1237,18 @@ export default function Admin() {
           )}
         </div>
       )}
+
+      <DevicesModal
+        open={devicesModal.open}
+        onClose={() =>
+          setDevicesModal({ open: false, email: "", productKey: "" })
+        }
+        email={devicesModal.email}
+        productKey={devicesModal.productKey}
+        token={accessToken}
+        refreshParent={load}
+        setMsg={setMsg}
+      />
     </div>
   );
 }

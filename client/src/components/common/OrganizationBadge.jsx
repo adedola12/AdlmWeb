@@ -62,12 +62,8 @@ function BuildingIcon({ className = "" }) {
 }
 
 /**
- * Tiny badge you can reuse everywhere.
- * Supports:
- * - licenseType: "personal" | "organization"
- * - organization: { name }
- * - organizationName: legacy snapshot field
- * - seats: number (optional)
+ * Tiny badge used everywhere.
+ * Fix: infer "organization" if seats > 1 even when licenseType is missing/wrong.
  */
 export default function OrganizationBadge({
   licenseType = "personal",
@@ -77,14 +73,17 @@ export default function OrganizationBadge({
   className = "",
   showPersonal = true,
 }) {
-  const lt = String(licenseType || "personal").toLowerCase();
-  const isOrg = lt === "organization";
-
-  const name = String(organization?.name || organizationName || "").trim();
-
   const seatsNum =
     typeof seats === "number" ? seats : seats != null ? Number(seats) : null;
-  const seatText = Number.isFinite(seatsNum) && seatsNum > 0 ? seatsNum : null;
+
+  const seatCount =
+    Number.isFinite(seatsNum) && seatsNum > 0 ? Math.floor(seatsNum) : null;
+
+  const lt = String(licenseType || "").toLowerCase();
+  const name = String(organization?.name || organizationName || "").trim();
+
+  // ✅ IMPORTANT: infer org if seatCount > 1 (multi-seat)
+  const isOrg = lt === "organization" || (seatCount != null && seatCount > 1);
 
   if (!isOrg && !showPersonal) return null;
 
@@ -109,10 +108,10 @@ export default function OrganizationBadge({
         <span className="max-w-[180px] truncate">{name}</span>
       ) : null}
 
-      {isOrg && seatText ? <span className="opacity-60">·</span> : null}
-      {isOrg && seatText ? (
+      {isOrg && seatCount ? <span className="opacity-60">·</span> : null}
+      {isOrg && seatCount ? (
         <span>
-          {seatText} seat{seatText === 1 ? "" : "s"}
+          {seatCount} seat{seatCount === 1 ? "" : "s"}
         </span>
       ) : null}
     </span>

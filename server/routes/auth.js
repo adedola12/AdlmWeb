@@ -62,8 +62,16 @@ function normalizeExpiryMaybe(expValue) {
 /** Legacy -> devices[] migration */
 function normalizeLegacyEnt(ent) {
   if (!ent) return;
+
   if (!ent.seats || ent.seats < 1) ent.seats = 1;
   if (!Array.isArray(ent.devices)) ent.devices = [];
+
+  // ✅ infer correct licenseType from seats (fix wrong "personal" on multi-seat)
+  const seats = Math.max(Number(ent.seats || 1), 1);
+  const lt = String(ent.licenseType || "").toLowerCase();
+  if (lt !== "organization" && seats > 1) ent.licenseType = "organization";
+  if (!ent.licenseType)
+    ent.licenseType = seats > 1 ? "organization" : "personal";
 
   // migrate legacy single-device -> devices[]
   if (ent.devices.length === 0 && ent.deviceFingerprint) {
@@ -76,6 +84,7 @@ function normalizeLegacyEnt(ent) {
     });
   }
 }
+
 
 function activeDevices(ent) {
   return (ent?.devices || []).filter((d) => !d.revokedAt);
