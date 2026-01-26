@@ -13,7 +13,7 @@ const SECTIONS = [
   { key: "doors_windows", label: "Windows & Doors" },
   { key: "paint", label: "Painting" },
   { key: "steelwork", label: "Steelwork" },
-];
+  { key: "carbon", label: "Carbon and Others" },];
 
 const ADMIN_RATEGEN_V2_BASE = "/admin/rategen-v2";
 

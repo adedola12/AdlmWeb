@@ -20,6 +20,7 @@ const ALLOWED_SECTION_KEYS = new Set([
   "doors_windows",
   "paint",
   "steelwork",
+  "carbon",
 ]);
 
 const SECTION_LABELS = {
@@ -31,6 +32,7 @@ const SECTION_LABELS = {
   doors_windows: "Windows & Doors",
   paint: "Painting",
   steelwork: "Steelwork",
+  carbon: "Carbon and Others"
 };
 
 const toNum = (v, fallback = 0) => {
@@ -52,6 +54,8 @@ function normalizeSectionKey(raw) {
   if (s.includes("concrete")) return "concrete";
   if (s.includes("finish")) return "finishes";
   if (s.includes("block")) return "blockwork";
+  if (s.includes("carbon")) return "carbon";
+
   return s;
 }
 
