@@ -3,7 +3,13 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { FaTrash, FaInfoCircle, FaLink } from "react-icons/fa";
+import {
+  FaTrash,
+  FaInfoCircle,
+  FaLink,
+  FaSearch,
+  FaTimes,
+} from "react-icons/fa";
 import * as XLSX from "xlsx";
 
 const TITLES = {
@@ -31,14 +37,14 @@ function getEndpoints(tool) {
   if (t === "revit-materials" || t === "revit-material") {
     return {
       list: `/projects/revit/materials`,
-      one: (id) => `/projects/revit/materials/${id}`, // GET + PUT
+      one: (id) => `/projects/revit/materials/${id}`,
       del: (id) => `/projects/revit/materials/${id}`,
     };
   }
 
   return {
     list: `/projects/${t}`,
-    one: (id) => `/projects/${t}/${id}`, // GET + PUT
+    one: (id) => `/projects/${t}/${id}`,
     del: (id) => `/projects/${t}/${id}`,
   };
 }
@@ -68,7 +74,7 @@ function sanitizeFilename(name) {
     .slice(0, 120);
 }
 
-// ✅ simple tooltip (Tailwind-friendly)
+// tooltip
 function Tip({ text }) {
   return (
     <span className="relative inline-flex items-center group">
@@ -80,11 +86,7 @@ function Tip({ text }) {
   );
 }
 
-/**
- * ✅ "Similar items" grouping:
- * Very lightweight keyword grouping based on description.
- * You can expand this keyword list anytime.
- */
+// grouping
 function rateGroupFromText(text) {
   const s = String(text || "").toLowerCase();
 
@@ -104,7 +106,7 @@ function rateGroupFromText(text) {
   )
     return "earthwork";
 
-  return ""; // no group
+  return "";
 }
 
 function ratesEqual(a, b) {
@@ -117,11 +119,31 @@ function ratesEqual(a, b) {
   return true;
 }
 
+// local cache helpers (prevents reload loss if user didn’t save or server response is delayed)
+function cacheKey(tool, projectId) {
+  return `takeoffRates:${normTool(tool)}:${projectId}`;
+}
+function readCache(tool, projectId) {
+  try {
+    const raw = localStorage.getItem(cacheKey(tool, projectId));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function writeCache(tool, projectId, payload) {
+  try {
+    localStorage.setItem(cacheKey(tool, projectId), JSON.stringify(payload));
+  } catch {}
+}
+
 export default function ProjectsGeneric() {
   const { tool } = useParams();
   const title = TITLES[tool] || "Projects";
   const { accessToken } = useAuth();
-  const [searchParams] = useSearchParams();
+
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const endpoints = React.useMemo(() => getEndpoints(tool), [tool]);
   const showMaterials = isMaterialsTool(tool);
@@ -130,17 +152,23 @@ export default function ProjectsGeneric() {
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
 
-  // ✅ persisted rates editing (keyed by row key)
+  // rates editing
   const [rates, setRates] = React.useState({});
   const [baseRates, setBaseRates] = React.useState({});
 
-  // ✅ copy logic options
-  const [autoCopySimilar, setAutoCopySimilar] = React.useState(true);
+  // linked groups (controls auto-copy)
+  const [linkedGroups, setLinkedGroups] = React.useState({}); // { concrete: true, ... }
   const [onlyFillEmpty, setOnlyFillEmpty] = React.useState(true);
 
-  // ✅ save UX
+  // save UX
   const [saving, setSaving] = React.useState(false);
   const [notice, setNotice] = React.useState("");
+
+  // search (items)
+  const [itemQuery, setItemQuery] = React.useState("");
+
+  // optional: search projects list
+  const [projectQuery, setProjectQuery] = React.useState("");
 
   const rowId = (r) => r?._id || r?.id || null;
   const selectedId = sel?._id || sel?.id;
@@ -164,6 +192,51 @@ export default function ProjectsGeneric() {
     return rateGroupFromText(itemText(it));
   }
 
+  function isGroupLinked(group) {
+    return !!(group && linkedGroups?.[group]);
+  }
+
+  function toggleGroupLink(group, currentRowIndex) {
+    if (!group) return;
+
+    setLinkedGroups((prev) => {
+      const next = { ...(prev || {}) };
+      next[group] = !next[group];
+      return next;
+    });
+
+    // nice UX: if enabling link and current row has a rate, apply it immediately to others
+    const items = Array.isArray(sel?.items) ? sel.items : [];
+    const it = items[currentRowIndex];
+    if (!it) return;
+
+    const k0 = itemKey(it, currentRowIndex);
+    const vRaw = rates?.[k0];
+    const v =
+      String(vRaw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(vRaw);
+
+    if (v === 0) return;
+
+    // apply current rate to others in the same group (respect onlyFillEmpty)
+    setRates((prev) => {
+      const next = { ...(prev || {}) };
+      for (let j = 0; j < items.length; j++) {
+        if (j === currentRowIndex) continue;
+        if (rateGroupForItem(items[j]) !== group) continue;
+
+        const kj = itemKey(items[j], j);
+        const already =
+          String(next[kj] ?? "").trim() === ""
+            ? safeNum(items[j]?.rate)
+            : safeNum(next[kj]);
+        if (onlyFillEmpty && already !== 0) continue;
+
+        next[kj] = v;
+      }
+      return next;
+    });
+  }
+
   function initRatesFromProject(project) {
     const items = Array.isArray(project?.items) ? project.items : [];
     const map = {};
@@ -171,8 +244,35 @@ export default function ProjectsGeneric() {
       const k = itemKey(items[i], i);
       map[k] = safeNum(items[i]?.rate);
     }
-    setRates(map);
+
+    // set base from server
     setBaseRates(map);
+
+    // overlay any cached rates (so reload won’t “lose” in-progress edits)
+    const cached = project?._id ? readCache(tool, project._id) : null;
+    if (cached && cached?.rates && typeof cached.rates === "object") {
+      // if cache is same or newer version, apply it
+      if (
+        typeof cached.version === "number" &&
+        typeof project.version === "number"
+      ) {
+        if (cached.version >= project.version) {
+          setRates({ ...map, ...cached.rates });
+          return;
+        }
+      }
+      // fallback: if server rates look empty but cache has values, apply cache
+      const serverAllZero = Object.values(map).every((x) => safeNum(x) === 0);
+      const cacheHasAny = Object.values(cached.rates).some(
+        (x) => safeNum(x) !== 0,
+      );
+      if (serverAllZero && cacheHasAny) {
+        setRates({ ...map, ...cached.rates });
+        return;
+      }
+    }
+
+    setRates(map);
   }
 
   async function load() {
@@ -214,10 +314,19 @@ export default function ProjectsGeneric() {
 
     setErr("");
     setNotice("");
+    setItemQuery("");
 
     try {
       const p = await apiAuthed(endpoints.one(id), { token: accessToken });
       setSel(p);
+
+      // ✅ keep selection in URL so reload opens same project
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("project", id);
+        return next;
+      });
+
       initRatesFromProject(p);
     } catch (e) {
       setErr(e.message || "Failed to open project");
@@ -262,41 +371,6 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // ✅ Manual: apply current row rate to all similar rows
-  function applyRateToSimilar(rowIndex) {
-    if (!sel) return;
-    const items = Array.isArray(sel?.items) ? sel.items : [];
-    const it = items[rowIndex];
-    if (!it) return;
-
-    const group = rateGroupForItem(it);
-    if (!group) return;
-
-    const k0 = itemKey(it, rowIndex);
-    const v = rates?.[k0];
-
-    // don't apply empty
-    if (String(v ?? "").trim() === "") return;
-
-    setRates((prev) => {
-      const next = { ...(prev || {}) };
-      for (let j = 0; j < items.length; j++) {
-        if (j === rowIndex) continue;
-
-        const g = rateGroupForItem(items[j]);
-        if (g !== group) continue;
-
-        const kj = itemKey(items[j], j);
-        const already = safeNum(next[kj]);
-
-        if (onlyFillEmpty && already !== 0) continue;
-        next[kj] = v;
-      }
-      return next;
-    });
-  }
-
-  // ✅ When user edits a rate: optionally auto-copy to similar group (Concrete, etc.)
   function handleRateChange(rowIndex, value) {
     if (!sel) return;
     const items = Array.isArray(sel?.items) ? sel.items : [];
@@ -309,23 +383,23 @@ export default function ProjectsGeneric() {
     setRates((prev) => {
       const next = { ...(prev || {}), [k0]: value };
 
-      // do not propagate if empty
-      if (!autoCopySimilar) return next;
-      if (!group) return next;
-      if (String(value ?? "").trim() === "") return next;
+      // ✅ auto-copy only when that group is linked
+      if (!group || !isGroupLinked(group)) return next;
+
+      if (String(value ?? "").trim() === "") return next; // don’t propagate blank
 
       for (let j = 0; j < items.length; j++) {
         if (j === rowIndex) continue;
-
-        const gj = rateGroupForItem(items[j]);
-        if (gj !== group) continue;
+        if (rateGroupForItem(items[j]) !== group) continue;
 
         const kj = itemKey(items[j], j);
-        const already = safeNum(next[kj]);
 
-        // ✅ "unless I want to otherwise change it":
-        // default behavior only fills empty rates
-        if (onlyFillEmpty && already !== 0) continue;
+        const existing =
+          String(next[kj] ?? "").trim() === ""
+            ? safeNum(items[j]?.rate)
+            : safeNum(next[kj]);
+
+        if (onlyFillEmpty && existing !== 0) continue;
 
         next[kj] = value;
       }
@@ -346,22 +420,18 @@ export default function ProjectsGeneric() {
     try {
       const items = Array.isArray(sel?.items) ? sel.items : [];
 
-      // build payload items with updated rate field
       const updatedItems = items.map((it, i) => {
         const k = itemKey(it, i);
-
-        // if user left it blank, keep existing stored rate
         const raw = rates?.[k];
+
+        // important: if user left blank, keep existing it.rate (server value)
         const use =
           String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
 
         return { ...it, rate: use };
       });
 
-      const payload = {
-        baseVersion: sel?.version,
-        items: updatedItems,
-      };
+      const payload = { baseVersion: sel?.version, items: updatedItems };
 
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
@@ -369,11 +439,12 @@ export default function ProjectsGeneric() {
         body: payload,
       });
 
+      // If backend returns the updated doc with rates, great.
       setSel(updated);
       initRatesFromProject(updated);
-      setNotice("Saved.");
+
+      setNotice("Saved. Your rates will remain after refresh/reload.");
     } catch (e) {
-      // handle version conflict nicely
       const msg = e?.message || "Failed to save";
       if (String(msg).toLowerCase().includes("conflict")) {
         setErr(
@@ -387,36 +458,75 @@ export default function ProjectsGeneric() {
     }
   }
 
+  // ✅ Cache rates locally so reload doesn’t wipe unsaved work
+  React.useEffect(() => {
+    if (!selectedId) return;
+    // store only when there is a selection
+    writeCache(tool, selectedId, {
+      version: sel?.version ?? 0,
+      rates: rates || {},
+      savedAt: Date.now(),
+    });
+  }, [tool, selectedId, sel?.version, rates]);
+
   const items = Array.isArray(sel?.items) ? sel.items : [];
 
-  const computed = items.map((it, i) => {
+  // compute all rows (for totals + export)
+  const computedAll = items.map((it, i) => {
     const k = itemKey(it, i);
     const qty = safeNum(it?.qty);
+
     const rate =
       String(rates?.[k] ?? "").trim() === ""
         ? safeNum(it?.rate)
         : safeNum(rates?.[k]);
+
     const amount = rate * qty;
 
     return {
+      i,
       key: k,
       sn: it?.sn ?? i + 1,
       description: itemText(it),
       qty,
       unit: String(it?.unit || ""),
+      group: rateGroupForItem(it),
       rate,
       amount,
     };
   });
 
-  const totalAmount = computed.reduce((acc, r) => acc + safeNum(r.amount), 0);
+  const totalAmount = computedAll.reduce(
+    (acc, r) => acc + safeNum(r.amount),
+    0,
+  );
+
+  // ✅ item search filter (does not affect totals/export)
+  const q = String(itemQuery || "")
+    .trim()
+    .toLowerCase();
+  const computedShown = !q
+    ? computedAll
+    : computedAll.filter((r) => {
+        return (
+          String(r.description || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(r.group || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(r.sn || "")
+            .toLowerCase()
+            .includes(q)
+        );
+      });
 
   function exportBoQ() {
     if (!sel) return;
 
     const headers = ["S/N", "Description", "Qty", "Unit", "Rate", "Amount"];
 
-    const rowsAoa = computed.map((r) => [
+    const rowsAoa = computedAll.map((r) => [
       r.sn,
       r.description,
       Number(r.qty.toFixed(2)),
@@ -425,19 +535,18 @@ export default function ProjectsGeneric() {
       Number(r.amount.toFixed(2)),
     ]);
 
-    // ✅ TOTAL row
     rowsAoa.push(["", "", "", "", "TOTAL", Number(totalAmount.toFixed(2))]);
 
     const aoa = [headers, ...rowsAoa];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
 
     ws["!cols"] = [
-      { wch: 6 }, // S/N
-      { wch: 60 }, // Description
-      { wch: 12 }, // Qty
-      { wch: 10 }, // Unit
-      { wch: 14 }, // Rate
-      { wch: 16 }, // Amount
+      { wch: 6 },
+      { wch: 60 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 16 },
     ];
 
     const wb = XLSX.utils.book_new();
@@ -453,6 +562,18 @@ export default function ProjectsGeneric() {
   }, [accessToken, tool]);
 
   const showRevitToggle = normTool(tool) === "revit" || isMaterialsTool(tool);
+
+  // project list filter
+  const projectQ = String(projectQuery || "")
+    .trim()
+    .toLowerCase();
+  const rowsShown = !projectQ
+    ? rows
+    : rows.filter((r) =>
+        String(r?.name || "")
+          .toLowerCase()
+          .includes(projectQ),
+      );
 
   return (
     <div className="grid md:grid-cols-3 gap-6">
@@ -488,8 +609,31 @@ export default function ProjectsGeneric() {
 
         {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
 
+        {/* project search */}
+        <div className="mt-3">
+          <div className="flex items-center gap-2 border rounded-md px-2 py-1 bg-white">
+            <FaSearch className="text-slate-500" />
+            <input
+              className="w-full outline-none text-sm"
+              placeholder="Search projects..."
+              value={projectQuery}
+              onChange={(e) => setProjectQuery(e.target.value)}
+            />
+            {!!projectQuery && (
+              <button
+                type="button"
+                className="text-slate-500 hover:text-slate-700"
+                onClick={() => setProjectQuery("")}
+                title="Clear"
+              >
+                <FaTimes />
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="mt-3 space-y-2">
-          {rows.map((r) => {
+          {rowsShown.map((r) => {
             const id = rowId(r);
             const active = selectedId === id;
 
@@ -530,8 +674,8 @@ export default function ProjectsGeneric() {
             );
           })}
 
-          {rows.length === 0 && (
-            <div className="text-sm text-slate-600">No projects yet.</div>
+          {rowsShown.length === 0 && (
+            <div className="text-sm text-slate-600">No projects found.</div>
           )}
         </div>
       </div>
@@ -546,17 +690,7 @@ export default function ProjectsGeneric() {
               <div className="min-w-0">
                 <h2 className="font-semibold mb-2">{sel.name}</h2>
 
-                {/* ✅ Copy/Link settings */}
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700">
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={autoCopySimilar}
-                      onChange={(e) => setAutoCopySimilar(e.target.checked)}
-                    />
-                    Auto-copy rate to similar items
-                  </label>
-
                   <label className="inline-flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -569,11 +703,19 @@ export default function ProjectsGeneric() {
                   <span className="inline-flex items-center gap-2">
                     <Tip text="Subscribe to the Rate Gen for rate update." />
                   </span>
+
+                  <span className="text-slate-500">
+                    Linked groups:{" "}
+                    <b className="text-slate-700">
+                      {Object.keys(linkedGroups)
+                        .filter((g) => linkedGroups[g])
+                        .join(", ") || "None"}
+                    </b>
+                  </span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                {/* ✅ SAVE button */}
                 <button
                   className={`btn btn-sm ${isDirty ? "btn-primary" : ""}`}
                   onClick={saveRatesToCloud}
@@ -594,6 +736,30 @@ export default function ProjectsGeneric() {
             {notice && (
               <div className="text-green-700 text-sm mt-2">{notice}</div>
             )}
+            {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
+
+            {/* item search */}
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 border rounded-md px-2 py-2 bg-white w-full">
+                <FaSearch className="text-slate-500" />
+                <input
+                  className="w-full outline-none text-sm"
+                  placeholder="Search items (description / group / S/N)..."
+                  value={itemQuery}
+                  onChange={(e) => setItemQuery(e.target.value)}
+                />
+                {!!itemQuery && (
+                  <button
+                    type="button"
+                    className="text-slate-500 hover:text-slate-700"
+                    onClick={() => setItemQuery("")}
+                    title="Clear"
+                  >
+                    <FaTimes />
+                  </button>
+                )}
+              </div>
+            </div>
 
             <div className="mt-3 mb-3 flex items-center justify-end">
               <div className="px-3 py-2 rounded-lg bg-slate-50 border text-sm">
@@ -616,24 +782,17 @@ export default function ProjectsGeneric() {
                 </thead>
 
                 <tbody>
-                  {items.map((it, i) => {
-                    const k = itemKey(it, i);
-                    const qty = safeNum(it?.qty);
-                    const rateVal =
-                      String(rates?.[k] ?? "").trim() === ""
-                        ? safeNum(it?.rate)
-                        : safeNum(rates?.[k]);
-                    const amt = rateVal * qty;
-
-                    const group = rateGroupForItem(it); // used for "apply similar"
-                    const canApplySimilar = !!group;
+                  {computedShown.map((r) => {
+                    const it = items[r.i];
+                    const group = r.group;
+                    const linked = isGroupLinked(group);
 
                     return (
-                      <tr key={k || i} className="border-b align-top">
-                        <td className="py-2 pr-4">{it?.sn ?? i + 1}</td>
-                        <td className="py-2 pr-4">{itemText(it)}</td>
-                        <td className="py-2 pr-4">{qty.toFixed(2)}</td>
-                        <td className="py-2 pr-4">{String(it?.unit || "")}</td>
+                      <tr key={r.key || r.i} className="border-b align-top">
+                        <td className="py-2 pr-4">{r.sn}</td>
+                        <td className="py-2 pr-4">{r.description}</td>
+                        <td className="py-2 pr-4">{r.qty.toFixed(2)}</td>
+                        <td className="py-2 pr-4">{r.unit}</td>
 
                         <td className="py-2 pr-4">
                           <div className="flex items-center gap-2">
@@ -641,42 +800,57 @@ export default function ProjectsGeneric() {
                               className="input !h-9 !py-1 !px-2 w-[140px]"
                               type="number"
                               step="any"
-                              value={rates?.[k] ?? ""}
+                              value={rates?.[r.key] ?? ""}
                               placeholder={String(safeNum(it?.rate) || 0)}
                               onChange={(e) =>
-                                handleRateChange(i, e.target.value)
+                                handleRateChange(r.i, e.target.value)
                               }
                             />
 
-                            {/* ✅ manual "link/copy rate to similar" */}
+                            {/* ✅ Link toggle (highlights when active) */}
                             <button
                               type="button"
-                              className={`inline-flex items-center justify-center w-9 h-9 rounded-md border ${
-                                canApplySimilar
-                                  ? "hover:bg-slate-50"
+                              className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition ${
+                                group
+                                  ? linked
+                                    ? "bg-blue-50 border-blue-300"
+                                    : "hover:bg-slate-50"
                                   : "opacity-40 cursor-not-allowed"
                               }`}
                               title={
-                                canApplySimilar
-                                  ? `Apply this rate to similar (${group}) items`
+                                group
+                                  ? linked
+                                    ? `Linked: changes propagate to (${group}) items`
+                                    : `Click to link (${group}) items`
                                   : "No similar group detected"
                               }
-                              disabled={!canApplySimilar}
-                              onClick={() => applyRateToSimilar(i)}
+                              disabled={!group}
+                              onClick={() => toggleGroupLink(group, r.i)}
                             >
-                              <FaLink className="text-slate-600" />
+                              <FaLink
+                                className={
+                                  linked ? "text-blue-700" : "text-slate-600"
+                                }
+                              />
                             </button>
                           </div>
 
-                          {/* small hint */}
-                          {canApplySimilar && (
-                            <div className="text-[11px] text-slate-500 mt-1">
-                              Group: {group}
+                          {group && (
+                            <div className="text-[11px] mt-1">
+                              <span className="text-slate-500">Group:</span>{" "}
+                              <span className="text-slate-700">{group}</span>{" "}
+                              {linked && (
+                                <span className="text-blue-700 font-medium">
+                                  • linked
+                                </span>
+                              )}
                             </div>
                           )}
                         </td>
 
-                        <td className="py-2 pr-4 font-medium">{money(amt)}</td>
+                        <td className="py-2 pr-4 font-medium">
+                          {money(r.amount)}
+                        </td>
                       </tr>
                     );
                   })}
