@@ -110,7 +110,6 @@ function toRateDefinition(r) {
     profitValue: r.profitValue ?? 0,
     totalCost: r.totalCost ?? 0,
 
-    // ✅ add these (safe for existing clients)
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
 
@@ -130,16 +129,6 @@ function toRateDefinition(r) {
         }))
       : [],
   };
-}
-
-function normMatKey(name) {
-  return String(name || "")
-    .toLowerCase()
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/\[[^\]]*\]/g, " ")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 /**
@@ -265,13 +254,7 @@ router.get("/library/compute-items/sync", async (req, res, next) => {
 });
 
 /**
- * ✅ NEW: GET /library/rates/sync
- * Used by Windows app to pull admin-created Rate Library (rategenrates collection).
- *
- * Query:
- *  - sectionKey=ground (optional)
- *  - limit=250 (optional)
- *  - cursor=... (optional)
+ * GET /library/rates/sync
  */
 router.get("/library/rates/sync", async (req, res, next) => {
   try {
@@ -320,12 +303,7 @@ router.get("/library/rates/sync", async (req, res, next) => {
 });
 
 /**
- * ✅ NEW: GET /library/rates/updates
- * Latest-first endpoint for notification feed.
- * Query:
- *  - limit=60 (optional)
- *  - sectionKey=ground (optional)
- *  - since=ISO_DATE (optional) => return only items updated after this time
+ * GET /library/rates/updates
  */
 router.get("/library/rates/updates", async (req, res, next) => {
   try {
@@ -345,7 +323,7 @@ router.get("/library/rates/updates", async (req, res, next) => {
     }
 
     const docs = await RateGenRate.find(q)
-      .sort({ updatedAt: -1, _id: -1 }) // ✅ latest first
+      .sort({ updatedAt: -1, _id: -1 })
       .limit(limit)
       .lean();
 
@@ -358,102 +336,276 @@ router.get("/library/rates/updates", async (req, res, next) => {
   }
 });
 
-// ---------- Material price resolve (Admin master + user library) ----------
+// ---------- ✅ Material price resolve (FUZZY: Admin master + user library) ----------
+
+const BRACKET_RE = /\[[^\]]*\]/g;
+const PAREN_RE = /\([^)]*\)/g;
+
+const STOP = new Set([
+  "the",
+  "and",
+  "to",
+  "of",
+  "for",
+  "in",
+  "on",
+  "at",
+  "with",
+  "without",
+  "from",
+  "bag",
+  "bags",
+  "ton",
+  "tons",
+  "tonne",
+  "tonnes",
+  "m3",
+]);
+
+function normText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(BRACKET_RE, " ")
+    .replace(PAREN_RE, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokens(s) {
+  return normText(s)
+    .split(" ")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .filter((x) => x.length > 1 && !STOP.has(x) && !/^\d+$/.test(x));
+}
+
+function normUnit(u) {
+  const raw = String(u || "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return "";
+  if (raw === "bag" || raw === "bags") return "bag";
+  if (
+    raw === "t" ||
+    raw === "ton" ||
+    raw === "tons" ||
+    raw === "tonne" ||
+    raw === "tonnes"
+  )
+    return "t";
+  const compact = raw.replace(/\s+/g, "");
+  if (compact === "m3" || compact === "m³" || compact === "cum") return "m3";
+  if (/\b(litre|liter|ltr|l)\b/.test(raw)) return "l";
+  return raw;
+}
+
+function scoreMatch(reqTokens, candTokens) {
+  if (!reqTokens.length || !candTokens.length) return 0;
+
+  const A = new Set(reqTokens);
+  const B = new Set(candTokens);
+
+  let inter = 0;
+  for (const x of A) if (B.has(x)) inter += 1;
+
+  const coverage = inter / A.size;
+  const precision = inter / B.size;
+
+  return 0.75 * coverage + 0.25 * precision;
+}
 
 /**
- * POST /rategen-v2/library/material-prices/resolve
+ * POST /library/material-prices/resolve
  * Body:
  *  {
- *    names: string[],
- *    includeMaster?: boolean (default true),
- *    includeUser?: boolean (default true)
+ *    items?: [{ name, unit }],
+ *    names?: string[],
+ *    includeMaster?: boolean,
+ *    includeUser?: boolean,
+ *    limitCandidates?: number
  *  }
  *
  * Returns:
  *  {
  *    ok: true,
- *    pricesByKey: { [normKey]: { name, unit, price, source } },
- *    requested: [{ query, key, match }]
+ *    pricesByKey: { [normKey]: bestMatchOrNull },
+ *    candidatesByKey: { [normKey]: Candidate[] },
+ *    results: [...],
+ *    requested: [...], // legacy-friendly
+ *    stats: {...}
  *  }
  */
 router.post("/library/material-prices/resolve", async (req, res, next) => {
   try {
     await ensureDb();
 
-    const includeMaster = req.body?.includeMaster !== false;
-    const includeUser = req.body?.includeUser !== false;
+    const {
+      items,
+      names,
+      includeMaster = true,
+      includeUser = true,
+      limitCandidates = 10,
+    } = req.body || {};
 
-    const names = Array.isArray(req.body?.names) ? req.body.names : [];
-    const sliced = names
+    const wanted =
+      Array.isArray(items) && items.length
+        ? items.map((x) => ({ name: x?.name, unit: x?.unit }))
+        : Array.isArray(names) && names.length
+          ? names.map((n) => ({ name: n, unit: "" }))
+          : [];
+
+    const cleanedWanted = wanted
       .slice(0, 2000)
-      .map((s) => String(s || "").trim())
-      .filter(Boolean);
+      .map((x) => ({
+        name: String(x?.name || "").trim(),
+        unit: String(x?.unit || "").trim(),
+      }))
+      .filter((x) => x.name);
 
-    const wantedKeys = Array.from(
-      new Set(sliced.map(normMatKey).filter(Boolean)),
-    );
-    if (wantedKeys.length === 0) {
-      return res.json({ ok: true, pricesByKey: {}, requested: [] });
+    if (!cleanedWanted.length) {
+      return res.json({
+        ok: true,
+        results: [],
+        pricesByKey: {},
+        candidatesByKey: {},
+        requested: [],
+        stats: { requested: 0 },
+      });
     }
 
-    const pricesByKey = {}; // normKey -> { name, unit, price, source }
+    // ---- Build pool (master + user) ----
+    const pool = [];
 
-    // 1) MASTER (admin) materials
+    let masterCount = 0;
     if (includeMaster) {
       const master = await RateGenMaterial.find({ enabled: true })
-        .select({ name: 1, unit: 1, defaultUnitPrice: 1 })
+        .select({ sn: 1, name: 1, unit: 1, defaultUnitPrice: 1, category: 1 })
         .lean();
 
-      for (const m of master) {
-        const k = normMatKey(m?.name);
-        if (!k) continue;
-        if (!wantedKeys.includes(k)) continue;
+      masterCount = Array.isArray(master) ? master.length : 0;
 
+      for (const m of master || []) {
         const price = Number(m?.defaultUnitPrice || 0);
-        if (!Number.isFinite(price) || price <= 0) continue;
+        const desc = String(m?.name || "").trim();
+        if (!desc || !Number.isFinite(price) || price <= 0) continue;
 
-        pricesByKey[k] = {
-          name: m?.name || "",
+        pool.push({
+          sn: m?.sn ?? null,
+          description: desc,
           unit: m?.unit || "",
           price,
+          category: m?.category || "",
           source: "master",
-        };
+        });
       }
     }
 
-    // 2) USER (their saved library) overrides master
+    let userCount = 0;
     if (includeUser) {
-      const userId = req.user?._id;
-      const lib = await RateGenLibrary.findOne({ userId }).lean();
-
+      const lib = await RateGenLibrary.findOne({ userId: req.user._id }).lean();
       const mats = Array.isArray(lib?.materials) ? lib.materials : [];
+      userCount = mats.length;
+
       for (const m of mats) {
-        const nm = m?.name || m?.description || "";
-        const k = normMatKey(nm);
-        if (!k) continue;
-        if (!wantedKeys.includes(k)) continue;
-
+        const desc = String(m?.description || m?.name || "").trim();
         const price = Number(m?.price || 0);
-        if (!Number.isFinite(price) || price <= 0) continue;
+        if (!desc || !Number.isFinite(price) || price <= 0) continue;
 
-        pricesByKey[k] = {
-          name: nm,
+        pool.push({
+          sn: m?.sn ?? null,
+          description: desc,
           unit: m?.unit || "",
           price,
+          category: m?.category || "",
           source: "user",
-        };
+        });
       }
     }
 
-    const requested = sliced.map((q) => {
-      const key = normMatKey(q);
-      const hit = key ? pricesByKey[key] : null;
+    const prepared = pool
+      .map((x) => {
+        const d = String(x.description || "").trim();
+        return {
+          ...x,
+          _descNorm: normText(d),
+          _tokens: tokens(d),
+          _unitNorm: normUnit(x.unit),
+        };
+      })
+      .filter((x) => x._descNorm && x.price > 0);
+
+    const maxCands = Math.max(
+      3,
+      Math.min(20, clampInt(limitCandidates, 3, 20, 10)),
+    );
+
+    const pricesByKey = {};
+    const candidatesByKey = {};
+    const results = [];
+
+    for (const w of cleanedWanted) {
+      const key = normText(w.name);
+      const reqToks = tokens(w.name);
+      const reqUnit = normUnit(w.unit);
+
+      const scored = prepared
+        .map((c) => {
+          let s = scoreMatch(reqToks, c._tokens);
+
+          // small boost for exact normalized equality
+          if (key && c._descNorm === key) s += 0.15;
+
+          // soft penalty for unit mismatch (still show candidates)
+          if (reqUnit && c._unitNorm && reqUnit !== c._unitNorm) s *= 0.75;
+
+          return { ...c, score: s };
+        })
+        .filter((x) => x.score >= 0.35)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxCands);
+
+      const best = scored[0] || null;
+
+      candidatesByKey[key] = scored.map((x) => ({
+        sn: x.sn,
+        description: x.description,
+        unit: x.unit,
+        price: x.price,
+        category: x.category,
+        source: x.source,
+        score: Number(x.score.toFixed(4)),
+      }));
+
+      pricesByKey[key] = best
+        ? {
+            description: best.description,
+            unit: best.unit,
+            price: best.price,
+            category: best.category,
+            source: best.source,
+            score: Number(best.score.toFixed(4)),
+          }
+        : null;
+
+      results.push({
+        key,
+        requested: { name: w.name, unit: w.unit },
+        best: pricesByKey[key],
+        candidates: candidatesByKey[key],
+      });
+    }
+
+    // legacy-friendly list (so old clients won’t break)
+    const requested = cleanedWanted.map((w) => {
+      const key = normText(w.name);
+      const hit = pricesByKey[key];
       return {
-        query: q,
+        query: w.name,
         key,
         match: hit
           ? {
-              name: hit.name,
+              name: hit.description,
               unit: hit.unit,
               price: hit.price,
               source: hit.source,
@@ -462,7 +614,18 @@ router.post("/library/material-prices/resolve", async (req, res, next) => {
       };
     });
 
-    res.json({ ok: true, pricesByKey, requested });
+    return res.json({
+      ok: true,
+      results,
+      pricesByKey,
+      candidatesByKey,
+      requested,
+      stats: {
+        requested: cleanedWanted.length,
+        pool: prepared.length,
+        sources: { master: masterCount, user: userCount },
+      },
+    });
   } catch (err) {
     next(err);
   }

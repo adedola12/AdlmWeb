@@ -136,6 +136,26 @@ function writeLinkCache(tool, projectId, payload) {
   } catch {}
 }
 
+function normalizeUnit(u) {
+  const raw = String(u || "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return "";
+  if (raw === "bag" || raw === "bags") return "bag";
+  if (
+    raw === "t" ||
+    raw === "ton" ||
+    raw === "tons" ||
+    raw === "tonne" ||
+    raw === "tonnes"
+  )
+    return "t";
+  const compact = raw.replace(/\s+/g, "");
+  if (compact === "m3" || compact === "m³" || compact === "cum") return "m3";
+  if (/\b(litre|liter|ltr|l)\b/.test(raw)) return "l";
+  return raw;
+}
+
 /** ---------------- Similarity auto-grouping (Takeoffs) ---------------- */
 
 const BRACKET_RE = /\[[^\]]*\]/g;
@@ -207,14 +227,12 @@ function tokenize(desc) {
   if (!s) return [];
 
   const parts = s.split(" ").filter(Boolean);
-
   const out = [];
   for (const p of parts) {
     if (!p) continue;
     if (STOP.has(p)) continue;
     if (/^\d+$/.test(p)) continue;
     if (p.length < 2) continue;
-
     out.push(normalizeToken(p));
   }
   return out.filter(Boolean);
@@ -244,9 +262,7 @@ function buildSimilarityGroups(items, getText) {
     const set = new Set(toks);
     tokenSets[i] = set;
 
-    for (const t of set) {
-      df.set(t, (df.get(t) || 0) + 1);
-    }
+    for (const t of set) df.set(t, (df.get(t) || 0) + 1);
   }
 
   const idf = new Map();
@@ -356,7 +372,7 @@ const AUTO_FILL_PREF_KEY = "adlm:autoFillMaterialsRates:v1";
 function readAutoFillPref() {
   try {
     const raw = localStorage.getItem(AUTO_FILL_PREF_KEY);
-    if (raw == null) return null; // not set
+    if (raw == null) return null;
     return raw === "1";
   } catch {
     return null;
@@ -374,6 +390,10 @@ function entitlementActive(ent) {
   if (ent.expiresAt && new Date(ent.expiresAt).getTime() < Date.now())
     return false;
   return true;
+}
+
+function pickKeyFromCandidate(c) {
+  return `${normalizeMaterialName(c?.description)}|${normalizeUnit(c?.unit)}`;
 }
 
 export default function ProjectsGeneric() {
@@ -394,7 +414,7 @@ export default function ProjectsGeneric() {
   const [rates, setRates] = React.useState({});
   const [baseRates, setBaseRates] = React.useState({});
 
-  // linked groups (controls auto-copy)
+  // linked groups
   const [linkedGroups, setLinkedGroups] = React.useState({});
   const [onlyFillEmpty, setOnlyFillEmpty] = React.useState(true);
 
@@ -408,12 +428,20 @@ export default function ProjectsGeneric() {
   // optional: search projects list
   const [projectQuery, setProjectQuery] = React.useState("");
 
-  // ✅ RateGen entitlement + auto-fill toggle (materials only)
+  // material resolve + picks
+  const [matResolved, setMatResolved] = React.useState({
+    pricesByKey: {},
+    candidatesByKey: {},
+  });
+  const [matPicks, setMatPicks] = React.useState({});
+  const [openPickKey, setOpenPickKey] = React.useState(null);
+
+  // entitlement + auto-fill
   const [canRateGen, setCanRateGen] = React.useState(false);
   const [autoFillMaterialsRates, setAutoFillMaterialsRates] =
     React.useState(false);
   const [autoFillBusy, setAutoFillBusy] = React.useState(false);
-  const autoFillAppliedRef = React.useRef({}); // { [projectId]: true }
+  const autoFillAppliedRef = React.useRef({});
 
   const rowId = (r) => r?._id || r?.id || null;
   const selectedId = sel?._id || sel?.id;
@@ -433,7 +461,6 @@ export default function ProjectsGeneric() {
       : String(it?.description || "");
   }
 
-  // Build groups per selected project
   const items = Array.isArray(sel?.items) ? sel.items : [];
   const { itemGroupId, groupMeta } = React.useMemo(() => {
     if (showMaterials) return buildMaterialGroups(items);
@@ -444,15 +471,12 @@ export default function ProjectsGeneric() {
   function groupIdForIndex(i) {
     return itemGroupId?.[i] || "";
   }
-
   function groupLabel(groupId) {
     return groupMeta?.[groupId]?.label || "Similar items";
   }
-
   function groupCount(groupId) {
     return safeNum(groupMeta?.[groupId]?.count);
   }
-
   function isGroupLinked(groupId) {
     return !!(groupId && linkedGroups?.[groupId]);
   }
@@ -479,9 +503,7 @@ export default function ProjectsGeneric() {
         if (!(k in nextUi)) continue;
         const serverVal = safeNum(base[k]);
         const cacheVal = safeNum(v);
-        if (serverVal === 0 && cacheVal !== 0) {
-          nextUi[k] = String(cacheVal);
-        }
+        if (serverVal === 0 && cacheVal !== 0) nextUi[k] = String(cacheVal);
       }
       setRates(nextUi);
     } else {
@@ -490,13 +512,16 @@ export default function ProjectsGeneric() {
 
     if (project?._id) {
       const lk = readLinkCache(tool, project._id);
-      if (lk && lk?.linkedGroups && typeof lk.linkedGroups === "object") {
-        setLinkedGroups(lk.linkedGroups);
+      if (lk && typeof lk === "object") {
+        setLinkedGroups(lk.linkedGroups || {});
+        setMatPicks(lk.matPicks || {});
       } else {
         setLinkedGroups({});
+        setMatPicks({});
       }
     } else {
       setLinkedGroups({});
+      setMatPicks({});
     }
   }
 
@@ -514,7 +539,6 @@ export default function ProjectsGeneric() {
         ? safeList.find((x) => rowId(x) === preselectId)
         : null;
       const firstId = rowId(safeList?.[0]);
-
       const toOpen = rowId(found) || firstId;
 
       if (toOpen) await view(toOpen);
@@ -603,7 +627,6 @@ export default function ProjectsGeneric() {
     if (!sel || !groupId) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
     const gv = safeNum(rateValueRaw);
-
     if (gv === 0) return;
 
     setRates((prev) => {
@@ -622,7 +645,6 @@ export default function ProjectsGeneric() {
         })();
 
         if (onlyFillEmpty && existing !== 0) continue;
-
         next[kj] = String(gv);
       }
       return next;
@@ -638,7 +660,6 @@ export default function ProjectsGeneric() {
     if (!it) return;
 
     const k0 = itemKey(it, currentRowIndex);
-
     const currentVal =
       String(rates?.[k0] ?? "").trim() === ""
         ? safeNum(it?.rate)
@@ -650,11 +671,11 @@ export default function ProjectsGeneric() {
       next[groupId] = nowOn;
 
       if (nowOn && currentVal !== 0) {
-        setTimeout(() => {
-          applyRateToGroupFromRow(groupId, currentRowIndex, currentVal);
-        }, 0);
+        setTimeout(
+          () => applyRateToGroupFromRow(groupId, currentRowIndex, currentVal),
+          0,
+        );
       }
-
       return next;
     });
   }
@@ -686,7 +707,6 @@ export default function ProjectsGeneric() {
             : safeNum(next[kj]);
 
         if (onlyFillEmpty && existing !== 0) continue;
-
         next[kj] = value;
       }
       return next;
@@ -709,7 +729,6 @@ export default function ProjectsGeneric() {
       const updatedItems = its.map((it, i) => {
         const k = itemKey(it, i);
         const raw = rates?.[k];
-
         const use =
           String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
         return { ...it, rate: use };
@@ -741,7 +760,6 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // Cache rates locally (but v2 merge prevents wiping saved rates)
   React.useEffect(() => {
     if (!selectedId) return;
     writeCache(tool, selectedId, {
@@ -751,19 +769,18 @@ export default function ProjectsGeneric() {
     });
   }, [tool, selectedId, sel?.version, rates]);
 
-  // Cache linked groups per project
   React.useEffect(() => {
     if (!selectedId) return;
     writeLinkCache(tool, selectedId, {
       linkedGroups: linkedGroups || {},
+      matPicks: matPicks || {},
       savedAt: Date.now(),
     });
-  }, [tool, selectedId, linkedGroups]);
+  }, [tool, selectedId, linkedGroups, matPicks]);
 
   /** ---------------- Entitlements check (RateGen) ---------------- */
   React.useEffect(() => {
     if (!accessToken) return;
-
     let cancelled = false;
 
     (async () => {
@@ -787,7 +804,6 @@ export default function ProjectsGeneric() {
     };
   }, [accessToken]);
 
-  // default auto-fill pref (only for materials & only if entitled)
   React.useEffect(() => {
     if (!showMaterials) return;
 
@@ -798,7 +814,6 @@ export default function ProjectsGeneric() {
 
     const pref = readAutoFillPref();
     if (pref == null) {
-      // first time: ON by default for entitled users
       setAutoFillMaterialsRates(true);
       writeAutoFillPref(true);
     } else {
@@ -807,15 +822,16 @@ export default function ProjectsGeneric() {
   }, [showMaterials, canRateGen]);
 
   /** ---------------- Auto-fill material rates from RateGen ---------------- */
-  async function resolveMaterialPrices(names) {
-    // requires RateGen entitlement server-side
+  async function resolveMaterialPrices(itemsReq) {
     return await apiAuthed("/rategen-v2/library/material-prices/resolve", {
       token: accessToken,
       method: "POST",
       body: {
-        names,
+        items: itemsReq,
+        names: itemsReq.map((x) => x.name),
         includeMaster: true,
         includeUser: true,
+        limitCandidates: 10,
       },
     });
   }
@@ -826,27 +842,40 @@ export default function ProjectsGeneric() {
     if (!project?._id) return;
 
     const its = Array.isArray(project?.items) ? project.items : [];
-    const uniqueNames = Array.from(
-      new Set(
-        its.map((x) => String(x?.materialName || "").trim()).filter(Boolean),
-      ),
-    );
 
-    if (uniqueNames.length === 0) return;
+    const uniq = new Map();
+    for (const it of its) {
+      const name = String(it?.materialName || "").trim();
+      if (!name) continue;
+      const unit = String(it?.unit || "").trim();
+      const key = `${normalizeMaterialName(name)}|${normalizeUnit(unit)}`;
+      if (!uniq.has(key)) uniq.set(key, { name, unit });
+    }
+
+    const reqItems = Array.from(uniq.values());
+    if (!reqItems.length) return;
 
     setAutoFillBusy(true);
     setErr("");
     setNotice("");
 
     try {
-      const resp = await resolveMaterialPrices(uniqueNames);
+      const resp = await resolveMaterialPrices(reqItems);
+
       const pricesByKey =
         resp?.pricesByKey && typeof resp.pricesByKey === "object"
           ? resp.pricesByKey
           : {};
+      const candidatesByKey =
+        resp?.candidatesByKey && typeof resp.candidatesByKey === "object"
+          ? resp.candidatesByKey
+          : {};
+
+      setMatResolved({ pricesByKey, candidatesByKey });
 
       let matched = 0;
       let filled = 0;
+      let unitConflicts = 0;
 
       setRates((prev) => {
         const next = { ...(prev || {}) };
@@ -856,15 +885,29 @@ export default function ProjectsGeneric() {
           const k = itemKey(it, i);
 
           const matKey = normalizeMaterialName(it.materialName);
-          const hit = pricesByKey?.[matKey];
-          if (!hit) continue;
+          const candidates = Array.isArray(candidatesByKey?.[matKey])
+            ? candidatesByKey[matKey]
+            : [];
+
+          const pickedKey = matPicks?.[matKey] || null;
+          const picked = pickedKey
+            ? candidates.find((c) => pickKeyFromCandidate(c) === pickedKey)
+            : null;
+
+          const best = picked || pricesByKey?.[matKey];
+          if (!best) continue;
 
           matched += 1;
 
-          const price = safeNum(
-            hit?.price ?? hit?.defaultUnitPrice ?? hit?.unitPrice ?? hit,
-          );
+          const price = safeNum(best.price);
           if (price <= 0) continue;
+
+          const reqUnit = normalizeUnit(it.unit);
+          const hitUnit = normalizeUnit(best.unit);
+          if (reqUnit && hitUnit && reqUnit !== hitUnit) {
+            unitConflicts += 1;
+            continue;
+          }
 
           const existing =
             String(next[k] ?? "").trim() === ""
@@ -882,8 +925,12 @@ export default function ProjectsGeneric() {
 
       setNotice(
         filled > 0
-          ? `Auto-filled ${filled} material rate(s) from Rate Gen. (${matched} match(es) found)`
-          : `No rates were auto-filled. (${matched} match(es) found)`,
+          ? `Auto-filled ${filled} material rate(s). (${matched} match(es) found${
+              unitConflicts ? `, ${unitConflicts} unit conflict(s)` : ""
+            })`
+          : `No rates were auto-filled. (${matched} match(es) found${
+              unitConflicts ? `, ${unitConflicts} unit conflict(s)` : ""
+            })`,
       );
     } catch (e) {
       setErr(e?.message || "Failed to auto-fill material rates");
@@ -892,7 +939,6 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // auto-fill once per project when enabled
   React.useEffect(() => {
     if (!showMaterials) return;
     if (!autoFillMaterialsRates) return;
@@ -910,13 +956,11 @@ export default function ProjectsGeneric() {
     setAutoFillMaterialsRates(v);
     writeAutoFillPref(v);
 
-    // allow re-apply on same project when toggling ON
     if (selectedId) delete autoFillAppliedRef.current[selectedId];
-
     if (v && sel) autoFillMaterialRates(sel);
   }
 
-  // compute all rows (for totals + export)
+  // compute all rows
   const computedAll = items.map((it, i) => {
     const k = itemKey(it, i);
     const qty = safeNum(it?.qty);
@@ -949,7 +993,6 @@ export default function ProjectsGeneric() {
     0,
   );
 
-  // item search filter (does not affect totals/export)
   const q = String(itemQuery || "")
     .trim()
     .toLowerCase();
@@ -1011,7 +1054,6 @@ export default function ProjectsGeneric() {
 
   const showRevitToggle = normTool(tool) === "revit" || isMaterialsTool(tool);
 
-  // project list filter
   const projectQ = String(projectQuery || "")
     .trim()
     .toLowerCase();
@@ -1148,7 +1190,6 @@ export default function ProjectsGeneric() {
                     Only fill empty rates
                   </label>
 
-                  {/* ✅ Materials Auto-Fill Toggle (RateGen entitlement) */}
                   {showMaterials && canRateGen && (
                     <label className="inline-flex items-center gap-2">
                       <input
@@ -1268,6 +1309,28 @@ export default function ProjectsGeneric() {
                     const linked = isGroupLinked(gid);
                     const canLink = gid && r.groupCount >= 2;
 
+                    const matKey = showMaterials
+                      ? normalizeMaterialName(it?.materialName)
+                      : "";
+                    const candidates = showMaterials
+                      ? Array.isArray(matResolved?.candidatesByKey?.[matKey])
+                        ? matResolved.candidatesByKey[matKey]
+                        : []
+                      : [];
+
+                    const pickCandidate = (cand) => {
+                      if (!cand) return;
+                      const it0 = items[r.i];
+                      if (!it0) return;
+
+                      const mk = normalizeMaterialName(it0.materialName);
+                      const pk = pickKeyFromCandidate(cand);
+
+                      setMatPicks((prev) => ({ ...(prev || {}), [mk]: pk }));
+                      handleRateChange(r.i, String(safeNum(cand.price) || 0));
+                      setOpenPickKey(null);
+                    };
+
                     return (
                       <tr key={r.key || r.i} className="border-b align-top">
                         <td className="py-2 pr-4">{r.sn}</td>
@@ -1313,6 +1376,81 @@ export default function ProjectsGeneric() {
                                 }
                               />
                             </button>
+
+                            {showMaterials && candidates.length > 0 && (
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center justify-center w-9 h-9 rounded-md border hover:bg-slate-50"
+                                  title="Pick matching material from RateGen"
+                                  onClick={() =>
+                                    setOpenPickKey(
+                                      openPickKey === r.key ? null : r.key,
+                                    )
+                                  }
+                                >
+                                  <FaSearch className="text-slate-600" />
+                                </button>
+
+                                {openPickKey === r.key && (
+                                  <div className="absolute right-0 mt-2 w-80 z-30 bg-white border rounded-lg shadow-lg overflow-hidden">
+                                    <div className="px-3 py-2 text-xs text-slate-600 border-b">
+                                      Choose match for:{" "}
+                                      <b>
+                                        {String(it?.materialName || "").trim()}
+                                      </b>
+                                    </div>
+
+                                    <div className="max-h-64 overflow-auto">
+                                      {candidates.slice(0, 10).map((c) => {
+                                        const unitBad =
+                                          normalizeUnit(it?.unit) &&
+                                          normalizeUnit(c?.unit) &&
+                                          normalizeUnit(it?.unit) !==
+                                            normalizeUnit(c?.unit);
+
+                                        return (
+                                          <button
+                                            key={pickKeyFromCandidate(c)}
+                                            type="button"
+                                            className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b"
+                                            onClick={() => pickCandidate(c)}
+                                          >
+                                            <div className="flex items-center justify-between gap-3">
+                                              <div className="font-medium truncate">
+                                                {c.description}
+                                              </div>
+                                              <div className="font-semibold">
+                                                {money(c.price)}
+                                              </div>
+                                            </div>
+                                            <div className="text-xs text-slate-500 mt-0.5">
+                                              {c.unit} • {c.source}
+                                              {unitBad && (
+                                                <span className="text-amber-700 font-medium">
+                                                  {" "}
+                                                  • unit mismatch
+                                                </span>
+                                              )}
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+
+                                    <div className="p-2 flex justify-end">
+                                      <button
+                                        type="button"
+                                        className="btn btn-xs"
+                                        onClick={() => setOpenPickKey(null)}
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {!!gid && (
