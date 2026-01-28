@@ -50,6 +50,8 @@ import adminRateGenMaster from "./routes/admin.rategen.master.js";
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
 import entitlementsRouter from "./routes/entitlements.js";
+import adminUsersLite from "./routes/admin.usersLite.js";
+
 
 
 const app = express();
@@ -217,6 +219,9 @@ app.use("/admin/rategen-compute", adminRateGenCompute);
 
 /* legacy alias */
 app.use("/api/rates", ratesCompute);
+
+// ✅ Mini-admin read-only users view (admin + mini_admin)
+app.use("/admin/users-lite", adminUsersLite);
 
 /* ✅ Admin dashboard router LAST */
 app.use("/admin", adminRoutes);

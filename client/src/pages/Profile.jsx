@@ -9,8 +9,8 @@ export default function Profile() {
   const navigate = useNavigate();
   const { user, setAuth, accessToken } = useAuth();
 
-  const staff = isStaff(user);
-  const admin = isAdmin(user);
+  const staff = isStaff(user); // admin + mini_admin
+  const admin = isAdmin(user); // admin only
 
   const [username, setUsername] = React.useState(user?.username || "");
   const [avatarUrl, setAvatarUrl] = React.useState(user?.avatarUrl || "");
@@ -57,10 +57,8 @@ export default function Profile() {
       body: JSON.stringify(body),
     });
 
-    // server might return { user } or the updated fields directly
     const updatedUser = res?.user || res;
 
-    // keep auth store synced
     setAuth((prev) => ({
       ...prev,
       user: { ...(prev?.user || {}), ...(updatedUser || {}) },
@@ -77,7 +75,6 @@ export default function Profile() {
     setMsg("Requesting upload ticket…");
 
     try {
-      // non-admin signer for profile images
       const sig = await apiAuthed(`/me/media/sign`, {
         token: accessToken,
         method: "POST",
@@ -148,11 +145,10 @@ export default function Profile() {
       const url = await uploadToCloudinary(f);
       if (!url) throw new Error("No URL returned");
 
-      // cache-bust so the <img> always refetches the new file
       const withBust = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
 
-      setAvatarUrl(withBust); // show immediately
-      await saveProfile({ avatarUrl: url }); // store clean URL in DB
+      setAvatarUrl(withBust);
+      await saveProfile({ avatarUrl: url });
 
       setMsg("✅ Profile image updated.");
     } catch (err) {
@@ -187,7 +183,6 @@ export default function Profile() {
   const imgSrc = (avatarUrl || "").trim() || placeholder;
   const finalImgSrc = imgErr ? placeholder : imgSrc;
 
-  // robust zone option mapping (supports {key,label} or strings)
   const zoneOptions = (Array.isArray(zones) ? zones : []).map((z) => {
     const key =
       (z && typeof z === "object" ? z.key || z.value || z.id : z) ?? "";
@@ -204,7 +199,7 @@ export default function Profile() {
 
         <div className="flex items-center gap-4 mb-4">
           <img
-            key={finalImgSrc} // force reload when URL changes
+            key={finalImgSrc}
             src={finalImgSrc}
             onError={() => setImgErr(true)}
             className="w-16 h-16 rounded-full border object-cover bg-slate-100"
@@ -309,14 +304,14 @@ export default function Profile() {
             Forgot password
           </Link>
 
-          {/* ✅ Full admin only */}
+          {/* Full admin only */}
           {admin && (
             <Link to="/admin" className="btn">
               Admin dashboard
             </Link>
           )}
 
-          {/* ✅ Staff tools (admin + mini_admin) */}
+          {/* Staff tools (admin + mini_admin) */}
           {staff && (
             <>
               <Link to="/admin/trainings" className="btn">
@@ -342,11 +337,16 @@ export default function Profile() {
               <Link to="/admin/showcase" className="btn">
                 Add / manage testimonials
               </Link>
+
+              {/* ✅ NEW BUTTON: Mini-admin Users View */}
+              <Link to="/admin/users-lite" className="btn">
+                Users (Mini Admin View)
+              </Link>
             </>
           )}
         </div>
 
-        {/* ✅ NEW: Admin tools panel with Freebies button (fixes navigate + isStaff usage) */}
+        {/* Optional quick tools panel */}
         {staff && (
           <div className="mt-4 rounded-xl border bg-white p-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -372,6 +372,15 @@ export default function Profile() {
                   onClick={() => navigate("/admin/coupons")}
                 >
                   Coupons
+                </button>
+
+                {/* ✅ ALSO add it here if you want it grouped */}
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => navigate("/admin/users-lite")}
+                >
+                  Users Lite
                 </button>
               </div>
             </div>
