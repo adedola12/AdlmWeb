@@ -7,6 +7,9 @@ const ItemSchema = new mongoose.Schema(
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },
 
+    // ✅ NEW: persisted rate (so refresh won't wipe it)
+    rate: { type: Number, default: 0 },
+
     // classic takeoff items
     description: { type: String, default: "" },
 
@@ -22,7 +25,7 @@ const ItemSchema = new mongoose.Schema(
     // stable grouping / merge key
     code: { type: String, default: "" },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const TakeoffProjectSchema = new mongoose.Schema(
