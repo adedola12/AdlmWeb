@@ -86,29 +86,6 @@ function Tip({ text }) {
   );
 }
 
-// grouping
-function rateGroupFromText(text) {
-  const s = String(text || "").toLowerCase();
-
-  if (s.includes("concrete")) return "concrete";
-  if (s.includes("formwork")) return "formwork";
-  if (s.includes("block")) return "blockwork";
-  if (s.includes("rebar") || s.includes("reinforcement"))
-    return "reinforcement";
-  if (s.includes("plaster") || s.includes("render")) return "plastering";
-  if (s.includes("paint")) return "painting";
-  if (s.includes("tile") || s.includes("tiling")) return "tiling";
-  if (s.includes("roof")) return "roofing";
-  if (
-    s.includes("excavation") ||
-    s.includes("earthwork") ||
-    s.includes("earth work")
-  )
-    return "earthwork";
-
-  return "";
-}
-
 function ratesEqual(a, b) {
   const A = a || {};
   const B = b || {};
@@ -119,9 +96,11 @@ function ratesEqual(a, b) {
   return true;
 }
 
-// local cache helpers (prevents reload loss if user didn’t save or server response is delayed)
+/** ---------------- Local cache helpers ----------------
+ * v2 keys so old buggy cache won't override new behavior
+ */
 function cacheKey(tool, projectId) {
-  return `takeoffRates:${normTool(tool)}:${projectId}`;
+  return `takeoffRates:v2:${normTool(tool)}:${projectId}`;
 }
 function readCache(tool, projectId) {
   try {
@@ -136,6 +115,265 @@ function writeCache(tool, projectId, payload) {
   try {
     localStorage.setItem(cacheKey(tool, projectId), JSON.stringify(payload));
   } catch {}
+}
+
+function linkKey(tool, projectId) {
+  return `takeoffLinks:v2:${normTool(tool)}:${projectId}`;
+}
+function readLinkCache(tool, projectId) {
+  try {
+    const raw = localStorage.getItem(linkKey(tool, projectId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+function writeLinkCache(tool, projectId, payload) {
+  try {
+    localStorage.setItem(linkKey(tool, projectId), JSON.stringify(payload));
+  } catch {}
+}
+
+/** ---------------- Similarity auto-grouping (Takeoffs) ---------------- */
+
+const BRACKET_RE = /\[[^\]]*\]/g;
+const NON_WORD_RE = /[^a-z0-9\s]/g;
+
+const STOP = new Set([
+  "the",
+  "and",
+  "to",
+  "of",
+  "for",
+  "in",
+  "on",
+  "at",
+  "with",
+  "without",
+  "from",
+  "all",
+  "multiple",
+  "picked",
+  "floors",
+  "floor",
+  "level",
+  "levels",
+  "type",
+  "generic",
+  "interior",
+  "exterior",
+  "complete",
+  "including",
+  "as",
+  "by",
+  "into",
+]);
+
+const SYN = {
+  rebar: "reinforcement",
+  bars: "reinforcement",
+  bar: "reinforcement",
+  steel: "reinforcement",
+  rendering: "render",
+  plastering: "render",
+  plaster: "render",
+  rc: "concrete",
+  rcc: "concrete",
+};
+
+function stripMeta(desc) {
+  return String(desc || "")
+    .replace(BRACKET_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeToken(w) {
+  const t = String(w || "").trim();
+  if (!t) return "";
+  return SYN[t] || t;
+}
+
+function tokenize(desc) {
+  const s = stripMeta(desc)
+    .toLowerCase()
+    .replace(/–|—/g, "-")
+    .replace(NON_WORD_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!s) return [];
+
+  const parts = s.split(" ").filter(Boolean);
+
+  const out = [];
+  for (const p of parts) {
+    if (!p) continue;
+    if (STOP.has(p)) continue;
+    if (/^\d+$/.test(p)) continue;
+    if (p.length < 2) continue;
+
+    out.push(normalizeToken(p));
+  }
+  return out.filter(Boolean);
+}
+
+function groupLabelFromDesc(desc) {
+  const s = stripMeta(desc);
+  if (!s) return "Similar items";
+  const parts = s
+    .split(" - ")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const label = parts.slice(0, 2).join(" - ") || s;
+  return label.length > 60 ? `${label.slice(0, 60)}…` : label;
+}
+
+function buildSimilarityGroups(items, getText) {
+  const N = Array.isArray(items) ? items.length : 0;
+  if (!N) return { itemGroupId: [], groupMeta: {} };
+
+  const tokenSets = new Array(N);
+  const df = new Map();
+
+  for (let i = 0; i < N; i++) {
+    const text = getText(items[i]);
+    const toks = tokenize(text);
+    const set = new Set(toks);
+    tokenSets[i] = set;
+
+    for (const t of set) {
+      df.set(t, (df.get(t) || 0) + 1);
+    }
+  }
+
+  const idf = new Map();
+  for (const [t, c] of df.entries()) {
+    const w = Math.log((N + 1) / (c + 1)) + 1;
+    idf.set(t, w);
+  }
+
+  const SIG_TOKENS = 4;
+  const itemGroupId = new Array(N);
+  const groupMeta = {};
+
+  for (let i = 0; i < N; i++) {
+    const set = tokenSets[i];
+    const arr = Array.from(set);
+
+    arr.sort((a, b) => {
+      const wa = idf.get(a) || 1;
+      const wb = idf.get(b) || 1;
+      if (wb !== wa) return wb - wa;
+      return a.localeCompare(b);
+    });
+
+    const top = arr.slice(0, SIG_TOKENS).sort((a, b) => a.localeCompare(b));
+    const sig = top.length ? top.join("|") : "misc";
+
+    itemGroupId[i] = sig;
+
+    if (!groupMeta[sig]) {
+      groupMeta[sig] = {
+        id: sig,
+        label: groupLabelFromDesc(getText(items[i])),
+        count: 0,
+      };
+    }
+    groupMeta[sig].count += 1;
+  }
+
+  return { itemGroupId, groupMeta };
+}
+
+/** ---------------- Materials grouping (by materialName) ---------------- */
+
+const PAREN_RE = /\([^)]*\)/g;
+
+function normalizeMaterialName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(PAREN_RE, " ")
+    .replace(BRACKET_RE, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeTakeoffLine(line) {
+  return String(line || "")
+    .replace(BRACKET_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isBlockMaterial(materialNameNorm) {
+  return /\bblocks?\b/.test(materialNameNorm);
+}
+
+function buildMaterialGroups(items) {
+  const N = Array.isArray(items) ? items.length : 0;
+  if (!N) return { itemGroupId: [], groupMeta: {} };
+
+  const itemGroupId = new Array(N);
+  const groupMeta = {};
+
+  for (let i = 0; i < N; i++) {
+    const it = items[i] || {};
+    const matNorm = normalizeMaterialName(it.materialName);
+    const takeoffNorm = normalizeTakeoffLine(it.takeoffLine);
+
+    const gid = isBlockMaterial(matNorm)
+      ? `block|${matNorm}|${takeoffNorm || "na"}`
+      : `mat|${matNorm || "unknown"}`;
+
+    itemGroupId[i] = gid;
+
+    if (!groupMeta[gid]) {
+      const label = isBlockMaterial(matNorm)
+        ? `${(it.materialName || "Block").trim()} — ${(it.takeoffLine || "").trim()}`.trim()
+        : `${(it.materialName || "Unknown Material").trim()}`;
+
+      groupMeta[gid] = {
+        id: gid,
+        label: label.length > 60 ? `${label.slice(0, 60)}…` : label,
+        count: 0,
+      };
+    }
+
+    groupMeta[gid].count += 1;
+  }
+
+  return { itemGroupId, groupMeta };
+}
+
+/** ---------------- RateGen entitlement + auto-fill ---------------- */
+
+const AUTO_FILL_PREF_KEY = "adlm:autoFillMaterialsRates:v1";
+function readAutoFillPref() {
+  try {
+    const raw = localStorage.getItem(AUTO_FILL_PREF_KEY);
+    if (raw == null) return null; // not set
+    return raw === "1";
+  } catch {
+    return null;
+  }
+}
+function writeAutoFillPref(v) {
+  try {
+    localStorage.setItem(AUTO_FILL_PREF_KEY, v ? "1" : "0");
+  } catch {}
+}
+
+function entitlementActive(ent) {
+  if (!ent) return false;
+  if (String(ent.status || "").toLowerCase() !== "active") return false;
+  if (ent.expiresAt && new Date(ent.expiresAt).getTime() < Date.now())
+    return false;
+  return true;
 }
 
 export default function ProjectsGeneric() {
@@ -157,7 +395,7 @@ export default function ProjectsGeneric() {
   const [baseRates, setBaseRates] = React.useState({});
 
   // linked groups (controls auto-copy)
-  const [linkedGroups, setLinkedGroups] = React.useState({}); // { concrete: true, ... }
+  const [linkedGroups, setLinkedGroups] = React.useState({});
   const [onlyFillEmpty, setOnlyFillEmpty] = React.useState(true);
 
   // save UX
@@ -169,6 +407,13 @@ export default function ProjectsGeneric() {
 
   // optional: search projects list
   const [projectQuery, setProjectQuery] = React.useState("");
+
+  // ✅ RateGen entitlement + auto-fill toggle (materials only)
+  const [canRateGen, setCanRateGen] = React.useState(false);
+  const [autoFillMaterialsRates, setAutoFillMaterialsRates] =
+    React.useState(false);
+  const [autoFillBusy, setAutoFillBusy] = React.useState(false);
+  const autoFillAppliedRef = React.useRef({}); // { [projectId]: true }
 
   const rowId = (r) => r?._id || r?.id || null;
   const selectedId = sel?._id || sel?.id;
@@ -188,91 +433,71 @@ export default function ProjectsGeneric() {
       : String(it?.description || "");
   }
 
-  function rateGroupForItem(it) {
-    return rateGroupFromText(itemText(it));
+  // Build groups per selected project
+  const items = Array.isArray(sel?.items) ? sel.items : [];
+  const { itemGroupId, groupMeta } = React.useMemo(() => {
+    if (showMaterials) return buildMaterialGroups(items);
+    return buildSimilarityGroups(items, itemText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, showMaterials, items.length]);
+
+  function groupIdForIndex(i) {
+    return itemGroupId?.[i] || "";
   }
 
-  function isGroupLinked(group) {
-    return !!(group && linkedGroups?.[group]);
+  function groupLabel(groupId) {
+    return groupMeta?.[groupId]?.label || "Similar items";
   }
 
-  function toggleGroupLink(group, currentRowIndex) {
-    if (!group) return;
+  function groupCount(groupId) {
+    return safeNum(groupMeta?.[groupId]?.count);
+  }
 
-    setLinkedGroups((prev) => {
-      const next = { ...(prev || {}) };
-      next[group] = !next[group];
-      return next;
-    });
-
-    // nice UX: if enabling link and current row has a rate, apply it immediately to others
-    const items = Array.isArray(sel?.items) ? sel.items : [];
-    const it = items[currentRowIndex];
-    if (!it) return;
-
-    const k0 = itemKey(it, currentRowIndex);
-    const vRaw = rates?.[k0];
-    const v =
-      String(vRaw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(vRaw);
-
-    if (v === 0) return;
-
-    // apply current rate to others in the same group (respect onlyFillEmpty)
-    setRates((prev) => {
-      const next = { ...(prev || {}) };
-      for (let j = 0; j < items.length; j++) {
-        if (j === currentRowIndex) continue;
-        if (rateGroupForItem(items[j]) !== group) continue;
-
-        const kj = itemKey(items[j], j);
-        const already =
-          String(next[kj] ?? "").trim() === ""
-            ? safeNum(items[j]?.rate)
-            : safeNum(next[kj]);
-        if (onlyFillEmpty && already !== 0) continue;
-
-        next[kj] = v;
-      }
-      return next;
-    });
+  function isGroupLinked(groupId) {
+    return !!(groupId && linkedGroups?.[groupId]);
   }
 
   function initRatesFromProject(project) {
-    const items = Array.isArray(project?.items) ? project.items : [];
-    const map = {};
-    for (let i = 0; i < items.length; i++) {
-      const k = itemKey(items[i], i);
-      map[k] = safeNum(items[i]?.rate);
+    const its = Array.isArray(project?.items) ? project.items : [];
+
+    const base = {};
+    const ui = {};
+
+    for (let i = 0; i < its.length; i++) {
+      const k = itemKey(its[i], i);
+      const r = safeNum(its[i]?.rate);
+      base[k] = r;
+      ui[k] = r > 0 ? String(r) : "";
     }
 
-    // set base from server
-    setBaseRates(map);
+    setBaseRates(base);
 
-    // overlay any cached rates (so reload won’t “lose” in-progress edits)
     const cached = project?._id ? readCache(tool, project._id) : null;
     if (cached && cached?.rates && typeof cached.rates === "object") {
-      // if cache is same or newer version, apply it
-      if (
-        typeof cached.version === "number" &&
-        typeof project.version === "number"
-      ) {
-        if (cached.version >= project.version) {
-          setRates({ ...map, ...cached.rates });
-          return;
+      const nextUi = { ...ui };
+      for (const [k, v] of Object.entries(cached.rates)) {
+        if (!(k in nextUi)) continue;
+        const serverVal = safeNum(base[k]);
+        const cacheVal = safeNum(v);
+        if (serverVal === 0 && cacheVal !== 0) {
+          nextUi[k] = String(cacheVal);
         }
       }
-      // fallback: if server rates look empty but cache has values, apply cache
-      const serverAllZero = Object.values(map).every((x) => safeNum(x) === 0);
-      const cacheHasAny = Object.values(cached.rates).some(
-        (x) => safeNum(x) !== 0,
-      );
-      if (serverAllZero && cacheHasAny) {
-        setRates({ ...map, ...cached.rates });
-        return;
-      }
+      setRates(nextUi);
+    } else {
+      setRates(ui);
     }
 
-    setRates(map);
+    if (project?._id) {
+      const lk = readLinkCache(tool, project._id);
+      if (lk && lk?.linkedGroups && typeof lk.linkedGroups === "object") {
+        setLinkedGroups(lk.linkedGroups);
+      } else {
+        setLinkedGroups({});
+      }
+    } else {
+      setLinkedGroups({});
+    }
   }
 
   async function load() {
@@ -297,12 +522,14 @@ export default function ProjectsGeneric() {
         setSel(null);
         setRates({});
         setBaseRates({});
+        setLinkedGroups({});
       }
     } catch (e) {
       setErr(e.message || "Failed to load projects");
       setSel(null);
       setRates({});
       setBaseRates({});
+      setLinkedGroups({});
     }
   }
 
@@ -320,7 +547,6 @@ export default function ProjectsGeneric() {
       const p = await apiAuthed(endpoints.one(id), { token: accessToken });
       setSel(p);
 
-      // ✅ keep selection in URL so reload opens same project
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.set("project", id);
@@ -333,6 +559,7 @@ export default function ProjectsGeneric() {
       setSel(null);
       setRates({});
       setBaseRates({});
+      setLinkedGroups({});
     }
   }
 
@@ -361,6 +588,7 @@ export default function ProjectsGeneric() {
         setSel(null);
         setRates({});
         setBaseRates({});
+        setLinkedGroups({});
 
         const remaining = rows.filter((r) => rowId(r) !== id);
         const nextId = rowId(remaining?.[0]);
@@ -371,32 +599,90 @@ export default function ProjectsGeneric() {
     }
   }
 
+  function applyRateToGroupFromRow(groupId, rowIndex, rateValueRaw) {
+    if (!sel || !groupId) return;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const gv = safeNum(rateValueRaw);
+
+    if (gv === 0) return;
+
+    setRates((prev) => {
+      const next = { ...(prev || {}) };
+
+      for (let j = 0; j < its.length; j++) {
+        if (j === rowIndex) continue;
+        if (groupIdForIndex(j) !== groupId) continue;
+
+        const kj = itemKey(its[j], j);
+
+        const existing = (() => {
+          const raw = next[kj];
+          if (String(raw ?? "").trim() === "") return safeNum(its[j]?.rate);
+          return safeNum(raw);
+        })();
+
+        if (onlyFillEmpty && existing !== 0) continue;
+
+        next[kj] = String(gv);
+      }
+      return next;
+    });
+  }
+
+  function toggleGroupLink(groupId, currentRowIndex) {
+    if (!groupId) return;
+    if (groupCount(groupId) < 2) return;
+
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const it = its[currentRowIndex];
+    if (!it) return;
+
+    const k0 = itemKey(it, currentRowIndex);
+
+    const currentVal =
+      String(rates?.[k0] ?? "").trim() === ""
+        ? safeNum(it?.rate)
+        : safeNum(rates?.[k0]);
+
+    setLinkedGroups((prev) => {
+      const next = { ...(prev || {}) };
+      const nowOn = !next[groupId];
+      next[groupId] = nowOn;
+
+      if (nowOn && currentVal !== 0) {
+        setTimeout(() => {
+          applyRateToGroupFromRow(groupId, currentRowIndex, currentVal);
+        }, 0);
+      }
+
+      return next;
+    });
+  }
+
   function handleRateChange(rowIndex, value) {
     if (!sel) return;
-    const items = Array.isArray(sel?.items) ? sel.items : [];
-    const it = items[rowIndex];
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const it = its[rowIndex];
     if (!it) return;
 
     const k0 = itemKey(it, rowIndex);
-    const group = rateGroupForItem(it);
+    const groupId = groupIdForIndex(rowIndex);
 
     setRates((prev) => {
       const next = { ...(prev || {}), [k0]: value };
 
-      // ✅ auto-copy only when that group is linked
-      if (!group || !isGroupLinked(group)) return next;
+      if (!groupId || !isGroupLinked(groupId)) return next;
+      if (String(value ?? "").trim() === "") return next;
 
-      if (String(value ?? "").trim() === "") return next; // don’t propagate blank
-
-      for (let j = 0; j < items.length; j++) {
+      for (let j = 0; j < its.length; j++) {
         if (j === rowIndex) continue;
-        if (rateGroupForItem(items[j]) !== group) continue;
+        if (groupIdForIndex(j) !== groupId) continue;
 
-        const kj = itemKey(items[j], j);
+        const kj = itemKey(its[j], j);
 
         const existing =
           String(next[kj] ?? "").trim() === ""
-            ? safeNum(items[j]?.rate)
+            ? safeNum(its[j]?.rate)
             : safeNum(next[kj]);
 
         if (onlyFillEmpty && existing !== 0) continue;
@@ -418,16 +704,14 @@ export default function ProjectsGeneric() {
     setNotice("");
 
     try {
-      const items = Array.isArray(sel?.items) ? sel.items : [];
+      const its = Array.isArray(sel?.items) ? sel.items : [];
 
-      const updatedItems = items.map((it, i) => {
+      const updatedItems = its.map((it, i) => {
         const k = itemKey(it, i);
         const raw = rates?.[k];
 
-        // important: if user left blank, keep existing it.rate (server value)
         const use =
           String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
-
         return { ...it, rate: use };
       });
 
@@ -439,7 +723,6 @@ export default function ProjectsGeneric() {
         body: payload,
       });
 
-      // If backend returns the updated doc with rates, great.
       setSel(updated);
       initRatesFromProject(updated);
 
@@ -458,10 +741,9 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // ✅ Cache rates locally so reload doesn’t wipe unsaved work
+  // Cache rates locally (but v2 merge prevents wiping saved rates)
   React.useEffect(() => {
     if (!selectedId) return;
-    // store only when there is a selection
     writeCache(tool, selectedId, {
       version: sel?.version ?? 0,
       rates: rates || {},
@@ -469,7 +751,170 @@ export default function ProjectsGeneric() {
     });
   }, [tool, selectedId, sel?.version, rates]);
 
-  const items = Array.isArray(sel?.items) ? sel.items : [];
+  // Cache linked groups per project
+  React.useEffect(() => {
+    if (!selectedId) return;
+    writeLinkCache(tool, selectedId, {
+      linkedGroups: linkedGroups || {},
+      savedAt: Date.now(),
+    });
+  }, [tool, selectedId, linkedGroups]);
+
+  /** ---------------- Entitlements check (RateGen) ---------------- */
+  React.useEffect(() => {
+    if (!accessToken) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const resp = await apiAuthed("/api/entitlements", {
+          token: accessToken,
+        });
+        const ents = Array.isArray(resp?.entitlements) ? resp.entitlements : [];
+        const rg = ents.find(
+          (e) => String(e.productKey || "").toLowerCase() === "rategen",
+        );
+        const ok = entitlementActive(rg);
+        if (!cancelled) setCanRateGen(ok);
+      } catch {
+        if (!cancelled) setCanRateGen(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  // default auto-fill pref (only for materials & only if entitled)
+  React.useEffect(() => {
+    if (!showMaterials) return;
+
+    if (!canRateGen) {
+      setAutoFillMaterialsRates(false);
+      return;
+    }
+
+    const pref = readAutoFillPref();
+    if (pref == null) {
+      // first time: ON by default for entitled users
+      setAutoFillMaterialsRates(true);
+      writeAutoFillPref(true);
+    } else {
+      setAutoFillMaterialsRates(!!pref);
+    }
+  }, [showMaterials, canRateGen]);
+
+  /** ---------------- Auto-fill material rates from RateGen ---------------- */
+  async function resolveMaterialPrices(names) {
+    // requires RateGen entitlement server-side
+    return await apiAuthed("/rategen-v2/library/material-prices/resolve", {
+      token: accessToken,
+      method: "POST",
+      body: {
+        names,
+        includeMaster: true,
+        includeUser: true,
+      },
+    });
+  }
+
+  async function autoFillMaterialRates(project) {
+    if (!showMaterials) return;
+    if (!canRateGen) return;
+    if (!project?._id) return;
+
+    const its = Array.isArray(project?.items) ? project.items : [];
+    const uniqueNames = Array.from(
+      new Set(
+        its.map((x) => String(x?.materialName || "").trim()).filter(Boolean),
+      ),
+    );
+
+    if (uniqueNames.length === 0) return;
+
+    setAutoFillBusy(true);
+    setErr("");
+    setNotice("");
+
+    try {
+      const resp = await resolveMaterialPrices(uniqueNames);
+      const pricesByKey =
+        resp?.pricesByKey && typeof resp.pricesByKey === "object"
+          ? resp.pricesByKey
+          : {};
+
+      let matched = 0;
+      let filled = 0;
+
+      setRates((prev) => {
+        const next = { ...(prev || {}) };
+
+        for (let i = 0; i < its.length; i++) {
+          const it = its[i] || {};
+          const k = itemKey(it, i);
+
+          const matKey = normalizeMaterialName(it.materialName);
+          const hit = pricesByKey?.[matKey];
+          if (!hit) continue;
+
+          matched += 1;
+
+          const price = safeNum(
+            hit?.price ?? hit?.defaultUnitPrice ?? hit?.unitPrice ?? hit,
+          );
+          if (price <= 0) continue;
+
+          const existing =
+            String(next[k] ?? "").trim() === ""
+              ? safeNum(it?.rate)
+              : safeNum(next[k]);
+
+          if (onlyFillEmpty && existing !== 0) continue;
+
+          next[k] = String(price);
+          filled += 1;
+        }
+
+        return next;
+      });
+
+      setNotice(
+        filled > 0
+          ? `Auto-filled ${filled} material rate(s) from Rate Gen. (${matched} match(es) found)`
+          : `No rates were auto-filled. (${matched} match(es) found)`,
+      );
+    } catch (e) {
+      setErr(e?.message || "Failed to auto-fill material rates");
+    } finally {
+      setAutoFillBusy(false);
+    }
+  }
+
+  // auto-fill once per project when enabled
+  React.useEffect(() => {
+    if (!showMaterials) return;
+    if (!autoFillMaterialsRates) return;
+    if (!canRateGen) return;
+    if (!sel || !selectedId) return;
+
+    if (autoFillAppliedRef.current[selectedId]) return;
+    autoFillAppliedRef.current[selectedId] = true;
+
+    autoFillMaterialRates(sel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMaterials, autoFillMaterialsRates, canRateGen, selectedId]);
+
+  function toggleAutoFill(v) {
+    setAutoFillMaterialsRates(v);
+    writeAutoFillPref(v);
+
+    // allow re-apply on same project when toggling ON
+    if (selectedId) delete autoFillAppliedRef.current[selectedId];
+
+    if (v && sel) autoFillMaterialRates(sel);
+  }
 
   // compute all rows (for totals + export)
   const computedAll = items.map((it, i) => {
@@ -482,6 +927,7 @@ export default function ProjectsGeneric() {
         : safeNum(rates?.[k]);
 
     const amount = rate * qty;
+    const gid = groupIdForIndex(i);
 
     return {
       i,
@@ -490,7 +936,9 @@ export default function ProjectsGeneric() {
       description: itemText(it),
       qty,
       unit: String(it?.unit || ""),
-      group: rateGroupForItem(it),
+      groupId: gid,
+      groupLabel: groupLabel(gid),
+      groupCount: groupCount(gid),
       rate,
       amount,
     };
@@ -501,7 +949,7 @@ export default function ProjectsGeneric() {
     0,
   );
 
-  // ✅ item search filter (does not affect totals/export)
+  // item search filter (does not affect totals/export)
   const q = String(itemQuery || "")
     .trim()
     .toLowerCase();
@@ -512,7 +960,7 @@ export default function ProjectsGeneric() {
           String(r.description || "")
             .toLowerCase()
             .includes(q) ||
-          String(r.group || "")
+          String(r.groupLabel || "")
             .toLowerCase()
             .includes(q) ||
           String(r.sn || "")
@@ -700,16 +1148,48 @@ export default function ProjectsGeneric() {
                     Only fill empty rates
                   </label>
 
+                  {/* ✅ Materials Auto-Fill Toggle (RateGen entitlement) */}
+                  {showMaterials && canRateGen && (
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={autoFillMaterialsRates}
+                        onChange={(e) => toggleAutoFill(e.target.checked)}
+                        disabled={autoFillBusy}
+                      />
+                      Auto-fill material rates (Rate Gen)
+                    </label>
+                  )}
+
+                  {showMaterials && canRateGen && (
+                    <button
+                      type="button"
+                      className="btn btn-xs"
+                      onClick={() => sel && autoFillMaterialRates(sel)}
+                      disabled={autoFillBusy}
+                      title="Fetch prices and auto-fill again"
+                    >
+                      {autoFillBusy ? "Syncing..." : "Sync prices"}
+                    </button>
+                  )}
+
                   <span className="inline-flex items-center gap-2">
-                    <Tip text="Subscribe to the Rate Gen for rate update." />
+                    <Tip
+                      text={
+                        showMaterials
+                          ? canRateGen
+                            ? "Auto-fill uses Admin RateGen + your saved material prices."
+                            : "Subscribe to Rate Gen to auto-fill material prices."
+                          : "Subscribe to the Rate Gen for rate update."
+                      }
+                    />
                   </span>
 
                   <span className="text-slate-500">
                     Linked groups:{" "}
                     <b className="text-slate-700">
-                      {Object.keys(linkedGroups)
-                        .filter((g) => linkedGroups[g])
-                        .join(", ") || "None"}
+                      {Object.keys(linkedGroups).filter((g) => linkedGroups[g])
+                        .length || 0}
                     </b>
                   </span>
                 </div>
@@ -784,8 +1264,9 @@ export default function ProjectsGeneric() {
                 <tbody>
                   {computedShown.map((r) => {
                     const it = items[r.i];
-                    const group = r.group;
-                    const linked = isGroupLinked(group);
+                    const gid = r.groupId;
+                    const linked = isGroupLinked(gid);
+                    const canLink = gid && r.groupCount >= 2;
 
                     return (
                       <tr key={r.key || r.i} className="border-b align-top">
@@ -807,25 +1288,24 @@ export default function ProjectsGeneric() {
                               }
                             />
 
-                            {/* ✅ Link toggle (highlights when active) */}
                             <button
                               type="button"
                               className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition ${
-                                group
+                                canLink
                                   ? linked
                                     ? "bg-blue-50 border-blue-300"
                                     : "hover:bg-slate-50"
                                   : "opacity-40 cursor-not-allowed"
                               }`}
                               title={
-                                group
+                                canLink
                                   ? linked
-                                    ? `Linked: changes propagate to (${group}) items`
-                                    : `Click to link (${group}) items`
-                                  : "No similar group detected"
+                                    ? `Linked: changes propagate to similar items`
+                                    : `Click to link similar items`
+                                  : "No similar items found to link"
                               }
-                              disabled={!group}
-                              onClick={() => toggleGroupLink(group, r.i)}
+                              disabled={!canLink}
+                              onClick={() => toggleGroupLink(gid, r.i)}
                             >
                               <FaLink
                                 className={
@@ -835,10 +1315,12 @@ export default function ProjectsGeneric() {
                             </button>
                           </div>
 
-                          {group && (
+                          {!!gid && (
                             <div className="text-[11px] mt-1">
                               <span className="text-slate-500">Group:</span>{" "}
-                              <span className="text-slate-700">{group}</span>{" "}
+                              <span className="text-slate-700">
+                                {r.groupLabel} ({r.groupCount})
+                              </span>{" "}
                               {linked && (
                                 <span className="text-blue-700 font-medium">
                                   • linked
