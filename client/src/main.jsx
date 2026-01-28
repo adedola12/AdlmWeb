@@ -48,6 +48,8 @@ import AdminRoute from "./components/AdminRoute.jsx";
 
 import Freebies from "./pages/Freebies.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
+import AdminUsersLite from "./pages/AdminUsersLite.jsx";
+
 
 
 const router = createBrowserRouter([
@@ -217,6 +219,15 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
+      {
+        path: "admin/users-lite",
+        element: (
+          <AdminRoute roles={["admin", "mini_admin"]}>
+            <AdminUsersLite />
+          </AdminRoute>
+        ),
+      },
+
       {
         path: "admin/showcase",
         element: (
