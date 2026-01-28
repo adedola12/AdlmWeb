@@ -86,6 +86,9 @@ function sanitizeItems(items) {
       qty: Number.isFinite(Number(it.qty)) ? Number(it.qty) : 0,
       unit: it.unit != null ? String(it.unit) : "",
 
+      // ✅ NEW: persist rate
+      rate: Number.isFinite(Number(it.rate)) ? Number(it.rate) : 0,
+
       elementIds,
       level: it.level != null ? String(it.level) : "",
       type: it.type != null ? String(it.type) : "",
@@ -96,6 +99,7 @@ function sanitizeItems(items) {
 
   return safe;
 }
+
 
 function normalizeChecklistKeys(keys) {
   if (!Array.isArray(keys)) return [];
@@ -310,6 +314,40 @@ router.put(
   }
 );
 
+/** DELETE /projects/revit/materials/:id */
+router.delete(
+  "/revit/materials/:id",
+  forceMaterialsProductKey,
+  requireEntitlementParam,
+  async (req, res) => {
+    try {
+      const productKey = requestedProductKey(req);
+      const id = String(req.params.id || "").trim();
+
+      if (!isValidObjectId(id))
+        return res.status(400).json({ error: "Invalid id" });
+
+      const userId = getUserObjectId(req);
+      if (!userId)
+        return res.status(401).json({ error: "Invalid user id in token" });
+
+      const deleted = await TakeoffProject.findOneAndDelete({
+        _id: id,
+        userId,
+        productKey,
+      });
+
+      if (!deleted) return res.status(404).json({ error: "Not found" });
+
+      return res.json({ ok: true, id });
+    } catch (err) {
+      console.error("DELETE /projects/revit/materials/:id error:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
+
+
 /** ---------------- GENERIC ROUTES ----------------
  * /projects/:productKey
  * /projects/:productKey/:id
@@ -496,5 +534,41 @@ router.put(
     }
   }
 );
+
+/** DELETE /projects/:productKey/:id */
+router.delete(
+  "/:productKey/:id",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  async (req, res) => {
+    try {
+      const productKey = requestedProductKey(req);
+      const id = String(req.params.id || "").trim();
+
+      if (!isValidObjectId(id))
+        return res.status(400).json({ error: "Invalid id" });
+
+      const userId = getUserObjectId(req);
+      if (!userId)
+        return res.status(401).json({ error: "Invalid user id in token" });
+
+      const deleted = await TakeoffProject.findOneAndDelete({
+        _id: id,
+        userId,
+        productKey,
+      });
+
+      if (!deleted) return res.status(404).json({ error: "Not found" });
+
+      return res.json({ ok: true, id });
+    } catch (err) {
+      console.error("DELETE /projects/:productKey/:id error:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
+
+
+
 
 export default router;
