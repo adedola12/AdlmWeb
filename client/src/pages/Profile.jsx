@@ -306,9 +306,19 @@ export default function Profile() {
 
           {/* Full admin only */}
           {admin && (
-            <Link to="/admin" className="btn">
-              Admin dashboard
-            </Link>
+            <>
+              <Link to="/admin" className="btn">
+                Admin dashboard
+              </Link>
+
+              <Link to="/admin/learn" className="btn">
+                Video upload / courses
+              </Link>
+
+              <Link to="/admin/courses" className="btn">
+                Admin · Courses
+              </Link>
+            </>
           )}
 
           {/* Staff tools (admin + mini_admin) */}
@@ -322,16 +332,8 @@ export default function Profile() {
                 Build / Add rates (Rate Library)
               </Link>
 
-              <Link to="/admin/learn" className="btn">
-                Video upload / courses
-              </Link>
-
               <Link to="/admin/rategen" className="btn">
                 Update material & labour prices
-              </Link>
-
-              <Link to="/admin/courses" className="btn">
-                Admin · Courses
               </Link>
 
               <Link to="/admin/showcase" className="btn">
