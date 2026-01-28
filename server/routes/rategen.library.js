@@ -10,6 +10,7 @@ import { RateGenLabour } from "../models/RateGenLabour.js";
 import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { ensureMeta } from "../models/RateGenMeta.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
 
 const router = express.Router();
 
@@ -131,6 +132,15 @@ function toRateDefinition(r) {
   };
 }
 
+function normMatKey(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 /**
  * GET /library/meta
@@ -239,7 +249,7 @@ router.get("/library/compute-items/sync", async (req, res, next) => {
       docs.length === limit
         ? buildCursor(
             docs[docs.length - 1].updatedAt,
-            docs[docs.length - 1]._id
+            docs[docs.length - 1]._id,
           )
         : null;
 
@@ -294,7 +304,7 @@ router.get("/library/rates/sync", async (req, res, next) => {
       docs.length === limit
         ? buildCursor(
             docs[docs.length - 1].updatedAt,
-            docs[docs.length - 1]._id
+            docs[docs.length - 1]._id,
           )
         : null;
 
@@ -335,7 +345,7 @@ router.get("/library/rates/updates", async (req, res, next) => {
     }
 
     const docs = await RateGenRate.find(q)
-      .sort({ updatedAt: -1, _id: -1 })   // ✅ latest first
+      .sort({ updatedAt: -1, _id: -1 }) // ✅ latest first
       .limit(limit)
       .lean();
 
@@ -348,5 +358,114 @@ router.get("/library/rates/updates", async (req, res, next) => {
   }
 });
 
+// ---------- Material price resolve (Admin master + user library) ----------
+
+/**
+ * POST /rategen-v2/library/material-prices/resolve
+ * Body:
+ *  {
+ *    names: string[],
+ *    includeMaster?: boolean (default true),
+ *    includeUser?: boolean (default true)
+ *  }
+ *
+ * Returns:
+ *  {
+ *    ok: true,
+ *    pricesByKey: { [normKey]: { name, unit, price, source } },
+ *    requested: [{ query, key, match }]
+ *  }
+ */
+router.post("/library/material-prices/resolve", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const includeMaster = req.body?.includeMaster !== false;
+    const includeUser = req.body?.includeUser !== false;
+
+    const names = Array.isArray(req.body?.names) ? req.body.names : [];
+    const sliced = names
+      .slice(0, 2000)
+      .map((s) => String(s || "").trim())
+      .filter(Boolean);
+
+    const wantedKeys = Array.from(
+      new Set(sliced.map(normMatKey).filter(Boolean)),
+    );
+    if (wantedKeys.length === 0) {
+      return res.json({ ok: true, pricesByKey: {}, requested: [] });
+    }
+
+    const pricesByKey = {}; // normKey -> { name, unit, price, source }
+
+    // 1) MASTER (admin) materials
+    if (includeMaster) {
+      const master = await RateGenMaterial.find({ enabled: true })
+        .select({ name: 1, unit: 1, defaultUnitPrice: 1 })
+        .lean();
+
+      for (const m of master) {
+        const k = normMatKey(m?.name);
+        if (!k) continue;
+        if (!wantedKeys.includes(k)) continue;
+
+        const price = Number(m?.defaultUnitPrice || 0);
+        if (!Number.isFinite(price) || price <= 0) continue;
+
+        pricesByKey[k] = {
+          name: m?.name || "",
+          unit: m?.unit || "",
+          price,
+          source: "master",
+        };
+      }
+    }
+
+    // 2) USER (their saved library) overrides master
+    if (includeUser) {
+      const userId = req.user?._id;
+      const lib = await RateGenLibrary.findOne({ userId }).lean();
+
+      const mats = Array.isArray(lib?.materials) ? lib.materials : [];
+      for (const m of mats) {
+        const nm = m?.name || m?.description || "";
+        const k = normMatKey(nm);
+        if (!k) continue;
+        if (!wantedKeys.includes(k)) continue;
+
+        const price = Number(m?.price || 0);
+        if (!Number.isFinite(price) || price <= 0) continue;
+
+        pricesByKey[k] = {
+          name: nm,
+          unit: m?.unit || "",
+          price,
+          source: "user",
+        };
+      }
+    }
+
+    const requested = sliced.map((q) => {
+      const key = normMatKey(q);
+      const hit = key ? pricesByKey[key] : null;
+      return {
+        query: q,
+        key,
+        match: hit
+          ? {
+              name: hit.name,
+              unit: hit.unit,
+              price: hit.price,
+              source: hit.source,
+            }
+          : null,
+      };
+    });
+
+    res.json({ ok: true, pricesByKey, requested });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;
