@@ -822,18 +822,105 @@ export default function ProjectsGeneric() {
   }, [showMaterials, canRateGen]);
 
   /** ---------------- Auto-fill material rates from RateGen ---------------- */
-  async function resolveMaterialPrices(itemsReq) {
-    return await apiAuthed("/rategen-v2/library/material-prices/resolve", {
-      token: accessToken,
-      method: "POST",
-      body: {
-        items: itemsReq,
-        names: itemsReq.map((x) => x.name),
-        includeMaster: true,
-        includeUser: true,
-        limitCandidates: 10,
-      },
+  function toCandidate(row, source) {
+    const description = String(row?.description || "").trim();
+    const unit = String(row?.unit || "").trim();
+    const price = safeNum(row?.price);
+    const category = String(row?.category || "").trim();
+
+    return {
+      description,
+      unit,
+      price,
+      category,
+      source, // "My Library" | "Master"
+    };
+  }
+
+  function pushCand(candidatesByKey, nameKey, cand) {
+    if (!nameKey) return;
+    if (!candidatesByKey[nameKey]) candidatesByKey[nameKey] = [];
+
+    // de-dupe by (description|unit) - keep higher price if duplicate appears
+    const pk = pickKeyFromCandidate(cand);
+    const arr = candidatesByKey[nameKey];
+    const idx = arr.findIndex((x) => pickKeyFromCandidate(x) === pk);
+
+    if (idx >= 0) {
+      // prefer user library over master, otherwise keep higher price
+      const cur = arr[idx];
+      const curIsUser = String(cur?.source || "")
+        .toLowerCase()
+        .includes("my");
+      const newIsUser = String(cand?.source || "")
+        .toLowerCase()
+        .includes("my");
+
+      if (newIsUser && !curIsUser) arr[idx] = cand;
+      else if (safeNum(cand.price) > safeNum(cur.price)) arr[idx] = cand;
+    } else {
+      arr.push(cand);
+    }
+  }
+
+  function bestCandidateForUnit(candidates, reqUnitRaw) {
+    const reqUnit = normalizeUnit(reqUnitRaw);
+    if (!Array.isArray(candidates) || candidates.length === 0) return null;
+
+    // priority: My Library first
+    const sorted = [...candidates].sort((a, b) => {
+      const au = String(a?.source || "")
+        .toLowerCase()
+        .includes("my")
+        ? 0
+        : 1;
+      const bu = String(b?.source || "")
+        .toLowerCase()
+        .includes("my")
+        ? 0
+        : 1;
+      if (au !== bu) return au - bu;
+      return safeNum(b?.price) - safeNum(a?.price);
     });
+
+    // if unit provided, try unit-perfect match first
+    if (reqUnit) {
+      const hit = sorted.find((c) => normalizeUnit(c?.unit) === reqUnit);
+      if (hit) return hit;
+    }
+
+    // else just return best by priority
+    return sorted[0];
+  }
+
+  // ✅ NEW: pull from the SAME working routes as RateGenLibrary page
+  async function fetchLegacyMaterialCatalog() {
+    const [m, lib] = await Promise.all([
+      apiAuthed("/rategen/master", { token: accessToken }),
+      apiAuthed("/rategen/library", { token: accessToken }),
+    ]);
+
+    const masterRows = Array.isArray(m?.materials) ? m.materials : [];
+    const userRows = Array.isArray(lib?.materials) ? lib.materials : [];
+
+    const candidatesByKey = {}; // key = normalizeMaterialName(description)
+
+    // user first (so it naturally wins)
+    for (const r of userRows) {
+      const cand = toCandidate(r, "My Library");
+      const nameKey = normalizeMaterialName(cand.description);
+      if (!cand.description || cand.price <= 0) continue;
+      pushCand(candidatesByKey, nameKey, cand);
+    }
+
+    for (const r of masterRows) {
+      const cand = toCandidate(r, "Master");
+      const nameKey = normalizeMaterialName(cand.description);
+      if (!cand.description || cand.price <= 0) continue;
+      pushCand(candidatesByKey, nameKey, cand);
+    }
+
+    return { candidatesByKey };
   }
 
   async function autoFillMaterialRates(project) {
@@ -860,18 +947,14 @@ export default function ProjectsGeneric() {
     setNotice("");
 
     try {
-      const resp = await resolveMaterialPrices(reqItems);
+      // ✅ use legacy working endpoints
+      const { candidatesByKey } = await fetchLegacyMaterialCatalog();
 
-      const pricesByKey =
-        resp?.pricesByKey && typeof resp.pricesByKey === "object"
-          ? resp.pricesByKey
-          : {};
-      const candidatesByKey =
-        resp?.candidatesByKey && typeof resp.candidatesByKey === "object"
-          ? resp.candidatesByKey
-          : {};
-
-      setMatResolved({ pricesByKey, candidatesByKey });
+      // keep your picker UI working
+      setMatResolved({
+        pricesByKey: {}, // not needed anymore (we choose per-item below)
+        candidatesByKey: candidatesByKey || {},
+      });
 
       let matched = 0;
       let filled = 0;
@@ -889,12 +972,15 @@ export default function ProjectsGeneric() {
             ? candidatesByKey[matKey]
             : [];
 
+          if (!candidates.length) continue;
+
+          // If user manually picked a candidate earlier, respect it
           const pickedKey = matPicks?.[matKey] || null;
           const picked = pickedKey
             ? candidates.find((c) => pickKeyFromCandidate(c) === pickedKey)
             : null;
 
-          const best = picked || pricesByKey?.[matKey];
+          const best = picked || bestCandidateForUnit(candidates, it?.unit);
           if (!best) continue;
 
           matched += 1;
@@ -904,6 +990,8 @@ export default function ProjectsGeneric() {
 
           const reqUnit = normalizeUnit(it.unit);
           const hitUnit = normalizeUnit(best.unit);
+
+          // still enforce unit safety
           if (reqUnit && hitUnit && reqUnit !== hitUnit) {
             unitConflicts += 1;
             continue;
