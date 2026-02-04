@@ -1,13 +1,10 @@
 import React from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import AnalyticsTracker from "./components/AnalyticsTracker.jsx";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import HelpBot from "./components/HelpBot.jsx";
-import confetti from "canvas-confetti";
-import LaunchCountdownBanner from "./components/LaunchCountdownBanner.jsx";
 
 import { API_BASE } from "./config";
 
@@ -19,14 +16,12 @@ export default function App() {
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
 
   const VIDEO_ID = "YX6vJTaAUXA";
-  const MAX_SECONDS = 300; // 5 minutes
+  const MAX_SECONDS = 300;
 
   React.useEffect(() => {
-    if (location.pathname === "/") setShowVideo(true);
-    else setShowVideo(false);
+    setShowVideo(location.pathname === "/");
   }, [location.pathname]);
 
-  // load banner
   React.useEffect(() => {
     (async () => {
       try {
@@ -45,15 +40,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      {/* ✅ Launch countdown banner on top */}
-      {/* <LaunchCountdownBanner targetIso={LAUNCH_AT} title="Full launch in" /> */}
       {!bannerDismissed && (
         <CouponBanner
           banner={banner}
           onClose={() => setBannerDismissed(true)}
         />
       )}
-      <AnalyticsTracker />
 
       <Nav />
 
@@ -63,6 +55,7 @@ export default function App() {
 
       <Footer />
       <HelpBot />
+
       <YoutubeWelcomeModal
         open={showVideo}
         onClose={closeVideo}
