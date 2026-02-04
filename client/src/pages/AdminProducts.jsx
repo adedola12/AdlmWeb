@@ -1,29 +1,27 @@
 import React from "react";
-import { Link } from "react-router-dom"; // ✅ add this
+import { Link } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import { API_BASE } from "../config"; // ✅ and this (used in MediaBrowserModal)
+import { API_BASE } from "../config";
 
 export default function AdminProducts() {
   const { accessToken } = useAuth();
   const [items, setItems] = React.useState([]);
   const [msg, setMsg] = React.useState("");
 
-  // form helpers
   const [billingInterval, setBillingInterval] = React.useState("monthly");
 
-  // upload state
   const [uploadingPreview, setUploadingPreview] = React.useState(false);
   const [uploadingThumb, setUploadingThumb] = React.useState(false);
   const [previewPct, setPreviewPct] = React.useState(0);
   const [thumbPct, setThumbPct] = React.useState(0);
-  const [previewUrl, setPreviewUrl] = React.useState(null); // null = no video yet
 
-  const [images, setImages] = React.useState([]); // gallery (array of URLs)
+  const [previewUrl, setPreviewUrl] = React.useState(null);
+  const [images, setImages] = React.useState([]);
+
   const [showImagePicker, setShowImagePicker] = React.useState(false);
   const [showVideoPicker, setShowVideoPicker] = React.useState(false);
 
-  // refs to write URLs after upload
   const previewInputRef = React.useRef(null);
   const thumbInputRef = React.useRef(null);
 
@@ -36,6 +34,7 @@ export default function AdminProducts() {
       setMsg(e.message);
     }
   }
+
   React.useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,54 +47,22 @@ export default function AdminProducts() {
       .filter(Boolean);
   }
 
-  async function add(e) {
-    e.preventDefault();
-    const fd = new FormData(e.target);
+  function parseDiscount(fd, prefix) {
+    const type = String(fd.get(`${prefix}Type`) || "none").toLowerCase();
+    if (type === "none") return undefined;
 
-    const price = {
-      monthlyNGN: Number(fd.get("monthlyNGN") || 0),
-      yearlyNGN: Number(fd.get("yearlyNGN") || 0),
-      installNGN: Number(fd.get("installNGN") || 0),
+    const valueNGN = Number(fd.get(`${prefix}ValueNGN`) || 0) || 0;
+    const rawUSD = fd.get(`${prefix}ValueUSD`);
+    const valueUSD =
+      rawUSD === "" || rawUSD == null ? null : Number(rawUSD || 0);
+
+    if (valueNGN <= 0 && (valueUSD == null || valueUSD <= 0)) return undefined;
+
+    return {
+      type: type === "fixed" ? "fixed" : "percent",
+      valueNGN,
+      valueUSD,
     };
-    const productType = fd.get("productType") || "software";
-    const courseSku = (fd.get("courseSku") || "").trim();
-    const monthlyUSD = fd.get("monthlyUSD");
-    const yearlyUSD = fd.get("yearlyUSD");
-    const installUSD = fd.get("installUSD");
-    if (monthlyUSD !== "") price.monthlyUSD = Number(monthlyUSD);
-    if (yearlyUSD !== "") price.yearlyUSD = Number(yearlyUSD);
-    if (installUSD !== "") price.installUSD = Number(installUSD);
-
-    const payload = {
-      key: fd.get("key"),
-      name: fd.get("name"),
-      blurb: fd.get("blurb") || "",
-      description: fd.get("description") || "",
-      features: parseFeatures(fd.get("features")),
-      billingInterval: fd.get("billingInterval") || "monthly",
-      price,
-      // previewUrl: previewInputRef.current?.value || undefined,
-      previewUrl: previewUrl || undefined,
-      thumbnailUrl: thumbInputRef.current?.value || images[0] || undefined,
-      images,
-      isPublished: fd.get("isPublished") === "on",
-      sort: Number(fd.get("sort") || 0),
-
-      // ✅ new fields for course/products
-      isCourse: productType === "course",
-      courseSku: productType === "course" && courseSku ? courseSku : undefined,
-    };
-
-    await apiAuthed("/admin/products", {
-      token: accessToken,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    e.target.reset();
-    setBillingInterval("monthly");
-    load();
   }
 
   function fileLabel(f) {
@@ -103,7 +70,6 @@ export default function AdminProducts() {
     return `${f.name} (${Math.round(f.size / 1024 / 1024)} MB)`;
   }
 
-  /** Signed/unsigned upload with progress */
   async function uploadToCloudinary(file, type) {
     if (!file) return null;
 
@@ -116,7 +82,6 @@ export default function AdminProducts() {
     setMsg(`Requesting ${type} upload ticket…`);
 
     try {
-      // 1) sign
       const sig = await apiAuthed(`/admin/media/sign`, {
         token: accessToken,
         method: "POST",
@@ -124,7 +89,6 @@ export default function AdminProducts() {
         body: JSON.stringify({ resource_type: type }),
       });
 
-      // 2) form
       const fd = new FormData();
       fd.append("file", file);
 
@@ -141,7 +105,6 @@ export default function AdminProducts() {
 
       const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${sig.resource_type}/upload`;
 
-      // 3) xhr for progress
       const secureUrl = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", endpoint);
@@ -157,8 +120,8 @@ export default function AdminProducts() {
             } else {
               reject(
                 new Error(
-                  json?.error?.message || `Upload failed (${xhr.status})`
-                )
+                  json?.error?.message || `Upload failed (${xhr.status})`,
+                ),
               );
             }
           } catch {
@@ -181,10 +144,9 @@ export default function AdminProducts() {
     setMsg(`Uploading video: ${fileLabel(f)}…`);
     try {
       const url = await uploadToCloudinary(f, "video");
-      // if (url && previewInputRef.current) previewInputRef.current.value = url;
       if (url) {
         if (previewInputRef.current) previewInputRef.current.value = url;
-        setPreviewUrl(url); // ✅ update state so <video src> is never ""
+        setPreviewUrl(url);
       }
       setMsg(url ? "✅ Preview video uploaded." : "Upload failed.");
     } catch (e) {
@@ -192,16 +154,66 @@ export default function AdminProducts() {
     }
   }
 
-  async function handleThumbFile(f) {
-    if (!f) return;
-    setMsg(`Uploading image: ${fileLabel(f)}…`);
-    try {
-      const url = await uploadToCloudinary(f, "image");
-      if (url && thumbInputRef.current) thumbInputRef.current.value = url;
-      setMsg(url ? "✅ Thumbnail image uploaded." : "Upload failed.");
-    } catch (e) {
-      setMsg(`❌ ${e.message || "Upload error"}`);
-    }
+  async function add(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+
+    const price = {
+      monthlyNGN: Number(fd.get("monthlyNGN") || 0) || 0,
+      yearlyNGN: Number(fd.get("yearlyNGN") || 0) || 0,
+      installNGN: Number(fd.get("installNGN") || 0) || 0,
+    };
+
+    const monthlyUSD = fd.get("monthlyUSD");
+    const yearlyUSD = fd.get("yearlyUSD");
+    const installUSD = fd.get("installUSD");
+    if (monthlyUSD !== "") price.monthlyUSD = Number(monthlyUSD);
+    if (yearlyUSD !== "") price.yearlyUSD = Number(yearlyUSD);
+    if (installUSD !== "") price.installUSD = Number(installUSD);
+
+    const productType = fd.get("productType") || "software";
+    const courseSku = (fd.get("courseSku") || "").trim();
+
+    const discounts = {
+      sixMonths: parseDiscount(fd, "disc6"),
+      oneYear: parseDiscount(fd, "disc12"),
+    };
+    const hasDiscounts = !!discounts.sixMonths || !!discounts.oneYear;
+
+    const payload = {
+      key: fd.get("key"),
+      name: fd.get("name"),
+      blurb: fd.get("blurb") || "",
+      description: fd.get("description") || "",
+      features: parseFeatures(fd.get("features")),
+      billingInterval: fd.get("billingInterval") || "monthly",
+      price,
+      discounts: hasDiscounts ? discounts : undefined,
+      previewUrl: previewUrl || undefined,
+      thumbnailUrl: thumbInputRef.current?.value || images[0] || undefined,
+      images,
+      isPublished: fd.get("isPublished") === "on",
+      sort: Number(fd.get("sort") || 0) || 0,
+      isCourse: productType === "course",
+      courseSku: productType === "course" && courseSku ? courseSku : undefined,
+    };
+
+    await apiAuthed("/admin/products", {
+      token: accessToken,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    // ✅ reset UI state properly
+    e.target.reset();
+    setBillingInterval("monthly");
+    setImages([]);
+    setPreviewUrl(null);
+    if (thumbInputRef.current) thumbInputRef.current.value = "";
+    if (previewInputRef.current) previewInputRef.current.value = "";
+
+    load();
   }
 
   async function toggle(p) {
@@ -222,7 +234,6 @@ export default function AdminProducts() {
     load();
   }
 
-  // --- Small UI helpers --- //
   function Thumb({
     src,
     onPrimary,
@@ -258,26 +269,26 @@ export default function AdminProducts() {
     const [next, setNext] = React.useState(null);
     const [loading, setLoading] = React.useState(false);
 
-    async function load(cursor = null) {
+    async function loadAssets(cursor = null) {
       setLoading(true);
       try {
         const qs = new URLSearchParams();
         qs.set("type", type);
         if (q) qs.set("q", q);
         if (cursor) qs.set("next", cursor);
+
         const res = await fetch(
           `${API_BASE}/admin/media/assets?${qs.toString()}`,
           {
             credentials: "include",
             headers: { Authorization: `Bearer ${accessToken}` },
-          }
+          },
         );
+
         const json = await res.json();
-        if (cursor) {
-          setItems((prev) => [...prev, ...json.items]);
-        } else {
-          setItems(json.items || []);
-        }
+        if (cursor) setItems((prev) => [...prev, ...(json.items || [])]);
+        else setItems(json.items || []);
+
         setNext(json.next || null);
       } finally {
         setLoading(false);
@@ -285,11 +296,12 @@ export default function AdminProducts() {
     }
 
     React.useEffect(() => {
-      if (open) load(null);
+      if (open) loadAssets(null);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, q, type]);
 
     if (!open) return null;
+
     return (
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl p-4 w-full max-w-3xl space-y-3">
@@ -299,12 +311,14 @@ export default function AdminProducts() {
               Close
             </button>
           </div>
+
           <input
             className="input"
             placeholder="Search filename..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+
           {loading ? (
             <div className="text-sm text-slate-600">Loading…</div>
           ) : (
@@ -334,13 +348,14 @@ export default function AdminProducts() {
                   </div>
                 )}
               </div>
+
               <div className="flex items-center justify-between">
                 <div />
                 <button
                   type="button"
                   className="btn btn-sm"
                   disabled={!next || loading}
-                  onClick={() => load(next)}
+                  onClick={() => loadAssets(next)}
                 >
                   Load more
                 </button>
@@ -357,9 +372,15 @@ export default function AdminProducts() {
       <div className="card">
         <h1 className="text-xl font-semibold">Admin · Products</h1>
         {msg && <div className="text-sm mt-2">{msg}</div>}
+        {(previewPct > 0 || thumbPct > 0) && (
+          <div className="text-xs text-slate-500 mt-2">
+            {previewPct > 0 ? `Video upload: ${previewPct}%` : ""}
+            {previewPct > 0 && thumbPct > 0 ? " · " : ""}
+            {thumbPct > 0 ? `Image upload: ${thumbPct}%` : ""}
+          </div>
+        )}
       </div>
 
-      {/* Add product */}
       <div className="card">
         <h2 className="font-semibold mb-3">Add product</h2>
 
@@ -377,7 +398,6 @@ export default function AdminProducts() {
             placeholder="Short blurb"
           />
 
-          {/* Billing interval */}
           <label className="text-sm">
             <div className="mb-1">Billing interval</div>
             <select
@@ -391,7 +411,6 @@ export default function AdminProducts() {
             </select>
           </label>
 
-          {/* Product type */}
           <label className="text-sm">
             <div className="mb-1">Product type</div>
             <select
@@ -404,7 +423,6 @@ export default function AdminProducts() {
             </select>
           </label>
 
-          {/* Course SKU (only used if Product type is Course) */}
           <label className="text-sm">
             <div className="mb-1">Course SKU (if Course)</div>
             <input
@@ -414,7 +432,6 @@ export default function AdminProducts() {
             />
           </label>
 
-          {/* NGN prices */}
           <label className="text-sm">
             <div className="mb-1">NGN · Price / month</div>
             <input
@@ -426,6 +443,7 @@ export default function AdminProducts() {
               placeholder="0"
             />
           </label>
+
           <label className="text-sm">
             <div className="mb-1">NGN · Price / year</div>
             <input
@@ -437,6 +455,7 @@ export default function AdminProducts() {
               placeholder="0"
             />
           </label>
+
           <label className="text-sm">
             <div className="mb-1">NGN · Install fee (one-time)</div>
             <input
@@ -449,7 +468,6 @@ export default function AdminProducts() {
             />
           </label>
 
-          {/* Optional USD overrides */}
           <label className="text-sm">
             <div className="mb-1">USD override · /month (optional)</div>
             <input
@@ -461,6 +479,7 @@ export default function AdminProducts() {
               placeholder=""
             />
           </label>
+
           <label className="text-sm">
             <div className="mb-1">USD override · /year (optional)</div>
             <input
@@ -472,6 +491,7 @@ export default function AdminProducts() {
               placeholder=""
             />
           </label>
+
           <label className="text-sm">
             <div className="mb-1">USD override · Install (optional)</div>
             <input
@@ -484,81 +504,103 @@ export default function AdminProducts() {
             />
           </label>
 
-          {/* Preview video */}
-          {/* <div className="sm:col-span-2 grid gap-2">
-            <input
-              className="input"
-              name="previewUrl"
-              placeholder="Preview video URL (MP4 / Cloudinary)"
-              ref={previewInputRef}
-            />
-            <div className="flex items-center gap-3">
-              <label
-                className={`btn btn-sm ${
-                  uploadingPreview ? "opacity-50 pointer-events-none" : ""
-                }`}
-              >
-                Upload preview video
-                <input
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  disabled={uploadingPreview}
-                  onChange={(e) => handlePreviewFile(e.target.files?.[0])}
-                />
-              </label>
-              {uploadingPreview && (
-                <div className="flex items-center gap-2 text-xs text-slate-600">
-                  <div className="w-40 h-2 bg-slate-200 rounded">
-                    <div
-                      className="h-2 bg-blue-600 rounded"
-                      style={{ width: `${previewPct}%` }}
-                    />
-                  </div>
-                  <span>{previewPct}%</span>
-                </div>
-              )}
+          {/* Discounts */}
+          <div className="sm:col-span-2 border rounded-lg p-3">
+            <div className="font-medium mb-2">Bundle Discounts (optional)</div>
+            <div className="text-xs text-slate-500 mb-3">
+              Applies to recurring only (install fee is added separately if
+              checked). For <b>monthly</b> products: 6 months = periods 6, 1
+              year = periods 12. For <b>yearly</b> products: 1 year = periods 1.
             </div>
-          </div> */}
 
-          {/* Thumbnail */}
-          {/* <div className="sm:col-span-2 grid gap-2">
-            <input
-              className="input"
-              name="thumbnailUrl"
-              placeholder="Thumbnail image URL (optional)"
-              ref={thumbInputRef}
-            />
-            <div className="flex items-center gap-3">
-              <label
-                className={`btn btn-sm ${
-                  uploadingThumb ? "opacity-50 pointer-events-none" : ""
-                }`}
-              >
-                Upload thumbnail image
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={uploadingThumb}
-                  onChange={(e) => handleThumbFile(e.target.files?.[0])}
-                />
-              </label>
-              {uploadingThumb && (
-                <div className="flex items-center gap-2 text-xs text-slate-600">
-                  <div className="w-40 h-2 bg-slate-200 rounded">
-                    <div
-                      className="h-2 bg-blue-600 rounded"
-                      style={{ width: `${thumbPct}%` }}
-                    />
-                  </div>
-                  <span>{thumbPct}%</span>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="border rounded p-3">
+                <div className="font-medium text-sm mb-2">
+                  6 Months Discount
                 </div>
-              )}
-            </div>
-          </div> */}
 
-          {/* Gallery images */}
+                <label className="text-sm block">
+                  Type
+                  <select
+                    className="input mt-1"
+                    name="disc6Type"
+                    defaultValue="none"
+                  >
+                    <option value="none">None</option>
+                    <option value="percent">Percent off</option>
+                    <option value="fixed">Fixed bundle price</option>
+                  </select>
+                </label>
+
+                <label className="text-sm block mt-2">
+                  Value (NGN)
+                  <input
+                    className="input mt-1"
+                    name="disc6ValueNGN"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 10 OR 38000"
+                  />
+                </label>
+
+                <label className="text-sm block mt-2">
+                  Value (USD, optional)
+                  <input
+                    className="input mt-1"
+                    name="disc6ValueUSD"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder=""
+                  />
+                </label>
+              </div>
+
+              <div className="border rounded p-3">
+                <div className="font-medium text-sm mb-2">1 Year Discount</div>
+
+                <label className="text-sm block">
+                  Type
+                  <select
+                    className="input mt-1"
+                    name="disc12Type"
+                    defaultValue="none"
+                  >
+                    <option value="none">None</option>
+                    <option value="percent">Percent off</option>
+                    <option value="fixed">Fixed bundle price</option>
+                  </select>
+                </label>
+
+                <label className="text-sm block mt-2">
+                  Value (NGN)
+                  <input
+                    className="input mt-1"
+                    name="disc12ValueNGN"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 10 OR 75000"
+                  />
+                </label>
+
+                <label className="text-sm block mt-2">
+                  Value (USD, optional)
+                  <input
+                    className="input mt-1"
+                    name="disc12ValueUSD"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder=""
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Images */}
           <div className="sm:col-span-2">
             <div className="mb-2 font-medium">Images</div>
             <div className="flex flex-wrap gap-3">
@@ -567,7 +609,6 @@ export default function AdminProducts() {
                   key={`${src}-${i}`}
                   src={src}
                   onPrimary={() => {
-                    // make this the thumbnail
                     if (thumbInputRef.current)
                       thumbInputRef.current.value = src;
                   }}
@@ -581,11 +622,10 @@ export default function AdminProducts() {
                 <div className="text-sm text-slate-600">No images yet.</div>
               )}
             </div>
+
             <div className="mt-2 flex flex-wrap gap-2">
               <label
-                className={`btn btn-sm ${
-                  uploadingThumb ? "opacity-50 pointer-events-none" : ""
-                }`}
+                className={`btn btn-sm ${uploadingThumb ? "opacity-50 pointer-events-none" : ""}`}
               >
                 Upload image
                 <input
@@ -602,6 +642,7 @@ export default function AdminProducts() {
                   }}
                 />
               </label>
+
               <button
                 type="button"
                 className="btn btn-sm"
@@ -609,7 +650,7 @@ export default function AdminProducts() {
               >
                 Add from Cloudinary
               </button>
-              {/* keep a hidden input for thumbnail (can be set by clicking a Thumb) */}
+
               <input ref={thumbInputRef} name="thumbnailUrl" type="hidden" />
             </div>
           </div>
@@ -622,7 +663,7 @@ export default function AdminProducts() {
                 {previewUrl ? (
                   <video
                     className="w-48 h-28 object-cover"
-                    src={previewUrl} // ✅ valid URL
+                    src={previewUrl}
                     controls
                     preload="metadata"
                   />
@@ -632,11 +673,10 @@ export default function AdminProducts() {
                   </div>
                 )}
               </div>
+
               <div className="flex flex-col gap-2">
                 <label
-                  className={`btn btn-sm ${
-                    uploadingPreview ? "opacity-50 pointer-events-none" : ""
-                  }`}
+                  className={`btn btn-sm ${uploadingPreview ? "opacity-50 pointer-events-none" : ""}`}
                 >
                   Upload video
                   <input
@@ -647,6 +687,7 @@ export default function AdminProducts() {
                     onChange={(e) => handlePreviewFile(e.target.files?.[0])}
                   />
                 </label>
+
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -654,6 +695,7 @@ export default function AdminProducts() {
                 >
                   Choose from Cloudinary
                 </button>
+
                 <input
                   ref={previewInputRef}
                   name="previewUrl"
@@ -674,26 +716,26 @@ export default function AdminProducts() {
               setShowImagePicker(false);
             }}
           />
+
           <MediaBrowserModal
             open={showVideoPicker}
             onClose={() => setShowVideoPicker(false)}
             type="video"
             accessToken={accessToken}
             onPick={(url) => {
-              // if (previewInputRef.current) previewInputRef.current.value = url;
               if (previewInputRef.current) previewInputRef.current.value = url;
-              setPreviewUrl(url); // ✅ keep state in syn
+              setPreviewUrl(url);
               setShowVideoPicker(false);
             }}
           />
 
-          {/* Description + Features */}
           <textarea
             className="input sm:col-span-2"
             name="description"
             rows={4}
             placeholder="Long description (Markdown or plain text)"
           />
+
           <textarea
             className="input sm:col-span-2"
             name="features"
@@ -707,6 +749,7 @@ export default function AdminProducts() {
             placeholder="Sort (higher first)"
             type="number"
           />
+
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="isPublished" defaultChecked />{" "}
             Published
@@ -743,6 +786,7 @@ export default function AdminProducts() {
               ) : (
                 <div className="w-16 h-10 rounded border bg-slate-100" />
               )}
+
               <div className="text-sm">
                 <div className="font-medium">{p.name}</div>
                 <div className="text-slate-600">
@@ -757,48 +801,6 @@ export default function AdminProducts() {
                     </span>
                   )}
                 </div>
-                <div className="text-slate-600">
-                  NGN /
-                  {p.billingInterval === "yearly" ? (
-                    <>
-                      yr: <b>₦{(p.price?.yearlyNGN || 0).toLocaleString()}</b>
-                    </>
-                  ) : (
-                    <>
-                      mo: <b>₦{(p.price?.monthlyNGN || 0).toLocaleString()}</b>
-                    </>
-                  )}
-                  {p.price?.installNGN > 0 && (
-                    <>
-                      {" "}
-                      · Install:{" "}
-                      <b>₦{(p.price.installNGN || 0).toLocaleString()}</b>
-                    </>
-                  )}
-                </div>
-                {(p.price?.monthlyUSD ||
-                  p.price?.yearlyUSD ||
-                  p.price?.installUSD) && (
-                  <div className="text-slate-600">
-                    USD override ·{" "}
-                    {p.billingInterval === "yearly" ? (
-                      <>
-                        yr: <b>${(p.price?.yearlyUSD || 0).toFixed(2)}</b>
-                      </>
-                    ) : (
-                      <>
-                        mo: <b>${(p.price?.monthlyUSD || 0).toFixed(2)}</b>
-                      </>
-                    )}
-                    {p.price?.installUSD > 0 && (
-                      <>
-                        {" "}
-                        · Install:{" "}
-                        <b>${(p.price.installUSD || 0).toFixed(2)}</b>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -806,7 +808,6 @@ export default function AdminProducts() {
               <Link className="btn btn-sm" to={`/admin/products/${p._id}/edit`}>
                 Edit
               </Link>
-
               <button className="btn btn-sm" onClick={() => toggle(p)}>
                 {p.isPublished ? "Unpublish" : "Publish"}
               </button>
@@ -816,6 +817,7 @@ export default function AdminProducts() {
             </div>
           </div>
         ))}
+
         {!items.length && (
           <div className="text-sm text-slate-600">No products yet.</div>
         )}

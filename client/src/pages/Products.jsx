@@ -516,7 +516,7 @@ function ProductCard({
       ? p.isPopular
       : (p.sort ?? 99) <= 1 || (rating || 0) >= 4.8;
 
-  const outOfStock = Number(p.stockQty || 0) <= 0;
+  const outOfStock = false;
 
   const yearly = p.price?.yearlyNGN || 0;
   const monthly = p.price?.monthlyNGN || 0;
