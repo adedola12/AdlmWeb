@@ -9,28 +9,70 @@ import ComingSoonModal from "../components/ComingSoonModal.jsx";
 /* -------------------- UI helpers -------------------- */
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
 
+const getCategory = (p) =>
+  p?.metadata?.category || p?.category || p?.type || "General";
+
+function getProductKey(p) {
+  return String(p?.key || p?.slug || p?._id || "").trim();
+}
+
+/* -------------------- localStorage cart helpers -------------------- */
+function readCartItems() {
+  try {
+    const arr = JSON.parse(localStorage.getItem("cartItems") || "[]");
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCartItems(items) {
+  const safe = Array.isArray(items) ? items : [];
+  localStorage.setItem("cartItems", JSON.stringify(safe));
+  const totalQty = safe.reduce((sum, it) => sum + Number(it.qty || 0), 0);
+  localStorage.setItem("cartCount", String(totalQty));
+  return totalQty;
+}
+
+/* -------------------- UI: in-view animation -------------------- */
 function useInView(ref, threshold = 0.12) {
   const [inView, setInView] = React.useState(false);
+
   React.useEffect(() => {
     if (!ref.current) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setInView(true);
+      return;
+    }
+
     const obs = new IntersectionObserver(
-      ([entry]) => entry.isIntersecting && setInView(true),
-      { threshold }
+      ([entry]) => {
+        if (entry.isIntersecting) setInView(true);
+      },
+      { threshold },
     );
+
     obs.observe(ref.current);
     return () => obs.disconnect();
   }, [ref, threshold]);
+
   return inView;
 }
 
 function CardVideo({ src, poster }) {
   const ref = React.useRef(null);
-  const onEnter = () => ref.current?.play();
+
+  const onEnter = () => {
+    if (!ref.current) return;
+    const p = ref.current.play();
+    // avoid noisy unhandled promise rejections on some browsers
+    if (p && typeof p.catch === "function") p.catch(() => {});
+  };
+
   const onLeave = () => {
-    if (ref.current) {
-      ref.current.pause();
-      ref.current.currentTime = 0;
-    }
+    if (!ref.current) return;
+    ref.current.pause();
+    ref.current.currentTime = 0;
   };
 
   return (
@@ -49,49 +91,21 @@ function CardVideo({ src, poster }) {
           src={src}
           poster={poster || undefined}
         />
+      ) : poster ? (
+        <img src={poster} className="w-full h-full object-cover" alt="" />
       ) : (
-        poster && <img src={poster} className="w-full h-full object-cover" />
+        <div className="w-full h-full bg-slate-900" />
       )}
     </div>
   );
 }
 
-/* Derive a category-like label from product shape (best effort) */
-const getCategory = (p) =>
-  p?.metadata?.category || p?.category || p?.type || "General";
-
-/* ✅ Safe product key resolver (supports your existing data shapes) */
-function getProductKey(p) {
-  return String(p?.key || p?.slug || p?._id || "").trim();
-}
-
-/* ✅ Cart helpers (single source of truth) */
-function readCartItems() {
-  try {
-    const arr = JSON.parse(localStorage.getItem("cartItems") || "[]");
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeCartItems(items) {
-  localStorage.setItem("cartItems", JSON.stringify(items || []));
-  // keep cartCount synced as total qty
-  const totalQty = (items || []).reduce(
-    (sum, it) => sum + Number(it.qty || 0),
-    0
-  );
-  localStorage.setItem("cartCount", String(totalQty));
-  return totalQty;
-}
-
 /* -------------------- Page -------------------- */
 export default function Products() {
   const [qs, setQs] = useSearchParams();
-  const pageFromQs = Math.max(parseInt(qs.get("page") || "1", 10), 1);
+  const navigate = useNavigate();
 
-  const [page, setPage] = React.useState(pageFromQs);
+  const page = Math.max(parseInt(qs.get("page") || "1", 10), 1);
   const pageSize = 9;
 
   const [data, setData] = React.useState({
@@ -108,7 +122,7 @@ export default function Products() {
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState("All Products");
 
-  // cart badge (localStorage-backed) — keep it as total qty
+  // cart badge (localStorage-backed)
   const [cartCount, setCartCount] = React.useState(() => {
     const n = Number(localStorage.getItem("cartCount") || 0);
     return Number.isFinite(n) ? n : 0;
@@ -127,73 +141,92 @@ export default function Products() {
 
   const { user, accessToken } = useAuth();
   const isAdmin = user?.role === "admin";
-  const navigate = useNavigate();
 
-  /* -------------------- load products -------------------- */
-  async function load() {
-    setLoading(true);
-    setMsg("");
-    try {
-      if (isAdmin) {
-        const res = await apiAuthed(`/admin/products`, { token: accessToken });
-        const all = Array.isArray(res) ? res : [];
-        const total = all.length;
-        const start = (page - 1) * pageSize;
-        const items = all.slice(start, start + pageSize);
-        setData({ items, total, page, pageSize });
-      } else {
-        const res = await fetch(
-          `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
-          { credentials: "include" }
-        );
-        const json = await res.json();
-        setData({
-          items: Array.isArray(json?.items) ? json.items : [],
-          total: Number(json?.total || 0),
-          page: Number(json?.page || page),
-          pageSize: Number(json?.pageSize || pageSize),
-        });
-      }
-    } catch (e) {
-      setMsg(e.message || "Failed to load products");
-    } finally {
-      setLoading(false);
-    }
+  /* -------------------- FIX: cart sync (NO setCart anywhere) -------------------- */
+  React.useEffect(() => {
+    const sync = () => {
+      const items = readCartItems();
+      const total = items.reduce((sum, it) => sum + Number(it.qty || 0), 0);
+      localStorage.setItem("cartCount", String(total));
+      setCartCount(total);
+    };
+
+    sync();
+
+    const onStorage = (e) => {
+      if (e.key === "cartItems" || e.key === "cartCount") sync();
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  /* -------------------- pagination helper -------------------- */
+  function gotoPage(next) {
+    const n = Math.max(1, Number(next) || 1);
+    setQs(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set("page", String(n));
+        return p;
+      },
+      { replace: true },
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  /* -------------------- load products -------------------- */
   React.useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setMsg("");
+
+      try {
+        if (isAdmin) {
+          const res = await apiAuthed(`/admin/products`, {
+            token: accessToken,
+          });
+          const all = Array.isArray(res) ? res : [];
+          const total = all.length;
+          const start = (page - 1) * pageSize;
+          const items = all.slice(start, start + pageSize);
+
+          if (!cancelled) setData({ items, total, page, pageSize });
+        } else {
+          const res = await fetch(
+            `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
+            { credentials: "include" },
+          );
+          const json = await res.json();
+
+          if (!cancelled) {
+            setData({
+              items: Array.isArray(json?.items) ? json.items : [],
+              total: Number(json?.total || 0),
+              page: Number(json?.page || page),
+              pageSize: Number(json?.pageSize || pageSize),
+            });
+          }
+        }
+      } catch (e) {
+        if (!cancelled) setMsg(e?.message || "Failed to load products");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     load();
-    setQs(
-      (p) => {
-        const n = new URLSearchParams(p);
-        n.set("page", String(page));
-        return n;
-      },
-      { replace: true }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
-
-  React.useEffect(() => {
-    const arr = readCartItems();
-    if (!arr.length) return;
-
-    setCart(() => {
-      const next = {};
-      arr.forEach(({ productKey, qty, firstTime }) => {
-        const k = String(productKey || "").trim();
-        if (!k) return;
-        next[k] = {
-          qty: Math.max(parseInt(qty || 1, 10), 1),
-          firstTime: !!firstTime,
-        };
-      });
-      return next;
-    });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [page, pageSize, isAdmin, accessToken]);
 
   /* -------------------- load active coupons -------------------- */
   React.useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/coupons/active`, {
@@ -202,16 +235,19 @@ export default function Products() {
         const json = await res.json();
         const list = Array.isArray(json?.items) ? json.items : [];
 
-        // only keep product-specific coupons (mode === "include")
         const productOnly = list.filter(
-          (c) => (c?.appliesTo?.mode || "all") === "include"
+          (c) => (c?.appliesTo?.mode || "all") === "include",
         );
 
-        setActiveCoupons(productOnly);
+        if (!cancelled) setActiveCoupons(productOnly);
       } catch {
-        setActiveCoupons([]);
+        if (!cancelled) setActiveCoupons([]);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const pages = Math.max(Math.ceil((data.total || 0) / pageSize), 1);
@@ -248,6 +284,7 @@ export default function Products() {
   async function saveEdit(p) {
     try {
       setMsg("");
+
       const payload = {
         name: draft.name,
         blurb: draft.blurb,
@@ -282,51 +319,39 @@ export default function Products() {
         body: JSON.stringify(payload),
       });
 
-      await load();
+      // reload current page
+      gotoPage(page);
       setMsg("Product updated.");
       cancelEdit();
     } catch (e) {
-      setMsg(e.message || "Failed to update product");
+      setMsg(e?.message || "Failed to update product");
     }
   }
 
-  /* -------------------- derived: filter list -------------------- */
+  /* -------------------- derived: categories -------------------- */
   const allCats = React.useMemo(() => {
     const set = new Set(["All Products"]);
     (data.items || []).forEach((p) => set.add(getCategory(p)));
     return Array.from(set);
   }, [data.items]);
 
-  /* -------------------- Add-to-cart (storage + badge) -------------------- */
-function addToCart(p, months = 1) {
-  const productKey = getProductKey(p);
-  if (!productKey) return;
+  /* -------------------- Add-to-cart -------------------- */
+  function addToCart(p, months = 1) {
+    const productKey = getProductKey(p);
+    if (!productKey) return;
 
-  // read existing
-  let items = [];
-  try {
-    items = JSON.parse(localStorage.getItem("cartItems") || "[]");
-    if (!Array.isArray(items)) items = [];
-  } catch {
-    items = [];
+    const items = readCartItems();
+    const i = items.findIndex((it) => String(it.productKey) === productKey);
+
+    if (i >= 0) {
+      items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + months;
+    } else {
+      items.push({ productKey, qty: months, firstTime: false });
+    }
+
+    const totalQty = writeCartItems(items);
+    setCartCount(totalQty);
   }
-
-  // merge
-  const i = items.findIndex((it) => String(it.productKey) === productKey);
-  if (i >= 0) {
-    items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + months;
-  } else {
-    items.push({ productKey, qty: months, firstTime: false });
-  }
-
-  localStorage.setItem("cartItems", JSON.stringify(items));
-
-  // cartCount should reflect total quantity (not just +1)
-  const totalQty = items.reduce((sum, it) => sum + Number(it.qty || 0), 0);
-  localStorage.setItem("cartCount", String(totalQty));
-  setCartCount(totalQty);
-}
-
 
   /* -------------------- animations CSS -------------------- */
   const style = `
@@ -391,9 +416,7 @@ function addToCart(p, months = 1) {
             type="button"
             onClick={() =>
               navigate(
-                `/purchase?return=${encodeURIComponent(
-                  "/products?page=" + page
-                )}`
+                `/purchase?return=${encodeURIComponent("/products?page=" + page)}`,
               )
             }
             className="relative rounded-lg px-3 py-2 ring-1 ring-black/5 hover:bg-slate-50 active:animate-[pop_200ms_ease-out]"
@@ -440,7 +463,7 @@ function addToCart(p, months = 1) {
                   setDraft={setDraft}
                   saveEdit={saveEdit}
                   addToCart={addToCart}
-                  coupons={activeCoupons} // ✅ PASS COUPONS PROPERLY
+                  coupons={activeCoupons}
                 />
               ))}
           </div>
@@ -449,7 +472,7 @@ function addToCart(p, months = 1) {
             <button
               className="btn btn-sm"
               disabled={!hasPrev}
-              onClick={() => setPage(page - 1)}
+              onClick={() => gotoPage(page - 1)}
             >
               Previous
             </button>
@@ -459,7 +482,7 @@ function addToCart(p, months = 1) {
             <button
               className="btn btn-sm"
               disabled={!hasNext}
-              onClick={() => setPage(page + 1)}
+              onClick={() => gotoPage(page + 1)}
             >
               Next
             </button>
@@ -482,7 +505,7 @@ function ProductCard({
   setDraft,
   saveEdit,
   addToCart,
-  coupons, // ✅ receive coupons
+  coupons,
 }) {
   const editing = isEditing(p._id);
   const cat = getCategory(p);
@@ -493,7 +516,7 @@ function ProductCard({
       ? p.isPopular
       : (p.sort ?? 99) <= 1 || (rating || 0) >= 4.8;
 
-  const outOfStock = p.stockQty === 0;
+  const outOfStock = Number(p.stockQty || 0) <= 0;
 
   const yearly = p.price?.yearlyNGN || 0;
   const monthly = p.price?.monthlyNGN || 0;
@@ -506,7 +529,6 @@ function ProductCard({
 
   const productKey = getProductKey(p);
 
-  // ✅ coupon applies ONLY if "include" mode and product key is in list
   const applicable = (coupons || []).filter((c) => {
     const mode = c?.appliesTo?.mode || "all";
     if (mode !== "include") return false;
@@ -516,17 +538,15 @@ function ProductCard({
     );
   });
 
-  // pick best savings coupon
   let bestCoupon = null;
   let bestSavings = 0;
 
   for (const c of applicable) {
     let savings = 0;
-    if (c.type === "percent") {
+    if (c.type === "percent")
       savings = (Number(unit || 0) * Number(c.value || 0)) / 100;
-    } else {
-      savings = Number(c.value || 0);
-    }
+    else savings = Number(c.value || 0);
+
     if (savings > bestSavings) {
       bestSavings = savings;
       bestCoupon = c;
@@ -543,7 +563,9 @@ function ProductCard({
         ${inView ? "opacity-100" : "opacity-0"}
       `}
       style={{
-        animation: inView && `fade-in-up 500ms ease-out ${delay}ms forwards`,
+        animation: inView
+          ? `fade-in-up 500ms ease-out ${delay}ms forwards`
+          : undefined,
       }}
     >
       {(popular || outOfStock) && (
@@ -560,7 +582,6 @@ function ProductCard({
         </div>
       )}
 
-      {/* Product-specific coupon badge */}
       {bestCoupon && (
         <div className="absolute left-3 top-3 z-10">
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
@@ -660,11 +681,7 @@ function ProductCard({
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             className={`rounded-md px-3 py-2 text-sm font-medium ring-1 ring-slate-200 transition active:animate-[pop_180ms_ease-out]
-              ${
-                outOfStock
-                  ? "opacity-50 cursor-not-allowed"
-                  : "hover:bg-blue-50"
-              }
+              ${outOfStock ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50"}
             `}
             onClick={() => {
               if (outOfStock) return;
