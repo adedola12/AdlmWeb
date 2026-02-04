@@ -12,6 +12,8 @@ const router = express.Router();
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
+/* ------------------ helpers ------------------ */
+
 function normalizeExpiry(v) {
   if (!v) return null;
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
@@ -27,6 +29,7 @@ function maskFp(fp) {
   return `${s.slice(0, 5)}…${s.slice(-4)}`;
 }
 
+// ✅ legacy -> devices[] migration
 function normalizeLegacyEntitlement(ent) {
   if (!ent) return ent;
 
@@ -76,13 +79,65 @@ async function ensureUserEntitlementsMigrated(userDoc) {
   if (changed) await userDoc.save();
 }
 
+function isEntExpiredAt(expiresAt) {
+  if (!expiresAt) return false;
+  const end = dayjs(expiresAt).endOf("day");
+  return end.isValid() && end.isBefore(dayjs());
+}
+
+// calendar days remaining (0 if today, 1 if tomorrow, etc.)
+function daysLeftFor(expiresAt) {
+  if (!expiresAt) return null;
+  const endDay = dayjs(expiresAt).endOf("day");
+  if (!endDay.isValid()) return null;
+  const diff = endDay.startOf("day").diff(dayjs().startOf("day"), "day");
+  return Math.max(diff, 0);
+}
+
+/**
+ * ✅ Auto-mark expired entitlements:
+ * - active -> expired when date passes
+ * - expired -> active ONLY if admin extended expiry (date now in future)
+ * - does NOT touch "disabled" or other statuses (admin choice remains)
+ */
+function applyExpiryToUser(userDoc) {
+  let changed = false;
+  userDoc.entitlements = userDoc.entitlements || [];
+
+  for (const ent of userDoc.entitlements) {
+    const st = String(ent.status || "active").toLowerCase();
+    const expired = isEntExpiredAt(ent.expiresAt);
+
+    if (expired && st === "active") {
+      ent.status = "expired";
+      changed = true;
+    }
+
+    if (!expired && st === "expired") {
+      ent.status = "active";
+      changed = true;
+    }
+  }
+
+  if (changed) userDoc.refreshVersion = (userDoc.refreshVersion || 0) + 1;
+  return changed;
+}
+
 function toEntitlementV2(ent) {
   normalizeLegacyEntitlement(ent);
   const act = activeDevices(ent);
+
+  const expired = isEntExpiredAt(ent.expiresAt);
+  const daysLeft = daysLeftFor(ent.expiresAt);
+
   return {
     productKey: ent.productKey,
     status: ent.status,
     expiresAt: normalizeExpiry(ent.expiresAt),
+
+    // ✅ helpful UI fields
+    isExpired: expired,
+    daysLeft,
 
     seats: Math.max(parseInt(ent.seats || 1, 10), 1),
     seatsUsed: act.length,
@@ -98,6 +153,8 @@ function toEntitlementV2(ent) {
     })),
   };
 }
+
+/* ------------------ routes ------------------ */
 
 router.get(
   "/",
@@ -118,11 +175,23 @@ router.get(
       entitlements: 1,
       refreshVersion: 1,
     });
-    if (user) await ensureUserEntitlementsMigrated(user);
+
+    if (user) {
+      await ensureUserEntitlementsMigrated(user);
+      const expiryChanged = applyExpiryToUser(user);
+      if (expiryChanged) await user.save();
+    }
 
     const entitlementsV2 = user
       ? (user.entitlements || []).map(toEntitlementV2)
       : [];
+
+    // ✅ keep legacy "entitlements" accurate from DB (not token)
+    const entitlementsLegacy = (user?.entitlements || []).map((e) => ({
+      productKey: e.productKey,
+      status: e.status,
+      expiresAt: normalizeExpiry(e.expiresAt),
+    }));
 
     return res.json({
       email,
@@ -130,7 +199,7 @@ router.get(
       username,
       avatarUrl,
       zone,
-      entitlements: req.user.entitlements, // legacy payload
+      entitlements: entitlementsLegacy, // legacy payload (but now accurate)
       entitlementsV2,
       refreshVersion: user?.refreshVersion || 1,
       firstName: firstName || "",
@@ -145,9 +214,14 @@ router.get(
   "/entitlements",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id, { entitlements: 1 }).lean();
+    const user = await User.findById(req.user._id, { entitlements: 1 });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    const ent = (user?.entitlements || []).map((e) => ({
+    await ensureUserEntitlementsMigrated(user);
+    const expiryChanged = applyExpiryToUser(user);
+    if (expiryChanged) await user.save();
+
+    const ent = (user.entitlements || []).map((e) => ({
       productKey: e.productKey,
       status: e.status,
       expiresAt: normalizeExpiry(e.expiresAt),
@@ -161,13 +235,19 @@ router.get(
   "/entitlements-v2",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id, { entitlements: 1 });
+    const user = await User.findById(req.user._id, {
+      entitlements: 1,
+      refreshVersion: 1,
+    });
     if (!user) return res.status(404).json({ error: "User not found" });
 
     await ensureUserEntitlementsMigrated(user);
+    const expiryChanged = applyExpiryToUser(user);
+    if (expiryChanged) await user.save();
 
     return res.json({
       ok: true,
+      refreshVersion: user.refreshVersion || 1,
       entitlements: (user.entitlements || []).map(toEntitlementV2),
     });
   }),
@@ -181,10 +261,13 @@ router.get(
     const user = await User.findById(req.user._id, {
       entitlements: 1,
       email: 1,
+      refreshVersion: 1,
     });
     if (!user) return res.status(404).json({ error: "User missing" });
 
     await ensureUserEntitlementsMigrated(user);
+    const expiryChanged = applyExpiryToUser(user);
+    if (expiryChanged) await user.save();
 
     const ents = (user.entitlements || []).map((e) => ({
       ...toEntitlementV2(e),
@@ -195,7 +278,9 @@ router.get(
     const prods = await Product.find({ key: { $in: keys } })
       .select("key isCourse")
       .lean();
-    const byKey = Object.fromEntries(prods.map((p) => [p.key, !!p.isCourse]));
+    const byKey = Object.fromEntries(
+      (prods || []).map((p) => [p.key, !!p.isCourse]),
+    );
 
     const entitlements = ents.map((e) => ({
       ...e,
@@ -223,7 +308,7 @@ router.get(
 
     const installKeys = Array.from(
       new Set(
-        installs
+        (installs || [])
           .flatMap((p) =>
             Array.isArray(p.lines) && p.lines.length
               ? p.lines.map((l) => l.productKey)
@@ -238,10 +323,10 @@ router.get(
       .lean();
 
     const prodNameByKey = Object.fromEntries(
-      installProducts.map((x) => [x.key, x.name]),
+      (installProducts || []).map((x) => [x.key, x.name]),
     );
 
-    const installsEnriched = installs.map((p) => {
+    const installsEnriched = (installs || []).map((p) => {
       const firstLine =
         Array.isArray(p.lines) && p.lines.length ? p.lines[0] : null;
       const key = firstLine?.productKey || p.productKey || "";
@@ -256,6 +341,7 @@ router.get(
 
     return res.json({
       email: user.email,
+      refreshVersion: user.refreshVersion || 1,
       entitlements,
       installations: installsEnriched,
     });
@@ -317,7 +403,7 @@ router.post(
       const nz = normalizeZone(zone);
       if (!nz) return res.status(400).json({ error: "Invalid zone" });
       u.zone = nz;
-      u.refreshVersion += 1;
+      u.refreshVersion = (u.refreshVersion || 0) + 1;
     }
 
     if (firstName !== undefined) u.firstName = String(firstName || "").trim();

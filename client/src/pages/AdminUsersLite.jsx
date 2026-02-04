@@ -43,67 +43,6 @@ function statusRank(s) {
   return order[key] || 99;
 }
 
-function normalizePurchases(data) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.rows)) return data.rows;
-  if (Array.isArray(data?.items)) return data.items;
-  return [];
-}
-
-function buildAttemptedItem(p) {
-  // If cart purchase
-  if (Array.isArray(p?.lines) && p.lines.length > 0) {
-    const names = p.lines
-      .map((ln) => ln?.name || ln?.productName || ln?.productKey || "")
-      .filter(Boolean);
-    if (names.length) return names.join(" · ");
-  }
-
-  // Single product purchase
-  return (
-    p?.name ||
-    p?.productName ||
-    p?.productTitle ||
-    p?.productKey ||
-    p?.sku ||
-    "—"
-  );
-}
-
-function pickFirstNonEmpty(...vals) {
-  for (const v of vals) {
-    const s = String(v ?? "").trim();
-    if (s) return s;
-  }
-  return "";
-}
-
-function purchaseToLiteRow(p) {
-  const email = pickFirstNonEmpty(p?.email, p?.user?.email, p?.customer?.email);
-
-  const firstName = pickFirstNonEmpty(
-    p?.firstName,
-    p?.user?.firstName,
-    p?.customer?.firstName,
-  );
-
-  const lastName = pickFirstNonEmpty(
-    p?.lastName,
-    p?.user?.lastName,
-    p?.customer?.lastName,
-  );
-
-  const attemptedItem = buildAttemptedItem(p);
-
-  return {
-    firstName,
-    lastName,
-    email,
-    attemptedItem,
-    createdAt: p?.createdAt || null,
-  };
-}
-
 export default function AdminUsersLite() {
   const { accessToken } = useAuth();
 
@@ -121,30 +60,20 @@ export default function AdminUsersLite() {
   async function loadTabs() {
     setMsg("");
     try {
-      const [tabsData, pendingData] = await Promise.all([
-        apiAuthed("/admin/users-lite/tabs", { token: accessToken }),
-        apiAuthed("/admin/purchases?status=pending", { token: accessToken }),
-      ]);
+      const data = await apiAuthed("/admin/users-lite/tabs", {
+        token: accessToken,
+      });
 
-      const list = Array.isArray(tabsData?.tabs) ? tabsData.tabs : [];
-      const pending = normalizePurchases(pendingData);
+      const list = Array.isArray(data?.tabs) ? data.tabs : [];
+      setTabs(list);
 
-      const unpaidTab = {
-        id: UNPAID_TAB_ID,
-        title: "Unpaid Attempts",
-        count: pending.length,
-      };
-
-      const merged = [...list, unpaidTab];
-      setTabs(merged);
-
-      if (!tab && merged.length) setTab(merged[0].id);
+      if (!tab && list.length) setTab(list[0].id);
     } catch (e) {
       setMsg(e.message || "Failed to load tabs");
     }
   }
 
-  async function loadUsersLite(nextTab) {
+  async function loadList(nextTab) {
     const t = nextTab || tab;
     if (!t) return;
 
@@ -162,88 +91,6 @@ export default function AdminUsersLite() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function loadUnpaidAttempts() {
-    setLoading(true);
-    setMsg("");
-    try {
-      const data = await apiAuthed(`/admin/purchases?status=pending`, {
-        token: accessToken,
-      });
-
-      const purchases = normalizePurchases(data);
-
-      // Sort newest first (if createdAt exists)
-      purchases.sort((a, b) => {
-        const ax = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bx = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return bx - ax;
-      });
-
-      // Aggregate by email (one row per user), combine attempted items uniquely
-      const map = new Map(); // emailLower -> {firstName,lastName,email, items:Set, createdAt}
-      for (const p of purchases) {
-        const r = purchaseToLiteRow(p);
-        if (!r.email) continue;
-
-        const key = String(r.email).toLowerCase();
-        if (!map.has(key)) {
-          map.set(key, {
-            firstName: r.firstName || "",
-            lastName: r.lastName || "",
-            email: r.email,
-            _items: new Set(),
-            createdAt: r.createdAt || null,
-          });
-        }
-
-        const agg = map.get(key);
-
-        // prefer first non-empty first/last name seen
-        if (!agg.firstName && r.firstName) agg.firstName = r.firstName;
-        if (!agg.lastName && r.lastName) agg.lastName = r.lastName;
-
-        if (r.attemptedItem && r.attemptedItem !== "—") {
-          // if attemptedItem contains " · " already, split to avoid duplicate bundles
-          const parts = String(r.attemptedItem)
-            .split("·")
-            .map((s) => s.trim())
-            .filter(Boolean);
-          if (parts.length) parts.forEach((x) => agg._items.add(x));
-          else agg._items.add(String(r.attemptedItem).trim());
-        }
-      }
-
-      const result = Array.from(map.values()).map((x) => ({
-        firstName: x.firstName,
-        lastName: x.lastName,
-        email: x.email,
-        attemptedItem: x._items.size ? Array.from(x._items).join(" · ") : "—",
-        createdAt: x.createdAt,
-      }));
-
-      setRows(result);
-
-      // update tab count live
-      setTabs((prev) =>
-        prev.map((t) =>
-          t.id === UNPAID_TAB_ID ? { ...t, count: result.length } : t,
-        ),
-      );
-    } catch (e) {
-      setMsg(e.message || "Failed to load unpaid attempts");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadList(nextTab) {
-    const t = nextTab || tab;
-    if (!t) return;
-    if (t === UNPAID_TAB_ID) return loadUnpaidAttempts();
-    return loadUsersLite(t);
   }
 
   React.useEffect(() => {
@@ -280,7 +127,6 @@ export default function AdminUsersLite() {
       if (sort === "name_asc") return an.localeCompare(bn);
       if (sort === "name_desc") return bn.localeCompare(an);
 
-      // status sorting only applies to normal user tabs
       if (!isUnpaidTab) {
         const ar = statusRank(a.subscriptionStatus);
         const br = statusRank(b.subscriptionStatus);
@@ -332,8 +178,8 @@ export default function AdminUsersLite() {
           </h1>
           <p className="text-sm text-slate-600">
             {isUnpaidTab
-              ? "Read-only: First name, Last name, Email, and what they tried to purchase but didn’t pay for."
-              : "Read-only: First name, Last name, Email, Subscription status."}
+              ? "Read-only: Name, Email, and what they tried to purchase but didn’t pay for."
+              : "Read-only: Name, Email, Subscription status."}
           </p>
         </div>
 

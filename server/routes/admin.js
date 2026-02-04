@@ -51,6 +51,90 @@ function lineHasPeriods(ln) {
   return Object.prototype.hasOwnProperty.call(ln || {}, "periods");
 }
 
+function isEntExpiredAt(expiresAt) {
+  if (!expiresAt) return false;
+  const end = dayjs(expiresAt).endOf("day");
+  return end.isValid() && end.isBefore(dayjs());
+}
+
+/**
+ * ✅ Normalize entitlement object (legacy migration + safety)
+ */
+function normalizeLegacyEnt(ent) {
+  if (!ent) return;
+
+  if (!ent.seats || ent.seats < 1) ent.seats = 1;
+  if (!Array.isArray(ent.devices)) ent.devices = [];
+
+  const orgName = String(ent.organizationName || "").trim();
+  const ltRaw = String(ent.licenseType || "").toLowerCase();
+
+  // infer ONLY from orgName if missing/invalid
+  if (ltRaw !== "personal" && ltRaw !== "organization") {
+    ent.licenseType = orgName ? "organization" : "personal";
+  }
+
+  // If marked org but no orgName + legacy single-device fingerprint -> likely personal legacy
+  if (
+    ent.licenseType === "organization" &&
+    !orgName &&
+    ent.seats > 1 &&
+    (!!ent.deviceFingerprint || (ent.devices || []).length <= 1)
+  ) {
+    ent.licenseType = "personal";
+    ent.seats = 1;
+  }
+
+  // Personal must not have multi-seat
+  if (ent.licenseType === "personal" && ent.seats > 1) ent.seats = 1;
+
+  // legacy fallback deviceFingerprint -> devices[]
+  if (ent.devices.length === 0 && ent.deviceFingerprint) {
+    ent.devices.push({
+      fingerprint: ent.deviceFingerprint,
+      name: "",
+      boundAt: ent.deviceBoundAt || new Date(),
+      lastSeenAt: new Date(),
+      revokedAt: null,
+    });
+  }
+}
+
+/**
+ * ✅ Enforce expiry rule:
+ * - If expired and status was active => set status = "expired"
+ * - If not expired but status = "expired" (after renewal) => restore to active
+ */
+function applyExpiryToUser(userDoc) {
+  if (!userDoc) return false;
+
+  let changed = false;
+  userDoc.entitlements = userDoc.entitlements || [];
+
+  for (const ent of userDoc.entitlements) {
+    normalizeLegacyEnt(ent);
+
+    const st = String(ent.status || "active").toLowerCase();
+    const expired = isEntExpiredAt(ent.expiresAt);
+
+    if (expired && st === "active") {
+      ent.status = "expired";
+      changed = true;
+    }
+
+    if (!expired && st === "expired") {
+      ent.status = "active";
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    userDoc.refreshVersion = (userDoc.refreshVersion || 0) + 1;
+  }
+
+  return changed;
+}
+
 /**
  * Parse a purchase line into a normalized grant, with legacy fix:
  * - If personal + no periods field + qty > 1 => qty was duration (periods), NOT seats.
@@ -96,46 +180,6 @@ function parseLineForGrant(purchase, ln) {
   };
 }
 
-function normalizeLegacyEnt(ent) {
-  if (!ent) return;
-
-  if (!ent.seats || ent.seats < 1) ent.seats = 1;
-  if (!Array.isArray(ent.devices)) ent.devices = [];
-
-  const orgName = String(ent.organizationName || "").trim();
-  const ltRaw = String(ent.licenseType || "").toLowerCase();
-
-  // infer ONLY from orgName if missing/invalid
-  if (ltRaw !== "personal" && ltRaw !== "organization") {
-    ent.licenseType = orgName ? "organization" : "personal";
-  }
-
-  // If marked org but no orgName + legacy single-device fingerprint -> likely personal legacy
-  if (
-    ent.licenseType === "organization" &&
-    !orgName &&
-    ent.seats > 1 &&
-    (!!ent.deviceFingerprint || (ent.devices || []).length <= 1)
-  ) {
-    ent.licenseType = "personal";
-    ent.seats = 1;
-  }
-
-  // Personal must not have multi-seat
-  if (ent.licenseType === "personal" && ent.seats > 1) ent.seats = 1;
-
-  // legacy fallback deviceFingerprint -> devices[]
-  if (ent.devices.length === 0 && ent.deviceFingerprint) {
-    ent.devices.push({
-      fingerprint: ent.deviceFingerprint,
-      name: "",
-      boundAt: ent.deviceBoundAt || new Date(),
-      lastSeenAt: new Date(),
-      revokedAt: null,
-    });
-  }
-}
-
 function addMonthsToEntitlement(
   userDoc,
   productKey,
@@ -178,6 +222,7 @@ function addMonthsToEntitlement(
 
   normalizeLegacyEnt(ent);
 
+  // ✅ if expired, start from NOW; if still valid, extend from current expiry
   const base =
     ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
       ? dayjs(ent.expiresAt)
@@ -386,7 +431,15 @@ router.get(
       disabled: 1,
       entitlements: 1,
       createdAt: 1,
+      refreshVersion: 1,
     }).sort({ createdAt: -1 });
+
+    // ✅ enforce expiry -> status becomes "expired" (no ghost-active entitlements)
+    const saves = [];
+    for (const u of list) {
+      if (applyExpiryToUser(u)) saves.push(u.save());
+    }
+    if (saves.length) await Promise.all(saves);
 
     return res.json(list);
   }),
@@ -404,6 +457,8 @@ router.post(
 
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
+
+    applyExpiryToUser(u);
 
     u.disabled = disabled;
     u.refreshVersion = (u.refreshVersion || 0) + 1;
@@ -433,6 +488,9 @@ router.post(
 
     const user = await User.findById(purchase.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
+
+    // ✅ ensure user expiry statuses are enforced before applying new months
+    applyExpiryToUser(user);
 
     const overrideMonths = Number(req.body?.months || 0);
 
@@ -633,6 +691,8 @@ router.post(
       const user = await User.findById(p.userId);
       if (!user) return res.status(404).json({ error: "User not found" });
 
+      applyExpiryToUser(user);
+
       installGrants.forEach((g) =>
         addMonthsToEntitlement(user, g.productKey, Number(g.months), g.seats, {
           licenseType: g.licenseType || purchaseLt,
@@ -690,6 +750,8 @@ router.post(
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
 
+    applyExpiryToUser(u);
+
     u.entitlements = u.entitlements || [];
     const now = dayjs();
 
@@ -741,6 +803,8 @@ router.post(
       }
     }
 
+    applyExpiryToUser(u);
+
     await u.save();
     return res.json({ ok: true, entitlements: u.entitlements });
   }),
@@ -752,6 +816,8 @@ router.post(
     const { email, productKey } = req.body || {};
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
+
+    applyExpiryToUser(u);
 
     const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
     if (!ent) return res.status(404).json({ error: "Entitlement not found" });
@@ -775,6 +841,8 @@ router.post(
 
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
+
+    applyExpiryToUser(u);
 
     const before = (u.entitlements || []).length;
     u.entitlements = (u.entitlements || []).filter(
@@ -810,6 +878,8 @@ router.get(
 
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
+
+    applyExpiryToUser(u);
 
     const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
     if (!ent) return res.status(404).json({ error: "Entitlement not found" });
@@ -851,6 +921,8 @@ router.post(
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
 
+    applyExpiryToUser(u);
+
     const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
     if (!ent) return res.status(404).json({ error: "Entitlement not found" });
 
@@ -891,6 +963,8 @@ router.post(
 
     const u = await User.findOne({ email });
     if (!u) return res.status(404).json({ error: "User not found" });
+
+    applyExpiryToUser(u);
 
     const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
     if (!ent) return res.status(404).json({ error: "Entitlement not found" });
