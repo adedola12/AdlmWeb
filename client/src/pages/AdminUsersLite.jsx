@@ -10,19 +10,18 @@ const STATUS_LABEL = {
   disabled: "Disabled",
 };
 
+const UNPAID_TAB_ID = "__unpaid_attempts__";
+
 function escapeCsvCell(v) {
   const s = String(v ?? "");
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 
-function downloadCsv(filename, rows) {
-  const header = ["First Name", "Last Name", "Email"];
+function downloadCsv(filename, header, rows, rowToCells) {
   const lines = [
-    header.join(","),
-    ...(rows || []).map((r) =>
-      [r.firstName, r.lastName, r.email].map(escapeCsvCell).join(","),
-    ),
+    header.map(escapeCsvCell).join(","),
+    ...(rows || []).map((r) => rowToCells(r).map(escapeCsvCell).join(",")),
   ];
   const csv = lines.join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -39,11 +38,70 @@ function downloadCsv(filename, rows) {
 }
 
 function statusRank(s) {
-  // for sorting
   const key = String(s || "").toLowerCase();
-  // active first
   const order = { active: 1, expired: 2, inactive: 3, disabled: 4 };
   return order[key] || 99;
+}
+
+function normalizePurchases(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.rows)) return data.rows;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
+function buildAttemptedItem(p) {
+  // If cart purchase
+  if (Array.isArray(p?.lines) && p.lines.length > 0) {
+    const names = p.lines
+      .map((ln) => ln?.name || ln?.productName || ln?.productKey || "")
+      .filter(Boolean);
+    if (names.length) return names.join(" · ");
+  }
+
+  // Single product purchase
+  return (
+    p?.name ||
+    p?.productName ||
+    p?.productTitle ||
+    p?.productKey ||
+    p?.sku ||
+    "—"
+  );
+}
+
+function pickFirstNonEmpty(...vals) {
+  for (const v of vals) {
+    const s = String(v ?? "").trim();
+    if (s) return s;
+  }
+  return "";
+}
+
+function purchaseToLiteRow(p) {
+  const email = pickFirstNonEmpty(p?.email, p?.user?.email, p?.customer?.email);
+
+  const firstName = pickFirstNonEmpty(
+    p?.firstName,
+    p?.user?.firstName,
+    p?.customer?.firstName,
+  );
+
+  const lastName = pickFirstNonEmpty(
+    p?.lastName,
+    p?.user?.lastName,
+    p?.customer?.lastName,
+  );
+
+  const attemptedItem = buildAttemptedItem(p);
+
+  return {
+    firstName,
+    lastName,
+    email,
+    attemptedItem,
+    createdAt: p?.createdAt || null,
+  };
 }
 
 export default function AdminUsersLite() {
@@ -58,21 +116,35 @@ export default function AdminUsersLite() {
   const [q, setQ] = React.useState("");
   const [sort, setSort] = React.useState("name_asc"); // name_asc | name_desc | status_asc | status_desc
 
+  const isUnpaidTab = tab === UNPAID_TAB_ID;
+
   async function loadTabs() {
     setMsg("");
     try {
-      const data = await apiAuthed("/admin/users-lite/tabs", {
-        token: accessToken,
-      });
-      const list = Array.isArray(data?.tabs) ? data.tabs : [];
-      setTabs(list);
-      if (!tab && list.length) setTab(list[0].id);
+      const [tabsData, pendingData] = await Promise.all([
+        apiAuthed("/admin/users-lite/tabs", { token: accessToken }),
+        apiAuthed("/admin/purchases?status=pending", { token: accessToken }),
+      ]);
+
+      const list = Array.isArray(tabsData?.tabs) ? tabsData.tabs : [];
+      const pending = normalizePurchases(pendingData);
+
+      const unpaidTab = {
+        id: UNPAID_TAB_ID,
+        title: "Unpaid Attempts",
+        count: pending.length,
+      };
+
+      const merged = [...list, unpaidTab];
+      setTabs(merged);
+
+      if (!tab && merged.length) setTab(merged[0].id);
     } catch (e) {
       setMsg(e.message || "Failed to load tabs");
     }
   }
 
-  async function loadList(nextTab) {
+  async function loadUsersLite(nextTab) {
     const t = nextTab || tab;
     if (!t) return;
 
@@ -92,12 +164,95 @@ export default function AdminUsersLite() {
     }
   }
 
+  async function loadUnpaidAttempts() {
+    setLoading(true);
+    setMsg("");
+    try {
+      const data = await apiAuthed(`/admin/purchases?status=pending`, {
+        token: accessToken,
+      });
+
+      const purchases = normalizePurchases(data);
+
+      // Sort newest first (if createdAt exists)
+      purchases.sort((a, b) => {
+        const ax = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bx = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bx - ax;
+      });
+
+      // Aggregate by email (one row per user), combine attempted items uniquely
+      const map = new Map(); // emailLower -> {firstName,lastName,email, items:Set, createdAt}
+      for (const p of purchases) {
+        const r = purchaseToLiteRow(p);
+        if (!r.email) continue;
+
+        const key = String(r.email).toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, {
+            firstName: r.firstName || "",
+            lastName: r.lastName || "",
+            email: r.email,
+            _items: new Set(),
+            createdAt: r.createdAt || null,
+          });
+        }
+
+        const agg = map.get(key);
+
+        // prefer first non-empty first/last name seen
+        if (!agg.firstName && r.firstName) agg.firstName = r.firstName;
+        if (!agg.lastName && r.lastName) agg.lastName = r.lastName;
+
+        if (r.attemptedItem && r.attemptedItem !== "—") {
+          // if attemptedItem contains " · " already, split to avoid duplicate bundles
+          const parts = String(r.attemptedItem)
+            .split("·")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (parts.length) parts.forEach((x) => agg._items.add(x));
+          else agg._items.add(String(r.attemptedItem).trim());
+        }
+      }
+
+      const result = Array.from(map.values()).map((x) => ({
+        firstName: x.firstName,
+        lastName: x.lastName,
+        email: x.email,
+        attemptedItem: x._items.size ? Array.from(x._items).join(" · ") : "—",
+        createdAt: x.createdAt,
+      }));
+
+      setRows(result);
+
+      // update tab count live
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === UNPAID_TAB_ID ? { ...t, count: result.length } : t,
+        ),
+      );
+    } catch (e) {
+      setMsg(e.message || "Failed to load unpaid attempts");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadList(nextTab) {
+    const t = nextTab || tab;
+    if (!t) return;
+    if (t === UNPAID_TAB_ID) return loadUnpaidAttempts();
+    return loadUsersLite(t);
+  }
+
   React.useEffect(() => {
     loadTabs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
+    if (!tab) return;
     loadList(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -108,8 +263,9 @@ export default function AdminUsersLite() {
 
     if (needle) {
       list = list.filter((r) => {
-        const hay =
-          `${r.firstName || ""} ${r.lastName || ""} ${r.email || ""}`.toLowerCase();
+        const hay = isUnpaidTab
+          ? `${r.firstName || ""} ${r.lastName || ""} ${r.email || ""} ${r.attemptedItem || ""}`.toLowerCase()
+          : `${r.firstName || ""} ${r.lastName || ""} ${r.email || ""}`.toLowerCase();
         return hay.includes(needle);
       });
     }
@@ -124,23 +280,48 @@ export default function AdminUsersLite() {
       if (sort === "name_asc") return an.localeCompare(bn);
       if (sort === "name_desc") return bn.localeCompare(an);
 
-      const ar = statusRank(a.subscriptionStatus);
-      const br = statusRank(b.subscriptionStatus);
-      if (sort === "status_asc") {
-        if (ar !== br) return ar - br;
-        return an.localeCompare(bn);
+      // status sorting only applies to normal user tabs
+      if (!isUnpaidTab) {
+        const ar = statusRank(a.subscriptionStatus);
+        const br = statusRank(b.subscriptionStatus);
+        if (sort === "status_asc") {
+          if (ar !== br) return ar - br;
+          return an.localeCompare(bn);
+        }
+        if (sort === "status_desc") {
+          if (ar !== br) return br - ar;
+          return an.localeCompare(bn);
+        }
       }
-      if (sort === "status_desc") {
-        if (ar !== br) return br - ar;
-        return an.localeCompare(bn);
-      }
+
       return 0;
     });
 
     return sorted;
-  }, [rows, q, sort]);
+  }, [rows, q, sort, isUnpaidTab]);
 
   const activeTabTitle = tabs.find((t) => t.id === tab)?.title || "Users";
+
+  function onExport() {
+    const safeName = (activeTabTitle || "users").replace(/[^\w-]+/g, "_");
+
+    if (isUnpaidTab) {
+      downloadCsv(
+        `${safeName}.csv`,
+        ["First Name", "Last Name", "Email", "Attempted Purchase"],
+        filtered,
+        (r) => [r.firstName, r.lastName, r.email, r.attemptedItem],
+      );
+      return;
+    }
+
+    downloadCsv(
+      `${safeName}.csv`,
+      ["First Name", "Last Name", "Email"],
+      filtered,
+      (r) => [r.firstName, r.lastName, r.email],
+    );
+  }
 
   return (
     <div className="px-3 md:px-6 lg:px-10 py-6 space-y-4">
@@ -150,7 +331,9 @@ export default function AdminUsersLite() {
             Users (Mini Admin View)
           </h1>
           <p className="text-sm text-slate-600">
-            Read-only: First name, Last name, Email, Subscription status.
+            {isUnpaidTab
+              ? "Read-only: First name, Last name, Email, and what they tried to purchase but didn’t pay for."
+              : "Read-only: First name, Last name, Email, Subscription status."}
           </p>
         </div>
 
@@ -165,15 +348,14 @@ export default function AdminUsersLite() {
 
           <button
             className="rounded-lg px-3 py-2 bg-blue-600 text-white hover:bg-blue-700"
-            onClick={() =>
-              downloadCsv(
-                `${(activeTabTitle || "users").replace(/[^\w-]+/g, "_")}.csv`,
-                filtered,
-              )
-            }
+            onClick={onExport}
             type="button"
             disabled={loading || filtered.length === 0}
-            title="Export First Name, Last Name, Email"
+            title={
+              isUnpaidTab
+                ? "Export Name, Email, Attempted Purchase"
+                : "Export First Name, Last Name, Email"
+            }
           >
             Export CSV
           </button>
@@ -216,7 +398,11 @@ export default function AdminUsersLite() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name or email…"
+            placeholder={
+              isUnpaidTab
+                ? "Search by name, email, or attempted purchase…"
+                : "Search by name or email…"
+            }
             className="w-full rounded-lg px-3 py-2 ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-blue-600"
           />
         </div>
@@ -230,8 +416,13 @@ export default function AdminUsersLite() {
           >
             <option value="name_asc">Name (A–Z)</option>
             <option value="name_desc">Name (Z–A)</option>
-            <option value="status_asc">Status (Active first)</option>
-            <option value="status_desc">Status (Inactive first)</option>
+
+            {!isUnpaidTab && (
+              <>
+                <option value="status_asc">Status (Active first)</option>
+                <option value="status_desc">Status (Inactive first)</option>
+              </>
+            )}
           </select>
 
           <span className="text-xs text-slate-600">
@@ -253,11 +444,19 @@ export default function AdminUsersLite() {
                 </th>
                 <th className="text-left px-4 py-3 font-semibold">Last Name</th>
                 <th className="text-left px-4 py-3 font-semibold">Email</th>
-                <th className="text-left px-4 py-3 font-semibold">
-                  Subscription Status
-                </th>
+
+                {isUnpaidTab ? (
+                  <th className="text-left px-4 py-3 font-semibold">
+                    Attempted Purchase
+                  </th>
+                ) : (
+                  <th className="text-left px-4 py-3 font-semibold">
+                    Subscription Status
+                  </th>
+                )}
               </tr>
             </thead>
+
             <tbody>
               {loading ? (
                 <tr>
@@ -273,10 +472,26 @@ export default function AdminUsersLite() {
                 </tr>
               ) : (
                 filtered.map((r, i) => {
+                  if (isUnpaidTab) {
+                    return (
+                      <tr key={`${r.email}-${i}`} className="border-t">
+                        <td className="px-4 py-3">{r.firstName || "-"}</td>
+                        <td className="px-4 py-3">{r.lastName || "-"}</td>
+                        <td className="px-4 py-3">{r.email || "-"}</td>
+                        <td className="px-4 py-3">
+                          <div className="max-w-[520px] break-words">
+                            {r.attemptedItem || "—"}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   const s = String(
                     r.subscriptionStatus || "inactive",
                   ).toLowerCase();
                   const label = STATUS_LABEL[s] || "Inactive";
+
                   return (
                     <tr key={`${r.email}-${i}`} className="border-t">
                       <td className="px-4 py-3">{r.firstName || "-"}</td>
