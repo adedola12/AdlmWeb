@@ -46,24 +46,24 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    if (didConfetti.current) return;
-    didConfetti.current = true;
+    // if (didConfetti.current) return;
+    // didConfetti.current = true;
 
-    // quick burst
-    confetti({
-      particleCount: 120,
-      spread: 70,
-      origin: { y: 0.2 },
-    });
+    // // quick burst
+    // confetti({
+    //   particleCount: 120,
+    //   spread: 70,
+    //   origin: { y: 0.2 },
+    // });
 
     // small follow-up
-    setTimeout(() => {
-      confetti({
-        particleCount: 80,
-        spread: 55,
-        origin: { y: 0.2 },
-      });
-    }, 350);
+    // setTimeout(() => {
+    //   confetti({
+    //     particleCount: 80,
+    //     spread: 55,
+    //     origin: { y: 0.2 },
+    //   });
+    // }, 350);
   }, []);
 
   function closeVideo() {
@@ -73,7 +73,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* ✅ Launch countdown banner on top */}
-      <LaunchCountdownBanner targetIso={LAUNCH_AT} title="Full launch in" />
+      {/* <LaunchCountdownBanner targetIso={LAUNCH_AT} title="Full launch in" /> */}
       {!bannerDismissed && (
         <CouponBanner
           banner={banner}
