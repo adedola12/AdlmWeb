@@ -105,7 +105,7 @@ function FreeVideoPicker({ selected, setSelected }) {
       });
       const json = await res.json();
       const items = (json.items || []).filter(
-        (x) => !query || x.title.toLowerCase().includes(query.toLowerCase())
+        (x) => !query || x.title.toLowerCase().includes(query.toLowerCase()),
       );
       setData({ ...json, items });
       setPage(p);
@@ -192,25 +192,6 @@ function FreeVideoPicker({ selected, setSelected }) {
   );
 }
 
-// --- Small UI helpers --- //
-function Thumb({ src, onPrimary, onRemove, primaryLabel = "Make thumbnail" }) {
-  return (
-    <div className="relative">
-      <img src={src} className="w-24 h-24 object-cover rounded border" />
-      <div className="mt-1 flex gap-1">
-        {onPrimary && (
-          <button type="button" className="btn btn-xs" onClick={onPrimary}>
-            {primaryLabel}
-          </button>
-        )}
-        <button type="button" className="btn btn-xs" onClick={onRemove}>
-          Remove
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function MediaBrowserModal({
   open,
   onClose,
@@ -236,7 +217,7 @@ function MediaBrowserModal({
         {
           credentials: "include",
           headers: { Authorization: `Bearer ${accessToken}` },
-        }
+        },
       );
 
       const json = await res.json();
@@ -250,13 +231,11 @@ function MediaBrowserModal({
     }
   }
 
-  // load when open / search changes / type changes
   React.useEffect(() => {
     if (open) load(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, q, type]);
 
-  // ESC closes modal
   React.useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
@@ -272,12 +251,10 @@ function MediaBrowserModal({
     <div
       className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
       onMouseDown={(e) => {
-        // close if user clicks the dark overlay (outside the dialog)
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
       <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden">
-        {/* Sticky header */}
         <div className="sticky top-0 z-10 bg-white border-b">
           <div className="flex items-center justify-between px-4 py-3">
             <div>
@@ -290,7 +267,6 @@ function MediaBrowserModal({
               </div>
             </div>
 
-            {/* X close button */}
             <button
               type="button"
               onClick={onClose}
@@ -312,19 +288,12 @@ function MediaBrowserModal({
           </div>
         </div>
 
-        {/* Scrollable body */}
         <div className="px-4 py-4">
           {loading ? (
             <div className="text-sm text-slate-600">Loading…</div>
           ) : (
             <>
-              <div
-                className="
-                  max-h-[65vh]
-                  overflow-y-auto
-                  pr-1
-                "
-              >
+              <div className="max-h-[65vh] overflow-y-auto pr-1">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                   {items.map((it) => (
                     <button
@@ -362,7 +331,6 @@ function MediaBrowserModal({
                 </div>
               </div>
 
-              {/* Footer actions */}
               <div className="mt-4 flex items-center justify-between">
                 <button type="button" className="btn btn-sm" onClick={onClose}>
                   Close
@@ -385,6 +353,35 @@ function MediaBrowserModal({
   );
 }
 
+// -------------------- DISCOUNT HELPERS --------------------
+function toUiDiscount(d) {
+  if (!d || !d.type) {
+    return { type: "none", valueNGN: "", valueUSD: "" };
+  }
+  return {
+    type: d.type, // "percent" | "fixed"
+    valueNGN: d.valueNGN ?? "",
+    valueUSD: d.valueUSD == null ? "" : d.valueUSD,
+  };
+}
+
+function buildDiscount(ui) {
+  const type = String(ui?.type || "none").toLowerCase();
+  if (type === "none") return undefined;
+
+  const valueNGN = Number(ui?.valueNGN || 0) || 0;
+  const rawUSD = ui?.valueUSD;
+  const valueUSD = rawUSD === "" || rawUSD == null ? null : Number(rawUSD || 0);
+
+  // require at least one positive value
+  if (valueNGN <= 0 && (valueUSD == null || valueUSD <= 0)) return undefined;
+
+  return {
+    type: type === "fixed" ? "fixed" : "percent",
+    valueNGN,
+    valueUSD,
+  };
+}
 
 export default function AdminProductEdit() {
   const { id } = useParams();
@@ -395,13 +392,13 @@ export default function AdminProductEdit() {
   const [msg, setMsg] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
-  // local pieces we can manipulate
   const [name, setName] = React.useState("");
   const [blurb, setBlurb] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [features, setFeatures] = React.useState([]);
   const [images, setImages] = React.useState([]);
   const [billingInterval, setBillingInterval] = React.useState("monthly");
+
   const [price, setPrice] = React.useState({
     monthlyNGN: 0,
     yearlyNGN: 0,
@@ -410,20 +407,28 @@ export default function AdminProductEdit() {
     yearlyUSD: "",
     installUSD: "",
   });
+
+  // ✅ NEW: discounts state for edit page
+  const [discountsUi, setDiscountsUi] = React.useState({
+    sixMonths: { type: "none", valueNGN: "", valueUSD: "" },
+    oneYear: { type: "none", valueNGN: "", valueUSD: "" },
+  });
+
   const [previewUrl, setPreviewUrl] = React.useState("");
   const [thumbnailUrl, setThumbnailUrl] = React.useState("");
   const [isPublished, setIsPublished] = React.useState(true);
   const [sort, setSort] = React.useState(0);
   const [relatedFreeVideoIds, setRelatedFreeVideoIds] = React.useState([]);
 
-  // FIX: add missing modal states
   const [showImagePicker, setShowImagePicker] = React.useState(false);
   const [showVideoPicker, setShowVideoPicker] = React.useState(false);
 
-  // small uploader (no progress UI here)
+  // ✅ FIX: this ref was used in your code but missing
+  const previewInputRef = React.useRef(null);
+
   async function uploadToCloudinary(
     file,
-    resourceType /* "image" | "video" */
+    resourceType /* "image" | "video" */,
   ) {
     try {
       const sig = await apiAuthed(`/admin/media/sign`, {
@@ -466,6 +471,7 @@ export default function AdminProductEdit() {
         const data = await apiAuthed(`/admin/products/${id}`, {
           token: accessToken,
         });
+
         setP(data);
         setName(data.name || "");
         setBlurb(data.blurb || "");
@@ -473,6 +479,7 @@ export default function AdminProductEdit() {
         setFeatures(Array.isArray(data.features) ? data.features : []);
         setImages(Array.isArray(data.images) ? data.images : []);
         setBillingInterval(data.billingInterval || "monthly");
+
         setPrice({
           monthlyNGN: data.price?.monthlyNGN ?? 0,
           yearlyNGN: data.price?.yearlyNGN ?? 0,
@@ -481,12 +488,21 @@ export default function AdminProductEdit() {
           yearlyUSD: data.price?.yearlyUSD ?? "",
           installUSD: data.price?.installUSD ?? "",
         });
+
+        // ✅ NEW: load existing discounts into UI
+        setDiscountsUi({
+          sixMonths: toUiDiscount(data.discounts?.sixMonths),
+          oneYear: toUiDiscount(data.discounts?.oneYear),
+        });
+
         setPreviewUrl(data.previewUrl || "");
         setThumbnailUrl(data.thumbnailUrl || "");
         setIsPublished(!!data.isPublished);
         setSort(data.sort ?? 0);
+
+        // robust mapping whether populated or raw ids
         setRelatedFreeVideoIds(
-          (data.relatedFreeVideoIds || []).map((v) => v._id)
+          (data.relatedFreeVideoIds || []).map((v) => v?._id || v),
         );
       } catch (err) {
         setMsg(err?.message || "Failed to load product");
@@ -500,24 +516,37 @@ export default function AdminProductEdit() {
     setSaving(true);
     setMsg("");
     try {
+      const discounts = {
+        sixMonths: buildDiscount(discountsUi.sixMonths),
+        oneYear: buildDiscount(discountsUi.oneYear),
+      };
+      const hasDiscounts = !!discounts.sixMonths || !!discounts.oneYear;
+
       const payload = {
         name,
         blurb,
         description,
         features,
-        images: Array.from(new Set(images)), // dedupe
+        images: Array.from(new Set(images)),
         billingInterval,
         price: {
           monthlyNGN: Number(price.monthlyNGN || 0),
           yearlyNGN: Number(price.yearlyNGN || 0),
           installNGN: Number(price.installNGN || 0),
         },
+
+        // ✅ IMPORTANT:
+        // - if user has discounts -> send them
+        // - if user cleared discounts -> send {} so API can UNSET them
+        discounts: hasDiscounts ? discounts : {},
+
         previewUrl: previewUrl || undefined,
         thumbnailUrl: thumbnailUrl || undefined,
         isPublished,
         sort: Number(sort || 0),
         relatedFreeVideoIds,
       };
+
       if (price.monthlyUSD !== "")
         payload.price.monthlyUSD = Number(price.monthlyUSD);
       if (price.yearlyUSD !== "")
@@ -531,6 +560,7 @@ export default function AdminProductEdit() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       setMsg("✅ Saved.");
     } catch (e) {
       setMsg(e.message || "Save failed");
@@ -559,13 +589,15 @@ export default function AdminProductEdit() {
       {msg && <div className="text-sm">{msg}</div>}
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <div className="card space-y-2">
+        {/* LEFT */}
+        <div className="card space-y-3">
           <input
             className="input"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name"
           />
+
           <textarea
             className="input"
             rows={2}
@@ -573,6 +605,7 @@ export default function AdminProductEdit() {
             onChange={(e) => setBlurb(e.target.value)}
             placeholder="Short blurb"
           />
+
           <textarea
             className="input"
             rows={6}
@@ -665,6 +698,152 @@ export default function AdminProductEdit() {
             </label>
           </div>
 
+          {/* ✅ NEW: DISCOUNTS UI */}
+          <div className="border rounded-lg p-3 space-y-3">
+            <div className="font-medium">Bundle Discounts (optional)</div>
+            <div className="text-xs text-slate-500">
+              Applies to <b>recurring only</b>. Install fee is added separately.
+              <br />
+              For <b>monthly</b> products: 6 months = 6 periods, 1 year = 12
+              periods. For <b>yearly</b> products: 1 year = 1 period.
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              {/* 6 Months */}
+              <div className="border rounded p-3">
+                <div className="font-medium text-sm mb-2">
+                  6 Months Discount
+                </div>
+
+                <label className="text-sm block">
+                  Type
+                  <select
+                    className="input mt-1"
+                    value={discountsUi.sixMonths.type}
+                    onChange={(e) =>
+                      setDiscountsUi((d) => ({
+                        ...d,
+                        sixMonths: { ...d.sixMonths, type: e.target.value },
+                      }))
+                    }
+                  >
+                    <option value="none">None</option>
+                    <option value="percent">Percent off</option>
+                    <option value="fixed">Fixed bundle price</option>
+                  </select>
+                </label>
+
+                <label className="text-sm block mt-2">
+                  Value (NGN)
+                  <input
+                    className="input mt-1"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 10 OR 38000"
+                    value={discountsUi.sixMonths.valueNGN}
+                    onChange={(e) =>
+                      setDiscountsUi((d) => ({
+                        ...d,
+                        sixMonths: { ...d.sixMonths, valueNGN: e.target.value },
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="text-sm block mt-2">
+                  Value (USD, optional)
+                  <input
+                    className="input mt-1"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={discountsUi.sixMonths.valueUSD}
+                    onChange={(e) =>
+                      setDiscountsUi((d) => ({
+                        ...d,
+                        sixMonths: { ...d.sixMonths, valueUSD: e.target.value },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+
+              {/* 1 Year */}
+              <div className="border rounded p-3">
+                <div className="font-medium text-sm mb-2">1 Year Discount</div>
+
+                <label className="text-sm block">
+                  Type
+                  <select
+                    className="input mt-1"
+                    value={discountsUi.oneYear.type}
+                    onChange={(e) =>
+                      setDiscountsUi((d) => ({
+                        ...d,
+                        oneYear: { ...d.oneYear, type: e.target.value },
+                      }))
+                    }
+                  >
+                    <option value="none">None</option>
+                    <option value="percent">Percent off</option>
+                    <option value="fixed">Fixed bundle price</option>
+                  </select>
+                </label>
+
+                <label className="text-sm block mt-2">
+                  Value (NGN)
+                  <input
+                    className="input mt-1"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 10 OR 75000"
+                    value={discountsUi.oneYear.valueNGN}
+                    onChange={(e) =>
+                      setDiscountsUi((d) => ({
+                        ...d,
+                        oneYear: { ...d.oneYear, valueNGN: e.target.value },
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="text-sm block mt-2">
+                  Value (USD, optional)
+                  <input
+                    className="input mt-1"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={discountsUi.oneYear.valueUSD}
+                    onChange={(e) =>
+                      setDiscountsUi((d) => ({
+                        ...d,
+                        oneYear: { ...d.oneYear, valueUSD: e.target.value },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() =>
+                  setDiscountsUi({
+                    sixMonths: { type: "none", valueNGN: "", valueUSD: "" },
+                    oneYear: { type: "none", valueNGN: "", valueUSD: "" },
+                  })
+                }
+              >
+                Clear discounts
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2">
               <input
@@ -686,8 +865,8 @@ export default function AdminProductEdit() {
           </div>
         </div>
 
+        {/* RIGHT */}
         <div className="card space-y-4">
-          {/* Image gallery */}
           <div>
             <div className="font-medium mb-2">Images</div>
             <div className="flex flex-wrap gap-3">
@@ -696,6 +875,7 @@ export default function AdminProductEdit() {
                   <img
                     src={src}
                     className="w-24 h-24 object-cover rounded border"
+                    alt=""
                   />
                   <div className="mt-1 flex gap-1">
                     <button
@@ -748,7 +928,6 @@ export default function AdminProductEdit() {
             </div>
           </div>
 
-          {/* Preview & Thumbnail controls with tiny previews */}
           <div className="space-y-2">
             <div className="font-medium">Preview & Thumbnail</div>
 
@@ -770,6 +949,7 @@ export default function AdminProductEdit() {
 
               <div className="flex flex-col gap-2">
                 <input
+                  ref={previewInputRef}
                   className="input"
                   placeholder="Preview video URL"
                   value={previewUrl}
@@ -786,11 +966,7 @@ export default function AdminProductEdit() {
                         const f = e.target.files?.[0];
                         if (!f) return;
                         const url = await uploadToCloudinary(f, "video");
-                        if (url) {
-                          setPreviewUrl(url); // ✅ show it immediately
-                          if (previewInputRef.current)
-                            previewInputRef.current.value = url; // still persist in form
-                        }
+                        if (url) setPreviewUrl(url);
                       }}
                     />
                   </label>
@@ -826,7 +1002,6 @@ export default function AdminProductEdit() {
             </div>
           </div>
 
-          {/* Modals */}
           <MediaBrowserModal
             open={showImagePicker}
             onClose={() => setShowImagePicker(false)}
@@ -843,8 +1018,7 @@ export default function AdminProductEdit() {
             type="video"
             accessToken={accessToken}
             onPick={(url) => {
-              setPreviewUrl(url); // ✅ show it
-              if (previewInputRef.current) previewInputRef.current.value = url; // persist in form
+              setPreviewUrl(url);
               setShowVideoPicker(false);
             }}
           />
