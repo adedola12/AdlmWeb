@@ -23,7 +23,6 @@ import Admin from "./pages/Admin.jsx";
 import AdminLearn from "./pages/AdminLearn.jsx";
 import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminProductEdit from "./pages/AdminProductEdit.jsx";
-import AdminCourses from "./pages/AdminCourses.jsx";
 import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
 import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 import AboutADLM from "./pages/About.jsx";
@@ -50,9 +49,6 @@ import AdminRoute from "./components/AdminRoute.jsx";
 import Freebies from "./pages/Freebies.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
-import { initGA } from "./ga";
-
-initGA();
 
 const router = createBrowserRouter([
   {
@@ -236,7 +232,6 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
-
       {
         path: "admin/showcase",
         element: (
@@ -266,14 +261,6 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin", "mini_admin"]}>
             <AdminRateGenMaster />
-          </AdminRoute>
-        ),
-      },
-      {
-        path: "admin/courses",
-        element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
-            <AdminCourses />
           </AdminRoute>
         ),
       },
