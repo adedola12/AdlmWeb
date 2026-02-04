@@ -185,27 +185,35 @@ router.patch("/:id", async (req, res) => {
   if ("key" in body) delete body.key;
 
   // sanitize arrays
-  if (Array.isArray(body.features))
-    body.features = body.features.filter(Boolean);
+  if (Array.isArray(body.features)) body.features = body.features.filter(Boolean);
   if (Array.isArray(body.images)) body.images = body.images.filter(Boolean);
   if (Array.isArray(body.relatedFreeVideoIds))
     body.relatedFreeVideoIds = body.relatedFreeVideoIds.filter(Boolean);
   if (Array.isArray(body.relatedCourseSkus))
     body.relatedCourseSkus = body.relatedCourseSkus.filter(Boolean);
 
-  // sanitize discounts
-  if (body.discounts) {
-    const safe = cleanDiscounts(body.discounts);
-    if (!safe) delete body.discounts;
-    else body.discounts = safe;
-  }
-
   // ✅ choose filter depending on id type
   const filter = mongoose.isValidObjectId(id)
     ? { _id: id }
     : { $or: [{ key: id }, { courseSku: id }] };
 
-  const p = await Product.findOneAndUpdate(filter, body, {
+  // ✅ BUILD UPDATE OBJECT (so we can $unset discounts when cleared)
+  const update = { ...body };
+
+  // sanitize discounts (and allow clearing)
+  if ("discounts" in body) {
+    const safe = cleanDiscounts(body.discounts);
+
+    if (!safe) {
+      // user cleared discounts -> remove from doc
+      update.$unset = { ...(update.$unset || {}), discounts: 1 };
+      delete update.discounts;
+    } else {
+      update.discounts = safe;
+    }
+  }
+
+  const p = await Product.findOneAndUpdate(filter, update, {
     new: true,
     runValidators: true,
   });
@@ -232,6 +240,7 @@ router.patch("/:id", async (req, res) => {
 
   res.json(p);
 });
+
 
 // DELETE /admin/products/:id -> supports ObjectId OR key OR courseSku
 router.delete("/:id", async (req, res) => {
