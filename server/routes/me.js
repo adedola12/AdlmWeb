@@ -9,6 +9,9 @@ import { Purchase } from "../models/Purchase.js";
 
 const router = express.Router();
 
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
+
 function normalizeExpiry(v) {
   if (!v) return null;
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
@@ -84,7 +87,6 @@ function toEntitlementV2(ent) {
     seats: Math.max(parseInt(ent.seats || 1, 10), 1),
     seatsUsed: act.length,
 
-    // ✅ NEW
     licenseType: ent.licenseType || "personal",
     organizationName: ent.organizationName || "",
 
@@ -97,223 +99,300 @@ function toEntitlementV2(ent) {
   };
 }
 
-router.get("/", requireAuth, async (req, res) => {
-  // Keep legacy response fields for compatibility…
-  const {
-    email,
-    role,
-    username,
-    avatarUrl,
-    zone,
-    firstName,
-    lastName,
-    whatsapp,
-  } = req.user;
+router.get(
+  "/",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const {
+      email,
+      role,
+      username,
+      avatarUrl,
+      zone,
+      firstName,
+      lastName,
+      whatsapp,
+    } = req.user;
 
-  // …but also include live entitlement counts from DB (so dashboard is accurate)
-  const user = await User.findById(req.user._id, {
-    entitlements: 1,
-    refreshVersion: 1,
-  });
-  if (user) await ensureUserEntitlementsMigrated(user);
+    const user = await User.findById(req.user._id, {
+      entitlements: 1,
+      refreshVersion: 1,
+    });
+    if (user) await ensureUserEntitlementsMigrated(user);
 
-  const entitlementsV2 = user
-    ? (user.entitlements || []).map(toEntitlementV2)
-    : [];
+    const entitlementsV2 = user
+      ? (user.entitlements || []).map(toEntitlementV2)
+      : [];
 
-  return res.json({
-    email,
-    role,
-    username,
-    avatarUrl,
-    zone,
-    entitlements: req.user.entitlements, // legacy payload (do not break old clients)
-    entitlementsV2, // ✅ new dashboard-ready payload
-    refreshVersion: user?.refreshVersion || 1,
-    firstName: firstName || "",
-    lastName: lastName || "",
-    whatsapp: whatsapp || "",
-  });
-});
+    return res.json({
+      email,
+      role,
+      username,
+      avatarUrl,
+      zone,
+      entitlements: req.user.entitlements, // legacy payload
+      entitlementsV2,
+      refreshVersion: user?.refreshVersion || 1,
+      firstName: firstName || "",
+      lastName: lastName || "",
+      whatsapp: whatsapp || "",
+    });
+  }),
+);
 
 /* used by desktop (legacy shape kept) */
-router.get("/entitlements", requireAuth, async (req, res) => {
-  const user = await User.findById(req.user._id, { entitlements: 1 }).lean();
+router.get(
+  "/entitlements",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id, { entitlements: 1 }).lean();
 
-  const ent = (user?.entitlements || []).map((e) => ({
-    productKey: e.productKey,
-    status: e.status,
-    expiresAt: normalizeExpiry(e.expiresAt),
-  }));
+    const ent = (user?.entitlements || []).map((e) => ({
+      productKey: e.productKey,
+      status: e.status,
+      expiresAt: normalizeExpiry(e.expiresAt),
+    }));
 
-  res.json(ent);
-});
+    res.json(ent);
+  }),
+);
 
-/* ✅ NEW: used by web/org dashboard to see device usage */
-router.get("/entitlements-v2", requireAuth, async (req, res) => {
-  const user = await User.findById(req.user._id, { entitlements: 1 });
-  if (!user) return res.status(404).json({ error: "User not found" });
+router.get(
+  "/entitlements-v2",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id, { entitlements: 1 });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-  await ensureUserEntitlementsMigrated(user);
+    await ensureUserEntitlementsMigrated(user);
 
-  return res.json({
-    ok: true,
-    entitlements: (user.entitlements || []).map(toEntitlementV2),
-  });
-});
+    return res.json({
+      ok: true,
+      entitlements: (user.entitlements || []).map(toEntitlementV2),
+    });
+  }),
+);
 
 /* web summary */
-router.get("/summary", requireAuth, async (req, res) => {
-  const user = await User.findById(req.user._id, { entitlements: 1, email: 1 });
-  if (!user) return res.status(404).json({ error: "User missing" });
+router.get(
+  "/summary",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id, {
+      entitlements: 1,
+      email: 1,
+    });
+    if (!user) return res.status(404).json({ error: "User missing" });
 
-  await ensureUserEntitlementsMigrated(user);
+    await ensureUserEntitlementsMigrated(user);
 
-  const ents = (user.entitlements || []).map((e) => ({
-    ...toEntitlementV2(e), // ✅ seats + devices
-    isCourse: false,
-  }));
+    const ents = (user.entitlements || []).map((e) => ({
+      ...toEntitlementV2(e),
+      isCourse: false,
+    }));
 
-  const keys = ents.map((e) => e.productKey);
-  const prods = await Product.find({ key: { $in: keys } })
-    .select("key isCourse")
-    .lean();
-  const byKey = Object.fromEntries(prods.map((p) => [p.key, !!p.isCourse]));
+    const keys = ents.map((e) => e.productKey);
+    const prods = await Product.find({ key: { $in: keys } })
+      .select("key isCourse")
+      .lean();
+    const byKey = Object.fromEntries(prods.map((p) => [p.key, !!p.isCourse]));
 
-  const entitlements = ents.map((e) => ({
-    ...e,
-    isCourse: !!byKey[e.productKey],
-  }));
+    const entitlements = ents.map((e) => ({
+      ...e,
+      isCourse: !!byKey[e.productKey],
+    }));
 
-  const installs = await Purchase.find(
-    {
-      userId: req.user._id,
-      status: "approved",
-      "installation.status": { $in: ["pending", "complete"] },
-    },
-    {
-      lines: 1,
-      productKey: 1,
-      status: 1,
-      installation: 1,
-      decidedAt: 1,
-      totalAmount: 1,
-      currency: 1,
-    },
-  )
-    .sort({ decidedAt: -1 })
-    .lean();
+    const installs = await Purchase.find(
+      {
+        userId: req.user._id,
+        status: "approved",
+        "installation.status": { $in: ["pending", "complete"] },
+      },
+      {
+        lines: 1,
+        productKey: 1,
+        status: 1,
+        installation: 1,
+        decidedAt: 1,
+        totalAmount: 1,
+        currency: 1,
+      },
+    )
+      .sort({ decidedAt: -1 })
+      .lean();
 
-  const installKeys = Array.from(
-    new Set(
-      installs
-        .flatMap((p) =>
-          Array.isArray(p.lines) && p.lines.length
-            ? p.lines.map((l) => l.productKey)
-            : [p.productKey],
-        )
-        .filter(Boolean),
-    ),
-  );
+    const installKeys = Array.from(
+      new Set(
+        installs
+          .flatMap((p) =>
+            Array.isArray(p.lines) && p.lines.length
+              ? p.lines.map((l) => l.productKey)
+              : [p.productKey],
+          )
+          .filter(Boolean),
+      ),
+    );
 
-  const installProducts = await Product.find({ key: { $in: installKeys } })
-    .select("key name")
-    .lean();
+    const installProducts = await Product.find({ key: { $in: installKeys } })
+      .select("key name")
+      .lean();
 
-  const prodNameByKey = Object.fromEntries(
-    installProducts.map((x) => [x.key, x.name]),
-  );
+    const prodNameByKey = Object.fromEntries(
+      installProducts.map((x) => [x.key, x.name]),
+    );
 
-  const installsEnriched = installs.map((p) => {
-    const firstLine =
-      Array.isArray(p.lines) && p.lines.length ? p.lines[0] : null;
-    const key = firstLine?.productKey || p.productKey || "";
-    const name = firstLine?.name || prodNameByKey[key] || key || "";
+    const installsEnriched = installs.map((p) => {
+      const firstLine =
+        Array.isArray(p.lines) && p.lines.length ? p.lines[0] : null;
+      const key = firstLine?.productKey || p.productKey || "";
+      const name = firstLine?.name || prodNameByKey[key] || key || "";
 
-    return {
-      ...p,
-      installationProductKey: key,
-      installationProductName: name,
-    };
-  });
+      return {
+        ...p,
+        installationProductKey: key,
+        installationProductName: name,
+      };
+    });
 
-  return res.json({
-    email: user.email,
-    entitlements,
-    installations: installsEnriched,
-  });
-});
+    return res.json({
+      email: user.email,
+      entitlements,
+      installations: installsEnriched,
+    });
+  }),
+);
 
 // Profile details
-router.get("/profile", requireAuth, async (req, res) => {
-  const u = await User.findById(req.user._id).lean();
-  if (!u) return res.status(404).json({ error: "User missing" });
+router.get(
+  "/profile",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const u = await User.findById(req.user._id).lean();
+    if (!u) return res.status(404).json({ error: "User missing" });
 
-  const {
-    email,
-    username,
-    avatarUrl,
-    role,
-    zone,
-    firstName,
-    lastName,
-    whatsapp,
-  } = u;
+    const {
+      email,
+      username,
+      avatarUrl,
+      role,
+      zone,
+      firstName,
+      lastName,
+      whatsapp,
+    } = u;
 
-  return res.json({
-    email,
-    username,
-    avatarUrl,
-    role,
-    zone,
-    zones: ZONES,
-    firstName: firstName || "",
-    lastName: lastName || "",
-    whatsapp: whatsapp || "",
-  });
-});
+    return res.json({
+      email,
+      username,
+      avatarUrl,
+      role,
+      zone,
+      zones: ZONES,
+      firstName: firstName || "",
+      lastName: lastName || "",
+      whatsapp: whatsapp || "",
+    });
+  }),
+);
 
-router.post("/profile", requireAuth, async (req, res) => {
-  const { username, avatarUrl, zone, firstName, lastName, whatsapp } =
-    req.body || {};
-  const u = await User.findById(req.user._id);
-  if (!u) return res.status(404).json({ error: "User missing" });
+router.post(
+  "/profile",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { username, avatarUrl, zone, firstName, lastName, whatsapp } =
+      req.body || {};
+    const u = await User.findById(req.user._id);
+    if (!u) return res.status(404).json({ error: "User missing" });
 
-  if (username) {
-    const exists = await User.findOne({ username, _id: { $ne: u._id } });
-    if (exists)
-      return res.status(409).json({ error: "Username already taken" });
-  }
+    if (username) {
+      const exists = await User.findOne({ username, _id: { $ne: u._id } });
+      if (exists)
+        return res.status(409).json({ error: "Username already taken" });
+    }
 
-  if (username !== undefined) u.username = username;
-  if (avatarUrl !== undefined) u.avatarUrl = avatarUrl;
+    if (username !== undefined) u.username = username;
+    if (avatarUrl !== undefined) u.avatarUrl = avatarUrl;
 
-  if (zone !== undefined) {
-    const nz = normalizeZone(zone);
-    if (!nz) return res.status(400).json({ error: "Invalid zone" });
-    u.zone = nz;
-    u.refreshVersion += 1;
-  }
+    if (zone !== undefined) {
+      const nz = normalizeZone(zone);
+      if (!nz) return res.status(400).json({ error: "Invalid zone" });
+      u.zone = nz;
+      u.refreshVersion += 1;
+    }
 
-  if (firstName !== undefined) u.firstName = String(firstName || "").trim();
-  if (lastName !== undefined) u.lastName = String(lastName || "").trim();
-  if (whatsapp !== undefined)
-    u.whatsapp = String(whatsapp || "").replace(/[^\d+]/g, "");
+    if (firstName !== undefined) u.firstName = String(firstName || "").trim();
+    if (lastName !== undefined) u.lastName = String(lastName || "").trim();
+    if (whatsapp !== undefined)
+      u.whatsapp = String(whatsapp || "").replace(/[^\d+]/g, "");
 
-  await u.save();
+    await u.save();
 
-  return res.json({
-    user: {
-      email: u.email,
-      username: u.username,
-      avatarUrl: u.avatarUrl,
-      role: u.role,
-      zone: u.zone,
-      firstName: u.firstName || "",
-      lastName: u.lastName || "",
-      whatsapp: u.whatsapp || "",
-    },
-  });
-});
+    return res.json({
+      user: {
+        email: u.email,
+        username: u.username,
+        avatarUrl: u.avatarUrl,
+        role: u.role,
+        zone: u.zone,
+        firstName: u.firstName || "",
+        lastName: u.lastName || "",
+        whatsapp: u.whatsapp || "",
+      },
+    });
+  }),
+);
+
+/* ✅ Orders list (Dashboard uses this) */
+router.get(
+  "/orders",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit || "10", 10), 1),
+      50,
+    );
+    const skip = (page - 1) * limit;
+
+    const q = { userId: req.user._id };
+
+    const [total, items] = await Promise.all([
+      Purchase.countDocuments(q),
+      Purchase.find(q).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    ]);
+
+    const pages = Math.max(Math.ceil(total / limit), 1);
+
+    return res.json({
+      items,
+      pagination: {
+        page,
+        pages,
+        total,
+        limit,
+        hasPrev: page > 1,
+        hasNext: page < pages,
+      },
+    });
+  }),
+);
+
+/* ✅ Single order (Receipt page uses this) */
+router.get(
+  "/orders/:id",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const order = await Purchase.findOne({
+      _id: id,
+      userId: req.user._id,
+    }).lean();
+
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    return res.json(order);
+  }),
+);
 
 export default router;
