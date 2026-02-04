@@ -44,12 +44,10 @@ export default function Purchase() {
   const { accessToken } = useAuth();
   const [products, setProducts] = React.useState([]);
 
-  // cart entry: { periods, seats, firstTime }
   const [cart, setCart] = React.useState({});
   const [currency, setCurrency] = React.useState("NGN");
 
-  // ✅ NEW: purchase-level license type + org details
-  const [licenseType, setLicenseType] = React.useState("personal"); // "personal" | "organization"
+  const [licenseType, setLicenseType] = React.useState("personal");
   const [org, setOrg] = React.useState({ name: "", email: "", phone: "" });
 
   const [couponCode, setCouponCode] = React.useState("");
@@ -66,11 +64,33 @@ export default function Purchase() {
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
 
-  // ---------- money helpers (match backend rounding) ----------
+  // ---------- money helpers ----------
   const round2 = (x) =>
     Math.round((Number(x || 0) + Number.EPSILON) * 100) / 100;
   const money = (x) =>
     currency === "USD" ? round2(x) : Math.round(Number(x || 0));
+
+  function pickBundleDiscount(p, periods) {
+    const d = p?.discounts || null;
+    if (!d) return null;
+
+    if (p.billingInterval === "yearly") {
+      return periods === 1 ? d.oneYear || null : null;
+    }
+
+    if (periods === 6) return d.sixMonths || null;
+    if (periods === 12) return d.oneYear || null;
+    return null;
+  }
+
+  function discountFixedValue(d, currencyNow) {
+    if (!d || d.type !== "fixed") return 0;
+    if (currencyNow === "USD") {
+      // NOTE: only applies if valueUSD is set (no fx conversion client-side)
+      return Number(d.valueUSD || 0);
+    }
+    return Number(d.valueNGN || 0);
+  }
 
   // ---------- load products ----------
   React.useEffect(() => {
@@ -88,16 +108,16 @@ export default function Purchase() {
     })();
   }, []);
 
-  // ---------- restore cart + meta after products load ----------
+  // ---------- restore cart + meta ----------
   React.useEffect(() => {
     if (!products.length) return;
 
-    // restore meta
     const meta = readCartMeta();
     const lt =
       String(meta?.licenseType || "personal").toLowerCase() === "organization"
         ? "organization"
         : "personal";
+
     setLicenseType(lt);
     setOrg({
       name: String(meta?.org?.name || ""),
@@ -105,7 +125,6 @@ export default function Purchase() {
       phone: String(meta?.org?.phone || ""),
     });
 
-    // restore items
     const arr = readCartItems();
     if (!arr.length) return;
 
@@ -115,7 +134,6 @@ export default function Purchase() {
         const k = String(it.productKey || "").trim();
         if (!k) return;
 
-        // legacy support: old cart stored { qty } meaning "months/years"
         const periods = Math.max(parseInt(it.periods ?? it.qty ?? 1, 10), 1);
         const seats = Math.max(parseInt(it.seats ?? 1, 10), 1);
 
@@ -129,7 +147,7 @@ export default function Purchase() {
     });
   }, [products.length]);
 
-  // Prefill from ?product=KEY&periods=N  (kept old param "months" for compatibility)
+  // Prefill from ?product=KEY&periods=N
   React.useEffect(() => {
     const k = (qs.get("product") || "").trim();
     const p = Math.max(
@@ -143,11 +161,7 @@ export default function Purchase() {
         ? c
         : {
             ...c,
-            [k]: {
-              periods: p,
-              seats: licenseType === "organization" ? 1 : 1,
-              firstTime: false,
-            },
+            [k]: { periods: p, seats: 1, firstTime: false },
           },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,7 +175,6 @@ export default function Purchase() {
       next.periods = Math.max(parseInt(next.periods || 1, 10), 1);
       next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
 
-      // force seats=1 for personal
       if (licenseType !== "organization") next.seats = 1;
 
       return { ...c, [key]: next };
@@ -175,14 +188,7 @@ export default function Purchase() {
             const { [key]: _, ...rest } = c;
             return rest;
           })()
-        : {
-            ...c,
-            [key]: {
-              periods: 1,
-              seats: licenseType === "organization" ? 1 : 1,
-              firstTime: false,
-            },
-          },
+        : { ...c, [key]: { periods: 1, seats: 1, firstTime: false } },
     );
   }
 
@@ -193,12 +199,11 @@ export default function Purchase() {
     const install =
       currency === "USD" ? p.price?.installUSD : p.price?.installNGN;
 
-    // match backend: USD 2dp, NGN integer
-    const m = money(monthly || 0);
-    const y = money(yearly || 0);
-    const i = money(install || 0);
-
-    return { monthly: m, yearly: y, install: i };
+    return {
+      monthly: money(monthly || 0),
+      yearly: money(yearly || 0),
+      install: money(install || 0),
+    };
   }
 
   function lineCalc(p, entry) {
@@ -213,7 +218,21 @@ export default function Purchase() {
         ? Math.max(parseInt(entry.seats || 1, 10), 1)
         : 1;
 
-    const recurring = money(unit * seats * periods);
+    let recurring = money(unit * seats * periods);
+
+    const disc = pickBundleDiscount(p, periods);
+
+    if (disc?.type === "percent") {
+      const pct = Number(disc.valueNGN || 0);
+      const factor = Math.max(0, 1 - pct / 100);
+      recurring = money(unit * seats * periods * factor);
+    }
+
+    if (disc?.type === "fixed") {
+      const fixedPerSeat = discountFixedValue(disc, currency);
+      if (fixedPerSeat > 0) recurring = money(fixedPerSeat * seats);
+    }
+
     const installFee = entry.firstTime ? money(install) : 0;
 
     return {
@@ -223,16 +242,17 @@ export default function Purchase() {
       unit,
       seats,
       periods,
+      discountApplied: !!disc,
+      discountType: disc?.type || null,
     };
   }
 
   const chosen = products.filter((p) => !!cart[getProductKey(p)]);
-
   const total = money(
-    chosen.reduce((sum, p) => {
-      const k = getProductKey(p);
-      return sum + lineCalc(p, cart[k]).total;
-    }, 0),
+    chosen.reduce(
+      (sum, p) => sum + lineCalc(p, cart[getProductKey(p)]).total,
+      0,
+    ),
   );
 
   const grandTotal = money(Math.max(total - Number(discount || 0), 0));
@@ -296,7 +316,6 @@ export default function Purchase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, licenseType, org.name, org.email, org.phone]);
 
-  // If they switch back to personal, force all seats=1
   React.useEffect(() => {
     if (licenseType === "organization") return;
     setCart((c) => {
@@ -347,8 +366,6 @@ export default function Purchase() {
           currency,
           items,
           couponCode: couponCode.trim(),
-
-          // ✅ NEW
           licenseType,
           organization: licenseType === "organization" ? org : null,
         }),
@@ -629,30 +646,11 @@ export default function Purchase() {
           <div className="text-sm text-slate-600">No items selected.</div>
         ) : (
           <>
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="text-sm text-slate-700">
-                <div className="font-medium">
-                  License:{" "}
-                  {licenseType === "organization" ? "Organization" : "Personal"}
-                </div>
-                {showOrgPanel && (
-                  <div className="text-xs text-slate-500">
-                    Org:{" "}
-                    {org.name ? (
-                      <b className="text-slate-700">{org.name}</b>
-                    ) : (
-                      "— (required)"
-                    )}
-                  </div>
-                )}
+            {anyInstall && (
+              <div className="text-xs text-slate-500 mb-2">
+                Some items include <b>installation fee</b>.
               </div>
-
-              {anyInstall && (
-                <div className="text-xs text-slate-500">
-                  Some items include <b>installation fee</b>.
-                </div>
-              )}
-            </div>
+            )}
 
             <div className="mt-3 space-y-2 text-sm">
               {chosen.map((p) => {
