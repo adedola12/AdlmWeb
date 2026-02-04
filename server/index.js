@@ -111,6 +111,7 @@ app.use(
           "'self'",
           "https://js.paystack.co",
           "https://checkout.flutterwave.com",
+          "https://www.googletagmanager.com",
         ],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
@@ -120,10 +121,15 @@ app.use(
           "https://api.paystack.co",
           "https://api.flutterwave.com",
           "https://api.cloudinary.com",
+          "https://www.googletagmanager.com",
+          "https://www.google-analytics.com",
+          "https://region1.google-analytics.com",
+          "https://stats.g.doubleclick.net",
         ],
         frameSrc: [
           "https://js.paystack.co",
           "https://checkout.flutterwave.com",
+          "https://www.googletagmanager.com",
         ],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
@@ -131,9 +137,10 @@ app.use(
         frameAncestors: ["'none'"],
       },
     },
+
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     hsts: process.env.NODE_ENV === "production",
-  })
+  }),
 );
 
 app.use(cookieParser());

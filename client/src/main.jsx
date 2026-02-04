@@ -50,6 +50,9 @@ import AdminRoute from "./components/AdminRoute.jsx";
 import Freebies from "./pages/Freebies.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
+import { initGA } from "./ga";
+
+initGA();
 
 const router = createBrowserRouter([
   {

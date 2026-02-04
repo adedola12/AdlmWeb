@@ -1,5 +1,6 @@
 import React from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import AnalyticsTracker from "./components/AnalyticsTracker.jsx";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
@@ -20,13 +21,6 @@ export default function App() {
   const VIDEO_ID = "YX6vJTaAUXA";
   const MAX_SECONDS = 300; // 5 minutes
 
-  // ✅ avoid double confetti in React.StrictMode
-  const didConfetti = React.useRef(false);
-
-  // set your launch time here (Africa/Lagos is +01:00)
-  // Example: 24 hours from now is NOT stable, better use a real date/time:
-  const LAUNCH_AT = "2025-12-20T11:00:00+01:00"; // <-- change this
-
   React.useEffect(() => {
     if (location.pathname === "/") setShowVideo(true);
     else setShowVideo(false);
@@ -45,27 +39,6 @@ export default function App() {
     })();
   }, []);
 
-  React.useEffect(() => {
-    // if (didConfetti.current) return;
-    // didConfetti.current = true;
-
-    // // quick burst
-    // confetti({
-    //   particleCount: 120,
-    //   spread: 70,
-    //   origin: { y: 0.2 },
-    // });
-
-    // small follow-up
-    // setTimeout(() => {
-    //   confetti({
-    //     particleCount: 80,
-    //     spread: 55,
-    //     origin: { y: 0.2 },
-    //   });
-    // }, 350);
-  }, []);
-
   function closeVideo() {
     setShowVideo(false);
   }
@@ -80,6 +53,7 @@ export default function App() {
           onClose={() => setBannerDismissed(true)}
         />
       )}
+      <AnalyticsTracker />
 
       <Nav />
 
