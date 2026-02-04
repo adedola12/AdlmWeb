@@ -42,6 +42,7 @@ import AdminRateGen from "./pages/AdminRateGen.jsx";
 import AdminAddRate from "./pages/AdminAddRate.jsx";
 import RateGenUpdates from "./pages/RateGenUpdates.jsx";
 import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
+import Receipt from "./pages/Receipt.jsx";
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
@@ -49,8 +50,6 @@ import AdminRoute from "./components/AdminRoute.jsx";
 import Freebies from "./pages/Freebies.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
-
-
 
 const router = createBrowserRouter([
   {
@@ -108,7 +107,14 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
-
+      {
+        path: "receipt/:orderId",
+        element: (
+          <ProtectedRoute>
+            <Receipt />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "profile",
         element: (
@@ -279,5 +285,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <AuthProvider>
       <RouterProvider router={router} />
     </AuthProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

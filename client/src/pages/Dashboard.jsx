@@ -343,6 +343,13 @@ export default function Dashboard() {
                   error={ordersErr}
                   pagination={ordersPagination}
                   onPageChange={setOrdersPage}
+                  onOpenReceipt={(orderId) =>
+                    window.open(
+                      `/receipt/${orderId}`,
+                      "_blank",
+                      "noopener,noreferrer",
+                    )
+                  }
                 />
               )}
 
@@ -662,7 +669,14 @@ function LearningTab({ courses = [] }) {
   );
 }
 
-function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
+function OrdersTab({
+  orders = [],
+  loading,
+  error,
+  pagination,
+  onPageChange,
+  onOpenReceipt,
+}) {
   if (loading)
     return <div className="text-sm text-slate-600">Loading orders…</div>;
   if (error) return <div className="text-sm text-red-600">{error}</div>;
@@ -681,6 +695,12 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
     return <div className="text-sm text-slate-600">No orders yet.</div>;
   }
 
+  const canPrintReceipt = (o) => {
+    const st = String(o?.status || "").toLowerCase();
+    // show only if admin approved (or paid + approved in your system)
+    return st === "approved" || o?.paid === true;
+  };
+
   return (
     <div className="space-y-4">
       <div className="space-y-3">
@@ -692,16 +712,16 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
 
           const statusLabel = o.paid
             ? "Paid"
-            : o.status === "approved"
+            : String(o.status || "").toLowerCase() === "approved"
               ? "Approved"
-              : o.status === "rejected"
+              : String(o.status || "").toLowerCase() === "rejected"
                 ? "Rejected"
                 : "Awaiting admin approval";
 
           const statusPill =
-            o.paid || o.status === "approved"
+            o.paid || String(o.status || "").toLowerCase() === "approved"
               ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
-              : o.status === "rejected"
+              : String(o.status || "").toLowerCase() === "rejected"
                 ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
                 : "bg-amber-50 text-amber-800 ring-1 ring-amber-100";
 
@@ -711,13 +731,6 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
             seats > 1
               ? "organization"
               : "personal";
-
-          <OrganizationBadge
-            licenseType={lt}
-            organization={o.organization}
-            organizationName={o?.organization?.name}
-            seats={seats}
-          />;
 
           return (
             <div
@@ -754,6 +767,20 @@ function OrdersTab({ orders = [], loading, error, pagination, onPageChange }) {
                     {Number(o.totalAmount || 0).toLocaleString()}
                   </div>
                 </div>
+              </div>
+
+              {/* Receipt button (only for approved/paid) */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {canPrintReceipt(o) && (
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                    onClick={() => onOpenReceipt?.(o._id)}
+                    title="Open receipt page to print or download PDF"
+                  >
+                    Print / Download Receipt
+                  </button>
+                )}
               </div>
 
               {Array.isArray(o.lines) && o.lines.length > 0 && (

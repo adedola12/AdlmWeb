@@ -23,6 +23,17 @@ const normInterval = (v) =>
     .toLowerCase()
     .trim();
 
+const ANYDESK_WINDOWS_URL = "https://anydesk.com/en/downloads/windows";
+
+const APP_URL =
+  String(process.env.PUBLIC_APP_URL || "").trim() || "http://localhost:5173";
+
+function joinUrl(base, path) {
+  const b = String(base || "").replace(/\/+$/, "");
+  const p = String(path || "").replace(/^\/+/, "");
+  return `${b}/${p}`;
+}
+
 function hasOrgMeta({ licenseType, organizationName, organization } = {}) {
   const lt = String(licenseType || "").toLowerCase();
   const org1 = String(organizationName || "").trim();
@@ -61,7 +72,6 @@ function parseLineForGrant(purchase, ln) {
   );
 
   const rawQty = Math.max(Number(ln?.qty ?? 1), 1);
-
   const hasPeriods = lineHasPeriods(ln);
   const rawPeriods = hasPeriods ? Math.max(Number(ln?.periods ?? 1), 1) : 1;
 
@@ -211,7 +221,6 @@ function normalizeGrants(grants, defaults = {}) {
     if (!k || !Number.isFinite(m) || m <= 0) continue;
 
     const orgName = String(g?.organizationName || defOrg).trim();
-
     const lt = inferLicenseTypeFromMeta(g?.licenseType || defLt, orgName, null);
 
     const sRaw = Math.max(Number(g?.seats || 1), 1);
@@ -310,6 +319,53 @@ async function getIsCourseMap(keys) {
     .select("key isCourse")
     .lean();
   return Object.fromEntries((prods || []).map((p) => [p.key, !!p.isCourse]));
+}
+
+function buildApproveEmailHtml({
+  firstName,
+  receiptLink,
+  anydeskLink,
+  isPendingInstall,
+}) {
+  const name = String(firstName || "").trim() || "there";
+
+  const btn = (href, label, bg) => `
+    <a href="${href}"
+       style="display:inline-block;padding:12px 16px;border-radius:10px;
+              background:${bg};color:#ffffff;text-decoration:none;font-weight:600;
+              margin-right:10px;margin-top:8px">
+      ${label}
+    </a>
+  `;
+
+  return `
+    <div style="font-family:Arial,sans-serif;line-height:1.55;color:#0f172a">
+      <h2 style="margin:0 0 10px 0">Purchase Approved ✅</h2>
+      <p style="margin:0 0 12px 0">Hello ${name},</p>
+
+      ${
+        isPendingInstall
+          ? `<p style="margin:0 0 12px 0">
+               Your purchase has been approved. Installation is currently <b>pending</b>.
+               Our team will complete installation and activate your subscription.
+             </p>`
+          : `<p style="margin:0 0 12px 0">
+               Your purchase has been approved and your access is now <b>active</b>.
+             </p>`
+      }
+
+      <div style="margin:10px 0 18px 0">
+        ${btn(receiptLink, "Open Receipt (Print / PDF)", "#2563eb")}
+        ${btn(anydeskLink, "Download AnyDesk (Windows)", "#0f172a")}
+      </div>
+
+      <p style="margin:0 0 6px 0;color:#475569;font-size:13px">
+        Tip: If you cannot download PDF, click <b>Print</b> and choose “Save as PDF”.
+      </p>
+
+      <p style="margin:18px 0 0 0">Thank you,<br/>ADLM Studio</p>
+    </div>
+  `;
 }
 
 /* -------------------- routes -------------------- */
@@ -414,8 +470,7 @@ router.post(
     // Installation defaults
     purchase.installation = purchase.installation || {};
     purchase.installation.anydeskUrl =
-      purchase.installation.anydeskUrl ||
-      "https://anydesk.com/en/downloads/windows";
+      purchase.installation.anydeskUrl || ANYDESK_WINDOWS_URL;
     purchase.installation.installVideoUrl =
       purchase.installation.installVideoUrl || "";
 
@@ -450,27 +505,29 @@ router.post(
       purchase.coupon.redeemedApplied = true;
     }
 
+    // ✅ Save first (so receipt link is valid and state is consistent)
     await purchase.save();
 
-    // email (non-blocking)
+    const receiptLink = joinUrl(APP_URL, `/receipt/${purchase._id}`);
+    const anydeskLink = purchase.installation.anydeskUrl || ANYDESK_WINDOWS_URL;
+
+    // ✅ ONE email only (no transporter, no duplicates)
     try {
       const isPendingInstall = staged.length > 0;
+      const firstName =
+        purchase.firstName || user.firstName || user.username || "";
+
       await sendMail({
-        to: user.email,
+        to: purchase.email || user.email,
         subject: isPendingInstall
           ? "ADLM Purchase Approved — Installation Pending"
           : "ADLM Purchase Approved — Activated",
-        html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.5">
-            <h2>Your purchase has been approved ✅</h2>
-            ${
-              isPendingInstall
-                ? `<p>Your subscription will start after installation is completed by our team.</p>`
-                : `<p>Your subscription is now active. You can start using your product immediately.</p>`
-            }
-            <p>Thank you for choosing ADLM.</p>
-          </div>
-        `,
+        html: buildApproveEmailHtml({
+          firstName,
+          receiptLink,
+          anydeskLink,
+          isPendingInstall,
+        }),
       });
     } catch (e) {
       console.error("[admin approve] sendMail failed:", e?.message || e);
