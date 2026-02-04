@@ -95,6 +95,48 @@ function isEntExpired(ent) {
   return end.isValid() && end.isBefore(dayjs());
 }
 
+function getDaysLeft(expiresAt) {
+  if (!expiresAt) return null;
+  const end = dayjs(expiresAt).endOf("day");
+  if (!end.isValid()) return null;
+
+  const now = dayjs();
+  if (end.isBefore(now)) {
+    const daysAgo = Math.ceil(now.diff(end, "hour") / 24);
+    return -Math.max(daysAgo, 0);
+  }
+
+  const daysLeft = Math.ceil(end.diff(now, "hour") / 24);
+  return Math.max(daysLeft, 0);
+}
+
+function timeLeftBadge(expiresAt) {
+  const d = getDaysLeft(expiresAt);
+  if (d == null) return <span className="text-xs text-slate-500">—</span>;
+
+  if (d < 0) return <Badge label={`Expired ${Math.abs(d)}d`} tone="red" />;
+  if (d === 0) return <Badge label="Expires today" tone="red" />;
+
+  const tone = d <= 3 ? "red" : d <= 14 ? "yellow" : "green";
+  return <Badge label={`${d}d left`} tone={tone} />;
+}
+
+function effectiveEntStatus(ent) {
+  const raw = String(ent?.status || "").toLowerCase() || "active";
+  if (raw === "disabled") return "disabled";
+  if (isEntExpired(ent)) return "expired";
+  if (raw === "expired") return "active";
+  return raw;
+}
+
+function statusBadgeFrom(ent) {
+  const st = effectiveEntStatus(ent);
+  if (st === "expired") return <Badge label="Expired" tone="red" />;
+  if (st === "disabled") return <Badge label="Disabled" tone="slate" />;
+  if (st === "active") return <Badge label="Active" tone="green" />;
+  return <Badge label={st || "Unknown"} tone="slate" />;
+}
+
 function getInstallState(p) {
   const inst = p?.installation || {};
   const status = String(inst.status || "").toLowerCase();
@@ -109,16 +151,6 @@ function getInstallState(p) {
   if (status === "complete" && entApplied === true)
     return { label: "Completed", tone: "green" };
   return { label: status || "Unknown", tone: "slate" };
-}
-
-function sumSeatsFromLines(lines) {
-  if (!Array.isArray(lines) || lines.length === 0) return null;
-  let total = 0;
-  for (const ln of lines) {
-    const seats = Math.max(parseInt(ln?.qty ?? 1, 10) || 1, 1);
-    total += seats;
-  }
-  return total || null;
 }
 
 function monthsFromLine(ln) {
@@ -500,6 +532,7 @@ export default function Admin() {
     }
   }
 
+  // ✅ Active subscriptions view: ONLY active + not expired
   const activeRows = React.useMemo(() => {
     const rows = [];
     (users || []).forEach((u) => {
@@ -509,7 +542,7 @@ export default function Admin() {
         if (isEntExpired(e)) return; // ✅ don't count expired as active
 
         const seats = Math.max(Number(e?.seats || 1), 1);
-        const lt = inferLicenseType(e?.licenseType, seats);
+        const lt = inferLicenseType(e?.licenseType, seats, e?.organizationName);
         const orgName =
           lt === "organization" ? String(e?.organizationName || "").trim() : "";
 
@@ -536,6 +569,65 @@ export default function Admin() {
             rx.test(r.productKey || ""),
         )
       : rows;
+  }, [users, q]);
+
+  // ✅ All subscriptions view: active + expired + disabled
+  const allRows = React.useMemo(() => {
+    const rows = [];
+    (users || []).forEach((u) => {
+      (u.entitlements || []).forEach((e) => {
+        const seats = Math.max(Number(e?.seats || 1), 1);
+        const lt = inferLicenseType(e?.licenseType, seats, e?.organizationName);
+        const orgName =
+          lt === "organization" ? String(e?.organizationName || "").trim() : "";
+
+        const effStatus = effectiveEntStatus(e);
+        const daysLeft = getDaysLeft(e?.expiresAt);
+
+        rows.push({
+          email: u.email,
+          username: u.username,
+          userDisabled: !!u.disabled,
+
+          productKey: e.productKey,
+          expiresAt: e.expiresAt,
+          rawStatus: e.status,
+          status: effStatus,
+
+          seats,
+          licenseType: lt,
+          organizationName: orgName,
+          seatsUsed: countActiveDevices(e),
+
+          daysLeft,
+        });
+      });
+    });
+
+    const rx = q ? new RegExp(q, "i") : null;
+    const filtered = rx
+      ? rows.filter(
+          (r) =>
+            rx.test(r.email || "") ||
+            rx.test(r.username || "") ||
+            rx.test(r.productKey || ""),
+        )
+      : rows;
+
+    // Sort: expired first (negative), then expiring soonest, then no-expiry last
+    const sorted = [...filtered].sort((a, b) => {
+      const ad =
+        typeof a.daysLeft === "number" ? a.daysLeft : Number.POSITIVE_INFINITY;
+      const bd =
+        typeof b.daysLeft === "number" ? b.daysLeft : Number.POSITIVE_INFINITY;
+      if (ad !== bd) return ad - bd;
+      const ax = a.expiresAt ? new Date(a.expiresAt).getTime() : 0;
+      const bx = b.expiresAt ? new Date(b.expiresAt).getTime() : 0;
+      if (ax !== bx) return ax - bx;
+      return String(a.email || "").localeCompare(String(b.email || ""));
+    });
+
+    return sorted;
   }, [users, q]);
 
   function ActiveSubscriptionsByProduct({
@@ -629,6 +721,7 @@ export default function Admin() {
                 <th className="py-2 pr-3">User</th>
                 <th className="py-2 pr-3">Subscription</th>
                 <th className="py-2 pr-3">Expiry</th>
+                <th className="py-2 pr-3">Time left</th>
                 <th className="py-2 pr-3">Devices</th>
                 <th className="py-2 pr-3">Renewal</th>
                 <th className="py-2 pr-3">Entitlement</th>
@@ -670,6 +763,8 @@ export default function Admin() {
                         ? dayjs(r.expiresAt).format("YYYY-MM-DD")
                         : "-"}
                     </td>
+
+                    <td className="py-3 pr-3">{timeLeftBadge(r.expiresAt)}</td>
 
                     <td className="py-3 pr-3">
                       <div className="text-xs text-slate-700">
@@ -791,7 +886,7 @@ export default function Admin() {
 
               {sortedRows.length === 0 && (
                 <tr>
-                  <td className="py-4 text-slate-600" colSpan={7}>
+                  <td className="py-4 text-slate-600" colSpan={8}>
                     No users found under this subscription.
                   </td>
                 </tr>
@@ -861,7 +956,7 @@ export default function Admin() {
         {msg && <div className="text-sm mt-2">{msg}</div>}
 
         <div className="mt-4 border-b">
-          <nav className="flex gap-6">
+          <nav className="flex gap-6 flex-wrap">
             <button
               onClick={() => setTab("pending")}
               className={`py-2 -mb-px border-b-2 transition ${
@@ -882,6 +977,18 @@ export default function Admin() {
               }`}
             >
               Active subscriptions ({activeRows.length})
+            </button>
+
+            <button
+              onClick={() => setTab("subscriptions")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "subscriptions"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+              title="Shows Active + Expired + Disabled entitlements"
+            >
+              Subscriptions ({allRows.length})
             </button>
 
             <button
@@ -1023,6 +1130,7 @@ export default function Admin() {
                             const inferredLineLt = inferLicenseType(
                               ln?.licenseType || p.licenseType,
                               seatsLine,
+                              ln.organizationName || p?.organization?.name,
                             );
 
                             return (
@@ -1136,6 +1244,245 @@ export default function Admin() {
                 />
               );
             })()
+          )}
+        </div>
+      )}
+
+      {tab === "subscriptions" && (
+        <div className="card">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="font-semibold">Subscriptions</h2>
+            <div className="text-xs text-slate-500">
+              Shows Active + Expired + Disabled. Sorted by Expired/Expiring
+              soon.
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : allRows.length === 0 ? (
+            <div className="text-sm text-slate-600">
+              No subscriptions found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-slate-600">
+                  <tr className="border-b">
+                    <th className="py-2 pr-3">User</th>
+                    <th className="py-2 pr-3">Product</th>
+                    <th className="py-2 pr-3">License</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Expiry</th>
+                    <th className="py-2 pr-3">Time left</th>
+                    <th className="py-2 pr-3">Seats / Devices</th>
+                    <th className="py-2 pr-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allRows.map((r, i) => {
+                    const renewSelId = `all-renew-${i}`;
+
+                    // build a pseudo entitlement object for status badge helpers
+                    const entPseudo = {
+                      status: r.rawStatus,
+                      expiresAt: r.expiresAt,
+                    };
+
+                    return (
+                      <tr
+                        key={`${r.email}-${r.productKey}-${i}`}
+                        className={`border-b ${r.userDisabled ? "opacity-60" : ""}`}
+                      >
+                        <td className="py-3 pr-3">
+                          <div className="font-medium">{r.email}</div>
+                          <div className="text-xs text-slate-500">
+                            {r.username ? `@${r.username}` : ""}
+                            {r.userDisabled ? " · User disabled" : ""}
+                          </div>
+                        </td>
+
+                        <td className="py-3 pr-3">{r.productKey}</td>
+
+                        <td className="py-3 pr-3">
+                          <OrganizationBadge
+                            licenseType={r.licenseType}
+                            organizationName={r.organizationName}
+                            seats={r.seats}
+                          />
+                        </td>
+
+                        <td className="py-3 pr-3">
+                          <div className="flex items-center gap-2">
+                            {statusBadgeFrom(entPseudo)}
+                            {r.status === "active" && (
+                              <span className="text-xs text-slate-500">
+                                (active & valid)
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-3 pr-3">
+                          {r.expiresAt
+                            ? dayjs(r.expiresAt).format("YYYY-MM-DD")
+                            : "—"}
+                        </td>
+
+                        <td className="py-3 pr-3">
+                          {timeLeftBadge(r.expiresAt)}
+                        </td>
+
+                        <td className="py-3 pr-3">
+                          <div className="text-xs text-slate-700">
+                            <b>{r.seatsUsed}</b> / {r.seats} used
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              className="btn btn-sm"
+                              onClick={() =>
+                                setDevicesModal({
+                                  open: true,
+                                  email: r.email,
+                                  productKey: r.productKey,
+                                })
+                              }
+                            >
+                              Devices
+                            </button>
+
+                            <button
+                              className="btn btn-sm"
+                              onClick={async () => {
+                                setMsg("");
+                                try {
+                                  await apiAuthed(`/admin/users/reset-device`, {
+                                    token: accessToken,
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      email: r.email,
+                                      productKey: r.productKey,
+                                    }),
+                                  });
+                                  await load();
+                                  setMsg(
+                                    `Device lock reset for ${r.productKey}`,
+                                  );
+                                } catch (e) {
+                                  setMsg(
+                                    e?.message || "Failed to reset device",
+                                  );
+                                }
+                              }}
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        </td>
+
+                        <td className="py-3 pr-3">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <select
+                                id={renewSelId}
+                                className="input max-w-[140px]"
+                              >
+                                {MONTH_CHOICES.map((m) => (
+                                  <option key={m.value} value={m.value}>
+                                    {m.label}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <button
+                                className="btn btn-sm"
+                                title="Adds time starting from NOW if expired, or from current expiry if still valid"
+                                onClick={() =>
+                                  updateEntitlement(
+                                    r.email,
+                                    r.productKey,
+                                    Number(
+                                      document.getElementById(renewSelId).value,
+                                    ),
+                                    "active",
+                                  )
+                                }
+                              >
+                                Renew
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {r.status === "disabled" ? (
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() =>
+                                    updateEntitlement(
+                                      r.email,
+                                      r.productKey,
+                                      0,
+                                      "active",
+                                    )
+                                  }
+                                >
+                                  Enable
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() =>
+                                    updateEntitlement(
+                                      r.email,
+                                      r.productKey,
+                                      0,
+                                      "disabled",
+                                    )
+                                  }
+                                >
+                                  Disable
+                                </button>
+                              )}
+
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => {
+                                  const ok = window.confirm(
+                                    `Delete entitlement ${r.productKey} for ${r.email}? This cannot be undone.`,
+                                  );
+                                  if (ok)
+                                    deleteEntitlement(r.email, r.productKey);
+                                }}
+                              >
+                                Delete
+                              </button>
+
+                              <button
+                                className="btn btn-sm"
+                                onClick={() =>
+                                  setDisabled(r.email, !r.userDisabled)
+                                }
+                              >
+                                {r.userDisabled
+                                  ? "Enable user"
+                                  : "Disable user"}
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              <div className="text-xs text-slate-500 mt-3">
+                Tip: Expired entitlements are automatically blocked. Access
+                returns only after admin approval/renewal.
+              </div>
+            </div>
           )}
         </div>
       )}
