@@ -311,10 +311,6 @@ export default function Profile() {
                 Admin dashboard
               </Link>
 
-              <Link to="/admin/learn" className="btn">
-                Video upload / courses
-              </Link>
-
               <Link to="/admin/courses" className="btn">
                 Admin · Courses
               </Link>
@@ -330,6 +326,10 @@ export default function Profile() {
 
               <Link to="/admin/rategen/add-rate" className="btn">
                 Build / Add rates (Rate Library)
+              </Link>
+
+              <Link to="/admin/learn" className="btn">
+                Video upload / courses
               </Link>
 
               <Link to="/admin/rategen" className="btn">
