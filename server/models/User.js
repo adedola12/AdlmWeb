@@ -18,7 +18,7 @@ const EntitlementSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["active", "inactive", "disabled"],
+      enum: ["active", "inactive", "disabled", "expired"],
       default: "inactive",
     },
 
