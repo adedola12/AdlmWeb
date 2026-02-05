@@ -19,7 +19,7 @@ function useInView(threshold = 0.12) {
           obs.unobserve(el); // fire once
         }
       },
-      { threshold }
+      { threshold },
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -105,7 +105,7 @@ function SafeImg({ src, alt = "", className = "" }) {
       className={className}
       onError={() =>
         setUrl(
-          "https://images.unsplash.com/photo-1523419409543-9e4b7a63e27a?q=80&w=1600&auto=format&fit=crop"
+          "https://images.unsplash.com/photo-1523419409543-9e4b7a63e27a?q=80&w=1600&auto=format&fit=crop",
         )
       }
     />
@@ -115,7 +115,7 @@ function SafeImg({ src, alt = "", className = "" }) {
 function JourneyTimeline() {
   const items = [
     { year: "2019", title: "ADLM Studio was founded" },
-    { year: "2020", title: "Started QS Software Teaining" },
+    { year: "2020", title: "Started QS Software Training" },
     { year: "2022", title: "Launched PlanSwift plugin" },
     { year: "2024", title: "Launched Revit Plugin for Quantity Takeoff" },
     { year: "2025", title: "Launched ADLM Rate Gen" },
@@ -210,7 +210,7 @@ export default function AboutADLM() {
     site: "https://images.unsplash.com/photo-1504306663385-cd3fee2e5af1?q=80&w=1600&auto=format&fit=crop",
     team1: dolapo,
     team2: richard,
-    // team3: gladys,
+    team3: gladys,
     team4:
       "https://images.unsplash.com/photo-1529070538774-1843cb3265df?q=80&w=1200&auto=format&fit=crop",
   };
@@ -300,12 +300,12 @@ export default function AboutADLM() {
       img: ph.team2,
       linkedin: "https://www.linkedin.com/in/richardenoch/",
     },
-    // {
-    //   name: "Gladys Terungwa",
-    //   role: "Product Manager",
-    //   img: ph.team3,
-    //   linkedin: "https://www.linkedin.com/in/gladys-terungwa-9697b6313/",
-    // },
+    {
+      name: "Gladys Terungwa",
+      role: "Product Manager",
+      img: ph.team3,
+      linkedin: "https://www.linkedin.com/in/gladys-terungwa-9697b6313/",
+    },
     {
       name: "Etti Taiwo",
       role: "Fullstack Developer",
