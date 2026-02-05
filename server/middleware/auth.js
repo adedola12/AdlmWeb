@@ -55,16 +55,22 @@ export function requireAdmin(req, res, next) {
   }
 }
 
-// export function requireAuth(req, res, next) {
-//   try {
-//     const h = req.headers.authorization || "";
-//     const bearer = h.startsWith("Bearer ") ? h.slice(7) : null;
-//     const cookieToken = req.cookies?.[ACCESS_COOKIE] || null;
-//     const token = bearer || cookieToken;
-//     if (!token) return res.status(401).json({ error: "Unauthorized" });
-//     req.user = verifyAccess(token);
-//     next();
-//   } catch {
-//     return res.status(401).json({ error: "Unauthorized" });
-//   }
-// }
+export function requireAdminOrMiniAdmin(req, res, next) {
+  // requireAuth should have already populated req.user
+  if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+
+  const role = String(req.user.role || "")
+    .toLowerCase()
+    .trim();
+
+  // accept both formats just in case you stored it differently
+  const ok =
+    role === "admin" ||
+    role === "mini_admin" ||
+    role === "mini-admin" ||
+    role === "miniadmin";
+
+  if (!ok) return res.status(403).json({ error: "Admin access required" });
+
+  next();
+}
