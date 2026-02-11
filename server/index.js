@@ -35,6 +35,11 @@ import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 
+import meTrainingsRoutes from "./routes/me-trainings.js";
+import ptrainingsPublic from "./routes/ptrainings.js";      // new manual flow
+import mePTrainingsRoutes from "./routes/me-ptrainings.js"; // new ptraining portal
+import adminPTrainings from "./routes/admin.ptrainings.js"; // new ptraining admin
+
 /* -------------------- RateGen (LEGACY) -------------------- */
 import rategenRouter from "./routes/rategen.js";
 import adminRateGen from "./routes/admin.rategen.js";
@@ -51,8 +56,6 @@ import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
 import entitlementsRouter from "./routes/entitlements.js";
 import adminUsersLite from "./routes/admin.usersLite.js";
-
-
 
 const app = express();
 
@@ -167,7 +170,7 @@ app.use((err, _req, res, next) => {
 
 /* -------- root -------- */
 app.get("/", (_req, res) =>
-  res.json({ ok: true, service: "ADLM Auth/Licensing" })
+  res.json({ ok: true, service: "ADLM Auth/Licensing" }),
 );
 
 app.use("/webhooks", webhooksRouter);
@@ -184,6 +187,11 @@ app.use("/api/projects", projectRoutes);
 
 app.use("/me/media", meMediaRoutes);
 app.use("/me/orders", meOrdersRoutes);
+
+app.use("/me/trainings", meTrainingsRoutes);
+app.use("/ptrainings", ptrainingsPublic);
+app.use("/me/ptrainings", mePTrainingsRoutes);
+
 
 app.use("/trainings", trainingsPublic);
 app.use("/showcase", showcasePublic);
@@ -204,6 +212,8 @@ app.use("/admin/showcase", adminShowcase);
 app.use("/admin/coupons", adminCoupons);
 app.use("/admin/products", adminProducts);
 app.use("/admin/settings", adminSettings);
+
+app.use("/admin/ptrainings", adminPTrainings);
 
 app.use("/admin/bunny", adminBunny);
 
@@ -237,7 +247,6 @@ app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
 
 app.use("/api/entitlements", entitlementsRouter);
-
 
 /* -------- production SPA hosting (optional) -------- */
 if (process.env.NODE_ENV === "production") {

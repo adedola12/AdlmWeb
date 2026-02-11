@@ -46,6 +46,9 @@ import Receipt from "./pages/Receipt.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 
+import TrainingEnrollment from "./pages/TrainingEnrollment.jsx";
+import AdminPTrainings from "./pages/AdminPTrainings.jsx"; 
+
 import Freebies from "./pages/Freebies.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
@@ -73,6 +76,9 @@ const router = createBrowserRouter([
       { path: "support", element: <Support /> },
 
       { path: "checkout/thanks", element: <CheckoutThanks /> },
+      { path: "trainings", element: <Trainings /> },
+      { path: "/ptrainings/:id", element: <TrainingDetail /> },
+      { path: "/ptrainings/enrollment/:enrollmentId", element: <TrainingDetail /> },
 
       {
         path: "purchase",
@@ -130,6 +136,26 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+
+      {
+        path: "trainings/enrollment/:enrollmentId",
+        element: (
+          <ProtectedRoute>
+            <TrainingEnrollment />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/admin/ptrainings",
+        element: (
+          <ProtectedRoute>
+            <AdminPTrainings />
+          </ProtectedRoute>
+        ),
+      },
+
+
+
 
       {
         path: "revit-projects",

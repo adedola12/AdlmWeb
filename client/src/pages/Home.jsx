@@ -1,6 +1,8 @@
 // src/pages/Home.jsx
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
+import FeaturedTrainingBanner from "../components/FeaturedTrainingBanner.jsx";
+
 import { useAuth } from "../store.jsx";
 
 /* ---------------------- tiny helpers ---------------------- */
@@ -87,7 +89,8 @@ export default function Home() {
           <div
             className="max-w-3xl opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
             style={{ animationDelay: "120ms" }}
-          >
+          >            
+            <FeaturedTrainingBanner />;
             <h1
               className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
               style={{ animationDelay: "220ms" }}
@@ -106,7 +109,6 @@ export default function Home() {
               take-off and professional training, we bring everything you need
               into one easy-to-use platform—built for the Nigerian market.
             </p>
-
             <div
               className="mt-6 flex flex-wrap items-center gap-3 opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
               style={{ animationDelay: "420ms" }}
