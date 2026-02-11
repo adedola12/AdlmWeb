@@ -1,6 +1,7 @@
 // src/components/FeaturedTrainingBanner.jsx
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { api } from "../http.js";
 
 export default function FeaturedTrainingBanner() {
   const [t, setT] = useState(null);
@@ -8,12 +9,11 @@ export default function FeaturedTrainingBanner() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch("/trainings/featured", {
-          credentials: "include",
-        });
-        const j = await r.json();
-        if (r.ok && j) setT(j);
-      } catch {}
+        const { data } = await api.get("/ptrainings/featured");
+        if (data) setT(data);
+      } catch {
+        // silent
+      }
     })();
   }, []);
 
@@ -28,8 +28,9 @@ export default function FeaturedTrainingBanner() {
         <div className="text-xl font-bold mt-1">{t.title}</div>
         <div className="text-gray-600 mt-1">{t.description}</div>
       </div>
+
       <Link
-        to={`/trainings/${t._id}`}
+        to={`/ptrainings/${t._id}`}
         className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
       >
         Register for the Physical Class Now

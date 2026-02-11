@@ -314,6 +314,9 @@ export default function Profile() {
               <Link to="/admin/courses" className="btn">
                 Admin · Courses
               </Link>
+              <Link to="/admin/ptrainings" className="btn">
+                Admin • Physical Trainings
+              </Link>
             </>
           )}
 

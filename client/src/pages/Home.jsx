@@ -16,7 +16,7 @@ function useInView(ref, rootMargin = "0px") {
     if (!ref.current) return;
     const obs = new IntersectionObserver(
       ([entry]) => entry.isIntersecting && setInView(true),
-      { root: null, rootMargin, threshold: 0.2 }
+      { root: null, rootMargin, threshold: 0.2 },
     );
     obs.observe(ref.current);
     return () => obs.disconnect();
@@ -89,8 +89,8 @@ export default function Home() {
           <div
             className="max-w-3xl opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
             style={{ animationDelay: "120ms" }}
-          >            
-            <FeaturedTrainingBanner />;
+          >
+            <FeaturedTrainingBanner />
             <h1
               className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
               style={{ animationDelay: "220ms" }}

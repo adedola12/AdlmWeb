@@ -65,7 +65,6 @@ function CardVideo({ src, poster }) {
   const onEnter = () => {
     if (!ref.current) return;
     const p = ref.current.play();
-    // avoid noisy unhandled promise rejections on some browsers
     if (p && typeof p.catch === "function") p.catch(() => {});
   };
 
@@ -100,6 +99,62 @@ function CardVideo({ src, poster }) {
   );
 }
 
+/* -------------------- NEW: Training Card -------------------- */
+function TrainingCard({ t }) {
+  const img =
+    t?.flyerUrl ||
+    t?.location?.photos?.find((x) => x?.type === "image" && x?.url)?.url ||
+    "";
+
+  const start = t?.startAt ? new Date(t.startAt) : null;
+  const end = t?.endAt ? new Date(t.endAt) : null;
+
+  const when =
+    start && !Number.isNaN(start.getTime())
+      ? `${start.toLocaleDateString()}${end && !Number.isNaN(end.getTime()) ? " - " + end.toLocaleDateString() : ""}`
+      : "";
+
+  const venue = [t?.location?.name, t?.location?.city, t?.location?.state]
+    .filter(Boolean)
+    .join(" • ");
+
+  return (
+    <article className="rounded-2xl bg-white p-3 md:p-4 shadow-sm ring-1 ring-black/5 hover:shadow-lg hover:ring-black/10 transition">
+      <div className="rounded-xl overflow-hidden aspect-video bg-slate-100 ring-1 ring-black/5">
+        {img ? (
+          <img src={img} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-slate-200" />
+        )}
+      </div>
+
+      <div className="mt-3">
+        <div className="text-xs text-slate-600">{when}</div>
+        <div className="text-base font-semibold line-clamp-2">{t?.title}</div>
+        {t?.subtitle ? (
+          <div className="text-sm text-slate-600 line-clamp-2">
+            {t.subtitle}
+          </div>
+        ) : null}
+
+        {venue ? (
+          <div className="mt-1 text-xs text-slate-500">{venue}</div>
+        ) : null}
+
+        <div className="mt-3 flex items-center justify-between">
+          <div className="text-sm font-semibold">{ngn(t?.priceNGN || 0)}</div>
+          <Link
+            to={`/ptrainings/${encodeURIComponent(t?._id)}`}
+            className="rounded-md px-3 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition"
+          >
+            View
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 /* -------------------- Page -------------------- */
 export default function Products() {
   const [qs, setQs] = useSearchParams();
@@ -115,14 +170,15 @@ export default function Products() {
     pageSize,
   });
 
+  const [trainings, setTrainings] = React.useState([]);
+  const [trainingsErr, setTrainingsErr] = React.useState("");
+
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
 
-  // Search & filter UI state (client-side)
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState("All Products");
 
-  // cart badge (localStorage-backed)
   const [cartCount, setCartCount] = React.useState(() => {
     const n = Number(localStorage.getItem("cartCount") || 0);
     return Number.isFinite(n) ? n : 0;
@@ -131,18 +187,16 @@ export default function Products() {
   const [showModal, setShowModal] = React.useState(false);
   const closeModal = () => setShowModal(false);
 
-  // admin-only edit state
   const [editingId, setEditingId] = React.useState(null);
   const [draft, setDraft] = React.useState({});
   const isEditing = (id) => editingId === id;
 
-  // Coupons (active)
   const [activeCoupons, setActiveCoupons] = React.useState([]);
 
   const { user, accessToken } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  /* -------------------- FIX: cart sync (NO setCart anywhere) -------------------- */
+  /* -------------------- cart sync -------------------- */
   React.useEffect(() => {
     const sync = () => {
       const items = readCartItems();
@@ -222,6 +276,30 @@ export default function Products() {
       cancelled = true;
     };
   }, [page, pageSize, isAdmin, accessToken]);
+
+  /* -------------------- NEW: load published physical trainings -------------------- */
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setTrainingsErr("");
+        const res = await fetch(`${API_BASE}/ptrainings/events`, {
+          credentials: "include",
+        });
+        const json = await res.json();
+        const list = Array.isArray(json) ? json : [];
+        if (!cancelled) setTrainings(list);
+      } catch (e) {
+        if (!cancelled)
+          setTrainingsErr(e?.message || "Failed to load trainings");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /* -------------------- load active coupons -------------------- */
   React.useEffect(() => {
@@ -319,7 +397,6 @@ export default function Products() {
         body: JSON.stringify(payload),
       });
 
-      // reload current page
       gotoPage(page);
       setMsg("Product updated.");
       cancelEdit();
@@ -434,6 +511,40 @@ export default function Products() {
         </div>
       </div>
 
+      {/* ✅ NEW: Physical Trainings section */}
+      <div className="rounded-2xl bg-white p-4 md:p-5 ring-1 ring-black/5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-bold">Physical Trainings</div>
+            <div className="text-sm text-slate-600">
+              Upcoming physical programs (flyer + location).
+            </div>
+          </div>
+          <button
+            className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+            onClick={() => navigate("/trainings")}
+            type="button"
+          >
+            View all trainings
+          </button>
+        </div>
+
+        {trainingsErr ? (
+          <div className="mt-3 text-sm text-red-600">{trainingsErr}</div>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {(trainings || []).slice(0, 6).map((t) => (
+            <TrainingCard key={t._id} t={t} />
+          ))}
+          {!(trainings || []).length ? (
+            <div className="text-sm text-slate-600">
+              No trainings published yet.
+            </div>
+          ) : null}
+        </div>
+      </div>
+
       {msg && <div className="text-sm">{msg}</div>}
 
       {loading ? (
@@ -471,7 +582,7 @@ export default function Products() {
           <div className="mt-6 flex items-center justify-between">
             <button
               className="btn btn-sm"
-              disabled={!hasPrev}
+              disabled={page <= 1}
               onClick={() => gotoPage(page - 1)}
             >
               Previous
@@ -481,7 +592,7 @@ export default function Products() {
             </div>
             <button
               className="btn btn-sm"
-              disabled={!hasNext}
+              disabled={page >= pages}
               onClick={() => gotoPage(page + 1)}
             >
               Next
