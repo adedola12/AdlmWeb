@@ -47,11 +47,15 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 
 import TrainingEnrollment from "./pages/TrainingEnrollment.jsx";
-import AdminPTrainings from "./pages/AdminPTrainings.jsx"; 
+import AdminPTrainings from "./pages/AdminPTrainings.jsx";
 
 import Freebies from "./pages/Freebies.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
+
+// ✅ NEW: Physical trainings pages
+import PTrainingDetail from "./pages/PTrainingDetail.jsx";
+import PTrainingEnrollment from "./pages/PTrainingEnrollment.jsx";
 
 const router = createBrowserRouter([
   {
@@ -60,8 +64,10 @@ const router = createBrowserRouter([
     errorElement: <AppError />,
     children: [
       { index: true, element: <Home /> },
+
       { path: "products", element: <Products /> },
       { path: "product/:key", element: <ProductDetail /> },
+
       { path: "login", element: <Login /> },
       { path: "signup", element: <Signup /> },
 
@@ -70,15 +76,34 @@ const router = createBrowserRouter([
       { path: "learn/free/:id", element: <FreeVideoDetail /> },
 
       { path: "about", element: <AboutADLM /> },
+
+      // Online trainings
       { path: "trainings", element: <Trainings /> },
       { path: "trainings/:id", element: <TrainingDetail /> },
+      {
+        path: "trainings/enrollment/:enrollmentId",
+        element: (
+          <ProtectedRoute>
+            <TrainingEnrollment />
+          </ProtectedRoute>
+        ),
+      },
+
+      // ✅ Physical trainings (Public detail + Protected portal)
+      { path: "ptrainings/:id", element: <PTrainingDetail /> },
+      {
+        path: "ptrainings/enrollment/:enrollmentId",
+        element: (
+          <ProtectedRoute>
+            <PTrainingEnrollment />
+          </ProtectedRoute>
+        ),
+      },
+
       { path: "testimonials", element: <Testimonials /> },
       { path: "support", element: <Support /> },
 
       { path: "checkout/thanks", element: <CheckoutThanks /> },
-      { path: "trainings", element: <Trainings /> },
-      { path: "/ptrainings/:id", element: <TrainingDetail /> },
-      { path: "/ptrainings/enrollment/:enrollmentId", element: <TrainingDetail /> },
 
       {
         path: "purchase",
@@ -105,14 +130,6 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "admin/freebies",
-        element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
-            <AdminFreebies />
-          </AdminRoute>
-        ),
-      },
-      {
         path: "receipt/:orderId",
         element: (
           <ProtectedRoute>
@@ -136,26 +153,6 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-
-      {
-        path: "trainings/enrollment/:enrollmentId",
-        element: (
-          <ProtectedRoute>
-            <TrainingEnrollment />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: "/admin/ptrainings",
-        element: (
-          <ProtectedRoute>
-            <AdminPTrainings />
-          </ProtectedRoute>
-        ),
-      },
-
-
-
 
       {
         path: "revit-projects",
@@ -209,18 +206,18 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "admin/coupons",
-        element: (
-          <AdminRoute roles={["admin"]}>
-            <AdminCoupons />
-          </AdminRoute>
-        ),
-      },
-      {
         path: "admin/products/:id/edit",
         element: (
           <AdminRoute roles={["admin"]}>
             <AdminProductEdit />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/coupons",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <AdminCoupons />
           </AdminRoute>
         ),
       },
@@ -287,6 +284,26 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin", "mini_admin"]}>
             <AdminRateGenMaster />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Physical trainings admin (backend requires admin)
+      {
+        path: "admin/ptrainings",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <AdminPTrainings />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Mini-admin / staff freebies
+      {
+        path: "admin/freebies",
+        element: (
+          <AdminRoute roles={["admin", "mini_admin"]}>
+            <AdminFreebies />
           </AdminRoute>
         ),
       },

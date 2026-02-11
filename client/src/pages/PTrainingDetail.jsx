@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { API_BASE } from "../config";
 
 function fmtDate(d) {
   try {
@@ -68,7 +69,13 @@ export default function PTrainingDetail() {
       setLoading(true);
       setErr("");
       try {
-        const r = await fetch(`/ptrainings/${id}`, { credentials: "include" });
+        // ✅ FIX: public detail is /ptrainings/events/:id
+        const r = await fetch(
+          `${API_BASE}/ptrainings/events/${encodeURIComponent(id)}`,
+          {
+            credentials: "include",
+          },
+        );
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error || "Failed");
         if (ok) setT(j);
@@ -94,6 +101,7 @@ export default function PTrainingDetail() {
     setBusy(true);
     setErr("");
     try {
+      // ✅ backend route added below: POST /ptrainings/:id/enroll
       const { data } = await apiAuthed.post(`/ptrainings/${id}/enroll`, {});
       if (!data?.enrollmentId) throw new Error("No enrollmentId returned");
 
@@ -116,6 +124,7 @@ export default function PTrainingDetail() {
   async function confirmPaymentSubmission() {
     if (!enrollmentId) return;
     try {
+      // ✅ backend route added below
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
         { note: payNote, payerName, bankName, reference },
