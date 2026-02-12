@@ -51,7 +51,7 @@ async function uploadReceiptToCloudinary(file) {
   return j.secure_url;
 }
 
-function pickToken(user) {
+function pickTokenFromUserOrStorage(user) {
   return (
     user?.accessToken ||
     user?.token ||
@@ -68,9 +68,13 @@ function pickToken(user) {
 export default function PTrainingEnrollment() {
   const { enrollmentId } = useParams();
   const nav = useNavigate();
-  const { user } = useAuth();
 
-  const token = useMemo(() => pickToken(user), [user]);
+  // ✅ keep consistent with PTrainingDetail: prefer context accessToken
+  const { user, accessToken } = useAuth();
+  const token = useMemo(
+    () => accessToken || pickTokenFromUserOrStorage(user),
+    [accessToken, user],
+  );
   const authedOpts = useMemo(() => (token ? { token } : {}), [token]);
 
   const [loading, setLoading] = useState(true);
@@ -80,7 +84,6 @@ export default function PTrainingEnrollment() {
 
   const [form, setForm] = useState({});
 
-  // optional receipt upload from portal
   const [note, setNote] = useState("Submitted from portal");
   const [receiptUrl, setReceiptUrl] = useState("");
   const [receiptUploading, setReceiptUploading] = useState(false);
@@ -135,7 +138,6 @@ export default function PTrainingEnrollment() {
 
   const formUnlocked =
     paidConfirmed || manualSubmitted || Number(e?.payment?.amountNGN || 0) <= 0;
-
   const adminApproved = e?.status === "approved";
 
   function setField(k, v) {
@@ -220,8 +222,6 @@ export default function PTrainingEnrollment() {
   if (!e || !training) return <div className="p-6">Not found</div>;
 
   const paymentInstructions = e.paymentInstructions || null;
-
-  // ✅ view detail using slug if available
   const trainingKey = training.slug || training._id;
 
   return (
@@ -293,7 +293,6 @@ export default function PTrainingEnrollment() {
                 </div>
               ) : null}
 
-              {/* receipt upload */}
               <div className="p-3 rounded-xl border bg-gray-50">
                 <div className="font-semibold">Upload Receipt (Optional)</div>
 
@@ -524,7 +523,7 @@ export default function PTrainingEnrollment() {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <a
                 className="px-4 py-2 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700"
                 href={gcalLink({
@@ -541,7 +540,6 @@ export default function PTrainingEnrollment() {
                 Add Reminder (Google Calendar)
               </a>
 
-              {/* ✅ safer: download from API origin */}
               <a
                 className="px-4 py-2 rounded-xl border font-semibold hover:bg-gray-50"
                 href={`${API_BASE}/me/ptrainings/${enrollmentId}/ics`}
