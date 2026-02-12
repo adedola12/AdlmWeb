@@ -1,7 +1,8 @@
 // src/pages/PTrainingEnrollment.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { apiAuthed } from "../http.js";
+import { useAuth } from "../store.jsx";
 
 function fmtDate(d) {
   try {
@@ -49,8 +50,28 @@ async function uploadReceiptToCloudinary(file) {
   return j.secure_url;
 }
 
+function pickToken(user) {
+  // supports multiple possible keys + localStorage fallbacks
+  return (
+    user?.accessToken ||
+    user?.token ||
+    user?.access_token ||
+    user?.jwt ||
+    localStorage.getItem("accessToken") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("adlm_accessToken") ||
+    ""
+  );
+}
+
 export default function PTrainingEnrollment() {
   const { enrollmentId } = useParams();
+  const nav = useNavigate();
+  const { user } = useAuth();
+
+  const token = useMemo(() => pickToken(user), [user]);
+  const authedOpts = useMemo(() => (token ? { token } : {}), [token]);
 
   const [loading, setLoading] = useState(true);
   const [e, setE] = useState(null);
@@ -59,7 +80,7 @@ export default function PTrainingEnrollment() {
 
   const [form, setForm] = useState({});
 
-  // ✅ NEW: optional receipt upload from portal
+  // optional receipt upload from portal
   const [note, setNote] = useState("Submitted from portal");
   const [receiptUrl, setReceiptUrl] = useState("");
   const [receiptUploading, setReceiptUploading] = useState(false);
@@ -67,15 +88,25 @@ export default function PTrainingEnrollment() {
   async function load() {
     setLoading(true);
     setErr("");
+
     try {
-      const { data } = await apiAuthed.get(`/me/ptrainings/${enrollmentId}`);
+      const { data } = await apiAuthed.get(
+        `/me/ptrainings/${enrollmentId}`,
+        authedOpts,
+      );
       setE(data);
 
-      // try to rehydrate receipt url if it exists
       const ru = data?.payment?.raw?.receiptUrl || "";
       if (ru && !receiptUrl) setReceiptUrl(ru);
     } catch (x) {
-      setErr(x?.response?.data?.error || x.message || "Failed");
+      const msg = x?.message || "Failed";
+
+      // if auth fails, show a clear message + allow login redirect
+      if (msg.toLowerCase().includes("unauthorized")) {
+        setErr("Session expired. Please login again.");
+      } else {
+        setErr(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -84,7 +115,7 @@ export default function PTrainingEnrollment() {
   useEffect(() => {
     load();
     // eslint-disable-next-line
-  }, [enrollmentId]);
+  }, [enrollmentId, token]);
 
   useEffect(() => {
     if (e?.formData && Object.keys(e.formData).length) setForm(e.formData);
@@ -107,7 +138,7 @@ export default function PTrainingEnrollment() {
   const formUnlocked =
     paidConfirmed || manualSubmitted || Number(e?.payment?.amountNGN || 0) <= 0;
 
-  const adminApproved = e?.status === "approved"; // ✅ used for Go to Dashboard
+  const adminApproved = e?.status === "approved";
 
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -117,10 +148,19 @@ export default function PTrainingEnrollment() {
     setBusy(true);
     setErr("");
     try {
-      await apiAuthed.post(`/me/ptrainings/${enrollmentId}/form`, form);
+      await apiAuthed.post(
+        `/me/ptrainings/${enrollmentId}/form`,
+        form,
+        authedOpts,
+      );
       await load();
     } catch (x) {
-      setErr(x?.response?.data?.error || x.message || "Failed");
+      const msg = x?.message || "Failed";
+      setErr(
+        msg.toLowerCase().includes("unauthorized")
+          ? "Please login again."
+          : msg,
+      );
     } finally {
       setBusy(false);
     }
@@ -134,12 +174,18 @@ export default function PTrainingEnrollment() {
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
         {
           note: note || "Submitted from portal",
-          receiptUrl, // ✅ NEW
+          receiptUrl,
         },
+        authedOpts,
       );
       await load();
     } catch (x) {
-      setErr(x?.response?.data?.error || x.message || "Failed");
+      const msg = x?.message || "Failed";
+      setErr(
+        msg.toLowerCase().includes("unauthorized")
+          ? "Please login again."
+          : msg,
+      );
     } finally {
       setBusy(false);
     }
@@ -159,7 +205,23 @@ export default function PTrainingEnrollment() {
   }
 
   if (loading) return <div className="p-6">Loading…</div>;
-  if (err) return <div className="p-6 text-red-600">{err}</div>;
+
+  if (err) {
+    return (
+      <div className="p-6">
+        <div className="text-red-600 font-semibold">{err}</div>
+        {err.toLowerCase().includes("login") ? (
+          <button
+            onClick={() => nav("/login")}
+            className="mt-3 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+          >
+            Go to Login
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   if (!e || !training) return <div className="p-6">Not found</div>;
 
   const paymentInstructions = e.paymentInstructions || null;
@@ -173,7 +235,6 @@ export default function PTrainingEnrollment() {
             {fmtDate(training.startAt)} — {fmtDate(training.endAt)}
           </p>
 
-          {/* ✅ Go to Dashboard only after admin approval */}
           {adminApproved ? (
             <div className="mt-2">
               <Link
@@ -234,7 +295,7 @@ export default function PTrainingEnrollment() {
                 </div>
               ) : null}
 
-              {/* ✅ Optional receipt upload */}
+              {/* receipt upload */}
               <div className="p-3 rounded-xl border bg-gray-50">
                 <div className="font-semibold">Upload Receipt (Optional)</div>
 
