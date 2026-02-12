@@ -36,7 +36,7 @@ import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 
 import meTrainingsRoutes from "./routes/me-trainings.js";
-import ptrainingsPublic from "./routes/ptrainings.js";      // new manual flow
+import ptrainingsPublic from "./routes/ptrainings.js"; // new manual flow
 import mePTrainingsRoutes from "./routes/me-ptrainings.js"; // new ptraining portal
 import adminPTrainings from "./routes/admin.ptrainings.js"; // new ptraining admin
 
@@ -133,6 +133,9 @@ app.use(
           "https://js.paystack.co",
           "https://checkout.flutterwave.com",
           "https://www.googletagmanager.com",
+          "https://www.google.com",
+          "https://www.google.com/maps",
+          "https://maps.google.com",
         ],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
@@ -191,7 +194,6 @@ app.use("/me/orders", meOrdersRoutes);
 app.use("/me/trainings", meTrainingsRoutes);
 app.use("/ptrainings", ptrainingsPublic);
 app.use("/me/ptrainings", mePTrainingsRoutes);
-
 
 app.use("/trainings", trainingsPublic);
 app.use("/showcase", showcasePublic);
