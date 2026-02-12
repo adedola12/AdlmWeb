@@ -1,6 +1,7 @@
 // server/routes/me-ptrainings.js
 import express from "express";
 import dayjs from "dayjs";
+import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { TrainingEvent } from "../models/TrainingEvent.js";
 import { TrainingEnrollment } from "../models/TrainingEnrollment.js";
@@ -69,6 +70,71 @@ function toICSDate(dt) {
     "Z"
   );
 }
+
+/**
+ * ✅ NEW: list ALL my enrollments (for Dashboard)
+ * GET /me/ptrainings/enrollments
+ */
+router.get(
+  "/enrollments",
+  asyncHandler(async (req, res) => {
+    const list = await TrainingEnrollment.find({ userId: req.user._id })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const trainingIds = [
+      ...new Set(
+        (list || []).map((x) => String(x.trainingId || "")).filter(Boolean),
+      ),
+    ];
+
+    // Mongoose can cast strings to ObjectId, but we'll be strict-safe:
+    const trainingObjectIds = trainingIds
+      .map((id) => {
+        try {
+          return new mongoose.Types.ObjectId(String(id));
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    const trainings = await TrainingEvent.find({
+      _id: { $in: trainingObjectIds },
+    })
+      .select(
+        "title subtitle slug description startAt endAt flyerUrl pricing priceNGN location installationChecklist softwareProductKeys entitlementGrants",
+      )
+      .lean();
+
+    const trainingMap = Object.fromEntries(
+      (trainings || []).map((t) => [String(t._id), t]),
+    );
+
+    const enriched = (list || []).map((enr) => {
+      const training = trainingMap[String(enr.trainingId)] || null;
+
+      const paymentState = String(enr?.payment?.raw?.state || "").toLowerCase();
+      const receiptUrl = enr?.payment?.raw?.receiptUrl || "";
+
+      // Use stored amount first, fallback to resolved fee
+      const amount =
+        Number(enr?.payment?.amountNGN ?? 0) ||
+        (training ? resolveTrainingFeeNGN(training) : 0);
+
+      return {
+        ...enr,
+        training,
+        paymentState,
+        hasReceipt: !!receiptUrl,
+        receiptUrl,
+        amountNGN: amount,
+      };
+    });
+
+    res.json(enriched);
+  }),
+);
 
 router.get(
   "/:enrollmentId",

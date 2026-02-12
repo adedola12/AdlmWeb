@@ -37,6 +37,28 @@ function prettyKey(k) {
   return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
+function isYouTubeUrl(url) {
+  const u = String(url || "").trim();
+  if (!u) return false;
+  return /youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\//i.test(u);
+}
+
+function toYouTubeEmbed(url) {
+  const u = String(url || "").trim();
+  if (!u) return "";
+
+  const short = u.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
+  if (short) return `https://www.youtube.com/embed/${short[1]}`;
+
+  const watch = u.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
+  if (watch) return `https://www.youtube.com/embed/${watch[1]}`;
+
+  const embed = u.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/);
+  if (embed) return `https://www.youtube.com/embed/${embed[1]}`;
+
+  return "";
+}
+
 const PRODUCT_CATALOG = {
   revit_plugin_building: {
     name: "ADLM Revit Plugin (Architecture & Structure)",
@@ -137,7 +159,7 @@ export default function PTrainingDetail() {
   const [receiptUrl, setReceiptUrl] = useState("");
   const [receiptUploading, setReceiptUploading] = useState(false);
 
-  // venue gallery modal
+  // gallery modal (images + videos)
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryIdx, setGalleryIdx] = useState(0);
 
@@ -173,17 +195,75 @@ export default function PTrainingDetail() {
       .join(", ");
   }, [t]);
 
-  const venuePhotos = useMemo(() => {
-    const p = t?.location?.photos || [];
-    return Array.isArray(p)
-      ? p.filter((x) => x?.type === "image" && x?.url)
+  /**
+   * ✅ Combined gallery for Training Location section:
+   * - Location photos: t.location.photos (images only)
+   * - Venue media: t.media (images + videos)
+   */
+  const galleryMedia = useMemo(() => {
+    const locPhotos = Array.isArray(t?.location?.photos)
+      ? t.location.photos
+          .filter((x) => x?.url)
+          .map((x) => ({
+            type: "image",
+            url: x.url,
+            title: x.title || "Location Photo",
+            _src: "location",
+          }))
       : [];
+
+    const venueMedia = Array.isArray(t?.media)
+      ? t.media
+          .filter((x) => x?.url)
+          .map((x) => {
+            const type0 = String(x?.type || "image").toLowerCase();
+            const type = type0 === "video" ? "video" : "image";
+            return {
+              type,
+              url: x.url,
+              title:
+                x.title || (type === "video" ? "Venue Video" : "Venue Photo"),
+              _src: "venue",
+            };
+          })
+      : [];
+
+    const combined = [...locPhotos, ...venueMedia];
+
+    // De-dupe by (type + url)
+    const seen = new Set();
+    const out = [];
+    for (const m of combined) {
+      const key = `${m.type}::${m.url}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(m);
+    }
+    return out;
   }, [t]);
+
+  // ✅ IMPORTANT: keep all hooks ABOVE early returns
+  const mediaCounts = useMemo(() => {
+    const imgs = galleryMedia.filter((m) => m.type === "image").length;
+    const vids = galleryMedia.filter((m) => m.type === "video").length;
+    return { imgs, vids };
+  }, [galleryMedia]);
+
+  // keep galleryIdx valid if media changes
+  useEffect(() => {
+    if (!galleryOpen) return;
+    if (galleryMedia.length <= 0) {
+      setGalleryOpen(false);
+      setGalleryIdx(0);
+      return;
+    }
+    if (galleryIdx >= galleryMedia.length) setGalleryIdx(0);
+  }, [galleryOpen, galleryMedia.length, galleryIdx]);
 
   const flyerImage = useMemo(() => {
     if (t?.flyerUrl) return t.flyerUrl;
     const firstMediaImg = (t?.media || []).find(
-      (m) => m?.type === "image" && m?.url,
+      (m) => String(m?.type || "").toLowerCase() === "image" && m?.url,
     );
     return firstMediaImg?.url || "";
   }, [t]);
@@ -258,7 +338,6 @@ export default function PTrainingDetail() {
       const { data } = await apiAuthed.post(`/ptrainings/${id}/enroll`, {});
       if (!data?.enrollmentId) throw new Error("No enrollmentId returned");
 
-      // ✅ If payment already submitted OR not manual payment, go to enrollment page
       if (
         data?.paymentSubmitted ||
         String(data?.paymentState || "").toLowerCase() === "submitted"
@@ -270,7 +349,6 @@ export default function PTrainingDetail() {
         return nav(`/ptrainings/enrollment/${data.enrollmentId}`);
       }
 
-      // open manual payment modal
       setEnrollmentId(data.enrollmentId);
       setPayInfo(data.paymentInstructions || null);
       setPayOpen(true);
@@ -293,13 +371,7 @@ export default function PTrainingDetail() {
     try {
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
-        {
-          note: payNote,
-          payerName,
-          bankName,
-          reference,
-          receiptUrl,
-        },
+        { note: payNote, payerName, bankName, reference, receiptUrl },
       );
 
       setPayOpen(false);
@@ -327,20 +399,21 @@ export default function PTrainingDetail() {
     setGalleryOpen(true);
   }
 
-  function nextImg() {
+  function nextItem() {
     setGalleryIdx((p) => {
-      const n = venuePhotos.length || 1;
+      const n = galleryMedia.length || 1;
       return (p + 1) % n;
     });
   }
 
-  function prevImg() {
+  function prevItem() {
     setGalleryIdx((p) => {
-      const n = venuePhotos.length || 1;
+      const n = galleryMedia.length || 1;
       return (p - 1 + n) % n;
     });
   }
 
+  // ✅ early returns after all hooks
   if (loading) return <div className="p-4 sm:p-6">Loading…</div>;
   if (err) return <div className="p-4 sm:p-6 text-red-600">{err}</div>;
   if (!t) return <div className="p-4 sm:p-6">Not found</div>;
@@ -349,6 +422,8 @@ export default function PTrainingDetail() {
   const approved = t.approvedCount || 0;
   const closed = approved >= cap;
   const mapsHref = mapsLink(address, t.location?.googleMapsPlaceUrl);
+
+  const activeMedia = galleryMedia[galleryIdx] || null;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -589,30 +664,56 @@ export default function PTrainingDetail() {
           </div>
         </div>
 
-        {/* Venue gallery */}
+        {/* ✅ Combined Gallery */}
         <div className="mt-6">
-          <div className="font-semibold">Venue Gallery</div>
-          {venuePhotos.length ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-semibold">Location & Venue Gallery</div>
+            {!!galleryMedia.length && (
+              <div className="text-xs text-gray-600">
+                {mediaCounts.imgs} photo(s) • {mediaCounts.vids} video(s)
+              </div>
+            )}
+          </div>
+
+          {galleryMedia.length ? (
             <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {venuePhotos.map((p, i) => (
+              {galleryMedia.map((m, i) => (
                 <button
-                  key={p.url + i}
+                  key={`${m.type}-${m.url}-${i}`}
                   type="button"
                   onClick={() => openGalleryAt(i)}
-                  className="rounded-2xl border overflow-hidden hover:opacity-90 bg-black"
-                  title={p.title || "View"}
+                  className="rounded-2xl border overflow-hidden hover:opacity-95 bg-black relative"
+                  title={m.title || "View"}
                 >
-                  <img
-                    src={p.url}
-                    alt={p.title || "Venue"}
-                    className="w-full h-28 object-cover bg-white"
-                  />
+                  {m.type === "image" ? (
+                    <img
+                      src={m.url}
+                      alt={m.title || "Image"}
+                      className="w-full h-28 object-cover bg-white"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-28 bg-black grid place-items-center text-white">
+                      <div className="text-center">
+                        <div className="text-2xl leading-none">▶</div>
+                        <div className="text-xs mt-1 opacity-90">Video</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <span className="absolute left-2 top-2 text-[10px] px-2 py-0.5 rounded-full bg-white/90 border">
+                    {m._src === "location" ? "Location" : "Venue"}
+                  </span>
+
+                  <span className="absolute right-2 top-2 text-[10px] px-2 py-0.5 rounded-full bg-white/90 border">
+                    {m.type === "video" ? "Video" : "Photo"}
+                  </span>
                 </button>
               ))}
             </div>
           ) : (
             <div className="mt-2 text-sm text-gray-600">
-              No venue photos yet.
+              No gallery media yet.
             </div>
           )}
         </div>
@@ -658,39 +759,81 @@ export default function PTrainingDetail() {
         </div>
       </div>
 
-      {/* Venue Lightbox */}
-      {galleryOpen && venuePhotos.length ? (
+      {/* ✅ Gallery Lightbox */}
+      {galleryOpen && galleryMedia.length ? (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="w-full max-w-4xl bg-white rounded-2xl overflow-hidden border shadow-lg">
-            <div className="flex items-center justify-between p-3 border-b">
-              <div className="font-semibold truncate">
-                {venuePhotos[galleryIdx]?.title || "Venue Photo"}
+            <div className="flex items-center justify-between p-3 border-b gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold truncate">
+                  {activeMedia?.title ||
+                    (activeMedia?.type === "video" ? "Video" : "Photo")}
+                </div>
+                <div className="text-xs text-gray-600">
+                  {activeMedia?._src === "location" ? "Location" : "Venue"} •{" "}
+                  {activeMedia?.type === "video" ? "Video" : "Photo"} •{" "}
+                  {galleryIdx + 1}/{galleryMedia.length}
+                </div>
               </div>
-              <button
-                onClick={() => setGalleryOpen(false)}
-                className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
-              >
-                Close
-              </button>
+
+              <div className="flex items-center gap-2">
+                {activeMedia?.url ? (
+                  <a
+                    href={activeMedia.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+                    title="Open in new tab"
+                  >
+                    Open
+                  </a>
+                ) : null}
+
+                <button
+                  onClick={() => setGalleryOpen(false)}
+                  className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="relative bg-black">
-              <img
-                src={venuePhotos[galleryIdx]?.url}
-                alt="Venue"
-                className="w-full max-h-[70vh] object-contain"
-              />
+              {activeMedia?.type === "video" ? (
+                isYouTubeUrl(activeMedia.url) ? (
+                  <iframe
+                    title={activeMedia.title || "Video"}
+                    src={toYouTubeEmbed(activeMedia.url)}
+                    className="w-full h-[70vh]"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    src={activeMedia.url}
+                    className="w-full max-h-[70vh] object-contain"
+                    controls
+                    autoPlay
+                  />
+                )
+              ) : (
+                <img
+                  src={activeMedia?.url}
+                  alt={activeMedia?.title || "Image"}
+                  className="w-full max-h-[70vh] object-contain"
+                />
+              )}
 
-              {venuePhotos.length > 1 ? (
+              {galleryMedia.length > 1 ? (
                 <>
                   <button
-                    onClick={prevImg}
+                    onClick={prevItem}
                     className="absolute left-3 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl bg-white/90 border font-semibold hover:bg-white"
                   >
                     Prev
                   </button>
                   <button
-                    onClick={nextImg}
+                    onClick={nextItem}
                     className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl bg-white/90 border font-semibold hover:bg-white"
                   >
                     Next
@@ -767,7 +910,6 @@ export default function PTrainingDetail() {
                 </div>
               ) : null}
 
-              {/* Optional Receipt Upload */}
               <div className="p-3 rounded-xl border bg-gray-50">
                 <div className="font-semibold">
                   Upload Payment Receipt (Optional)
