@@ -25,6 +25,30 @@ function gcalLink({ title, details, location, startAt, endAt }) {
   return u.toString();
 }
 
+async function uploadReceiptToCloudinary(file) {
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const preset =
+    import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET_RECEIPT ||
+    import.meta.env.VITE_CLOUDINARY_UNSIGNED_UPLOAD_PRESET;
+
+  if (!cloudName || !preset) {
+    throw new Error(
+      "Receipt upload is not configured. Set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UNSIGNED_PRESET_RECEIPT.",
+    );
+  }
+
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("upload_preset", preset);
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+  const r = await fetch(endpoint, { method: "POST", body: fd });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error?.message || "Upload failed");
+  if (!j?.secure_url) throw new Error("Upload failed (no URL returned)");
+  return j.secure_url;
+}
+
 export default function PTrainingEnrollment() {
   const { enrollmentId } = useParams();
 
@@ -35,12 +59,21 @@ export default function PTrainingEnrollment() {
 
   const [form, setForm] = useState({});
 
+  // ✅ NEW: optional receipt upload from portal
+  const [note, setNote] = useState("Submitted from portal");
+  const [receiptUrl, setReceiptUrl] = useState("");
+  const [receiptUploading, setReceiptUploading] = useState(false);
+
   async function load() {
     setLoading(true);
     setErr("");
     try {
       const { data } = await apiAuthed.get(`/me/ptrainings/${enrollmentId}`);
       setE(data);
+
+      // try to rehydrate receipt url if it exists
+      const ru = data?.payment?.raw?.receiptUrl || "";
+      if (ru && !receiptUrl) setReceiptUrl(ru);
     } catch (x) {
       setErr(x?.response?.data?.error || x.message || "Failed");
     } finally {
@@ -72,7 +105,9 @@ export default function PTrainingEnrollment() {
   const paidConfirmed = !!e?.payment?.paid;
 
   const formUnlocked =
-    paidConfirmed || manualSubmitted || Number(training?.priceNGN || 0) <= 0;
+    paidConfirmed || manualSubmitted || Number(e?.payment?.amountNGN || 0) <= 0;
+
+  const adminApproved = e?.status === "approved"; // ✅ used for Go to Dashboard
 
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -98,7 +133,8 @@ export default function PTrainingEnrollment() {
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
         {
-          note: "Submitted from portal",
+          note: note || "Submitted from portal",
+          receiptUrl, // ✅ NEW
         },
       );
       await load();
@@ -106,6 +142,19 @@ export default function PTrainingEnrollment() {
       setErr(x?.response?.data?.error || x.message || "Failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onPickReceipt(file) {
+    if (!file) return;
+    setReceiptUploading(true);
+    try {
+      const url = await uploadReceiptToCloudinary(file);
+      setReceiptUrl(url);
+    } catch (x) {
+      alert(x?.message || "Receipt upload failed");
+    } finally {
+      setReceiptUploading(false);
     }
   }
 
@@ -118,12 +167,25 @@ export default function PTrainingEnrollment() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">{training.title}</h1>
           <p className="text-gray-600 mt-1">
             {fmtDate(training.startAt)} — {fmtDate(training.endAt)}
           </p>
+
+          {/* ✅ Go to Dashboard only after admin approval */}
+          {adminApproved ? (
+            <div className="mt-2">
+              <Link
+                to="/dashboard"
+                className="inline-flex px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+              >
+                Go to Dashboard →
+              </Link>
+            </div>
+          ) : null}
         </div>
+
         <Link
           to={`/ptrainings/${training._id}`}
           className="text-blue-600 hover:underline font-semibold"
@@ -145,7 +207,7 @@ export default function PTrainingEnrollment() {
           </div>
 
           {!paidConfirmed && (
-            <div className="text-sm text-gray-600 mt-2 space-y-2">
+            <div className="text-sm text-gray-600 mt-2 space-y-3">
               {paymentInstructions ? (
                 <div className="p-3 rounded-xl border bg-gray-50">
                   <div>
@@ -172,10 +234,60 @@ export default function PTrainingEnrollment() {
                 </div>
               ) : null}
 
+              {/* ✅ Optional receipt upload */}
+              <div className="p-3 rounded-xl border bg-gray-50">
+                <div className="font-semibold">Upload Receipt (Optional)</div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <label className="px-3 py-2 rounded-xl bg-white border font-semibold hover:bg-gray-100 cursor-pointer">
+                    {receiptUploading ? "Uploading…" : "Choose Image"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={receiptUploading}
+                      onChange={(ev) => {
+                        const f = ev.target.files?.[0];
+                        ev.target.value = "";
+                        if (!f) return;
+                        onPickReceipt(f);
+                      }}
+                    />
+                  </label>
+
+                  {receiptUrl ? (
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-xl border font-semibold hover:bg-white"
+                      onClick={() => setReceiptUrl("")}
+                      disabled={receiptUploading}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+
+                {receiptUrl ? (
+                  <img
+                    src={receiptUrl}
+                    alt="Receipt"
+                    className="mt-3 w-full max-h-56 object-cover rounded-2xl border bg-white"
+                  />
+                ) : null}
+
+                <textarea
+                  className="mt-3 w-full border rounded-xl px-3 py-2"
+                  rows={2}
+                  value={note}
+                  onChange={(x) => setNote(x.target.value)}
+                  placeholder="Note to admin (optional)"
+                />
+              </div>
+
               {!manualSubmitted ? (
                 <button
                   onClick={submitManualPayment}
-                  disabled={busy}
+                  disabled={busy || receiptUploading}
                   className="px-3 py-2 rounded-xl border hover:bg-gray-50 font-semibold"
                 >
                   {busy ? "Submitting…" : "I’ve Paid / Continue"}
@@ -256,13 +368,13 @@ export default function PTrainingEnrollment() {
                       rows={4}
                       placeholder={f.placeholder || ""}
                       value={String(v)}
-                      onChange={(e) => setField(f.key, e.target.value)}
+                      onChange={(x) => setField(f.key, x.target.value)}
                     />
                   ) : f.type === "select" ? (
                     <select
                       className={common}
                       value={String(v)}
-                      onChange={(e) => setField(f.key, e.target.value)}
+                      onChange={(x) => setField(f.key, x.target.value)}
                     >
                       <option value="">Select…</option>
                       {(f.options || []).map((o) => (
@@ -308,7 +420,7 @@ export default function PTrainingEnrollment() {
                       }
                       placeholder={f.placeholder || ""}
                       value={String(v)}
-                      onChange={(e) => setField(f.key, e.target.value)}
+                      onChange={(x) => setField(f.key, x.target.value)}
                     />
                   )}
                 </div>
@@ -379,7 +491,6 @@ export default function PTrainingEnrollment() {
             </div>
           </div>
 
-          {/* Installation checklist */}
           <div className="mt-6">
             <h3 className="font-bold text-lg">
               Software & Plugin Installation Checklist
@@ -413,7 +524,6 @@ export default function PTrainingEnrollment() {
             </div>
           </div>
 
-          {/* Installation status */}
           <div className="mt-6 p-4 rounded-2xl border">
             <div className="font-bold">Installation Status</div>
             <div className="mt-1 text-gray-700">

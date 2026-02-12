@@ -25,16 +25,38 @@ function getPaymentInstructions(amountNGN) {
   };
 }
 
+function computePricing(training) {
+  const pricing = training?.pricing || {};
+  const normal = Number(pricing?.normalNGN ?? training?.priceNGN ?? 0) || 0;
+  const groupOf3 = Number(pricing?.groupOf3NGN ?? 0) || 0;
+  const ebPrice = Number(pricing?.earlyBird?.priceNGN ?? 0) || 0;
+
+  const ebEndsAtRaw = pricing?.earlyBird?.endsAt || null;
+  const ebEndsAt = ebEndsAtRaw ? new Date(ebEndsAtRaw) : null;
+
+  const now = new Date();
+  const ebActive =
+    ebPrice > 0 &&
+    ebEndsAt &&
+    !Number.isNaN(ebEndsAt.getTime()) &&
+    now.getTime() < ebEndsAt.getTime();
+
+  const payable = ebActive ? ebPrice : normal;
+  const tier = ebActive ? "earlybird" : "normal";
+
+  return { normal, groupOf3, ebPrice, ebEndsAt, ebActive, payable, tier };
+}
+
 /**
  * Public: list published events (for Products page)
  */
 router.get(
   "/events",
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (_req, res) => {
     const list = await TrainingEvent.find({ isPublished: true })
       .sort({ startAt: 1, createdAt: -1 })
       .select(
-        "title subtitle slug description startAt endAt priceNGN capacityApproved flyerUrl location isFeatured sort",
+        "title subtitle slug description startAt endAt priceNGN pricing capacityApproved flyerUrl location isFeatured sort",
       )
       .lean();
 
@@ -44,7 +66,6 @@ router.get(
 
 /**
  * Public: detail (used by PTrainingDetail.jsx)
- * ✅ includes approvedCount so UI can show “approved/capacity”
  */
 router.get(
   "/events/:id",
@@ -66,7 +87,7 @@ router.get(
 );
 
 /**
- * ✅ Auth: Enroll in a training (called by PTrainingDetail.jsx)
+ * ✅ Auth: Enroll in a training
  * POST /ptrainings/:id/enroll
  */
 router.post(
@@ -78,21 +99,23 @@ router.post(
       return res.status(404).json({ error: "Training not found" });
     }
 
-    // If already enrolled, return existing enrollmentId + payment mode
+    const pricing = computePricing(training);
+    const isPaid = Number(pricing.payable || 0) > 0;
+
+    // If already enrolled, return existing enrollmentId + payment info
     const existing = await TrainingEnrollment.findOne({
       trainingId: training._id,
       userId: req.user._id,
     });
 
-    const isPaid = Number(training.priceNGN || 0) > 0;
-
     if (existing) {
+      const amt = Number(existing?.payment?.amountNGN ?? pricing.payable ?? 0);
+      const paidMode = amt > 0;
+
       return res.json({
         enrollmentId: String(existing._id),
-        manualPayment: isPaid,
-        paymentInstructions: isPaid
-          ? getPaymentInstructions(training.priceNGN)
-          : null,
+        manualPayment: paidMode,
+        paymentInstructions: paidMode ? getPaymentInstructions(amt) : null,
       });
     }
 
@@ -109,25 +132,26 @@ router.post(
         .json({ error: "Enrollment closed: capacity reached." });
     }
 
-    // Create enrollment
     const enr = new TrainingEnrollment({
       trainingId: training._id,
       userId: req.user._id,
       status: isPaid ? "payment_pending" : "form_pending",
       payment: {
-        amountNGN: Number(training.priceNGN || 0),
-        paid: !isPaid, // free => paid=true so form unlocks immediately
+        amountNGN: Number(pricing.payable || 0),
+        paid: !isPaid,
         paidAt: !isPaid ? new Date() : null,
         raw: !isPaid
           ? {
               method: "free",
               state: "confirmed",
               confirmedAt: new Date().toISOString(),
+              pricingTier: "free",
             }
           : {
               method: "manual_transfer",
               state: "pending",
               createdAt: new Date().toISOString(),
+              pricingTier: pricing.tier,
             },
       },
       installation: { status: "none" },
@@ -139,14 +163,14 @@ router.post(
       enrollmentId: String(enr._id),
       manualPayment: isPaid,
       paymentInstructions: isPaid
-        ? getPaymentInstructions(training.priceNGN)
+        ? getPaymentInstructions(pricing.payable)
         : null,
     });
   }),
 );
 
 /**
- * ✅ Auth: User submits manual transfer proof (called by PTrainingDetail + portal)
+ * ✅ Auth: User submits manual transfer proof (+ optional receiptUrl)
  * POST /ptrainings/enrollments/:enrollmentId/payment-submitted
  */
 router.post(
@@ -164,10 +188,13 @@ router.post(
     const training = await TrainingEvent.findById(enr.trainingId).lean();
     if (!training) return res.status(404).json({ error: "Training not found" });
 
-    const isPaid = Number(training.priceNGN || 0) > 0;
-    if (!isPaid) {
-      // free trainings: nothing to submit, but keep it safe
+    const pricing = computePricing(training);
+    const payable = Number(enr?.payment?.amountNGN ?? pricing.payable ?? 0);
+
+    if (payable <= 0) {
+      // free training: ensure paid
       enr.payment = enr.payment || {};
+      enr.payment.amountNGN = 0;
       enr.payment.paid = true;
       enr.payment.paidAt = enr.payment.paidAt || new Date();
       enr.status =
@@ -176,18 +203,17 @@ router.post(
       return res.json({ ok: true, enrollmentId: String(enr._id) });
     }
 
-    const { note, payerName, bankName, reference } = req.body || {};
+    const { note, payerName, bankName, reference, receiptUrl } = req.body || {};
 
     enr.payment = enr.payment || {};
-    enr.payment.amountNGN = Number(
-      enr.payment.amountNGN || training.priceNGN || 0,
-    );
+    enr.payment.amountNGN = Number(enr.payment.amountNGN || payable || 0);
     if (reference) enr.payment.reference = String(reference);
 
     const prev =
       enr.payment.raw && typeof enr.payment.raw === "object"
         ? enr.payment.raw
         : {};
+
     enr.payment.raw = {
       ...prev,
       method: "manual_transfer",
@@ -197,9 +223,10 @@ router.post(
       payerName: payerName || prev.payerName || "",
       bankName: bankName || prev.bankName || "",
       reference: reference || prev.reference || "",
+      receiptUrl: receiptUrl || prev.receiptUrl || "",
     };
 
-    // Unlock form after submission
+    // Unlock form after submission (do not override approved)
     if (enr.status === "payment_pending") enr.status = "form_pending";
 
     await enr.save();
