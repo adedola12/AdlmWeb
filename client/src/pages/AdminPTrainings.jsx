@@ -1,5 +1,5 @@
 // src/pages/AdminPTrainings.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apiAuthed } from "../http.js";
 
 /* ---------------------- helpers ---------------------- */
@@ -193,9 +193,11 @@ function MediaBrowserModal({ open, onClose, type = "image", onPick }) {
   const [q, setQ] = useState("");
   const [next, setNext] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
   async function loadAssets(cursor = null) {
     setLoading(true);
+    setErr("");
     try {
       const params = { type };
       if (q) params.q = q;
@@ -208,6 +210,10 @@ function MediaBrowserModal({ open, onClose, type = "image", onPick }) {
       else setItems(list);
 
       setNext(data?.next || null);
+    } catch (e) {
+      setErr(e?.message || "Failed to load assets");
+      setItems([]);
+      setNext(null);
     } finally {
       setLoading(false);
     }
@@ -223,7 +229,9 @@ function MediaBrowserModal({ open, onClose, type = "image", onPick }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-4 w-full max-w-3xl space-y-3">
+      {/* ✅ constrain height + prevent whole modal overflow */}
+      <div className="bg-white rounded-2xl p-4 w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="font-semibold">Choose from Cloudinary ({type})</div>
           <button
@@ -235,57 +243,70 @@ function MediaBrowserModal({ open, onClose, type = "image", onPick }) {
           </button>
         </div>
 
-        <input
-          className="w-full border rounded-xl px-3 py-2"
-          placeholder="Search filename..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+        {/* Search */}
+        <div className="mt-3">
+          <input
+            className="w-full border rounded-xl px-3 py-2"
+            placeholder="Search filename..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {err ? <div className="mt-2 text-sm text-red-600">{err}</div> : null}
+        </div>
 
-        {loading ? (
-          <div className="text-sm text-slate-600">Loading…</div>
-        ) : (
-          <>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-              {items.map((it) => (
+        {/* ✅ Scrollable content area */}
+        <div className="mt-3 flex-1 overflow-y-auto pr-1">
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                {items.map((it) => (
+                  <button
+                    key={it.public_id}
+                    className="border rounded-xl overflow-hidden hover:opacity-90"
+                    onClick={() => onPick(it.url)}
+                    title={it.public_id}
+                    type="button"
+                  >
+                    {type === "image" ? (
+                      <img
+                        src={it.url}
+                        className="w-full h-24 object-cover"
+                        alt=""
+                      />
+                    ) : (
+                      <video
+                        src={it.url}
+                        className="w-full h-24 object-cover"
+                        preload="metadata"
+                        muted
+                      />
+                    )}
+                  </button>
+                ))}
+
+                {!items.length && (
+                  <div className="text-sm text-slate-600 col-span-full">
+                    No assets found.
+                  </div>
+                )}
+              </div>
+
+              {/* ✅ Sticky footer button (always reachable) */}
+              <div className="sticky bottom-0 bg-white pt-3 pb-1 flex items-center justify-end">
                 <button
-                  key={it.public_id}
-                  className="border rounded-xl overflow-hidden hover:opacity-90"
-                  onClick={() => onPick(it.url)}
-                  title={it.public_id}
                   type="button"
+                  className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+                  disabled={!next || loading}
+                  onClick={() => loadAssets(next)}
                 >
-                  {type === "image" ? (
-                    <img
-                      src={it.url}
-                      className="w-full h-24 object-cover"
-                      alt=""
-                    />
-                  ) : (
-                    <video src={it.url} className="w-full h-24 object-cover" />
-                  )}
+                  Load more
                 </button>
-              ))}
-
-              {!items.length && (
-                <div className="text-sm text-slate-600 col-span-full">
-                  No assets found.
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end">
-              <button
-                type="button"
-                className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
-                disabled={!next || loading}
-                onClick={() => loadAssets(next)}
-              >
-                Load more
-              </button>
-            </div>
-          </>
-        )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -381,6 +402,7 @@ export default function AdminPTrainings() {
   // --- form preview state
   const [formPreview, setFormPreview] = useState({});
 
+  // ✅ IMPORTANT: keep ALL hooks above any early return (fixes "Rendered more hooks" crash)
   const productMap = useMemo(() => {
     const m = {};
     (products || []).forEach((p) => {
@@ -400,6 +422,14 @@ export default function AdminPTrainings() {
     });
   }, [products, productQ]);
 
+  const formDataTemplate = useMemo(
+    () => buildFormDataTemplate(draft.formFields),
+    [draft.formFields],
+  );
+
+  // Prevent double-fetch noise in React 18 StrictMode (dev)
+  const didInitRef = useRef(false);
+
   async function loadEvents() {
     const { data } = await apiAuthed.get("/admin/ptrainings/events");
     setEvents(Array.isArray(data) ? data : []);
@@ -418,16 +448,41 @@ export default function AdminPTrainings() {
   async function loadAll() {
     setLoading(true);
     setErr("");
-    try {
-      await Promise.all([loadEvents(), loadEnrollments(), loadProducts()]);
-    } catch (e) {
-      setErr(e?.message || "Failed");
-    } finally {
-      setLoading(false);
+
+    // Load independently so one 401 doesn't block everything else
+    const results = await Promise.allSettled([
+      loadEvents(),
+      loadEnrollments(),
+      loadProducts(),
+    ]);
+
+    const errors = results
+      .filter((r) => r.status === "rejected")
+      .map((r) => r.reason);
+
+    if (errors.length) {
+      const unauthorized = errors.some(
+        (e) =>
+          String(e?.message || "").toLowerCase() === "unauthorized" ||
+          String(e || "")
+            .toLowerCase()
+            .includes("unauthorized"),
+      );
+
+      setErr(
+        unauthorized
+          ? "Unauthorized (401). Please login again with an admin account, then refresh."
+          : errors[0]?.message || "Failed to load admin data.",
+      );
     }
+
+    setLoading(false);
   }
 
   useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+
     loadAll();
     // eslint-disable-next-line
   }, []);
@@ -768,11 +823,6 @@ export default function AdminPTrainings() {
     (draft.softwareProductKeys || []).map(normKey).filter(Boolean),
   );
 
-  const formDataTemplate = useMemo(
-    () => buildFormDataTemplate(draft.formFields),
-    [draft.formFields],
-  );
-
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold">Admin PTrainings</h1>
@@ -1090,7 +1140,7 @@ export default function AdminPTrainings() {
               />
             </div>
 
-            {/* ✅ Venue Images & Videos (was Event Media) */}
+            {/* ✅ Venue Images & Videos (Gallery) */}
             <div className="mt-6 rounded-2xl border p-4">
               <div className="flex items-center justify-between">
                 <div className="font-bold text-lg">
@@ -1446,7 +1496,7 @@ export default function AdminPTrainings() {
               </div>
             </div>
 
-            {/* ✅ Registration Form (FormFields + FormData) */}
+            {/* ✅ Registration Form */}
             <div className="mt-6 rounded-2xl border p-4">
               <div className="font-bold text-lg">Registration Form</div>
               <div className="text-sm text-gray-600 mt-1">

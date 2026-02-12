@@ -253,7 +253,7 @@ router.get(
   }),
 );
 
-/* web summary */
+/* web summary ✅ UPDATED */
 router.get(
   "/summary",
   requireAuth,
@@ -262,6 +262,7 @@ router.get(
       entitlements: 1,
       email: 1,
       refreshVersion: 1,
+      createdAt: 1,
     });
     if (!user) return res.status(404).json({ error: "User missing" });
 
@@ -269,24 +270,134 @@ router.get(
     const expiryChanged = applyExpiryToUser(user);
     if (expiryChanged) await user.save();
 
-    const ents = (user.entitlements || []).map((e) => ({
+    // 1) Entitlements (base)
+    const entsBase = (user.entitlements || []).map((e) => ({
       ...toEntitlementV2(e),
       isCourse: false,
     }));
 
-    const keys = ents.map((e) => e.productKey);
-    const prods = await Product.find({ key: { $in: keys } })
-      .select("key isCourse")
-      .lean();
-    const byKey = Object.fromEntries(
-      (prods || []).map((p) => [p.key, !!p.isCourse]),
+    const keys = Array.from(
+      new Set(entsBase.map((e) => e.productKey).filter(Boolean)),
     );
 
-    const entitlements = ents.map((e) => ({
-      ...e,
-      isCourse: !!byKey[e.productKey],
-    }));
+    // 2) Product meta for those keys (name, isCourse, cards)
+    const prods = keys.length
+      ? await Product.find({ key: { $in: keys } })
+          .select("key name blurb thumbnailUrl price isCourse")
+          .lean()
+      : [];
 
+    const prodByKey = Object.fromEntries((prods || []).map((p) => [p.key, p]));
+
+    // 3) Attach isCourse + productName to entitlements (so Dashboard tabs render properly)
+    let entitlements = entsBase.map((e) => {
+      const p = prodByKey[e.productKey] || null;
+      return {
+        ...e,
+        isCourse: !!p?.isCourse,
+        productName: p?.name || e.productKey,
+      };
+    });
+
+    // 4) Attach latest billingInterval + installFee for each productKey (best-effort)
+    //    This makes SubscriptionsTab show billing + install fee if available.
+    const purchaseQ =
+      keys.length === 0
+        ? null
+        : {
+            userId: req.user._id,
+            $and: [
+              {
+                $or: [
+                  { status: "approved" },
+                  { paid: true }, // fallback if you use paid=true
+                ],
+              },
+              {
+                $or: [
+                  { productKey: { $in: keys } },
+                  { "lines.productKey": { $in: keys } },
+                ],
+              },
+            ],
+          };
+
+    const purchases = purchaseQ
+      ? await Purchase.find(purchaseQ, {
+          productKey: 1,
+          lines: 1,
+          decidedAt: 1,
+          createdAt: 1,
+          currency: 1,
+        })
+          .sort({ decidedAt: -1, createdAt: -1 })
+          .lean()
+      : [];
+
+    const latestByKey = {}; // { [key]: { billingInterval, installFee, currency } }
+
+    for (const p of purchases) {
+      // line-based purchases
+      if (Array.isArray(p.lines) && p.lines.length) {
+        for (const ln of p.lines) {
+          const k = String(ln?.productKey || "").trim();
+          if (!k || !keys.includes(k)) continue;
+          if (latestByKey[k]) continue;
+
+          latestByKey[k] = {
+            billingInterval: ln?.billingInterval || "",
+            installFee: Number(ln?.install ?? 0) || 0,
+            currency: p?.currency || "NGN",
+          };
+        }
+      } else {
+        // single productKey purchase
+        const k = String(p?.productKey || "").trim();
+        if (!k || !keys.includes(k)) continue;
+        if (latestByKey[k]) continue;
+
+        latestByKey[k] = {
+          billingInterval: "", // unknown (no lines)
+          installFee: 0,
+          currency: p?.currency || "NGN",
+        };
+      }
+    }
+
+    entitlements = entitlements.map((e) => {
+      const meta = latestByKey[e.productKey];
+      if (!meta) return e;
+      return {
+        ...e,
+        billingInterval: meta.billingInterval || e.billingInterval || "",
+        installFee: meta.installFee ?? e.installFee ?? 0,
+        currency: meta.currency || e.currency || "NGN",
+      };
+    });
+
+    // 5) Products array for "My Products" tab (cards)
+    //    Dashboard expects: _id, key, name, blurb, thumbnailUrl, price, isActive
+    const entByKey = Object.fromEntries(
+      entitlements.map((e) => [e.productKey, e]),
+    );
+    const products = (prods || []).map((p) => {
+      const e = entByKey[p.key];
+      const st = String(e?.status || "inactive").toLowerCase();
+      const isActive = st === "active" && !e?.isExpired;
+
+      return {
+        _id: p._id,
+        key: p.key,
+        name: p.name,
+        blurb: p.blurb || "",
+        thumbnailUrl: p.thumbnailUrl || "",
+        price: p.price || {},
+        isCourse: !!p.isCourse,
+        isActive,
+      };
+    });
+
+    // 6) Installation requests (existing)
     const installs = await Purchase.find(
       {
         userId: req.user._id,
@@ -301,6 +412,8 @@ router.get(
         decidedAt: 1,
         totalAmount: 1,
         currency: 1,
+        licenseType: 1,
+        organization: 1,
       },
     )
       .sort({ decidedAt: -1 })
@@ -318,9 +431,11 @@ router.get(
       ),
     );
 
-    const installProducts = await Product.find({ key: { $in: installKeys } })
-      .select("key name")
-      .lean();
+    const installProducts = installKeys.length
+      ? await Product.find({ key: { $in: installKeys } })
+          .select("key name")
+          .lean()
+      : [];
 
     const prodNameByKey = Object.fromEntries(
       (installProducts || []).map((x) => [x.key, x.name]),
@@ -339,11 +454,25 @@ router.get(
       };
     });
 
+    // 7) Counts/stats used on Dashboard
+    const ordersCount = await Purchase.countDocuments({ userId: req.user._id });
+
     return res.json({
       email: user.email,
       refreshVersion: user.refreshVersion || 1,
-      entitlements,
+
+      // ✅ Dashboard expects these
+      products, // for "My Products" tab + Active Products stat
+      entitlements, // for Subscriptions tab (now includes productName/isCourse/billingInterval/installFee)
       installations: installsEnriched,
+
+      ordersCount, // used by Dashboard total orders stat
+      totalOrders: ordersCount, // legacy alias (safe)
+
+      tutorialsWatched: 0, // keep field so UI doesn't break (can wire later)
+      membership: {
+        startedAt: user.createdAt || null,
+      },
     });
   }),
 );
