@@ -79,11 +79,9 @@ function addMonthsToEntitlement(
       devices: [],
       licenseType: lt,
       organizationName: org,
-      // ✅ if months==0, make it non-expiring (null) instead of "expires today"
       expiresAt: m ? now.add(m, "month").toDate() : null,
     });
   } else {
-    // extend expiry from the later of now or current expiry
     if (m) {
       const base =
         ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
@@ -91,7 +89,6 @@ function addMonthsToEntitlement(
           : now;
       ent.expiresAt = base.add(m, "month").toDate();
     } else {
-      // keep expiresAt as-is if months==0
       ent.expiresAt = ent.expiresAt ?? null;
     }
 
@@ -183,13 +180,42 @@ router.get(
   "/enrollments",
   asyncHandler(async (req, res) => {
     const q = {};
-    if (req.query.status) q.status = String(req.query.status);
+
+    const statusRaw = String(req.query.status || "")
+      .trim()
+      .toLowerCase();
+    const paymentStateRaw = String(req.query.paymentState || "")
+      .trim()
+      .toLowerCase();
+    const trainingIdRaw = String(req.query.trainingId || "").trim();
+
+    if (trainingIdRaw) q.trainingId = trainingIdRaw;
+
+    // ✅ Special behavior:
+    // If admin filters by status=payment_pending, also show people who already clicked "I've Paid"
+    // (they become form_pending but payment.raw.state === submitted)
+    if (statusRaw) {
+      if (statusRaw === "payment_pending") {
+        q.$or = [
+          { status: "payment_pending" },
+          { status: "form_pending", "payment.raw.state": "submitted" },
+        ];
+      } else {
+        q.status = statusRaw;
+      }
+    }
+
+    // Optional explicit filter by payment.raw.state
+    if (paymentStateRaw) {
+      q["payment.raw.state"] = paymentStateRaw;
+    }
 
     const list = await TrainingEnrollment.find(q)
       .sort({ createdAt: -1 })
       .limit(500)
       .lean();
 
+    // ---- attach training info ----
     const trainingIdsStr = [
       ...new Set(
         (list || []).map((x) => String(x.trainingId || "")).filter(Boolean),
@@ -216,7 +242,7 @@ router.get(
 
     const approvedMap = await getApprovedCountsMap(trainingObjectIds);
 
-    const map = Object.fromEntries(
+    const trainingMap = Object.fromEntries(
       (trainings || []).map((t) => {
         const approvedCount = approvedMap[String(t._id)] || 0;
         const cap = capacityOf(t);
@@ -225,10 +251,52 @@ router.get(
       }),
     );
 
-    const enriched = (list || []).map((x) => ({
-      ...x,
-      training: map[String(x.trainingId)] || null,
-    }));
+    // ---- attach user info (so admin sees who paid) ----
+    const userIdsStr = [
+      ...new Set(
+        (list || []).map((x) => String(x.userId || "")).filter(Boolean),
+      ),
+    ];
+
+    const userObjectIds = userIdsStr
+      .map((id) => {
+        try {
+          return new mongoose.Types.ObjectId(String(id));
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    const users = await User.find({ _id: { $in: userObjectIds } })
+      .select("email username firstName lastName phone")
+      .lean();
+
+    const userMap = Object.fromEntries(
+      (users || []).map((u) => [String(u._id), u]),
+    );
+
+    const enriched = (list || []).map((x) => {
+      const paymentState = String(x?.payment?.raw?.state || "").toLowerCase();
+      const receiptUrl = x?.payment?.raw?.receiptUrl || "";
+
+      return {
+        ...x,
+        training: trainingMap[String(x.trainingId)] || null,
+        user: userMap[String(x.userId)] || null,
+
+        // ✅ helpful derived fields for admin UI
+        paymentState,
+        paymentSubmittedAt: x?.payment?.raw?.submittedAt || null,
+        hasReceipt: !!receiptUrl,
+        receiptUrl,
+        payerName: x?.payment?.raw?.payerName || "",
+        payerBank: x?.payment?.raw?.bankName || "",
+        payerReference:
+          x?.payment?.raw?.reference || x?.payment?.reference || "",
+        payerNote: x?.payment?.raw?.note || "",
+      };
+    });
 
     res.json(enriched);
   }),
@@ -261,7 +329,6 @@ router.patch(
 
         const st0 = String(enr.status || "").toLowerCase();
         if (st0 === "approved") {
-          // already approved: do NOT take another seat
           const trainingLean = await TrainingEvent.findById(
             enr.trainingId,
           ).lean();
@@ -270,6 +337,7 @@ router.patch(
             trainingId: enr.trainingId,
             status: "approved",
           }).session(session);
+
           responsePayload = {
             status: 200,
             body: {
@@ -303,7 +371,6 @@ router.patch(
 
         const cap = capacityOf(training);
 
-        // ✅ Re-sync approvedCount from real approvals (safe migration + correctness)
         const currentApproved = await TrainingEnrollment.countDocuments({
           trainingId: training._id,
           status: "approved",
@@ -315,7 +382,6 @@ router.patch(
           { session },
         );
 
-        // ✅ Atomically reserve a seat
         const seatUpdate = await TrainingEvent.collection.findOneAndUpdate(
           { _id: training._id, approvedCount: { $lt: cap } },
           { $inc: { approvedCount: 1 } },
@@ -330,7 +396,6 @@ router.patch(
           return;
         }
 
-        // mark paid + approved
         enr.payment = enr.payment || {};
         enr.payment.paid = true;
         enr.payment.paidAt = new Date();
@@ -345,11 +410,9 @@ router.patch(
         enr.approvedAt = new Date();
         enr.approvedBy = req.user?.email || "admin";
 
-        // ensure installation shape exists
         enr.installation = enr.installation || {};
         enr.installation.status = enr.installation.status || "pending";
 
-        // ✅ grant entitlements NOW (on approval) - once only
         const user = await User.findById(enr.userId).session(session);
         if (!user) {
           responsePayload = { status: 404, body: { error: "User not found" } };
@@ -365,7 +428,6 @@ router.patch(
           await user.save({ session });
         }
 
-        // store flags on enrollment
         enr.installation.entitlementsApplied = true;
         enr.installation.entitlementsAppliedAt = new Date();
         enr.installation.entitlementsAppliedBy = req.user?.email || "admin";
@@ -428,11 +490,6 @@ router.patch(
   }),
 );
 
-/**
- * ✅ Mark installation complete
- * - DOES NOT double-grant entitlements if already granted on approval.
- * - If somehow not granted yet, it will grant once here.
- */
 router.patch(
   "/enrollments/:id/installation-complete",
   asyncHandler(async (req, res) => {

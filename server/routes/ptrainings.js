@@ -110,12 +110,25 @@ router.post(
 
     if (existing) {
       const amt = Number(existing?.payment?.amountNGN ?? pricing.payable ?? 0);
-      const paidMode = amt > 0;
+
+      const status0 = String(existing?.status || "").toLowerCase();
+      const paidAlready = !!existing?.payment?.paid || status0 === "approved";
+
+      const paymentState = String(
+        existing?.payment?.raw?.state || "",
+      ).toLowerCase();
+      const paymentSubmitted = paymentState === "submitted";
+
+      // ✅ Only show payment modal if user still needs to take action
+      const needsManualPaymentAction =
+        amt > 0 && !paidAlready && !paymentSubmitted;
 
       return res.json({
         enrollmentId: String(existing._id),
-        manualPayment: paidMode,
-        paymentInstructions: paidMode ? getPaymentInstructions(amt) : null,
+        manualPayment: needsManualPaymentAction,
+        paymentSubmitted,
+        paymentState,
+        paymentInstructions: amt > 0 ? getPaymentInstructions(amt) : null,
       });
     }
 
@@ -162,6 +175,8 @@ router.post(
     res.json({
       enrollmentId: String(enr._id),
       manualPayment: isPaid,
+      paymentSubmitted: false,
+      paymentState: isPaid ? "pending" : "confirmed",
       paymentInstructions: isPaid
         ? getPaymentInstructions(pricing.payable)
         : null,
@@ -183,6 +198,11 @@ router.post(
 
     if (String(enr.userId) !== String(req.user._id)) {
       return res.status(403).json({ error: "Forbidden" });
+    }
+
+    // ✅ If already approved, just return ok
+    if (String(enr.status || "").toLowerCase() === "approved") {
+      return res.json({ ok: true, enrollmentId: String(enr._id) });
     }
 
     const training = await TrainingEvent.findById(enr.trainingId).lean();
@@ -226,8 +246,10 @@ router.post(
       receiptUrl: receiptUrl || prev.receiptUrl || "",
     };
 
-    // Unlock form after submission (do not override approved)
-    if (enr.status === "payment_pending") enr.status = "form_pending";
+    // ✅ Unlock form after submission (do not override approved)
+    if (String(enr.status || "").toLowerCase() === "payment_pending") {
+      enr.status = "form_pending";
+    }
 
     await enr.save();
     res.json({ ok: true, enrollmentId: String(enr._id) });

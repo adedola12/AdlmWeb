@@ -37,37 +37,24 @@ function prettyKey(k) {
   return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-/**
- * ✅ Map admin-only productKey → user-facing product name + product page route
- * - Adjust routes/slugs here to match your store routing.
- * - If key not found, we fallback to prettyKey and a generic /product/<key> route.
- */
 const PRODUCT_CATALOG = {
-  // Revit
   revit_plugin_building: {
     name: "ADLM Revit Plugin (Architecture & Structure)",
-    to: "/product/revit", // adjust if needed
+    to: "/product/revit",
   },
   revit_plugin_services: {
     name: "ADLM Revit Plugin (MEP & HVAC)",
-    to: "/product/revit-mep", // adjust if needed
+    to: "/product/revit-mep",
   },
-
-  // PlanSwift
   planswift_plugin_building: {
     name: "ADLM PlanSwift Plugin (Building Works & Services)",
     to: "/product/planswift",
   },
   planswift_plugin_civil: {
     name: "ADLM PlanSwift Plugin (Civil Works)",
-    to: "/product/planswift-civil", // adjust if needed
+    to: "/product/planswift-civil",
   },
-
-  // RateGen
-  rategen: {
-    name: "ADLM RateGen",
-    to: "/product/rategen", // adjust if needed
-  },
+  rategen: { name: "ADLM RateGen", to: "/product/rategen" },
 };
 
 function getProductMeta(productKey) {
@@ -271,10 +258,19 @@ export default function PTrainingDetail() {
       const { data } = await apiAuthed.post(`/ptrainings/${id}/enroll`, {});
       if (!data?.enrollmentId) throw new Error("No enrollmentId returned");
 
+      // ✅ If payment already submitted OR not manual payment, go to enrollment page
+      if (
+        data?.paymentSubmitted ||
+        String(data?.paymentState || "").toLowerCase() === "submitted"
+      ) {
+        return nav(`/ptrainings/enrollment/${data.enrollmentId}`);
+      }
+
       if (!data?.manualPayment) {
         return nav(`/ptrainings/enrollment/${data.enrollmentId}`);
       }
 
+      // open manual payment modal
       setEnrollmentId(data.enrollmentId);
       setPayInfo(data.paymentInstructions || null);
       setPayOpen(true);
@@ -305,6 +301,7 @@ export default function PTrainingDetail() {
           receiptUrl,
         },
       );
+
       setPayOpen(false);
       nav(`/ptrainings/enrollment/${enrollmentId}`);
     } catch (e) {
@@ -355,9 +352,8 @@ export default function PTrainingDetail() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-      {/* HERO (no flyer here) */}
+      {/* HERO */}
       <div className="bg-white rounded-2xl border shadow-sm p-4 sm:p-6">
-        {/* Pricing row */}
         <div className="flex flex-wrap gap-2">
           <span
             className={`px-3 py-1 rounded-full text-sm border ${
@@ -450,22 +446,19 @@ export default function PTrainingDetail() {
         </div>
       </div>
 
-      {/* PROGRAM OVERVIEW (Left content, Right flyer) */}
+      {/* PROGRAM OVERVIEW */}
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left: overview content */}
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
           <h2 className="text-xl font-bold">Program Overview</h2>
           <p className="mt-3 text-gray-700 whitespace-pre-wrap">
             {t.fullDescription || t.description || "—"}
           </p>
 
-          {/* Included plugins + duration (product names + click to product page) */}
           {!!includedPlugins.length && (
             <>
               <h3 className="text-lg font-bold mt-6">
                 Included Plugins & Subscription
               </h3>
-
               <div className="mt-3 space-y-2">
                 {includedPlugins.map((p) => (
                   <div
@@ -482,9 +475,8 @@ export default function PTrainingDetail() {
                       </Link>
 
                       <div className="text-xs text-gray-600 mt-1">
-                        {p.months > 0 ? `${p.months} month(s)` : "Duration: —"}
-                        {" • "}
-                        Seats: {p.seats || 1}
+                        {p.months > 0 ? `${p.months} month(s)` : "Duration: —"}{" "}
+                        {" • "} Seats: {p.seats || 1}
                       </div>
                     </div>
 
@@ -529,18 +521,10 @@ export default function PTrainingDetail() {
           )}
         </div>
 
-        {/* Right: flyer (full image, not cropped) */}
+        {/* Right: flyer */}
         <div className="bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-bold">Event Flyer</h3>
-            {/* {flyerImage ? (
-              <button
-                onClick={() => setFlyerOpen(true)}
-                className="text-sm font-semibold px-3 py-2 rounded-xl border hover:bg-gray-50"
-              >
-                View full
-              </button>
-            ) : null} */}
           </div>
 
           <div className="mt-4 rounded-2xl border bg-gray-50 overflow-hidden">
@@ -563,7 +547,6 @@ export default function PTrainingDetail() {
               </div>
             )}
           </div>
-
         </div>
       </div>
 
@@ -634,7 +617,6 @@ export default function PTrainingDetail() {
           )}
         </div>
 
-        {/* optional embed */}
         {t.location?.googleMapsEmbedUrl ? (
           <div className="mt-6 rounded-2xl overflow-hidden border">
             <iframe
@@ -648,7 +630,7 @@ export default function PTrainingDetail() {
         ) : null}
       </div>
 
-      {/* NEXT STEPS (moved under location) */}
+      {/* NEXT STEPS */}
       <div className="mt-6 bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
         <h3 className="text-lg font-bold">Next Steps</h3>
         <div className="mt-3 text-gray-700 text-sm grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -656,19 +638,16 @@ export default function PTrainingDetail() {
             <div className="font-semibold">1) Make Payment</div>
             <div>Click “Register Now” to see ADLM account details.</div>
           </div>
-
           <div className="p-3 rounded-xl bg-gray-50 border">
             <div className="font-semibold">2) Upload Receipt (Optional)</div>
             <div>
               You can upload a transfer receipt image while submitting payment.
             </div>
           </div>
-
           <div className="p-3 rounded-xl bg-gray-50 border">
             <div className="font-semibold">3) Fill Registration Form</div>
             <div>After submitting transfer, complete the participant form.</div>
           </div>
-
           <div className="p-3 rounded-xl bg-gray-50 border">
             <div className="font-semibold">4) Admin Approval</div>
             <div>
