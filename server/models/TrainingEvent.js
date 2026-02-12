@@ -1,5 +1,6 @@
 // server/models/TrainingEvent.js
 import mongoose from "mongoose";
+import { ensureUniqueSlug } from "../utils/slug.js";
 
 const FormFieldSchema = new mongoose.Schema(
   {
@@ -72,12 +73,15 @@ const TrainingEventSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
     subtitle: { type: String, default: "", trim: true },
+
+    // ✅ slug used for public sharing (stable link)
     slug: {
       type: String,
       required: true,
       unique: true,
       index: true,
       trim: true,
+      sparse: true,
     },
 
     description: { type: String, default: "" },
@@ -125,31 +129,41 @@ const TrainingEventSchema = new mongoose.Schema(
     isPublished: { type: Boolean, default: true },
     isFeatured: { type: Boolean, default: false },
     sort: { type: Number, default: 0 },
+
+    // ✅ Optional but useful (your admin approval logic uses this field in Mongo)
+    approvedCount: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true },
 );
 
-TrainingEventSchema.pre("validate", function (next) {
-  try {
-    if (!this.pricing) this.pricing = {};
+// ✅ FIXED: async hook (you had await inside non-async)
+TrainingEventSchema.pre("validate", async function () {
+  // normalize pricing
+  if (!this.pricing) this.pricing = {};
 
-    const legacy = Number(this.priceNGN || 0) || 0;
-    const normal =
-      this.pricing?.normalNGN == null ? null : Number(this.pricing.normalNGN);
+  const legacy = Number(this.priceNGN || 0) || 0;
+  const normal =
+    this.pricing?.normalNGN == null ? null : Number(this.pricing.normalNGN);
 
-    if (normal == null || Number.isNaN(normal)) {
-      this.pricing.normalNGN = legacy;
-    }
+  if (normal == null || Number.isNaN(normal)) {
+    this.pricing.normalNGN = legacy;
+  }
 
-    this.priceNGN = Number(this.pricing.normalNGN || 0) || 0;
+  this.priceNGN = Number(this.pricing.normalNGN || 0) || 0;
 
-    if (!this.pricing.earlyBird) this.pricing.earlyBird = {};
-    const ebPrice = Number(this.pricing.earlyBird.priceNGN || 0) || 0;
-    this.pricing.earlyBird.priceNGN = ebPrice;
+  if (!this.pricing.earlyBird) this.pricing.earlyBird = {};
+  const ebPrice = Number(this.pricing.earlyBird.priceNGN || 0) || 0;
+  this.pricing.earlyBird.priceNGN = ebPrice;
 
-    next();
-  } catch (e) {
-    next(e);
+  // normalize slug
+  if (this.slug) {
+    this.slug = String(this.slug).trim().toLowerCase();
+  }
+
+  // auto-generate slug if missing (keeps existing slugs unchanged)
+  if (!this.slug && this.title) {
+    await ensureUniqueSlug(this.constructor, this, this.title);
+    if (this.slug) this.slug = String(this.slug).trim().toLowerCase();
   }
 });
 
