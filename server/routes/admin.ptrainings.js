@@ -12,34 +12,90 @@ router.use(requireAuth, requireAdmin);
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
-function addMonthsToEntitlement(userDoc, productKey, monthsToAdd, seats = 1) {
-  if (!userDoc || !productKey) return;
-  const m = Math.max(Number(monthsToAdd || 0), 0);
-  if (!m) return;
+const normKey = (k) =>
+  String(k || "")
+    .trim()
+    .toLowerCase();
+
+/**
+ * ✅ Upsert entitlements using the SAME shape as User.entitlements schema
+ * Applies months by extending expiresAt.
+ */
+function addMonthsToEntitlement(
+  userDoc,
+  {
+    productKey,
+    months = 1,
+    seats = 1,
+    licenseType = "personal",
+    organizationName = "",
+  },
+) {
+  const pk = normKey(productKey);
+  if (!userDoc || !pk) return;
+
+  const m = Math.max(Number(months || 0), 0);
+  // If months is 0, we still activate entitlement (no expiry change).
+  const nextSeats = Math.max(Number(seats || 1), 1);
+  const lt = licenseType === "organization" ? "organization" : "personal";
+  const org =
+    lt === "organization" ? String(organizationName || "").trim() : "";
 
   userDoc.entitlements = userDoc.entitlements || [];
   const now = dayjs();
 
-  let ent = userDoc.entitlements.find((e) => e.productKey === productKey);
+  let ent = userDoc.entitlements.find((e) => normKey(e.productKey) === pk);
+
   if (!ent) {
     userDoc.entitlements.push({
-      productKey,
+      productKey: pk,
       status: "active",
-      seats: Math.max(Number(seats || 1), 1),
-      expiresAt: now.add(m, "month").toDate(),
+      seats: nextSeats,
       devices: [],
+      licenseType: lt,
+      organizationName: org,
+      expiresAt: m ? now.add(m, "month").toDate() : now.toDate(),
     });
   } else {
-    const base =
-      ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
-        ? dayjs(ent.expiresAt)
-        : now;
+    // extend expiry from the later of now or current expiry
+    if (m) {
+      const base =
+        ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
+          ? dayjs(ent.expiresAt)
+          : now;
+      ent.expiresAt = base.add(m, "month").toDate();
+    } else {
+      // keep expiresAt as-is if months==0
+      ent.expiresAt = ent.expiresAt || now.toDate();
+    }
+
     ent.status = "active";
-    ent.expiresAt = base.add(m, "month").toDate();
-    ent.seats = Math.max(Number(ent.seats || 1), Number(seats || 1), 1);
+    ent.seats = Math.max(Number(ent.seats || 1), nextSeats, 1);
+
+    // keep license metadata in sync
+    ent.licenseType = lt;
+    ent.organizationName = org;
   }
 
   userDoc.refreshVersion = (userDoc.refreshVersion || 0) + 1;
+}
+
+function applyTrainingGrantsToUser(userDoc, training) {
+  const grants = Array.isArray(training?.entitlementGrants)
+    ? training.entitlementGrants
+    : [];
+
+  for (const g of grants) {
+    addMonthsToEntitlement(userDoc, {
+      productKey: g?.productKey,
+      months: g?.months,
+      seats: g?.seats,
+      licenseType: g?.licenseType,
+      organizationName: g?.organizationName,
+    });
+  }
+
+  return grants;
 }
 
 /* -------------------- EVENTS CRUD -------------------- */
@@ -94,10 +150,7 @@ router.get(
       .limit(500)
       .lean();
 
-    // attach training (so admin UI can see basic info if you want later)
-    const ids = [...new Set((list || []).map((x) => String(x.trainingId)))].map(
-      (x) => x,
-    );
+    const ids = [...new Set((list || []).map((x) => String(x.trainingId)))];
     const trainings = await TrainingEvent.find({ _id: { $in: ids } })
       .select(
         "title startAt endAt priceNGN capacityApproved entitlementGrants installationChecklist",
@@ -107,6 +160,7 @@ router.get(
     const map = Object.fromEntries(
       (trainings || []).map((t) => [String(t._id), t]),
     );
+
     const enriched = (list || []).map((x) => ({
       ...x,
       training: map[String(x.trainingId)] || null,
@@ -118,8 +172,7 @@ router.get(
 
 /**
  * ✅ Approve enrollment (admin confirms payment & slot)
- * - sets payment.paid=true
- * - sets status="approved"
+ * ✅ ALSO: grant entitlements immediately on approval
  */
 router.patch(
   "/enrollments/:id/approve",
@@ -141,6 +194,7 @@ router.patch(
         .json({ error: "Cannot approve: capacity reached." });
     }
 
+    // mark paid + approved
     enr.payment = enr.payment || {};
     enr.payment.paid = true;
     enr.payment.paidAt = new Date();
@@ -155,12 +209,30 @@ router.patch(
     enr.approvedAt = new Date();
     enr.approvedBy = req.user?.email || "admin";
 
-    // keep installation shape consistent
+    // ensure installation shape exists
     enr.installation = enr.installation || {};
     enr.installation.status = enr.installation.status || "pending";
 
+    // ✅ grant entitlements NOW (on approval)
+    const user = await User.findById(enr.userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const grantsApplied = applyTrainingGrantsToUser(user, training);
+    await user.save();
+
+    // store flags on enrollment (reuse existing fields you already set in install route)
+    enr.installation.entitlementsApplied = true;
+    enr.installation.entitlementsAppliedAt = new Date();
+    enr.installation.entitlementsAppliedBy = req.user?.email || "admin";
+
     await enr.save();
-    res.json({ ok: true, enrollment: enr });
+
+    res.json({
+      ok: true,
+      enrollment: enr,
+      grantsApplied,
+      message: "Enrollment approved and entitlements granted.",
+    });
   }),
 );
 
@@ -180,7 +252,9 @@ router.patch(
 );
 
 /**
- * ✅ Mark installation complete + grant entitlements (if configured on training)
+ * ✅ Mark installation complete
+ * - DOES NOT double-grant entitlements if already granted on approval.
+ * - If somehow not granted yet, it will grant once here.
  */
 router.patch(
   "/enrollments/:id/installation-complete",
@@ -194,32 +268,37 @@ router.patch(
     const user = await User.findById(enr.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    const grants = Array.isArray(training.entitlementGrants)
-      ? training.entitlementGrants
-      : [];
-
-    for (const g of grants) {
-      const productKey = String(g?.productKey || "").trim();
-      const months = Number(g?.months || 0);
-      const seats = Number(g?.seats || 1);
-      addMonthsToEntitlement(user, productKey, months, seats);
-    }
-    await user.save();
-
     enr.installation = enr.installation || {};
+
+    let grantsApplied = [];
+    const alreadyApplied = !!enr.installation.entitlementsApplied;
+
+    if (!alreadyApplied) {
+      grantsApplied = applyTrainingGrantsToUser(user, training);
+      await user.save();
+
+      enr.installation.entitlementsApplied = true;
+      enr.installation.entitlementsAppliedAt = new Date();
+      enr.installation.entitlementsAppliedBy = req.user?.email || "admin";
+    } else {
+      grantsApplied = Array.isArray(training?.entitlementGrants)
+        ? training.entitlementGrants
+        : [];
+    }
+
     enr.installation.status = "complete";
     enr.installation.completedAt = new Date();
     enr.installation.completedBy = req.user?.email || "admin";
-    enr.installation.entitlementsApplied = true;
-    enr.installation.entitlementsAppliedAt = new Date();
 
     await enr.save();
 
     res.json({
       ok: true,
       enrollment: enr,
-      grantsApplied: grants,
-      message: "Installation complete and entitlements granted.",
+      grantsApplied,
+      message: alreadyApplied
+        ? "Installation marked complete. (Entitlements were already granted on approval.)"
+        : "Installation complete and entitlements granted.",
     });
   }),
 );

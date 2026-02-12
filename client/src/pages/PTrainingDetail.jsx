@@ -1,6 +1,6 @@
 // src/pages/PTrainingDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { API_BASE } from "../config";
@@ -13,9 +13,68 @@ function fmtDate(d) {
   }
 }
 
-function mapsDirLink(address) {
+function money(n) {
+  const x = Number(n || 0);
+  if (!x) return "₦0";
+  return `₦${x.toLocaleString()}`;
+}
+
+function mapsLink(address, placeUrl) {
+  if (placeUrl) return placeUrl;
   const dest = encodeURIComponent(address || "");
   return `https://www.google.com/maps/dir/?api=1&origin=Current+Location&destination=${dest}`;
+}
+
+function normKey(k) {
+  return String(k || "")
+    .trim()
+    .toLowerCase();
+}
+
+function prettyKey(k) {
+  const s = String(k || "").trim();
+  if (!s) return "—";
+  return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+/**
+ * ✅ Map admin-only productKey → user-facing product name + product page route
+ * - Adjust routes/slugs here to match your store routing.
+ * - If key not found, we fallback to prettyKey and a generic /product/<key> route.
+ */
+const PRODUCT_CATALOG = {
+  // Revit
+  revit_plugin_building: {
+    name: "ADLM Revit Plugin (Architecture & Structure)",
+    to: "/product/revit", // adjust if needed
+  },
+  revit_plugin_services: {
+    name: "ADLM Revit Plugin (MEP & HVAC)",
+    to: "/product/revit-mep", // adjust if needed
+  },
+
+  // PlanSwift
+  planswift_plugin_building: {
+    name: "ADLM PlanSwift Plugin (Building Works & Services)",
+    to: "/product/planswift",
+  },
+  planswift_plugin_civil: {
+    name: "ADLM PlanSwift Plugin (Civil Works)",
+    to: "/product/planswift-civil", // adjust if needed
+  },
+
+  // RateGen
+  rategen: {
+    name: "ADLM RateGen",
+    to: "/product/rategen", // adjust if needed
+  },
+};
+
+function getProductMeta(productKey) {
+  const k = normKey(productKey);
+  const meta = PRODUCT_CATALOG[k];
+  if (meta?.name && meta?.to) return meta;
+  return { name: prettyKey(productKey), to: `/product/${k}` };
 }
 
 function CopyRow({ label, value }) {
@@ -43,6 +102,30 @@ function CopyRow({ label, value }) {
   );
 }
 
+async function uploadReceiptToCloudinary(file) {
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const preset =
+    import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET_RECEIPT ||
+    import.meta.env.VITE_CLOUDINARY_UNSIGNED_UPLOAD_PRESET;
+
+  if (!cloudName || !preset) {
+    throw new Error(
+      "Receipt upload is not configured. Set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UNSIGNED_PRESET_RECEIPT.",
+    );
+  }
+
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("upload_preset", preset);
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+  const r = await fetch(endpoint, { method: "POST", body: fd });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error?.message || "Upload failed");
+  if (!j?.secure_url) throw new Error("Upload failed (no URL returned)");
+  return j.secure_url;
+}
+
 export default function PTrainingDetail() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -54,7 +137,7 @@ export default function PTrainingDetail() {
 
   const [busy, setBusy] = useState(false);
 
-  // modal state
+  // payment modal state
   const [payOpen, setPayOpen] = useState(false);
   const [payInfo, setPayInfo] = useState(null);
   const [enrollmentId, setEnrollmentId] = useState("");
@@ -63,18 +146,26 @@ export default function PTrainingDetail() {
   const [bankName, setBankName] = useState("");
   const [reference, setReference] = useState("");
 
+  // receipt upload state (optional)
+  const [receiptUrl, setReceiptUrl] = useState("");
+  const [receiptUploading, setReceiptUploading] = useState(false);
+
+  // venue gallery modal
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryIdx, setGalleryIdx] = useState(0);
+
+  // flyer lightbox
+  const [flyerOpen, setFlyerOpen] = useState(false);
+
   useEffect(() => {
     let ok = true;
     (async () => {
       setLoading(true);
       setErr("");
       try {
-        // ✅ FIX: public detail is /ptrainings/events/:id
         const r = await fetch(
           `${API_BASE}/ptrainings/events/${encodeURIComponent(id)}`,
-          {
-            credentials: "include",
-          },
+          { credentials: "include" },
         );
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error || "Failed");
@@ -95,25 +186,104 @@ export default function PTrainingDetail() {
       .join(", ");
   }, [t]);
 
+  const venuePhotos = useMemo(() => {
+    const p = t?.location?.photos || [];
+    return Array.isArray(p)
+      ? p.filter((x) => x?.type === "image" && x?.url)
+      : [];
+  }, [t]);
+
+  const flyerImage = useMemo(() => {
+    if (t?.flyerUrl) return t.flyerUrl;
+    const firstMediaImg = (t?.media || []).find(
+      (m) => m?.type === "image" && m?.url,
+    );
+    return firstMediaImg?.url || "";
+  }, [t]);
+
+  const pricingRow = useMemo(() => {
+    const pricing = t?.pricing || {};
+    const normal = Number(pricing?.normalNGN ?? t?.priceNGN ?? 0) || 0;
+    const group = Number(pricing?.groupOf3NGN ?? 0) || 0;
+    const eb = Number(pricing?.earlyBird?.priceNGN ?? 0) || 0;
+    const ebEndsAt = pricing?.earlyBird?.endsAt
+      ? new Date(pricing.earlyBird.endsAt)
+      : null;
+
+    const ebActive =
+      eb > 0 &&
+      ebEndsAt &&
+      !Number.isNaN(ebEndsAt.getTime()) &&
+      Date.now() < ebEndsAt.getTime();
+
+    const payable = ebActive ? eb : normal;
+
+    return { normal, group, eb, ebEndsAt, ebActive, payable };
+  }, [t]);
+
+  const includedPlugins = useMemo(() => {
+    const grants = Array.isArray(t?.entitlementGrants)
+      ? t.entitlementGrants
+      : [];
+
+    if (grants.length) {
+      return grants
+        .map((g) => {
+          const productKey = normKey(g?.productKey);
+          if (!productKey) return null;
+          const meta = getProductMeta(productKey);
+          return {
+            productKey,
+            name: meta.name,
+            to: meta.to,
+            months: Math.max(Number(g?.months || 0), 0),
+            seats: Math.max(Number(g?.seats || 1), 1),
+          };
+        })
+        .filter(Boolean);
+    }
+
+    const keys = Array.isArray(t?.softwareProductKeys)
+      ? t.softwareProductKeys
+      : [];
+    return keys
+      .map((k) => {
+        const productKey = normKey(k);
+        if (!productKey) return null;
+        const meta = getProductMeta(productKey);
+        return {
+          productKey,
+          name: meta.name,
+          to: meta.to,
+          months: 0,
+          seats: 1,
+        };
+      })
+      .filter(Boolean);
+  }, [t]);
+
   async function onRegister() {
     if (!user) return nav("/login");
 
     setBusy(true);
     setErr("");
     try {
-      // ✅ backend route added below: POST /ptrainings/:id/enroll
       const { data } = await apiAuthed.post(`/ptrainings/${id}/enroll`, {});
       if (!data?.enrollmentId) throw new Error("No enrollmentId returned");
 
-      // FREE training -> go straight to portal
       if (!data?.manualPayment) {
         return nav(`/ptrainings/enrollment/${data.enrollmentId}`);
       }
 
-      // PAID -> show manual payment popup
       setEnrollmentId(data.enrollmentId);
       setPayInfo(data.paymentInstructions || null);
       setPayOpen(true);
+
+      setReceiptUrl("");
+      setPayNote("");
+      setPayerName("");
+      setBankName("");
+      setReference("");
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || "Failed");
     } finally {
@@ -123,11 +293,17 @@ export default function PTrainingDetail() {
 
   async function confirmPaymentSubmission() {
     if (!enrollmentId) return;
+
     try {
-      // ✅ backend route added below
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
-        { note: payNote, payerName, bankName, reference },
+        {
+          note: payNote,
+          payerName,
+          bankName,
+          reference,
+          receiptUrl,
+        },
       );
       setPayOpen(false);
       nav(`/ptrainings/enrollment/${enrollmentId}`);
@@ -136,52 +312,123 @@ export default function PTrainingDetail() {
     }
   }
 
-  if (loading) return <div className="p-6">Loading…</div>;
-  if (err) return <div className="p-6 text-red-600">{err}</div>;
-  if (!t) return <div className="p-6">Not found</div>;
+  async function onPickReceipt(file) {
+    if (!file) return;
+    setReceiptUploading(true);
+    try {
+      const url = await uploadReceiptToCloudinary(file);
+      setReceiptUrl(url);
+    } catch (e) {
+      alert(e?.message || "Receipt upload failed");
+    } finally {
+      setReceiptUploading(false);
+    }
+  }
+
+  function openGalleryAt(i) {
+    setGalleryIdx(i);
+    setGalleryOpen(true);
+  }
+
+  function nextImg() {
+    setGalleryIdx((p) => {
+      const n = venuePhotos.length || 1;
+      return (p + 1) % n;
+    });
+  }
+
+  function prevImg() {
+    setGalleryIdx((p) => {
+      const n = venuePhotos.length || 1;
+      return (p - 1 + n) % n;
+    });
+  }
+
+  if (loading) return <div className="p-4 sm:p-6">Loading…</div>;
+  if (err) return <div className="p-4 sm:p-6 text-red-600">{err}</div>;
+  if (!t) return <div className="p-4 sm:p-6">Not found</div>;
 
   const cap = t.capacityApproved || 14;
   const approved = t.approvedCount || 0;
   const closed = approved >= cap;
+  const mapsHref = mapsLink(address, t.location?.googleMapsPlaceUrl);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">{t.title}</h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      {/* HERO (no flyer here) */}
+      <div className="bg-white rounded-2xl border shadow-sm p-4 sm:p-6">
+        {/* Pricing row */}
+        <div className="flex flex-wrap gap-2">
+          <span
+            className={`px-3 py-1 rounded-full text-sm border ${
+              pricingRow.ebActive ? "bg-green-50 border-green-200" : "bg-white"
+            }`}
+          >
+            <b>Earlybird:</b> {money(pricingRow.eb)}
+            {pricingRow.ebEndsAt ? (
+              <span className="text-gray-500">
+                {" "}
+                • ends {fmtDate(pricingRow.ebEndsAt)}
+              </span>
+            ) : null}
+          </span>
+
+          <span
+            className={`px-3 py-1 rounded-full text-sm border ${
+              !pricingRow.ebActive ? "bg-green-50 border-green-200" : "bg-white"
+            }`}
+          >
+            <b>Normal:</b> {money(pricingRow.normal)}
+          </span>
+
+          <span className="px-3 py-1 rounded-full text-sm border bg-white">
+            <b>Group of 3:</b> {money(pricingRow.group)}
+          </span>
+        </div>
+
+        <div className="mt-4">
+          <h1 className="text-2xl sm:text-3xl font-bold leading-tight">
+            {t.title}
+          </h1>
           {t.subtitle ? (
             <p className="text-gray-600 mt-1">{t.subtitle}</p>
           ) : null}
+        </div>
 
-          <div className="mt-3 text-sm text-gray-700 space-y-1">
-            <div>
-              <span className="font-semibold">Date:</span> {fmtDate(t.startAt)}{" "}
-              — {fmtDate(t.endAt)}
-            </div>
+        <div className="mt-4 text-sm text-gray-700 space-y-2">
+          <div>
+            <span className="font-semibold">Date:</span> {fmtDate(t.startAt)} —{" "}
+            {fmtDate(t.endAt)}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
             <div>
               <span className="font-semibold">Capacity:</span> {approved}/{cap}{" "}
-              approved{" "}
-              {closed ? (
-                <span className="ml-2 inline-flex px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs">
-                  Enrollment Closed
-                </span>
-              ) : (
-                <span className="ml-2 inline-flex px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
-                  Open
-                </span>
-              )}
+              approved
             </div>
-            <div>
-              <span className="font-semibold">Fee:</span>{" "}
-              {Number(t.priceNGN || 0) <= 0
-                ? "Free"
-                : `₦${Number(t.priceNGN).toLocaleString()}`}
-            </div>
+            {closed ? (
+              <span className="inline-flex px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs">
+                Enrollment Closed
+              </span>
+            ) : (
+              <span className="inline-flex px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
+                Open
+              </span>
+            )}
+          </div>
+
+          <div>
+            <span className="font-semibold">Payable now:</span>{" "}
+            {pricingRow.payable <= 0 ? "Free" : money(pricingRow.payable)}
+            {pricingRow.ebActive ? (
+              <span className="ml-2 text-xs text-green-700 font-semibold">
+                (Earlybird active)
+              </span>
+            ) : null}
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:gap-3">
           <button
             onClick={onRegister}
             disabled={busy || closed}
@@ -196,20 +443,62 @@ export default function PTrainingDetail() {
 
           <a
             href="#location"
-            className="px-4 py-2 rounded-xl font-semibold border border-gray-300 hover:bg-gray-50"
+            className="px-4 py-2 rounded-xl font-semibold border border-gray-300 hover:bg-gray-50 text-center"
           >
             View Location
           </a>
         </div>
       </div>
 
-      {/* Description */}
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border p-6">
+      {/* PROGRAM OVERVIEW (Left content, Right flyer) */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Left: overview content */}
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
           <h2 className="text-xl font-bold">Program Overview</h2>
           <p className="mt-3 text-gray-700 whitespace-pre-wrap">
             {t.fullDescription || t.description || "—"}
           </p>
+
+          {/* Included plugins + duration (product names + click to product page) */}
+          {!!includedPlugins.length && (
+            <>
+              <h3 className="text-lg font-bold mt-6">
+                Included Plugins & Subscription
+              </h3>
+
+              <div className="mt-3 space-y-2">
+                {includedPlugins.map((p) => (
+                  <div
+                    key={p.productKey}
+                    className="p-3 rounded-xl border bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <Link
+                        to={p.to}
+                        className="font-semibold text-blue-700 hover:underline break-words"
+                        title="Open product page"
+                      >
+                        {p.name}
+                      </Link>
+
+                      <div className="text-xs text-gray-600 mt-1">
+                        {p.months > 0 ? `${p.months} month(s)` : "Duration: —"}
+                        {" • "}
+                        Seats: {p.seats || 1}
+                      </div>
+                    </div>
+
+                    <Link
+                      to={p.to}
+                      className="text-sm font-semibold px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 w-fit"
+                    >
+                      Learn more →
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           {!!(t.whatYouGet || []).length && (
             <>
@@ -217,7 +506,7 @@ export default function PTrainingDetail() {
               <ul className="mt-3 space-y-2">
                 {t.whatYouGet.map((x, i) => (
                   <li key={i} className="flex gap-2">
-                    <span className="mt-1 h-2 w-2 rounded-full bg-blue-600" />
+                    <span className="mt-1 h-2 w-2 rounded-full bg-blue-600 shrink-0" />
                     <span className="text-gray-700">{x}</span>
                   </li>
                 ))}
@@ -231,7 +520,7 @@ export default function PTrainingDetail() {
               <ul className="mt-3 space-y-2">
                 {t.requirements.map((x, i) => (
                   <li key={i} className="flex gap-2">
-                    <span className="mt-1 h-2 w-2 rounded-full bg-gray-500" />
+                    <span className="mt-1 h-2 w-2 rounded-full bg-gray-500 shrink-0" />
                     <span className="text-gray-700">{x}</span>
                   </li>
                 ))}
@@ -240,50 +529,53 @@ export default function PTrainingDetail() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border p-6">
-          <h3 className="text-lg font-bold">Next Steps</h3>
-          <div className="mt-3 text-gray-700 text-sm space-y-3">
-            <div className="p-3 rounded-xl bg-gray-50 border">
-              <div className="font-semibold">1) Make Payment</div>
-              <div>Click “Register Now” to see ADLM account details.</div>
-            </div>
-            <div className="p-3 rounded-xl bg-gray-50 border">
-              <div className="font-semibold">2) Fill Registration Form</div>
-              <div>
-                After you confirm transfer, complete your participant form.
-              </div>
-            </div>
-            <div className="p-3 rounded-xl bg-gray-50 border">
-              <div className="font-semibold">
-                3) Admin Approval & Installation
-              </div>
-              <div>
-                Admin confirms your payment, approves your slot, and completes
-                installation.
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <Link
-                to="/dashboard"
-                className="text-blue-600 hover:underline font-semibold"
+        {/* Right: flyer (full image, not cropped) */}
+        <div className="bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-bold">Event Flyer</h3>
+            {/* {flyerImage ? (
+              <button
+                onClick={() => setFlyerOpen(true)}
+                className="text-sm font-semibold px-3 py-2 rounded-xl border hover:bg-gray-50"
               >
-                Go to Dashboard →
-              </Link>
-            </div>
+                View full
+              </button>
+            ) : null} */}
           </div>
+
+          <div className="mt-4 rounded-2xl border bg-gray-50 overflow-hidden">
+            {flyerImage ? (
+              <button
+                type="button"
+                onClick={() => setFlyerOpen(true)}
+                className="w-full"
+                title="Click to view full flyer"
+              >
+                <img
+                  src={flyerImage}
+                  alt="Training flyer"
+                  className="w-full h-auto object-contain bg-white"
+                />
+              </button>
+            ) : (
+              <div className="h-40 grid place-items-center text-gray-500">
+                No flyer image
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
-      {/* Location */}
+      {/* LOCATION */}
       <div
         id="location"
-        className="mt-10 bg-white rounded-2xl shadow-sm border p-6"
+        className="mt-6 bg-white rounded-2xl shadow-sm border p-4 sm:p-6"
       >
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-xl font-bold">Training Location</h2>
-            <p className="mt-2 text-gray-700">{address || "—"}</p>
+            <p className="mt-2 text-gray-700 break-words">{address || "—"}</p>
 
             {!!(t.location?.amenities || []).length && (
               <div className="mt-4">
@@ -302,33 +594,165 @@ export default function PTrainingDetail() {
             )}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex">
             <a
-              href={t.location?.googleMapsPlaceUrl || mapsDirLink(address)}
+              href={mapsHref}
               target="_blank"
               rel="noreferrer"
-              className="px-4 py-2 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700"
+              className="px-4 py-2 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700 text-center w-full sm:w-auto"
             >
               Open in Google Maps
             </a>
-            <a
-              href={mapsDirLink(address)}
-              target="_blank"
-              rel="noreferrer"
-              className="px-4 py-2 rounded-xl font-semibold border border-gray-300 hover:bg-gray-50"
-            >
-              Directions
-            </a>
+          </div>
+        </div>
+
+        {/* Venue gallery */}
+        <div className="mt-6">
+          <div className="font-semibold">Venue Gallery</div>
+          {venuePhotos.length ? (
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {venuePhotos.map((p, i) => (
+                <button
+                  key={p.url + i}
+                  type="button"
+                  onClick={() => openGalleryAt(i)}
+                  className="rounded-2xl border overflow-hidden hover:opacity-90 bg-black"
+                  title={p.title || "View"}
+                >
+                  <img
+                    src={p.url}
+                    alt={p.title || "Venue"}
+                    className="w-full h-28 object-cover bg-white"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 text-sm text-gray-600">
+              No venue photos yet.
+            </div>
+          )}
+        </div>
+
+        {/* optional embed */}
+        {t.location?.googleMapsEmbedUrl ? (
+          <div className="mt-6 rounded-2xl overflow-hidden border">
+            <iframe
+              title="Google Maps"
+              src={t.location.googleMapsEmbedUrl}
+              className="w-full h-72 sm:h-80"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {/* NEXT STEPS (moved under location) */}
+      <div className="mt-6 bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
+        <h3 className="text-lg font-bold">Next Steps</h3>
+        <div className="mt-3 text-gray-700 text-sm grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="p-3 rounded-xl bg-gray-50 border">
+            <div className="font-semibold">1) Make Payment</div>
+            <div>Click “Register Now” to see ADLM account details.</div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-gray-50 border">
+            <div className="font-semibold">2) Upload Receipt (Optional)</div>
+            <div>
+              You can upload a transfer receipt image while submitting payment.
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-gray-50 border">
+            <div className="font-semibold">3) Fill Registration Form</div>
+            <div>After submitting transfer, complete the participant form.</div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-gray-50 border">
+            <div className="font-semibold">4) Admin Approval</div>
+            <div>
+              Admin confirms your payment, approves your slot and activates your
+              tool access.
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ✅ Manual payment popup */}
+      {/* Venue Lightbox */}
+      {galleryOpen && venuePhotos.length ? (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl bg-white rounded-2xl overflow-hidden border shadow-lg">
+            <div className="flex items-center justify-between p-3 border-b">
+              <div className="font-semibold truncate">
+                {venuePhotos[galleryIdx]?.title || "Venue Photo"}
+              </div>
+              <button
+                onClick={() => setGalleryOpen(false)}
+                className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="relative bg-black">
+              <img
+                src={venuePhotos[galleryIdx]?.url}
+                alt="Venue"
+                className="w-full max-h-[70vh] object-contain"
+              />
+
+              {venuePhotos.length > 1 ? (
+                <>
+                  <button
+                    onClick={prevImg}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl bg-white/90 border font-semibold hover:bg-white"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={nextImg}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl bg-white/90 border font-semibold hover:bg-white"
+                  >
+                    Next
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Flyer Lightbox */}
+      {flyerOpen && flyerImage ? (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl bg-white rounded-2xl overflow-hidden border shadow-lg">
+            <div className="flex items-center justify-between p-3 border-b">
+              <div className="font-semibold truncate">Event Flyer</div>
+              <button
+                onClick={() => setFlyerOpen(false)}
+                className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="bg-black">
+              <img
+                src={flyerImage}
+                alt="Training flyer"
+                className="w-full max-h-[80vh] object-contain bg-black"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Manual payment popup */}
       {payOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-xl bg-white rounded-2xl shadow-lg border p-6">
+          <div className="w-full max-w-xl bg-white rounded-2xl shadow-lg border p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <div className="text-xl font-bold">ADLM Payment Details</div>
                 <div className="text-sm text-gray-600 mt-1">
                   Make a transfer and click <b>I’ve Paid / Continue</b>.
@@ -345,13 +769,7 @@ export default function PTrainingDetail() {
             <div className="mt-4 space-y-3">
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
                 <div className="text-sm text-blue-700">
-                  Amount:{" "}
-                  <b>
-                    ₦
-                    {Number(
-                      payInfo?.amountNGN || t.priceNGN || 0,
-                    ).toLocaleString()}
-                  </b>
+                  Amount: <b>{money(Number(payInfo?.amountNGN || 0))}</b>
                 </div>
               </div>
 
@@ -369,6 +787,54 @@ export default function PTrainingDetail() {
                   ) : null}
                 </div>
               ) : null}
+
+              {/* Optional Receipt Upload */}
+              <div className="p-3 rounded-xl border bg-gray-50">
+                <div className="font-semibold">
+                  Upload Payment Receipt (Optional)
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  If configured, you can upload a screenshot/photo of the
+                  transfer.
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <label className="px-3 py-2 rounded-xl bg-white border font-semibold hover:bg-gray-100 cursor-pointer">
+                    {receiptUploading ? "Uploading…" : "Choose Image"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={receiptUploading}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!f) return;
+                        onPickReceipt(f);
+                      }}
+                    />
+                  </label>
+
+                  {receiptUrl ? (
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-xl border font-semibold hover:bg-white"
+                      onClick={() => setReceiptUrl("")}
+                      disabled={receiptUploading}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+
+                {receiptUrl ? (
+                  <img
+                    src={receiptUrl}
+                    alt="Receipt"
+                    className="mt-3 w-full max-h-56 object-contain rounded-2xl border bg-white"
+                  />
+                ) : null}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input
@@ -400,7 +866,8 @@ export default function PTrainingDetail() {
 
               <button
                 onClick={confirmPaymentSubmission}
-                className="w-full px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                className="w-full px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+                disabled={receiptUploading}
               >
                 I’ve Paid / Continue
               </button>

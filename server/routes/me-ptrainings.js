@@ -1,5 +1,6 @@
 // server/routes/me-ptrainings.js
 import express from "express";
+import dayjs from "dayjs";
 import { requireAuth } from "../middleware/auth.js";
 import { TrainingEvent } from "../models/TrainingEvent.js";
 import { TrainingEnrollment } from "../models/TrainingEnrollment.js";
@@ -24,6 +25,26 @@ function getPaymentInstructions(amountNGN) {
     whatsapp: process.env.ADLMPAY_WHATSAPP || "",
     supportEmail: process.env.ADLMPAY_SUPPORT_EMAIL || "",
   };
+}
+
+function resolveTrainingFeeNGN(training) {
+  const legacy = Number(training?.priceNGN || 0) || 0;
+  const normal = Number(training?.pricing?.normalNGN ?? legacy ?? 0) || 0;
+
+  const ebPrice = Number(training?.pricing?.earlyBird?.priceNGN || 0) || 0;
+  const ebEndsAt = training?.pricing?.earlyBird?.endsAt
+    ? new Date(training.pricing.earlyBird.endsAt)
+    : null;
+
+  const now = new Date();
+  const earlybirdActive =
+    ebPrice > 0 &&
+    ebEndsAt &&
+    !Number.isNaN(ebEndsAt.getTime()) &&
+    now < ebEndsAt;
+
+  if (earlybirdActive) return ebPrice;
+  return normal;
 }
 
 function escapeICS(s) {
@@ -63,10 +84,12 @@ router.get(
     const training = await TrainingEvent.findById(enr.trainingId).lean();
     if (!training) return res.status(404).json({ error: "Training not found" });
 
+    // Use stored amount first, fallback to resolved fee
+    const amount =
+      Number(enr?.payment?.amountNGN ?? 0) || resolveTrainingFeeNGN(training);
+
     const paymentInstructions =
-      Number(training.priceNGN || 0) > 0
-        ? getPaymentInstructions(training.priceNGN)
-        : null;
+      amount > 0 ? getPaymentInstructions(amount) : null;
 
     res.json({ ...enr, training, paymentInstructions });
   }),
