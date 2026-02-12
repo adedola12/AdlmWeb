@@ -713,22 +713,34 @@ export default function Admin() {
     return sorted;
   }, [users, q]);
 
-  async function approveTrainingEnrollment(enrollmentId) {
-    setMsg("");
-    try {
-      const res = await apiAuthed(
-        `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
-        {
-          token: accessToken,
-          method: "PATCH",
-        },
-      );
-      await load();
-      setMsg(res?.message || "Training enrollment approved");
-    } catch (e) {
-      setMsg(e?.message || "Failed to approve training enrollment");
+async function approveTrainingEnrollment(enrollmentId) {
+  setMsg("");
+  try {
+    const res = await apiAuthed(
+      `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
+      {
+        token: accessToken,
+        method: "PATCH",
+      },
+    );
+
+    await load();
+    setMsg(res?.message || "Training enrollment approved");
+  } catch (e) {
+    const serverError =
+      e?.data?.error || e?.response?.data?.error || e?.error || "";
+
+    // Friendly message for capacity conflict
+    if (e?.status === 409 || String(e?.message || "").includes("409")) {
+      setMsg(serverError || "Cannot approve: capacity reached.");
+      return;
     }
+
+    setMsg(
+      serverError || e?.message || "Failed to approve training enrollment",
+    );
   }
+}
 
   async function rejectTrainingEnrollment(enrollmentId) {
     setMsg("");
@@ -1297,16 +1309,26 @@ export default function Admin() {
                         ? dayjs(t.startAt).format("YYYY-MM-DD")
                         : "—";
                       const status = String(t?.status || "open").toLowerCase();
+                      const selected =
+                        String(ptTrainingFilter) === String(t._id);
 
                       return (
-                        <button
+                        <div
                           key={t._id}
-                          className={`w-full text-left border rounded p-3 hover:bg-slate-50 ${
-                            String(ptTrainingFilter) === String(t._id)
+                          role="button"
+                          tabIndex={0}
+                          className={`w-full text-left border rounded p-3 hover:bg-slate-50 cursor-pointer ${
+                            selected
                               ? "ring-2 ring-blue-200 border-blue-200"
                               : ""
                           }`}
                           onClick={() => setPtTrainingFilter(String(t._id))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setPtTrainingFilter(String(t._id));
+                            }
+                          }}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
@@ -1338,65 +1360,33 @@ export default function Admin() {
                             </div>
                           </div>
 
-                          <div className="mt-2 flex items-center justify-end gap-2">
-                            {/* ✅ Edit now navigates to AdminPTrainings and selects this event */}
-
-                            {/* GOOD */}
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              className="p-3 border rounded-lg hover:bg-slate-50 cursor-pointer"
-                              onClick={() => goEditTraining(t._id)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  goEditTraining(t._id);
-                                }
+                          <div className="mt-3 flex gap-2 justify-end flex-wrap">
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                goEditTraining(t._id);
                               }}
                             >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="font-semibold truncate">
-                                    {t.title}
-                                  </div>
-                                  <div className="text-xs text-slate-500 truncate">
-                                    {t.slug}
-                                  </div>
-                                </div>
-                                <div className="shrink-0">
-                                  {trainingSeatBadge(t)}
-                                </div>
-                              </div>
+                              Edit
+                            </button>
 
-                              <div className="mt-3 flex gap-2 flex-wrap">
-                                <button
-                                  type="button"
-                                  className="btn btn-sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    goEditTraining(t._id);
-                                  }}
-                                >
-                                  Edit
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="btn btn-sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const ok = window.confirm(
-                                      "Delete this training?",
-                                    );
-                                    if (ok) deleteTrainingEvent(t._id);
-                                  }}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const ok = window.confirm(
+                                  "Delete this training?",
+                                );
+                                if (ok) deleteTrainingEvent(t._id);
+                              }}
+                            >
+                              Delete
+                            </button>
                           </div>
-                        </button>
+                        </div>
                       );
                     })
                   )}
