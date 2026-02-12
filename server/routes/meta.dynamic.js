@@ -2,38 +2,27 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-
-// ✅ Import the model you already have (you used it earlier)
 import { TrainingEvent } from "../models/TrainingEvent.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// This file lives in: server/routes/
-// So ../../client/dist/index.html points to: client/dist/index.html
-const DIST_DIR = path.resolve(__dirname, "../../client/dist");
-const INDEX_HTML_PATH = path.join(DIST_DIR, "index.html");
+// Vite build output
+const INDEX_HTML_PATH = process.env.INDEX_HTML_PATH
+  ? path.resolve(process.env.INDEX_HTML_PATH)
+  : path.resolve(__dirname, "../../client/dist/index.html");
 
-// Recommended in production: https://www.adlmstudio.net
-const PUBLIC_APP_URL = String(process.env.PUBLIC_APP_URL || "").trim();
-const DEFAULT_OG_IMAGE = String(
-  process.env.PUBLIC_OG_DEFAULT_IMAGE || "/og-default.jpg",
-).trim();
+// Cache index.html in memory (auto-reloads in dev when file changes)
+let _cachedHtml = null;
+let _cachedMtimeMs = 0;
 
-// Social crawlers (WhatsApp/FB/LinkedIn/Twitter/Slack/Discord/etc.)
-const BOT_UA_RE =
-  /facebookexternalhit|facebot|Twitterbot|Slackbot-LinkExpanding|Discordbot|WhatsApp|TelegramBot|LinkedInBot|Pinterest|Googlebot|bingbot|DuckDuckBot|Baiduspider|YandexBot/i;
-
-let cachedHtml = null;
-let cachedMtime = 0;
-
-function loadHtmlTemplate() {
+function readIndexHtml() {
   const stat = fs.statSync(INDEX_HTML_PATH);
-  if (!cachedHtml || stat.mtimeMs !== cachedMtime) {
-    cachedHtml = fs.readFileSync(INDEX_HTML_PATH, "utf8");
-    cachedMtime = stat.mtimeMs;
+  if (!_cachedHtml || stat.mtimeMs !== _cachedMtimeMs) {
+    _cachedHtml = fs.readFileSync(INDEX_HTML_PATH, "utf8");
+    _cachedMtimeMs = stat.mtimeMs;
   }
-  return cachedHtml;
+  return _cachedHtml;
 }
 
 function escapeHtml(s) {
@@ -53,42 +42,49 @@ function truncate(s, n = 180) {
   return x.length > n ? `${x.slice(0, n - 1)}…` : x;
 }
 
-function hasFileExtension(p) {
-  // skip static assets e.g. /assets/app.js, /Logo.png, /robots.txt
-  return /\.[a-z0-9]{2,6}$/i.test(p);
-}
-
-function isDocumentOrBotRequest(req) {
-  const dest = req.get("sec-fetch-dest");
-  const mode = req.get("sec-fetch-mode");
-  if (dest === "document" || mode === "navigate") return true;
-
-  const ua = req.get("user-agent") || "";
-  if (BOT_UA_RE.test(ua)) return true;
-
-  // fallback: browsers often send Accept including text/html on navigations
-  const accept = req.get("accept") || "";
-  return accept.includes("text/html");
-}
-
 function getBaseUrl(req) {
-  if (PUBLIC_APP_URL) return PUBLIC_APP_URL.replace(/\/+$/, "");
+  // Prefer explicit env in production
+  const envBase = String(process.env.PUBLIC_APP_URL || "").trim();
+  if (envBase) return envBase.replace(/\/+$/, "");
 
-  const proto = (req.get("x-forwarded-proto") || req.protocol || "http")
+  // Otherwise infer from request (works behind proxies if trust proxy is set)
+  const xfProto = String(req.headers["x-forwarded-proto"] || "")
     .split(",")[0]
     .trim();
-  const host = req.get("x-forwarded-host") || req.get("host");
+  const proto = xfProto || req.protocol || "https";
+  const host = req.get("host");
   return `${proto}://${host}`.replace(/\/+$/, "");
 }
 
 function absolutizeUrl(maybeUrl, baseUrl) {
   const u = String(maybeUrl || "").trim();
   if (!u) return "";
-  if (/^https?:\/\//i.test(u)) return u;
+  try {
+    // already absolute
+    if (/^https?:\/\//i.test(u)) return u;
+    return new URL(u.replace(/^\/+/, "/"), baseUrl).toString();
+  } catch {
+    return "";
+  }
+}
 
-  const base = String(baseUrl || "").replace(/\/+$/, "");
-  const rel = u.replace(/^\/+/, "");
-  return `${base}/${rel}`;
+function looksLikeApiRequest(req) {
+  const accept = String(req.headers.accept || "").toLowerCase();
+  if (accept.includes("application/json")) return true;
+  if (req.headers["x-requested-with"]) return true; // XHR
+  return false;
+}
+
+function isAssetRequest(reqPath) {
+  // Any path with a file extension is considered an asset (/assets/app.js, /Logo.png, etc.)
+  return path.extname(reqPath || "") !== "";
+}
+
+function shouldServeInjectedHtml(req) {
+  if (req.method !== "GET" && req.method !== "HEAD") return false;
+  if (isAssetRequest(req.path)) return false;
+  if (looksLikeApiRequest(req)) return false;
+  return true;
 }
 
 function injectMeta(html, meta) {
@@ -101,25 +97,26 @@ function injectMeta(html, meta) {
 
 async function resolveMeta(req) {
   const baseUrl = getBaseUrl(req);
-  const fullUrl = `${baseUrl}${req.originalUrl || req.url || ""}`;
 
-  const fallback = {
+  // Strip querystring for canonical
+  const cleanPath = String(req.originalUrl || "").split("?")[0] || "/";
+  const pageUrl = new URL(cleanPath, baseUrl).toString();
+
+  // Defaults
+  let meta = {
     title: "ADLM Studio",
-    description:
-      "BIM training, digital construction tools, and QS productivity solutions.",
-    url: fullUrl,
-    image: absolutizeUrl(DEFAULT_OG_IMAGE, baseUrl),
+    description: "BIM Training, QS Tools, and Digital Construction Solutions.",
+    url: pageUrl,
+    image: new URL("/og-default.jpg", baseUrl).toString(), // put og-default.jpg in client/public
   };
 
-  const pathname = req.path || "/";
-
-  // ✅ Physical trainings: /ptrainings/:slug -> use flyerUrl as preview image
-  const ptrain = pathname.match(/^\/ptrainings\/([^/]+)\/?$/);
-  if (ptrain) {
-    const slug = decodeURIComponent(ptrain[1]);
+  // ✅ PTraining detail page: /ptrainings/:slug  -> use flyer as preview
+  const m = req.path.match(/^\/ptrainings\/([^/]+)\/?$/i);
+  if (m) {
+    const slug = decodeURIComponent(m[1]);
 
     const training = await TrainingEvent.findOne({ slug })
-      .select("title subtitle description flyerUrl slug")
+      .select("title subtitle description flyerUrl ogImageUrl slug")
       .lean();
 
     const title = training?.title
@@ -134,67 +131,48 @@ async function resolveMeta(req) {
         180,
       ) || "Register for ADLM Physical Training.";
 
-    const image = absolutizeUrl(training?.flyerUrl, baseUrl) || fallback.image;
+    // Prefer an explicit OG image if you store one; else flyer; else default
+    const chosen =
+      training?.ogImageUrl || training?.flyerUrl || "/og-default.jpg";
 
-    return { title, description, url: fullUrl, image };
+    const image = absolutizeUrl(chosen, baseUrl) || meta.image;
+
+    meta = { ...meta, title, description, url: pageUrl, image };
+    return meta;
   }
 
-  // ✅ Optional: normal trainings pages if you have /trainings/:slug
-  const train = pathname.match(/^\/trainings\/([^/]+)\/?$/);
-  if (train) {
-    const slug = decodeURIComponent(train[1]);
-
-    const training = await TrainingEvent.findOne({ slug })
-      .select("title subtitle description flyerUrl slug")
-      .lean();
-
-    if (!training) return fallback;
-
-    const title = `${training.title || "Training"} | ADLM Studio`;
-    const description =
-      truncate(
-        training?.subtitle ||
-          training?.description ||
-          "Training by ADLM Studio.",
-        180,
-      ) || fallback.description;
-
-    const image = absolutizeUrl(training?.flyerUrl, baseUrl) || fallback.image;
-
-    return { title, description, url: fullUrl, image };
+  // ✅ PTraining listing page: /ptrainings
+  if (/^\/ptrainings\/?$/i.test(req.path)) {
+    meta.title = "ADLM Physical Trainings | ADLM Studio";
+    meta.description =
+      "Explore and register for upcoming ADLM physical trainings.";
+    return meta;
   }
 
-  // ✅ Generic fallback for other pages (still gives correct URL + default OG image)
-  return fallback;
+  // Add more resolvers here later:
+  // - /trainings/:slug
+  // - /products/:slug
+  // - /learn/:slug
+  // etc.
+
+  return meta;
 }
 
 export function registerDynamicMetaRoutes(app) {
-  // Catch remaining routes AFTER APIs.
+  // Use RegExp wildcard for Express (safe with newer path-to-regexp)
   app.get(/.*/, async (req, res, next) => {
     try {
-      // Only respond with HTML for actual navigations/bots
-      if (!isDocumentOrBotRequest(req)) return next();
+      if (!shouldServeInjectedHtml(req)) return next();
 
-      // Skip assets
-      if (hasFileExtension(req.path || "")) return next();
-
-      // Ensure build exists
-      if (!fs.existsSync(INDEX_HTML_PATH)) {
-        return res
-          .status(500)
-          .send(
-            "client/dist/index.html not found. Build your frontend first (npm run build).",
-          );
-      }
-
-      const template = loadHtmlTemplate();
+      const template = readIndexHtml();
       const meta = await resolveMeta(req);
       const html = injectMeta(template, meta);
 
-      return res
+      res
         .status(200)
         .set("Content-Type", "text/html; charset=utf-8")
-        .set("Cache-Control", "no-store")
+        // keep small cache; crawlers also cache on their side
+        .set("Cache-Control", "public, max-age=300")
         .send(html);
     } catch (err) {
       next(err);

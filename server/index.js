@@ -150,7 +150,20 @@ app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 app.use(morgan("dev"));
 
 /* =========================
-   ✅ API ROUTES FIRST
+   ✅ FRONTEND STATIC (ASSETS) + ✅ DYNAMIC META (HTML)
+   ========================= */
+
+// client is sibling of server -> ../client/dist
+const distDir = path.resolve(__dirname, "../client/dist");
+
+// Serve assets, but DO NOT auto-serve index.html (we inject it)
+app.use(express.static(distDir, { index: false }));
+
+// ✅ This MUST be before API routes, so bots/browsers get HTML with OG tags
+registerDynamicMetaRoutes(app);
+
+/* =========================
+   ✅ API ROUTES
    ========================= */
 
 app.use("/webhooks", webhooksRouter);
@@ -230,19 +243,6 @@ app.use((err, _req, res, next) => {
   }
   next(err);
 });
-
-/* =========================
-   ✅ FRONTEND (STATIC + META SPA FALLBACK)
-   ========================= */
-
-// ✅ FIX: client is a sibling of server -> ../client/dist
-const distDir = path.resolve(__dirname, "../client/dist");
-
-// Serve assets, but DO NOT auto-serve index.html (we inject it dynamically)
-app.use(express.static(distDir, { index: false }));
-
-// ✅ Dynamic OG/Twitter tags + SPA HTML fallback for document/bot requests
-registerDynamicMetaRoutes(app);
 
 /* -------- 404 + generic -------- */
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
