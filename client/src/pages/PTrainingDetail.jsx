@@ -59,6 +59,37 @@ function toYouTubeEmbed(url) {
   return "";
 }
 
+/** ✅ IMPORTANT: do not touch http.js — we pass token via opts.token */
+function getAccessToken(user) {
+  // from auth store (common patterns)
+  const t1 =
+    user?.accessToken ||
+    user?.token ||
+    user?.jwt ||
+    user?.auth?.accessToken ||
+    user?.session?.accessToken ||
+    "";
+
+  if (t1) return String(t1);
+
+  // from storage (common keys)
+  if (typeof window === "undefined") return "";
+  const keys = [
+    "accessToken",
+    "token",
+    "jwt",
+    "adlm_access_token",
+    "ADLM_ACCESS_TOKEN",
+  ];
+
+  for (const k of keys) {
+    const v =
+      window.localStorage?.getItem(k) || window.sessionStorage?.getItem(k);
+    if (v) return String(v);
+  }
+  return "";
+}
+
 const PRODUCT_CATALOG = {
   revit_plugin_building: {
     name: "ADLM Revit Plugin (Architecture & Structure)",
@@ -140,6 +171,9 @@ export default function PTrainingDetail() {
   const nav = useNavigate();
   const { user } = useAuth();
 
+  const token = useMemo(() => pickToken(user), [user]);
+  const authedOpts = useMemo(() => (token ? { token } : {}), [token]);
+
   const [loading, setLoading] = useState(true);
   const [t, setT] = useState(null);
   const [err, setErr] = useState("");
@@ -180,7 +214,7 @@ export default function PTrainingDetail() {
         if (!r.ok) throw new Error(j?.error || "Failed");
         if (ok) setT(j);
       } catch (e) {
-        if (ok) setErr(e.message || "Failed");
+        if (ok) setErr(e?.message || "Failed");
       } finally {
         if (ok) setLoading(false);
       }
@@ -195,11 +229,6 @@ export default function PTrainingDetail() {
       .join(", ");
   }, [t]);
 
-  /**
-   * ✅ Combined gallery for Training Location section:
-   * - Location photos: t.location.photos (images only)
-   * - Venue media: t.media (images + videos)
-   */
   const galleryMedia = useMemo(() => {
     const locPhotos = Array.isArray(t?.location?.photos)
       ? t.location.photos
@@ -230,7 +259,6 @@ export default function PTrainingDetail() {
 
     const combined = [...locPhotos, ...venueMedia];
 
-    // De-dupe by (type + url)
     const seen = new Set();
     const out = [];
     for (const m of combined) {
@@ -242,14 +270,12 @@ export default function PTrainingDetail() {
     return out;
   }, [t]);
 
-  // ✅ IMPORTANT: keep all hooks ABOVE early returns
   const mediaCounts = useMemo(() => {
     const imgs = galleryMedia.filter((m) => m.type === "image").length;
     const vids = galleryMedia.filter((m) => m.type === "video").length;
     return { imgs, vids };
   }, [galleryMedia]);
 
-  // keep galleryIdx valid if media changes
   useEffect(() => {
     if (!galleryOpen) return;
     if (galleryMedia.length <= 0) {
@@ -329,13 +355,33 @@ export default function PTrainingDetail() {
       .filter(Boolean);
   }, [t]);
 
+  function pickToken(user) {
+    return (
+      user?.accessToken ||
+      user?.token ||
+      user?.access_token ||
+      user?.jwt ||
+      localStorage.getItem("accessToken") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("access_token") ||
+      localStorage.getItem("adlm_accessToken") ||
+      ""
+    );
+  }
+
   async function onRegister() {
     if (!user) return nav("/login");
 
     setBusy(true);
     setErr("");
     try {
-      const { data } = await apiAuthed.post(`/ptrainings/${id}/enroll`, {});
+      // ✅ PASS TOKEN HERE (no http.js change)
+      const { data } = await apiAuthed.post(
+        `/ptrainings/${id}/enroll`,
+        {},
+        authedOpts,
+      );
+
       if (!data?.enrollmentId) throw new Error("No enrollmentId returned");
 
       if (
@@ -359,7 +405,7 @@ export default function PTrainingDetail() {
       setBankName("");
       setReference("");
     } catch (e) {
-      setErr(e?.response?.data?.error || e.message || "Failed");
+      setErr(e?.message || "Failed");
     } finally {
       setBusy(false);
     }
@@ -369,15 +415,17 @@ export default function PTrainingDetail() {
     if (!enrollmentId) return;
 
     try {
+      // ✅ PASS TOKEN HERE TOO
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
         { note: payNote, payerName, bankName, reference, receiptUrl },
+        authedOpts,
       );
 
       setPayOpen(false);
       nav(`/ptrainings/enrollment/${enrollmentId}`);
     } catch (e) {
-      alert(e?.response?.data?.error || e.message || "Failed");
+      alert(e?.message || "Failed");
     }
   }
 
@@ -413,7 +461,6 @@ export default function PTrainingDetail() {
     });
   }
 
-  // ✅ early returns after all hooks
   if (loading) return <div className="p-4 sm:p-6">Loading…</div>;
   if (err) return <div className="p-4 sm:p-6 text-red-600">{err}</div>;
   if (!t) return <div className="p-4 sm:p-6">Not found</div>;
@@ -664,7 +711,7 @@ export default function PTrainingDetail() {
           </div>
         </div>
 
-        {/* ✅ Combined Gallery */}
+        {/* Combined Gallery */}
         <div className="mt-6">
           <div className="flex items-center justify-between gap-3">
             <div className="font-semibold">Location & Venue Gallery</div>
@@ -759,7 +806,7 @@ export default function PTrainingDetail() {
         </div>
       </div>
 
-      {/* ✅ Gallery Lightbox */}
+      {/* Gallery Lightbox */}
       {galleryOpen && galleryMedia.length ? (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="w-full max-w-4xl bg-white rounded-2xl overflow-hidden border shadow-lg">
