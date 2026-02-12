@@ -7,8 +7,15 @@ const TrainingEnrollmentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "TrainingEvent",
       index: true,
+      required: true, // ✅ prevent future orphans
     },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+      required: true,
+    },
 
     status: {
       type: String,
@@ -45,6 +52,7 @@ const TrainingEnrollmentSchema = new mongoose.Schema(
       markedAt: { type: Date, default: null },
     },
 
+    // ✅ Use these top-level fields consistently (routes updated below)
     entitlementsApplied: { type: Boolean, default: false },
     entitlementsAppliedAt: { type: Date, default: null },
 
