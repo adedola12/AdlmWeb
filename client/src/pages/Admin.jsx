@@ -438,6 +438,58 @@ function DevicesModal({
   );
 }
 
+function ReceiptModal({ open, url, title, onClose }) {
+  if (!open) return null;
+
+  const cleanUrl = String(url || "");
+  const base = cleanUrl.split("?")[0];
+  const isImage = /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(base);
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-3xl rounded-xl shadow-lg ring-1 ring-slate-200 overflow-hidden">
+          <div className="px-4 py-3 border-b flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-semibold truncate">Payment Receipt</div>
+              {title ? (
+                <div className="text-xs text-slate-500 mt-0.5 truncate">
+                  {title}
+                </div>
+              ) : null}
+            </div>
+
+            <button className="btn btn-sm" onClick={onClose}>
+              Close
+            </button>
+          </div>
+
+          <div className="p-4">
+            {!cleanUrl ? (
+              <div className="text-sm text-slate-600">No receipt found.</div>
+            ) : isImage ? (
+              <img
+                src={cleanUrl}
+                alt="Receipt"
+                className="w-full h-auto rounded-lg border"
+                style={{ maxHeight: "70vh", objectFit: "contain" }}
+              />
+            ) : (
+              <iframe
+                title="Receipt"
+                src={cleanUrl}
+                className="w-full rounded-lg border"
+                style={{ height: "70vh" }}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------ main page ------------------ */
 
 export default function Admin() {
@@ -459,6 +511,11 @@ export default function Admin() {
   const [ptShowAllEnrollments, setPtShowAllEnrollments] = React.useState(false);
   const [ptBusy, setPtBusy] = React.useState({});
 
+  const [receiptModal, setReceiptModal] = React.useState({
+    open: false,
+    url: "",
+    title: "",
+  });
 
   const [devicesModal, setDevicesModal] = React.useState({
     open: false,
@@ -522,6 +579,38 @@ export default function Admin() {
   function goEditTraining(id) {
     navigate(`${PTRAININGS_ADMIN_ROUTE}?eventId=${encodeURIComponent(id)}`);
   }
+
+  const ptPendingCount = React.useMemo(() => {
+    const rows = Array.isArray(trainingEnrollments) ? trainingEnrollments : [];
+    let n = 0;
+
+    for (const e of rows) {
+      const st = String(e?.status || "").toLowerCase();
+      if (st === "approved" || st === "rejected") continue;
+
+      const payState = String(
+        e?.paymentState || e?.payment?.raw?.state || e?.payment?.state || "",
+      ).toLowerCase();
+
+      const receiptUrl =
+        e?.receiptUrl ||
+        e?.payment?.receiptUrl ||
+        e?.payment?.raw?.receiptUrl ||
+        "";
+
+      const hasSubmitted =
+        payState === "submitted" ||
+        !!receiptUrl ||
+        !!e?.payerReference ||
+        !!e?.payment?.reference ||
+        !!e?.payerNote ||
+        !!e?.payment?.note;
+
+      if (hasSubmitted) n += 1;
+    }
+
+    return n;
+  }, [trainingEnrollments]);
 
   async function deleteEntitlement(email, productKey) {
     setMsg("");
@@ -715,54 +804,53 @@ export default function Admin() {
     return sorted;
   }, [users, q]);
 
-async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
-  setMsg("");
+  async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
+    setMsg("");
 
-  // Optional guard: don't even call backend if UI already knows it's full
-  if (seatsLeftMaybe === 0) {
-    setMsg("Cannot approve: capacity reached.");
-    return;
-  }
-
-  setPtBusy((s) => ({ ...s, [enrollmentId]: true }));
-
-  try {
-    const res = await apiAuthed(
-      `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
-      {
-        token: accessToken,
-        method: "PATCH",
-      },
-    );
-
-    await load();
-    setMsg(res?.message || "Training enrollment approved");
-  } catch (e) {
-    // ✅ now works because http.js throws {status, data}
-    if (e?.status === 409) {
-      const cap = e?.data?.cap;
-      const left = e?.data?.seatsLeft;
-      setMsg(
-        e?.data?.error ||
-          (cap != null && left != null
-            ? `Cannot approve: capacity reached (${left}/${cap} left).`
-            : "Cannot approve: capacity reached."),
-      );
+    // Optional guard: don't even call backend if UI already knows it's full
+    if (seatsLeftMaybe === 0) {
+      setMsg("Cannot approve: capacity reached.");
       return;
     }
 
-    setMsg(
-      e?.data?.error || e?.message || "Failed to approve training enrollment",
-    );
-  } finally {
-    setPtBusy((s) => {
-      const n = { ...s };
-      delete n[enrollmentId];
-      return n;
-    });
-  }
-}
+    setPtBusy((s) => ({ ...s, [enrollmentId]: true }));
 
+    try {
+      const res = await apiAuthed(
+        `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
+        {
+          token: accessToken,
+          method: "PATCH",
+        },
+      );
+
+      await load();
+      setMsg(res?.message || "Training enrollment approved");
+    } catch (e) {
+      // ✅ now works because http.js throws {status, data}
+      if (e?.status === 409) {
+        const cap = e?.data?.cap;
+        const left = e?.data?.seatsLeft;
+        setMsg(
+          e?.data?.error ||
+            (cap != null && left != null
+              ? `Cannot approve: capacity reached (${left}/${cap} left).`
+              : "Cannot approve: capacity reached."),
+        );
+        return;
+      }
+
+      setMsg(
+        e?.data?.error || e?.message || "Failed to approve training enrollment",
+      );
+    } finally {
+      setPtBusy((s) => {
+        const n = { ...s };
+        delete n[enrollmentId];
+        return n;
+      });
+    }
+  }
 
   async function rejectTrainingEnrollment(enrollmentId) {
     setMsg("");
@@ -1237,7 +1325,14 @@ async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
             >
-              Physical Training
+              <span className="inline-flex items-center gap-2">
+                Physical Training
+                {ptPendingCount > 0 ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+                    {ptPendingCount}
+                  </span>
+                ) : null}
+              </span>
             </button>
 
             <button
@@ -1459,13 +1554,22 @@ async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
                           ? dayjs(e.training.date).format("YYYY-MM-DD")
                           : "—";
 
+                      const userEmail =
+                        e?.user?.email || e?.email || e?.userEmail || "—";
+
+                      const firstName =
+                        e?.user?.firstName || e?.firstName || "";
+
                       const payer =
-                        `${e?.payment?.payerName || ""}`.trim() ||
+                        `${e?.payerName || e?.payment?.payerName || ""}`.trim() ||
                         `${e?.firstName || ""} ${e?.lastName || ""}`.trim() ||
                         "—";
 
-                      const email = e?.email || e?.userEmail || "—";
-                      const receipt = e?.payment?.receiptUrl || "";
+                      const receipt =
+                        e?.receiptUrl ||
+                        e?.payment?.receiptUrl ||
+                        e?.payment?.raw?.receiptUrl ||
+                        "";
 
                       const st = String(e?.status || "").toLowerCase();
                       const decidedAt = e?.decidedAt
@@ -1481,8 +1585,10 @@ async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
                             <div className="text-sm min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <div className="font-medium truncate">
-                                  {email}
+                                  {firstName ? `${firstName} · ` : ""}
+                                  {userEmail}
                                 </div>
+
                                 {pTrainingStatusBadge(st)}
                                 {decidedAt ? (
                                   <span className="text-xs text-slate-500">
@@ -1525,14 +1631,19 @@ async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
 
                               {receipt ? (
                                 <div className="mt-2">
-                                  <a
-                                    href={receipt}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                  <button
+                                    type="button"
                                     className="text-sm font-semibold text-blue-700 hover:underline"
+                                    onClick={() =>
+                                      setReceiptModal({
+                                        open: true,
+                                        url: receipt,
+                                        title: `${firstName || payer || "User"} · ${userEmail}`,
+                                      })
+                                    }
                                   >
-                                    View receipt →
-                                  </a>
+                                    Show receipt
+                                  </button>
                                 </div>
                               ) : null}
                             </div>
@@ -2246,6 +2357,13 @@ async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
         token={accessToken}
         refreshParent={load}
         setMsg={setMsg}
+      />
+
+      <ReceiptModal
+        open={receiptModal.open}
+        url={receiptModal.url}
+        title={receiptModal.title}
+        onClose={() => setReceiptModal({ open: false, url: "", title: "" })}
       />
     </div>
   );

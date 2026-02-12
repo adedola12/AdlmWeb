@@ -2,6 +2,7 @@
 import express from "express";
 import dayjs from "dayjs";
 import mongoose from "mongoose";
+import { sendMail } from "../util/mailer.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { TrainingEvent } from "../models/TrainingEvent.js";
 import { TrainingEnrollment } from "../models/TrainingEnrollment.js";
@@ -49,6 +50,7 @@ async function getApprovedCountsMap(trainingObjectIds, session = null) {
   const agg = await TrainingEnrollment.aggregate(pipeline).session(
     session || null,
   );
+
   return Object.fromEntries(
     (agg || []).map((x) => [String(x._id), x.count || 0]),
   );
@@ -121,12 +123,6 @@ function cleanFormFields(arr) {
 
 /**
  * Normalize payload from admin UI.
- * Supports:
- *  - legacy priceNGN
- *  - new pricing tiers (pricing.normalNGN, groupOf3NGN, earlyBird)
- *  - location object + photos
- *  - venue gallery in `media` (images/videos)
- *  - formFields schema
  */
 function normalizeEventPayload(body) {
   const b = body || {};
@@ -143,7 +139,7 @@ function normalizeEventPayload(body) {
   if (typeof payload.fullDescription === "string")
     payload.fullDescription = payload.fullDescription;
 
-  // dates: allow ISO strings; mongoose will cast
+  // dates
   if (payload.startAt === null || payload.startAt === "")
     delete payload.startAt;
   if (payload.endAt === null || payload.endAt === "") delete payload.endAt;
@@ -181,7 +177,7 @@ function normalizeEventPayload(body) {
       earlyBird: { priceNGN: ebPrice, endsAt: ebEndsAt },
     };
 
-    // keep legacy in sync (normal fee)
+    // legacy sync
     payload.priceNGN = normalNGN;
   } else {
     // legacy only
@@ -226,13 +222,13 @@ function normalizeEventPayload(body) {
     };
   }
 
-  // venue gallery (kept as `media`)
+  // venue gallery
   payload.media = cleanMediaArray(payload.media);
 
   // form schema
   payload.formFields = cleanFormFields(payload.formFields);
 
-  // installation + grants (keep as-is but ensure arrays)
+  // installation + grants
   payload.installationChecklist = Array.isArray(payload.installationChecklist)
     ? payload.installationChecklist
     : [];
@@ -242,9 +238,7 @@ function normalizeEventPayload(body) {
 
   // Remove undefined/null at top-level
   Object.keys(payload).forEach((k) => {
-    if (payload[k] === undefined || payload[k] === null) {
-      delete payload[k];
-    }
+    if (payload[k] === undefined || payload[k] === null) delete payload[k];
   });
 
   return payload;
@@ -321,6 +315,162 @@ function applyTrainingGrantsToUser(userDoc, training) {
   return grants;
 }
 
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function toCalUtcStamp(d) {
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "";
+  return dt
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
+}
+
+function buildMapsLink(training) {
+  const loc = training?.location || {};
+  const direct = String(loc?.googleMapsPlaceUrl || "").trim();
+  if (direct) return direct;
+
+  const name = String(loc?.name || "").trim();
+  const addr = String(loc?.address || "").trim();
+  const city = String(loc?.city || "").trim();
+  const state = String(loc?.state || "").trim();
+  const q = encodeURIComponent(
+    [name, addr, city, state].filter(Boolean).join(", "),
+  );
+  return q
+    ? `https://www.google.com/maps/search/?api=1&query=${q}`
+    : "https://www.google.com/maps";
+}
+
+function buildCalendarLinks(training) {
+  const title = String(training?.title || "ADLM Physical Training").trim();
+
+  const startAt = training?.startAt ? new Date(training.startAt) : null;
+  let endAt = training?.endAt ? new Date(training.endAt) : null;
+
+  if (startAt && (!endAt || Number.isNaN(endAt.getTime()))) {
+    endAt = new Date(startAt.getTime() + 3 * 60 * 60 * 1000);
+  }
+
+  const loc = training?.location || {};
+  const locationText = [loc?.name, loc?.address, loc?.city, loc?.state]
+    .map((x) => String(x || "").trim())
+    .filter(Boolean)
+    .join(", ");
+
+  const details = `You're confirmed for ${title}. See you in class!`;
+
+  const gStart = startAt ? toCalUtcStamp(startAt) : "";
+  const gEnd = endAt ? toCalUtcStamp(endAt) : "";
+
+  const google =
+    gStart && gEnd
+      ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
+          title,
+        )}&dates=${gStart}/${gEnd}&details=${encodeURIComponent(
+          details,
+        )}&location=${encodeURIComponent(locationText)}`
+      : "https://calendar.google.com/";
+
+  const outlook =
+    startAt && endAt
+      ? `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(
+          title,
+        )}&startdt=${encodeURIComponent(startAt.toISOString())}&enddt=${encodeURIComponent(
+          endAt.toISOString(),
+        )}&body=${encodeURIComponent(details)}&location=${encodeURIComponent(
+          locationText,
+        )}`
+      : "https://outlook.live.com/calendar/";
+
+  return { google, outlook };
+}
+
+function buildTrainingApprovedEmailHtml({ firstName, training }) {
+  const name = String(firstName || "").trim() || "there";
+
+  const title = escapeHtml(training?.title || "ADLM Physical Training");
+  const startTxt = training?.startAt
+    ? dayjs(training.startAt).format("dddd, D MMM YYYY · h:mm A")
+    : "To be announced";
+  const endTxt = training?.endAt
+    ? dayjs(training.endAt).format("dddd, D MMM YYYY · h:mm A")
+    : "";
+
+  const loc = training?.location || {};
+  const locName = escapeHtml(loc?.name || "");
+  const addr = escapeHtml(loc?.address || "");
+  const city = escapeHtml(loc?.city || "");
+  const state = escapeHtml(loc?.state || "");
+
+  const mapsUrl = buildMapsLink(training);
+  const { google: googleCalUrl, outlook: outlookCalUrl } =
+    buildCalendarLinks(training);
+
+  const btn = (href, label, bg) => `
+    <a href="${href}"
+       style="display:inline-block;padding:12px 16px;border-radius:10px;
+              background:${bg};color:#ffffff;text-decoration:none;font-weight:700;
+              margin-right:10px;margin-top:8px">
+      ${label}
+    </a>
+  `;
+
+  return `
+  <div style="font-family:Arial,sans-serif;line-height:1.55;color:#0f172a">
+    <h2 style="margin:0 0 10px 0">Congratulations ${escapeHtml(name)} 🎉</h2>
+    <p style="margin:0 0 12px 0">
+      Your payment has been <b>confirmed</b> and your seat is now <b>secured</b> for:
+    </p>
+
+    <div style="padding:12px 14px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;margin:12px 0">
+      <div style="font-size:16px;font-weight:800;margin-bottom:6px">${title}</div>
+      <div style="font-size:13px;color:#334155">
+        <div><b>Date/Time:</b> ${escapeHtml(startTxt)} ${
+          endTxt ? `— ${escapeHtml(endTxt)}` : ""
+        }</div>
+        ${
+          locName || addr || city || state
+            ? `<div style="margin-top:6px"><b>Venue:</b> ${[
+                locName,
+                addr,
+                city,
+                state,
+              ]
+                .filter(Boolean)
+                .join(", ")}</div>`
+            : ""
+        }
+      </div>
+    </div>
+
+    <div style="margin:10px 0 18px 0">
+      ${btn(googleCalUrl, "Add to Google Calendar", "#2563eb")}
+      ${btn(outlookCalUrl, "Add to Outlook Calendar", "#0f172a")}
+      ${btn(mapsUrl, "Open Map Location", "#16a34a")}
+    </div>
+
+    <p style="margin:0 0 10px 0;color:#334155;font-size:14px">
+      If you have any questions before the class, just reply to this email.
+    </p>
+
+    <p style="margin:18px 0 0 0;font-weight:800">See you in class ✅</p>
+
+    <p style="margin:12px 0 0 0;color:#475569">
+      — ADLM Studio
+    </p>
+  </div>
+  `;
+}
+
 /* =========================================================
    EVENTS CRUD
    ========================================================= */
@@ -384,20 +534,17 @@ async function deleteEvent(req, res) {
     let deletedEvent = null;
 
     await session.withTransaction(async () => {
-      // ✅ Delete all enrollments tied to this training (handles old string-stored ids too)
       const enrRes = await TrainingEnrollment.deleteMany({
         $or: [{ trainingId: idObj }, { trainingId: idStr }],
       }).session(session);
 
       deletedEnrollments = enrRes?.deletedCount || 0;
 
-      // ✅ Delete the training itself
       deletedEvent = await TrainingEvent.findOneAndDelete({
         _id: idObj,
       }).session(session);
 
       if (!deletedEvent) {
-        // abort transaction => enrollments won't be deleted either
         throw Object.assign(new Error("Not found"), { status: 404 });
       }
     });
@@ -431,7 +578,8 @@ router.delete("/:id", requireStrictObjectIdParam, asyncHandler(deleteEvent));
 router.get(
   "/enrollments",
   asyncHandler(async (req, res) => {
-    const q = {};
+    // Build query safely (so trainingId OR doesn't clash with status OR)
+    const and = [];
 
     const statusRaw = String(req.query.status || "")
       .trim()
@@ -441,22 +589,35 @@ router.get(
       .toLowerCase();
     const trainingIdRaw = String(req.query.trainingId || "").trim();
 
-    if (trainingIdRaw) q.trainingId = trainingIdRaw;
+    if (trainingIdRaw) {
+      if (isStrictObjectId(trainingIdRaw)) {
+        const tidObj = new mongoose.Types.ObjectId(trainingIdRaw);
+        and.push({
+          $or: [{ trainingId: trainingIdRaw }, { trainingId: tidObj }],
+        });
+      } else {
+        and.push({ trainingId: trainingIdRaw });
+      }
+    }
 
     if (statusRaw) {
       if (statusRaw === "payment_pending") {
-        q.$or = [
-          { status: "payment_pending" },
-          { status: "form_pending", "payment.raw.state": "submitted" },
-        ];
+        and.push({
+          $or: [
+            { status: "payment_pending" },
+            { status: "form_pending", "payment.raw.state": "submitted" },
+          ],
+        });
       } else {
-        q.status = statusRaw;
+        and.push({ status: statusRaw });
       }
     }
 
     if (paymentStateRaw) {
-      q["payment.raw.state"] = paymentStateRaw;
+      and.push({ "payment.raw.state": paymentStateRaw });
     }
+
+    const q = and.length === 0 ? {} : and.length === 1 ? and[0] : { $and: and };
 
     const list = await TrainingEnrollment.find(q)
       .sort({ createdAt: -1 })
@@ -483,9 +644,8 @@ router.get(
       _id: { $in: trainingObjectIds },
     })
       .select(
-        "title startAt endAt priceNGN pricing capacityApproved capacity entitlementGrants installationChecklist flyerUrl slug",
+        "title startAt endAt priceNGN pricing capacityApproved capacity entitlementGrants installationChecklist flyerUrl slug location",
       )
-
       .lean();
 
     const approvedMap = await getApprovedCountsMap(trainingObjectIds);
@@ -563,12 +723,12 @@ router.patch(
 
     try {
       let resultBody = null;
+      let mailJob = null;
 
       await session.withTransaction(async () => {
         const enr = await TrainingEnrollment.findById(req.params.id).session(
           session,
         );
-
         if (!enr) throw new HttpError(404, "Enrollment not found");
 
         const st0 = String(enr.status || "").toLowerCase();
@@ -576,10 +736,11 @@ router.patch(
         // Already approved => return success (no writes needed)
         if (st0 === "approved") {
           const trainingLean = await TrainingEvent.findById(enr.trainingId)
-            .lean()
-            .session(session);
+            .session(session)
+            .lean();
 
           const cap = capacityOf(trainingLean);
+
           const approvedCount = await TrainingEnrollment.countDocuments({
             status: "approved",
             $or: [
@@ -603,11 +764,10 @@ router.patch(
           throw new HttpError(400, "Cannot approve: enrollment was rejected.");
         }
 
-        // Load training + user FIRST (so we don't reserve a seat then fail)
+        // Load training + user FIRST
         const trainingLean = await TrainingEvent.findById(enr.trainingId)
-          .lean()
-          .session(session);
-
+          .session(session)
+          .lean();
         if (!trainingLean) throw new HttpError(404, "Training not found");
 
         const user = await User.findById(enr.userId).session(session);
@@ -615,7 +775,7 @@ router.patch(
 
         const cap = capacityOf(trainingLean);
 
-        // Re-sync approvedCount from truth (enrollments) to avoid drift/leaks
+        // Re-sync approvedCount from truth
         const currentApproved = await TrainingEnrollment.countDocuments({
           status: "approved",
           $or: [
@@ -630,20 +790,17 @@ router.patch(
           { session },
         );
 
-        // Atomic seat reservation (works even if approvedCount was missing before)
+        // Atomic seat reservation
         const seatUpdate = await TrainingEvent.collection.findOneAndUpdate(
           {
             _id: trainingLean._id,
-            $expr: {
-              $lt: [{ $ifNull: ["$approvedCount", 0] }, cap],
-            },
+            $expr: { $lt: [{ $ifNull: ["$approvedCount", 0] }, cap] },
           },
           { $inc: { approvedCount: 1 } },
           { session, returnDocument: "after" },
         );
 
         if (!seatUpdate?.value) {
-          // Throw to ABORT transaction (no partial writes committed)
           throw new HttpError(409, "Cannot approve: capacity reached.", {
             cap,
             approvedCount: currentApproved,
@@ -677,9 +834,6 @@ router.patch(
 
         if (!alreadyApplied) {
           await user.save({ session });
-        }
-
-        if (!alreadyApplied) {
           enr.entitlementsApplied = true;
           enr.entitlementsAppliedAt = new Date();
         }
@@ -690,6 +844,13 @@ router.patch(
 
         const approvedCountAfter = seatUpdate.value.approvedCount || 0;
         const seatsLeft = Math.max(cap - approvedCountAfter, 0);
+
+        // prepare email payload (send AFTER commit)
+        mailJob = {
+          to: user.email,
+          firstName: user.firstName || enr.firstName || user.username || "",
+          training: trainingLean,
+        };
 
         resultBody = {
           ok: true,
@@ -703,6 +864,26 @@ router.patch(
 
       if (!resultBody) {
         return res.status(500).json({ error: "Unknown approval error" });
+      }
+
+      // ✅ send email OUTSIDE transaction (avoids duplicates on rollback)
+      if (mailJob?.to) {
+        try {
+          await sendMail({
+            to: mailJob.to,
+            subject:
+              "You're Confirmed! ADLM Physical Training — Details Inside",
+            html: buildTrainingApprovedEmailHtml({
+              firstName: mailJob.firstName,
+              training: mailJob.training,
+            }),
+          });
+        } catch (e) {
+          console.error(
+            "[ptrainings approve] sendMail failed:",
+            e?.message || e,
+          );
+        }
       }
 
       return res.json(resultBody);
@@ -768,9 +949,7 @@ router.patch(
     enr.installation = enr.installation || {};
 
     let grantsApplied = [];
-    // const alreadyApplied = !!enr.installation.entitlementsApplied;
     const alreadyApplied = !!enr.entitlementsApplied;
-
 
     if (!alreadyApplied) {
       grantsApplied = applyTrainingGrantsToUser(user, training);
