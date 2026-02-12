@@ -25,6 +25,18 @@ function capacityOf(training) {
   return Number.isFinite(cap) && cap > 0 ? cap : DEFAULT_CAPACITY;
 }
 
+function isStrictObjectId(id) {
+  // strict 24-hex check (avoids mongoose treating shorter strings as valid)
+  return typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
+}
+
+function requireStrictObjectIdParam(req, res, next) {
+  const id = String(req.params.id || "");
+  if (!isStrictObjectId(id))
+    return res.status(404).json({ error: "Not found" });
+  return next();
+}
+
 async function getApprovedCountsMap(trainingObjectIds, session = null) {
   if (!Array.isArray(trainingObjectIds) || trainingObjectIds.length === 0) {
     return {};
@@ -61,7 +73,6 @@ function normalizeEventPayload(body) {
     payload.status = payload.status.trim().toLowerCase();
 
   // Dates: allow ISO strings/null
-  // (Mongoose can cast strings, but keep it clean)
   if (payload.startAt === null || payload.startAt === "")
     delete payload.startAt;
   if (payload.endAt === null || payload.endAt === "") delete payload.endAt;
@@ -73,9 +84,7 @@ function normalizeEventPayload(body) {
     else delete payload.capacityApproved;
   }
 
-  // Price normalization:
-  // - if UI sends { price, currency } and currency is NGN, also set priceNGN
-  // - if UI sends priceNGN only, also mirror to price (optional)
+  // Price normalization
   const currency = String(payload.currency || "NGN")
     .toUpperCase()
     .trim();
@@ -97,7 +106,6 @@ function normalizeEventPayload(body) {
     if (Number.isFinite(p)) payload.priceNGN = p;
     else delete payload.priceNGN;
   } else {
-    // don't delete if schema expects it? safe to remove empties
     delete payload.priceNGN;
   }
 
@@ -110,7 +118,7 @@ function normalizeEventPayload(body) {
 
   payload.currency = currency;
 
-  // Remove undefined/null empties (keep falsy 0 if any)
+  // Remove undefined/null/empty strings
   Object.keys(payload).forEach((k) => {
     if (payload[k] === undefined || payload[k] === null || payload[k] === "") {
       delete payload[k];
@@ -121,7 +129,7 @@ function normalizeEventPayload(body) {
 }
 
 /**
- * ✅ Upsert entitlements using the SAME shape as User.entitlements schema
+ * Upsert entitlements using the SAME shape as User.entitlements schema
  * Applies months by extending expiresAt.
  */
 function addMonthsToEntitlement(
@@ -171,7 +179,6 @@ function addMonthsToEntitlement(
 
     ent.status = "active";
     ent.seats = Math.max(Number(ent.seats || 1), nextSeats, 1);
-
     ent.licenseType = lt;
     ent.organizationName = org;
   }
@@ -183,7 +190,6 @@ function applyTrainingGrantsToUser(userDoc, training) {
   const grants = Array.isArray(training?.entitlementGrants)
     ? training.entitlementGrants
     : [];
-
   for (const g of grants) {
     addMonthsToEntitlement(userDoc, {
       productKey: g?.productKey,
@@ -193,15 +199,13 @@ function applyTrainingGrantsToUser(userDoc, training) {
       organizationName: g?.organizationName,
     });
   }
-
   return grants;
 }
 
 /* =========================================================
    EVENTS CRUD
-   NOTE:
    - Canonical routes: /events, /events/:id
-   - Compatibility aliases (for your Admin.jsx): /, /:id
+   - Compatibility aliases (Admin.jsx): /, /:id
    ========================================================= */
 
 async function listEvents(_req, res) {
@@ -231,17 +235,27 @@ async function createEvent(req, res) {
 }
 
 async function patchEvent(req, res) {
+  // hard guard (even for canonical route)
+  if (!isStrictObjectId(String(req.params.id || ""))) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
   const payload = normalizeEventPayload(req.body);
   const updated = await TrainingEvent.findByIdAndUpdate(
     req.params.id,
     payload,
     { new: true },
   );
+
   if (!updated) return res.status(404).json({ error: "Not found" });
   res.json(updated);
 }
 
 async function deleteEvent(req, res) {
+  if (!isStrictObjectId(String(req.params.id || ""))) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
   const gone = await TrainingEvent.findByIdAndDelete(req.params.id);
   if (!gone) return res.status(404).json({ error: "Not found" });
   res.json({ ok: true });
@@ -253,13 +267,14 @@ router.post("/events", asyncHandler(createEvent));
 router.patch("/events/:id", asyncHandler(patchEvent));
 router.delete("/events/:id", asyncHandler(deleteEvent));
 
-// ✅ Compatibility aliases for existing frontend calls
+// Compatibility aliases for existing frontend calls
 router.get("/", asyncHandler(listEvents));
 router.post("/", asyncHandler(createEvent));
 
-// IMPORTANT: constrain :id so it doesn't catch "/enrollments"
-router.patch("/:id([0-9a-fA-F]{24})", asyncHandler(patchEvent));
-router.delete("/:id([0-9a-fA-F]{24})", asyncHandler(deleteEvent));
+// ✅ FIXED: no inline regex (path-to-regexp was crashing)
+// We validate ObjectId manually using middleware
+router.patch("/:id", requireStrictObjectIdParam, asyncHandler(patchEvent));
+router.delete("/:id", requireStrictObjectIdParam, asyncHandler(deleteEvent));
 
 /* -------------------- ENROLLMENTS -------------------- */
 router.get(
@@ -277,9 +292,7 @@ router.get(
 
     if (trainingIdRaw) q.trainingId = trainingIdRaw;
 
-    // ✅ Special behavior:
-    // If admin filters by status=payment_pending, also show people who already clicked "I've Paid"
-    // (they become form_pending but payment.raw.state === submitted)
+    // If admin filters by status=payment_pending, also show users who clicked "I've Paid"
     if (statusRaw) {
       if (statusRaw === "payment_pending") {
         q.$or = [
@@ -291,7 +304,6 @@ router.get(
       }
     }
 
-    // Optional explicit filter by payment.raw.state
     if (paymentStateRaw) {
       q["payment.raw.state"] = paymentStateRaw;
     }
@@ -301,7 +313,7 @@ router.get(
       .limit(500)
       .lean();
 
-    // ---- attach training info ----
+    // attach training info
     const trainingIdsStr = [
       ...new Set(
         (list || []).map((x) => String(x.trainingId || "")).filter(Boolean),
@@ -337,7 +349,7 @@ router.get(
       }),
     );
 
-    // ---- attach user info ----
+    // attach user info
     const userIdsStr = [
       ...new Set(
         (list || []).map((x) => String(x.userId || "")).filter(Boolean),
