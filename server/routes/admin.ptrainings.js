@@ -44,6 +44,83 @@ async function getApprovedCountsMap(trainingObjectIds, session = null) {
 }
 
 /**
+ * Normalize payload from admin UI.
+ * Supports both:
+ *  - priceNGN (legacy)
+ *  - price + currency (newer UI)
+ */
+function normalizeEventPayload(body) {
+  const b = body || {};
+  const payload = { ...b };
+
+  // Trim strings safely
+  if (typeof payload.title === "string") payload.title = payload.title.trim();
+  if (typeof payload.location === "string")
+    payload.location = payload.location.trim();
+  if (typeof payload.status === "string")
+    payload.status = payload.status.trim().toLowerCase();
+
+  // Dates: allow ISO strings/null
+  // (Mongoose can cast strings, but keep it clean)
+  if (payload.startAt === null || payload.startAt === "")
+    delete payload.startAt;
+  if (payload.endAt === null || payload.endAt === "") delete payload.endAt;
+
+  // Capacity
+  if (payload.capacityApproved != null) {
+    const cap = parseInt(payload.capacityApproved, 10);
+    if (Number.isFinite(cap) && cap > 0) payload.capacityApproved = cap;
+    else delete payload.capacityApproved;
+  }
+
+  // Price normalization:
+  // - if UI sends { price, currency } and currency is NGN, also set priceNGN
+  // - if UI sends priceNGN only, also mirror to price (optional)
+  const currency = String(payload.currency || "NGN")
+    .toUpperCase()
+    .trim();
+
+  // allow amount as alias
+  if (payload.price == null && payload.amount != null)
+    payload.price = payload.amount;
+
+  if (payload.price != null && payload.price !== "") {
+    const p = Number(payload.price);
+    if (Number.isFinite(p)) payload.price = p;
+    else delete payload.price;
+  } else {
+    delete payload.price;
+  }
+
+  if (payload.priceNGN != null && payload.priceNGN !== "") {
+    const p = Number(payload.priceNGN);
+    if (Number.isFinite(p)) payload.priceNGN = p;
+    else delete payload.priceNGN;
+  } else {
+    // don't delete if schema expects it? safe to remove empties
+    delete payload.priceNGN;
+  }
+
+  if (payload.price != null && payload.priceNGN == null && currency === "NGN") {
+    payload.priceNGN = payload.price;
+  }
+  if (payload.priceNGN != null && payload.price == null) {
+    payload.price = payload.priceNGN;
+  }
+
+  payload.currency = currency;
+
+  // Remove undefined/null empties (keep falsy 0 if any)
+  Object.keys(payload).forEach((k) => {
+    if (payload[k] === undefined || payload[k] === null || payload[k] === "") {
+      delete payload[k];
+    }
+  });
+
+  return payload;
+}
+
+/**
  * ✅ Upsert entitlements using the SAME shape as User.entitlements schema
  * Applies months by extending expiresAt.
  */
@@ -120,60 +197,69 @@ function applyTrainingGrantsToUser(userDoc, training) {
   return grants;
 }
 
-/* -------------------- EVENTS CRUD -------------------- */
-router.get(
-  "/events",
-  asyncHandler(async (_req, res) => {
-    const list = await TrainingEvent.find({}).sort({ createdAt: -1 }).lean();
+/* =========================================================
+   EVENTS CRUD
+   NOTE:
+   - Canonical routes: /events, /events/:id
+   - Compatibility aliases (for your Admin.jsx): /, /:id
+   ========================================================= */
 
-    const ids = (list || [])
-      .map((t) => t?._id)
-      .filter(Boolean)
-      .map((id) => new mongoose.Types.ObjectId(String(id)));
+async function listEvents(_req, res) {
+  const list = await TrainingEvent.find({}).sort({ createdAt: -1 }).lean();
 
-    const approvedMap = await getApprovedCountsMap(ids);
+  const ids = (list || [])
+    .map((t) => t?._id)
+    .filter(Boolean)
+    .map((id) => new mongoose.Types.ObjectId(String(id)));
 
-    const enriched = (list || []).map((t) => {
-      const approvedCount = approvedMap[String(t._id)] || 0;
-      const cap = capacityOf(t);
-      const seatsLeft = Math.max(cap - approvedCount, 0);
-      return { ...t, approvedCount, seatsLeft };
-    });
+  const approvedMap = await getApprovedCountsMap(ids);
 
-    res.json(enriched || []);
-  }),
-);
+  const enriched = (list || []).map((t) => {
+    const approvedCount = approvedMap[String(t._id)] || 0;
+    const cap = capacityOf(t);
+    const seatsLeft = Math.max(cap - approvedCount, 0);
+    return { ...t, approvedCount, seatsLeft };
+  });
 
-router.post(
-  "/events",
-  asyncHandler(async (req, res) => {
-    const payload = req.body || {};
-    const created = await TrainingEvent.create(payload);
-    res.json(created);
-  }),
-);
+  res.json(enriched || []);
+}
 
-router.patch(
-  "/events/:id",
-  asyncHandler(async (req, res) => {
-    const updated = await TrainingEvent.findByIdAndUpdate(
-      req.params.id,
-      req.body || {},
-      { new: true },
-    );
-    if (!updated) return res.status(404).json({ error: "Not found" });
-    res.json(updated);
-  }),
-);
+async function createEvent(req, res) {
+  const payload = normalizeEventPayload(req.body);
+  const created = await TrainingEvent.create(payload);
+  res.json(created);
+}
 
-router.delete(
-  "/events/:id",
-  asyncHandler(async (req, res) => {
-    const gone = await TrainingEvent.findByIdAndDelete(req.params.id);
-    if (!gone) return res.status(404).json({ error: "Not found" });
-    res.json({ ok: true });
-  }),
-);
+async function patchEvent(req, res) {
+  const payload = normalizeEventPayload(req.body);
+  const updated = await TrainingEvent.findByIdAndUpdate(
+    req.params.id,
+    payload,
+    { new: true },
+  );
+  if (!updated) return res.status(404).json({ error: "Not found" });
+  res.json(updated);
+}
+
+async function deleteEvent(req, res) {
+  const gone = await TrainingEvent.findByIdAndDelete(req.params.id);
+  if (!gone) return res.status(404).json({ error: "Not found" });
+  res.json({ ok: true });
+}
+
+// Canonical
+router.get("/events", asyncHandler(listEvents));
+router.post("/events", asyncHandler(createEvent));
+router.patch("/events/:id", asyncHandler(patchEvent));
+router.delete("/events/:id", asyncHandler(deleteEvent));
+
+// ✅ Compatibility aliases for existing frontend calls
+router.get("/", asyncHandler(listEvents));
+router.post("/", asyncHandler(createEvent));
+
+// IMPORTANT: constrain :id so it doesn't catch "/enrollments"
+router.patch("/:id([0-9a-fA-F]{24})", asyncHandler(patchEvent));
+router.delete("/:id([0-9a-fA-F]{24})", asyncHandler(deleteEvent));
 
 /* -------------------- ENROLLMENTS -------------------- */
 router.get(
@@ -236,7 +322,7 @@ router.get(
       _id: { $in: trainingObjectIds },
     })
       .select(
-        "title startAt endAt priceNGN capacityApproved entitlementGrants installationChecklist",
+        "title startAt endAt priceNGN currency price capacityApproved entitlementGrants installationChecklist",
       )
       .lean();
 
@@ -251,7 +337,7 @@ router.get(
       }),
     );
 
-    // ---- attach user info (so admin sees who paid) ----
+    // ---- attach user info ----
     const userIdsStr = [
       ...new Set(
         (list || []).map((x) => String(x.userId || "")).filter(Boolean),
@@ -285,7 +371,6 @@ router.get(
         training: trainingMap[String(x.trainingId)] || null,
         user: userMap[String(x.userId)] || null,
 
-        // ✅ helpful derived fields for admin UI
         paymentState,
         paymentSubmittedAt: x?.payment?.raw?.submittedAt || null,
         hasReceipt: !!receiptUrl,
@@ -302,11 +387,6 @@ router.get(
   }),
 );
 
-/**
- * ✅ Approve enrollment (admin confirms payment & slot)
- * ✅ ALSO: grant entitlements immediately on approval
- * ✅ ALSO: atomically increments TrainingEvent.approvedCount so "seats left" reduces
- */
 router.patch(
   "/enrollments/:id/approve",
   asyncHandler(async (req, res) => {

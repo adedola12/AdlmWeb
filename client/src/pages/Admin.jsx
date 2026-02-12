@@ -435,6 +435,245 @@ function DevicesModal({
   );
 }
 
+/* ------------------ pTraining Modal ------------------ */
+
+function TrainingEditorModal({
+  open,
+  onClose,
+  initial,
+  token,
+  onSaved,
+  setMsg,
+}) {
+  const [busy, setBusy] = React.useState(false);
+
+  const isNew = !initial?._id;
+
+  const [form, setForm] = React.useState({
+    title: "",
+    startAt: "",
+    endAt: "",
+    location: "",
+    price: "",
+    currency: "NGN",
+    capacityApproved: 14,
+    status: "open",
+  });
+
+  React.useEffect(() => {
+    if (!open) return;
+    setForm({
+      title: initial?.title || "",
+      startAt: initial?.startAt
+        ? dayjs(initial.startAt).format("YYYY-MM-DDTHH:mm")
+        : "",
+      endAt: initial?.endAt
+        ? dayjs(initial.endAt).format("YYYY-MM-DDTHH:mm")
+        : "",
+      location: initial?.location || "",
+      price:
+        initial?.price != null
+          ? String(initial.price)
+          : initial?.amount != null
+            ? String(initial.amount)
+            : "",
+      currency: initial?.currency || "NGN",
+      capacityApproved: Number(
+        initial?.capacityApproved ?? initial?.capacity ?? 14,
+      ),
+      status: initial?.status || "open",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial?._id]);
+
+  if (!open) return null;
+
+  async function save() {
+    setMsg("");
+    setBusy(true);
+    try {
+      const payload = {
+        title: form.title.trim(),
+        startAt: form.startAt ? new Date(form.startAt).toISOString() : null,
+        endAt: form.endAt ? new Date(form.endAt).toISOString() : null,
+        location: form.location.trim(),
+        currency: form.currency || "NGN",
+        price: form.price === "" ? null : Number(form.price),
+        capacityApproved: Math.max(parseInt(form.capacityApproved, 10) || 1, 1),
+        status: form.status || "open",
+      };
+
+      // Remove nulls so backend can keep existing values if it prefers
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === null) delete payload[k];
+        if (payload[k] === "" || payload[k] === undefined) delete payload[k];
+      });
+
+      if (isNew) {
+        await apiAuthed(`/admin/ptrainings`, {
+          token,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        setMsg("Training created");
+      } else {
+        await apiAuthed(`/admin/ptrainings/${initial._id}`, {
+          token,
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        setMsg("Training updated");
+      }
+
+      await onSaved?.();
+      onClose?.();
+    } catch (e) {
+      setMsg(e?.message || "Failed to save training");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-2xl rounded-xl shadow-lg ring-1 ring-slate-200 overflow-hidden">
+          <div className="px-4 py-3 border-b flex items-center justify-between gap-3">
+            <div className="font-semibold">
+              {isNew ? "Create Physical Training" : "Edit Physical Training"}
+            </div>
+            <button className="btn btn-sm" onClick={onClose}>
+              Close
+            </button>
+          </div>
+
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <div className="text-xs text-slate-500 mb-1">Title</div>
+                <input
+                  className="input w-full"
+                  value={form.title}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, title: e.target.value }))
+                  }
+                  placeholder="e.g., 2-Weekend BIM Training"
+                />
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-500 mb-1">Status</div>
+                <select
+                  className="input w-full"
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, status: e.target.value }))
+                  }
+                >
+                  <option value="open">Open</option>
+                  <option value="closed">Closed</option>
+                  <option value="draft">Draft</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-500 mb-1">Start</div>
+                <input
+                  type="datetime-local"
+                  className="input w-full"
+                  value={form.startAt}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, startAt: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-500 mb-1">End</div>
+                <input
+                  type="datetime-local"
+                  className="input w-full"
+                  value={form.endAt}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, endAt: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <div className="text-xs text-slate-500 mb-1">Location</div>
+                <input
+                  className="input w-full"
+                  value={form.location}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, location: e.target.value }))
+                  }
+                  placeholder="e.g., Lagos · ADLM Studio"
+                />
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-500 mb-1">Currency</div>
+                <input
+                  className="input w-full"
+                  value={form.currency}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, currency: e.target.value }))
+                  }
+                  placeholder="NGN"
+                />
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-500 mb-1">Price</div>
+                <input
+                  className="input w-full"
+                  value={form.price}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, price: e.target.value }))
+                  }
+                  placeholder="e.g., 50000"
+                />
+              </div>
+
+              <div>
+                <div className="text-xs text-slate-500 mb-1">
+                  Capacity (Approved)
+                </div>
+                <input
+                  className="input w-full"
+                  value={form.capacityApproved}
+                  onChange={(e) =>
+                    setForm((s) => ({ ...s, capacityApproved: e.target.value }))
+                  }
+                  placeholder="14"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button className="btn btn-sm" onClick={onClose} disabled={busy}>
+                Cancel
+              </button>
+              <button className="btn" onClick={save} disabled={busy}>
+                {busy ? "Saving…" : "Save"}
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500">
+              Notes: “Capacity” controls seats. On approval, seats reduce (based
+              on your backend logic).
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------ main page ------------------ */
 
 export default function Admin() {
@@ -448,7 +687,17 @@ export default function Admin() {
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
   const [installations, setInstallations] = React.useState([]);
+
+  // pTrainings
+  const [ptrainings, setPTrainings] = React.useState([]);
   const [trainingEnrollments, setTrainingEnrollments] = React.useState([]);
+  const [ptTrainingFilter, setPtTrainingFilter] = React.useState("all"); // trainingId or "all"
+  const [ptShowAllEnrollments, setPtShowAllEnrollments] = React.useState(false);
+
+  const [trainingModal, setTrainingModal] = React.useState({
+    open: false,
+    training: null,
+  });
 
   const [devicesModal, setDevicesModal] = React.useState({
     open: false,
@@ -461,16 +710,23 @@ export default function Admin() {
     setMsg("");
     try {
       const qs = q ? `?q=${encodeURIComponent(q)}` : "";
-      const [uRes, pRes, iRes, teRes] = await Promise.all([
+      const [uRes, pRes, iRes, tRes, teRes] = await Promise.all([
         apiAuthed(`/admin/users${qs}`, { token: accessToken }),
         apiAuthed(`/admin/purchases?status=pending`, { token: accessToken }),
         apiAuthed(`/admin/installations`, { token: accessToken }),
+
+        // NEW: trainings list
+        apiAuthed(`/admin/ptrainings`, { token: accessToken }),
+
+        // existing: enrollments
         apiAuthed(`/admin/ptrainings/enrollments`, { token: accessToken }),
       ]);
 
       setUsers(uRes || []);
       setInstallations(iRes || []);
       setPurchases(pRes || []);
+
+      setPTrainings(Array.isArray(tRes) ? tRes : tRes?.data || []);
       setTrainingEnrollments(teRes || []);
     } catch (e) {
       setMsg(e?.message || "Failed to load admin data");
@@ -992,6 +1248,108 @@ export default function Admin() {
     return arr;
   }, [installations]);
 
+  // pTrainings helpers
+  const pTrainingsSorted = React.useMemo(() => {
+    const arr = Array.isArray(ptrainings) ? [...ptrainings] : [];
+    arr.sort((a, b) => {
+      const ax = a?.startAt ? new Date(a.startAt).getTime() : 0;
+      const bx = b?.startAt ? new Date(b.startAt).getTime() : 0;
+      return bx - ax;
+    });
+    return arr;
+  }, [ptrainings]);
+
+  const enrollmentsFiltered = React.useMemo(() => {
+    const rows = Array.isArray(trainingEnrollments) ? trainingEnrollments : [];
+    const rx = q ? new RegExp(q, "i") : null;
+
+    return rows.filter((e) => {
+      const trainingId =
+        e?.training?._id || e?.trainingId || e?.ptrainingId || "";
+      if (
+        ptTrainingFilter !== "all" &&
+        String(trainingId) !== String(ptTrainingFilter)
+      ) {
+        return false;
+      }
+
+      if (!ptShowAllEnrollments) {
+        // only those needing review: submitted proof and not yet decided
+        const st = String(e?.status || "").toLowerCase();
+        if (st === "approved" || st === "rejected") return false;
+
+        const payState = String(e?.payment?.raw?.state || "").toLowerCase();
+        const hasSubmitted =
+          payState === "submitted" ||
+          !!e?.payment?.receiptUrl ||
+          !!e?.payment?.reference ||
+          !!e?.payment?.note;
+
+        if (!hasSubmitted) return false;
+      }
+
+      if (!rx) return true;
+
+      const email = String(e?.email || e?.userEmail || "");
+      const name = `${e?.firstName || ""} ${e?.lastName || ""}`.trim();
+      const title = String(e?.training?.title || e?.trainingTitle || "");
+      return rx.test(email) || rx.test(name) || rx.test(title);
+    });
+  }, [trainingEnrollments, ptTrainingFilter, ptShowAllEnrollments, q]);
+
+  const trainingStats = React.useMemo(() => {
+    // Map trainingId -> approvedCount
+    const m = new Map();
+    const rows = Array.isArray(trainingEnrollments) ? trainingEnrollments : [];
+    for (const e of rows) {
+      const st = String(e?.status || "").toLowerCase();
+      if (st !== "approved") continue;
+      const tid = String(
+        e?.training?._id || e?.trainingId || e?.ptrainingId || "",
+      );
+      if (!tid) continue;
+      m.set(tid, (m.get(tid) || 0) + 1);
+    }
+    return m;
+  }, [trainingEnrollments]);
+
+  function trainingSeatBadge(t) {
+    const tid = String(t?._id || "");
+    const approved = trainingStats.get(tid) || 0;
+
+    const cap = Math.max(
+      Number(t?.capacityApproved ?? t?.capacity ?? 0) || 0,
+      0,
+    );
+
+    // if backend already provides seatsLeft, prefer it
+    const seatsLeft =
+      typeof t?.seatsLeft === "number"
+        ? t.seatsLeft
+        : cap
+          ? Math.max(cap - approved, 0)
+          : null;
+
+    if (!cap && seatsLeft == null) return <Badge label="—" tone="slate" />;
+
+    if (seatsLeft != null) {
+      const tone =
+        seatsLeft === 0 ? "red" : seatsLeft <= 2 ? "yellow" : "green";
+      return <Badge label={`${seatsLeft}/${cap || "?"} left`} tone={tone} />;
+    }
+
+    return <Badge label={`${approved}/${cap} used`} tone="blue" />;
+  }
+
+  function pTrainingStatusBadge(st) {
+    const s = String(st || "").toLowerCase();
+    if (s === "approved") return <Badge label="Approved" tone="green" />;
+    if (s === "rejected") return <Badge label="Rejected" tone="red" />;
+    if (s === "pending") return <Badge label="Pending" tone="yellow" />;
+    if (s === "submitted") return <Badge label="Submitted" tone="blue" />;
+    return <Badge label={s || "—"} tone="slate" />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="card">
@@ -1091,181 +1449,284 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* --- pending tab & other tabs unchanged below this point --- */}
-
+      {/* ------------------ pTrainings tab (UPDATED) ------------------ */}
       {tab === "ptrainings" && (
         <div className="card">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="font-semibold">Physical Training Approvals</h2>
-            <div className="text-xs text-slate-500">
-              Approve payment + registration. Approval also grants the event
-              entitlements. Seats reduce automatically on approval.
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 className="font-semibold">Physical Training</h2>
+              <div className="text-xs text-slate-500 mt-1">
+                Manage trainings and approve submitted payments + registrations.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                className="btn btn-sm"
+                onClick={() => setTrainingModal({ open: true, training: null })}
+              >
+                New Training
+              </button>
+              <button className="btn btn-sm" onClick={load}>
+                Refresh
+              </button>
             </div>
           </div>
 
           {loading ? (
             <div className="text-sm text-slate-600">Loading…</div>
           ) : (
-            (() => {
-              const rows = Array.isArray(trainingEnrollments)
-                ? trainingEnrollments
-                : [];
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Trainings list */}
+              <div className="lg:col-span-1 border rounded p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-sm">Trainings</div>
+                  <select
+                    className="input max-w-[170px]"
+                    value={ptTrainingFilter}
+                    onChange={(e) => setPtTrainingFilter(e.target.value)}
+                    title="Filter enrollments by training"
+                  >
+                    <option value="all">All</option>
+                    {pTrainingsSorted.map((t) => (
+                      <option key={t._id} value={t._id}>
+                        {t.title || "Training"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              const rx = q ? new RegExp(q, "i") : null;
+                <div className="mt-3 space-y-2">
+                  {pTrainingsSorted.length === 0 ? (
+                    <div className="text-sm text-slate-600">
+                      No trainings yet. Click “New Training”.
+                    </div>
+                  ) : (
+                    pTrainingsSorted.map((t) => {
+                      const when = t?.startAt
+                        ? dayjs(t.startAt).format("YYYY-MM-DD")
+                        : "—";
+                      const status = String(t?.status || "open").toLowerCase();
 
-              const needsReview = rows.filter((e) => {
-                const st = String(e?.status || "").toLowerCase();
-                if (st === "approved" || st === "rejected") return false;
-
-                const payState = String(
-                  e?.payment?.raw?.state || "",
-                ).toLowerCase();
-                const hasSubmitted =
-                  payState === "submitted" ||
-                  !!e?.payment?.receiptUrl ||
-                  !!e?.payment?.reference ||
-                  !!e?.payment?.note;
-
-                if (!hasSubmitted) return false;
-
-                if (!rx) return true;
-
-                const email = String(e?.email || e?.userEmail || "");
-                const name =
-                  `${e?.firstName || ""} ${e?.lastName || ""}`.trim();
-                const title = String(e?.training?.title || "");
-                return rx.test(email) || rx.test(name) || rx.test(title);
-              });
-
-              if (needsReview.length === 0) {
-                return (
-                  <div className="text-sm text-slate-600">
-                    No submitted training payments to review.
-                  </div>
-                );
-              }
-
-              return (
-                <div className="space-y-2">
-                  {needsReview.map((e) => {
-                    const title = e?.training?.title || "Training";
-                    const when = e?.training?.startAt
-                      ? dayjs(e.training.startAt).format("YYYY-MM-DD")
-                      : "—";
-
-                    const cap = Number(e?.training?.capacityApproved || 14);
-                    const seatsLeft =
-                      typeof e?.training?.seatsLeft === "number"
-                        ? e.training.seatsLeft
-                        : null;
-
-                    const payer =
-                      `${e?.payment?.payerName || ""}`.trim() ||
-                      `${e?.firstName || ""} ${e?.lastName || ""}`.trim() ||
-                      "—";
-
-                    const receipt = e?.payment?.receiptUrl || "";
-
-                    return (
-                      <div
-                        key={e._id}
-                        className="border rounded p-3 flex flex-col gap-3"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm min-w-0">
-                            <div className="font-medium truncate">
-                              {e?.email || e?.userEmail || "—"}
-                            </div>
-
-                            <div className="text-xs text-slate-500 mt-1">
-                              <b>{title}</b> · {when}
-                              {seatsLeft != null ? (
-                                <>
-                                  {" "}
-                                  · Seats left:{" "}
-                                  <b className="text-slate-700">{seatsLeft}</b>/
-                                  {cap}
-                                </>
-                              ) : null}
-                            </div>
-
-                            <div className="mt-2 text-xs text-slate-600 space-y-1">
-                              <div>
-                                Payer: <b className="text-slate-800">{payer}</b>
+                      return (
+                        <button
+                          key={t._id}
+                          className={`w-full text-left border rounded p-3 hover:bg-slate-50 ${
+                            String(ptTrainingFilter) === String(t._id)
+                              ? "ring-2 ring-blue-200 border-blue-200"
+                              : ""
+                          }`}
+                          onClick={() => setPtTrainingFilter(String(t._id))}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="font-medium truncate">
+                                {t.title || "Training"}
                               </div>
-                              {e?.payment?.bankName ? (
-                                <div>
-                                  Bank:{" "}
-                                  <b className="text-slate-800">
-                                    {e.payment.bankName}
-                                  </b>
-                                </div>
-                              ) : null}
-                              {e?.payment?.reference ? (
-                                <div>
-                                  Ref:{" "}
-                                  <b className="text-slate-800">
-                                    {e.payment.reference}
-                                  </b>
-                                </div>
-                              ) : null}
-                              {e?.payment?.note ? (
-                                <div className="text-slate-700">
-                                  Note: {e.payment.note}
-                                </div>
-                              ) : null}
+                              <div className="text-xs text-slate-500 mt-1">
+                                {when}
+                                {t?.location ? ` · ${t.location}` : ""}
+                              </div>
                             </div>
 
-                            {receipt ? (
-                              <div className="mt-2">
-                                <a
-                                  href={receipt}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm font-semibold text-blue-700 hover:underline"
-                                >
-                                  View receipt →
-                                </a>
-                              </div>
-                            ) : null}
+                            <div className="shrink-0 flex flex-col items-end gap-1">
+                              {trainingSeatBadge(t)}
+                              <Badge
+                                label={status}
+                                tone={
+                                  status === "closed"
+                                    ? "red"
+                                    : status === "draft"
+                                      ? "slate"
+                                      : "green"
+                                }
+                              />
+                            </div>
                           </div>
 
-                          <div className="shrink-0 flex gap-2">
+                          <div className="mt-2 flex items-center justify-end gap-2">
                             <button
-                              className="btn"
-                              onClick={() => {
-                                const ok = window.confirm(
-                                  "Approve this training payment and registration?",
-                                );
-                                if (ok) approveTrainingEnrollment(e._id);
+                              className="btn btn-sm"
+                              onClick={(ev) => {
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                setTrainingModal({ open: true, training: t });
                               }}
                             >
-                              Approve
+                              Edit
                             </button>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
 
-                            <button
-                              className="btn"
-                              onClick={() => {
-                                const ok = window.confirm(
-                                  "Reject this enrollment?",
-                                );
-                                if (ok) rejectTrainingEnrollment(e._id);
-                              }}
-                            >
-                              Reject
-                            </button>
+              {/* Enrollments */}
+              <div className="lg:col-span-2 border rounded p-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="font-semibold text-sm">
+                    Enrollments{" "}
+                    <span className="text-slate-400">
+                      ({enrollmentsFiltered.length})
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-600 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={ptShowAllEnrollments}
+                        onChange={(e) =>
+                          setPtShowAllEnrollments(e.target.checked)
+                        }
+                      />
+                      Show all (incl. approved/rejected)
+                    </label>
+                  </div>
+                </div>
+
+                <div className="text-xs text-slate-500 mt-1">
+                  When “Show all” is OFF, you only see **submitted** proofs
+                  needing review.
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {enrollmentsFiltered.length === 0 ? (
+                    <div className="text-sm text-slate-600">
+                      No enrollments match your filter.
+                    </div>
+                  ) : (
+                    enrollmentsFiltered.map((e) => {
+                      const trainingTitle =
+                        e?.training?.title || e?.trainingTitle || "Training";
+                      const when = e?.training?.startAt
+                        ? dayjs(e.training.startAt).format("YYYY-MM-DD")
+                        : e?.training?.date
+                          ? dayjs(e.training.date).format("YYYY-MM-DD")
+                          : "—";
+
+                      const payer =
+                        `${e?.payment?.payerName || ""}`.trim() ||
+                        `${e?.firstName || ""} ${e?.lastName || ""}`.trim() ||
+                        "—";
+
+                      const email = e?.email || e?.userEmail || "—";
+                      const receipt = e?.payment?.receiptUrl || "";
+
+                      const st = String(e?.status || "").toLowerCase();
+                      const decidedAt = e?.decidedAt
+                        ? dayjs(e.decidedAt).format("YYYY-MM-DD HH:mm")
+                        : "";
+
+                      return (
+                        <div
+                          key={e._id}
+                          className="border rounded p-3 flex flex-col gap-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="text-sm min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="font-medium truncate">
+                                  {email}
+                                </div>
+                                {pTrainingStatusBadge(st)}
+                                {decidedAt ? (
+                                  <span className="text-xs text-slate-500">
+                                    · {decidedAt}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="text-xs text-slate-500 mt-1">
+                                <b>{trainingTitle}</b> · {when}
+                              </div>
+
+                              <div className="mt-2 text-xs text-slate-600 space-y-1">
+                                <div>
+                                  Payer:{" "}
+                                  <b className="text-slate-800">{payer}</b>
+                                </div>
+                                {e?.payment?.bankName ? (
+                                  <div>
+                                    Bank:{" "}
+                                    <b className="text-slate-800">
+                                      {e.payment.bankName}
+                                    </b>
+                                  </div>
+                                ) : null}
+                                {e?.payment?.reference ? (
+                                  <div>
+                                    Ref:{" "}
+                                    <b className="text-slate-800">
+                                      {e.payment.reference}
+                                    </b>
+                                  </div>
+                                ) : null}
+                                {e?.payment?.note ? (
+                                  <div className="text-slate-700">
+                                    Note: {e.payment.note}
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {receipt ? (
+                                <div className="mt-2">
+                                  <a
+                                    href={receipt}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-sm font-semibold text-blue-700 hover:underline"
+                                  >
+                                    View receipt →
+                                  </a>
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="shrink-0 flex gap-2">
+                              {st !== "approved" && st !== "rejected" && (
+                                <>
+                                  <button
+                                    className="btn"
+                                    onClick={() => {
+                                      const ok = window.confirm(
+                                        "Approve this training payment and registration?",
+                                      );
+                                      if (ok) approveTrainingEnrollment(e._id);
+                                    }}
+                                  >
+                                    Approve
+                                  </button>
+
+                                  <button
+                                    className="btn"
+                                    onClick={() => {
+                                      const ok = window.confirm(
+                                        "Reject this enrollment?",
+                                      );
+                                      if (ok) rejectTrainingEnrollment(e._id);
+                                    }}
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
-              );
-            })()
+              </div>
+            </div>
           )}
         </div>
       )}
 
+      {/* ------------------ pending tab ------------------ */}
       {tab === "pending" && (
         <div className="card">
           <h2 className="font-semibold mb-3">Pending Purchases</h2>
@@ -1466,6 +1927,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ------------------ active tab ------------------ */}
       {tab === "active" && (
         <div className="card">
           <h2 className="font-semibold mb-3">Active Subscriptions</h2>
@@ -1510,6 +1972,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ------------------ subscriptions tab ------------------ */}
       {tab === "subscriptions" && (
         <div className="card">
           <div className="flex items-center justify-between gap-3 mb-3">
@@ -1749,6 +2212,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ------------------ installations tab ------------------ */}
       {tab === "installations" && (
         <div className="card">
           <div className="flex items-center justify-between gap-3 mb-3">
@@ -1894,6 +2358,8 @@ export default function Admin() {
           )}
         </div>
       )}
+
+      {/* Modals */}
       <DevicesModal
         open={devicesModal.open}
         onClose={() =>
@@ -1903,6 +2369,15 @@ export default function Admin() {
         productKey={devicesModal.productKey}
         token={accessToken}
         refreshParent={load}
+        setMsg={setMsg}
+      />
+
+      <TrainingEditorModal
+        open={trainingModal.open}
+        onClose={() => setTrainingModal({ open: false, training: null })}
+        initial={trainingModal.training}
+        token={accessToken}
+        onSaved={load}
         setMsg={setMsg}
       />
     </div>
