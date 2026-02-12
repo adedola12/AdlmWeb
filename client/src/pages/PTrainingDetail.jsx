@@ -79,7 +79,6 @@ function isEmbeddableGoogleMapsUrl(url) {
   const u = String(url || "").trim();
   if (!u) return false;
 
-  // Common embeddable formats
   if (/\/maps\/embed/i.test(u)) return true;
   if (/output=embed/i.test(u)) return true;
   if (/google\.com\/maps\?q=/i.test(u)) return true;
@@ -92,7 +91,6 @@ function buildGoogleMapsEmbedUrl(embedUrl, address) {
   const raw = String(embedUrl || "").trim();
   if (isEmbeddableGoogleMapsUrl(raw)) return raw;
 
-  // Fallback that is usually embeddable without API key
   const q = encodeURIComponent(String(address || "").trim());
   if (!q) return "";
   return `https://www.google.com/maps?q=${q}&output=embed`;
@@ -136,14 +134,14 @@ function CopyRow({ label, value }) {
     }
   }
   return (
-    <div className="flex items-center justify-between gap-3 p-3 rounded-xl border bg-gray-50">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border bg-gray-50">
       <div className="min-w-0">
         <div className="text-xs text-gray-500">{label}</div>
         <div className="font-semibold break-all">{value || "—"}</div>
       </div>
       <button
         onClick={copy}
-        className="px-3 py-2 rounded-xl border font-semibold hover:bg-white"
+        className="px-3 py-2 rounded-xl border font-semibold hover:bg-white w-full sm:w-auto"
       >
         Copy
       </button>
@@ -179,15 +177,11 @@ export default function PTrainingDetail() {
   const { key } = useParams();
   const nav = useNavigate();
 
-  // ✅ IMPORTANT: read BOTH user and accessToken from context
   const { user, accessToken } = useAuth();
 
-  // ✅ Prefer context accessToken (reliable on mobile), fallback to user/localStorage
   const token = useMemo(() => {
     return accessToken || pickTokenFromUserOrStorage(user);
   }, [accessToken, user]);
-
-  const authedOpts = useMemo(() => (token ? { token } : {}), [token]);
 
   const [loading, setLoading] = useState(true);
   const [t, setT] = useState(null);
@@ -214,6 +208,16 @@ export default function PTrainingDetail() {
 
   // flyer lightbox
   const [flyerOpen, setFlyerOpen] = useState(false);
+
+  // ✅ prevent background scroll when payment modal is open (mobile fix)
+  useEffect(() => {
+    if (!payOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [payOpen]);
 
   useEffect(() => {
     let ok = true;
@@ -379,7 +383,6 @@ export default function PTrainingDetail() {
   }, [t]);
 
   async function onRegister() {
-    // ✅ If token is missing, force login (prevents mobile cookie-only auth failures)
     if (!token) return nav("/login");
 
     setBusy(true);
@@ -388,7 +391,7 @@ export default function PTrainingDetail() {
       const { data } = await apiAuthed.post(
         `/ptrainings/${encodeURIComponent(String(key || ""))}/enroll`,
         {},
-        { token }, // ✅ always send Bearer token
+        { token },
       );
 
       if (!data?.enrollmentId) throw new Error("No enrollmentId returned");
@@ -428,7 +431,7 @@ export default function PTrainingDetail() {
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
         { note: payNote, payerName, bankName, reference, receiptUrl },
-        { token }, // ✅ always send Bearer token
+        { token },
       );
 
       setPayOpen(false);
@@ -773,7 +776,7 @@ export default function PTrainingDetail() {
           )}
         </div>
 
-        {/* ✅ Map embed (safe + fallback) */}
+        {/* Map embed */}
         <div className="mt-6 rounded-2xl overflow-hidden border">
           {mapsEmbedSrc ? (
             <iframe
@@ -929,35 +932,65 @@ export default function PTrainingDetail() {
         </div>
       ) : null}
 
-      {/* Manual payment popup */}
+      {/* ✅ Manual payment popup (MOBILE RESPONSIVE FIXED) */}
       {payOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-xl bg-white rounded-2xl shadow-lg border p-4 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xl font-bold">ADLM Payment Details</div>
-                <div className="text-sm text-gray-600 mt-1">
-                  Make a transfer and click <b>I’ve Paid / Continue</b>.
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-2 sm:p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className={[
+              "w-full sm:max-w-xl bg-white border shadow-xl",
+              "rounded-t-2xl sm:rounded-2xl overflow-hidden",
+              "max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]",
+              "flex flex-col",
+            ].join(" ")}
+          >
+            {/* sticky header */}
+            <div className="sticky top-0 z-10 bg-white border-b p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-lg sm:text-xl font-bold">
+                    ADLM Payment Details
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Make a transfer and click <b>I’ve Paid / Continue</b>.
+                  </div>
                 </div>
+
+                <button
+                  onClick={() => setPayOpen(false)}
+                  className="shrink-0 px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+                >
+                  Close
+                </button>
               </div>
-              <button
-                onClick={() => setPayOpen(false)}
-                className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
-              >
-                Close
-              </button>
             </div>
 
-            <div className="mt-4 space-y-3">
+            {/* scrollable body */}
+            <div
+              className="min-h-0 overflow-y-auto p-4 sm:p-6 space-y-3"
+              style={{
+                paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))",
+              }}
+            >
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
                 <div className="text-sm text-blue-700">
                   Amount: <b>{money(Number(payInfo?.amountNGN || 0))}</b>
                 </div>
               </div>
 
-              <CopyRow label="Bank Name" value={payInfo?.bankName} />
-              <CopyRow label="Account Name" value={payInfo?.accountName} />
-              <CopyRow label="Account Number" value={payInfo?.accountNumber} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <CopyRow label="Bank Name" value={payInfo?.bankName} />
+                <CopyRow label="Account Name" value={payInfo?.accountName} />
+                <div className="sm:col-span-2">
+                  <CopyRow
+                    label="Account Number"
+                    value={payInfo?.accountNumber}
+                  />
+                </div>
+              </div>
 
               {payInfo?.note ? (
                 <div className="p-3 rounded-xl border bg-gray-50 text-sm text-gray-700">
@@ -1017,7 +1050,7 @@ export default function PTrainingDetail() {
                 ) : null}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   className="border rounded-xl px-3 py-2"
                   placeholder="Payer Name (optional)"
@@ -1031,13 +1064,13 @@ export default function PTrainingDetail() {
                   onChange={(e) => setBankName(e.target.value)}
                 />
                 <input
-                  className="border rounded-xl px-3 py-2 md:col-span-2"
+                  className="border rounded-xl px-3 py-2 sm:col-span-2"
                   placeholder="Transfer Reference / Narration (optional)"
                   value={reference}
                   onChange={(e) => setReference(e.target.value)}
                 />
                 <textarea
-                  className="border rounded-xl px-3 py-2 md:col-span-2"
+                  className="border rounded-xl px-3 py-2 sm:col-span-2"
                   rows={3}
                   placeholder="Note to admin (optional)"
                   value={payNote}
@@ -1045,20 +1078,28 @@ export default function PTrainingDetail() {
                 />
               </div>
 
-              <button
-                onClick={confirmPaymentSubmission}
-                className="w-full px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
-                disabled={receiptUploading}
-              >
-                I’ve Paid / Continue
-              </button>
+              {/* sticky footer buttons on small screens */}
+              <div className="pt-2 grid grid-cols-1 gap-2">
+                <button
+                  onClick={confirmPaymentSubmission}
+                  className="w-full px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+                  disabled={receiptUploading}
+                >
+                  I’ve Paid / Continue
+                </button>
 
-              <button
-                onClick={() => nav(`/ptrainings/enrollment/${enrollmentId}`)}
-                className="w-full px-4 py-3 rounded-xl border font-semibold hover:bg-gray-50"
-              >
-                Continue Without Submitting Payment
-              </button>
+                <button
+                  onClick={() => nav(`/ptrainings/enrollment/${enrollmentId}`)}
+                  className="w-full px-4 py-3 rounded-xl border font-semibold hover:bg-gray-50"
+                >
+                  Continue Without Submitting Payment
+                </button>
+              </div>
+
+              {/* mobile hint */}
+              <div className="text-xs text-gray-500 text-center pt-1 sm:hidden">
+                Tip: scroll inside this sheet to see all fields.
+              </div>
             </div>
           </div>
         </div>
