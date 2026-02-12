@@ -10,6 +10,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { connectDB } from "./db.js";
 
+import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
+
 // routes
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
@@ -36,9 +38,9 @@ import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 
 import meTrainingsRoutes from "./routes/me-trainings.js";
-import ptrainingsPublic from "./routes/ptrainings.js"; // new manual flow
-import mePTrainingsRoutes from "./routes/me-ptrainings.js"; // new ptraining portal
-import adminPTrainings from "./routes/admin.ptrainings.js"; // new ptraining admin
+import ptrainingsPublic from "./routes/ptrainings.js";
+import mePTrainingsRoutes from "./routes/me-ptrainings.js";
+import adminPTrainings from "./routes/admin.ptrainings.js";
 
 /* -------------------- RateGen (LEGACY) -------------------- */
 import rategenRouter from "./routes/rategen.js";
@@ -94,12 +96,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-/**
- * ✅ CRITICAL FIX (Express + path-to-regexp v6):
- * Don't use "*" or "/*" strings here.
- * Use RegExp to match all OPTIONS.
- */
 app.options(/.*/, cors(corsOptions));
 
 /* -------- security -------- */
@@ -143,7 +139,6 @@ app.use(
         frameAncestors: ["'none'"],
       },
     },
-
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     hsts: process.env.NODE_ENV === "production",
   }),
@@ -154,27 +149,9 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 app.use(morgan("dev"));
 
-/* -------- helpful error handling -------- */
-app.use((err, _req, res, next) => {
-  if (err?.type === "entity.too.large") {
-    return res.status(413).json({
-      error:
-        "Payload too large. Increase server JSON limit or send only changed rows.",
-    });
-  }
-  if (err?.type === "entity.parse.failed") {
-    return res.status(400).json({ error: "Invalid JSON body." });
-  }
-  if (err && /Not allowed by CORS/.test(err.message)) {
-    return res.status(403).json({ error: err.message });
-  }
-  next(err);
-});
-
-/* -------- root -------- */
-app.get("/", (_req, res) =>
-  res.json({ ok: true, service: "ADLM Auth/Licensing" }),
-);
+/* =========================
+   ✅ API ROUTES FIRST
+   ========================= */
 
 app.use("/webhooks", webhooksRouter);
 
@@ -202,9 +179,7 @@ app.use("/helpbot", helpbotRoutes);
 
 /* ===================================================================
    ✅ ADMIN ROUTES (ORDER MATTERS!)
-   Put specific admin routes BEFORE "/admin" router
    =================================================================== */
-
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes);
 
@@ -216,7 +191,6 @@ app.use("/admin/products", adminProducts);
 app.use("/admin/settings", adminSettings);
 
 app.use("/admin/ptrainings", adminPTrainings);
-
 app.use("/admin/bunny", adminBunny);
 
 /* -------------------- RateGen routes -------------------- */
@@ -247,19 +221,36 @@ app.use("/admin", adminRoutes);
 
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
-
 app.use("/api/entitlements", entitlementsRouter);
 
-/* -------- production SPA hosting (optional) -------- */
-if (process.env.NODE_ENV === "production") {
-  const dist = path.join(__dirname, "client", "dist");
-  app.use(express.static(dist));
+/* -------- helpful error handling -------- */
+app.use((err, _req, res, next) => {
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({
+      error:
+        "Payload too large. Increase server JSON limit or send only changed rows.",
+    });
+  }
+  if (err?.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "Invalid JSON body." });
+  }
+  if (err && /Not allowed by CORS/.test(err.message)) {
+    return res.status(403).json({ error: err.message });
+  }
+  next(err);
+});
 
-  // ✅ CRITICAL FIX: use RegExp, NOT "*" or "/*"
-  app.get(/.*/, (_req, res) => {
-    res.sendFile(path.join(dist, "index.html"));
-  });
-}
+/* =========================
+   ✅ FRONTEND (STATIC + META SPA FALLBACK)
+   ========================= */
+
+const distDir = path.join(__dirname, "client", "dist");
+
+// Serve assets, but DO NOT auto-serve index.html (we inject it)
+app.use(express.static(distDir, { index: false }));
+
+// ✅ Inject dynamic OG/Twitter tags + serve SPA for document requests
+registerDynamicMetaRoutes(app);
 
 /* -------- 404 + generic -------- */
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
