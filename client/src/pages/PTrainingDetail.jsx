@@ -59,35 +59,19 @@ function toYouTubeEmbed(url) {
   return "";
 }
 
-/** ✅ IMPORTANT: do not touch http.js — we pass token via opts.token */
-function getAccessToken(user) {
-  // from auth store (common patterns)
-  const t1 =
+function pickToken(user) {
+  return (
     user?.accessToken ||
     user?.token ||
+    user?.access_token ||
     user?.jwt ||
-    user?.auth?.accessToken ||
-    user?.session?.accessToken ||
-    "";
-
-  if (t1) return String(t1);
-
-  // from storage (common keys)
-  if (typeof window === "undefined") return "";
-  const keys = [
-    "accessToken",
-    "token",
-    "jwt",
-    "adlm_access_token",
-    "ADLM_ACCESS_TOKEN",
-  ];
-
-  for (const k of keys) {
-    const v =
-      window.localStorage?.getItem(k) || window.sessionStorage?.getItem(k);
-    if (v) return String(v);
-  }
-  return "";
+    (typeof window !== "undefined" && localStorage.getItem("accessToken")) ||
+    (typeof window !== "undefined" && localStorage.getItem("token")) ||
+    (typeof window !== "undefined" && localStorage.getItem("access_token")) ||
+    (typeof window !== "undefined" &&
+      localStorage.getItem("adlm_accessToken")) ||
+    ""
+  );
 }
 
 const PRODUCT_CATALOG = {
@@ -167,7 +151,8 @@ async function uploadReceiptToCloudinary(file) {
 }
 
 export default function PTrainingDetail() {
-  const { id } = useParams();
+  // ✅ key can be slug OR id (slug preferred)
+  const { key } = useParams();
   const nav = useNavigate();
   const { user } = useAuth();
 
@@ -207,7 +192,7 @@ export default function PTrainingDetail() {
       setErr("");
       try {
         const r = await fetch(
-          `${API_BASE}/ptrainings/events/${encodeURIComponent(id)}`,
+          `${API_BASE}/ptrainings/events/${encodeURIComponent(String(key || ""))}`,
           { credentials: "include" },
         );
         const j = await r.json();
@@ -220,7 +205,7 @@ export default function PTrainingDetail() {
       }
     })();
     return () => (ok = false);
-  }, [id]);
+  }, [key]);
 
   const address = useMemo(() => {
     const loc = t?.location || {};
@@ -262,9 +247,9 @@ export default function PTrainingDetail() {
     const seen = new Set();
     const out = [];
     for (const m of combined) {
-      const key = `${m.type}::${m.url}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const k0 = `${m.type}::${m.url}`;
+      if (seen.has(k0)) continue;
+      seen.add(k0);
       out.push(m);
     }
     return out;
@@ -355,29 +340,15 @@ export default function PTrainingDetail() {
       .filter(Boolean);
   }, [t]);
 
-  function pickToken(user) {
-    return (
-      user?.accessToken ||
-      user?.token ||
-      user?.access_token ||
-      user?.jwt ||
-      localStorage.getItem("accessToken") ||
-      localStorage.getItem("token") ||
-      localStorage.getItem("access_token") ||
-      localStorage.getItem("adlm_accessToken") ||
-      ""
-    );
-  }
-
   async function onRegister() {
     if (!user) return nav("/login");
 
     setBusy(true);
     setErr("");
     try {
-      // ✅ PASS TOKEN HERE (no http.js change)
+      // ✅ now enroll can accept slug OR id
       const { data } = await apiAuthed.post(
-        `/ptrainings/${id}/enroll`,
+        `/ptrainings/${encodeURIComponent(String(key || ""))}/enroll`,
         {},
         authedOpts,
       );
@@ -415,7 +386,6 @@ export default function PTrainingDetail() {
     if (!enrollmentId) return;
 
     try {
-      // ✅ PASS TOKEN HERE TOO
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
         { note: payNote, payerName, bankName, reference, receiptUrl },

@@ -9,6 +9,31 @@ const router = express.Router();
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
+function isStrictObjectId(id) {
+  return typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
+}
+
+// ✅ Find a published training by either Mongo _id or slug.
+// Keeps old links working, and enables new slug links.
+async function findPublishedTrainingByKey(keyRaw) {
+  const key = String(keyRaw || "").trim();
+  if (!key) return null;
+
+  // 1) try _id if it looks like ObjectId
+  if (isStrictObjectId(key)) {
+    const byId = await TrainingEvent.findOne({
+      _id: key,
+      isPublished: true,
+    }).lean();
+    if (byId) return byId;
+    // if not found, fallback to slug (covers edge-case slug that is 24-hex)
+  }
+
+  // 2) slug (store slug lowercase)
+  const slug = key.toLowerCase();
+  return await TrainingEvent.findOne({ slug, isPublished: true }).lean();
+}
+
 function getPaymentInstructions(amountNGN) {
   return {
     mode: "manual_transfer",
@@ -48,7 +73,7 @@ function computePricing(training) {
 }
 
 /**
- * Public: list published events (for Products page)
+ * Public: list published events
  */
 router.get(
   "/events",
@@ -56,7 +81,7 @@ router.get(
     const list = await TrainingEvent.find({ isPublished: true })
       .sort({ startAt: 1, createdAt: -1 })
       .select(
-        "title subtitle slug description startAt endAt priceNGN pricing capacityApproved flyerUrl location isFeatured sort",
+        "title subtitle slug description startAt endAt priceNGN pricing capacityApproved flyerUrl location isFeatured sort media whatYouGet requirements",
       )
       .lean();
 
@@ -65,21 +90,19 @@ router.get(
 );
 
 /**
- * Public: detail (used by PTrainingDetail.jsx)
+ * ✅ Public: detail by :key (slug or id)
+ * GET /ptrainings/events/:key
  */
 router.get(
-  "/events/:id",
+  "/events/:key",
   asyncHandler(async (req, res) => {
-    const ev = await TrainingEvent.findOne({
-      _id: req.params.id,
-      isPublished: true,
-    }).lean();
-
+    const ev = await findPublishedTrainingByKey(req.params.key);
     if (!ev) return res.status(404).json({ error: "Not found" });
 
+    // ✅ count approved (support old enrollments where trainingId may be stored as string)
     const approvedCount = await TrainingEnrollment.countDocuments({
-      trainingId: ev._id,
       status: "approved",
+      $or: [{ trainingId: ev._id }, { trainingId: String(ev._id) }],
     });
 
     res.json({ ...ev, approvedCount });
@@ -87,15 +110,15 @@ router.get(
 );
 
 /**
- * ✅ Auth: Enroll in a training
- * POST /ptrainings/:id/enroll
+ * ✅ Auth: Enroll by :key (slug or id)
+ * POST /ptrainings/:key/enroll
  */
 router.post(
-  "/:id/enroll",
+  "/:key/enroll",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const training = await TrainingEvent.findById(req.params.id).lean();
-    if (!training || !training.isPublished) {
+    const training = await findPublishedTrainingByKey(req.params.key);
+    if (!training) {
       return res.status(404).json({ error: "Training not found" });
     }
 
@@ -119,7 +142,7 @@ router.post(
       ).toLowerCase();
       const paymentSubmitted = paymentState === "submitted";
 
-      // ✅ Only show payment modal if user still needs to take action
+      // Only show payment modal if user still needs to take action
       const needsManualPaymentAction =
         amt > 0 && !paidAlready && !paymentSubmitted;
 
@@ -135,8 +158,8 @@ router.post(
     // Enforce cap on APPROVED slots
     const cap = Number(training.capacityApproved || 14);
     const approvedCount = await TrainingEnrollment.countDocuments({
-      trainingId: training._id,
       status: "approved",
+      $or: [{ trainingId: training._id }, { trainingId: String(training._id) }],
     });
 
     if (approvedCount >= cap) {
@@ -185,7 +208,7 @@ router.post(
 );
 
 /**
- * ✅ Auth: User submits manual transfer proof (+ optional receiptUrl)
+ * Auth: User submits manual transfer proof (+ optional receiptUrl)
  * POST /ptrainings/enrollments/:enrollmentId/payment-submitted
  */
 router.post(
@@ -200,7 +223,7 @@ router.post(
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    // ✅ If already approved, just return ok
+    // If already approved, just return ok
     if (String(enr.status || "").toLowerCase() === "approved") {
       return res.json({ ok: true, enrollmentId: String(enr._id) });
     }
@@ -246,7 +269,7 @@ router.post(
       receiptUrl: receiptUrl || prev.receiptUrl || "",
     };
 
-    // ✅ Unlock form after submission (do not override approved)
+    // Unlock form after submission (do not override approved)
     if (String(enr.status || "").toLowerCase() === "payment_pending") {
       enr.status = "form_pending";
     }

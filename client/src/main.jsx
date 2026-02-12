@@ -53,7 +53,7 @@ import Freebies from "./pages/Freebies.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
 
-// ✅ NEW: Physical trainings pages
+// ✅ Physical trainings pages
 import PTrainingDetail from "./pages/PTrainingDetail.jsx";
 import PTrainingEnrollment from "./pages/PTrainingEnrollment.jsx";
 
@@ -89,8 +89,8 @@ const router = createBrowserRouter([
         ),
       },
 
-      // ✅ Physical trainings (Public detail + Protected portal)
-      { path: "ptrainings/:id", element: <PTrainingDetail /> },
+      // ✅ Physical trainings (Public detail by slug OR id + Protected portal)
+      { path: "ptrainings/:key", element: <PTrainingDetail /> },
       {
         path: "ptrainings/enrollment/:enrollmentId",
         element: (
@@ -288,7 +288,7 @@ const router = createBrowserRouter([
         ),
       },
 
-      // ✅ Physical trainings admin (backend requires admin)
+      // ✅ Physical trainings admin
       {
         path: "admin/ptrainings",
         element: (

@@ -144,7 +144,7 @@ function TrainingCard({ t }) {
         <div className="mt-3 flex items-center justify-between">
           <div className="text-sm font-semibold">{ngn(t?.priceNGN || 0)}</div>
           <Link
-            to={`/ptrainings/${encodeURIComponent(t?._id)}`}
+            to={`/ptrainings/${t.slug || t._id}`}
             className="rounded-md px-3 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition"
           >
             View

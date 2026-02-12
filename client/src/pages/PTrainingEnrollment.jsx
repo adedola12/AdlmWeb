@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
+import { API_BASE } from "../config";
 
 function fmtDate(d) {
   try {
@@ -51,7 +52,6 @@ async function uploadReceiptToCloudinary(file) {
 }
 
 function pickToken(user) {
-  // supports multiple possible keys + localStorage fallbacks
   return (
     user?.accessToken ||
     user?.token ||
@@ -100,8 +100,6 @@ export default function PTrainingEnrollment() {
       if (ru && !receiptUrl) setReceiptUrl(ru);
     } catch (x) {
       const msg = x?.message || "Failed";
-
-      // if auth fails, show a clear message + allow login redirect
       if (msg.toLowerCase().includes("unauthorized")) {
         setErr("Session expired. Please login again.");
       } else {
@@ -172,10 +170,7 @@ export default function PTrainingEnrollment() {
     try {
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
-        {
-          note: note || "Submitted from portal",
-          receiptUrl,
-        },
+        { note: note || "Submitted from portal", receiptUrl },
         authedOpts,
       );
       await load();
@@ -226,6 +221,9 @@ export default function PTrainingEnrollment() {
 
   const paymentInstructions = e.paymentInstructions || null;
 
+  // ✅ view detail using slug if available
+  const trainingKey = training.slug || training._id;
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-start justify-between gap-4">
@@ -248,7 +246,7 @@ export default function PTrainingEnrollment() {
         </div>
 
         <Link
-          to={`/ptrainings/${training._id}`}
+          to={`/ptrainings/${trainingKey}`}
           className="text-blue-600 hover:underline font-semibold"
         >
           View Training Page →
@@ -543,9 +541,10 @@ export default function PTrainingEnrollment() {
                 Add Reminder (Google Calendar)
               </a>
 
+              {/* ✅ safer: download from API origin */}
               <a
                 className="px-4 py-2 rounded-xl border font-semibold hover:bg-gray-50"
-                href={`/me/ptrainings/${enrollmentId}/ics`}
+                href={`${API_BASE}/me/ptrainings/${enrollmentId}/ics`}
               >
                 Download .ICS
               </a>
