@@ -1,6 +1,7 @@
 // server/routes/admin.ptrainings.js
 import express from "express";
 import dayjs from "dayjs";
+import mongoose from "mongoose";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { TrainingEvent } from "../models/TrainingEvent.js";
 import { TrainingEnrollment } from "../models/TrainingEnrollment.js";
@@ -16,6 +17,31 @@ const normKey = (k) =>
   String(k || "")
     .trim()
     .toLowerCase();
+
+const DEFAULT_CAPACITY = 14;
+
+function capacityOf(training) {
+  const cap = Number(training?.capacityApproved);
+  return Number.isFinite(cap) && cap > 0 ? cap : DEFAULT_CAPACITY;
+}
+
+async function getApprovedCountsMap(trainingObjectIds, session = null) {
+  if (!Array.isArray(trainingObjectIds) || trainingObjectIds.length === 0) {
+    return {};
+  }
+
+  const pipeline = [
+    { $match: { trainingId: { $in: trainingObjectIds }, status: "approved" } },
+    { $group: { _id: "$trainingId", count: { $sum: 1 } } },
+  ];
+
+  const agg = await TrainingEnrollment.aggregate(pipeline).session(
+    session || null,
+  );
+  return Object.fromEntries(
+    (agg || []).map((x) => [String(x._id), x.count || 0]),
+  );
+}
 
 /**
  * ✅ Upsert entitlements using the SAME shape as User.entitlements schema
@@ -35,7 +61,6 @@ function addMonthsToEntitlement(
   if (!userDoc || !pk) return;
 
   const m = Math.max(Number(months || 0), 0);
-  // If months is 0, we still activate entitlement (no expiry change).
   const nextSeats = Math.max(Number(seats || 1), 1);
   const lt = licenseType === "organization" ? "organization" : "personal";
   const org =
@@ -54,7 +79,8 @@ function addMonthsToEntitlement(
       devices: [],
       licenseType: lt,
       organizationName: org,
-      expiresAt: m ? now.add(m, "month").toDate() : now.toDate(),
+      // ✅ if months==0, make it non-expiring (null) instead of "expires today"
+      expiresAt: m ? now.add(m, "month").toDate() : null,
     });
   } else {
     // extend expiry from the later of now or current expiry
@@ -66,13 +92,12 @@ function addMonthsToEntitlement(
       ent.expiresAt = base.add(m, "month").toDate();
     } else {
       // keep expiresAt as-is if months==0
-      ent.expiresAt = ent.expiresAt || now.toDate();
+      ent.expiresAt = ent.expiresAt ?? null;
     }
 
     ent.status = "active";
     ent.seats = Math.max(Number(ent.seats || 1), nextSeats, 1);
 
-    // keep license metadata in sync
     ent.licenseType = lt;
     ent.organizationName = org;
   }
@@ -102,8 +127,23 @@ function applyTrainingGrantsToUser(userDoc, training) {
 router.get(
   "/events",
   asyncHandler(async (_req, res) => {
-    const list = await TrainingEvent.find({}).sort({ createdAt: -1 });
-    res.json(list || []);
+    const list = await TrainingEvent.find({}).sort({ createdAt: -1 }).lean();
+
+    const ids = (list || [])
+      .map((t) => t?._id)
+      .filter(Boolean)
+      .map((id) => new mongoose.Types.ObjectId(String(id)));
+
+    const approvedMap = await getApprovedCountsMap(ids);
+
+    const enriched = (list || []).map((t) => {
+      const approvedCount = approvedMap[String(t._id)] || 0;
+      const cap = capacityOf(t);
+      const seatsLeft = Math.max(cap - approvedCount, 0);
+      return { ...t, approvedCount, seatsLeft };
+    });
+
+    res.json(enriched || []);
   }),
 );
 
@@ -150,15 +190,39 @@ router.get(
       .limit(500)
       .lean();
 
-    const ids = [...new Set((list || []).map((x) => String(x.trainingId)))];
-    const trainings = await TrainingEvent.find({ _id: { $in: ids } })
+    const trainingIdsStr = [
+      ...new Set(
+        (list || []).map((x) => String(x.trainingId || "")).filter(Boolean),
+      ),
+    ];
+
+    const trainingObjectIds = trainingIdsStr
+      .map((id) => {
+        try {
+          return new mongoose.Types.ObjectId(String(id));
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    const trainings = await TrainingEvent.find({
+      _id: { $in: trainingObjectIds },
+    })
       .select(
         "title startAt endAt priceNGN capacityApproved entitlementGrants installationChecklist",
       )
       .lean();
 
+    const approvedMap = await getApprovedCountsMap(trainingObjectIds);
+
     const map = Object.fromEntries(
-      (trainings || []).map((t) => [String(t._id), t]),
+      (trainings || []).map((t) => {
+        const approvedCount = approvedMap[String(t._id)] || 0;
+        const cap = capacityOf(t);
+        const seatsLeft = Math.max(cap - approvedCount, 0);
+        return [String(t._id), { ...t, approvedCount, seatsLeft }];
+      }),
     );
 
     const enriched = (list || []).map((x) => ({
@@ -173,86 +237,165 @@ router.get(
 /**
  * ✅ Approve enrollment (admin confirms payment & slot)
  * ✅ ALSO: grant entitlements immediately on approval
+ * ✅ ALSO: atomically increments TrainingEvent.approvedCount so "seats left" reduces
  */
 router.patch(
   "/enrollments/:id/approve",
   asyncHandler(async (req, res) => {
-    const enr = await TrainingEnrollment.findById(req.params.id);
-    if (!enr) return res.status(404).json({ error: "Enrollment not found" });
+    const session = await mongoose.startSession();
 
-    const st0 = String(enr.status || "").toLowerCase();
-    if (st0 === "approved") {
-      return res.json({
-        ok: true,
-        enrollment: enr,
-        grantsApplied: [],
-        message: "Enrollment already approved (no changes).",
+    try {
+      let responsePayload = null;
+
+      await session.withTransaction(async () => {
+        const enr = await TrainingEnrollment.findById(req.params.id).session(
+          session,
+        );
+        if (!enr) {
+          responsePayload = {
+            status: 404,
+            body: { error: "Enrollment not found" },
+          };
+          return;
+        }
+
+        const st0 = String(enr.status || "").toLowerCase();
+        if (st0 === "approved") {
+          // already approved: do NOT take another seat
+          const trainingLean = await TrainingEvent.findById(
+            enr.trainingId,
+          ).lean();
+          const cap = capacityOf(trainingLean);
+          const approvedCount = await TrainingEnrollment.countDocuments({
+            trainingId: enr.trainingId,
+            status: "approved",
+          }).session(session);
+          responsePayload = {
+            status: 200,
+            body: {
+              ok: true,
+              enrollment: enr,
+              grantsApplied: [],
+              seatsLeft: Math.max(cap - approvedCount, 0),
+              approvedCount,
+              message: "Enrollment already approved (no changes).",
+            },
+          };
+          return;
+        }
+
+        if (st0 === "rejected") {
+          responsePayload = {
+            status: 400,
+            body: { error: "Cannot approve: enrollment was rejected." },
+          };
+          return;
+        }
+
+        const training = await TrainingEvent.findById(enr.trainingId).lean();
+        if (!training) {
+          responsePayload = {
+            status: 404,
+            body: { error: "Training not found" },
+          };
+          return;
+        }
+
+        const cap = capacityOf(training);
+
+        // ✅ Re-sync approvedCount from real approvals (safe migration + correctness)
+        const currentApproved = await TrainingEnrollment.countDocuments({
+          trainingId: training._id,
+          status: "approved",
+        }).session(session);
+
+        await TrainingEvent.collection.updateOne(
+          { _id: training._id },
+          { $set: { approvedCount: currentApproved } },
+          { session },
+        );
+
+        // ✅ Atomically reserve a seat
+        const seatUpdate = await TrainingEvent.collection.findOneAndUpdate(
+          { _id: training._id, approvedCount: { $lt: cap } },
+          { $inc: { approvedCount: 1 } },
+          { session, returnDocument: "after", returnOriginal: false },
+        );
+
+        if (!seatUpdate?.value) {
+          responsePayload = {
+            status: 409,
+            body: { error: "Cannot approve: capacity reached." },
+          };
+          return;
+        }
+
+        // mark paid + approved
+        enr.payment = enr.payment || {};
+        enr.payment.paid = true;
+        enr.payment.paidAt = new Date();
+        enr.payment.raw = {
+          ...(enr.payment.raw || {}),
+          state: "confirmed",
+          confirmedAt: new Date().toISOString(),
+          confirmedBy: req.user?.email || "admin",
+        };
+
+        enr.status = "approved";
+        enr.approvedAt = new Date();
+        enr.approvedBy = req.user?.email || "admin";
+
+        // ensure installation shape exists
+        enr.installation = enr.installation || {};
+        enr.installation.status = enr.installation.status || "pending";
+
+        // ✅ grant entitlements NOW (on approval) - once only
+        const user = await User.findById(enr.userId).session(session);
+        if (!user) {
+          responsePayload = { status: 404, body: { error: "User not found" } };
+          return;
+        }
+
+        const alreadyApplied = enr?.installation?.entitlementsApplied === true;
+        const grantsApplied = alreadyApplied
+          ? []
+          : applyTrainingGrantsToUser(user, training);
+
+        if (!alreadyApplied) {
+          await user.save({ session });
+        }
+
+        // store flags on enrollment
+        enr.installation.entitlementsApplied = true;
+        enr.installation.entitlementsAppliedAt = new Date();
+        enr.installation.entitlementsAppliedBy = req.user?.email || "admin";
+
+        await enr.save({ session });
+
+        const approvedCountAfter = seatUpdate.value.approvedCount || 0;
+        const seatsLeft = Math.max(cap - approvedCountAfter, 0);
+
+        responsePayload = {
+          status: 200,
+          body: {
+            ok: true,
+            enrollment: enr,
+            grantsApplied,
+            seatsLeft,
+            approvedCount: approvedCountAfter,
+            message:
+              "Enrollment approved, entitlements granted, seat reserved.",
+          },
+        };
       });
+
+      if (!responsePayload) {
+        return res.status(500).json({ error: "Unknown approval error" });
+      }
+      return res.status(responsePayload.status).json(responsePayload.body);
+    } finally {
+      session.endSession();
     }
-    if (st0 === "rejected") {
-      return res
-        .status(400)
-        .json({ error: "Cannot approve: enrollment was rejected." });
-    }
-
-    const training = await TrainingEvent.findById(enr.trainingId).lean();
-    if (!training) return res.status(404).json({ error: "Training not found" });
-
-    // enforce cap
-    const approvedCount = await TrainingEnrollment.countDocuments({
-      trainingId: training._id,
-      status: "approved",
-    });
-    if (approvedCount >= (training.capacityApproved || 14)) {
-      return res
-        .status(409)
-        .json({ error: "Cannot approve: capacity reached." });
-    }
-
-    // mark paid + approved
-    enr.payment = enr.payment || {};
-    enr.payment.paid = true;
-    enr.payment.paidAt = new Date();
-    enr.payment.raw = {
-      ...(enr.payment.raw || {}),
-      state: "confirmed",
-      confirmedAt: new Date().toISOString(),
-      confirmedBy: req.user?.email || "admin",
-    };
-
-    enr.status = "approved";
-    enr.approvedAt = new Date();
-    enr.approvedBy = req.user?.email || "admin";
-
-    // ensure installation shape exists
-    enr.installation = enr.installation || {};
-    enr.installation.status = enr.installation.status || "pending";
-
-    // ✅ grant entitlements NOW (on approval)
-    const user = await User.findById(enr.userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    const alreadyApplied = enr?.installation?.entitlementsApplied === true;
-    const grantsApplied = alreadyApplied
-      ? []
-      : applyTrainingGrantsToUser(user, training);
-    if (!alreadyApplied) await user.save();
-
-    await user.save();
-
-    // store flags on enrollment (reuse existing fields you already set in install route)
-    enr.installation.entitlementsApplied = true;
-    enr.installation.entitlementsAppliedAt = new Date();
-    enr.installation.entitlementsAppliedBy = req.user?.email || "admin";
-
-    await enr.save();
-
-    res.json({
-      ok: true,
-      enrollment: enr,
-      grantsApplied,
-      message: "Enrollment approved and entitlements granted.",
-    });
   }),
 );
 
@@ -275,7 +418,6 @@ router.patch(
         .status(400)
         .json({ error: "Cannot reject: enrollment already approved." });
     }
-
 
     enr.status = "rejected";
     enr.rejectedAt = new Date();
