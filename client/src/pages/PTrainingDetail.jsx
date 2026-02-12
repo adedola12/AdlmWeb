@@ -25,6 +25,56 @@ function mapsLink(address, placeUrl) {
   return `https://www.google.com/maps/dir/?api=1&origin=Current+Location&destination=${dest}`;
 }
 
+function buildMapsEmbedUrl(loc, address) {
+  const rawEmbed = String(loc?.googleMapsEmbedUrl || "").trim();
+
+  // If they already saved an embed URL, use it.
+  if (rawEmbed) {
+    const ok =
+      /google\.com\/maps\/embed/i.test(rawEmbed) ||
+      /output=embed/i.test(rawEmbed);
+    if (ok) return rawEmbed;
+
+    // If it's a maps? URL, force output=embed
+    if (/google\.com\/maps\?/i.test(rawEmbed)) {
+      try {
+        const u = new URL(rawEmbed);
+        u.searchParams.set("output", "embed");
+        return u.toString();
+      } catch {
+        // fallthrough
+      }
+    }
+  }
+
+  // If they saved a place URL, convert to q=...&output=embed
+  const placeUrl = String(loc?.googleMapsPlaceUrl || "").trim();
+  if (placeUrl) {
+    if (
+      /google\.com\/maps\/embed/i.test(placeUrl) ||
+      /output=embed/i.test(placeUrl)
+    ) {
+      return placeUrl;
+    }
+    try {
+      const u = new URL(placeUrl);
+      const q = u.searchParams.get("q") || u.searchParams.get("query");
+      if (q) {
+        return `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Final fallback: embed by address (works broadly)
+  const q =
+    String(address || "").trim() ||
+    [loc?.name, loc?.address, loc?.city, loc?.state].filter(Boolean).join(", ");
+  if (!q) return "";
+  return `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
+}
+
 function normKey(k) {
   return String(k || "")
     .trim()
@@ -59,19 +109,39 @@ function toYouTubeEmbed(url) {
   return "";
 }
 
-function pickToken(user) {
-  return (
-    user?.accessToken ||
-    user?.token ||
-    user?.access_token ||
-    user?.jwt ||
-    (typeof window !== "undefined" && localStorage.getItem("accessToken")) ||
-    (typeof window !== "undefined" && localStorage.getItem("token")) ||
-    (typeof window !== "undefined" && localStorage.getItem("access_token")) ||
-    (typeof window !== "undefined" &&
-      localStorage.getItem("adlm_accessToken")) ||
-    ""
-  );
+function pickToken({ user, accessToken } = {}) {
+  // 1) context token first
+  const t1 = String(accessToken || "").trim();
+  if (t1) return t1;
+
+  // 2) sometimes token is nested under user
+  const t2 =
+    user?.accessToken || user?.token || user?.access_token || user?.jwt || "";
+  if (String(t2 || "").trim()) return String(t2).trim();
+
+  if (typeof window === "undefined") return "";
+
+  // 3) legacy keys
+  const legacy =
+    localStorage.getItem("accessToken") ||
+    localStorage.getItem("adlm_accessToken") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("access_token");
+  if (legacy) return String(legacy).trim();
+
+  // 4) current "auth" blob
+  try {
+    const raw = localStorage.getItem("auth");
+    if (raw) {
+      const a = JSON.parse(raw);
+      const t3 = a?.accessToken || a?.user?.accessToken || "";
+      if (String(t3 || "").trim()) return String(t3).trim();
+    }
+  } catch {
+    // ignore
+  }
+
+  return "";
 }
 
 const PRODUCT_CATALOG = {
@@ -151,12 +221,14 @@ async function uploadReceiptToCloudinary(file) {
 }
 
 export default function PTrainingDetail() {
-  // ✅ key can be slug OR id (slug preferred)
   const { key } = useParams();
   const nav = useNavigate();
-  const { user } = useAuth();
+  const { user, accessToken, clear } = useAuth();
 
-  const token = useMemo(() => pickToken(user), [user]);
+  const token = useMemo(
+    () => pickToken({ user, accessToken }),
+    [user, accessToken],
+  );
   const authedOpts = useMemo(() => (token ? { token } : {}), [token]);
 
   const [loading, setLoading] = useState(true);
@@ -165,7 +237,6 @@ export default function PTrainingDetail() {
 
   const [busy, setBusy] = useState(false);
 
-  // payment modal state
   const [payOpen, setPayOpen] = useState(false);
   const [payInfo, setPayInfo] = useState(null);
   const [enrollmentId, setEnrollmentId] = useState("");
@@ -174,15 +245,12 @@ export default function PTrainingDetail() {
   const [bankName, setBankName] = useState("");
   const [reference, setReference] = useState("");
 
-  // receipt upload state (optional)
   const [receiptUrl, setReceiptUrl] = useState("");
   const [receiptUploading, setReceiptUploading] = useState(false);
 
-  // gallery modal (images + videos)
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryIdx, setGalleryIdx] = useState(0);
 
-  // flyer lightbox
   const [flyerOpen, setFlyerOpen] = useState(false);
 
   useEffect(() => {
@@ -214,6 +282,16 @@ export default function PTrainingDetail() {
       .join(", ");
   }, [t]);
 
+  const mapsHref = useMemo(
+    () => mapsLink(address, t?.location?.googleMapsPlaceUrl),
+    [address, t],
+  );
+
+  const mapsEmbedSrc = useMemo(
+    () => buildMapsEmbedUrl(t?.location || {}, address),
+    [t, address],
+  );
+
   const galleryMedia = useMemo(() => {
     const locPhotos = Array.isArray(t?.location?.photos)
       ? t.location.photos
@@ -243,7 +321,6 @@ export default function PTrainingDetail() {
       : [];
 
     const combined = [...locPhotos, ...venueMedia];
-
     const seen = new Set();
     const out = [];
     for (const m of combined) {
@@ -303,7 +380,6 @@ export default function PTrainingDetail() {
     const grants = Array.isArray(t?.entitlementGrants)
       ? t.entitlementGrants
       : [];
-
     if (grants.length) {
       return grants
         .map((g) => {
@@ -340,17 +416,34 @@ export default function PTrainingDetail() {
       .filter(Boolean);
   }, [t]);
 
+  function handleAuthError(e) {
+    if (e?.status === 401) {
+      setErr("Session expired. Please log in again.");
+      clear?.();
+      nav("/login");
+      return true;
+    }
+    return false;
+  }
+
   async function onRegister() {
     if (!user) return nav("/login");
+
+    // On mobile, cookies may not refresh reliably — ensure we have a bearer token.
+    const liveToken = pickToken({ user, accessToken });
+    if (!liveToken) {
+      setErr("Please log in again to register.");
+      clear?.();
+      return nav("/login");
+    }
 
     setBusy(true);
     setErr("");
     try {
-      // ✅ now enroll can accept slug OR id
       const { data } = await apiAuthed.post(
         `/ptrainings/${encodeURIComponent(String(key || ""))}/enroll`,
         {},
-        authedOpts,
+        { token: liveToken },
       );
 
       if (!data?.enrollmentId) throw new Error("No enrollmentId returned");
@@ -376,7 +469,7 @@ export default function PTrainingDetail() {
       setBankName("");
       setReference("");
     } catch (e) {
-      setErr(e?.message || "Failed");
+      if (!handleAuthError(e)) setErr(e?.message || "Failed");
     } finally {
       setBusy(false);
     }
@@ -385,17 +478,24 @@ export default function PTrainingDetail() {
   async function confirmPaymentSubmission() {
     if (!enrollmentId) return;
 
+    const liveToken = pickToken({ user, accessToken });
+    if (!liveToken) {
+      setErr("Please log in again to continue.");
+      clear?.();
+      return nav("/login");
+    }
+
     try {
       await apiAuthed.post(
         `/ptrainings/enrollments/${enrollmentId}/payment-submitted`,
         { note: payNote, payerName, bankName, reference, receiptUrl },
-        authedOpts,
+        { token: liveToken },
       );
 
       setPayOpen(false);
       nav(`/ptrainings/enrollment/${enrollmentId}`);
     } catch (e) {
-      alert(e?.message || "Failed");
+      if (!handleAuthError(e)) alert(e?.message || "Failed");
     }
   }
 
@@ -438,7 +538,6 @@ export default function PTrainingDetail() {
   const cap = t.capacityApproved || 14;
   const approved = t.approvedCount || 0;
   const closed = approved >= cap;
-  const mapsHref = mapsLink(address, t.location?.googleMapsPlaceUrl);
 
   const activeMedia = galleryMedia[galleryIdx] || null;
 
@@ -735,17 +834,23 @@ export default function PTrainingDetail() {
           )}
         </div>
 
-        {t.location?.googleMapsEmbedUrl ? (
+        {/* ✅ Map embed that won’t get blocked */}
+        {mapsEmbedSrc ? (
           <div className="mt-6 rounded-2xl overflow-hidden border">
             <iframe
               title="Google Maps"
-              src={t.location.googleMapsEmbedUrl}
+              src={mapsEmbedSrc}
               className="w-full h-72 sm:h-80"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
             />
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-6 text-sm text-gray-600">
+            Map preview not available. Please use “Open in Google Maps”.
+          </div>
+        )}
       </div>
 
       {/* NEXT STEPS */}
