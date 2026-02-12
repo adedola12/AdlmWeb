@@ -90,7 +90,6 @@ export default function Home() {
             className="max-w-3xl opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
             style={{ animationDelay: "120ms" }}
           >
-            <FeaturedTrainingBanner />
             <h1
               className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
               style={{ animationDelay: "220ms" }}
@@ -158,6 +157,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <FeaturedTrainingBanner />
 
       {/* WHY CHOOSE */}
       <section className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-24 pb-12 sm:pb-16">
