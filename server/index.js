@@ -7,6 +7,7 @@ import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { connectDB } from "./db.js";
 
@@ -66,6 +67,7 @@ const __dirname = path.dirname(__filename);
 
 app.set("trust proxy", 1);
 
+/* -------------------- quick debug -------------------- */
 app.get("/__debug/db", (_req, res) => {
   const c = mongoose?.connection || {};
   res.json({ dbName: c.name, host: c.host, ok: c.readyState === 1 });
@@ -150,20 +152,7 @@ app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 app.use(morgan("dev"));
 
 /* =========================
-   ✅ FRONTEND STATIC (ASSETS) + ✅ DYNAMIC META (HTML)
-   ========================= */
-
-// client is sibling of server -> ../client/dist
-const distDir = path.resolve(__dirname, "../client/dist");
-
-// Serve assets, but DO NOT auto-serve index.html (we inject it)
-app.use(express.static(distDir, { index: false }));
-
-// ✅ This MUST be before API routes, so bots/browsers get HTML with OG tags
-registerDynamicMetaRoutes(app);
-
-/* =========================
-   ✅ API ROUTES
+   ✅ API ROUTES (FIRST)
    ========================= */
 
 app.use("/webhooks", webhooksRouter);
@@ -227,6 +216,45 @@ app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
 app.use("/api/entitlements", entitlementsRouter);
 
+/* =========================
+   ✅ OPTIONAL: serve frontend + dynamic meta
+   - Prevents ENOENT crashes on Render when dist doesn't exist
+   ========================= */
+
+// Turn ON only when you really want this server to also host the frontend build
+const SERVE_CLIENT = ["1", "true", "yes"].includes(
+  String(process.env.SERVE_CLIENT || "").toLowerCase(),
+);
+
+// client is sibling of server -> ../client/dist
+const distDir = path.resolve(__dirname, "../client/dist");
+const indexHtml = path.join(distDir, "index.html");
+
+const hasClientBuild = fs.existsSync(indexHtml);
+
+if (SERVE_CLIENT && hasClientBuild) {
+  // Serve assets, but DO NOT auto-serve index.html (meta.dynamic injects it)
+  app.use(express.static(distDir, { index: false }));
+
+  // Dynamic meta HTML routes MUST be AFTER API routes
+  // so they never intercept /products/:key, /coupons/banner, etc.
+  registerDynamicMetaRoutes(app);
+
+  // SPA fallback for browser navigation (HTML only)
+  app.get("*", (req, res, next) => {
+    if (req.method !== "GET") return next();
+    const accept = String(req.headers.accept || "");
+    if (!accept.includes("text/html")) return next();
+    res.sendFile(indexHtml);
+  });
+} else {
+  if (SERVE_CLIENT && !hasClientBuild) {
+    console.warn(
+      "[SERVE_CLIENT] is enabled but client/dist/index.html was not found. Skipping static+meta routes to prevent ENOENT.",
+    );
+  }
+}
+
 /* -------- helpful error handling -------- */
 app.use((err, _req, res, next) => {
   if (err?.type === "entity.too.large") {
@@ -246,6 +274,7 @@ app.use((err, _req, res, next) => {
 
 /* -------- 404 + generic -------- */
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
+
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: "Server error" });
@@ -253,6 +282,7 @@ app.use((err, _req, res, _next) => {
 
 /* -------- boot -------- */
 const port = process.env.PORT || 4000;
+
 try {
   await connectDB(process.env.MONGO_URI);
   app.listen(port, () => console.log(`Server running on :${port}`));
