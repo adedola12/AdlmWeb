@@ -153,10 +153,49 @@ function getInstallState(p) {
   return { label: status || "Unknown", tone: "slate" };
 }
 
-function monthsFromLine(ln) {
-  const periods = Math.max(parseInt(ln?.periods ?? 1, 10) || 1, 1);
-  const interval = String(ln?.billingInterval || "monthly").toLowerCase();
-  return (interval === "yearly" ? 12 : 1) * periods;
+function monthsFromLine(purchase, ln) {
+  const interval = String(ln?.billingInterval || "monthly")
+    .toLowerCase()
+    .trim();
+  const intervalMonths = interval === "yearly" ? 12 : 1;
+
+  const explicitLineMonths = Number(
+    ln?.months ??
+      ln?.durationMonths ??
+      ln?.requestedMonths ??
+      ln?.approvedMonths ??
+      0,
+  );
+  if (Number.isFinite(explicitLineMonths) && explicitLineMonths > 0) {
+    return explicitLineMonths;
+  }
+
+  const hasPeriods = Object.prototype.hasOwnProperty.call(ln || {}, "periods");
+  if (hasPeriods) {
+    const p = Math.max(parseInt(ln?.periods ?? 1, 10) || 1, 1);
+    return p * intervalMonths;
+  }
+
+  const rawQty = Math.max(parseInt(ln?.qty ?? 1, 10) || 1, 1);
+
+  // legacy personal duration stored in qty
+  const inferredLt = inferLicenseType(
+    ln?.licenseType || purchase?.licenseType,
+    rawQty,
+    ln?.organizationName || purchase?.organization?.name,
+  );
+  if (inferredLt === "personal" && rawQty > 1) {
+    return rawQty * intervalMonths;
+  }
+
+  const purchaseFallbackMonths = Number(
+    purchase?.approvedMonths ?? purchase?.requestedMonths ?? 0,
+  );
+  if (Number.isFinite(purchaseFallbackMonths) && purchaseFallbackMonths > 0) {
+    return purchaseFallbackMonths;
+  }
+
+  return intervalMonths; // default 1 interval
 }
 
 function formatGrants(p) {
@@ -410,6 +449,9 @@ export default function Admin() {
   const [msg, setMsg] = React.useState("");
   const [installations, setInstallations] = React.useState([]);
 
+  const [trainingEnrollments, setTrainingEnrollments] = React.useState([]);
+
+
   const [devicesModal, setDevicesModal] = React.useState({
     open: false,
     email: "",
@@ -425,11 +467,13 @@ export default function Admin() {
         apiAuthed(`/admin/users${qs}`, { token: accessToken }),
         apiAuthed(`/admin/purchases?status=pending`, { token: accessToken }),
         apiAuthed(`/admin/installations`, { token: accessToken }),
+        apiAuthed(`/admin/ptrainings/enrollments`, { token: accessToken }),
       ]);
 
       setUsers(uRes || []);
       setInstallations(iRes || []);
       setPurchases(pRes || []);
+      setTrainingEnrollments(teRes || []);
     } catch (e) {
       setMsg(e?.message || "Failed to load admin data");
     } finally {
@@ -629,6 +673,41 @@ export default function Admin() {
 
     return sorted;
   }, [users, q]);
+
+  async function approveTrainingEnrollment(enrollmentId) {
+    setMsg("");
+    try {
+      const res = await apiAuthed(
+        `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
+        {
+          token: accessToken,
+          method: "PATCH",
+        },
+      );
+      await load();
+      setMsg(res?.message || "Training enrollment approved");
+    } catch (e) {
+      setMsg(e?.message || "Failed to approve training enrollment");
+    }
+  }
+
+  async function rejectTrainingEnrollment(enrollmentId) {
+    setMsg("");
+    try {
+      const res = await apiAuthed(
+        `/admin/ptrainings/enrollments/${enrollmentId}/reject`,
+        {
+          token: accessToken,
+          method: "PATCH",
+        },
+      );
+      await load();
+      setMsg(res?.message || "Training enrollment rejected");
+    } catch (e) {
+      setMsg(e?.message || "Failed to reject training enrollment");
+    }
+  }
+
 
   function ActiveSubscriptionsByProduct({
     productKeys,
@@ -980,6 +1059,17 @@ export default function Admin() {
             </button>
 
             <button
+              onClick={() => setTab("ptrainings")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "ptrainings"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Physical Training
+            </button>
+
+            <button
               onClick={() => setTab("subscriptions")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "subscriptions"
@@ -1121,7 +1211,8 @@ export default function Admin() {
                               parseInt(ln?.periods ?? 1, 10) || 1,
                               1,
                             );
-                            const months = monthsFromLine(ln);
+                            const months = monthsFromLine(p, ln);
+
                             const seatsLine = Math.max(
                               parseInt(ln?.qty ?? 1, 10) || 1,
                               1,
@@ -1242,6 +1333,164 @@ export default function Admin() {
                     setDevicesModal({ open: true, email, productKey })
                   }
                 />
+              );
+            })()
+          )}
+        </div>
+      )}
+
+      {tab === "ptrainings" && (
+        <div className="card">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="font-semibold">Physical Training Approvals</h2>
+            <div className="text-xs text-slate-500">
+              Approve payment + registration. Approval also grants the event
+              entitlements.
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading…</div>
+          ) : (
+            (() => {
+              const rows = Array.isArray(trainingEnrollments)
+                ? trainingEnrollments
+                : [];
+
+              const rx = q ? new RegExp(q, "i") : null;
+
+              const needsReview = rows.filter((e) => {
+                const st = String(e?.status || "").toLowerCase();
+                if (st === "approved" || st === "rejected") return false;
+
+                const payState = String(
+                  e?.payment?.raw?.state || "",
+                ).toLowerCase();
+                const hasSubmitted =
+                  payState === "submitted" ||
+                  !!e?.payment?.receiptUrl ||
+                  !!e?.payment?.reference ||
+                  !!e?.payment?.note;
+
+                if (!hasSubmitted) return false;
+
+                if (!rx) return true;
+
+                const email = String(e?.email || e?.userEmail || "");
+                const name =
+                  `${e?.firstName || ""} ${e?.lastName || ""}`.trim();
+                const title = String(e?.training?.title || "");
+                return rx.test(email) || rx.test(name) || rx.test(title);
+              });
+
+              if (needsReview.length === 0) {
+                return (
+                  <div className="text-sm text-slate-600">
+                    No submitted training payments to review.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  {needsReview.map((e) => {
+                    const title = e?.training?.title || "Training";
+                    const when = e?.training?.startAt
+                      ? dayjs(e.training.startAt).format("YYYY-MM-DD")
+                      : "—";
+
+                    const payer =
+                      `${e?.payment?.payerName || ""}`.trim() ||
+                      `${e?.firstName || ""} ${e?.lastName || ""}`.trim() ||
+                      "—";
+
+                    const receipt = e?.payment?.receiptUrl || "";
+
+                    return (
+                      <div
+                        key={e._id}
+                        className="border rounded p-3 flex flex-col gap-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="text-sm min-w-0">
+                            <div className="font-medium truncate">
+                              {e?.email || e?.userEmail || "—"}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              <b>{title}</b> · {when}
+                            </div>
+
+                            <div className="mt-2 text-xs text-slate-600 space-y-1">
+                              <div>
+                                Payer: <b className="text-slate-800">{payer}</b>
+                              </div>
+                              {e?.payment?.bankName ? (
+                                <div>
+                                  Bank:{" "}
+                                  <b className="text-slate-800">
+                                    {e.payment.bankName}
+                                  </b>
+                                </div>
+                              ) : null}
+                              {e?.payment?.reference ? (
+                                <div>
+                                  Ref:{" "}
+                                  <b className="text-slate-800">
+                                    {e.payment.reference}
+                                  </b>
+                                </div>
+                              ) : null}
+                              {e?.payment?.note ? (
+                                <div className="text-slate-700">
+                                  Note: {e.payment.note}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {receipt ? (
+                              <div className="mt-2">
+                                <a
+                                  href={receipt}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sm font-semibold text-blue-700 hover:underline"
+                                >
+                                  View receipt →
+                                </a>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="shrink-0 flex gap-2">
+                            <button
+                              className="btn"
+                              onClick={() => {
+                                const ok = window.confirm(
+                                  "Approve this training payment and registration?",
+                                );
+                                if (ok) approveTrainingEnrollment(e._id);
+                              }}
+                            >
+                              Approve
+                            </button>
+
+                            <button
+                              className="btn"
+                              onClick={() => {
+                                const ok = window.confirm(
+                                  "Reject this enrollment?",
+                                );
+                                if (ok) rejectTrainingEnrollment(e._id);
+                              }}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               );
             })()
           )}

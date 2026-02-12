@@ -139,7 +139,7 @@ function applyExpiryToUser(userDoc) {
  * Parse a purchase line into a normalized grant, with legacy fix:
  * - If personal + no periods field + qty > 1 => qty was duration (periods), NOT seats.
  */
-function parseLineForGrant(purchase, ln) {
+function parseLineForGrant(purchase, ln, overrideMonths = 0) {
   const productKey = String(ln?.productKey || "").trim();
   if (!productKey) return null;
 
@@ -156,19 +156,55 @@ function parseLineForGrant(purchase, ln) {
   );
 
   const rawQty = Math.max(Number(ln?.qty ?? 1), 1);
+
+  // detect whether line has explicit "periods"
   const hasPeriods = lineHasPeriods(ln);
-  const rawPeriods = hasPeriods ? Math.max(Number(ln?.periods ?? 1), 1) : 1;
+  const rawPeriods = hasPeriods ? Math.max(Number(ln?.periods ?? 1), 1) : 0;
 
+  // seats: org uses qty, personal always 1
   let seats = lt === "organization" ? rawQty : 1;
-  let periods = rawPeriods;
 
-  // ✅ legacy fix: personal duration stored in qty
-  if (lt === "personal" && !hasPeriods && rawQty > 1) {
-    periods = rawQty;
-    seats = 1;
+  // -------- duration inference (months) --------
+  // 1) explicit months on line (if your checkout stores this)
+  const explicitLineMonths = Number(
+    ln?.months ??
+      ln?.durationMonths ??
+      ln?.requestedMonths ??
+      ln?.approvedMonths ??
+      0,
+  );
+
+  // 2) fallback months stored on purchase (if your checkout stores globally)
+  const purchaseFallbackMonths = Number(
+    purchase?.approvedMonths ?? purchase?.requestedMonths ?? 0,
+  );
+
+  let months = 0;
+
+  // If periods exist, periods wins.
+  if (rawPeriods > 0) {
+    months = rawPeriods * intervalMonths;
+  } else {
+    // ✅ legacy fix: personal duration stored inside qty
+    if (lt === "personal" && rawQty > 1) {
+      months = rawQty * intervalMonths;
+      seats = 1;
+    } else if (Number.isFinite(explicitLineMonths) && explicitLineMonths > 0) {
+      months = explicitLineMonths; // already months
+    } else if (
+      Number.isFinite(purchaseFallbackMonths) &&
+      purchaseFallbackMonths > 0
+    ) {
+      months = purchaseFallbackMonths; // already months
+    } else if (Number.isFinite(overrideMonths) && overrideMonths > 0) {
+      months = overrideMonths; // already months
+    } else {
+      // default: 1 interval
+      months = intervalMonths; // 1 month or 12 months depending on interval
+    }
   }
 
-  const months = periods * intervalMonths;
+  months = Math.max(Number(months || 0), 1);
 
   return {
     productKey,
@@ -321,9 +357,8 @@ function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
 
   if (Array.isArray(purchase.lines) && purchase.lines.length > 0) {
     for (const ln of purchase.lines) {
-      const parsed = parseLineForGrant(purchase, ln);
+      const parsed = parseLineForGrant(purchase, ln, overrideMonths);
       if (!parsed) continue;
-
       grants.push({
         productKey: parsed.productKey,
         months: parsed.months,
@@ -704,6 +739,7 @@ router.post(
 
       p.installation.entitlementsApplied = true;
       p.installation.entitlementsAppliedAt = new Date();
+      p.installation.entitlementGrants = grants; // persist the correct months/seats
     } else if (
       p.installation.entitlementsApplied !== true &&
       installGrants.length === 0

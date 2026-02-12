@@ -180,6 +180,21 @@ router.patch(
     const enr = await TrainingEnrollment.findById(req.params.id);
     if (!enr) return res.status(404).json({ error: "Enrollment not found" });
 
+    const st0 = String(enr.status || "").toLowerCase();
+    if (st0 === "approved") {
+      return res.json({
+        ok: true,
+        enrollment: enr,
+        grantsApplied: [],
+        message: "Enrollment already approved (no changes).",
+      });
+    }
+    if (st0 === "rejected") {
+      return res
+        .status(400)
+        .json({ error: "Cannot approve: enrollment was rejected." });
+    }
+
     const training = await TrainingEvent.findById(enr.trainingId).lean();
     if (!training) return res.status(404).json({ error: "Training not found" });
 
@@ -217,7 +232,12 @@ router.patch(
     const user = await User.findById(enr.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    const grantsApplied = applyTrainingGrantsToUser(user, training);
+    const alreadyApplied = enr?.installation?.entitlementsApplied === true;
+    const grantsApplied = alreadyApplied
+      ? []
+      : applyTrainingGrantsToUser(user, training);
+    if (!alreadyApplied) await user.save();
+
     await user.save();
 
     // store flags on enrollment (reuse existing fields you already set in install route)
@@ -241,6 +261,21 @@ router.patch(
   asyncHandler(async (req, res) => {
     const enr = await TrainingEnrollment.findById(req.params.id);
     if (!enr) return res.status(404).json({ error: "Enrollment not found" });
+
+    const st0 = String(enr.status || "").toLowerCase();
+    if (st0 === "rejected") {
+      return res.json({
+        ok: true,
+        enrollment: enr,
+        message: "Already rejected.",
+      });
+    }
+    if (st0 === "approved") {
+      return res
+        .status(400)
+        .json({ error: "Cannot reject: enrollment already approved." });
+    }
+
 
     enr.status = "rejected";
     enr.rejectedAt = new Date();

@@ -516,9 +516,9 @@ export default function Products() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold">Physical Trainings</div>
-            <div className="text-sm text-slate-600">
+            {/* <div className="text-sm text-slate-600">
               Upcoming physical programs (flyer + location).
-            </div>
+            </div> */}
           </div>
           <button
             className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
