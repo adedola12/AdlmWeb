@@ -38,7 +38,7 @@ function blankEvent() {
     endAt: "",
     capacityApproved: 14,
 
-    // ✅ NEW pricing tiers (draft uses datetime-local strings)
+    // ✅ pricing tiers (draft uses datetime-local strings)
     pricing: {
       normalNGN: 300000,
       groupOf3NGN: 0,
@@ -65,10 +65,13 @@ function blankEvent() {
       photos: [], // [{type:"image",url,title}]
     },
 
-    // Event media gallery (images/videos)
+    // ✅ Venue Images & Videos (gallery)
+    // (kept as `media` to avoid breaking API/DB)
     media: [], // [{type:"image"|"video", url, title}]
 
+    // ✅ Admin-defined registration form schema
     formFields: [],
+
     installationChecklist: [],
     entitlementGrants: [],
     softwareProductKeys: [],
@@ -80,6 +83,18 @@ function blankEvent() {
 function fileLabel(f) {
   if (!f) return "";
   return `${f.name} (${Math.round(f.size / 1024 / 1024)} MB)`;
+}
+
+function buildFormDataTemplate(formFields) {
+  const fields = Array.isArray(formFields) ? formFields : [];
+  const o = {};
+  for (const f of fields) {
+    const k = String(f?.key || "").trim();
+    if (!k) continue;
+    const t = String(f?.type || "short");
+    o[k] = t === "multi" ? [] : "";
+  }
+  return o;
 }
 
 /* ---------------------- UI atoms ---------------------- */
@@ -214,6 +229,7 @@ function MediaBrowserModal({ open, onClose, type = "image", onPick }) {
           <button
             className="px-3 py-2 rounded-xl border font-semibold"
             onClick={onClose}
+            type="button"
           >
             Close
           </button>
@@ -362,6 +378,9 @@ export default function AdminPTrainings() {
   const [pickerType, setPickerType] = useState("image"); // image|video
   const [pickerTarget, setPickerTarget] = useState(null);
 
+  // --- form preview state
+  const [formPreview, setFormPreview] = useState({});
+
   const productMap = useMemo(() => {
     const m = {};
     (products || []).forEach((p) => {
@@ -442,25 +461,40 @@ export default function AdminPTrainings() {
       location: {
         ...blankEvent().location,
         ...(e.location || {}),
+        amenities: Array.isArray(e?.location?.amenities)
+          ? e.location.amenities
+          : [],
         photos: Array.isArray(e?.location?.photos) ? e.location.photos : [],
       },
+
+      // ✅ Venue images/videos gallery
       media: Array.isArray(e?.media) ? e.media : [],
-      formFields: e.formFields || [],
-      installationChecklist: e.installationChecklist || [],
-      entitlementGrants: e.entitlementGrants || [],
-      softwareProductKeys: e.softwareProductKeys || [],
-      whatYouGet: e.whatYouGet || [],
-      requirements: e.requirements || [],
+
+      formFields: Array.isArray(e?.formFields) ? e.formFields : [],
+      installationChecklist: Array.isArray(e?.installationChecklist)
+        ? e.installationChecklist
+        : [],
+      entitlementGrants: Array.isArray(e?.entitlementGrants)
+        ? e.entitlementGrants
+        : [],
+      softwareProductKeys: Array.isArray(e?.softwareProductKeys)
+        ? e.softwareProductKeys
+        : [],
+      whatYouGet: Array.isArray(e?.whatYouGet) ? e.whatYouGet : [],
+      requirements: Array.isArray(e?.requirements) ? e.requirements : [],
     };
 
     syncSoftwareIntoDraft(next, productMap);
     setDraft(next);
+    setFormPreview(buildFormDataTemplate(next.formFields));
     setTab("events");
   }
 
   function newEvent() {
     setActiveId("");
-    setDraft(blankEvent());
+    const b = blankEvent();
+    setDraft(b);
+    setFormPreview(buildFormDataTemplate(b.formFields));
     setTab("events");
   }
 
@@ -480,6 +514,10 @@ export default function AdminPTrainings() {
 
       if (path === "softwareProductKeys") {
         syncSoftwareIntoDraft(next, productMap);
+      }
+
+      if (path === "formFields") {
+        setFormPreview(buildFormDataTemplate(value));
       }
 
       return next;
@@ -598,7 +636,8 @@ export default function AdminPTrainings() {
       update("location.photos", next);
     }
 
-    if (t.kind === "eventMedia") {
+    // ✅ Venue gallery (images/videos) - still saved in `media`
+    if (t.kind === "venueMedia") {
       const idx = t.idx;
       const next = deepClone(draft.media || []);
       if (!next[idx]) return;
@@ -644,12 +683,6 @@ export default function AdminPTrainings() {
       );
     }
 
-    // Optional: earlybird should end before start
-    if (ebEndsISO && new Date(ebEndsISO) > s) {
-      // This is a business choice; comment out if you want earlybird to end after start.
-      // return setErr("Earlybird end date should be on/before the Start date/time.");
-    }
-
     try {
       const payload = {
         ...draft,
@@ -658,7 +691,7 @@ export default function AdminPTrainings() {
         startAt: s.toISOString(),
         endAt: e.toISOString(),
 
-        // ✅ NEW pricing object
+        // ✅ pricing object
         pricing: {
           normalNGN,
           groupOf3NGN,
@@ -683,7 +716,7 @@ export default function AdminPTrainings() {
       }
 
       await loadEvents();
-      alert("Saved!");
+      window.alert("Saved!");
     } catch (e2) {
       setErr(e2?.message || "Failed");
     }
@@ -691,12 +724,14 @@ export default function AdminPTrainings() {
 
   async function deleteEvent() {
     if (!activeId) return;
-    if (!confirm("Delete this training event?")) return;
+    if (!window.confirm("Delete this training event?")) return;
 
     try {
       await apiAuthed.delete(`/admin/ptrainings/events/${activeId}`);
       setActiveId("");
-      setDraft(blankEvent());
+      const b = blankEvent();
+      setDraft(b);
+      setFormPreview(buildFormDataTemplate(b.formFields));
       await loadEvents();
     } catch (e) {
       setErr(e?.message || "Failed");
@@ -707,9 +742,9 @@ export default function AdminPTrainings() {
     try {
       await apiAuthed.patch(`/admin/ptrainings/enrollments/${id}/approve`, {});
       await loadEnrollments();
-      alert("Approved!");
+      window.alert("Approved!");
     } catch (e) {
-      alert(e?.message || "Failed");
+      window.alert(e?.message || "Failed");
     }
   }
 
@@ -720,9 +755,9 @@ export default function AdminPTrainings() {
         {},
       );
       await loadEnrollments();
-      alert("Installation complete + entitlements granted!");
+      window.alert("Installation complete + entitlements granted!");
     } catch (e) {
-      alert(e?.message || "Failed");
+      window.alert(e?.message || "Failed");
     }
   }
 
@@ -731,6 +766,11 @@ export default function AdminPTrainings() {
 
   const selectedSoftware = new Set(
     (draft.softwareProductKeys || []).map(normKey).filter(Boolean),
+  );
+
+  const formDataTemplate = useMemo(
+    () => buildFormDataTemplate(draft.formFields),
+    [draft.formFields],
   );
 
   return (
@@ -748,6 +788,7 @@ export default function AdminPTrainings() {
               : "border hover:bg-gray-50"
           }`}
           onClick={() => setTab("events")}
+          type="button"
         >
           Events
         </button>
@@ -758,6 +799,7 @@ export default function AdminPTrainings() {
               : "border hover:bg-gray-50"
           }`}
           onClick={() => setTab("enrollments")}
+          type="button"
         >
           Enrollments
         </button>
@@ -767,6 +809,7 @@ export default function AdminPTrainings() {
           onClick={loadAll}
           disabled={uploading}
           title={uploading ? "Wait for upload to finish" : undefined}
+          type="button"
         >
           Refresh
         </button>
@@ -889,7 +932,7 @@ export default function AdminPTrainings() {
               />
             </div>
 
-            {/* ✅ NEW: Pricing tiers */}
+            {/* Pricing tiers */}
             <div className="mt-6 rounded-2xl border p-4">
               <div className="font-bold text-lg">Pricing Tiers (NGN)</div>
               <div className="text-sm text-gray-600 mt-1">
@@ -929,12 +972,11 @@ export default function AdminPTrainings() {
 
               <div className="mt-2 text-xs text-gray-500">
                 If Earlybird fee is set (&gt; 0), “Earlybird ends at” must be
-                provided. Checkout logic should use Earlybird until the end
-                date/time, then fall back to Normal.
+                provided.
               </div>
             </div>
 
-            {/* Flyer uploader (PC + Cloudinary) */}
+            {/* Flyer uploader */}
             <div className="mt-6 rounded-2xl border p-4">
               <div className="font-bold text-lg">Flyer (Image)</div>
               <div className="text-sm text-gray-600 mt-1">
@@ -1048,11 +1090,11 @@ export default function AdminPTrainings() {
               />
             </div>
 
-            {/* Event Media (Images & Videos) */}
+            {/* ✅ Venue Images & Videos (was Event Media) */}
             <div className="mt-6 rounded-2xl border p-4">
               <div className="flex items-center justify-between">
                 <div className="font-bold text-lg">
-                  Event Media (Images / Videos)
+                  Venue Images & Videos (Gallery)
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -1066,7 +1108,7 @@ export default function AdminPTrainings() {
                     }
                     disabled={uploading}
                   >
-                    + Add Image
+                    + Add Venue Image
                   </button>
                   <button
                     type="button"
@@ -1079,7 +1121,7 @@ export default function AdminPTrainings() {
                     }
                     disabled={uploading}
                   >
-                    + Add Video
+                    + Add Venue Video
                   </button>
                 </div>
               </div>
@@ -1134,7 +1176,7 @@ export default function AdminPTrainings() {
                           next[idx].title = v;
                           update("media", next);
                         }}
-                        placeholder="e.g., Day 1 highlights"
+                        placeholder="e.g., Main training hall"
                       />
 
                       <TextInput
@@ -1186,7 +1228,7 @@ export default function AdminPTrainings() {
                           onClick={() =>
                             openPicker(
                               {
-                                kind: "eventMedia",
+                                kind: "venueMedia",
                                 idx,
                                 type: m.type || "image",
                               },
@@ -1206,7 +1248,7 @@ export default function AdminPTrainings() {
 
                 {!(draft.media || []).length ? (
                   <div className="text-sm text-gray-500">
-                    No event media yet. Add images/videos for the training page.
+                    No venue gallery yet. Add images/videos for the venue page.
                   </div>
                 ) : null}
               </div>
@@ -1260,10 +1302,10 @@ export default function AdminPTrainings() {
                 </div>
               </div>
 
-              {/* Location Photos (PC + Cloudinary + previews) */}
+              {/* Location Photos */}
               <div className="mt-4 rounded-2xl border p-4">
                 <div className="flex items-center justify-between">
-                  <div className="font-bold">Location Photos</div>
+                  <div className="font-bold">Location Photos (Images)</div>
                   <button
                     type="button"
                     className="px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
@@ -1404,6 +1446,67 @@ export default function AdminPTrainings() {
               </div>
             </div>
 
+            {/* ✅ Registration Form (FormFields + FormData) */}
+            <div className="mt-6 rounded-2xl border p-4">
+              <div className="font-bold text-lg">Registration Form</div>
+              <div className="text-sm text-gray-600 mt-1">
+                Define the fields users will fill when registering for this
+                training.
+              </div>
+
+              <div className="mt-4">
+                <FormFieldsEditor
+                  items={draft.formFields || []}
+                  onChange={(arr) => update("formFields", arr)}
+                  disabled={uploading}
+                />
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="rounded-2xl border bg-gray-50 p-4">
+                  <div className="font-bold">FormData (Template JSON)</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    This is the shape of <code>formData</code> that will be
+                    saved on enrollments.
+                  </div>
+                  <pre className="mt-3 p-3 rounded-xl bg-white border overflow-auto text-xs">
+                    {JSON.stringify(formDataTemplate, null, 2)}
+                  </pre>
+                </div>
+
+                <div className="rounded-2xl border bg-gray-50 p-4">
+                  <div className="font-bold">Form Preview (Admin)</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Preview how the form inputs will look (not submitted).
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    {(draft.formFields || []).map((f, idx) => (
+                      <FormPreviewField
+                        key={`${f?.key || "field"}-${idx}`}
+                        field={f}
+                        value={
+                          formPreview[String(f?.key || "").trim()] ??
+                          (f?.type === "multi" ? [] : "")
+                        }
+                        onChange={(val) => {
+                          const k = String(f?.key || "").trim();
+                          if (!k) return;
+                          setFormPreview((p) => ({ ...p, [k]: val }));
+                        }}
+                      />
+                    ))}
+
+                    {!(draft.formFields || []).length ? (
+                      <div className="text-sm text-gray-500">
+                        No form fields yet. Add fields above.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* What you get + requirements */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <SimpleStringListEditor
@@ -1484,7 +1587,7 @@ export default function AdminPTrainings() {
                 ) : null}
               </div>
 
-              {/* grants editor for selected software */}
+              {/* grants editor */}
               <div className="mt-4">
                 <div className="font-bold">Entitlement Grants (auto)</div>
                 <div className="mt-3 space-y-3">
@@ -1907,5 +2010,328 @@ function AmenityEditor({ items, onChange }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/* ---------------------- Form builder + preview ---------------------- */
+function FormFieldsEditor({ items, onChange, disabled }) {
+  const fields = Array.isArray(items) ? items : [];
+
+  function setField(idx, patch) {
+    const next = deepClone(fields);
+    next[idx] = { ...(next[idx] || {}), ...patch };
+    onChange(next);
+  }
+
+  function removeField(idx) {
+    onChange(fields.filter((_, i) => i !== idx));
+  }
+
+  function addField() {
+    onChange([
+      ...fields,
+      {
+        key: "",
+        label: "",
+        type: "short",
+        required: true,
+        placeholder: "",
+        options: [],
+      },
+    ]);
+  }
+
+  function move(idx, dir) {
+    const j = idx + dir;
+    if (j < 0 || j >= fields.length) return;
+    const next = deepClone(fields);
+    const tmp = next[idx];
+    next[idx] = next[j];
+    next[j] = tmp;
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="font-bold">Form Fields</div>
+        <button
+          type="button"
+          className="px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+          onClick={addField}
+          disabled={disabled}
+        >
+          + Add Field
+        </button>
+      </div>
+
+      {fields.map((f, idx) => {
+        const t = String(f?.type || "short");
+        const needsOptions = t === "select" || t === "multi";
+
+        return (
+          <div key={idx} className="p-4 rounded-2xl border bg-gray-50">
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-semibold">Field #{idx + 1}</div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-xl border font-semibold hover:bg-white disabled:opacity-60"
+                  onClick={() => move(idx, -1)}
+                  disabled={disabled || idx === 0}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-xl border font-semibold hover:bg-white disabled:opacity-60"
+                  onClick={() => move(idx, 1)}
+                  disabled={disabled || idx === fields.length - 1}
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-xl border font-semibold hover:bg-white disabled:opacity-60"
+                  onClick={() => removeField(idx)}
+                  disabled={disabled}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <TextInput
+                label="Key"
+                value={f?.key || ""}
+                onChange={(v) => setField(idx, { key: v })}
+                placeholder="e.g., fullName"
+              />
+              <TextInput
+                label="Label"
+                value={f?.label || ""}
+                onChange={(v) => setField(idx, { label: v })}
+                placeholder="e.g., Full Name"
+              />
+
+              <label className="block">
+                <div className="text-sm font-semibold text-gray-700">Type</div>
+                <select
+                  className="mt-1 w-full border rounded-xl px-3 py-2"
+                  value={t}
+                  onChange={(e) =>
+                    setField(idx, {
+                      type: e.target.value,
+                      options:
+                        e.target.value === "select" ||
+                        e.target.value === "multi"
+                          ? Array.isArray(f?.options)
+                            ? f.options
+                            : []
+                          : [],
+                    })
+                  }
+                  disabled={disabled}
+                >
+                  <option value="short">short</option>
+                  <option value="email">email</option>
+                  <option value="phone">phone</option>
+                  <option value="paragraph">paragraph</option>
+                  <option value="select">select</option>
+                  <option value="multi">multi</option>
+                  <option value="date">date</option>
+                </select>
+              </label>
+
+              <label className="flex items-center justify-between gap-3 p-3 rounded-xl border bg-white">
+                <div className="font-semibold text-gray-700">Required</div>
+                <input
+                  type="checkbox"
+                  checked={!!f?.required}
+                  onChange={(e) =>
+                    setField(idx, { required: e.target.checked })
+                  }
+                  className="h-5 w-5"
+                  disabled={disabled}
+                />
+              </label>
+
+              <div className="md:col-span-2">
+                <TextInput
+                  label="Placeholder (optional)"
+                  value={f?.placeholder || ""}
+                  onChange={(v) => setField(idx, { placeholder: v })}
+                  placeholder="e.g., Enter your name..."
+                />
+              </div>
+
+              {needsOptions ? (
+                <div className="md:col-span-2 rounded-2xl border bg-white p-3">
+                  <div className="font-semibold">Options</div>
+                  <OptionListEditor
+                    items={Array.isArray(f?.options) ? f.options : []}
+                    onChange={(opts) => setField(idx, { options: opts })}
+                    disabled={disabled}
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+
+      {!fields.length ? (
+        <div className="text-sm text-gray-500">No form fields yet.</div>
+      ) : null}
+    </div>
+  );
+}
+
+function OptionListEditor({ items, onChange, disabled }) {
+  const [v, setV] = useState("");
+  const list = Array.isArray(items) ? items : [];
+
+  return (
+    <div className="mt-2">
+      <div className="flex gap-2">
+        <input
+          className="flex-1 border rounded-xl px-3 py-2"
+          value={v}
+          placeholder="Add option..."
+          onChange={(e) => setV(e.target.value)}
+          disabled={disabled}
+        />
+        <button
+          type="button"
+          className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+          onClick={() => {
+            const s = String(v || "").trim();
+            if (!s) return;
+            onChange([...list, s]);
+            setV("");
+          }}
+          disabled={disabled}
+        >
+          Add
+        </button>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {list.map((x, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between gap-3 p-2 rounded-xl border bg-gray-50"
+          >
+            <div className="min-w-0 break-words">{x}</div>
+            <button
+              type="button"
+              className="px-3 py-2 rounded-xl border font-semibold hover:bg-white disabled:opacity-60"
+              onClick={() => onChange(list.filter((_, idx) => idx !== i))}
+              disabled={disabled}
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        {!list.length ? (
+          <div className="text-sm text-gray-500">No options.</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function FormPreviewField({ field, value, onChange }) {
+  const label = String(field?.label || field?.key || "Field");
+  const type = String(field?.type || "short");
+  const placeholder = String(field?.placeholder || "");
+
+  if (type === "paragraph") {
+    return (
+      <label className="block">
+        <div className="text-sm font-semibold text-gray-700">{label}</div>
+        <textarea
+          className="mt-1 w-full border rounded-xl px-3 py-2"
+          rows={3}
+          value={value ?? ""}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </label>
+    );
+  }
+
+  if (type === "select") {
+    const opts = Array.isArray(field?.options) ? field.options : [];
+    return (
+      <label className="block">
+        <div className="text-sm font-semibold text-gray-700">{label}</div>
+        <select
+          className="mt-1 w-full border rounded-xl px-3 py-2"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Select…</option>
+          {opts.map((o, i) => (
+            <option key={i} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
+  if (type === "multi") {
+    const opts = Array.isArray(field?.options) ? field.options : [];
+    const arr = Array.isArray(value) ? value : [];
+    return (
+      <div className="rounded-xl border bg-white p-3">
+        <div className="text-sm font-semibold text-gray-700">{label}</div>
+        <div className="mt-2 space-y-2">
+          {opts.map((o, i) => {
+            const checked = arr.includes(o);
+            return (
+              <label key={i} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => {
+                    const next = new Set(arr);
+                    if (e.target.checked) next.add(o);
+                    else next.delete(o);
+                    onChange(Array.from(next));
+                  }}
+                />
+                <span>{o}</span>
+              </label>
+            );
+          })}
+          {!opts.length ? (
+            <div className="text-sm text-gray-500">No options.</div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  const inputType =
+    type === "email"
+      ? "email"
+      : type === "phone"
+        ? "tel"
+        : type === "date"
+          ? "date"
+          : "text";
+
+  return (
+    <TextInput
+      label={label}
+      value={value ?? ""}
+      onChange={onChange}
+      placeholder={placeholder}
+      type={inputType}
+    />
   );
 }

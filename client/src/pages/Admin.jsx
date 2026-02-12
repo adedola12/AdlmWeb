@@ -12,6 +12,9 @@ const MONTH_CHOICES = [
   { label: "1 year", value: 12 },
 ];
 
+// ✅ Route to your detailed Physical Training admin page
+const PTRAININGS_ADMIN_ROUTE = "/admin/ptrainings";
+
 function Badge({ label, tone = "slate" }) {
   const toneClass =
     tone === "yellow"
@@ -435,245 +438,6 @@ function DevicesModal({
   );
 }
 
-/* ------------------ pTraining Modal ------------------ */
-
-function TrainingEditorModal({
-  open,
-  onClose,
-  initial,
-  token,
-  onSaved,
-  setMsg,
-}) {
-  const [busy, setBusy] = React.useState(false);
-
-  const isNew = !initial?._id;
-
-  const [form, setForm] = React.useState({
-    title: "",
-    startAt: "",
-    endAt: "",
-    location: "",
-    price: "",
-    currency: "NGN",
-    capacityApproved: 14,
-    status: "open",
-  });
-
-  React.useEffect(() => {
-    if (!open) return;
-    setForm({
-      title: initial?.title || "",
-      startAt: initial?.startAt
-        ? dayjs(initial.startAt).format("YYYY-MM-DDTHH:mm")
-        : "",
-      endAt: initial?.endAt
-        ? dayjs(initial.endAt).format("YYYY-MM-DDTHH:mm")
-        : "",
-      location: initial?.location || "",
-      price:
-        initial?.price != null
-          ? String(initial.price)
-          : initial?.amount != null
-            ? String(initial.amount)
-            : "",
-      currency: initial?.currency || "NGN",
-      capacityApproved: Number(
-        initial?.capacityApproved ?? initial?.capacity ?? 14,
-      ),
-      status: initial?.status || "open",
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial?._id]);
-
-  if (!open) return null;
-
-  async function save() {
-    setMsg("");
-    setBusy(true);
-    try {
-      const payload = {
-        title: form.title.trim(),
-        startAt: form.startAt ? new Date(form.startAt).toISOString() : null,
-        endAt: form.endAt ? new Date(form.endAt).toISOString() : null,
-        location: form.location.trim(),
-        currency: form.currency || "NGN",
-        price: form.price === "" ? null : Number(form.price),
-        capacityApproved: Math.max(parseInt(form.capacityApproved, 10) || 1, 1),
-        status: form.status || "open",
-      };
-
-      // Remove nulls so backend can keep existing values if it prefers
-      Object.keys(payload).forEach((k) => {
-        if (payload[k] === null) delete payload[k];
-        if (payload[k] === "" || payload[k] === undefined) delete payload[k];
-      });
-
-      if (isNew) {
-        await apiAuthed(`/admin/ptrainings`, {
-          token,
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        setMsg("Training created");
-      } else {
-        await apiAuthed(`/admin/ptrainings/${initial._id}`, {
-          token,
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        setMsg("Training updated");
-      }
-
-      await onSaved?.();
-      onClose?.();
-    } catch (e) {
-      setMsg(e?.message || "Failed to save training");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className="bg-white w-full max-w-2xl rounded-xl shadow-lg ring-1 ring-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b flex items-center justify-between gap-3">
-            <div className="font-semibold">
-              {isNew ? "Create Physical Training" : "Edit Physical Training"}
-            </div>
-            <button className="btn btn-sm" onClick={onClose}>
-              Close
-            </button>
-          </div>
-
-          <div className="p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <div className="text-xs text-slate-500 mb-1">Title</div>
-                <input
-                  className="input w-full"
-                  value={form.title}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, title: e.target.value }))
-                  }
-                  placeholder="e.g., 2-Weekend BIM Training"
-                />
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-500 mb-1">Status</div>
-                <select
-                  className="input w-full"
-                  value={form.status}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, status: e.target.value }))
-                  }
-                >
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                  <option value="draft">Draft</option>
-                </select>
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-500 mb-1">Start</div>
-                <input
-                  type="datetime-local"
-                  className="input w-full"
-                  value={form.startAt}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, startAt: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-500 mb-1">End</div>
-                <input
-                  type="datetime-local"
-                  className="input w-full"
-                  value={form.endAt}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, endAt: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <div className="text-xs text-slate-500 mb-1">Location</div>
-                <input
-                  className="input w-full"
-                  value={form.location}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, location: e.target.value }))
-                  }
-                  placeholder="e.g., Lagos · ADLM Studio"
-                />
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-500 mb-1">Currency</div>
-                <input
-                  className="input w-full"
-                  value={form.currency}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, currency: e.target.value }))
-                  }
-                  placeholder="NGN"
-                />
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-500 mb-1">Price</div>
-                <input
-                  className="input w-full"
-                  value={form.price}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, price: e.target.value }))
-                  }
-                  placeholder="e.g., 50000"
-                />
-              </div>
-
-              <div>
-                <div className="text-xs text-slate-500 mb-1">
-                  Capacity (Approved)
-                </div>
-                <input
-                  className="input w-full"
-                  value={form.capacityApproved}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, capacityApproved: e.target.value }))
-                  }
-                  placeholder="14"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <button className="btn btn-sm" onClick={onClose} disabled={busy}>
-                Cancel
-              </button>
-              <button className="btn" onClick={save} disabled={busy}>
-                {busy ? "Saving…" : "Save"}
-              </button>
-            </div>
-
-            <div className="text-xs text-slate-500">
-              Notes: “Capacity” controls seats. On approval, seats reduce (based
-              on your backend logic).
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ------------------ main page ------------------ */
 
 export default function Admin() {
@@ -694,11 +458,6 @@ export default function Admin() {
   const [ptTrainingFilter, setPtTrainingFilter] = React.useState("all"); // trainingId or "all"
   const [ptShowAllEnrollments, setPtShowAllEnrollments] = React.useState(false);
 
-  const [trainingModal, setTrainingModal] = React.useState({
-    open: false,
-    training: null,
-  });
-
   const [devicesModal, setDevicesModal] = React.useState({
     open: false,
     email: "",
@@ -715,10 +474,10 @@ export default function Admin() {
         apiAuthed(`/admin/purchases?status=pending`, { token: accessToken }),
         apiAuthed(`/admin/installations`, { token: accessToken }),
 
-        // NEW: trainings list
-        apiAuthed(`/admin/ptrainings`, { token: accessToken }),
+        // ✅ trainings list (events endpoint to match AdminPTrainings)
+        apiAuthed(`/admin/ptrainings/events`, { token: accessToken }),
 
-        // existing: enrollments
+        // enrollments
         apiAuthed(`/admin/ptrainings/enrollments`, { token: accessToken }),
       ]);
 
@@ -733,6 +492,33 @@ export default function Admin() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function deleteTrainingEvent(trainingId) {
+    setMsg("");
+    try {
+      await apiAuthed(`/admin/ptrainings/events/${trainingId}`, {
+        token: accessToken,
+        method: "DELETE",
+      });
+
+      if (String(ptTrainingFilter) === String(trainingId)) {
+        setPtTrainingFilter("all");
+      }
+
+      await load();
+      setMsg("Training deleted");
+    } catch (e) {
+      setMsg(e?.message || "Failed to delete training");
+    }
+  }
+
+  function goNewTraining() {
+    navigate(`${PTRAININGS_ADMIN_ROUTE}?new=1`);
+  }
+
+  function goEditTraining(id) {
+    navigate(`${PTRAININGS_ADMIN_ROUTE}?eventId=${encodeURIComponent(id)}`);
   }
 
   async function deleteEntitlement(email, productKey) {
@@ -1274,7 +1060,6 @@ export default function Admin() {
       }
 
       if (!ptShowAllEnrollments) {
-        // only those needing review: submitted proof and not yet decided
         const st = String(e?.status || "").toLowerCase();
         if (st === "approved" || st === "rejected") return false;
 
@@ -1298,7 +1083,6 @@ export default function Admin() {
   }, [trainingEnrollments, ptTrainingFilter, ptShowAllEnrollments, q]);
 
   const trainingStats = React.useMemo(() => {
-    // Map trainingId -> approvedCount
     const m = new Map();
     const rows = Array.isArray(trainingEnrollments) ? trainingEnrollments : [];
     for (const e of rows) {
@@ -1322,7 +1106,6 @@ export default function Admin() {
       0,
     );
 
-    // if backend already provides seatsLeft, prefer it
     const seatsLeft =
       typeof t?.seatsLeft === "number"
         ? t.seatsLeft
@@ -1461,12 +1244,19 @@ export default function Admin() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                className="btn btn-sm"
-                onClick={() => setTrainingModal({ open: true, training: null })}
-              >
+              {/* ✅ New Training now navigates to AdminPTrainings */}
+              <button className="btn btn-sm" onClick={goNewTraining}>
                 New Training
               </button>
+
+              <button
+                className="btn btn-sm"
+                onClick={() => navigate(PTRAININGS_ADMIN_ROUTE)}
+                title="Open full training editor"
+              >
+                Manage All
+              </button>
+
               <button className="btn btn-sm" onClick={load}>
                 Refresh
               </button>
@@ -1525,7 +1315,11 @@ export default function Admin() {
                               </div>
                               <div className="text-xs text-slate-500 mt-1">
                                 {when}
-                                {t?.location ? ` · ${t.location}` : ""}
+                                {t?.location?.name
+                                  ? ` · ${t.location.name}`
+                                  : t?.location
+                                    ? ` · ${t.location}`
+                                    : ""}
                               </div>
                             </div>
 
@@ -1545,16 +1339,62 @@ export default function Admin() {
                           </div>
 
                           <div className="mt-2 flex items-center justify-end gap-2">
-                            <button
-                              className="btn btn-sm"
-                              onClick={(ev) => {
-                                ev.preventDefault();
-                                ev.stopPropagation();
-                                setTrainingModal({ open: true, training: t });
+                            {/* ✅ Edit now navigates to AdminPTrainings and selects this event */}
+
+                            {/* GOOD */}
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className="p-3 border rounded-lg hover:bg-slate-50 cursor-pointer"
+                              onClick={() => goEditTraining(t._id)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  goEditTraining(t._id);
+                                }
                               }}
                             >
-                              Edit
-                            </button>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-semibold truncate">
+                                    {t.title}
+                                  </div>
+                                  <div className="text-xs text-slate-500 truncate">
+                                    {t.slug}
+                                  </div>
+                                </div>
+                                <div className="shrink-0">
+                                  {trainingSeatBadge(t)}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    goEditTraining(t._id);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const ok = window.confirm(
+                                      "Delete this training?",
+                                    );
+                                    if (ok) deleteTrainingEvent(t._id);
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </button>
                       );
@@ -2008,7 +1848,6 @@ export default function Admin() {
                   {allRows.map((r, i) => {
                     const renewSelId = `all-renew-${i}`;
 
-                    // build a pseudo entitlement object for status badge helpers
                     const entPseudo = {
                       status: r.rawStatus,
                       expiresAt: r.expiresAt,
@@ -2369,15 +2208,6 @@ export default function Admin() {
         productKey={devicesModal.productKey}
         token={accessToken}
         refreshParent={load}
-        setMsg={setMsg}
-      />
-
-      <TrainingEditorModal
-        open={trainingModal.open}
-        onClose={() => setTrainingModal({ open: false, training: null })}
-        initial={trainingModal.training}
-        token={accessToken}
-        onSaved={load}
         setMsg={setMsg}
       />
     </div>

@@ -26,7 +26,6 @@ function capacityOf(training) {
 }
 
 function isStrictObjectId(id) {
-  // strict 24-hex check (avoids mongoose treating shorter strings as valid)
   return typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
 }
 
@@ -55,72 +54,195 @@ async function getApprovedCountsMap(trainingObjectIds, session = null) {
   );
 }
 
+/* ---------------------- sanitizers ---------------------- */
+function asTrimmedString(x) {
+  if (x == null) return "";
+  return String(x).trim();
+}
+
+function asNumber(x, def = 0) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : def;
+}
+
+function cleanStringArray(arr) {
+  const a = Array.isArray(arr) ? arr : [];
+  return a.map((x) => asTrimmedString(x)).filter(Boolean);
+}
+
+function cleanMediaArray(arr, { forceType = null } = {}) {
+  const a = Array.isArray(arr) ? arr : [];
+  const out = [];
+  for (const it of a) {
+    const url = asTrimmedString(it?.url);
+    if (!url) continue;
+
+    let type = asTrimmedString(it?.type || "image").toLowerCase();
+    if (type !== "image" && type !== "video") type = "image";
+    if (forceType) type = forceType;
+
+    const title = asTrimmedString(it?.title || "");
+    out.push({ type, url, title });
+  }
+  return out;
+}
+
+function cleanFormFields(arr) {
+  const a = Array.isArray(arr) ? arr : [];
+  const out = [];
+
+  for (const f of a) {
+    const key = asTrimmedString(f?.key);
+    const label = asTrimmedString(f?.label);
+    if (!key || !label) continue;
+
+    let type = asTrimmedString(f?.type || "short").toLowerCase();
+    const allowed = [
+      "short",
+      "email",
+      "phone",
+      "paragraph",
+      "select",
+      "multi",
+      "date",
+    ];
+    if (!allowed.includes(type)) type = "short";
+
+    const required = !!f?.required;
+    const placeholder = asTrimmedString(f?.placeholder || "");
+    const options =
+      type === "select" || type === "multi" ? cleanStringArray(f?.options) : [];
+
+    out.push({ key, label, type, required, placeholder, options });
+  }
+
+  return out;
+}
+
 /**
  * Normalize payload from admin UI.
- * Supports both:
- *  - priceNGN (legacy)
- *  - price + currency (newer UI)
+ * Supports:
+ *  - legacy priceNGN
+ *  - new pricing tiers (pricing.normalNGN, groupOf3NGN, earlyBird)
+ *  - location object + photos
+ *  - venue gallery in `media` (images/videos)
+ *  - formFields schema
  */
 function normalizeEventPayload(body) {
   const b = body || {};
   const payload = { ...b };
 
-  // Trim strings safely
+  // strings
   if (typeof payload.title === "string") payload.title = payload.title.trim();
-  if (typeof payload.location === "string")
-    payload.location = payload.location.trim();
-  if (typeof payload.status === "string")
-    payload.status = payload.status.trim().toLowerCase();
+  if (typeof payload.subtitle === "string")
+    payload.subtitle = payload.subtitle.trim();
+  if (typeof payload.slug === "string") payload.slug = payload.slug.trim();
 
-  // Dates: allow ISO strings/null
+  if (typeof payload.description === "string")
+    payload.description = payload.description;
+  if (typeof payload.fullDescription === "string")
+    payload.fullDescription = payload.fullDescription;
+
+  // dates: allow ISO strings; mongoose will cast
   if (payload.startAt === null || payload.startAt === "")
     delete payload.startAt;
   if (payload.endAt === null || payload.endAt === "") delete payload.endAt;
 
-  // Capacity
+  // numbers
   if (payload.capacityApproved != null) {
     const cap = parseInt(payload.capacityApproved, 10);
     if (Number.isFinite(cap) && cap > 0) payload.capacityApproved = cap;
     else delete payload.capacityApproved;
   }
 
-  // Price normalization
-  const currency = String(payload.currency || "NGN")
-    .toUpperCase()
-    .trim();
+  if (payload.sort != null) {
+    const s = parseInt(payload.sort, 10);
+    payload.sort = Number.isFinite(s) ? s : 0;
+  }
 
-  // allow amount as alias
-  if (payload.price == null && payload.amount != null)
-    payload.price = payload.amount;
+  // pricing tiers
+  if (payload.pricing && typeof payload.pricing === "object") {
+    const normalNGN = Math.max(asNumber(payload.pricing.normalNGN, 0), 0);
+    const groupOf3NGN = Math.max(asNumber(payload.pricing.groupOf3NGN, 0), 0);
 
-  if (payload.price != null && payload.price !== "") {
-    const p = Number(payload.price);
-    if (Number.isFinite(p)) payload.price = p;
-    else delete payload.price;
+    const eb = payload.pricing.earlyBird || {};
+    const ebPrice = Math.max(asNumber(eb.priceNGN, 0), 0);
+    const ebEndsAtRaw = eb.endsAt;
+
+    let ebEndsAt = null;
+    if (ebEndsAtRaw) {
+      const d = new Date(ebEndsAtRaw);
+      if (!Number.isNaN(d.getTime())) ebEndsAt = d;
+    }
+
+    payload.pricing = {
+      normalNGN,
+      groupOf3NGN,
+      earlyBird: { priceNGN: ebPrice, endsAt: ebEndsAt },
+    };
+
+    // keep legacy in sync (normal fee)
+    payload.priceNGN = normalNGN;
   } else {
-    delete payload.price;
+    // legacy only
+    if (payload.priceNGN != null && payload.priceNGN !== "") {
+      payload.priceNGN = Math.max(asNumber(payload.priceNGN, 0), 0);
+      payload.pricing = {
+        normalNGN: payload.priceNGN,
+        groupOf3NGN: 0,
+        earlyBird: { priceNGN: 0, endsAt: null },
+      };
+    }
   }
 
-  if (payload.priceNGN != null && payload.priceNGN !== "") {
-    const p = Number(payload.priceNGN);
-    if (Number.isFinite(p)) payload.priceNGN = p;
-    else delete payload.priceNGN;
-  } else {
-    delete payload.priceNGN;
+  // flyer
+  if (payload.flyerUrl != null)
+    payload.flyerUrl = asTrimmedString(payload.flyerUrl);
+
+  // flags
+  if (payload.isPublished != null) payload.isPublished = !!payload.isPublished;
+  if (payload.isFeatured != null) payload.isFeatured = !!payload.isFeatured;
+
+  // arrays
+  payload.whatYouGet = cleanStringArray(payload.whatYouGet);
+  payload.requirements = cleanStringArray(payload.requirements);
+  payload.softwareProductKeys = cleanStringArray(
+    payload.softwareProductKeys,
+  ).map(normKey);
+
+  // location object
+  if (payload.location && typeof payload.location === "object") {
+    payload.location = {
+      name: asTrimmedString(payload.location.name),
+      address: asTrimmedString(payload.location.address),
+      city: asTrimmedString(payload.location.city),
+      state: asTrimmedString(payload.location.state),
+      amenities: cleanStringArray(payload.location.amenities),
+      googleMapsPlaceUrl: asTrimmedString(payload.location.googleMapsPlaceUrl),
+      googleMapsEmbedUrl: asTrimmedString(payload.location.googleMapsEmbedUrl),
+
+      // location photos (images only)
+      photos: cleanMediaArray(payload.location.photos, { forceType: "image" }),
+    };
   }
 
-  if (payload.price != null && payload.priceNGN == null && currency === "NGN") {
-    payload.priceNGN = payload.price;
-  }
-  if (payload.priceNGN != null && payload.price == null) {
-    payload.price = payload.priceNGN;
-  }
+  // venue gallery (kept as `media`)
+  payload.media = cleanMediaArray(payload.media);
 
-  payload.currency = currency;
+  // form schema
+  payload.formFields = cleanFormFields(payload.formFields);
 
-  // Remove undefined/null/empty strings
+  // installation + grants (keep as-is but ensure arrays)
+  payload.installationChecklist = Array.isArray(payload.installationChecklist)
+    ? payload.installationChecklist
+    : [];
+  payload.entitlementGrants = Array.isArray(payload.entitlementGrants)
+    ? payload.entitlementGrants
+    : [];
+
+  // Remove undefined/null at top-level
   Object.keys(payload).forEach((k) => {
-    if (payload[k] === undefined || payload[k] === null || payload[k] === "") {
+    if (payload[k] === undefined || payload[k] === null) {
       delete payload[k];
     }
   });
@@ -128,10 +250,7 @@ function normalizeEventPayload(body) {
   return payload;
 }
 
-/**
- * Upsert entitlements using the SAME shape as User.entitlements schema
- * Applies months by extending expiresAt.
- */
+/* ---------------------- entitlements helpers ---------------------- */
 function addMonthsToEntitlement(
   userDoc,
   {
@@ -204,10 +323,7 @@ function applyTrainingGrantsToUser(userDoc, training) {
 
 /* =========================================================
    EVENTS CRUD
-   - Canonical routes: /events, /events/:id
-   - Compatibility aliases (Admin.jsx): /, /:id
    ========================================================= */
-
 async function listEvents(_req, res) {
   const list = await TrainingEvent.find({}).sort({ createdAt: -1 }).lean();
 
@@ -235,7 +351,6 @@ async function createEvent(req, res) {
 }
 
 async function patchEvent(req, res) {
-  // hard guard (even for canonical route)
   if (!isStrictObjectId(String(req.params.id || ""))) {
     return res.status(404).json({ error: "Not found" });
   }
@@ -244,7 +359,10 @@ async function patchEvent(req, res) {
   const updated = await TrainingEvent.findByIdAndUpdate(
     req.params.id,
     payload,
-    { new: true },
+    {
+      new: true,
+      runValidators: true,
+    },
   );
 
   if (!updated) return res.status(404).json({ error: "Not found" });
@@ -267,12 +385,9 @@ router.post("/events", asyncHandler(createEvent));
 router.patch("/events/:id", asyncHandler(patchEvent));
 router.delete("/events/:id", asyncHandler(deleteEvent));
 
-// Compatibility aliases for existing frontend calls
+// Compatibility aliases
 router.get("/", asyncHandler(listEvents));
 router.post("/", asyncHandler(createEvent));
-
-// ✅ FIXED: no inline regex (path-to-regexp was crashing)
-// We validate ObjectId manually using middleware
 router.patch("/:id", requireStrictObjectIdParam, asyncHandler(patchEvent));
 router.delete("/:id", requireStrictObjectIdParam, asyncHandler(deleteEvent));
 
@@ -292,7 +407,6 @@ router.get(
 
     if (trainingIdRaw) q.trainingId = trainingIdRaw;
 
-    // If admin filters by status=payment_pending, also show users who clicked "I've Paid"
     if (statusRaw) {
       if (statusRaw === "payment_pending") {
         q.$or = [
@@ -313,7 +427,6 @@ router.get(
       .limit(500)
       .lean();
 
-    // attach training info
     const trainingIdsStr = [
       ...new Set(
         (list || []).map((x) => String(x.trainingId || "")).filter(Boolean),
@@ -334,7 +447,7 @@ router.get(
       _id: { $in: trainingObjectIds },
     })
       .select(
-        "title startAt endAt priceNGN currency price capacityApproved entitlementGrants installationChecklist",
+        "title startAt endAt priceNGN pricing capacityApproved entitlementGrants installationChecklist flyerUrl slug",
       )
       .lean();
 
@@ -349,7 +462,6 @@ router.get(
       }),
     );
 
-    // attach user info
     const userIdsStr = [
       ...new Set(
         (list || []).map((x) => String(x.userId || "")).filter(Boolean),
