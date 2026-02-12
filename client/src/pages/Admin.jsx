@@ -457,6 +457,8 @@ export default function Admin() {
   const [trainingEnrollments, setTrainingEnrollments] = React.useState([]);
   const [ptTrainingFilter, setPtTrainingFilter] = React.useState("all"); // trainingId or "all"
   const [ptShowAllEnrollments, setPtShowAllEnrollments] = React.useState(false);
+  const [ptBusy, setPtBusy] = React.useState({});
+
 
   const [devicesModal, setDevicesModal] = React.useState({
     open: false,
@@ -713,8 +715,17 @@ export default function Admin() {
     return sorted;
   }, [users, q]);
 
-async function approveTrainingEnrollment(enrollmentId) {
+async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
   setMsg("");
+
+  // Optional guard: don't even call backend if UI already knows it's full
+  if (seatsLeftMaybe === 0) {
+    setMsg("Cannot approve: capacity reached.");
+    return;
+  }
+
+  setPtBusy((s) => ({ ...s, [enrollmentId]: true }));
+
   try {
     const res = await apiAuthed(
       `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
@@ -727,20 +738,31 @@ async function approveTrainingEnrollment(enrollmentId) {
     await load();
     setMsg(res?.message || "Training enrollment approved");
   } catch (e) {
-    const serverError =
-      e?.data?.error || e?.response?.data?.error || e?.error || "";
-
-    // Friendly message for capacity conflict
-    if (e?.status === 409 || String(e?.message || "").includes("409")) {
-      setMsg(serverError || "Cannot approve: capacity reached.");
+    // ✅ now works because http.js throws {status, data}
+    if (e?.status === 409) {
+      const cap = e?.data?.cap;
+      const left = e?.data?.seatsLeft;
+      setMsg(
+        e?.data?.error ||
+          (cap != null && left != null
+            ? `Cannot approve: capacity reached (${left}/${cap} left).`
+            : "Cannot approve: capacity reached."),
+      );
       return;
     }
 
     setMsg(
-      serverError || e?.message || "Failed to approve training enrollment",
+      e?.data?.error || e?.message || "Failed to approve training enrollment",
     );
+  } finally {
+    setPtBusy((s) => {
+      const n = { ...s };
+      delete n[enrollmentId];
+      return n;
+    });
   }
 }
+
 
   async function rejectTrainingEnrollment(enrollmentId) {
     setMsg("");
@@ -1518,17 +1540,42 @@ async function approveTrainingEnrollment(enrollmentId) {
                             <div className="shrink-0 flex gap-2">
                               {st !== "approved" && st !== "rejected" && (
                                 <>
-                                  <button
-                                    className="btn"
-                                    onClick={() => {
-                                      const ok = window.confirm(
-                                        "Approve this training payment and registration?",
-                                      );
-                                      if (ok) approveTrainingEnrollment(e._id);
-                                    }}
-                                  >
-                                    Approve
-                                  </button>
+                                  {(() => {
+                                    const seatsLeft =
+                                      typeof e?.training?.seatsLeft === "number"
+                                        ? e.training.seatsLeft
+                                        : null;
+                                    const disabled =
+                                      !!ptBusy[e._id] || seatsLeft === 0;
+
+                                    return (
+                                      <button
+                                        className="btn"
+                                        disabled={disabled}
+                                        title={
+                                          seatsLeft === 0
+                                            ? "Capacity reached"
+                                            : ptBusy[e._id]
+                                              ? "Approving…"
+                                              : "Approve enrollment"
+                                        }
+                                        onClick={() => {
+                                          const ok = window.confirm(
+                                            "Approve this training payment and registration?",
+                                          );
+                                          if (ok)
+                                            approveTrainingEnrollment(
+                                              e._id,
+                                              seatsLeft,
+                                            );
+                                        }}
+                                      >
+                                        {ptBusy[e._id]
+                                          ? "Approving…"
+                                          : "Approve"}
+                                      </button>
+                                    );
+                                  })()}
 
                                   <button
                                     className="btn"

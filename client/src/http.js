@@ -32,20 +32,22 @@ function isFormData(x) {
   return typeof FormData !== "undefined" && x instanceof FormData;
 }
 
-async function readError(res) {
+async function readErrorPayload(res) {
   const ct = res.headers.get("content-type") || "";
   const isJson = ct.includes("application/json");
 
   if (isJson) {
-    const j = await res.json().catch(() => ({}));
-    return j?.error || j?.message || `HTTP ${res.status}`;
+    const data = await res.json().catch(() => ({}));
+    const message = data?.error || data?.message || `HTTP ${res.status}`;
+    return { message, data };
   }
 
-  const t = await res.text().catch(() => "");
-  return t || `HTTP ${res.status}`;
+  const text = await res.text().catch(() => "");
+  return { message: text || `HTTP ${res.status}`, data: { text } };
 }
 
 async function parseBody(res) {
+  if (res.status === 204) return null;
   const ct = res.headers.get("content-type") || "";
   return ct.includes("application/json") ? res.json() : res.text();
 }
@@ -121,18 +123,30 @@ async function coreFetch(path, init = {}, authed = false) {
       window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: r }));
       res = await makeFetch(r.accessToken);
     } catch {
-      throw new Error("Unauthorized");
+      const err = new Error("Unauthorized");
+      err.status = 401;
+      err.data = { error: "Unauthorized" };
+      err.url = url;
+      err.method = m;
+      throw err;
     }
   }
 
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) {
+    const { message, data: errData } = await readErrorPayload(res);
+    const err = new Error(message);
+    err.status = res.status;
+    err.data = errData;
+    err.url = url;
+    err.method = m;
+    throw err;
+  }
+
   return parseBody(res);
 }
 
 /* =====================================================================
    ✅ BACKWARD-COMPAT EXPORTS
-   - api(path, init)  -> returns JSON/text directly (old style)
-   - api.get/post/... -> returns { data } (axios-like style)
    ===================================================================== */
 
 /** Old style usage: await api("/x", { method:"GET" }) */
