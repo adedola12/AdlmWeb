@@ -155,7 +155,6 @@ app.use(morgan("dev"));
 
 app.use("/webhooks", webhooksRouter);
 
-/* -------- Core API -------- */
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
 app.use("/purchase", purchaseRoutes);
@@ -177,9 +176,9 @@ app.use("/showcase", showcasePublic);
 app.use("/coupons", couponsPublic);
 app.use("/helpbot", helpbotRoutes);
 
-/* ===================================================================
-   ✅ ADMIN ROUTES (ORDER MATTERS!)
-   =================================================================== */
+/* =========================
+   ✅ ADMIN ROUTES
+   ========================= */
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes);
 
@@ -194,29 +193,21 @@ app.use("/admin/ptrainings", adminPTrainings);
 app.use("/admin/bunny", adminBunny);
 
 /* -------------------- RateGen routes -------------------- */
-/* LEGACY */
 app.use("/rategen", rategenRouter);
 app.use("/admin/rategen", adminRateGen);
 
-/* NEW / v2 PUBLIC */
 app.use("/rategen-v2", rategenLibraryPublic);
 app.use("/rategen-v2", ratesCompute);
 
-/* NEW / v2 ADMIN */
 app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
 app.use("/admin/rategen-v2/library", adminRateGenLibrary);
 
-/* ADMIN COMPUTE (admin-key) */
 app.use("/admin/rategen-compute", adminRateGenCompute);
-
-/* legacy alias */
 app.use("/api/rates", ratesCompute);
 
-// ✅ Mini-admin read-only users view (admin + mini_admin)
 app.use("/admin/users-lite", adminUsersLite);
 
-/* ✅ Admin dashboard router LAST */
 app.use("/admin", adminRoutes);
 
 app.use("/freebies", freebiesPublic);
@@ -244,12 +235,13 @@ app.use((err, _req, res, next) => {
    ✅ FRONTEND (STATIC + META SPA FALLBACK)
    ========================= */
 
-const distDir = path.join(__dirname, "client", "dist");
+// ✅ FIX: client is a sibling of server -> ../client/dist
+const distDir = path.resolve(__dirname, "../client/dist");
 
-// Serve assets, but DO NOT auto-serve index.html (we inject it)
+// Serve assets, but DO NOT auto-serve index.html (we inject it dynamically)
 app.use(express.static(distDir, { index: false }));
 
-// ✅ Inject dynamic OG/Twitter tags + serve SPA for document requests
+// ✅ Dynamic OG/Twitter tags + SPA HTML fallback for document/bot requests
 registerDynamicMetaRoutes(app);
 
 /* -------- 404 + generic -------- */
