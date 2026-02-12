@@ -516,92 +516,107 @@ router.get(
 router.patch(
   "/enrollments/:id/approve",
   asyncHandler(async (req, res) => {
+    class HttpError extends Error {
+      constructor(status, message, extra = {}) {
+        super(message);
+        this.status = status;
+        this.extra = extra;
+      }
+    }
+
     const session = await mongoose.startSession();
 
     try {
-      let responsePayload = null;
+      let resultBody = null;
 
       await session.withTransaction(async () => {
         const enr = await TrainingEnrollment.findById(req.params.id).session(
           session,
         );
-        if (!enr) {
-          responsePayload = {
-            status: 404,
-            body: { error: "Enrollment not found" },
-          };
-          return;
-        }
+
+        if (!enr) throw new HttpError(404, "Enrollment not found");
 
         const st0 = String(enr.status || "").toLowerCase();
+
+        // Already approved => return success (no writes needed)
         if (st0 === "approved") {
-          const trainingLean = await TrainingEvent.findById(
-            enr.trainingId,
-          ).lean();
+          const trainingLean = await TrainingEvent.findById(enr.trainingId)
+            .lean()
+            .session(session);
+
           const cap = capacityOf(trainingLean);
           const approvedCount = await TrainingEnrollment.countDocuments({
-            trainingId: enr.trainingId,
             status: "approved",
+            $or: [
+              { trainingId: trainingLean?._id },
+              { trainingId: String(trainingLean?._id || "") },
+            ],
           }).session(session);
 
-          responsePayload = {
-            status: 200,
-            body: {
-              ok: true,
-              enrollment: enr,
-              grantsApplied: [],
-              seatsLeft: Math.max(cap - approvedCount, 0),
-              approvedCount,
-              message: "Enrollment already approved (no changes).",
-            },
+          resultBody = {
+            ok: true,
+            enrollment: enr,
+            grantsApplied: [],
+            seatsLeft: Math.max(cap - approvedCount, 0),
+            approvedCount,
+            message: "Enrollment already approved (no changes).",
           };
           return;
         }
 
         if (st0 === "rejected") {
-          responsePayload = {
-            status: 400,
-            body: { error: "Cannot approve: enrollment was rejected." },
-          };
-          return;
+          throw new HttpError(400, "Cannot approve: enrollment was rejected.");
         }
 
-        const training = await TrainingEvent.findById(enr.trainingId).lean();
-        if (!training) {
-          responsePayload = {
-            status: 404,
-            body: { error: "Training not found" },
-          };
-          return;
-        }
+        // Load training + user FIRST (so we don't reserve a seat then fail)
+        const trainingLean = await TrainingEvent.findById(enr.trainingId)
+          .lean()
+          .session(session);
 
-        const cap = capacityOf(training);
+        if (!trainingLean) throw new HttpError(404, "Training not found");
 
+        const user = await User.findById(enr.userId).session(session);
+        if (!user) throw new HttpError(404, "User not found");
+
+        const cap = capacityOf(trainingLean);
+
+        // Re-sync approvedCount from truth (enrollments) to avoid drift/leaks
         const currentApproved = await TrainingEnrollment.countDocuments({
-          trainingId: training._id,
           status: "approved",
+          $or: [
+            { trainingId: trainingLean._id },
+            { trainingId: String(trainingLean._id) },
+          ],
         }).session(session);
 
         await TrainingEvent.collection.updateOne(
-          { _id: training._id },
+          { _id: trainingLean._id },
           { $set: { approvedCount: currentApproved } },
           { session },
         );
 
+        // Atomic seat reservation (works even if approvedCount was missing before)
         const seatUpdate = await TrainingEvent.collection.findOneAndUpdate(
-          { _id: training._id, approvedCount: { $lt: cap } },
+          {
+            _id: trainingLean._id,
+            $expr: {
+              $lt: [{ $ifNull: ["$approvedCount", 0] }, cap],
+            },
+          },
           { $inc: { approvedCount: 1 } },
-          { session, returnDocument: "after", returnOriginal: false },
+          { session, returnDocument: "after" },
         );
 
         if (!seatUpdate?.value) {
-          responsePayload = {
-            status: 409,
-            body: { error: "Cannot approve: capacity reached." },
-          };
-          return;
+          // Throw to ABORT transaction (no partial writes committed)
+          throw new HttpError(409, "Cannot approve: capacity reached.", {
+            cap,
+            approvedCount: currentApproved,
+            seatsLeft: Math.max(cap - currentApproved, 0),
+          });
         }
 
+        // Mark payment as confirmed + enrollment approved
         enr.payment = enr.payment || {};
         enr.payment.paid = true;
         enr.payment.paidAt = new Date();
@@ -619,16 +634,10 @@ router.patch(
         enr.installation = enr.installation || {};
         enr.installation.status = enr.installation.status || "pending";
 
-        const user = await User.findById(enr.userId).session(session);
-        if (!user) {
-          responsePayload = { status: 404, body: { error: "User not found" } };
-          return;
-        }
-
         const alreadyApplied = enr?.installation?.entitlementsApplied === true;
         const grantsApplied = alreadyApplied
           ? []
-          : applyTrainingGrantsToUser(user, training);
+          : applyTrainingGrantsToUser(user, trainingLean);
 
         if (!alreadyApplied) {
           await user.save({ session });
@@ -643,29 +652,39 @@ router.patch(
         const approvedCountAfter = seatUpdate.value.approvedCount || 0;
         const seatsLeft = Math.max(cap - approvedCountAfter, 0);
 
-        responsePayload = {
-          status: 200,
-          body: {
-            ok: true,
-            enrollment: enr,
-            grantsApplied,
-            seatsLeft,
-            approvedCount: approvedCountAfter,
-            message:
-              "Enrollment approved, entitlements granted, seat reserved.",
-          },
+        resultBody = {
+          ok: true,
+          enrollment: enr,
+          grantsApplied,
+          seatsLeft,
+          approvedCount: approvedCountAfter,
+          message: "Enrollment approved, entitlements granted, seat reserved.",
         };
       });
 
-      if (!responsePayload) {
+      if (!resultBody) {
         return res.status(500).json({ error: "Unknown approval error" });
       }
-      return res.status(responsePayload.status).json(responsePayload.body);
+
+      return res.json(resultBody);
+    } catch (err) {
+      const status = err?.status || 500;
+      const extra = err?.extra || null;
+
+      if (status === 409) {
+        return res.status(409).json({
+          error: err.message || "Cannot approve: capacity reached.",
+          ...(extra || {}),
+        });
+      }
+
+      return res.status(status).json({ error: err.message || "Server error" });
     } finally {
       session.endSession();
     }
   }),
 );
+
 
 router.patch(
   "/enrollments/:id/reject",
