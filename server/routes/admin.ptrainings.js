@@ -21,9 +21,10 @@ const normKey = (k) =>
 const DEFAULT_CAPACITY = 14;
 
 function capacityOf(training) {
-  const cap = Number(training?.capacityApproved);
+  const cap = Number(training?.capacityApproved ?? training?.capacity);
   return Number.isFinite(cap) && cap > 0 ? cap : DEFAULT_CAPACITY;
 }
+
 
 function isStrictObjectId(id) {
   return typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
@@ -447,8 +448,9 @@ router.get(
       _id: { $in: trainingObjectIds },
     })
       .select(
-        "title startAt endAt priceNGN pricing capacityApproved entitlementGrants installationChecklist flyerUrl slug",
+        "title startAt endAt priceNGN pricing capacityApproved capacity entitlementGrants installationChecklist flyerUrl slug",
       )
+
       .lean();
 
     const approvedMap = await getApprovedCountsMap(trainingObjectIds);
