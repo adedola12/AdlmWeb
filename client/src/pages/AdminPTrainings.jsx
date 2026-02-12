@@ -777,21 +777,22 @@ export default function AdminPTrainings() {
     }
   }
 
-  async function deleteEvent() {
-    if (!activeId) return;
-    if (!window.confirm("Delete this training event?")) return;
+async function deleteEvent() {
+  if (!activeId) return;
+  if (!window.confirm("Delete this training event?")) return;
 
-    try {
-      await apiAuthed.delete(`/admin/ptrainings/events/${activeId}`);
-      setActiveId("");
-      const b = blankEvent();
-      setDraft(b);
-      setFormPreview(buildFormDataTemplate(b.formFields));
-      await loadEvents();
-    } catch (e) {
-      setErr(e?.message || "Failed");
-    }
+  try {
+    await apiAuthed.delete(`/admin/ptrainings/events/${activeId}`);
+    setActiveId("");
+    const b = blankEvent();
+    setDraft(b);
+    setFormPreview(buildFormDataTemplate(b.formFields));
+    await Promise.all([loadEvents(), loadEnrollments()]); // ✅ add this
+  } catch (e) {
+    setErr(e?.message || "Failed");
   }
+}
+
 
   async function approveEnrollment(id) {
     try {

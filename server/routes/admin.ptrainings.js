@@ -25,7 +25,6 @@ function capacityOf(training) {
   return Number.isFinite(cap) && cap > 0 ? cap : DEFAULT_CAPACITY;
 }
 
-
 function isStrictObjectId(id) {
   return typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
 }
@@ -375,9 +374,45 @@ async function deleteEvent(req, res) {
     return res.status(404).json({ error: "Not found" });
   }
 
-  const gone = await TrainingEvent.findByIdAndDelete(req.params.id);
-  if (!gone) return res.status(404).json({ error: "Not found" });
-  res.json({ ok: true });
+  const idStr = String(req.params.id);
+  const idObj = new mongoose.Types.ObjectId(idStr);
+
+  const session = await mongoose.startSession();
+
+  try {
+    let deletedEnrollments = 0;
+    let deletedEvent = null;
+
+    await session.withTransaction(async () => {
+      // ✅ Delete all enrollments tied to this training (handles old string-stored ids too)
+      const enrRes = await TrainingEnrollment.deleteMany({
+        $or: [{ trainingId: idObj }, { trainingId: idStr }],
+      }).session(session);
+
+      deletedEnrollments = enrRes?.deletedCount || 0;
+
+      // ✅ Delete the training itself
+      deletedEvent = await TrainingEvent.findOneAndDelete({
+        _id: idObj,
+      }).session(session);
+
+      if (!deletedEvent) {
+        // abort transaction => enrollments won't be deleted either
+        throw Object.assign(new Error("Not found"), { status: 404 });
+      }
+    });
+
+    return res.json({
+      ok: true,
+      deletedEventId: idStr,
+      deletedEnrollments,
+    });
+  } catch (err) {
+    const status = err?.status || 500;
+    return res.status(status).json({ error: err?.message || "Server error" });
+  } finally {
+    session.endSession();
+  }
 }
 
 // Canonical
@@ -628,13 +663,14 @@ router.patch(
         };
 
         enr.status = "approved";
-        enr.approvedAt = new Date();
-        enr.approvedBy = req.user?.email || "admin";
+        enr.decidedAt = new Date();
+        enr.decidedBy = req.user?.email || "admin";
 
         enr.installation = enr.installation || {};
         enr.installation.status = enr.installation.status || "pending";
 
-        const alreadyApplied = enr?.installation?.entitlementsApplied === true;
+        const alreadyApplied = enr.entitlementsApplied === true;
+
         const grantsApplied = alreadyApplied
           ? []
           : applyTrainingGrantsToUser(user, trainingLean);
@@ -643,8 +679,11 @@ router.patch(
           await user.save({ session });
         }
 
-        enr.installation.entitlementsApplied = true;
-        enr.installation.entitlementsAppliedAt = new Date();
+        if (!alreadyApplied) {
+          enr.entitlementsApplied = true;
+          enr.entitlementsAppliedAt = new Date();
+        }
+
         enr.installation.entitlementsAppliedBy = req.user?.email || "admin";
 
         await enr.save({ session });
@@ -684,7 +723,6 @@ router.patch(
     }
   }),
 );
-
 
 router.patch(
   "/enrollments/:id/reject",
@@ -730,24 +768,26 @@ router.patch(
     enr.installation = enr.installation || {};
 
     let grantsApplied = [];
-    const alreadyApplied = !!enr.installation.entitlementsApplied;
+    // const alreadyApplied = !!enr.installation.entitlementsApplied;
+    const alreadyApplied = !!enr.entitlementsApplied;
+
 
     if (!alreadyApplied) {
       grantsApplied = applyTrainingGrantsToUser(user, training);
       await user.save();
 
-      enr.installation.entitlementsApplied = true;
-      enr.installation.entitlementsAppliedAt = new Date();
-      enr.installation.entitlementsAppliedBy = req.user?.email || "admin";
+      enr.entitlementsApplied = true;
+      enr.entitlementsAppliedAt = new Date();
+      enr.entitlementsAppliedBy = req.user?.email || "admin";
     } else {
       grantsApplied = Array.isArray(training?.entitlementGrants)
         ? training.entitlementGrants
         : [];
     }
 
-    enr.installation.status = "complete";
-    enr.installation.completedAt = new Date();
-    enr.installation.completedBy = req.user?.email || "admin";
+    enr.status = "complete";
+    enr.completedAt = new Date();
+    enr.completedBy = req.user?.email || "admin";
 
     await enr.save();
 
