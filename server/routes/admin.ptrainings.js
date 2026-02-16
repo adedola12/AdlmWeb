@@ -742,21 +742,36 @@ router.patch(
       }
     }
 
+    const enrollmentId = String(req.params.id || "").trim();
+    if (!isStrictObjectId(enrollmentId)) {
+      return res.status(404).json({ error: "Enrollment not found" });
+    }
+
     const session = await mongoose.startSession();
+
+    // Helper: always read approvedCount as int (handles string/number/null)
+    const approvedCountAsIntExpr = {
+      $convert: {
+        input: "$approvedCount",
+        to: "int",
+        onError: 0,
+        onNull: 0,
+      },
+    };
 
     try {
       let resultBody = null;
       let mailJob = null;
 
       await session.withTransaction(async () => {
-        const enr = await TrainingEnrollment.findById(req.params.id).session(
-          session,
-        );
+        // Load enrollment
+        const enr =
+          await TrainingEnrollment.findById(enrollmentId).session(session);
         if (!enr) throw new HttpError(404, "Enrollment not found");
 
         const st0 = String(enr.status || "").toLowerCase();
 
-        // Already approved => return success (no writes needed)
+        // Idempotent: already approved => success
         if (st0 === "approved") {
           const trainingLean = await TrainingEvent.findById(enr.trainingId)
             .session(session)
@@ -787,7 +802,7 @@ router.patch(
           throw new HttpError(400, "Cannot approve: enrollment was rejected.");
         }
 
-        // Load training + user FIRST
+        // Load training + user
         const trainingLean = await TrainingEvent.findById(enr.trainingId)
           .session(session)
           .lean();
@@ -798,7 +813,7 @@ router.patch(
 
         const cap = capacityOf(trainingLean);
 
-        // Re-sync approvedCount from truth
+        // Re-sync approvedCount (truth from enrollments)
         const currentApproved = await TrainingEnrollment.countDocuments({
           status: "approved",
           $or: [
@@ -807,27 +822,37 @@ router.patch(
           ],
         }).session(session);
 
+        // Ensure TrainingEvent.approvedCount is numeric + correct
         await TrainingEvent.collection.updateOne(
           { _id: trainingLean._id },
-          { $set: { approvedCount: currentApproved } },
+          { $set: { approvedCount: Number(currentApproved) } },
           { session },
         );
 
-        // Atomic seat reservation
+        // ✅ Atomic seat reservation (numeric-safe compare)
         const seatUpdate = await TrainingEvent.collection.findOneAndUpdate(
           {
             _id: trainingLean._id,
-            $expr: { $lt: [{ $ifNull: ["$approvedCount", 0] }, cap] },
+            $expr: { $lt: [approvedCountAsIntExpr, Number(cap)] },
           },
           { $inc: { approvedCount: 1 } },
           { session, returnDocument: "after" },
         );
 
         if (!seatUpdate?.value) {
+          // Recompute for accurate error payload
+          const freshApproved = await TrainingEnrollment.countDocuments({
+            status: "approved",
+            $or: [
+              { trainingId: trainingLean._id },
+              { trainingId: String(trainingLean._id) },
+            ],
+          }).session(session);
+
           throw new HttpError(409, "Cannot approve: capacity reached.", {
             cap,
-            approvedCount: currentApproved,
-            seatsLeft: Math.max(cap - currentApproved, 0),
+            approvedCount: freshApproved,
+            seatsLeft: Math.max(Number(cap) - freshApproved, 0),
           });
         }
 
@@ -849,6 +874,7 @@ router.patch(
         enr.installation = enr.installation || {};
         enr.installation.status = enr.installation.status || "pending";
 
+        // Entitlements apply once
         const alreadyApplied = enr.entitlementsApplied === true;
 
         const grantsApplied = alreadyApplied
@@ -865,10 +891,10 @@ router.patch(
 
         await enr.save({ session });
 
-        const approvedCountAfter = seatUpdate.value.approvedCount || 0;
-        const seatsLeft = Math.max(cap - approvedCountAfter, 0);
+        const approvedCountAfter = Number(seatUpdate.value.approvedCount || 0);
+        const seatsLeft = Math.max(Number(cap) - approvedCountAfter, 0);
 
-        // prepare email payload (send AFTER commit)
+        // Send email AFTER commit
         mailJob = {
           to: user.email,
           firstName: user.firstName || enr.firstName || user.username || "",
@@ -889,7 +915,7 @@ router.patch(
         return res.status(500).json({ error: "Unknown approval error" });
       }
 
-      // ✅ send email OUTSIDE transaction (avoids duplicates on rollback)
+      // Email outside transaction
       if (mailJob?.to) {
         try {
           await sendMail({
@@ -927,6 +953,7 @@ router.patch(
     }
   }),
 );
+
 
 router.patch(
   "/enrollments/:id/reject",
