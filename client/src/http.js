@@ -134,6 +134,7 @@ async function coreFetch(path, init = {}, authed = false) {
 
   if (!res.ok) {
     const { message, data: errData } = await readErrorPayload(res);
+
     const err = new Error(message);
     err.status = res.status;
     err.data = errData;

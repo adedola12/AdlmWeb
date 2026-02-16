@@ -25,6 +25,15 @@ function capacityOf(training) {
   const cap = Number(training?.capacityApproved ?? training?.capacity);
   return Number.isFinite(cap) && cap > 0 ? cap : DEFAULT_CAPACITY;
 }
+function manualSeatsLeftOf(training) {
+  const raw = training?.seatsLeft;
+  if (raw === undefined || raw === null || raw === "") return null;
+
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+
+  return Math.max(Math.floor(n), 0);
+}
 
 function isStrictObjectId(id) {
   return typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
@@ -177,6 +186,12 @@ function normalizeEventPayload(body) {
   if (payload.sort != null) {
     const s = parseInt(payload.sort, 10);
     payload.sort = Number.isFinite(s) ? s : 0;
+  }
+
+  if (payload.seatsLeft != null && payload.seatsLeft !== "") {
+    const sl = parseInt(payload.seatsLeft, 10);
+    if (Number.isFinite(sl) && sl >= 0) payload.seatsLeft = sl;
+    else delete payload.seatsLeft;
   }
 
   // pricing tiers
@@ -509,8 +524,13 @@ async function listEvents(_req, res) {
 
   const enriched = (list || []).map((t) => {
     const approvedCount = approvedMap[String(t._id)] || 0;
-    const cap = capacityOf(t);
-    const seatsLeft = Math.max(cap - approvedCount, 0);
+
+    // ✅ Manual mode:
+    // if seatsLeft is provided on event, use it.
+    // otherwise fallback to configured capacity (not capacity - approved).
+    const manualLeft = manualSeatsLeftOf(t);
+    const seatsLeft = manualLeft != null ? manualLeft : capacityOf(t);
+
     return { ...t, approvedCount, seatsLeft };
   });
 
@@ -676,8 +696,12 @@ router.get(
     const trainingMap = Object.fromEntries(
       (trainings || []).map((t) => {
         const approvedCount = approvedMap[String(t._id)] || 0;
-        const cap = capacityOf(t);
-        const seatsLeft = Math.max(cap - approvedCount, 0);
+
+        // ✅ Manual mode:
+        // use event.seatsLeft when present; otherwise show configured capacity.
+        const manualLeft = manualSeatsLeftOf(t);
+        const seatsLeft = manualLeft != null ? manualLeft : capacityOf(t);
+
         return [String(t._id), { ...t, approvedCount, seatsLeft }];
       }),
     );
@@ -735,10 +759,9 @@ router.patch(
   "/enrollments/:id/approve",
   asyncHandler(async (req, res) => {
     class HttpError extends Error {
-      constructor(status, message, extra = {}) {
+      constructor(status, message) {
         super(message);
         this.status = status;
-        this.extra = extra;
       }
     }
 
@@ -748,16 +771,6 @@ router.patch(
     }
 
     const session = await mongoose.startSession();
-
-    // Helper: always read approvedCount as int (handles string/number/null)
-    const approvedCountAsIntExpr = {
-      $convert: {
-        input: "$approvedCount",
-        to: "int",
-        onError: 0,
-        onNull: 0,
-      },
-    };
 
     try {
       let resultBody = null;
@@ -777,22 +790,11 @@ router.patch(
             .session(session)
             .lean();
 
-          const cap = capacityOf(trainingLean);
-
-          const approvedCount = await TrainingEnrollment.countDocuments({
-            status: "approved",
-            $or: [
-              { trainingId: trainingLean?._id },
-              { trainingId: String(trainingLean?._id || "") },
-            ],
-          }).session(session);
-
           resultBody = {
             ok: true,
             enrollment: enr,
             grantsApplied: [],
-            seatsLeft: Math.max(cap - approvedCount, 0),
-            approvedCount,
+            seatsLeft: manualSeatsLeftOf(trainingLean),
             message: "Enrollment already approved (no changes).",
           };
           return;
@@ -811,51 +813,7 @@ router.patch(
         const user = await User.findById(enr.userId).session(session);
         if (!user) throw new HttpError(404, "User not found");
 
-        const cap = capacityOf(trainingLean);
-
-        // Re-sync approvedCount (truth from enrollments)
-        const currentApproved = await TrainingEnrollment.countDocuments({
-          status: "approved",
-          $or: [
-            { trainingId: trainingLean._id },
-            { trainingId: String(trainingLean._id) },
-          ],
-        }).session(session);
-
-        // Ensure TrainingEvent.approvedCount is numeric + correct
-        await TrainingEvent.collection.updateOne(
-          { _id: trainingLean._id },
-          { $set: { approvedCount: Number(currentApproved) } },
-          { session },
-        );
-
-        // ✅ Atomic seat reservation (numeric-safe compare)
-        const seatUpdate = await TrainingEvent.collection.findOneAndUpdate(
-          {
-            _id: trainingLean._id,
-            $expr: { $lt: [approvedCountAsIntExpr, Number(cap)] },
-          },
-          { $inc: { approvedCount: 1 } },
-          { session, returnDocument: "after" },
-        );
-
-        if (!seatUpdate?.value) {
-          // Recompute for accurate error payload
-          const freshApproved = await TrainingEnrollment.countDocuments({
-            status: "approved",
-            $or: [
-              { trainingId: trainingLean._id },
-              { trainingId: String(trainingLean._id) },
-            ],
-          }).session(session);
-
-          throw new HttpError(409, "Cannot approve: capacity reached.", {
-            cap,
-            approvedCount: freshApproved,
-            seatsLeft: Math.max(Number(cap) - freshApproved, 0),
-          });
-        }
-
+        // ✅ NO capacity counter checks/increments here (manual admin flow)
         // Mark payment as confirmed + enrollment approved
         enr.payment = enr.payment || {};
         enr.payment.paid = true;
@@ -876,7 +834,6 @@ router.patch(
 
         // Entitlements apply once
         const alreadyApplied = enr.entitlementsApplied === true;
-
         const grantsApplied = alreadyApplied
           ? []
           : applyTrainingGrantsToUser(user, trainingLean);
@@ -888,11 +845,7 @@ router.patch(
         }
 
         enr.installation.entitlementsAppliedBy = req.user?.email || "admin";
-
         await enr.save({ session });
-
-        const approvedCountAfter = Number(seatUpdate.value.approvedCount || 0);
-        const seatsLeft = Math.max(Number(cap) - approvedCountAfter, 0);
 
         // Send email AFTER commit
         mailJob = {
@@ -905,9 +858,10 @@ router.patch(
           ok: true,
           enrollment: enr,
           grantsApplied,
-          seatsLeft,
-          approvedCount: approvedCountAfter,
-          message: "Enrollment approved, entitlements granted, seat reserved.",
+          seatsLeft: manualSeatsLeftOf(trainingLean),
+          message: alreadyApplied
+            ? "Enrollment approved."
+            : "Enrollment approved, entitlements granted.",
         };
       });
 
@@ -938,22 +892,12 @@ router.patch(
       return res.json(resultBody);
     } catch (err) {
       const status = err?.status || 500;
-      const extra = err?.extra || null;
-
-      if (status === 409) {
-        return res.status(409).json({
-          error: err.message || "Cannot approve: capacity reached.",
-          ...(extra || {}),
-        });
-      }
-
-      return res.status(status).json({ error: err.message || "Server error" });
+      return res.status(status).json({ error: err?.message || "Server error" });
     } finally {
       session.endSession();
     }
   }),
 );
-
 
 router.patch(
   "/enrollments/:id/reject",
@@ -1034,6 +978,5 @@ router.patch(
     });
   }),
 );
-
 
 export default router;
