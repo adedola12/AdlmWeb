@@ -532,11 +532,7 @@ export default function Admin() {
         apiAuthed(`/admin/users${qs}`, { token: accessToken }),
         apiAuthed(`/admin/purchases?status=pending`, { token: accessToken }),
         apiAuthed(`/admin/installations`, { token: accessToken }),
-
-        // ✅ trainings list (events endpoint to match AdminPTrainings)
         apiAuthed(`/admin/ptrainings/events`, { token: accessToken }),
-
-        // enrollments
         apiAuthed(`/admin/ptrainings/enrollments`, { token: accessToken }),
       ]);
 
@@ -707,6 +703,31 @@ export default function Admin() {
     }
   }
 
+  async function markTrainingInstallationComplete(enrollmentId) {
+    setMsg("");
+    setPtBusy((s) => ({ ...s, [`inst-${enrollmentId}`]: true }));
+
+    try {
+      const res = await apiAuthed(
+        `/admin/ptrainings/enrollments/${enrollmentId}/installation-complete`,
+        { token: accessToken, method: "PATCH" },
+      );
+
+      await load();
+      setMsg(res?.message || "Installation marked complete");
+    } catch (e) {
+      setMsg(
+        e?.data?.error || e?.message || "Failed to mark installation complete",
+      );
+    } finally {
+      setPtBusy((s) => {
+        const n = { ...s };
+        delete n[`inst-${enrollmentId}`];
+        return n;
+      });
+    }
+  }
+
   // ✅ Active subscriptions view: ONLY active + not expired
   const activeRows = React.useMemo(() => {
     const rows = [];
@@ -789,7 +810,7 @@ export default function Admin() {
         )
       : rows;
 
-    const sorted = [...filtered].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const ad =
         typeof a.daysLeft === "number" ? a.daysLeft : Number.POSITIVE_INFINITY;
       const bd =
@@ -800,14 +821,11 @@ export default function Admin() {
       if (ax !== bx) return ax - bx;
       return String(a.email || "").localeCompare(String(b.email || ""));
     });
-
-    return sorted;
   }, [users, q]);
 
   async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
     setMsg("");
 
-    // Optional guard: don't even call backend if UI already knows it's full
     if (seatsLeftMaybe === 0) {
       setMsg("Cannot approve: capacity reached.");
       return;
@@ -827,7 +845,6 @@ export default function Admin() {
       await load();
       setMsg(res?.message || "Training enrollment approved");
     } catch (e) {
-      // ✅ now works because http.js throws {status, data}
       if (e?.status === 409) {
         const cap = e?.data?.cap;
         const left = e?.data?.seatsLeft;
@@ -1156,7 +1173,6 @@ export default function Admin() {
     return arr;
   }, [installations]);
 
-  // pTrainings helpers
   const pTrainingsSorted = React.useMemo(() => {
     const arr = Array.isArray(ptrainings) ? [...ptrainings] : [];
     arr.sort((a, b) => {
@@ -1174,6 +1190,7 @@ export default function Admin() {
     return rows.filter((e) => {
       const trainingId =
         e?.training?._id || e?.trainingId || e?.ptrainingId || "";
+
       if (
         ptTrainingFilter !== "all" &&
         String(trainingId) !== String(ptTrainingFilter)
@@ -1185,11 +1202,22 @@ export default function Admin() {
         const st = String(e?.status || "").toLowerCase();
         if (st === "approved" || st === "rejected") return false;
 
-        const payState = String(e?.payment?.raw?.state || "").toLowerCase();
+        const payState = String(
+          e?.paymentState || e?.payment?.raw?.state || e?.payment?.state || "",
+        ).toLowerCase();
+
+        const receiptUrl =
+          e?.receiptUrl ||
+          e?.payment?.receiptUrl ||
+          e?.payment?.raw?.receiptUrl ||
+          "";
+
         const hasSubmitted =
           payState === "submitted" ||
-          !!e?.payment?.receiptUrl ||
+          !!receiptUrl ||
+          !!e?.payerReference ||
           !!e?.payment?.reference ||
+          !!e?.payerNote ||
           !!e?.payment?.note;
 
         if (!hasSubmitted) return false;
@@ -1197,8 +1225,9 @@ export default function Admin() {
 
       if (!rx) return true;
 
-      const email = String(e?.email || e?.userEmail || "");
-      const name = `${e?.firstName || ""} ${e?.lastName || ""}`.trim();
+      const email = String(e?.email || e?.userEmail || e?.user?.email || "");
+      const name =
+        `${e?.firstName || e?.user?.firstName || ""} ${e?.lastName || e?.user?.lastName || ""}`.trim();
       const title = String(e?.training?.title || e?.trainingTitle || "");
       return rx.test(email) || rx.test(name) || rx.test(title);
     });
@@ -1210,10 +1239,12 @@ export default function Admin() {
     for (const e of rows) {
       const st = String(e?.status || "").toLowerCase();
       if (st !== "approved") continue;
+
       const tid = String(
         e?.training?._id || e?.trainingId || e?.ptrainingId || "",
       );
       if (!tid) continue;
+
       m.set(tid, (m.get(tid) || 0) + 1);
     }
     return m;
@@ -1361,7 +1392,7 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* ------------------ pTrainings tab (UPDATED) ------------------ */}
+      {/* ------------------ pTrainings tab ------------------ */}
       {tab === "ptrainings" && (
         <div className="card">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -1373,7 +1404,6 @@ export default function Admin() {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* ✅ New Training now navigates to AdminPTrainings */}
               <button className="btn btn-sm" onClick={goNewTraining}>
                 New Training
               </button>
@@ -1535,8 +1565,8 @@ export default function Admin() {
                 </div>
 
                 <div className="text-xs text-slate-500 mt-1">
-                  When “Show all” is OFF, you only see **submitted** proofs
-                  needing review.
+                  When “Show all” is OFF, you only see submitted proofs needing
+                  review.
                 </div>
 
                 <div className="mt-3 space-y-2">
@@ -1572,9 +1602,18 @@ export default function Admin() {
                         "";
 
                       const st = String(e?.status || "").toLowerCase();
+                      const instSt = String(
+                        e?.installation?.status || "pending",
+                      ).toLowerCase();
+
                       const decidedAt = e?.decidedAt
                         ? dayjs(e.decidedAt).format("YYYY-MM-DD HH:mm")
                         : "";
+
+                      const seatsLeft =
+                        typeof e?.training?.seatsLeft === "number"
+                          ? e.training.seatsLeft
+                          : null;
 
                       return (
                         <div
@@ -1590,6 +1629,17 @@ export default function Admin() {
                                 </div>
 
                                 {pTrainingStatusBadge(st)}
+
+                                {/* ✅ show installation state ONLY when approved */}
+                                {st === "approved" ? (
+                                  <Badge
+                                    label={`Install: ${instSt}`}
+                                    tone={
+                                      instSt === "complete" ? "green" : "yellow"
+                                    }
+                                  />
+                                ) : null}
+
                                 {decidedAt ? (
                                   <span className="text-xs text-slate-500">
                                     · {decidedAt}
@@ -1648,45 +1698,35 @@ export default function Admin() {
                               ) : null}
                             </div>
 
-                            <div className="shrink-0 flex gap-2">
+                            <div className="shrink-0 flex gap-2 flex-wrap justify-end">
+                              {/* ✅ Approve/Reject only for pending/submitted */}
                               {st !== "approved" && st !== "rejected" && (
                                 <>
-                                  {(() => {
-                                    const seatsLeft =
-                                      typeof e?.training?.seatsLeft === "number"
-                                        ? e.training.seatsLeft
-                                        : null;
-                                    const disabled =
-                                      !!ptBusy[e._id] || seatsLeft === 0;
-
-                                    return (
-                                      <button
-                                        className="btn"
-                                        disabled={disabled}
-                                        title={
-                                          seatsLeft === 0
-                                            ? "Capacity reached"
-                                            : ptBusy[e._id]
-                                              ? "Approving…"
-                                              : "Approve enrollment"
-                                        }
-                                        onClick={() => {
-                                          const ok = window.confirm(
-                                            "Approve this training payment and registration?",
-                                          );
-                                          if (ok)
-                                            approveTrainingEnrollment(
-                                              e._id,
-                                              seatsLeft,
-                                            );
-                                        }}
-                                      >
-                                        {ptBusy[e._id]
+                                  <button
+                                    className="btn"
+                                    disabled={
+                                      !!ptBusy[e._id] || seatsLeft === 0
+                                    }
+                                    title={
+                                      seatsLeft === 0
+                                        ? "Capacity reached"
+                                        : ptBusy[e._id]
                                           ? "Approving…"
-                                          : "Approve"}
-                                      </button>
-                                    );
-                                  })()}
+                                          : "Approve enrollment"
+                                    }
+                                    onClick={() => {
+                                      const ok = window.confirm(
+                                        "Approve this training payment and registration?",
+                                      );
+                                      if (ok)
+                                        approveTrainingEnrollment(
+                                          e._id,
+                                          seatsLeft,
+                                        );
+                                    }}
+                                  >
+                                    {ptBusy[e._id] ? "Approving…" : "Approve"}
+                                  </button>
 
                                   <button
                                     className="btn"
@@ -1700,6 +1740,25 @@ export default function Admin() {
                                     Reject
                                   </button>
                                 </>
+                              )}
+
+                              {/* ✅ Installation complete action (ONLY for approved) */}
+                              {st === "approved" && instSt !== "complete" && (
+                                <button
+                                  className="btn"
+                                  disabled={!!ptBusy[`inst-${e._id}`]}
+                                  onClick={() => {
+                                    const ok = window.confirm(
+                                      "Mark this user's installation as complete?",
+                                    );
+                                    if (ok)
+                                      markTrainingInstallationComplete(e._id);
+                                  }}
+                                >
+                                  {ptBusy[`inst-${e._id}`]
+                                    ? "Saving…"
+                                    : "Mark installation complete"}
+                                </button>
                               )}
                             </div>
                           </div>
@@ -1995,7 +2054,6 @@ export default function Admin() {
                 <tbody>
                   {allRows.map((r, i) => {
                     const renewSelId = `all-renew-${i}`;
-
                     const entPseudo = {
                       status: r.rawStatus,
                       expiresAt: r.expiresAt,
@@ -2025,14 +2083,7 @@ export default function Admin() {
                         </td>
 
                         <td className="py-3 pr-3">
-                          <div className="flex items-center gap-2">
-                            {statusBadgeFrom(entPseudo)}
-                            {r.status === "active" && (
-                              <span className="text-xs text-slate-500">
-                                (active & valid)
-                              </span>
-                            )}
-                          </div>
+                          {statusBadgeFrom(entPseudo)}
                         </td>
 
                         <td className="py-3 pr-3">
@@ -2111,7 +2162,6 @@ export default function Admin() {
 
                               <button
                                 className="btn btn-sm"
-                                title="Adds time starting from NOW if expired, or from current expiry if still valid"
                                 onClick={() =>
                                   updateEntitlement(
                                     r.email,
@@ -2252,15 +2302,6 @@ export default function Admin() {
                           seats={seatsTotal}
                         />
                         <Badge label={badge.label} tone={badge.tone} />
-
-                        {p.currency && p.totalAmount != null && (
-                          <span className="text-xs text-slate-500">
-                            · {p.currency}{" "}
-                            {(p.totalAmount?.toLocaleString?.() ??
-                              p.totalAmount) ||
-                              ""}
-                          </span>
-                        )}
                       </div>
 
                       <div className="text-slate-600 mt-1">
@@ -2277,11 +2318,6 @@ export default function Admin() {
                         <div className="text-sm text-slate-800 break-words">
                           {grants.text}
                         </div>
-                        {Array.isArray(p?.lines) && p.lines.length > 0 && (
-                          <div className="text-xs text-slate-500 mt-1">
-                            Cart lines: {p.lines.length}
-                          </div>
-                        )}
                       </div>
 
                       <div className="mt-2 text-xs text-slate-500">
@@ -2329,14 +2365,6 @@ export default function Admin() {
                       >
                         Mark complete
                       </button>
-
-                      <div className="text-[11px] text-slate-500 text-right max-w-[240px]">
-                        {badge.label === "Pending"
-                          ? "After marking complete, subscription starts and coupon is finalized."
-                          : badge.label === "Completed but not applied"
-                            ? "This indicates a mismatch. Mark complete to apply entitlements."
-                            : "Legacy record: fields missing. Mark complete to normalize."}
-                      </div>
                     </div>
                   </div>
                 );

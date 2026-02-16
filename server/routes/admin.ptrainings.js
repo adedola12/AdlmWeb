@@ -42,15 +42,38 @@ async function getApprovedCountsMap(trainingObjectIds, session = null) {
     return {};
   }
 
+  // normalize to ObjectId + also keep string version
+  const objIds = trainingObjectIds
+    .map((id) => {
+      try {
+        return id instanceof mongoose.Types.ObjectId
+          ? id
+          : new mongoose.Types.ObjectId(String(id));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  const strIds = objIds.map((id) => String(id));
+
   const pipeline = [
-    { $match: { trainingId: { $in: trainingObjectIds }, status: "approved" } },
-    { $group: { _id: "$trainingId", count: { $sum: 1 } } },
+    {
+      $match: {
+        status: "approved",
+        $or: [{ trainingId: { $in: objIds } }, { trainingId: { $in: strIds } }],
+      },
+    },
+    // normalize key for grouping (so ObjectId and string group together)
+    { $project: { tid: { $toString: "$trainingId" } } },
+    { $group: { _id: "$tid", count: { $sum: 1 } } },
   ];
 
   const agg = await TrainingEnrollment.aggregate(pipeline).session(
     session || null,
   );
 
+  // map keys are string ids
   return Object.fromEntries(
     (agg || []).map((x) => [String(x._id), x.count || 0]),
   );
@@ -948,6 +971,11 @@ router.patch(
 
     enr.installation = enr.installation || {};
 
+    // ✅ mark installation as complete (THIS is your waitlist system)
+    enr.installation.status = "complete";
+    enr.installation.completedAt = new Date();
+    enr.installation.completedBy = req.user?.email || "admin";
+
     let grantsApplied = [];
     const alreadyApplied = !!enr.entitlementsApplied;
 
@@ -964,9 +992,8 @@ router.patch(
         : [];
     }
 
-    enr.status = "complete";
-    enr.completedAt = new Date();
-    enr.completedBy = req.user?.email || "admin";
+    // ✅ IMPORTANT: keep enr.status as "approved" so seat remains occupied
+    // enr.status = "approved";
 
     await enr.save();
 
@@ -975,10 +1002,11 @@ router.patch(
       enrollment: enr,
       grantsApplied,
       message: alreadyApplied
-        ? "Installation marked complete. (Entitlements were already granted on approval.)"
+        ? "Installation marked complete."
         : "Installation complete and entitlements granted.",
     });
   }),
 );
+
 
 export default router;
