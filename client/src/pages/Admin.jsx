@@ -823,51 +823,34 @@ export default function Admin() {
     });
   }, [users, q]);
 
-  async function approveTrainingEnrollment(enrollmentId, seatsLeftMaybe) {
-    setMsg("");
+async function approveTrainingEnrollment(enrollmentId) {
+  setMsg("");
+  setPtBusy((s) => ({ ...s, [enrollmentId]: true }));
 
-    if (seatsLeftMaybe === 0) {
-      setMsg("Cannot approve: capacity reached.");
-      return;
-    }
+  try {
+    const res = await apiAuthed(
+      `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
+      {
+        token: accessToken,
+        method: "PATCH",
+      },
+    );
 
-    setPtBusy((s) => ({ ...s, [enrollmentId]: true }));
-
-    try {
-      const res = await apiAuthed(
-        `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
-        {
-          token: accessToken,
-          method: "PATCH",
-        },
-      );
-
-      await load();
-      setMsg(res?.message || "Training enrollment approved");
-    } catch (e) {
-      if (e?.status === 409) {
-        const cap = e?.data?.cap;
-        const left = e?.data?.seatsLeft;
-        setMsg(
-          e?.data?.error ||
-            (cap != null && left != null
-              ? `Cannot approve: capacity reached (${left}/${cap} left).`
-              : "Cannot approve: capacity reached."),
-        );
-        return;
-      }
-
-      setMsg(
-        e?.data?.error || e?.message || "Failed to approve training enrollment",
-      );
-    } finally {
-      setPtBusy((s) => {
-        const n = { ...s };
-        delete n[enrollmentId];
-        return n;
-      });
-    }
+    await load();
+    setMsg(res?.message || "Training enrollment approved");
+  } catch (e) {
+    setMsg(
+      e?.data?.error || e?.message || "Failed to approve training enrollment",
+    );
+  } finally {
+    setPtBusy((s) => {
+      const n = { ...s };
+      delete n[enrollmentId];
+      return n;
+    });
   }
+}
+
 
   async function rejectTrainingEnrollment(enrollmentId) {
     setMsg("");
@@ -1233,49 +1216,29 @@ export default function Admin() {
     });
   }, [trainingEnrollments, ptTrainingFilter, ptShowAllEnrollments, q]);
 
-  const trainingStats = React.useMemo(() => {
-    const m = new Map();
-    const rows = Array.isArray(trainingEnrollments) ? trainingEnrollments : [];
-    for (const e of rows) {
-      const st = String(e?.status || "").toLowerCase();
-      if (st !== "approved") continue;
 
-      const tid = String(
-        e?.training?._id || e?.trainingId || e?.ptrainingId || "",
-      );
-      if (!tid) continue;
 
-      m.set(tid, (m.get(tid) || 0) + 1);
-    }
-    return m;
-  }, [trainingEnrollments]);
+function trainingSeatBadge(t) {
+  const cap = Math.max(Number(t?.capacityApproved ?? t?.capacity ?? 0) || 0, 0);
 
-  function trainingSeatBadge(t) {
-    const tid = String(t?._id || "");
-    const approved = trainingStats.get(tid) || 0;
+  const manualLeft =
+    typeof t?.seatsLeft === "number" && Number.isFinite(t.seatsLeft)
+      ? Math.max(Math.floor(t.seatsLeft), 0)
+      : null;
 
-    const cap = Math.max(
-      Number(t?.capacityApproved ?? t?.capacity ?? 0) || 0,
-      0,
-    );
-
-    const seatsLeft =
-      typeof t?.seatsLeft === "number"
-        ? t.seatsLeft
-        : cap
-          ? Math.max(cap - approved, 0)
-          : null;
-
-    if (!cap && seatsLeft == null) return <Badge label="—" tone="slate" />;
-
-    if (seatsLeft != null) {
-      const tone =
-        seatsLeft === 0 ? "red" : seatsLeft <= 2 ? "yellow" : "green";
-      return <Badge label={`${seatsLeft}/${cap || "?"} left`} tone={tone} />;
-    }
-
-    return <Badge label={`${approved}/${cap} used`} tone="blue" />;
+  // If seatsLeft is provided by backend/admin, trust that manual value
+  if (manualLeft != null) {
+    const tone =
+      manualLeft === 0 ? "red" : manualLeft <= 2 ? "yellow" : "green";
+    return <Badge label={`${manualLeft} left`} tone={tone} />;
   }
+
+  // Fallback display if no manual seatsLeft
+  if (cap > 0) return <Badge label={`${cap} slots`} tone="blue" />;
+
+  return <Badge label="—" tone="slate" />;
+}
+
 
   function pTrainingStatusBadge(st) {
     const s = String(st || "").toLowerCase();
@@ -1610,10 +1573,7 @@ export default function Admin() {
                         ? dayjs(e.decidedAt).format("YYYY-MM-DD HH:mm")
                         : "";
 
-                      const seatsLeft =
-                        typeof e?.training?.seatsLeft === "number"
-                          ? e.training.seatsLeft
-                          : null;
+
 
                       return (
                         <div
@@ -1704,25 +1664,17 @@ export default function Admin() {
                                 <>
                                   <button
                                     className="btn"
-                                    disabled={
-                                      !!ptBusy[e._id] || seatsLeft === 0
-                                    }
+                                    disabled={!!ptBusy[e._id]}
                                     title={
-                                      seatsLeft === 0
-                                        ? "Capacity reached"
-                                        : ptBusy[e._id]
-                                          ? "Approving…"
-                                          : "Approve enrollment"
+                                      ptBusy[e._id]
+                                        ? "Approving…"
+                                        : "Approve enrollment"
                                     }
                                     onClick={() => {
                                       const ok = window.confirm(
                                         "Approve this training payment and registration?",
                                       );
-                                      if (ok)
-                                        approveTrainingEnrollment(
-                                          e._id,
-                                          seatsLeft,
-                                        );
+                                      if (ok) approveTrainingEnrollment(e._id);
                                     }}
                                   >
                                     {ptBusy[e._id] ? "Approving…" : "Approve"}
