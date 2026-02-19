@@ -9,11 +9,14 @@ import {
   FaLink,
   FaSearch,
   FaTimes,
+  FaFolder,
+  FaCubes,
+  FaArrowLeft,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 
 const TITLES = {
-  revit: "Revit Projects",
+  revit: "Revit Takeoffs",
   revitmep: "Revit MEP Projects",
   planswift: "PlanSwift Projects",
   "revit-materials": "Revit Materials",
@@ -133,6 +136,13 @@ function readLinkCache(tool, projectId) {
 function writeLinkCache(tool, projectId, payload) {
   try {
     localStorage.setItem(linkKey(tool, projectId), JSON.stringify(payload));
+  } catch {}
+}
+
+function purgeLocal(tool, projectId) {
+  try {
+    localStorage.removeItem(cacheKey(tool, projectId));
+    localStorage.removeItem(linkKey(tool, projectId));
   } catch {}
 }
 
@@ -398,17 +408,24 @@ function pickKeyFromCandidate(c) {
 
 export default function ProjectsGeneric() {
   const { tool } = useParams();
-  const title = TITLES[tool] || "Projects";
   const { accessToken } = useAuth();
-
   const [searchParams, setSearchParams] = useSearchParams();
 
   const endpoints = React.useMemo(() => getEndpoints(tool), [tool]);
   const showMaterials = isMaterialsTool(tool);
+  const showRevitToggle = normTool(tool) === "revit" || isMaterialsTool(tool);
 
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
+
+  // explorer selection
+  const [selectedMap, setSelectedMap] = React.useState({});
+  const selectedIds = React.useMemo(
+    () => Object.keys(selectedMap || {}).filter(Boolean),
+    [selectedMap],
+  );
+  const [bulkBusy, setBulkBusy] = React.useState(false);
 
   // rates editing
   const [rates, setRates] = React.useState({});
@@ -425,7 +442,7 @@ export default function ProjectsGeneric() {
   // search (items)
   const [itemQuery, setItemQuery] = React.useState("");
 
-  // optional: search projects list
+  // search projects list
   const [projectQuery, setProjectQuery] = React.useState("");
 
   // material resolve + picks
@@ -462,6 +479,7 @@ export default function ProjectsGeneric() {
   }
 
   const items = Array.isArray(sel?.items) ? sel.items : [];
+
   const { itemGroupId, groupMeta } = React.useMemo(() => {
     if (showMaterials) return buildMaterialGroups(items);
     return buildSimilarityGroups(items, itemText);
@@ -525,7 +543,22 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function load() {
+  function closeProject() {
+    setSel(null);
+    setRates({});
+    setBaseRates({});
+    setLinkedGroups({});
+    setItemQuery("");
+    setNotice("");
+    setErr("");
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("project");
+      return next;
+    });
+  }
+
+  async function load({ keepSelection = true } = {}) {
     setErr("");
     setNotice("");
 
@@ -534,26 +567,25 @@ export default function ProjectsGeneric() {
       const safeList = Array.isArray(list) ? list : [];
       setRows(safeList);
 
-      const preselectId = searchParams.get("project");
-      const found = preselectId
-        ? safeList.find((x) => rowId(x) === preselectId)
-        : null;
-      const firstId = rowId(safeList?.[0]);
-      const toOpen = rowId(found) || firstId;
+      if (!keepSelection) setSelectedMap({});
 
-      if (toOpen) await view(toOpen);
-      else {
-        setSel(null);
-        setRates({});
-        setBaseRates({});
-        setLinkedGroups({});
+      // ✅ Only auto-open if ?project= exists (file-explorer UX)
+      const preselectId = searchParams.get("project");
+      if (preselectId) {
+        const found = safeList.find((x) => rowId(x) === preselectId);
+        if (found) await view(preselectId);
+        else closeProject();
+      } else {
+        // keep current open project if still valid
+        if (selectedId) {
+          const stillThere = safeList.some((x) => rowId(x) === selectedId);
+          if (!stillThere) closeProject();
+        }
       }
     } catch (e) {
       setErr(e.message || "Failed to load projects");
-      setSel(null);
-      setRates({});
-      setBaseRates({});
-      setLinkedGroups({});
+      closeProject();
+      setRows([]);
     }
   }
 
@@ -580,10 +612,75 @@ export default function ProjectsGeneric() {
       initRatesFromProject(p);
     } catch (e) {
       setErr(e.message || "Failed to open project");
-      setSel(null);
-      setRates({});
-      setBaseRates({});
-      setLinkedGroups({});
+      closeProject();
+    }
+  }
+
+  async function deleteMany(
+    ids,
+    { confirmLabel = "Delete selected projects" } = {},
+  ) {
+    const uniq = Array.from(new Set((ids || []).filter(Boolean)));
+    if (!uniq.length) return;
+
+    const ok = window.confirm(
+      `${confirmLabel}?\n\nCount: ${uniq.length}\n\nThis cannot be undone.`,
+    );
+    if (!ok) return;
+
+    setBulkBusy(true);
+    setErr("");
+    setNotice("");
+
+    try {
+      const results = await Promise.allSettled(
+        uniq.map((id) =>
+          apiAuthed(endpoints.del(id), {
+            token: accessToken,
+            method: "DELETE",
+          }),
+        ),
+      );
+
+      const deletedIds = [];
+      const failedIds = [];
+
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") deletedIds.push(uniq[i]);
+        else failedIds.push(uniq[i]);
+      });
+
+      for (const id of deletedIds) purgeLocal(tool, id);
+
+      setRows((prev) =>
+        Array.isArray(prev)
+          ? prev.filter((r) => !deletedIds.includes(rowId(r)))
+          : [],
+      );
+
+      // If current open project was deleted, go back to explorer
+      if (selectedId && deletedIds.includes(selectedId)) {
+        closeProject();
+      }
+
+      // Clear selections that are gone
+      setSelectedMap((prev) => {
+        const next = { ...(prev || {}) };
+        for (const id of deletedIds) delete next[id];
+        return next;
+      });
+
+      if (failedIds.length) {
+        setErr(
+          `Deleted ${deletedIds.length}. Failed ${failedIds.length}. Please retry.`,
+        );
+      } else {
+        setNotice(`Deleted ${deletedIds.length} project(s).`);
+      }
+    } catch (e) {
+      setErr(e?.message || "Failed to delete projects");
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -604,20 +701,21 @@ export default function ProjectsGeneric() {
         method: "DELETE",
       });
 
+      purgeLocal(tool, id);
+
       setRows((prev) =>
         Array.isArray(prev) ? prev.filter((r) => rowId(r) !== id) : [],
       );
 
-      if (selectedId === id) {
-        setSel(null);
-        setRates({});
-        setBaseRates({});
-        setLinkedGroups({});
+      if (selectedId === id) closeProject();
 
-        const remaining = rows.filter((r) => rowId(r) !== id);
-        const nextId = rowId(remaining?.[0]);
-        if (nextId) await view(nextId);
-      }
+      setSelectedMap((prev) => {
+        const next = { ...(prev || {}) };
+        delete next[id];
+        return next;
+      });
+
+      setNotice("Project deleted.");
     } catch (e) {
       setErr(e?.message || "Failed to delete project");
     }
@@ -841,13 +939,11 @@ export default function ProjectsGeneric() {
     if (!nameKey) return;
     if (!candidatesByKey[nameKey]) candidatesByKey[nameKey] = [];
 
-    // de-dupe by (description|unit) - keep higher price if duplicate appears
     const pk = pickKeyFromCandidate(cand);
     const arr = candidatesByKey[nameKey];
     const idx = arr.findIndex((x) => pickKeyFromCandidate(x) === pk);
 
     if (idx >= 0) {
-      // prefer user library over master, otherwise keep higher price
       const cur = arr[idx];
       const curIsUser = String(cur?.source || "")
         .toLowerCase()
@@ -867,7 +963,6 @@ export default function ProjectsGeneric() {
     const reqUnit = normalizeUnit(reqUnitRaw);
     if (!Array.isArray(candidates) || candidates.length === 0) return null;
 
-    // priority: My Library first
     const sorted = [...candidates].sort((a, b) => {
       const au = String(a?.source || "")
         .toLowerCase()
@@ -883,17 +978,14 @@ export default function ProjectsGeneric() {
       return safeNum(b?.price) - safeNum(a?.price);
     });
 
-    // if unit provided, try unit-perfect match first
     if (reqUnit) {
       const hit = sorted.find((c) => normalizeUnit(c?.unit) === reqUnit);
       if (hit) return hit;
     }
 
-    // else just return best by priority
     return sorted[0];
   }
 
-  // ✅ NEW: pull from the SAME working routes as RateGenLibrary page
   async function fetchLegacyMaterialCatalog() {
     const [m, lib] = await Promise.all([
       apiAuthed("/rategen/master", { token: accessToken }),
@@ -903,9 +995,8 @@ export default function ProjectsGeneric() {
     const masterRows = Array.isArray(m?.materials) ? m.materials : [];
     const userRows = Array.isArray(lib?.materials) ? lib.materials : [];
 
-    const candidatesByKey = {}; // key = normalizeMaterialName(description)
+    const candidatesByKey = {};
 
-    // user first (so it naturally wins)
     for (const r of userRows) {
       const cand = toCandidate(r, "My Library");
       const nameKey = normalizeMaterialName(cand.description);
@@ -947,12 +1038,10 @@ export default function ProjectsGeneric() {
     setNotice("");
 
     try {
-      // ✅ use legacy working endpoints
       const { candidatesByKey } = await fetchLegacyMaterialCatalog();
 
-      // keep your picker UI working
       setMatResolved({
-        pricesByKey: {}, // not needed anymore (we choose per-item below)
+        pricesByKey: {},
         candidatesByKey: candidatesByKey || {},
       });
 
@@ -974,7 +1063,6 @@ export default function ProjectsGeneric() {
 
           if (!candidates.length) continue;
 
-          // If user manually picked a candidate earlier, respect it
           const pickedKey = matPicks?.[matKey] || null;
           const picked = pickedKey
             ? candidates.find((c) => pickKeyFromCandidate(c) === pickedKey)
@@ -991,7 +1079,6 @@ export default function ProjectsGeneric() {
           const reqUnit = normalizeUnit(it.unit);
           const hitUnit = normalizeUnit(best.unit);
 
-          // still enforce unit safety
           if (reqUnit && hitUnit && reqUnit !== hitUnit) {
             unitConflicts += 1;
             continue;
@@ -1136,12 +1223,11 @@ export default function ProjectsGeneric() {
   }
 
   React.useEffect(() => {
-    load();
+    load({ keepSelection: true });
     // eslint-disable-next-line
   }, [accessToken, tool]);
 
-  const showRevitToggle = normTool(tool) === "revit" || isMaterialsTool(tool);
-
+  // Explorer filtering
   const projectQ = String(projectQuery || "")
     .trim()
     .toLowerCase();
@@ -1153,443 +1239,684 @@ export default function ProjectsGeneric() {
           .includes(projectQ),
       );
 
+  // Explorer selection helpers
+  function toggleSelect(id) {
+    if (!id) return;
+    setSelectedMap((prev) => {
+      const next = { ...(prev || {}) };
+      if (next[id]) delete next[id];
+      else next[id] = true;
+      return next;
+    });
+  }
+  function selectAllShown() {
+    const ids = rowsShown.map((r) => rowId(r)).filter(Boolean);
+    setSelectedMap((prev) => {
+      const next = { ...(prev || {}) };
+      ids.forEach((id) => (next[id] = true));
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelectedMap({});
+  }
+
+  const title = TITLES[tool] || "Projects";
+
   return (
-    <div className="grid md:grid-cols-3 gap-6">
-      {/* LEFT LIST */}
-      <div className="card md:col-span-1">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="font-semibold">{title}</h1>
+    <div className="min-h-screen p-4 md:p-6">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4">
+        {/* SIDEBAR */}
+        <aside className="md:w-[260px]">
+          <div className="card">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                {showMaterials ? (
+                  <FaCubes className="text-blue-700" />
+                ) : (
+                  <FaFolder className="text-blue-700" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">Revit Plugin</div>
+                <div className="font-semibold truncate">
+                  {showMaterials ? "Materials" : "Takeoffs"}
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  Browse projects like a file explorer
+                </div>
+              </div>
+            </div>
 
             {showRevitToggle && (
-              <div className="mt-2 flex gap-2">
+              <div className="mt-4 space-y-2">
                 <Link
                   to="/projects/revit"
-                  className={`btn btn-sm ${normTool(tool) === "revit" ? "btn-primary" : ""}`}
+                  className={[
+                    "w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border transition",
+                    normTool(tool) === "revit"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "hover:bg-slate-50",
+                  ].join(" ")}
                 >
+                  <FaFolder />
                   Takeoffs
                 </Link>
 
                 <Link
                   to="/projects/revit-materials"
-                  className={`btn btn-sm ${isMaterialsTool(tool) ? "btn-primary" : ""}`}
+                  className={[
+                    "w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border transition",
+                    isMaterialsTool(tool)
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "hover:bg-slate-50",
+                  ].join(" ")}
                 >
+                  <FaCubes />
                   Materials
                 </Link>
               </div>
             )}
-          </div>
 
-          <button className="btn btn-sm" onClick={load}>
-            Refresh
-          </button>
-        </div>
-
-        {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
-
-        {/* project search */}
-        <div className="mt-3">
-          <div className="flex items-center gap-2 border rounded-md px-2 py-1 bg-white">
-            <FaSearch className="text-slate-500" />
-            <input
-              className="w-full outline-none text-sm"
-              placeholder="Search projects..."
-              value={projectQuery}
-              onChange={(e) => setProjectQuery(e.target.value)}
-            />
-            {!!projectQuery && (
+            <div className="mt-4 flex gap-2">
               <button
-                type="button"
-                className="text-slate-500 hover:text-slate-700"
-                onClick={() => setProjectQuery("")}
-                title="Clear"
+                className="btn btn-sm"
+                onClick={() => load({ keepSelection: true })}
+                disabled={bulkBusy}
+                title="Refresh projects"
               >
-                <FaTimes />
+                Refresh
               </button>
+
+              {!!sel && (
+                <button
+                  className="btn btn-sm"
+                  onClick={closeProject}
+                  title="Back to projects"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <FaArrowLeft /> Back
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {err && <div className="text-red-600 text-sm mt-3">{err}</div>}
+            {notice && (
+              <div className="text-green-700 text-sm mt-3">{notice}</div>
             )}
           </div>
-        </div>
+        </aside>
 
-        <div className="mt-3 space-y-2">
-          {rowsShown.map((r) => {
-            const id = rowId(r);
-            const active = selectedId === id;
+        {/* MAIN */}
+        <main className="flex-1">
+          <div className="card">
+            {/* HEADER */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="font-semibold truncate">{title}</h1>
+                <div className="text-xs text-slate-500 mt-1">
+                  {sel ? (
+                    <>
+                      <span className="text-slate-600">Opened:</span>{" "}
+                      <b className="text-slate-800">{sel?.name}</b>
+                    </>
+                  ) : (
+                    "Select a project folder to open"
+                  )}
+                </div>
+              </div>
 
-            return (
-              <div
-                key={id || Math.random()}
-                role="button"
-                tabIndex={0}
-                onClick={() => id && view(id)}
-                onKeyDown={(e) => {
-                  if ((e.key === "Enter" || e.key === " ") && id) view(id);
-                }}
-                className={`w-full p-2 border rounded transition hover:bg-slate-50 flex items-start justify-between gap-3 ${
-                  active ? "bg-blue-50 border-blue-200" : ""
-                } ${!id ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium truncate">{r.name}</div>
-                  <div className="text-xs text-slate-600">
-                    {r.itemCount} items ·{" "}
-                    {new Date(r.updatedAt).toLocaleString()}
+              {/* Search projects (always visible) */}
+              {!sel && (
+                <div className="w-full md:w-[420px]">
+                  <div className="flex items-center gap-2 border rounded-md px-2 py-2 bg-white">
+                    <FaSearch className="text-slate-500" />
+                    <input
+                      className="w-full outline-none text-sm"
+                      placeholder="Search projects..."
+                      value={projectQuery}
+                      onChange={(e) => setProjectQuery(e.target.value)}
+                    />
+                    {!!projectQuery && (
+                      <button
+                        type="button"
+                        className="text-slate-500 hover:text-slate-700"
+                        onClick={() => setProjectQuery("")}
+                        title="Clear"
+                      >
+                        <FaTimes />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* EXPLORER VIEW */}
+            {!sel ? (
+              <div className="mt-5">
+                {/* Bulk actions */}
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div className="text-sm text-slate-600">
+                    {rowsShown.length} project(s)
+                    {selectedIds.length ? (
+                      <>
+                        {" "}
+                        • <b>{selectedIds.length}</b> selected
+                      </>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={selectAllShown}
+                      disabled={!rowsShown.length || bulkBusy}
+                      title="Select all projects in this view"
+                    >
+                      Select all
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={clearSelection}
+                      disabled={!selectedIds.length || bulkBusy}
+                      title="Clear selection"
+                    >
+                      Clear
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() =>
+                        deleteMany(selectedIds, {
+                          confirmLabel: "Delete selected projects",
+                        })
+                      }
+                      disabled={!selectedIds.length || bulkBusy}
+                      title="Delete selected"
+                    >
+                      <span className="inline-flex items-center gap-2 text-rose-700">
+                        <FaTrash /> Delete selected
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() =>
+                        deleteMany(rows.map((r) => rowId(r)).filter(Boolean), {
+                          confirmLabel: "Delete ALL projects",
+                        })
+                      }
+                      disabled={!rows.length || bulkBusy}
+                      title="Delete all projects"
+                    >
+                      <span className="inline-flex items-center gap-2 text-rose-700">
+                        <FaTrash /> Delete all
+                      </span>
+                    </button>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                  title="Delete project"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    delProject(id, r?.name);
-                  }}
-                  disabled={!id}
-                >
-                  <FaTrash />
-                </button>
-              </div>
-            );
-          })}
+                {/* Folder grid */}
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {rowsShown.map((r) => {
+                    const id = rowId(r);
+                    const checked = !!selectedMap?.[id];
 
-          {rowsShown.length === 0 && (
-            <div className="text-sm text-slate-600">No projects found.</div>
-          )}
-        </div>
-      </div>
-
-      {/* RIGHT BREAKDOWN */}
-      <div className="card md:col-span-2">
-        {!sel ? (
-          <div className="text-sm text-slate-600">Select a project</div>
-        ) : (
-          <>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="font-semibold mb-2">{sel.name}</h2>
-
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700">
-                  <label className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={onlyFillEmpty}
-                      onChange={(e) => setOnlyFillEmpty(e.target.checked)}
-                    />
-                    Only fill empty rates
-                  </label>
-
-                  {showMaterials && canRateGen && (
-                    <label className="inline-flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={autoFillMaterialsRates}
-                        onChange={(e) => toggleAutoFill(e.target.checked)}
-                        disabled={autoFillBusy}
-                      />
-                      Auto-fill material rates (Rate Gen)
-                    </label>
-                  )}
-
-                  {showMaterials && canRateGen && (
-                    <button
-                      type="button"
-                      className="btn btn-xs"
-                      onClick={() => sel && autoFillMaterialRates(sel)}
-                      disabled={autoFillBusy}
-                      title="Fetch prices and auto-fill again"
-                    >
-                      {autoFillBusy ? "Syncing..." : "Sync prices"}
-                    </button>
-                  )}
-
-                  <span className="inline-flex items-center gap-2">
-                    <Tip
-                      text={
-                        showMaterials
-                          ? canRateGen
-                            ? "Auto-fill uses Admin RateGen + your saved material prices."
-                            : "Subscribe to Rate Gen to auto-fill material prices."
-                          : "Subscribe to the Rate Gen for rate update."
-                      }
-                    />
-                  </span>
-
-                  <span className="text-slate-500">
-                    Linked groups:{" "}
-                    <b className="text-slate-700">
-                      {Object.keys(linkedGroups).filter((g) => linkedGroups[g])
-                        .length || 0}
-                    </b>
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  className={`btn btn-sm ${isDirty ? "btn-primary" : ""}`}
-                  onClick={saveRatesToCloud}
-                  disabled={!isDirty || saving}
-                  title={
-                    !isDirty ? "No changes to save" : "Save rates to cloud"
-                  }
-                >
-                  {saving ? "Saving..." : "Save"}
-                </button>
-
-                <button className="btn btn-sm" onClick={exportBoQ}>
-                  Export to Excel BoQ
-                </button>
-              </div>
-            </div>
-
-            {notice && (
-              <div className="text-green-700 text-sm mt-2">{notice}</div>
-            )}
-            {err && <div className="text-red-600 text-sm mt-2">{err}</div>}
-
-            {/* item search */}
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 border rounded-md px-2 py-2 bg-white w-full">
-                <FaSearch className="text-slate-500" />
-                <input
-                  className="w-full outline-none text-sm"
-                  placeholder="Search items (description / group / S/N)..."
-                  value={itemQuery}
-                  onChange={(e) => setItemQuery(e.target.value)}
-                />
-                {!!itemQuery && (
-                  <button
-                    type="button"
-                    className="text-slate-500 hover:text-slate-700"
-                    onClick={() => setItemQuery("")}
-                    title="Clear"
-                  >
-                    <FaTimes />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-3 mb-3 flex items-center justify-end">
-              <div className="px-3 py-2 rounded-lg bg-slate-50 border text-sm">
-                <span className="text-slate-600 mr-2">Total Amount:</span>
-                <span className="font-semibold">{money(totalAmount)}</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b">
-                    <th className="py-2 pr-4">S/N</th>
-                    <th className="py-2 pr-4">Description</th>
-                    <th className="py-2 pr-4">Qty</th>
-                    <th className="py-2 pr-4">Unit</th>
-                    <th className="py-2 pr-4">Rate</th>
-                    <th className="py-2 pr-4">Amount</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {computedShown.map((r) => {
-                    const it = items[r.i];
-                    const gid = r.groupId;
-                    const linked = isGroupLinked(gid);
-                    const canLink = gid && r.groupCount >= 2;
-
-                    const matKey = showMaterials
-                      ? normalizeMaterialName(it?.materialName)
-                      : "";
-                    const candidates = showMaterials
-                      ? Array.isArray(matResolved?.candidatesByKey?.[matKey])
-                        ? matResolved.candidatesByKey[matKey]
-                        : []
-                      : [];
-
-                    const pickCandidate = (cand) => {
-                      if (!cand) return;
-                      const it0 = items[r.i];
-                      if (!it0) return;
-
-                      const mk = normalizeMaterialName(it0.materialName);
-                      const pk = pickKeyFromCandidate(cand);
-
-                      setMatPicks((prev) => ({ ...(prev || {}), [mk]: pk }));
-                      handleRateChange(r.i, String(safeNum(cand.price) || 0));
-                      setOpenPickKey(null);
-                    };
+                    const updated = r?.updatedAt
+                      ? new Date(r.updatedAt).toLocaleString()
+                      : "—";
 
                     return (
-                      <tr key={r.key || r.i} className="border-b align-top">
-                        <td className="py-2 pr-4">{r.sn}</td>
-                        <td className="py-2 pr-4">{r.description}</td>
-                        <td className="py-2 pr-4">{r.qty.toFixed(2)}</td>
-                        <td className="py-2 pr-4">{r.unit}</td>
+                      <div
+                        key={id || Math.random()}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => id && view(id)}
+                        onKeyDown={(e) => {
+                          if ((e.key === "Enter" || e.key === " ") && id)
+                            view(id);
+                        }}
+                        className={[
+                          "relative rounded-xl border bg-white p-3 hover:shadow-sm transition cursor-pointer",
+                          checked ? "ring-2 ring-blue-200 border-blue-200" : "",
+                          !id ? "opacity-60 cursor-not-allowed" : "",
+                        ].join(" ")}
+                      >
+                        {/* Checkbox */}
+                        <button
+                          type="button"
+                          className={[
+                            "absolute top-2 left-2 w-8 h-8 rounded-md border bg-white flex items-center justify-center",
+                            "hover:bg-slate-50 transition",
+                          ].join(" ")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!id) return;
+                            toggleSelect(id);
+                          }}
+                          title={checked ? "Unselect" : "Select"}
+                          disabled={!id || bulkBusy}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            readOnly
+                            className="pointer-events-none"
+                          />
+                        </button>
 
-                        <td className="py-2 pr-4">
-                          <div className="flex items-center gap-2">
-                            <input
-                              className="input !h-9 !py-1 !px-2 w-[140px]"
-                              type="number"
-                              step="any"
-                              value={rates?.[r.key] ?? ""}
-                              placeholder={String(safeNum(it?.rate) || 0)}
-                              onChange={(e) =>
-                                handleRateChange(r.i, e.target.value)
-                              }
-                            />
+                        {/* Folder icon */}
+                        <div className="mt-2 flex items-center justify-center">
+                          <div className="w-14 h-14 rounded-xl bg-slate-50 flex items-center justify-center">
+                            <FaFolder className="text-slate-600 text-2xl" />
+                          </div>
+                        </div>
 
-                            <button
-                              type="button"
-                              className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition ${
-                                canLink
-                                  ? linked
-                                    ? "bg-blue-50 border-blue-300"
-                                    : "hover:bg-slate-50"
-                                  : "opacity-40 cursor-not-allowed"
-                              }`}
-                              title={
-                                canLink
-                                  ? linked
-                                    ? `Linked: changes propagate to similar items`
-                                    : `Click to link similar items`
-                                  : "No similar items found to link"
-                              }
-                              disabled={!canLink}
-                              onClick={() => toggleGroupLink(gid, r.i)}
-                            >
-                              <FaLink
-                                className={
-                                  linked ? "text-blue-700" : "text-slate-600"
-                                }
-                              />
-                            </button>
+                        {/* Name */}
+                        <div className="mt-3 text-center">
+                          <div className="font-medium text-sm line-clamp-2">
+                            {r?.name || "Untitled"}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            {r?.itemCount ?? 0} items
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-1">
+                            {updated}
+                          </div>
+                        </div>
 
-                            {showMaterials && candidates.length > 0 && (
-                              <div className="relative">
+                        {/* Quick delete */}
+                        <button
+                          type="button"
+                          className="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                          title="Delete project"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            delProject(id, r?.name);
+                          }}
+                          disabled={!id || bulkBusy}
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {rowsShown.length === 0 && (
+                  <div className="text-sm text-slate-600 mt-4">
+                    No projects found.
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* PROJECT OPEN VIEW (your existing table UI) */
+              <div className="mt-5">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="btn btn-sm"
+                        onClick={closeProject}
+                        title="Back to projects"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <FaArrowLeft /> Back to projects
+                        </span>
+                      </button>
+
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => delProject(selectedId, sel?.name)}
+                        title="Delete this project"
+                      >
+                        <span className="inline-flex items-center gap-2 text-rose-700">
+                          <FaTrash /> Delete
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-700">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={onlyFillEmpty}
+                          onChange={(e) => setOnlyFillEmpty(e.target.checked)}
+                        />
+                        Only fill empty rates
+                      </label>
+
+                      {showMaterials && canRateGen && (
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={autoFillMaterialsRates}
+                            onChange={(e) => toggleAutoFill(e.target.checked)}
+                            disabled={autoFillBusy}
+                          />
+                          Auto-fill material rates (Rate Gen)
+                        </label>
+                      )}
+
+                      {showMaterials && canRateGen && (
+                        <button
+                          type="button"
+                          className="btn btn-xs"
+                          onClick={() => sel && autoFillMaterialRates(sel)}
+                          disabled={autoFillBusy}
+                          title="Fetch prices and auto-fill again"
+                        >
+                          {autoFillBusy ? "Syncing..." : "Sync prices"}
+                        </button>
+                      )}
+
+                      <span className="inline-flex items-center gap-2">
+                        <Tip
+                          text={
+                            showMaterials
+                              ? canRateGen
+                                ? "Auto-fill uses Admin RateGen + your saved material prices."
+                                : "Subscribe to Rate Gen to auto-fill material prices."
+                              : "Subscribe to the Rate Gen for rate update."
+                          }
+                        />
+                      </span>
+
+                      <span className="text-slate-500">
+                        Linked groups:{" "}
+                        <b className="text-slate-700">
+                          {Object.keys(linkedGroups).filter(
+                            (g) => linkedGroups[g],
+                          ).length || 0}
+                        </b>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <button
+                      className={`btn btn-sm ${isDirty ? "btn-primary" : ""}`}
+                      onClick={saveRatesToCloud}
+                      disabled={!isDirty || saving}
+                      title={
+                        !isDirty ? "No changes to save" : "Save rates to cloud"
+                      }
+                    >
+                      {saving ? "Saving..." : "Save"}
+                    </button>
+
+                    <button className="btn btn-sm" onClick={exportBoQ}>
+                      Export to Excel BoQ
+                    </button>
+                  </div>
+                </div>
+
+                {err && <div className="text-red-600 text-sm mt-3">{err}</div>}
+
+                {/* item search */}
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 border rounded-md px-2 py-2 bg-white w-full">
+                    <FaSearch className="text-slate-500" />
+                    <input
+                      className="w-full outline-none text-sm"
+                      placeholder="Search items (description / group / S/N)..."
+                      value={itemQuery}
+                      onChange={(e) => setItemQuery(e.target.value)}
+                    />
+                    {!!itemQuery && (
+                      <button
+                        type="button"
+                        className="text-slate-500 hover:text-slate-700"
+                        onClick={() => setItemQuery("")}
+                        title="Clear"
+                      >
+                        <FaTimes />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 mb-3 flex items-center justify-end">
+                  <div className="px-3 py-2 rounded-lg bg-slate-50 border text-sm">
+                    <span className="text-slate-600 mr-2">Total Amount:</span>
+                    <span className="font-semibold">{money(totalAmount)}</span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b">
+                        <th className="py-2 pr-4">S/N</th>
+                        <th className="py-2 pr-4">Description</th>
+                        <th className="py-2 pr-4">Qty</th>
+                        <th className="py-2 pr-4">Unit</th>
+                        <th className="py-2 pr-4">Rate</th>
+                        <th className="py-2 pr-4">Amount</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {computedShown.map((r) => {
+                        const it = items[r.i];
+                        const gid = r.groupId;
+                        const linked = isGroupLinked(gid);
+                        const canLink = gid && r.groupCount >= 2;
+
+                        const matKey = showMaterials
+                          ? normalizeMaterialName(it?.materialName)
+                          : "";
+                        const candidates = showMaterials
+                          ? Array.isArray(
+                              matResolved?.candidatesByKey?.[matKey],
+                            )
+                            ? matResolved.candidatesByKey[matKey]
+                            : []
+                          : [];
+
+                        const pickCandidate = (cand) => {
+                          if (!cand) return;
+                          const it0 = items[r.i];
+                          if (!it0) return;
+
+                          const mk = normalizeMaterialName(it0.materialName);
+                          const pk = pickKeyFromCandidate(cand);
+
+                          setMatPicks((prev) => ({
+                            ...(prev || {}),
+                            [mk]: pk,
+                          }));
+                          handleRateChange(
+                            r.i,
+                            String(safeNum(cand.price) || 0),
+                          );
+                          setOpenPickKey(null);
+                        };
+
+                        return (
+                          <tr key={r.key || r.i} className="border-b align-top">
+                            <td className="py-2 pr-4">{r.sn}</td>
+                            <td className="py-2 pr-4">{r.description}</td>
+                            <td className="py-2 pr-4">{r.qty.toFixed(2)}</td>
+                            <td className="py-2 pr-4">{r.unit}</td>
+
+                            <td className="py-2 pr-4">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  className="input !h-9 !py-1 !px-2 w-[140px]"
+                                  type="number"
+                                  step="any"
+                                  value={rates?.[r.key] ?? ""}
+                                  placeholder={String(safeNum(it?.rate) || 0)}
+                                  onChange={(e) =>
+                                    handleRateChange(r.i, e.target.value)
+                                  }
+                                />
+
                                 <button
                                   type="button"
-                                  className="inline-flex items-center justify-center w-9 h-9 rounded-md border hover:bg-slate-50"
-                                  title="Pick matching material from RateGen"
-                                  onClick={() =>
-                                    setOpenPickKey(
-                                      openPickKey === r.key ? null : r.key,
-                                    )
+                                  className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition ${
+                                    canLink
+                                      ? linked
+                                        ? "bg-blue-50 border-blue-300"
+                                        : "hover:bg-slate-50"
+                                      : "opacity-40 cursor-not-allowed"
+                                  }`}
+                                  title={
+                                    canLink
+                                      ? linked
+                                        ? `Linked: changes propagate to similar items`
+                                        : `Click to link similar items`
+                                      : "No similar items found to link"
                                   }
+                                  disabled={!canLink}
+                                  onClick={() => toggleGroupLink(gid, r.i)}
                                 >
-                                  <FaSearch className="text-slate-600" />
+                                  <FaLink
+                                    className={
+                                      linked
+                                        ? "text-blue-700"
+                                        : "text-slate-600"
+                                    }
+                                  />
                                 </button>
 
-                                {openPickKey === r.key && (
-                                  <div className="absolute right-0 mt-2 w-80 z-30 bg-white border rounded-lg shadow-lg overflow-hidden">
-                                    <div className="px-3 py-2 text-xs text-slate-600 border-b">
-                                      Choose match for:{" "}
-                                      <b>
-                                        {String(it?.materialName || "").trim()}
-                                      </b>
-                                    </div>
+                                {showMaterials && candidates.length > 0 && (
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center w-9 h-9 rounded-md border hover:bg-slate-50"
+                                      title="Pick matching material from RateGen"
+                                      onClick={() =>
+                                        setOpenPickKey(
+                                          openPickKey === r.key ? null : r.key,
+                                        )
+                                      }
+                                    >
+                                      <FaSearch className="text-slate-600" />
+                                    </button>
 
-                                    <div className="max-h-64 overflow-auto">
-                                      {candidates.slice(0, 10).map((c) => {
-                                        const unitBad =
-                                          normalizeUnit(it?.unit) &&
-                                          normalizeUnit(c?.unit) &&
-                                          normalizeUnit(it?.unit) !==
-                                            normalizeUnit(c?.unit);
+                                    {openPickKey === r.key && (
+                                      <div className="absolute right-0 mt-2 w-80 z-30 bg-white border rounded-lg shadow-lg overflow-hidden">
+                                        <div className="px-3 py-2 text-xs text-slate-600 border-b">
+                                          Choose match for:{" "}
+                                          <b>
+                                            {String(
+                                              it?.materialName || "",
+                                            ).trim()}
+                                          </b>
+                                        </div>
 
-                                        return (
+                                        <div className="max-h-64 overflow-auto">
+                                          {candidates.slice(0, 10).map((c) => {
+                                            const unitBad =
+                                              normalizeUnit(it?.unit) &&
+                                              normalizeUnit(c?.unit) &&
+                                              normalizeUnit(it?.unit) !==
+                                                normalizeUnit(c?.unit);
+
+                                            return (
+                                              <button
+                                                key={pickKeyFromCandidate(c)}
+                                                type="button"
+                                                className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b"
+                                                onClick={() => pickCandidate(c)}
+                                              >
+                                                <div className="flex items-center justify-between gap-3">
+                                                  <div className="font-medium truncate">
+                                                    {c.description}
+                                                  </div>
+                                                  <div className="font-semibold">
+                                                    {money(c.price)}
+                                                  </div>
+                                                </div>
+                                                <div className="text-xs text-slate-500 mt-0.5">
+                                                  {c.unit} • {c.source}
+                                                  {unitBad && (
+                                                    <span className="text-amber-700 font-medium">
+                                                      {" "}
+                                                      • unit mismatch
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+
+                                        <div className="p-2 flex justify-end">
                                           <button
-                                            key={pickKeyFromCandidate(c)}
                                             type="button"
-                                            className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b"
-                                            onClick={() => pickCandidate(c)}
+                                            className="btn btn-xs"
+                                            onClick={() => setOpenPickKey(null)}
                                           >
-                                            <div className="flex items-center justify-between gap-3">
-                                              <div className="font-medium truncate">
-                                                {c.description}
-                                              </div>
-                                              <div className="font-semibold">
-                                                {money(c.price)}
-                                              </div>
-                                            </div>
-                                            <div className="text-xs text-slate-500 mt-0.5">
-                                              {c.unit} • {c.source}
-                                              {unitBad && (
-                                                <span className="text-amber-700 font-medium">
-                                                  {" "}
-                                                  • unit mismatch
-                                                </span>
-                                              )}
-                                            </div>
+                                            Close
                                           </button>
-                                        );
-                                      })}
-                                    </div>
-
-                                    <div className="p-2 flex justify-end">
-                                      <button
-                                        type="button"
-                                        className="btn btn-xs"
-                                        onClick={() => setOpenPickKey(null)}
-                                      >
-                                        Close
-                                      </button>
-                                    </div>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
-                            )}
-                          </div>
 
-                          {!!gid && (
-                            <div className="text-[11px] mt-1">
-                              <span className="text-slate-500">Group:</span>{" "}
-                              <span className="text-slate-700">
-                                {r.groupLabel} ({r.groupCount})
-                              </span>{" "}
-                              {linked && (
-                                <span className="text-blue-700 font-medium">
-                                  • linked
-                                </span>
+                              {!!gid && (
+                                <div className="text-[11px] mt-1">
+                                  <span className="text-slate-500">Group:</span>{" "}
+                                  <span className="text-slate-700">
+                                    {r.groupLabel} ({r.groupCount})
+                                  </span>{" "}
+                                  {linked && (
+                                    <span className="text-blue-700 font-medium">
+                                      • linked
+                                    </span>
+                                  )}
+                                </div>
                               )}
-                            </div>
-                          )}
-                        </td>
+                            </td>
 
-                        <td className="py-2 pr-4 font-medium">
-                          {money(r.amount)}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                            <td className="py-2 pr-4 font-medium">
+                              {money(r.amount)}
+                            </td>
+                          </tr>
+                        );
+                      })}
 
-                  {items.length > 0 && (
-                    <tr className="border-t">
-                      <td className="py-3 pr-4" />
-                      <td className="py-3 pr-4" />
-                      <td className="py-3 pr-4" />
-                      <td className="py-3 pr-4" />
-                      <td className="py-3 pr-4 font-semibold">TOTAL</td>
-                      <td className="py-3 pr-4 font-semibold">
-                        {money(totalAmount)}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      {items.length > 0 && (
+                        <tr className="border-t">
+                          <td className="py-3 pr-4" />
+                          <td className="py-3 pr-4" />
+                          <td className="py-3 pr-4" />
+                          <td className="py-3 pr-4" />
+                          <td className="py-3 pr-4 font-semibold">TOTAL</td>
+                          <td className="py-3 pr-4 font-semibold">
+                            {money(totalAmount)}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-            <div className="text-xs text-slate-500 mt-3 space-y-1">
-              <div>
-                Project ID: <code>{selectedId}</code>
+                <div className="text-xs text-slate-500 mt-3 space-y-1">
+                  <div>
+                    Project ID: <code>{selectedId}</code>
+                  </div>
+                  <div>
+                    <b>Tip:</b> You can still use the Project ID in your Windows
+                    plugin’s “Open from Cloud”.
+                  </div>
+                </div>
               </div>
-              <div>
-                <b>Tip:</b> You can still use the Project ID in your Windows
-                plugin’s “Open from Cloud”.
-              </div>
-            </div>
-          </>
-        )}
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );
