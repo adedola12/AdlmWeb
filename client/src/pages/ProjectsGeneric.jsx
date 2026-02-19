@@ -15,6 +15,8 @@ import {
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 
+const DASHBOARD_PATH = "/dashboard";
+
 const TITLES = {
   revit: "Revit Takeoffs",
   revitmep: "Revit MEP Projects",
@@ -32,6 +34,53 @@ function normTool(t) {
 function isMaterialsTool(tool) {
   const t = normTool(tool);
   return t === "revit-materials" || t === "revit-material";
+}
+
+function getSidebarMeta(tool) {
+  const t = normTool(tool);
+
+  if (t === "planswift") {
+    return {
+      app: "PlanSwift",
+      section: "Projects",
+      hint: "Browse projects like a file explorer",
+      Icon: FaFolder,
+    };
+  }
+
+  if (t === "revitmep") {
+    return {
+      app: "Revit MEP",
+      section: "Projects",
+      hint: "Browse projects like a file explorer",
+      Icon: FaFolder,
+    };
+  }
+
+  if (t === "revit") {
+    return {
+      app: "Revit Plugin",
+      section: "Takeoffs",
+      hint: "Browse projects like a file explorer",
+      Icon: FaFolder,
+    };
+  }
+
+  if (t === "revit-materials" || t === "revit-material") {
+    return {
+      app: "Revit Plugin",
+      section: "Materials",
+      hint: "Browse projects like a file explorer",
+      Icon: FaCubes,
+    };
+  }
+
+  return {
+    app: "Projects",
+    section: "Browser",
+    hint: "Browse projects like a file explorer",
+    Icon: FaFolder,
+  };
 }
 
 function getEndpoints(tool) {
@@ -411,9 +460,14 @@ export default function ProjectsGeneric() {
   const { accessToken } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const toolNorm = normTool(tool);
   const endpoints = React.useMemo(() => getEndpoints(tool), [tool]);
+
   const showMaterials = isMaterialsTool(tool);
-  const showRevitToggle = normTool(tool) === "revit" || isMaterialsTool(tool);
+  const showRevitToggle = toolNorm === "revit" || isMaterialsTool(tool);
+
+  const sidebarMeta = React.useMemo(() => getSidebarMeta(tool), [tool]);
+  const SidebarIcon = sidebarMeta.Icon;
 
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
@@ -926,13 +980,7 @@ export default function ProjectsGeneric() {
     const price = safeNum(row?.price);
     const category = String(row?.category || "").trim();
 
-    return {
-      description,
-      unit,
-      price,
-      category,
-      source, // "My Library" | "Master"
-    };
+    return { description, unit, price, category, source }; // source: "My Library" | "Master"
   }
 
   function pushCand(candidatesByKey, nameKey, cand) {
@@ -1263,6 +1311,10 @@ export default function ProjectsGeneric() {
 
   const title = TITLES[tool] || "Projects";
 
+  // checkbox styling: no surrounding border look
+  const checkboxCls =
+    "h-4 w-4 accent-blue-600 border-0 outline-none ring-0 focus:ring-0 focus:outline-none";
+
   return (
     <div className="min-h-screen p-4 md:p-6">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4">
@@ -1271,21 +1323,29 @@ export default function ProjectsGeneric() {
           <div className="card">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                {showMaterials ? (
-                  <FaCubes className="text-blue-700" />
-                ) : (
-                  <FaFolder className="text-blue-700" />
-                )}
+                <SidebarIcon className="text-blue-700" />
               </div>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">Revit Plugin</div>
+                <div className="text-xs text-slate-500">{sidebarMeta.app}</div>
                 <div className="font-semibold truncate">
-                  {showMaterials ? "Materials" : "Takeoffs"}
+                  {sidebarMeta.section}
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  Browse projects like a file explorer
+                  {sidebarMeta.hint}
                 </div>
               </div>
+            </div>
+
+            {/* Back to dashboard */}
+            <div className="mt-4">
+              <Link
+                to={DASHBOARD_PATH}
+                className="w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border hover:bg-slate-50 transition"
+                title="Back to dashboard"
+              >
+                <FaArrowLeft />
+                Back to dashboard
+              </Link>
             </div>
 
             {showRevitToggle && (
@@ -1294,7 +1354,7 @@ export default function ProjectsGeneric() {
                   to="/projects/revit"
                   className={[
                     "w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border transition",
-                    normTool(tool) === "revit"
+                    toolNorm === "revit"
                       ? "bg-blue-600 text-white border-blue-600"
                       : "hover:bg-slate-50",
                   ].join(" ")}
@@ -1440,8 +1500,8 @@ export default function ProjectsGeneric() {
                       disabled={!selectedIds.length || bulkBusy}
                       title="Delete selected"
                     >
-                      <span className="inline-flex items-center gap-2 text-rose-700">
-                        <FaTrash /> Delete selected
+                      <span className="inline-flex items-center gap-2 text-orange-700">
+                        <FaTrash className="text-[13px]" /> Delete selected
                       </span>
                     </button>
 
@@ -1456,8 +1516,8 @@ export default function ProjectsGeneric() {
                       disabled={!rows.length || bulkBusy}
                       title="Delete all projects"
                     >
-                      <span className="inline-flex items-center gap-2 text-rose-700">
-                        <FaTrash /> Delete all
+                      <span className="inline-flex items-center gap-2 text-orange-700">
+                        <FaTrash className="text-[13px]" /> Delete all
                       </span>
                     </button>
                   </div>
@@ -1489,12 +1549,12 @@ export default function ProjectsGeneric() {
                           !id ? "opacity-60 cursor-not-allowed" : "",
                         ].join(" ")}
                       >
-                        {/* Checkbox */}
+                        {/* Checkbox (no border around it) */}
                         <button
                           type="button"
                           className={[
-                            "absolute top-2 left-2 w-8 h-8 rounded-md border bg-white flex items-center justify-center",
-                            "hover:bg-slate-50 transition",
+                            "absolute top-2 left-2 w-8 h-8 rounded-md bg-white/90 flex items-center justify-center",
+                            "hover:bg-slate-50 transition shadow-sm",
                           ].join(" ")}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1508,7 +1568,7 @@ export default function ProjectsGeneric() {
                             type="checkbox"
                             checked={checked}
                             readOnly
-                            className="pointer-events-none"
+                            className={checkboxCls}
                           />
                         </button>
 
@@ -1532,10 +1592,10 @@ export default function ProjectsGeneric() {
                           </div>
                         </div>
 
-                        {/* Quick delete */}
+                        {/* Quick delete (smaller + dark, orange hover) */}
                         <button
                           type="button"
-                          className="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                          className="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-700 hover:text-orange-700 hover:bg-orange-50"
                           title="Delete project"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1543,7 +1603,7 @@ export default function ProjectsGeneric() {
                           }}
                           disabled={!id || bulkBusy}
                         >
-                          <FaTrash />
+                          <FaTrash className="text-[13px]" />
                         </button>
                       </div>
                     );
@@ -1577,8 +1637,8 @@ export default function ProjectsGeneric() {
                         onClick={() => delProject(selectedId, sel?.name)}
                         title="Delete this project"
                       >
-                        <span className="inline-flex items-center gap-2 text-rose-700">
-                          <FaTrash /> Delete
+                        <span className="inline-flex items-center gap-2 text-orange-700">
+                          <FaTrash className="text-[13px]" /> Delete
                         </span>
                       </button>
                     </div>
@@ -1589,6 +1649,7 @@ export default function ProjectsGeneric() {
                           type="checkbox"
                           checked={onlyFillEmpty}
                           onChange={(e) => setOnlyFillEmpty(e.target.checked)}
+                          className={checkboxCls}
                         />
                         Only fill empty rates
                       </label>
@@ -1600,6 +1661,7 @@ export default function ProjectsGeneric() {
                             checked={autoFillMaterialsRates}
                             onChange={(e) => toggleAutoFill(e.target.checked)}
                             disabled={autoFillBusy}
+                            className={checkboxCls}
                           />
                           Auto-fill material rates (Rate Gen)
                         </label>
