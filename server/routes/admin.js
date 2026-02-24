@@ -31,7 +31,7 @@ const WEB_URL =
     process.env.PUBLIC_WEB_URL || process.env.PUBLIC_APP_URL || "",
   ).trim() || "http://localhost:5173";
 
-const receiptLink = joinUrl(WEB_URL, `/receipt/${purchase._id}`);
+// const receiptLink = joinUrl(WEB_URL, `/receipt/${purchase._id}`);
 
 function joinUrl(base, path) {
   const b = String(base || "").replace(/\/+$/, "");
