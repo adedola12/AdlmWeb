@@ -504,6 +504,12 @@ export default function Admin() {
   const [msg, setMsg] = React.useState("");
   const [installations, setInstallations] = React.useState([]);
 
+  // ✅ Expiry reminder job (manual trigger)
+  const [expiryJobBusy, setExpiryJobBusy] = React.useState(false);
+  const [expiryDryRun, setExpiryDryRun] = React.useState(false); // optional safety toggle
+  const [expiryLimit, setExpiryLimit] = React.useState(0); // optional: 0 = no limit
+  const [expiryLast, setExpiryLast] = React.useState(null); // store last result
+
   // pTrainings
   const [ptrainings, setPTrainings] = React.useState([]);
   const [trainingEnrollments, setTrainingEnrollments] = React.useState([]);
@@ -546,6 +552,57 @@ export default function Admin() {
       setMsg(e?.message || "Failed to load admin data");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function runExpiryRemindersNow() {
+    setMsg("");
+
+    // Safety prompt when NOT dry-running
+    if (!expiryDryRun) {
+      const ok = window.confirm(
+        "Send subscription expiry/reminder emails now?\n\nThis may email many users.",
+      );
+      if (!ok) return;
+    }
+
+    setExpiryJobBusy(true);
+    try {
+      const body = {
+        dryRun: !!expiryDryRun,
+        limit: Number(expiryLimit || 0) || 0,
+      };
+
+      const out = await apiAuthed(`/admin/jobs/expiry-notifier/run`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      setExpiryLast(out);
+
+      if (out?.skipped && out?.reason === "lock-held") {
+        setMsg(
+          "Expiry job skipped: another run is currently in progress (lock held). Try again in a few minutes.",
+        );
+        return;
+      }
+
+      if (out?.ok) {
+        const mode = out?.dryRun ? "DRY RUN" : "SENT";
+        setMsg(
+          `Expiry reminders ${mode}: ${out?.sent ?? 0} email(s). Scanned users: ${out?.scannedUsers ?? 0}. Errors: ${out?.errors ?? 0}.`,
+        );
+      } else {
+        setMsg(out?.error || "Failed to run expiry notifier job");
+      }
+    } catch (e) {
+      setMsg(
+        e?.data?.error || e?.message || "Failed to run expiry notifier job",
+      );
+    } finally {
+      setExpiryJobBusy(false);
     }
   }
 
@@ -823,34 +880,33 @@ export default function Admin() {
     });
   }, [users, q]);
 
-async function approveTrainingEnrollment(enrollmentId) {
-  setMsg("");
-  setPtBusy((s) => ({ ...s, [enrollmentId]: true }));
+  async function approveTrainingEnrollment(enrollmentId) {
+    setMsg("");
+    setPtBusy((s) => ({ ...s, [enrollmentId]: true }));
 
-  try {
-    const res = await apiAuthed(
-      `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
-      {
-        token: accessToken,
-        method: "PATCH",
-      },
-    );
+    try {
+      const res = await apiAuthed(
+        `/admin/ptrainings/enrollments/${enrollmentId}/approve`,
+        {
+          token: accessToken,
+          method: "PATCH",
+        },
+      );
 
-    await load();
-    setMsg(res?.message || "Training enrollment approved");
-  } catch (e) {
-    setMsg(
-      e?.data?.error || e?.message || "Failed to approve training enrollment",
-    );
-  } finally {
-    setPtBusy((s) => {
-      const n = { ...s };
-      delete n[enrollmentId];
-      return n;
-    });
+      await load();
+      setMsg(res?.message || "Training enrollment approved");
+    } catch (e) {
+      setMsg(
+        e?.data?.error || e?.message || "Failed to approve training enrollment",
+      );
+    } finally {
+      setPtBusy((s) => {
+        const n = { ...s };
+        delete n[enrollmentId];
+        return n;
+      });
+    }
   }
-}
-
 
   async function rejectTrainingEnrollment(enrollmentId) {
     setMsg("");
@@ -1216,29 +1272,29 @@ async function approveTrainingEnrollment(enrollmentId) {
     });
   }, [trainingEnrollments, ptTrainingFilter, ptShowAllEnrollments, q]);
 
+  function trainingSeatBadge(t) {
+    const cap = Math.max(
+      Number(t?.capacityApproved ?? t?.capacity ?? 0) || 0,
+      0,
+    );
 
+    const manualLeft =
+      typeof t?.seatsLeft === "number" && Number.isFinite(t.seatsLeft)
+        ? Math.max(Math.floor(t.seatsLeft), 0)
+        : null;
 
-function trainingSeatBadge(t) {
-  const cap = Math.max(Number(t?.capacityApproved ?? t?.capacity ?? 0) || 0, 0);
+    // If seatsLeft is provided by backend/admin, trust that manual value
+    if (manualLeft != null) {
+      const tone =
+        manualLeft === 0 ? "red" : manualLeft <= 2 ? "yellow" : "green";
+      return <Badge label={`${manualLeft} left`} tone={tone} />;
+    }
 
-  const manualLeft =
-    typeof t?.seatsLeft === "number" && Number.isFinite(t.seatsLeft)
-      ? Math.max(Math.floor(t.seatsLeft), 0)
-      : null;
+    // Fallback display if no manual seatsLeft
+    if (cap > 0) return <Badge label={`${cap} slots`} tone="blue" />;
 
-  // If seatsLeft is provided by backend/admin, trust that manual value
-  if (manualLeft != null) {
-    const tone =
-      manualLeft === 0 ? "red" : manualLeft <= 2 ? "yellow" : "green";
-    return <Badge label={`${manualLeft} left`} tone={tone} />;
+    return <Badge label="—" tone="slate" />;
   }
-
-  // Fallback display if no manual seatsLeft
-  if (cap > 0) return <Badge label={`${cap} slots`} tone="blue" />;
-
-  return <Badge label="—" tone="slate" />;
-}
-
 
   function pTrainingStatusBadge(st) {
     const s = String(st || "").toLowerCase();
@@ -1255,7 +1311,7 @@ function trainingSeatBadge(t) {
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold">Admin</h1>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <input
               className="input"
               placeholder="Search email / username / product…"
@@ -1266,6 +1322,42 @@ function trainingSeatBadge(t) {
             <button className="btn btn-sm" onClick={load}>
               Refresh
             </button>
+
+            {/* ✅ Expiry reminders button */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-600 flex items-center gap-2 select-none">
+                <input
+                  type="checkbox"
+                  checked={expiryDryRun}
+                  onChange={(e) => setExpiryDryRun(e.target.checked)}
+                />
+                Dry run
+              </label>
+
+              <input
+                className="input w-[90px]"
+                type="number"
+                min="0"
+                step="1"
+                value={expiryLimit}
+                onChange={(e) => setExpiryLimit(e.target.value)}
+                placeholder="Limit"
+                title="Optional: 0 means no limit. Use this to test safely."
+              />
+
+              <button
+                className="btn btn-sm"
+                disabled={expiryJobBusy}
+                onClick={runExpiryRemindersNow}
+                title="Manually trigger subscription expiry/reminder emails"
+              >
+                {expiryJobBusy
+                  ? "Running…"
+                  : expiryDryRun
+                    ? "Run expiry (dry)"
+                    : "Send expiry emails"}
+              </button>
+            </div>
 
             <button
               className="btn btn-sm"
@@ -1287,6 +1379,13 @@ function trainingSeatBadge(t) {
 
         {msg && <div className="text-sm mt-2">{msg}</div>}
 
+        {expiryLast?.ok && (
+          <div className="text-xs text-slate-500 mt-1">
+            Last run: {expiryLast.dryRun ? "dry run" : "sent"} · scanned{" "}
+            {expiryLast.scannedUsers ?? 0} · emails {expiryLast.sent ?? 0} ·
+            errors {expiryLast.errors ?? 0}
+          </div>
+        )}
         <div className="mt-4 border-b">
           <nav className="flex gap-6 flex-wrap">
             <button
@@ -1572,8 +1671,6 @@ function trainingSeatBadge(t) {
                       const decidedAt = e?.decidedAt
                         ? dayjs(e.decidedAt).format("YYYY-MM-DD HH:mm")
                         : "";
-
-
 
                       return (
                         <div
