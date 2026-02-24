@@ -4,8 +4,14 @@ import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import { sendMail } from "./mailer.js";
 
-const APP_URL =
-  String(process.env.PUBLIC_APP_URL || "").trim() || "http://localhost:5173";
+const WEB_URL =
+  String(
+    process.env.PUBLIC_WEB_URL ||
+      process.env.PUBLIC_SITE_URL ||
+      process.env.PUBLIC_FRONTEND_URL ||
+      process.env.PUBLIC_APP_URL || // fallback only
+      "",
+  ).trim() || "http://localhost:5173";
 
 function joinUrl(base, path) {
   const b = String(base || "").replace(/\/+$/, "");
@@ -68,11 +74,11 @@ function buildExpiryEmailHtml({
       : `Expired on: <b>${expiryDate}</b>`;
 
   // ✅ match your actual frontend routes
-  const renewLink = joinUrl(
-    APP_URL,
-    `/product/${encodeURIComponent(productKey)}`,
-  );
-  const dashboardLink = joinUrl(APP_URL, `/dashboard`);
+const renewLink = joinUrl(
+  WEB_URL,
+  `/product/${encodeURIComponent(productKey)}`,
+);
+const dashboardLink = joinUrl(WEB_URL, `/dashboard`);
 
   const btn = (href, label, bg) => `
     <a href="${href}"

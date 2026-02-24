@@ -26,8 +26,12 @@ const normInterval = (v) =>
 
 const ANYDESK_WINDOWS_URL = "https://anydesk.com/en/downloads/windows";
 
-const APP_URL =
-  String(process.env.PUBLIC_APP_URL || "").trim() || "http://localhost:5173";
+const WEB_URL =
+  String(
+    process.env.PUBLIC_WEB_URL || process.env.PUBLIC_APP_URL || "",
+  ).trim() || "http://localhost:5173";
+
+const receiptLink = joinUrl(WEB_URL, `/receipt/${purchase._id}`);
 
 function joinUrl(base, path) {
   const b = String(base || "").replace(/\/+$/, "");
