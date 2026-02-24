@@ -1,10 +1,9 @@
-// models/User.js
 import mongoose from "mongoose";
 
 const DeviceBindingSchema = new mongoose.Schema(
   {
     fingerprint: { type: String, required: true, trim: true },
-    name: { type: String, default: "" }, // e.g. "Accounts-Laptop-01"
+    name: { type: String, default: "" },
     boundAt: { type: Date, default: Date.now },
     lastSeenAt: { type: Date, default: Date.now },
     revokedAt: { type: Date, default: null },
@@ -24,11 +23,9 @@ const EntitlementSchema = new mongoose.Schema(
 
     expiresAt: { type: Date },
 
-    // ✅ Seat-based licensing
     seats: { type: Number, default: 1, min: 1 },
     devices: { type: [DeviceBindingSchema], default: [] },
 
-    // ✅ NEW (used by your admin.js + auth.js logic)
     licenseType: {
       type: String,
       enum: ["personal", "organization"],
@@ -36,9 +33,14 @@ const EntitlementSchema = new mongoose.Schema(
     },
     organizationName: { type: String, trim: true, default: "" },
 
-    // ✅ LEGACY (keep so old docs still load)
     deviceFingerprint: { type: String, trim: true },
     deviceBoundAt: { type: Date },
+
+    notify: {
+      lastSentAt: { type: Date, default: null },
+      lastSentKind: { type: String, enum: ["pre", "post"], default: null },
+      lastSentDays: { type: Number, default: null },
+    },
   },
   { _id: false },
 );
@@ -53,7 +55,6 @@ const UserSchema = new mongoose.Schema(
       lowercase: true,
     },
 
-    // keep sparse unique so old docs without username don't collide
     username: {
       type: String,
       index: true,

@@ -1,4 +1,3 @@
-// server/index.js
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
@@ -10,6 +9,8 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { connectDB } from "./db.js";
+import cron from "node-cron";
+import { runExpiryNotifier } from "./util/expiryNotifier.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
@@ -218,29 +219,21 @@ app.use("/api/entitlements", entitlementsRouter);
 
 /* =========================
    ✅ OPTIONAL: serve frontend + dynamic meta
-   - Prevents ENOENT crashes on Render when dist doesn't exist
    ========================= */
 
-// Turn ON only when you really want this server to also host the frontend build
 const SERVE_CLIENT = ["1", "true", "yes"].includes(
   String(process.env.SERVE_CLIENT || "").toLowerCase(),
 );
 
-// client is sibling of server -> ../client/dist
 const distDir = path.resolve(__dirname, "../client/dist");
 const indexHtml = path.join(distDir, "index.html");
-
 const hasClientBuild = fs.existsSync(indexHtml);
 
 if (SERVE_CLIENT && hasClientBuild) {
-  // Serve assets, but DO NOT auto-serve index.html (meta.dynamic injects it)
   app.use(express.static(distDir, { index: false }));
 
-  // Dynamic meta HTML routes MUST be AFTER API routes
-  // so they never intercept /products/:key, /coupons/banner, etc.
   registerDynamicMetaRoutes(app);
 
-  // SPA fallback for browser navigation (HTML only)
   app.get("*", (req, res, next) => {
     if (req.method !== "GET") return next();
     const accept = String(req.headers.accept || "");
@@ -250,7 +243,7 @@ if (SERVE_CLIENT && hasClientBuild) {
 } else {
   if (SERVE_CLIENT && !hasClientBuild) {
     console.warn(
-      "[SERVE_CLIENT] is enabled but client/dist/index.html was not found. Skipping static+meta routes to prevent ENOENT.",
+      "[SERVE_CLIENT] enabled but client/dist/index.html not found. Skipping static/meta routes.",
     );
   }
 }
@@ -272,7 +265,6 @@ app.use((err, _req, res, next) => {
   next(err);
 });
 
-/* -------- 404 + generic -------- */
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
 app.use((err, _req, res, _next) => {
@@ -285,7 +277,30 @@ const port = process.env.PORT || 4000;
 
 try {
   await connectDB(process.env.MONGO_URI);
+
   app.listen(port, () => console.log(`Server running on :${port}`));
+
+  const ENABLE_EXPIRY_CRON =
+    String(process.env.ENABLE_EXPIRY_CRON || "true") !== "false";
+
+  const EXPIRY_CRON = String(process.env.EXPIRY_CRON || "0 9 * * *"); // 9am Lagos daily
+
+  if (ENABLE_EXPIRY_CRON) {
+    cron.schedule(
+      EXPIRY_CRON,
+      async () => {
+        try {
+          const out = await runExpiryNotifier();
+          console.log("[expiry-notifier] done:", out);
+        } catch (e) {
+          console.error("[expiry-notifier] failed:", e?.message || e);
+        }
+      },
+      { timezone: "Africa/Lagos" },
+    );
+
+    console.log("[expiry-notifier] cron scheduled:", EXPIRY_CRON);
+  }
 } catch (err) {
   console.error("DB error", err);
   process.exit(1);

@@ -8,6 +8,7 @@ import { Coupon } from "../models/Coupon.js";
 import { Product } from "../models/Product.js";
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 import { sendMail } from "../util/mailer.js";
+import { runExpiryNotifier } from "../util/expiryNotifier.js";
 
 const router = express.Router();
 
@@ -1031,6 +1032,17 @@ router.post(
       seats: ent.seats || 1,
       seatsUsed: activeDevices(ent).length,
     });
+  }),
+);
+
+router.post(
+  "/jobs/expiry-notifier/run",
+  asyncHandler(async (req, res) => {
+    const dryRun = !!req.body?.dryRun;
+    const limit = Number(req.body?.limit || 0) || 0;
+
+    const out = await runExpiryNotifier({ dryRun, limit });
+    return res.json(out);
   }),
 );
 
