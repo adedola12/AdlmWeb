@@ -26,12 +26,14 @@ const normInterval = (v) =>
 
 const ANYDESK_WINDOWS_URL = "https://anydesk.com/en/downloads/windows";
 
+/**
+ * ✅ Frontend URL for emails/links.
+ * Set PUBLIC_WEB_URL in production to your frontend domain (e.g. https://adlmstudio.net)
+ */
 const WEB_URL =
   String(
     process.env.PUBLIC_WEB_URL || process.env.PUBLIC_APP_URL || "",
   ).trim() || "http://localhost:5173";
-
-// const receiptLink = joinUrl(WEB_URL, `/receipt/${purchase._id}`);
 
 function joinUrl(base, path) {
   const b = String(base || "").replace(/\/+$/, "");
@@ -162,15 +164,11 @@ function parseLineForGrant(purchase, ln, overrideMonths = 0) {
 
   const rawQty = Math.max(Number(ln?.qty ?? 1), 1);
 
-  // detect whether line has explicit "periods"
   const hasPeriods = lineHasPeriods(ln);
   const rawPeriods = hasPeriods ? Math.max(Number(ln?.periods ?? 1), 1) : 0;
 
-  // seats: org uses qty, personal always 1
   let seats = lt === "organization" ? rawQty : 1;
 
-  // -------- duration inference (months) --------
-  // 1) explicit months on line (if your checkout stores this)
   const explicitLineMonths = Number(
     ln?.months ??
       ln?.durationMonths ??
@@ -179,33 +177,29 @@ function parseLineForGrant(purchase, ln, overrideMonths = 0) {
       0,
   );
 
-  // 2) fallback months stored on purchase (if your checkout stores globally)
   const purchaseFallbackMonths = Number(
     purchase?.approvedMonths ?? purchase?.requestedMonths ?? 0,
   );
 
   let months = 0;
 
-  // If periods exist, periods wins.
   if (rawPeriods > 0) {
     months = rawPeriods * intervalMonths;
   } else {
-    // ✅ legacy fix: personal duration stored inside qty
     if (lt === "personal" && rawQty > 1) {
       months = rawQty * intervalMonths;
       seats = 1;
     } else if (Number.isFinite(explicitLineMonths) && explicitLineMonths > 0) {
-      months = explicitLineMonths; // already months
+      months = explicitLineMonths;
     } else if (
       Number.isFinite(purchaseFallbackMonths) &&
       purchaseFallbackMonths > 0
     ) {
-      months = purchaseFallbackMonths; // already months
+      months = purchaseFallbackMonths;
     } else if (Number.isFinite(overrideMonths) && overrideMonths > 0) {
-      months = overrideMonths; // already months
+      months = overrideMonths;
     } else {
-      // default: 1 interval
-      months = intervalMonths; // 1 month or 12 months depending on interval
+      months = intervalMonths;
     }
   }
 
@@ -237,7 +231,6 @@ function addMonthsToEntitlement(
     meta?.organization,
   );
 
-  // org can have seats, personal is always 1
   const seatsFinal =
     metaLt === "organization" ? Math.max(Number(seatsToSet || 1), 1) : 1;
 
@@ -263,7 +256,6 @@ function addMonthsToEntitlement(
 
   normalizeLegacyEnt(ent);
 
-  // ✅ if expired, start from NOW; if still valid, extend from current expiry
   const base =
     ent.expiresAt && dayjs(ent.expiresAt).isAfter(now)
       ? dayjs(ent.expiresAt)
@@ -272,7 +264,6 @@ function addMonthsToEntitlement(
   ent.status = "active";
   ent.expiresAt = base.add(monthsToAdd, "month").toDate();
 
-  // org is "sticky" (don’t accidentally downgrade)
   const targetLt = ent.licenseType === "organization" ? "organization" : metaLt;
 
   if (targetLt === "organization") {
@@ -286,10 +277,6 @@ function addMonthsToEntitlement(
   }
 }
 
-/**
- * Normalize + merge grants by productKey.
- * IMPORTANT: do NOT infer org from seats alone (legacy qty can be duration).
- */
 function normalizeGrants(grants, defaults = {}) {
   const map = new Map();
 
@@ -454,6 +441,7 @@ function buildApproveEmailHtml({
 }
 
 /* -------------------- routes -------------------- */
+
 router.get(
   "/users",
   asyncHandler(async (req, res) => {
@@ -474,7 +462,6 @@ router.get(
       refreshVersion: 1,
     }).sort({ createdAt: -1 });
 
-    // ✅ enforce expiry -> status becomes "expired" (no ghost-active entitlements)
     const saves = [];
     for (const u of list) {
       if (applyExpiryToUser(u)) saves.push(u.save());
@@ -529,7 +516,6 @@ router.post(
     const user = await User.findById(purchase.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // ✅ ensure user expiry statuses are enforced before applying new months
     applyExpiryToUser(user);
 
     const overrideMonths = Number(req.body?.months || 0);
@@ -550,7 +536,6 @@ router.post(
       else staged.push(g);
     }
 
-    // Apply course entitlements immediately
     if (immediate.length) {
       immediate.forEach((g) =>
         addMonthsToEntitlement(user, g.productKey, g.months, g.seats, {
@@ -565,7 +550,6 @@ router.post(
     purchase.decidedBy = req.user?.email || "admin";
     purchase.decidedAt = new Date();
 
-    // Installation defaults
     purchase.installation = purchase.installation || {};
     purchase.installation.anydeskUrl =
       purchase.installation.anydeskUrl || ANYDESK_WINDOWS_URL;
@@ -590,7 +574,6 @@ router.post(
       purchase.installation.entitlementsAppliedAt = new Date();
     }
 
-    // Coupon redemption only for course-only approvals
     if (
       purchase.coupon?.couponId &&
       !purchase.coupon.redeemedApplied &&
@@ -603,13 +586,12 @@ router.post(
       purchase.coupon.redeemedApplied = true;
     }
 
-    // ✅ Save first (so receipt link is valid and state is consistent)
     await purchase.save();
 
-    const receiptLink = joinUrl(APP_URL, `/receipt/${purchase._id}`);
+    // ✅ FIX: receiptLink must be created INSIDE the handler (purchase exists here)
+    const receiptLink = joinUrl(WEB_URL, `/receipt/${purchase._id}`);
     const anydeskLink = purchase.installation.anydeskUrl || ANYDESK_WINDOWS_URL;
 
-    // ✅ ONE email only (no transporter, no duplicates)
     try {
       const isPendingInstall = staged.length > 0;
       const firstName =
@@ -677,7 +659,7 @@ router.get(
       $or: [
         { "installation.status": "pending" },
         { "installation.entitlementsApplied": false },
-        { "installation.entitlementsApplied": { $exists: false } }, // legacy
+        { "installation.entitlementsApplied": { $exists: false } },
       ],
     };
 
@@ -702,20 +684,17 @@ router.post(
       p.organization,
     );
 
-    // ✅ normalize whatever is stored
     let grants = normalizeGrants(p.installation.entitlementGrants, {
       licenseType: purchaseLt,
       organizationName: purchaseOrgName,
       organization: p.organization,
     });
 
-    // ✅ If grants missing (legacy), rebuild from purchase lines/productKey
     if (grants.length === 0) {
       grants = buildGrantsFromPurchase(p, 0);
       p.installation.entitlementGrants = grants;
     }
 
-    // Only apply NON-COURSE items on installation complete
     const keys = [...new Set(grants.map((g) => g.productKey).filter(Boolean))];
     const isCourseByKey = await getIsCourseMap(keys);
     const installGrants = grants.filter((g) => !isCourseByKey[g.productKey]);
@@ -744,7 +723,7 @@ router.post(
 
       p.installation.entitlementsApplied = true;
       p.installation.entitlementsAppliedAt = new Date();
-      p.installation.entitlementGrants = grants; // persist the correct months/seats
+      p.installation.entitlementGrants = grants;
     } else if (
       p.installation.entitlementsApplied !== true &&
       installGrants.length === 0
@@ -753,7 +732,6 @@ router.post(
       p.installation.entitlementsAppliedAt = new Date();
     }
 
-    // Coupon redemption finalizes here (install completion moment)
     if (p.coupon?.couponId && !p.coupon.redeemedApplied) {
       await Coupon.updateOne(
         { _id: p.coupon.couponId },
@@ -830,7 +808,6 @@ router.post(
         ent.expiresAt = base.add(months, "month").toDate();
       }
 
-      // org is sticky; don’t downgrade unintentionally
       const targetLt = ent.licenseType === "organization" ? "organization" : lt;
 
       if (targetLt === "organization") {
@@ -1021,7 +998,6 @@ router.post(
       return res.status(404).json({ error: "Device not found" });
     }
 
-    // keep legacy fields consistent
     if (ent.deviceFingerprint === fingerprint) {
       ent.deviceFingerprint = ent.devices?.[0]?.fingerprint;
       ent.deviceBoundAt = ent.devices?.[0]?.boundAt || undefined;
@@ -1039,6 +1015,7 @@ router.post(
   }),
 );
 
+// ✅ Manual trigger for expiry notifier
 router.post(
   "/jobs/expiry-notifier/run",
   asyncHandler(async (req, res) => {
