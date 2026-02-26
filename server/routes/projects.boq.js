@@ -1,3 +1,4 @@
+// server/routes/projects.boq.js
 import express from "express";
 import path from "path";
 import mongoose from "mongoose";
@@ -10,9 +11,6 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const asyncHandler = (fn) => (req, res, next) =>
-  Promise.resolve(fn(req, res, next)).catch(next);
-
 // Put template here: server/assets/boq/boq-template.xlsx
 const DEFAULT_TEMPLATE_PATH = path.join(
   __dirname,
@@ -21,6 +19,9 @@ const DEFAULT_TEMPLATE_PATH = path.join(
   "boq",
   "boq-template.xlsx",
 );
+
+const asyncHandler = (fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch(next);
 
 /* -------------------- helpers -------------------- */
 
@@ -42,16 +43,16 @@ function scoreCollectionName(name, tool) {
   let s = 0;
   if (n.includes("project")) s += 5;
   if (n.includes("takeoff")) s += 4;
-  if (n.includes("materials")) s += 3;
   if (n.includes("revit")) s += 3;
   if (n.includes("planswift")) s += 3;
+  if (n.includes("material")) s += 2;
 
   // tool-specific boost
-  if (t && n.includes(t)) s += 6;
+  if (t && n.includes(t)) s += 8;
 
-  // common aliases
+  // aliases
   if (t === "revit-materials" || t === "revit-material") {
-    if (n.includes("material")) s += 6;
+    if (n.includes("material")) s += 8;
     if (n.includes("revit")) s += 3;
   }
 
@@ -61,21 +62,14 @@ function scoreCollectionName(name, tool) {
 function toIdCandidates(id) {
   const raw = String(id || "").trim();
   const out = [];
-
-  // Mongo ObjectId
-  if (mongoose.Types.ObjectId.isValid(raw)) {
+  if (mongoose.Types.ObjectId.isValid(raw))
     out.push(new mongoose.Types.ObjectId(raw));
-  }
-
-  // string id fallback (some schemas store string ids)
   out.push(raw);
-
   return out;
 }
 
 function normalizeId(v) {
   if (!v) return "";
-  // ObjectId -> string
   if (typeof v === "object" && String(v._bsontype || "") === "ObjectId")
     return String(v);
   return String(v);
@@ -85,16 +79,12 @@ function userOwnsDoc(doc, userId) {
   if (!doc) return false;
   const uid = normalizeId(userId);
 
-  // If doc has any of these fields, enforce ownership strictly
   const ownerFields = ["userId", "ownerId", "createdById", "user", "uid"];
   for (const f of ownerFields) {
-    if (doc[f] != null) {
-      return normalizeId(doc[f]) === uid;
-    }
+    if (doc[f] != null) return normalizeId(doc[f]) === uid;
   }
 
-  // If none of those fields exist, we can’t strictly verify.
-  // We allow it (your ids are unguessable), but this keeps it compatible.
+  // If your schema does not store ownership fields, allow (unguessable ids).
   return true;
 }
 
@@ -106,41 +96,54 @@ async function listAllCollections() {
   return cols.map((c) => c.name).filter(Boolean);
 }
 
+function looksLikeProjectDoc(doc) {
+  if (!doc) return false;
+  const hasItems = Array.isArray(doc.items);
+  const hasName = typeof doc.name === "string" || typeof doc.title === "string";
+  return hasItems || hasName;
+}
+
+function toolMatchesIfPresent(doc, tool) {
+  const t = String(tool || "").toLowerCase();
+  if (!t) return true;
+
+  // If your docs store tool/type keys, enforce them when present
+  const candidates = ["tool", "type", "projectType", "source"];
+  for (const k of candidates) {
+    if (doc?.[k] != null) {
+      const dv = String(doc[k] || "").toLowerCase();
+      // allow partial matches (e.g. "revit" inside "revit_takeoffs")
+      if (!dv.includes(t)) return false;
+      return true;
+    }
+  }
+  return true; // field not present => don't block
+}
+
 async function findProjectDoc({ tool, id, userId }) {
   const collections = await listAllCollections();
 
-  // Limit to likely collections first, then sort by score
-  const likely = collections
+  const candidates = collections
     .filter(isLikelyProjectsCollection)
     .sort((a, b) => scoreCollectionName(b, tool) - scoreCollectionName(a, tool))
-    .slice(0, 30); // keep it bounded
-
-  // If no likely collections, fallback to all (still bounded)
-  const candidates = likely.length ? likely : collections.slice(0, 30);
+    .slice(0, 30);
 
   const ids = toIdCandidates(id);
 
   for (const colName of candidates) {
-    const col = mongoose.connection.collection(colName);
+    const col = mongoose.connection.db.collection(colName);
 
     for (const _id of ids) {
-      // Try common patterns
       const attempts = [{ _id }, { id: _id }, { projectId: _id }];
 
       for (const q of attempts) {
         const doc = await col.findOne(q);
-        if (!doc) continue;
-
-        // must look like your saved project shape
-        const hasItems = Array.isArray(doc.items) && doc.items.length >= 0;
-        const hasName =
-          typeof doc.name === "string" || typeof doc.title === "string";
-        if (!hasItems && !hasName) continue;
-
+        if (!looksLikeProjectDoc(doc)) continue;
+        if (!toolMatchesIfPresent(doc, tool)) continue;
         if (!userOwnsDoc(doc, userId)) continue;
 
-        // normalize name/title
         doc.name = doc.name || doc.title || "Project";
+        doc.items = Array.isArray(doc.items) ? doc.items : [];
         return doc;
       }
     }
@@ -162,9 +165,8 @@ router.get(
       .toLowerCase();
     const id = String(req.params.id || "").trim();
 
-    if (!tool || !id) {
+    if (!tool || !id)
       return res.status(400).json({ error: "tool and id are required" });
-    }
 
     const tpl = String(process.env.BOQ_TEMPLATE_PATH || "").trim();
     const templatePath = tpl || DEFAULT_TEMPLATE_PATH;
@@ -178,29 +180,41 @@ router.get(
     if (!project) {
       return res.status(404).json({
         error:
-          "Project not found (or not owned by this user). Also check your collection/model naming.",
+          "Project not found (or not owned by this user). Check your collection/model naming.",
       });
     }
 
     const out = await exportBoqFromTemplate({
       templatePath,
       projectName: project.name || "Project",
-      items: Array.isArray(project.items) ? project.items : [],
-      options: {
-        matchThreshold: Number(req.query.threshold || 0.28),
-      },
+      items: project.items,
+      options: { matchThreshold: Number(req.query.threshold || 0.28) },
     });
 
+    const buf = Buffer.isBuffer(out.buffer)
+      ? out.buffer
+      : Buffer.from(out.buffer);
+
+    // Quick sanity: XLSX is a ZIP => starts with "PK"
+    if (buf.length < 2 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
+      return res.status(500).json({
+        error:
+          "BoQ exporter did not generate a valid XLSX (zip) file. Check template path and exporter logic.",
+      });
+    }
+
+    res.setHeader("Cache-Control", "no-store");
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="${out.filename}"`,
     );
 
-    return res.send(out.buffer);
+    return res.status(200).end(buf);
   }),
 );
 

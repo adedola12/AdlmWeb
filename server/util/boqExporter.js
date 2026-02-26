@@ -1,3 +1,4 @@
+// server/util/boqExporter.js
 import ExcelJS from "exceljs";
 import dayjs from "dayjs";
 
@@ -8,10 +9,8 @@ function cellToString(v) {
   if (typeof v === "string") return v;
   if (typeof v === "number") return String(v);
   if (typeof v === "object") {
-    // ExcelJS rich text
-    if (Array.isArray(v.richText)) {
+    if (Array.isArray(v.richText))
       return v.richText.map((x) => x.text || "").join("");
-    }
     if (typeof v.text === "string") return v.text;
     if (typeof v.formula === "string") return `=${v.formula}`;
     if (v.result != null) return String(v.result);
@@ -78,7 +77,6 @@ function jaccardScore(aTokens, bTokens) {
 
   let inter = 0;
   for (const x of A) if (B.has(x)) inter += 1;
-
   const uni = A.size + B.size - inter;
   return uni ? inter / uni : 0;
 }
@@ -89,7 +87,6 @@ function normalizeUnit(u) {
   const raw = normalizeText(u);
   if (!raw) return "";
 
-  // takeoff side common units
   if (raw === "m2" || raw === "m²" || raw === "sqm" || raw === "sq m")
     return "sq.m";
   if (raw === "m3" || raw === "m³" || raw === "cum" || raw === "cu m")
@@ -101,7 +98,6 @@ function normalizeUnit(u) {
   if (raw === "ton" || raw === "tons" || raw === "t" || raw === "tonne")
     return "tonnes";
 
-  // template side often uses these exact spellings:
   if (raw === "sq.m" || raw === "cu.m" || raw === "lin.m") return raw;
   return raw;
 }
@@ -121,6 +117,43 @@ function round2(n) {
   return Math.round(safeNum(n) * 100) / 100;
 }
 
+/* -------------------- template detection -------------------- */
+
+function looksLikeBoqHeaderRow(ws) {
+  const r1 = ws.getRow(1);
+  const a = normalizeText(cellToString(r1.getCell(1).value));
+  const b = normalizeText(cellToString(r1.getCell(2).value));
+  const c = normalizeText(cellToString(r1.getCell(3).value));
+  const d = normalizeText(cellToString(r1.getCell(4).value));
+  const e = normalizeText(cellToString(r1.getCell(5).value));
+  const f = normalizeText(cellToString(r1.getCell(6).value));
+
+  // Your template header is typically:
+  // ITEM | DESCRIPTION | UNIT | QTY | RATE | AMOUNT
+  return (
+    a.includes("item") &&
+    b.includes("description") &&
+    c.includes("unit") &&
+    d.includes("qty") &&
+    e.includes("rate") &&
+    f.includes("amount")
+  );
+}
+
+function findBoqWorksheet(workbook) {
+  // Prefer sheet name containing BOQ
+  const byName = workbook.worksheets.find((w) =>
+    String(w.name || "")
+      .toLowerCase()
+      .includes("boq"),
+  );
+  if (byName) return byName;
+
+  // Else find by header row signature
+  const byHeader = workbook.worksheets.find(looksLikeBoqHeaderRow);
+  return byHeader || workbook.worksheets[0];
+}
+
 /* -------------------- template parsing -------------------- */
 
 function isItemCode(v) {
@@ -129,11 +162,6 @@ function isItemCode(v) {
   return /^[A-Z]{1,2}$/.test(s) || /^\d+(\.\d+)?$/.test(s);
 }
 
-/**
- * Your template has "ITEM / DESCRIPTION / UNIT / QTY / RATE / AMOUNT" at row 1.
- * Many lines are 2-row lines: code+partial desc (row X), then unit/qty/rate (row X+1).
- * We treat the row that has UNIT as the "detail row" where QTY+RATE should be written.
- */
 function extractTemplateLines(ws) {
   const lines = [];
 
@@ -162,14 +190,11 @@ function extractTemplateLines(ws) {
     const prevDesc = normSpace(cellToString(prevDescRaw));
 
     const itemCode = item || prevItem || "";
-
     const fullDesc =
       !item && prevItem && prevDesc ? normSpace(`${prevDesc} ${desc}`) : desc;
 
-    // ignore “carry / collection” type lines if they ever have units
     const ignore =
       /carried to summary|to collection|from page|collection/i.test(fullDesc);
-
     if (ignore) return;
 
     lines.push({
@@ -186,12 +211,7 @@ function extractTemplateLines(ws) {
 
 /* -------------------- writing helpers -------------------- */
 
-function getCell(ws, addr) {
-  return ws.getCell(addr);
-}
-
 function parseDirectRefFormula(formula) {
-  // formula from ExcelJS is without leading "=" (e.g. "D8")
   const m = String(formula || "")
     .trim()
     .match(/^([A-Z]{1,3})(\d+)$/i);
@@ -200,20 +220,17 @@ function parseDirectRefFormula(formula) {
 }
 
 function setNumberCellPreserveFormulaRefs(ws, addr, value) {
-  const cell = getCell(ws, addr);
+  const cell = ws.getCell(addr);
 
-  // If it's a simple direct reference (e.g. =D8), update the referenced cell instead
   if (cell?.value && typeof cell.value === "object" && cell.value.formula) {
     const ref = parseDirectRefFormula(cell.value.formula);
     if (ref) {
       ws.getCell(`${ref.col}${ref.row}`).value = safeNum(value);
-      return { updated: `${ref.col}${ref.row}`, mode: "follow-ref" };
+      return;
     }
   }
 
-  // Otherwise overwrite the cell
   cell.value = safeNum(value);
-  return { updated: addr, mode: "overwrite" };
 }
 
 /* -------------------- matching -------------------- */
@@ -225,22 +242,18 @@ function matchLine(takeoff, templateLines) {
   let best = null;
 
   for (const ln of templateLines) {
-    // unit must match strongly (prevents slab m3 matching a lin.m formwork line)
-    const unitOk = sameUnit(takeoff.unit, ln.unit);
-    if (!unitOk) continue;
+    if (!sameUnit(takeoff.unit, ln.unit)) continue;
 
     const score = jaccardScore(tTokens, ln.tokens);
 
-    // small bonus if one contains the other as substring
     const a = normalizeText(takeoff.description);
     const b = normalizeText(ln.desc);
     const containsBonus = a.includes(b) || b.includes(a) ? 0.15 : 0;
 
     const finalScore = score + containsBonus;
 
-    if (!best || finalScore > best.score) {
+    if (!best || finalScore > best.score)
       best = { line: ln, score: finalScore };
-    }
   }
 
   return best;
@@ -248,13 +261,6 @@ function matchLine(takeoff, templateLines) {
 
 /* -------------------- public API -------------------- */
 
-/**
- * Export BoQ using your formatted template.
- * - Clears all numeric QTY cells in the template (so old sample values don’t remain)
- * - Auto-matches takeoff items -> template rows (by unit + description similarity)
- * - Writes QTY (and RATE if provided) into template
- * - Adds a "Mapping" sheet for audit/debug
- */
 export async function exportBoqFromTemplate({
   templatePath,
   projectName = "Project",
@@ -264,50 +270,36 @@ export async function exportBoqFromTemplate({
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(templatePath);
 
-  const ws = workbook.worksheets[0]; // your file is a single sheet: "MAIN BUILDING BOQ"
+  // ensure Excel recalculates formulas when opened
+  workbook.calcProperties.fullCalcOnLoad = true;
 
+  const ws = findBoqWorksheet(workbook);
   const templateLines = extractTemplateLines(ws);
 
-  // 1) Clear numeric QTY cells (Column D) for all template lines
-  //    Keep formulas untouched (they’ll recompute from cleared drivers).
+  // Clear numeric QTY cells (Column D) for all template lines
   for (const ln of templateLines) {
     const qtyCell = ws.getCell(`D${ln.row}`);
     const v = qtyCell.value;
-
     const isFormula =
       v && typeof v === "object" && typeof v.formula === "string";
-    if (!isFormula && typeof v === "number") {
-      qtyCell.value = 0;
-    }
-    if (!isFormula && (v == null || v === "")) {
-      // keep blank
-    }
+    if (!isFormula) qtyCell.value = 0;
   }
 
-  // 2) Normalize takeoff items
   const takeoffs = (Array.isArray(items) ? items : [])
-    .map((it, idx) => {
-      const desc = String(
+    .map((it, idx) => ({
+      idx,
+      sn: it?.sn ?? idx + 1,
+      description: String(
         it?.description || it?.name || it?.takeoffLine || "",
-      ).trim();
-      const unit = String(it?.unit || "").trim();
-      const qty = safeNum(it?.qty);
-      const rate = safeNum(it?.rate);
-      return {
-        idx,
-        sn: it?.sn ?? idx + 1,
-        description: desc,
-        unit,
-        qty,
-        rate,
-      };
-    })
+      ).trim(),
+      unit: String(it?.unit || "").trim(),
+      qty: safeNum(it?.qty),
+      rate: safeNum(it?.rate),
+    }))
     .filter((x) => x.description && x.qty > 0);
 
-  // 3) Match + aggregate by template row
-  const agg = new Map(); // row -> { qty, rate, hits[] }
+  const agg = new Map();
   const mappingRows = [];
-
   const THRESH = Number(options.matchThreshold ?? 0.28);
 
   for (const t of takeoffs) {
@@ -337,17 +329,8 @@ export async function exportBoqFromTemplate({
       template: best.line,
       hits: 0,
     };
-
     cur.qty += t.qty;
-
-    // pick a reasonable rate:
-    // - if template already has a rate and takeoff has none, leave template as-is later
-    // - if takeoff has rate, we set/override
-    if (t.rate > 0) {
-      // if different rates come in, keep the latest non-zero
-      cur.rate = t.rate;
-    }
-
+    if (t.rate > 0) cur.rate = t.rate;
     cur.hits += 1;
     agg.set(row, cur);
 
@@ -366,32 +349,18 @@ export async function exportBoqFromTemplate({
     });
   }
 
-  // 4) Write values into template
+  // Write values into template: QTY -> D, RATE -> E (Amount F stays formula)
   for (const [row, v] of agg.entries()) {
-    // Qty goes to D
-    const qtyRes = setNumberCellPreserveFormulaRefs(
-      ws,
-      `D${row}`,
-      round2(v.qty),
-    );
-
-    // Rate goes to E (only if we got a rate from takeoff)
-    if (v.rate > 0) {
+    setNumberCellPreserveFormulaRefs(ws, `D${row}`, round2(v.qty));
+    if (v.rate > 0)
       setNumberCellPreserveFormulaRefs(ws, `E${row}`, round2(v.rate));
-    }
-
-    // (We do NOT touch Amount column F, it has formulas in your template)
-    // You’ll get correct totals when opened in Excel.
-    void qtyRes;
   }
 
-  // 5) Add mapping audit sheet (very useful to refine matching)
-  let mapWs = workbook.getWorksheet("Mapping");
-  if (mapWs) {
-    workbook.removeWorksheet(mapWs.id);
-  }
-  mapWs = workbook.addWorksheet("Mapping");
+  // Mapping sheet
+  const existing = workbook.getWorksheet("Mapping");
+  if (existing) workbook.removeWorksheet(existing.id);
 
+  const mapWs = workbook.addWorksheet("Mapping");
   mapWs.columns = [
     { header: "S/N", key: "sn", width: 8 },
     { header: "Takeoff Description", key: "takeoffDesc", width: 55 },
@@ -416,16 +385,12 @@ export async function exportBoqFromTemplate({
   }
 
   mapWs.getRow(1).font = { bold: true };
-
-  // Optional metadata
   mapWs.addRow([]);
   mapWs.addRow(["Project", projectName]);
   mapWs.addRow(["Exported At", dayjs().format("YYYY-MM-DD HH:mm")]);
   mapWs.addRow(["Match Threshold", THRESH]);
 
-  // 6) Return file buffer
   const buf = await workbook.xlsx.writeBuffer();
-
   const safeName = String(projectName || "Project")
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, " ")
@@ -433,7 +398,7 @@ export async function exportBoqFromTemplate({
     .slice(0, 120);
 
   return {
-    buffer: Buffer.from(buf),
+    buffer: Buffer.isBuffer(buf) ? buf : Buffer.from(buf),
     filename: `${safeName} - Elemental BOQ.xlsx`,
   };
 }
