@@ -60,6 +60,8 @@ import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
 import entitlementsRouter from "./routes/entitlements.js";
 import adminUsersLite from "./routes/admin.usersLite.js";
+import projectsBoqRoutes from "./routes/projects.boq.js";
+
 
 const app = express();
 
@@ -216,6 +218,8 @@ app.use("/admin", adminRoutes);
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
 app.use("/api/entitlements", entitlementsRouter);
+
+app.use("/projectsboq", projectsBoqRoutes);
 
 /* =========================
    ✅ OPTIONAL: serve frontend + dynamic meta

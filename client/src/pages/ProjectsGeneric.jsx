@@ -126,6 +126,175 @@ function sanitizeFilename(name) {
     .slice(0, 120);
 }
 
+/* -------------------- BOQ TEMPLATE (Elemental) -------------------- */
+
+const BOQ_TEMPLATE_LS_KEY = "adlm:boqTemplate:v1";
+const BOQ_DEFAULT_TEMPLATE_URL = "/boq-template.xlsx";
+
+/**
+ * IMPORTANT:
+ * - Make sure your Excel template already has enough pre-formatted blank rows
+ *   for line items (e.g. 300–800 rows), because SheetJS Community won't
+ *   reliably preserve styling if we insert rows dynamically.
+ *
+ * Adjust these to match YOUR template layout:
+ */
+const BOQ_TEMPLATE_MAP = {
+  sheetName: "BoQ", // <- change to your sheet name
+  header: {
+    projectNameCell: "B4", // <- optional
+    dateCell: "B5", // <- optional
+  },
+  table: {
+    firstRow: 12, // <- where first line item should be written
+    maxRows: 500, // <- how many rows in template are reserved for items
+    cols: {
+      sn: "A",
+      desc: "B",
+      unit: "E",
+      qty: "F",
+      rate: "G",
+      amount: "H",
+    },
+  },
+  summary: {
+    sheetName: "Summary", // we'll create if missing
+  },
+};
+
+function excelAddr(colLetter, row1Based) {
+  return `${colLetter}${row1Based}`;
+}
+
+function setCell(ws, addr, value) {
+  // Keep template formatting by only setting the value
+  ws[addr] = ws[addr] || {};
+  if (typeof value === "number") {
+    ws[addr].t = "n";
+    ws[addr].v = value;
+  } else if (value === null || value === undefined) {
+    ws[addr].t = "s";
+    ws[addr].v = "";
+  } else {
+    ws[addr].t = "s";
+    ws[addr].v = String(value);
+  }
+}
+
+function safeB64FromUint8(u8) {
+  let s = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+  }
+  return btoa(s);
+}
+function uint8FromB64(b64) {
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+
+async function readFileAsArrayBuffer(file) {
+  return await file.arrayBuffer();
+}
+
+function saveBoqTemplateToLocal(arrayBuffer) {
+  try {
+    const u8 = new Uint8Array(arrayBuffer);
+    const b64 = safeB64FromUint8(u8);
+    localStorage.setItem(BOQ_TEMPLATE_LS_KEY, b64);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadBoqTemplateFromLocal() {
+  try {
+    const b64 = localStorage.getItem(BOQ_TEMPLATE_LS_KEY);
+    if (!b64) return null;
+    return uint8FromB64(b64).buffer;
+  } catch {
+    return null;
+  }
+}
+
+async function loadBoqTemplateArrayBuffer() {
+  const local = loadBoqTemplateFromLocal();
+  if (local) return local;
+
+  // fallback to bundled template in /public
+  const res = await fetch(BOQ_DEFAULT_TEMPLATE_URL, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(
+      `BoQ template not found. Add it to client/public/boq-template.xlsx or upload it.`,
+    );
+  }
+  return await res.arrayBuffer();
+}
+
+/**
+ * Element grouping rules (fallback).
+ * BEST: if your saved items already contain it.elementName or it.elementCode,
+ * we will use that first.
+ */
+const ELEMENT_RULES = [
+  {
+    name: "Preliminaries",
+    re: /(prelim|mobil|site\s*setup|temporary|general)/i,
+  },
+  {
+    name: "Substructure",
+    re: /(excavat|foundation|footing|pile|substructure|blinding|hardcore|dpc|ground\s*beam|oversite)/i,
+  },
+  {
+    name: "Superstructure",
+    re: /(column|beam|slab|frame|blockwork|wall|lintel|stair|roof|truss)/i,
+  },
+  {
+    name: "Finishes",
+    re: /(plaster|render|screed|tile|paint|ceiling|skirting|cladding|screeding)/i,
+  },
+  {
+    name: "Fittings",
+    re: /(door|window|ironmongery|sanitary|cabinet|fixture|kitchen)/i,
+  },
+  {
+    name: "Services",
+    re: /(electrical|plumbing|hvac|fire|drain|pipe|cable|lighting|conduit)/i,
+  },
+  {
+    name: "External Works",
+    re: /(paving|fence|gate|landscap|external|road|kerb|drainage)/i,
+  },
+];
+
+function inferElementName(item) {
+  const explicit =
+    String(item?.elementName || item?.element || "").trim() ||
+    String(item?.elementCode || "").trim();
+  if (explicit) return explicit;
+
+  const text =
+    `${String(item?.code || "")} ${String(item?.description || "")}`.trim();
+  for (const r of ELEMENT_RULES) {
+    if (r.re.test(text)) return r.name;
+  }
+  return "Unclassified";
+}
+
+function boqDescFromItem(item, stripMetaFn) {
+  // keep it clean like BoQ descriptions
+  const d = stripMetaFn
+    ? stripMetaFn(item?.description)
+    : String(item?.description || "");
+  return String(d || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // tooltip
 function Tip({ text }) {
   return (
@@ -499,6 +668,12 @@ export default function ProjectsGeneric() {
   // search projects list
   const [projectQuery, setProjectQuery] = React.useState("");
 
+  const boqFileRef = React.useRef(null);
+  const [exportOpen, setExportOpen] = React.useState(false);
+  const [boqTemplateReady, setBoqTemplateReady] = React.useState(
+    !!loadBoqTemplateFromLocal(),
+  );
+
   // material resolve + picks
   const [matResolved, setMatResolved] = React.useState({
     pricesByKey: {},
@@ -551,6 +726,23 @@ export default function ProjectsGeneric() {
   }
   function isGroupLinked(groupId) {
     return !!(groupId && linkedGroups?.[groupId]);
+  }
+
+  async function onUploadBoqTemplate(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    try {
+      const ab = await readFileAsArrayBuffer(file);
+      const ok = saveBoqTemplateToLocal(ab);
+      if (!ok) throw new Error("Could not store template in browser storage.");
+      setBoqTemplateReady(true);
+      setNotice("BoQ template uploaded. Elemental export will use it.");
+      setErr("");
+    } catch (ex) {
+      setErr(ex?.message || "Failed to upload BoQ template");
+    }
   }
 
   function initRatesFromProject(project) {
@@ -1235,7 +1427,7 @@ export default function ProjectsGeneric() {
         );
       });
 
-  function exportBoQ() {
+  function exportGenericBoQ() {
     if (!sel) return;
 
     const headers = ["S/N", "Description", "Qty", "Unit", "Rate", "Amount"];
@@ -1269,6 +1461,30 @@ export default function ProjectsGeneric() {
     const filename = `${sanitizeFilename(sel?.name || "Project")} - BoQ.xlsx`;
     XLSX.writeFile(wb, filename);
   }
+
+async function exportElementalBoQFromBackend() {
+  if (!selectedId) return;
+
+  const url = `/projectsboq/${toolNorm}/${selectedId}/export/boq`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(msg || "Failed to export BoQ");
+  }
+
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${sanitizeFilename(sel?.name || "Project")} - Elemental BOQ.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
 
   React.useEffect(() => {
     load({ keepSelection: true });
@@ -1714,9 +1930,36 @@ export default function ProjectsGeneric() {
                       {saving ? "Saving..." : "Save"}
                     </button>
 
-                    <button className="btn btn-sm" onClick={exportBoQ}>
-                      Export to Excel BoQ
-                    </button>
+                    <div className="relative">
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => setExportOpen((v) => !v)}
+                      >
+                        Export ▾
+                      </button>
+
+                      {exportOpen && (
+                        <div className="absolute right-0 mt-2 w-56 bg-white border rounded-lg shadow-lg z-30 overflow-hidden">
+                          <button
+                            type="button"
+                            className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm"
+                            onClick={() => {
+                              setExportOpen(false);
+                              exportGenericBoQ();
+                            }}
+                          >
+                            Export Generic BoQ
+                          </button>
+
+                          <button
+                            className="btn btn-sm"
+                            onClick={() => exportElementalBoQFromBackend()}
+                          >
+                            Export Elemental BoQ
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
