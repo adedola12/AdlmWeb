@@ -3,6 +3,7 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { API_BASE } from "../config";
 import {
   FaTrash,
   FaInfoCircle,
@@ -1462,30 +1463,68 @@ export default function ProjectsGeneric() {
     XLSX.writeFile(wb, filename);
   }
 
-async function exportElementalBoQFromBackend() {
-  if (!selectedId) return;
+  // add near the top with other imports
 
-  const url = `/projectsboq/${toolNorm}/${selectedId}/export/boq`;
-  const res = await fetch(url, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(msg || "Failed to export BoQ");
+  // helper
+  function filenameFromDisposition(disposition, fallback) {
+    const cd = String(disposition || "");
+    const m = cd.match(/filename\*?=(?:UTF-8'')?"?([^"]+)"?/i);
+    if (!m) return fallback;
+    try {
+      return decodeURIComponent(m[1]);
+    } catch {
+      return m[1];
+    }
   }
 
-  const blob = await res.blob();
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${sanitizeFilename(sel?.name || "Project")} - Elemental BOQ.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(a.href);
-}
+  async function exportElementalBoQFromBackend() {
+    if (!selectedId) return;
 
+    const base = API_BASE || window.location.origin;
+    const path = `/projectsboq/${toolNorm}/${selectedId}/export/boq`;
+    const absUrl = new URL(path, base).toString();
+
+    const res = await fetch(absUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || "Failed to export BoQ");
+    }
+
+    const ct = String(res.headers.get("content-type") || "").toLowerCase();
+
+    // If we accidentally got HTML/JSON, don’t download it as .xlsx
+    const looksExcel =
+      ct.includes("spreadsheetml.sheet") ||
+      ct.includes("application/octet-stream");
+    if (!looksExcel) {
+      const txt = await res.text();
+      throw new Error(
+        `Export returned non-Excel content-type: ${ct}\n` + txt.slice(0, 300),
+      );
+    }
+
+    const blob = await res.blob();
+    const cd = res.headers.get("content-disposition");
+    const fallbackName = `${sanitizeFilename(sel?.name || "Project")} - Elemental BOQ.xlsx`;
+    const filename = filenameFromDisposition(cd, fallbackName);
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
   React.useEffect(() => {
     load({ keepSelection: true });
     // eslint-disable-next-line

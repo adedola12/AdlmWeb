@@ -62,7 +62,6 @@ import entitlementsRouter from "./routes/entitlements.js";
 import adminUsersLite from "./routes/admin.usersLite.js";
 import projectsBoqRoutes from "./routes/projects.boq.js";
 
-
 const app = express();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -219,7 +218,9 @@ app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
 app.use("/api/entitlements", entitlementsRouter);
 
+// app.use("/projectsboq", projectsBoqRoutes);
 app.use("/projectsboq", projectsBoqRoutes);
+app.use("/api/projectsboq", projectsBoqRoutes); // optional convenience
 
 /* =========================
    ✅ OPTIONAL: serve frontend + dynamic meta
