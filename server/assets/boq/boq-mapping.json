@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "oversite_laterite",
+      "takeoff": { "type": "regex", "match": "^Oversite\\s*[-–—]\\s*Laterite Filling" },
+      "boq": {
+        "sectionIncludes": ["substructure", "excavat", "filling"],
+        "descIncludes": ["laterite"]
+      },
+      "unit": { "from": "m3", "to": "cu.m" }
+    },
+    {
+      "id": "oversite_hardcore",
+      "takeoff": { "type": "regex", "match": "^Oversite\\s*[-–—]\\s*Hardcore Filling" },
+      "boq": {
+        "sectionIncludes": ["substructure", "excavat", "filling"],
+        "descIncludes": ["hardcore"]
+      },
+      "unit": { "from": "m3", "to": "cu.m" }
+    },
+    {
+      "id": "oversite_dpm",
+      "takeoff": { "type": "regex", "match": "^Oversite\\s*[-–—]\\s*DPM" },
+      "boq": {
+        "sectionIncludes": ["substructure"],
+        "descIncludes": ["damp proof", "membrane"]
+      },
+      "unit": { "from": "m2", "to": "sq.m" }
+    },
+    {
+      "id": "oversite_concrete_ground_slab",
+      "takeoff": { "type": "regex", "match": "^Oversite\\s*[-–—]\\s*Concrete" },
+      "boq": {
+        "sectionIncludes": ["substructure", "insitu concrete"],
+        "descIncludes": ["ground floor slab"]
+      },
+      "unit": { "from": "m3", "to": "cu.m" }
+    },
+    {
+      "id": "oversite_edges_formwork",
+      "takeoff": { "type": "regex", "match": "^Oversite\\s*[-–—]\\s*Formwork to Edges" },
+      "boq": {
+        "sectionIncludes": ["substructure", "formwork"],
+        "descIncludes": ["edges of horizontal", "ground floor slab"]
+      },
+      "unit": { "from": "m", "to": "lin.m" }
+    },
+
+    {
+      "id": "strip_excavation",
+      "takeoff": { "type": "regex", "match": "^Strip\\s*[-–—]\\s*Footing Excavation" },
+      "boq": {
+        "sectionIncludes": ["substructure", "excavat"],
+        "descIncludes": ["foundation excavation"]
+      },
+      "unit": { "from": "m3", "to": "cu.m" }
+    },
+    {
+      "id": "strip_disposal",
+      "takeoff": { "type": "regex", "match": "^Strip\\s*[-–—]\\s*Disposal" },
+      "boq": {
+        "sectionIncludes": ["substructure", "disposal"],
+        "descIncludes": ["excavated material"]
+      },
+      "unit": { "from": "m3", "to": "cu.m" }
+    },
+
+    {
+      "id": "beams_concrete_ground_beam",
+      "takeoff": { "type": "regex", "match": "^Beams\\s*[-–—]\\s*Concrete" },
+      "boq": {
+        "sectionIncludes": ["substructure", "insitu concrete"],
+        "descIncludes": ["ground floor beam"]
+      },
+      "unit": { "from": "m3", "to": "cu.m" }
+    },
+
+    {
+      "id": "columns_concrete_substructure_column",
+      "takeoff": { "type": "regex", "match": "^Columns\\s*[-–—]\\s*Concrete" },
+      "boq": {
+        "sectionIncludes": ["substructure", "insitu concrete"],
+        "descIncludes": ["in column"]
+      },
+      "unit": { "from": "m3", "to": "cu.m" }
+    },
+
+    {
+      "id": "slab_concrete_suspended",
+      "takeoff": { "type": "regex", "match": "^Slab\\s*[-–—]\\s*Concrete" },
+      "boq": {
+        "sectionIncludes": ["frames", "insitu concrete"],
+        "descIncludes": ["suspended slab"]
+      },
+      "unit": { "from": "m3", "to": "cu.m" }
+    },
+
+    {
+      "id": "rebar_any_to_tonnes",
+      "takeoff": { "type": "regex", "match": "Reinforcement" },
+      "boq": {
+        "descIncludes": ["reinforcement"]
+      },
+      "unit": { "from": "kg", "to": "tonnes" }
+    }
+  ]
+}
