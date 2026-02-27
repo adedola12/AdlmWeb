@@ -228,7 +228,6 @@ function convertQty(qty, fromU, toU) {
   const q = safeNum(qty);
 
   if (A === B) return q;
-
   if (A === "kg" && B === "tonnes") return q / 1000;
 
   return q;
@@ -263,12 +262,10 @@ function unitGroup(u) {
 
 function candidatesByTakeoffUnit(takeoffUnitRaw, templateLines) {
   const disp = unitDisplayFromTakeoff(takeoffUnitRaw);
-
   if (disp === "m2")
     return templateLines.filter((ln) => unitGroup(ln.unit) === "area");
   if (disp === "m3")
     return templateLines.filter((ln) => unitGroup(ln.unit) === "volume");
-
   return templateLines;
 }
 
@@ -335,38 +332,15 @@ function normalizeHeading(h) {
   return normSpace(h).replace(/\s+/g, " ").trim();
 }
 
-function updateContext(context, heading) {
-  const h = normalizeHeading(heading);
-  const low = h.toLowerCase();
+function headingLevelFromText(h) {
+  const txt = normalizeHeading(h);
+  const low = txt.toLowerCase();
 
-  // hard reset on new bill
-  if (low.includes("bill nr") || low.startsWith("bill")) return [h];
-
-  // section headers like SUBSTRUCTURE / FRAMES
-  const isUpper = h.length <= 40 && h === h.toUpperCase();
-  if (isUpper) {
-    const bill = context.find((x) => x.toLowerCase().includes("bill")) || "";
-    const next = [];
-    if (bill) next.push(bill);
-    next.push(h);
-    return next;
-  }
-
-  // numbered subsection like "1.5: EXCAVATING..."
-  if (/^\d/.test(h) || h.includes(":")) {
-    const bill = context.find((x) => x.toLowerCase().includes("bill")) || "";
-    const sec = context.find((x) => x === x.toUpperCase()) || "";
-    const next = [];
-    if (bill) next.push(bill);
-    if (sec) next.push(sec);
-    next.push(h);
-    return next;
-  }
-
-  // small subheading inside a section (e.g. Disposal)
-  const keep = context.slice(0, 3);
-  keep.push(h);
-  return keep.slice(-4);
+  if (low.includes("bill nr") || low.startsWith("bill")) return 0;
+  const isUpper = txt.length <= 40 && txt === txt.toUpperCase();
+  if (isUpper) return 1;
+  if (/^\d/.test(txt) || txt.includes(":")) return 2;
+  return 3;
 }
 
 function buildDescWithContext(
@@ -408,6 +382,37 @@ function extractTemplateLinesWithIndex(ws) {
   const lines = [];
   let context = [];
 
+  // reuse the same context rules you used earlier (string-based)
+  function updateContext(prev, heading) {
+    const h = normalizeHeading(heading);
+    const low = h.toLowerCase();
+
+    if (low.includes("bill nr") || low.startsWith("bill")) return [h];
+
+    const isUpper = h.length <= 40 && h === h.toUpperCase();
+    if (isUpper) {
+      const bill = prev.find((x) => x.toLowerCase().includes("bill")) || "";
+      const next = [];
+      if (bill) next.push(bill);
+      next.push(h);
+      return next;
+    }
+
+    if (/^\d/.test(h) || h.includes(":")) {
+      const bill = prev.find((x) => x.toLowerCase().includes("bill")) || "";
+      const sec = prev.find((x) => x === x.toUpperCase()) || "";
+      const next = [];
+      if (bill) next.push(bill);
+      if (sec) next.push(sec);
+      next.push(h);
+      return next;
+    }
+
+    const keep = prev.slice(0, 3);
+    keep.push(h);
+    return keep.slice(-4);
+  }
+
   ws.eachRow((row, rowNumber) => {
     if (rowNumber < 1) return;
 
@@ -431,7 +436,6 @@ function extractTemplateLinesWithIndex(ws) {
     const itemCode = item || prevItem || "";
     const fullDesc = buildDescWithContext(ws, rowNumber);
 
-    // ignore totals
     if (/carried to summary|to collection|from page|collection/i.test(fullDesc))
       return;
 
@@ -593,10 +597,12 @@ function parseOpeningTakeoff(desc) {
     .replace(/m/gi, "")
     .trim()
     .replace(/x/gi, "×");
+
   const parts = inner
     .split("×")
     .map((x) => x.trim())
     .filter(Boolean);
+
   if (parts.length !== 2) return { kind, wMm: 0, hMm: 0 };
 
   const wM = Number(parts[0]);
@@ -629,7 +635,7 @@ function matchOpeningBySize(takeoff, lines) {
     const d2 = Math.abs(pair.w - info.hMm) + Math.abs(pair.h - info.wMm);
     const dist = Math.min(d1, d2);
 
-    if (dist > 20) continue; // very strict
+    if (dist > 20) continue;
     if (!best || dist < best.dist) best = { line: ln, score: 1, dist };
   }
 
@@ -668,9 +674,6 @@ function fuzzyBestMatch(takeoff, lines) {
   const tTokens = tokenize(desc);
   if (!tTokens.length) return null;
 
-  // candidate filtering:
-  // - if takeoff is m2/m3 => restrict to area/volume group
-  // - otherwise require unit compatibility (includes kg->tonnes)
   const disp = unitDisplayFromTakeoff(takeoff.unit);
   let candidates =
     disp === "m2" || disp === "m3"
@@ -681,7 +684,6 @@ function fuzzyBestMatch(takeoff, lines) {
 
   const anchors = detectAnchorKeys(tTokens);
 
-  // if takeoff says reinforcement, require reinforcement candidate
   if (anchors.has("reinforcement")) {
     const reinf = candidates.filter((ln) =>
       ln.tokens.includes("reinforcement"),
@@ -723,6 +725,274 @@ function fuzzyBestMatch(takeoff, lines) {
 }
 
 /* =========================
+   TRIM UNUSED: build a compact BOQ sheet
+   ========================= */
+function deepClone(obj) {
+  if (!obj) return obj;
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch {
+    // fallback shallow clone
+    return { ...obj };
+  }
+}
+
+function getLastRowNumber(ws) {
+  return ws.lastRow?.number || ws.rowCount || 1;
+}
+
+function rowHasAnyValueAtoF(ws, r) {
+  const row = ws.getRow(r);
+  for (let c = 1; c <= 6; c++) {
+    const v = normSpace(cellToString(row.getCell(c).value));
+    if (v) return true;
+  }
+  return false;
+}
+
+function isTotalCarryRow(ws, r) {
+  const row = ws.getRow(r);
+  const b = normSpace(cellToString(row.getCell(2).value));
+  if (!b) return false;
+  return /carried to summary|to collection|from page|collection/i.test(b);
+}
+
+function rowIsDetail(ws, r) {
+  const row = ws.getRow(r);
+  const unit = normSpace(cellToString(row.getCell(3).value));
+  return !!unit;
+}
+
+function copyRowAtoF(
+  oldWs,
+  newWs,
+  oldRowNum,
+  newRowNum,
+  { forceAmountValue = false } = {},
+) {
+  const oldRow = oldWs.getRow(oldRowNum);
+  const newRow = newWs.getRow(newRowNum);
+
+  newRow.height = oldRow.height;
+  newRow.hidden = oldRow.hidden;
+
+  for (let c = 1; c <= 6; c++) {
+    const oc = oldRow.getCell(c);
+    const nc = newRow.getCell(c);
+
+    nc.value = oc.value;
+    nc.style = deepClone(oc.style);
+    if (oc.numFmt) nc.numFmt = oc.numFmt;
+  }
+
+  if (forceAmountValue) {
+    const qty = safeNum(oldRow.getCell(4).value);
+    const rate = safeNum(oldRow.getCell(5).value);
+    const amount = qty * rate;
+    const f = newRow.getCell(6);
+    f.value = amount;
+    // keep style/numFmt already copied
+  }
+
+  newRow.commit?.();
+}
+
+function copyColumnsMeta(oldWs, newWs) {
+  const cols = [];
+  const count = Math.max(6, oldWs.columnCount || 6);
+
+  for (let i = 1; i <= count; i++) {
+    const oc = oldWs.getColumn(i);
+    cols.push({
+      width: oc.width,
+      style: deepClone(oc.style),
+      hidden: oc.hidden,
+      outlineLevel: oc.outlineLevel,
+    });
+  }
+  newWs.columns = cols;
+
+  // basic worksheet settings
+  newWs.views = deepClone(oldWs.views);
+  newWs.pageSetup = deepClone(oldWs.pageSetup);
+  newWs.properties = deepClone(oldWs.properties);
+}
+
+function parseAddr(a) {
+  const m = String(a || "").match(/^([A-Z]+)(\d+)$/i);
+  if (!m) return null;
+  return { col: m[1].toUpperCase(), row: Number(m[2]) };
+}
+
+function parseMergeRange(rng) {
+  const s = String(rng || "");
+  const parts = s.split(":");
+  if (parts.length !== 2) return null;
+  const a = parseAddr(parts[0]);
+  const b = parseAddr(parts[1]);
+  if (!a || !b) return null;
+  return { a, b };
+}
+
+function compactBoqWorksheet(workbook, wsOld, usedDetailRowsSet) {
+  const oldName = wsOld.name || "BOQ";
+  const tmpName = `${oldName}__export_tmp`;
+
+  const newWs = workbook.addWorksheet(tmpName);
+  copyColumnsMeta(wsOld, newWs);
+
+  const last = getLastRowNumber(wsOld);
+
+  // heading context levels (store row numbers)
+  const ctx = [null, null, null, null];
+  let lastWrittenCtx = [null, null, null, null];
+
+  // buffer for item description rows that belong to the NEXT detail row
+  let itemBuf = [];
+  let lastBufWasBlank = false;
+
+  // map for merges
+  const oldToNewRow = new Map();
+
+  function flushHeadingsIfNeeded(newRowCursor) {
+    // write only from the first level that changed
+    let firstDiff = -1;
+    for (let i = 0; i < 4; i++) {
+      if (ctx[i] !== lastWrittenCtx[i]) {
+        firstDiff = i;
+        break;
+      }
+    }
+    if (firstDiff < 0) return newRowCursor;
+
+    for (let i = firstDiff; i < 4; i++) {
+      if (ctx[i] != null) {
+        // skip totals/collection rows even if they look like headings
+        if (!isTotalCarryRow(wsOld, ctx[i])) {
+          copyRowAtoF(wsOld, newWs, ctx[i], newRowCursor);
+          oldToNewRow.set(ctx[i], newRowCursor);
+          newRowCursor += 1;
+        }
+      }
+    }
+
+    lastWrittenCtx = [...ctx];
+    return newRowCursor;
+  }
+
+  let outRow = 1;
+
+  for (let r = 1; r <= last; r++) {
+    // hard skip totals rows everywhere
+    if (isTotalCarryRow(wsOld, r)) {
+      itemBuf = [];
+      lastBufWasBlank = false;
+      continue;
+    }
+
+    const row = wsOld.getRow(r);
+
+    const bText = normSpace(cellToString(row.getCell(2).value));
+    const isHeading = looksLikeHeadingRow(wsOld, r);
+    const isDetail = rowIsDetail(wsOld, r);
+
+    // headings update context
+    if (isHeading) {
+      const lvl = headingLevelFromText(bText);
+      ctx[lvl] = r;
+      for (let i = lvl + 1; i < 4; i++) ctx[i] = null;
+
+      // headings reset item buffer (new context)
+      itemBuf = [];
+      lastBufWasBlank = false;
+      continue;
+    }
+
+    // detail row => either used or unused
+    if (isDetail) {
+      const isUsed = usedDetailRowsSet.has(r);
+
+      if (!isUsed) {
+        // discard item buffer for unused line
+        itemBuf = [];
+        lastBufWasBlank = false;
+        continue;
+      }
+
+      // Used detail: write headings (once per context), then buffered description rows, then the detail row
+      outRow = flushHeadingsIfNeeded(outRow);
+
+      // write buffered rows (description/notes) that came before this detail row
+      for (const rr of itemBuf) {
+        copyRowAtoF(wsOld, newWs, rr, outRow);
+        oldToNewRow.set(rr, outRow);
+        outRow += 1;
+      }
+      itemBuf = [];
+      lastBufWasBlank = false;
+
+      // write the detail row; force amount value (qty * rate) to avoid broken formulas after compaction
+      copyRowAtoF(wsOld, newWs, r, outRow, { forceAmountValue: true });
+      oldToNewRow.set(r, outRow);
+      outRow += 1;
+
+      continue;
+    }
+
+    // non-heading, non-detail row
+    const hasValue = rowHasAnyValueAtoF(wsOld, r);
+
+    if (!hasValue) {
+      // keep max 1 blank row in buffer, only if buffer already has something
+      if (itemBuf.length > 0 && !lastBufWasBlank) {
+        itemBuf.push(r);
+        lastBufWasBlank = true;
+      }
+      continue;
+    }
+
+    // value row: keep as part of upcoming item description block
+    itemBuf.push(r);
+    lastBufWasBlank = false;
+  }
+
+  // copy merges (best effort, mostly horizontal merges)
+  const merges = wsOld.model?.merges || [];
+  for (const m of merges) {
+    const mr = parseMergeRange(m);
+    if (!mr) continue;
+
+    const sOld = mr.a.row;
+    const eOld = mr.b.row;
+
+    // only apply if all rows in range exist in the new sheet
+    let ok = true;
+    for (let rr = sOld; rr <= eOld; rr++) {
+      if (!oldToNewRow.has(rr)) {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok) continue;
+
+    const sNew = oldToNewRow.get(sOld);
+    const eNew = oldToNewRow.get(eOld);
+
+    try {
+      newWs.mergeCells(`${mr.a.col}${sNew}:${mr.b.col}${eNew}`);
+    } catch {
+      // ignore merge errors
+    }
+  }
+
+  // remove old + rename new to old sheet name
+  workbook.removeWorksheet(wsOld.id);
+  newWs.name = oldName;
+
+  return newWs;
+}
+
+/* =========================
    Public API
    ========================= */
 export async function exportBoqFromTemplate({
@@ -734,12 +1004,11 @@ export async function exportBoqFromTemplate({
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(templatePath);
 
-  // Ensure Excel recalculates formulas on open
+  // Ensure Excel recalculates formulas on open (still useful for other sheets)
   workbook.calcProperties.fullCalcOnLoad = true;
 
   const ws = findBoqWorksheet(workbook);
 
-  // Build template index (with section paths)
   const templateLines = extractTemplateLinesWithIndex(ws);
 
   // Clear QTY cells on all “writeable” detail rows (keeps formulas in Amount col intact)
@@ -761,14 +1030,15 @@ export async function exportBoqFromTemplate({
       const rawDesc = String(
         it?.description || it?.name || it?.takeoffLine || "",
       ).trim();
+
       const baseDesc = stripMetaSuffix(rawDesc);
       const meta = parseMeta(rawDesc);
 
       return {
         idx,
         sn: it?.sn ?? idx + 1,
-        description: baseDesc, // used for matching
-        rawDescription: rawDesc, // audit
+        description: baseDesc,
+        rawDescription: rawDesc,
         level: meta.level || String(it?.level || ""),
         type: meta.type || String(it?.type || ""),
         unit: String(it?.unit || "").trim(),
@@ -790,10 +1060,9 @@ export async function exportBoqFromTemplate({
       rate: 0,
       hits: 0,
       unitTo: templateLine?.unit || "",
-      unitOverride: "", // only used for m2/m3 requirement
+      unitOverride: "",
     };
 
-    // enforce: if takeoff unit is m2/m3, override BOQ unit display to m2/m3
     const uo = unitDisplayFromTakeoff(takeoff.unit);
     if (!cur.unitOverride && (uo === "m2" || uo === "m3"))
       cur.unitOverride = uo;
@@ -803,7 +1072,7 @@ export async function exportBoqFromTemplate({
   }
 
   for (const t of takeoffs) {
-    // 1) Special: openings (doors/windows) by size
+    // 1) openings by size
     const openHit = matchOpeningBySize(t, templateLines);
     if (openHit) {
       const row = openHit.line.row;
@@ -829,7 +1098,7 @@ export async function exportBoqFromTemplate({
       continue;
     }
 
-    // 2) Rule-based mapping
+    // 2) rule mapping
     let ruleBest = null;
     let ruleBestRule = null;
 
@@ -846,7 +1115,6 @@ export async function exportBoqFromTemplate({
 
       if (!candidates.length) continue;
 
-      // tie-break by score
       let best = null;
       const tt = tokenize(t.description);
       for (const ln of candidates) {
@@ -887,7 +1155,7 @@ export async function exportBoqFromTemplate({
       continue;
     }
 
-    // 3) Fallback fuzzy
+    // 3) fuzzy fallback
     const fuzzy = fuzzyBestMatch(t, templateLines);
     if (!fuzzy || fuzzy.score < FUZZY_THRESH) {
       mappingRows.push({
@@ -927,16 +1195,27 @@ export async function exportBoqFromTemplate({
     });
   }
 
-  // Write values into template: UNIT -> C (override), QTY -> D, RATE -> E
+  // Write into template before compaction
   for (const [row, v] of agg.entries()) {
     if (v.unitOverride === "m2" || v.unitOverride === "m3") {
-      // ✅ your enforcement
       setTextCellPreserveFormulaRefs(ws, `C${row}`, v.unitOverride);
     }
-
     setNumberCellPreserveFormulaRefs(ws, `D${row}`, round2(v.qty));
     if (v.rate > 0)
       setNumberCellPreserveFormulaRefs(ws, `E${row}`, round2(v.rate));
+  }
+
+  // ✅ NEW: TRIM UNUSED ROWS/SECTIONS (default true)
+  const trimUnused = options?.trimUnused !== false;
+
+  if (trimUnused) {
+    const usedDetailRows = new Set(
+      [...agg.entries()]
+        .filter(([, v]) => safeNum(v.qty) > 0)
+        .map(([row]) => row),
+    );
+
+    compactBoqWorksheet(workbook, ws, usedDetailRows);
   }
 
   // Remove old sheets if they exist
@@ -967,8 +1246,9 @@ export async function exportBoqFromTemplate({
   mapWs.addRow(["Exported At", dayjs().format("YYYY-MM-DD HH:mm")]);
   mapWs.addRow(["Fuzzy Threshold", FUZZY_THRESH]);
   mapWs.addRow(["Rules Loaded", compiledRules.length]);
+  mapWs.addRow(["Trim Unused", trimUnused ? "Yes" : "No"]);
 
-  // Template index sheet (helps you build mapping JSON accurately)
+  // Template index sheet
   const idxWs = workbook.addWorksheet("TemplateIndex");
   idxWs.columns = [
     { header: "Row", key: "row", width: 8 },
