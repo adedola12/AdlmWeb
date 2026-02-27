@@ -33,6 +33,30 @@ function normalizeText(s) {
     .trim();
 }
 
+/* -------------------- phrase expansions (VERY IMPORTANT) -------------------- */
+/**
+ * These expansions make short takeoff labels match long BOQ sentences.
+ * Add more as your takeoff naming grows.
+ */
+const PHRASE_EXPANSIONS = [
+  { re: /\bdpm\b/gi, to: "damp proof membrane" },
+  { re: /\bdpc\b/gi, to: "damp proof course" },
+  { re: /\bbrc\b/gi, to: "reinforcement mesh" },
+  { re: /\boversite\b/gi, to: "oversite ground floor slab" },
+  { re: /\bstrip\b/gi, to: "strip foundation trench" },
+  { re: /\bfooting\b/gi, to: "foundation footing" },
+  { re: /\bcompact(?:ing)?\b/gi, to: "leveling compacting" },
+  { re: /\bdispose\b/gi, to: "disposal" },
+];
+
+function expandPhrases(s) {
+  let out = String(s || "");
+  for (const x of PHRASE_EXPANSIONS) out = out.replace(x.re, x.to);
+  return out;
+}
+
+/* -------------------- tokenization -------------------- */
+
 const STOP = new Set([
   "the",
   "and",
@@ -58,8 +82,20 @@ const STOP = new Set([
   "max",
 ]);
 
+const SYN = {
+  rebar: "reinforcement",
+  bars: "reinforcement",
+  bar: "reinforcement",
+  steel: "reinforcement",
+  mesh: "reinforcement",
+  rc: "concrete",
+  rcc: "concrete",
+  plastering: "render",
+  rendering: "render",
+};
+
 function tokenize(s) {
-  const t = normalizeText(s);
+  const t = normalizeText(expandPhrases(s));
   if (!t) return [];
   return t
     .split(" ")
@@ -67,14 +103,14 @@ function tokenize(s) {
     .filter(Boolean)
     .filter((x) => x.length >= 2)
     .filter((x) => !STOP.has(x))
-    .filter((x) => !/^\d+$/.test(x));
+    .filter((x) => !/^\d+(\.\d+)?$/.test(x))
+    .map((x) => SYN[x] || x);
 }
 
 function jaccardScore(aTokens, bTokens) {
   const A = new Set(aTokens);
   const B = new Set(bTokens);
   if (!A.size || !B.size) return 0;
-
   let inter = 0;
   for (const x of A) if (B.has(x)) inter += 1;
   const uni = A.size + B.size - inter;
@@ -84,21 +120,35 @@ function jaccardScore(aTokens, bTokens) {
 /* -------------------- unit helpers -------------------- */
 
 function normalizeUnit(u) {
-  const raw = normalizeText(u);
+  const raw = normalizeText(u).replace("²", "2").replace("³", "3");
   if (!raw) return "";
 
-  if (raw === "m2" || raw === "m²" || raw === "sqm" || raw === "sq m")
+  if (raw === "m2" || raw === "sqm" || raw === "sq m" || raw === "sq.m")
     return "sq.m";
-  if (raw === "m3" || raw === "m³" || raw === "cum" || raw === "cu m")
+  if (raw === "m3" || raw === "cum" || raw === "cu m" || raw === "cu.m")
     return "cu.m";
   if (raw === "m" || raw === "lm" || raw === "lin m" || raw === "lin.m")
     return "lin.m";
-  if (raw === "no" || raw === "nr" || raw === "nos" || raw === "number")
+  if (
+    raw === "no" ||
+    raw === "nr" ||
+    raw === "nos" ||
+    raw === "number" ||
+    raw === "nr."
+  )
     return "nr.";
-  if (raw === "ton" || raw === "tons" || raw === "t" || raw === "tonne")
+  if (
+    raw === "ton" ||
+    raw === "tons" ||
+    raw === "t" ||
+    raw === "tonne" ||
+    raw === "tonnes"
+  )
     return "tonnes";
 
-  if (raw === "sq.m" || raw === "cu.m" || raw === "lin.m") return raw;
+  // keep template literals like "item", "sum"
+  if (raw === "item" || raw === "sum") return raw;
+
   return raw;
 }
 
@@ -128,8 +178,6 @@ function looksLikeBoqHeaderRow(ws) {
   const e = normalizeText(cellToString(r1.getCell(5).value));
   const f = normalizeText(cellToString(r1.getCell(6).value));
 
-  // Your template header is typically:
-  // ITEM | DESCRIPTION | UNIT | QTY | RATE | AMOUNT
   return (
     a.includes("item") &&
     b.includes("description") &&
@@ -141,7 +189,6 @@ function looksLikeBoqHeaderRow(ws) {
 }
 
 function findBoqWorksheet(workbook) {
-  // Prefer sheet name containing BOQ
   const byName = workbook.worksheets.find((w) =>
     String(w.name || "")
       .toLowerCase()
@@ -149,7 +196,6 @@ function findBoqWorksheet(workbook) {
   );
   if (byName) return byName;
 
-  // Else find by header row signature
   const byHeader = workbook.worksheets.find(looksLikeBoqHeaderRow);
   return byHeader || workbook.worksheets[0];
 }
@@ -162,40 +208,65 @@ function isItemCode(v) {
   return /^[A-Z]{1,2}$/.test(s) || /^\d+(\.\d+)?$/.test(s);
 }
 
+/**
+ * Key fix:
+ * Build each "line description" using multiple context rows above the UNIT row,
+ * skipping up to 2 blank spacer rows (your template uses lots of them).
+ */
+function buildDescWithContext(
+  ws,
+  rowNumber,
+  { maxBack = 14, maxBlank = 2 } = {},
+) {
+  const parts = [];
+  let blanks = 0;
+
+  for (let r = rowNumber; r >= 2 && r >= rowNumber - maxBack; r--) {
+    const a = normSpace(cellToString(ws.getRow(r).getCell(1).value));
+    const b = normSpace(cellToString(ws.getRow(r).getCell(2).value));
+    const c = normSpace(cellToString(ws.getRow(r).getCell(3).value));
+    const d = normSpace(cellToString(ws.getRow(r).getCell(4).value));
+    const e = normSpace(cellToString(ws.getRow(r).getCell(5).value));
+    const f = normSpace(cellToString(ws.getRow(r).getCell(6).value));
+
+    // stop if we reach a previous detail row (unit row), but not the starting row
+    if (r !== rowNumber && c) break;
+
+    const rowIsEmpty = !(a || b || c || d || e || f);
+    if (rowIsEmpty) {
+      blanks += 1;
+      if (blanks > maxBlank) break;
+      continue;
+    }
+    blanks = 0;
+
+    if (b) parts.push(b);
+  }
+
+  return normSpace(expandPhrases(parts.reverse().join(" ")));
+}
+
 function extractTemplateLines(ws) {
   const lines = [];
 
   ws.eachRow((row, rowNumber) => {
     if (rowNumber < 2) return;
 
-    const unitCell = row.getCell(3);
-    const unit = normSpace(cellToString(unitCell.value));
+    const unit = normSpace(cellToString(row.getCell(3).value));
     if (!unit) return;
 
-    const itemRaw = row.getCell(1).value;
-    const descRaw = row.getCell(2).value;
+    const itemRaw = cellToString(row.getCell(1).value);
+    const prevItemRaw = cellToString(ws.getRow(rowNumber - 1).getCell(1).value);
 
-    const prevRow = ws.getRow(rowNumber - 1);
-    const prevItemRaw = prevRow?.getCell(1)?.value;
-    const prevDescRaw = prevRow?.getCell(2)?.value;
-
-    const item = isItemCode(cellToString(itemRaw))
-      ? cellToString(itemRaw)
-      : null;
-    const prevItem = isItemCode(cellToString(prevItemRaw))
-      ? cellToString(prevItemRaw)
-      : null;
-
-    const desc = normSpace(cellToString(descRaw));
-    const prevDesc = normSpace(cellToString(prevDescRaw));
+    const item = isItemCode(itemRaw) ? itemRaw : null;
+    const prevItem = isItemCode(prevItemRaw) ? prevItemRaw : null;
 
     const itemCode = item || prevItem || "";
-    const fullDesc =
-      !item && prevItem && prevDesc ? normSpace(`${prevDesc} ${desc}`) : desc;
+    const fullDesc = buildDescWithContext(ws, rowNumber);
 
-    const ignore =
-      /carried to summary|to collection|from page|collection/i.test(fullDesc);
-    if (ignore) return;
+    // ignore summary/collection totals
+    if (/carried to summary|to collection|from page|collection/i.test(fullDesc))
+      return;
 
     lines.push({
       row: rowNumber,
@@ -222,6 +293,7 @@ function parseDirectRefFormula(formula) {
 function setNumberCellPreserveFormulaRefs(ws, addr, value) {
   const cell = ws.getCell(addr);
 
+  // If it's a simple direct reference (e.g. =D8), update the referenced cell instead
   if (cell?.value && typeof cell.value === "object" && cell.value.formula) {
     const ref = parseDirectRefFormula(cell.value.formula);
     if (ref) {
@@ -233,29 +305,86 @@ function setNumberCellPreserveFormulaRefs(ws, addr, value) {
   cell.value = safeNum(value);
 }
 
-/* -------------------- matching -------------------- */
+/* -------------------- matching (anchors + scoring) -------------------- */
 
-function matchLine(takeoff, templateLines) {
-  const tTokens = tokenize(takeoff.description);
+const ANCHOR_GROUPS = [
+  { name: "hardcore", keys: new Set(["hardcore"]) },
+  { name: "laterite", keys: new Set(["laterite"]) },
+  { name: "membrane", keys: new Set(["membrane", "damp"]) },
+  { name: "formwork", keys: new Set(["formwork", "soffit", "edges"]) },
+  { name: "excavation", keys: new Set(["excavation", "excavate", "trench"]) },
+  { name: "blockwork", keys: new Set(["blockwork", "block", "brick"]) },
+  // reinforcement is “hard” because your BOQ reinforcement is in Tonnes
+  { name: "reinforcement", keys: new Set(["reinforcement"]) },
+];
+
+function detectAnchorKeys(tokens) {
+  const s = new Set(tokens);
+  const out = new Set();
+  for (const g of ANCHOR_GROUPS) {
+    if ([...g.keys].some((k) => s.has(k))) {
+      for (const k of g.keys) out.add(k);
+    }
+  }
+  return out;
+}
+
+function matchLine(takeoff, templateLines, { threshold = 0.12 } = {}) {
+  const desc = expandPhrases(takeoff.description || "");
+  const tTokens = tokenize(desc);
+
   if (!tTokens.length) return null;
+
+  // filter by unit first
+  let candidates = templateLines.filter((ln) =>
+    sameUnit(takeoff.unit, ln.unit),
+  );
+  if (!candidates.length) return null;
+
+  const anchors = detectAnchorKeys(tTokens);
+
+  // If takeoff says "reinforcement" but no candidate contains reinforcement tokens, DO NOT guess.
+  const hasReinf = anchors.has("reinforcement");
+  if (hasReinf) {
+    const reinfCands = candidates.filter((ln) =>
+      ln.tokens.includes("reinforcement"),
+    );
+    if (!reinfCands.length) return null;
+    candidates = reinfCands;
+  } else if (anchors.size) {
+    const filtered = candidates.filter((ln) => {
+      const s = new Set(ln.tokens);
+      for (const k of anchors) if (s.has(k)) return true;
+      return false;
+    });
+    if (filtered.length) candidates = filtered;
+  }
 
   let best = null;
 
-  for (const ln of templateLines) {
-    if (!sameUnit(takeoff.unit, ln.unit)) continue;
+  for (const ln of candidates) {
+    const base = jaccardScore(tTokens, ln.tokens);
 
-    const score = jaccardScore(tTokens, ln.tokens);
-
-    const a = normalizeText(takeoff.description);
+    // substring bonus (helps when one is a shorter phrase)
+    const a = normalizeText(desc);
     const b = normalizeText(ln.desc);
     const containsBonus = a.includes(b) || b.includes(a) ? 0.15 : 0;
 
-    const finalScore = score + containsBonus;
+    // anchor bonus (reward specific material keywords)
+    const overlapAnchors = (() => {
+      const A = new Set(tTokens);
+      const B = new Set(ln.tokens);
+      let n = 0;
+      for (const k of anchors) if (A.has(k) && B.has(k)) n += 1;
+      return n;
+    })();
 
-    if (!best || finalScore > best.score)
-      best = { line: ln, score: finalScore };
+    const final = base + containsBonus + overlapAnchors * 0.08;
+
+    if (!best || final > best.score) best = { line: ln, score: final };
   }
 
+  if (!best || best.score < threshold) return null;
   return best;
 }
 
@@ -276,7 +405,8 @@ export async function exportBoqFromTemplate({
   const ws = findBoqWorksheet(workbook);
   const templateLines = extractTemplateLines(ws);
 
-  // Clear numeric QTY cells (Column D) for all template lines
+  // Clear all QTY cells on lines we consider “writeable”
+  // (keeps formulas in Amount column intact)
   for (const ln of templateLines) {
     const qtyCell = ws.getCell(`D${ln.row}`);
     const v = qtyCell.value;
@@ -298,14 +428,15 @@ export async function exportBoqFromTemplate({
     }))
     .filter((x) => x.description && x.qty > 0);
 
-  const agg = new Map();
+  const agg = new Map(); // row -> { qty, rate, hits }
   const mappingRows = [];
-  const THRESH = Number(options.matchThreshold ?? 0.28);
+
+  const THRESH = Number(options.matchThreshold ?? 0.12);
 
   for (const t of takeoffs) {
-    const best = matchLine(t, templateLines);
+    const best = matchLine(t, templateLines, { threshold: THRESH });
 
-    if (!best || best.score < THRESH) {
+    if (!best) {
       mappingRows.push({
         sn: t.sn,
         takeoffDesc: t.description,
@@ -316,7 +447,7 @@ export async function exportBoqFromTemplate({
         templateItem: "",
         templateDesc: "",
         templateUnit: "",
-        score: best ? best.score : 0,
+        score: 0,
         action: "UNMATCHED",
       });
       continue;
@@ -326,8 +457,8 @@ export async function exportBoqFromTemplate({
     const cur = agg.get(row) || {
       qty: 0,
       rate: 0,
-      template: best.line,
       hits: 0,
+      template: best.line,
     };
     cur.qty += t.qty;
     if (t.rate > 0) cur.rate = t.rate;
@@ -344,7 +475,7 @@ export async function exportBoqFromTemplate({
       templateItem: best.line.itemCode,
       templateDesc: best.line.desc,
       templateUnit: best.line.unit,
-      score: best.score,
+      score: round2(best.score),
       action: "MATCHED",
     });
   }
@@ -356,20 +487,20 @@ export async function exportBoqFromTemplate({
       setNumberCellPreserveFormulaRefs(ws, `E${row}`, round2(v.rate));
   }
 
-  // Mapping sheet
+  // Mapping sheet (audit)
   const existing = workbook.getWorksheet("Mapping");
   if (existing) workbook.removeWorksheet(existing.id);
 
   const mapWs = workbook.addWorksheet("Mapping");
   mapWs.columns = [
     { header: "S/N", key: "sn", width: 8 },
-    { header: "Takeoff Description", key: "takeoffDesc", width: 55 },
+    { header: "Takeoff Description", key: "takeoffDesc", width: 50 },
     { header: "Unit", key: "unit", width: 10 },
     { header: "Qty", key: "qty", width: 12 },
-    { header: "Rate", key: "rate", width: 14 },
+    { header: "Rate", key: "rate", width: 12 },
     { header: "Matched Row", key: "matchedRow", width: 12 },
     { header: "Template Item", key: "templateItem", width: 12 },
-    { header: "Template Description", key: "templateDesc", width: 55 },
+    { header: "Template Description", key: "templateDesc", width: 60 },
     { header: "Template Unit", key: "templateUnit", width: 12 },
     { header: "Score", key: "score", width: 10 },
     { header: "Action", key: "action", width: 12 },
@@ -380,7 +511,6 @@ export async function exportBoqFromTemplate({
       ...r,
       qty: round2(r.qty),
       rate: round2(r.rate),
-      score: round2(r.score),
     });
   }
 
@@ -391,6 +521,7 @@ export async function exportBoqFromTemplate({
   mapWs.addRow(["Match Threshold", THRESH]);
 
   const buf = await workbook.xlsx.writeBuffer();
+
   const safeName = String(projectName || "Project")
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, " ")

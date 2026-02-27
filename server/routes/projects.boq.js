@@ -188,7 +188,7 @@ router.get(
       templatePath,
       projectName: project.name || "Project",
       items: project.items,
-      options: { matchThreshold: Number(req.query.threshold || 0.28) },
+      options: { matchThreshold: Number(req.query.threshold || 0.12) },
     });
 
     const buf = Buffer.isBuffer(out.buffer)
