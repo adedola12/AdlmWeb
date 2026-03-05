@@ -30,6 +30,336 @@ function buildCursor(updatedAt, id) {
   return `${new Date(updatedAt).toISOString()}|${String(id)}`;
 }
 
+const BRACKET_RE = /\[[^\]]*\]/g;
+const PAREN_RE = /\([^)]*\)/g;
+
+const STOP = new Set([
+  "the",
+  "and",
+  "to",
+  "of",
+  "for",
+  "in",
+  "on",
+  "at",
+  "with",
+  "without",
+  "from",
+  "bag",
+  "bags",
+  "ton",
+  "tons",
+  "tonne",
+  "tonnes",
+  "m3",
+]);
+
+function normText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(BRACKET_RE, " ")
+    .replace(PAREN_RE, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function canonicalMaterialKey(raw) {
+  let s = normText(raw);
+
+  s = s.replace(/\bsharpsand\b/g, "sharp sand");
+  s = s.replace(/\bsharp\s+sand\b/g, "sharp sand");
+  s = s.replace(/\blongplank\b/g, "long plank");
+  s = s.replace(/\blong\s+plank\b/g, "long plank");
+  s = s.replace(/\bconcrete\s+nails?\b/g, "nails");
+  s = s.replace(/\bnails?\b/g, "nails");
+  s = s.replace(/\bbrc\s*mesh\b/g, "brc mesh");
+  s = s.replace(/\bbinding\s*wire\b/g, "binding wire");
+  s = s.replace(/\brebar\s*t?\s*(\d{1,2})\b/g, "rebar t$1");
+
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function compactKey(s) {
+  return canonicalMaterialKey(s).replace(/\s+/g, "");
+}
+
+function tokens(s) {
+  return canonicalMaterialKey(s)
+    .split(" ")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .filter((x) => x.length > 1 && !STOP.has(x) && !/^\d+$/.test(x));
+}
+
+function normUnit(u) {
+  const raw = String(u || "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return "";
+
+  if (raw === "bag" || raw === "bags") return "bag";
+  if (
+    raw === "t" ||
+    raw === "ton" ||
+    raw === "tons" ||
+    raw === "tonne" ||
+    raw === "tonnes"
+  )
+    return "t";
+
+  const compact = raw.replace(/\s+/g, "");
+  if (compact === "m3" || compact === "m³" || compact === "cum") return "m3";
+  if (/\b(litre|liter|ltr|l)\b/.test(raw)) return "l";
+
+  return raw;
+}
+
+function scoreMatch(reqTokens, candTokens) {
+  if (!reqTokens.length || !candTokens.length) return 0;
+
+  const A = new Set(reqTokens);
+  const B = new Set(candTokens);
+
+  let inter = 0;
+  for (const x of A) if (B.has(x)) inter += 1;
+
+  const coverage = inter / A.size;
+  const precision = inter / B.size;
+
+  return 0.75 * coverage + 0.25 * precision;
+}
+
+router.post("/library/material-prices/resolve", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const {
+      items,
+      names,
+      includeMaster = true,
+      includeUser = true,
+      limitCandidates = 10,
+    } = req.body || {};
+
+    const wanted =
+      Array.isArray(items) && items.length
+        ? items.map((x) => ({ name: x?.name, unit: x?.unit }))
+        : Array.isArray(names) && names.length
+          ? names.map((n) => ({ name: n, unit: "" }))
+          : [];
+
+    const cleanedWanted = wanted
+      .slice(0, 2000)
+      .map((x) => ({
+        name: String(x?.name || "").trim(),
+        unit: String(x?.unit || "").trim(),
+      }))
+      .filter((x) => x.name);
+
+    if (!cleanedWanted.length) {
+      return res.json({
+        ok: true,
+        results: [],
+        pricesByKey: {},
+        candidatesByKey: {},
+        requested: [],
+        stats: { requested: 0 },
+      });
+    }
+
+    const pool = [];
+
+    let masterCount = 0;
+    if (includeMaster) {
+      const master = await RateGenMaterial.find({ enabled: true })
+        .select({
+          sn: 1,
+          key: 1,
+          name: 1,
+          unit: 1,
+          defaultUnitPrice: 1,
+          category: 1,
+        })
+        .lean();
+
+      masterCount = Array.isArray(master) ? master.length : 0;
+
+      for (const m of master || []) {
+        const price = Number(m?.defaultUnitPrice || 0);
+        const desc = String(m?.name || "").trim();
+        if (!desc || !Number.isFinite(price) || price <= 0) continue;
+
+        pool.push({
+          sn: m?.sn ?? null,
+          key: m?.key || "",
+          description: desc,
+          unit: m?.unit || "",
+          price,
+          category: m?.category || "",
+          source: "master",
+        });
+      }
+    }
+
+    let userCount = 0;
+    if (includeUser) {
+      const lib = await RateGenLibrary.findOne({ userId: req.user._id }).lean();
+      const mats = Array.isArray(lib?.materials) ? lib.materials : [];
+      userCount = mats.length;
+
+      for (const m of mats) {
+        const desc = String(m?.description || m?.name || "").trim();
+        const price = Number(m?.price || 0);
+        if (!desc || !Number.isFinite(price) || price <= 0) continue;
+
+        pool.push({
+          sn: m?.sn ?? null,
+          key: m?.key || "",
+          description: desc,
+          unit: m?.unit || "",
+          price,
+          category: m?.category || "",
+          source: "user",
+        });
+      }
+    }
+
+    const prepared = pool
+      .map((x) => {
+        const desc = String(x.description || "").trim();
+        const key = String(x.key || "").trim();
+
+        return {
+          ...x,
+          _descNorm: normText(desc),
+          _tokens: tokens(desc),
+          _unitNorm: normUnit(x.unit),
+          _canon: canonicalMaterialKey(desc),
+          _compact: compactKey(desc),
+          _keyCanon: canonicalMaterialKey(key),
+          _keyCompact: compactKey(key),
+        };
+      })
+      .filter((x) => x._descNorm && x.price > 0);
+
+    const maxCands = Math.max(
+      3,
+      Math.min(20, clampInt(limitCandidates, 3, 20, 10)),
+    );
+
+    const pricesByKey = {};
+    const candidatesByKey = {};
+    const results = [];
+
+    for (const w of cleanedWanted) {
+      const canonKey = canonicalMaterialKey(w.name);
+      const compactWanted = compactKey(w.name);
+      const reqToks = tokens(w.name);
+      const reqUnit = normUnit(w.unit);
+
+      let candidates = prepared.filter((c) => {
+        return (
+          c._canon === canonKey ||
+          c._compact === compactWanted ||
+          c._keyCanon === canonKey ||
+          c._keyCompact === compactWanted
+        );
+      });
+
+      if (!candidates.length) {
+        candidates = prepared
+          .map((c) => {
+            let s = scoreMatch(reqToks, c._tokens);
+
+            if (canonKey && c._canon === canonKey) s += 0.2;
+            if (compactWanted && c._compact === compactWanted) s += 0.2;
+            if (canonKey && c._keyCanon === canonKey) s += 0.15;
+            if (compactWanted && c._keyCompact === compactWanted) s += 0.15;
+
+            if (reqUnit && c._unitNorm && reqUnit !== c._unitNorm) s *= 0.75;
+
+            return { ...c, score: s };
+          })
+          .filter((x) => x.score >= 0.35)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, maxCands);
+      } else {
+        candidates = candidates
+          .map((c) => {
+            let s = 1.0;
+            if (reqUnit && c._unitNorm && reqUnit === c._unitNorm) s += 0.1;
+            return { ...c, score: s };
+          })
+          .sort((a, b) => b.score - a.score || a.price - b.price)
+          .slice(0, maxCands);
+      }
+
+      const best = candidates[0] || null;
+
+      candidatesByKey[canonKey] = candidates.map((x) => ({
+        sn: x.sn,
+        description: x.description,
+        unit: x.unit,
+        price: x.price,
+        category: x.category,
+        source: x.source,
+        score: Number((x.score || 0).toFixed(4)),
+      }));
+
+      pricesByKey[canonKey] = best
+        ? {
+            description: best.description,
+            unit: best.unit,
+            price: best.price,
+            category: best.category,
+            source: best.source,
+            score: Number((best.score || 0).toFixed(4)),
+          }
+        : null;
+
+      results.push({
+        key: canonKey,
+        requested: { name: w.name, unit: w.unit },
+        best: pricesByKey[canonKey],
+        candidates: candidatesByKey[canonKey],
+      });
+    }
+
+    const requested = cleanedWanted.map((w) => {
+      const key = canonicalMaterialKey(w.name);
+      const hit = pricesByKey[key];
+      return {
+        query: w.name,
+        key,
+        match: hit
+          ? {
+              name: hit.description,
+              unit: hit.unit,
+              price: hit.price,
+              source: hit.source,
+            }
+          : null,
+      };
+    });
+
+    return res.json({
+      ok: true,
+      results,
+      pricesByKey,
+      candidatesByKey,
+      requested,
+      stats: {
+        requested: cleanedWanted.length,
+        pool: prepared.length,
+        sources: { master: masterCount, user: userCount },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function parseCursor(cursor) {
   if (!cursor) return null;
   const [tsRaw, idRaw] = String(cursor).split("|");
@@ -338,82 +668,58 @@ router.get("/library/rates/updates", async (req, res, next) => {
 
 // ---------- ✅ Material price resolve (FUZZY: Admin master + user library) ----------
 
-const BRACKET_RE = /\[[^\]]*\]/g;
-const PAREN_RE = /\([^)]*\)/g;
+// function normText(s) {
+//   return String(s || "")
+//     .toLowerCase()
+//     .replace(BRACKET_RE, " ")
+//     .replace(PAREN_RE, " ")
+//     .replace(/[^a-z0-9\s]/g, " ")
+//     .replace(/\s+/g, " ")
+//     .trim();
+// }
 
-const STOP = new Set([
-  "the",
-  "and",
-  "to",
-  "of",
-  "for",
-  "in",
-  "on",
-  "at",
-  "with",
-  "without",
-  "from",
-  "bag",
-  "bags",
-  "ton",
-  "tons",
-  "tonne",
-  "tonnes",
-  "m3",
-]);
+// function tokens(s) {
+//   return normText(s)
+//     .split(" ")
+//     .map((x) => x.trim())
+//     .filter(Boolean)
+//     .filter((x) => x.length > 1 && !STOP.has(x) && !/^\d+$/.test(x));
+// }
 
-function normText(s) {
-  return String(s || "")
-    .toLowerCase()
-    .replace(BRACKET_RE, " ")
-    .replace(PAREN_RE, " ")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// function normUnit(u) {
+//   const raw = String(u || "")
+//     .trim()
+//     .toLowerCase();
+//   if (!raw) return "";
+//   if (raw === "bag" || raw === "bags") return "bag";
+//   if (
+//     raw === "t" ||
+//     raw === "ton" ||
+//     raw === "tons" ||
+//     raw === "tonne" ||
+//     raw === "tonnes"
+//   )
+//     return "t";
+//   const compact = raw.replace(/\s+/g, "");
+//   if (compact === "m3" || compact === "m³" || compact === "cum") return "m3";
+//   if (/\b(litre|liter|ltr|l)\b/.test(raw)) return "l";
+//   return raw;
+// }
 
-function tokens(s) {
-  return normText(s)
-    .split(" ")
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .filter((x) => x.length > 1 && !STOP.has(x) && !/^\d+$/.test(x));
-}
+// function scoreMatch(reqTokens, candTokens) {
+//   if (!reqTokens.length || !candTokens.length) return 0;
 
-function normUnit(u) {
-  const raw = String(u || "")
-    .trim()
-    .toLowerCase();
-  if (!raw) return "";
-  if (raw === "bag" || raw === "bags") return "bag";
-  if (
-    raw === "t" ||
-    raw === "ton" ||
-    raw === "tons" ||
-    raw === "tonne" ||
-    raw === "tonnes"
-  )
-    return "t";
-  const compact = raw.replace(/\s+/g, "");
-  if (compact === "m3" || compact === "m³" || compact === "cum") return "m3";
-  if (/\b(litre|liter|ltr|l)\b/.test(raw)) return "l";
-  return raw;
-}
+//   const A = new Set(reqTokens);
+//   const B = new Set(candTokens);
 
-function scoreMatch(reqTokens, candTokens) {
-  if (!reqTokens.length || !candTokens.length) return 0;
+//   let inter = 0;
+//   for (const x of A) if (B.has(x)) inter += 1;
 
-  const A = new Set(reqTokens);
-  const B = new Set(candTokens);
+//   const coverage = inter / A.size;
+//   const precision = inter / B.size;
 
-  let inter = 0;
-  for (const x of A) if (B.has(x)) inter += 1;
-
-  const coverage = inter / A.size;
-  const precision = inter / B.size;
-
-  return 0.75 * coverage + 0.25 * precision;
-}
+//   return 0.75 * coverage + 0.25 * precision;
+// }
 
 /**
  * POST /library/material-prices/resolve
