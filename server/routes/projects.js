@@ -60,6 +60,46 @@ function requestedProductKey(req) {
 
 const MAX_ITEMS = Number(process.env.PROJECT_MAX_ITEMS || 8000);
 
+// function sanitizeItems(items) {
+//   if (!Array.isArray(items)) return [];
+//   const safe = [];
+
+//   for (let i = 0; i < items.length && safe.length < MAX_ITEMS; i++) {
+//     const it = items[i] || {};
+
+//     const elementIds = Array.isArray(it.elementIds)
+//       ? it.elementIds
+//           .map((n) => Number(n))
+//           .filter((n) => Number.isFinite(n) && n > 0)
+//       : [];
+
+//     safe.push({
+//       sn: Number.isFinite(Number(it.sn)) ? Number(it.sn) : i + 1,
+
+//       // classic
+//       description: it.description != null ? String(it.description) : "",
+
+//       // materials
+//       takeoffLine: it.takeoffLine != null ? String(it.takeoffLine) : "",
+//       materialName: it.materialName != null ? String(it.materialName) : "",
+
+//       qty: Number.isFinite(Number(it.qty)) ? Number(it.qty) : 0,
+//       unit: it.unit != null ? String(it.unit) : "",
+
+//       // ✅ NEW: persist rate
+//       rate: Number.isFinite(Number(it.rate)) ? Number(it.rate) : 0,
+
+//       elementIds,
+//       level: it.level != null ? String(it.level) : "",
+//       type: it.type != null ? String(it.type) : "",
+
+//       code: it.code != null ? String(it.code) : "",
+//     });
+//   }
+
+//   return safe;
+// }
+
 function sanitizeItems(items) {
   if (!Array.isArray(items)) return [];
   const safe = [];
@@ -76,23 +116,20 @@ function sanitizeItems(items) {
     safe.push({
       sn: Number.isFinite(Number(it.sn)) ? Number(it.sn) : i + 1,
 
-      // classic
       description: it.description != null ? String(it.description) : "",
 
-      // materials
       takeoffLine: it.takeoffLine != null ? String(it.takeoffLine) : "",
       materialName: it.materialName != null ? String(it.materialName) : "",
 
       qty: Number.isFinite(Number(it.qty)) ? Number(it.qty) : 0,
       unit: it.unit != null ? String(it.unit) : "",
 
-      // ✅ NEW: persist rate
       rate: Number.isFinite(Number(it.rate)) ? Number(it.rate) : 0,
+      purchased: Boolean(it.purchased), // ✅ NEW
 
       elementIds,
       level: it.level != null ? String(it.level) : "",
       type: it.type != null ? String(it.type) : "",
-
       code: it.code != null ? String(it.code) : "",
     });
   }

@@ -1,29 +1,22 @@
-// models/TakeoffProject.js
 import mongoose from "mongoose";
 
 const ItemSchema = new mongoose.Schema(
   {
-    // common
     sn: { type: Number, default: 0 },
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },
 
-    // ✅ persisted rate
     rate: { type: Number, default: 0 },
+    purchased: { type: Boolean, default: false }, // ✅ NEW
 
-    // classic takeoff items
     description: { type: String, default: "" },
-
-    // materials items
     takeoffLine: { type: String, default: "" },
     materialName: { type: String, default: "" },
 
-    // traceability
     elementIds: { type: [Number], default: [] },
     level: { type: String, default: "" },
     type: { type: String, default: "" },
 
-    // stable grouping / merge key
     code: { type: String, default: "" },
   },
   { _id: false },
