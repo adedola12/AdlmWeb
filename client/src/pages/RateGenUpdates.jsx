@@ -116,7 +116,6 @@ export default function RateGenUpdates() {
 
       for (const url of tryUrls) {
         try {
-          // eslint-disable-next-line no-await-in-loop
           res = await apiAuthed(url, { token: accessToken });
           if (res) break;
         } catch (e) {
@@ -600,3 +599,8 @@ export default function RateGenUpdates() {
     </div>
   );
 }
+
+
+
+
+

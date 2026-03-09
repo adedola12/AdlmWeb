@@ -16,7 +16,9 @@ function findIndexHtmlPath() {
   for (const p of INDEX_CANDIDATES) {
     try {
       if (p && fs.existsSync(p)) return p;
-    } catch {}
+    } catch {
+      // Ignore file system access issues while probing candidate index files.
+    }
   }
   return null;
 }
@@ -271,3 +273,4 @@ export default async function handler(req, res) {
     res.end(`Meta render error: ${e?.message || "Unknown error"}`);
   }
 }
+

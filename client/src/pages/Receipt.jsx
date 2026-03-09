@@ -81,7 +81,7 @@ export default function Receipt() {
       }
 
       pdf.save(`${receiptNo}.pdf`);
-    } catch (e) {
+    } catch {
       // fallback: user can still use Print -> Save as PDF
       alert(
         "PDF download needs html2canvas + jspdf installed. You can still print and save as PDF.",
@@ -303,3 +303,6 @@ export default function Receipt() {
     </div>
   );
 }
+
+
+

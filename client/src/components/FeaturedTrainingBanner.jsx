@@ -97,7 +97,7 @@ function pickFeaturedFromList(list) {
 export default function FeaturedTrainingBanner() {
   const nav = useNavigate();
   const [t, setT] = useState(null);
-  const [tick, setTick] = useState(0);
+  const [_tick, setTick] = useState(0);
 
   useEffect(() => {
     let ok = true;
@@ -130,10 +130,7 @@ export default function FeaturedTrainingBanner() {
     return () => clearInterval(id);
   }, [ebEndsAt]);
 
-  const countdown = useMemo(() => {
-    if (!ebEndsAt) return null;
-    return getCountdownParts(ebEndsAt);
-  }, [ebEndsAt, tick]);
+  const countdown = ebEndsAt ? getCountdownParts(ebEndsAt) : null;
 
   if (!t) return null;
 
@@ -226,3 +223,5 @@ export default function FeaturedTrainingBanner() {
     </div>
   );
 }
+
+

@@ -329,9 +329,6 @@ export default function Products() {
   }, []);
 
   const pages = Math.max(Math.ceil((data.total || 0) / pageSize), 1);
-  const hasPrev = page > 1;
-  const hasNext = page < pages;
-
   /* -------------------- admin edit -------------------- */
   function startEdit(p) {
     setEditingId(p._id);
@@ -522,10 +519,10 @@ export default function Products() {
           </div>
           <button
             className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
-            onClick={() => navigate("/trainings")}
+            onClick={() => navigate("/ptrainings")}
             type="button"
           >
-            View all trainings
+            View all physical trainings
           </button>
         </div>
 
@@ -831,3 +828,4 @@ function ProductCard({
     </article>
   );
 }
+

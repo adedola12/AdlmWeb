@@ -13,9 +13,8 @@ const RateGenMaterialSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-RateGenMaterialSchema.index({ name: 1 });
-RateGenMaterialSchema.index({ key: 1 });
 
 export const RateGenMaterial =
   mongoose.models.RateGenMaterial ||
   mongoose.model("RateGenMaterial", RateGenMaterialSchema);
+

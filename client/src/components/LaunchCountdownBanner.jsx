@@ -19,17 +19,13 @@ export default function LaunchCountdownBanner({
   storageKey = "adlm_launch_banner_auto_v1",
   onExpire,
 }) {
-  const target = React.useMemo(
-    () => new Date(targetIso).getTime(),
-    [targetIso]
-  );
+  const target = React.useMemo(() => new Date(targetIso).getTime(), [targetIso]);
   const [now, setNow] = React.useState(Date.now());
-
-  // ✅ self-disappear: once it reaches 0, persist hidden state
   const [hidden, setHidden] = React.useState(() => {
     try {
       return localStorage.getItem(storageKey) === "1";
     } catch {
+      // Storage may be unavailable in some browsers.
       return false;
     }
   });
@@ -40,22 +36,23 @@ export default function LaunchCountdownBanner({
     return () => clearInterval(id);
   }, [hidden]);
 
-  if (hidden) return null;
-
   const diff = target - now;
   const { d, h, m, s, total } = getParts(diff);
 
-  // ✅ auto hide when complete
   React.useEffect(() => {
-    if (total !== 0) return;
+    if (hidden || total !== 0) return;
 
     setHidden(true);
     try {
       localStorage.setItem(storageKey, "1");
-    } catch {}
+    } catch {
+      // Storage may be unavailable in some browsers.
+    }
 
     onExpire?.();
-  }, [total, onExpire, storageKey]);
+  }, [hidden, total, onExpire, storageKey]);
+
+  if (hidden) return null;
 
   const showDays = d > 0;
 
@@ -68,7 +65,6 @@ export default function LaunchCountdownBanner({
               {title}
             </div>
 
-            {/* ✅ bigger timer */}
             <div className="mt-1 flex items-center gap-2 font-mono">
               {showDays && <TimeBlock label="DAYS" value={String(d)} big />}
 
@@ -81,7 +77,7 @@ export default function LaunchCountdownBanner({
           </div>
 
           <div className="ml-auto hidden sm:flex items-center gap-2">
-            <span className="text-xs text-white/70">🎉 We’re almost live!</span>
+            <span className="text-xs text-white/70">We're almost live!</span>
           </div>
         </div>
       </div>

@@ -66,7 +66,7 @@ export default function TrainingEnrollment() {
           params: { reference: e.payment.reference, enrollmentId },
         });
         await load();
-      } catch (x) {
+      } catch {
         // keep silent; user can refresh
       }
     })();
@@ -381,3 +381,6 @@ export default function TrainingEnrollment() {
     </div>
   );
 }
+
+
+

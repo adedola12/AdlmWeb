@@ -8,7 +8,7 @@ const RefreshSchema = new mongoose.Schema(
       index: true,
       required: true,
     },
-    token: { type: String, index: true, required: true },
+    token: { type: String, required: true },
     ua: String,
     ip: String,
   },
@@ -19,3 +19,4 @@ RefreshSchema.index({ token: 1 }, { unique: true });
 
 export const Refresh =
   mongoose.models.Refresh || mongoose.model("Refresh", RefreshSchema);
+

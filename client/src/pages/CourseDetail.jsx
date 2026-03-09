@@ -13,7 +13,7 @@ export default function CourseDetail() {
   const [uploading, setUploading] = React.useState(false);
   const [activeCode, setActiveCode] = React.useState("");
 
-  async function load() {
+  const load = React.useCallback(async () => {
     try {
       const res = await apiAuthed(`/me/courses/${encodeURIComponent(sku)}`, {
         token: accessToken,
@@ -24,10 +24,11 @@ export default function CourseDetail() {
     } catch (e) {
       setErr(e?.message || "Failed to load course");
     }
-  }
-  React.useEffect(() => {
-    load(); // eslint-disable-line
   }, [sku, accessToken]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
 
   async function markComplete(moduleCode) {
     try {
@@ -286,3 +287,4 @@ export default function CourseDetail() {
     </div>
   );
 }
+

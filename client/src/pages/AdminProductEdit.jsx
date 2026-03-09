@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
@@ -385,7 +385,6 @@ function buildDiscount(ui) {
 
 export default function AdminProductEdit() {
   const { id } = useParams();
-  const nav = useNavigate();
   const { accessToken } = useAuth();
 
   const [p, setP] = React.useState(null);
@@ -1039,3 +1038,4 @@ export default function AdminProductEdit() {
     </div>
   );
 }
+

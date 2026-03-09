@@ -163,11 +163,11 @@ const BOQ_TEMPLATE_MAP = {
   },
 };
 
-function excelAddr(colLetter, row1Based) {
+function _excelAddr(colLetter, row1Based) {
   return `${colLetter}${row1Based}`;
 }
 
-function setCell(ws, addr, value) {
+function _setCell(ws, addr, value) {
   // Keep template formatting by only setting the value
   ws[addr] = ws[addr] || {};
   if (typeof value === "number") {
@@ -222,7 +222,7 @@ function loadBoqTemplateFromLocal() {
   }
 }
 
-async function loadBoqTemplateArrayBuffer() {
+async function _loadBoqTemplateArrayBuffer() {
   const local = loadBoqTemplateFromLocal();
   if (local) return local;
 
@@ -272,7 +272,7 @@ const ELEMENT_RULES = [
   },
 ];
 
-function inferElementName(item) {
+function _inferElementName(item) {
   const explicit =
     String(item?.elementName || item?.element || "").trim() ||
     String(item?.elementCode || "").trim();
@@ -286,7 +286,7 @@ function inferElementName(item) {
   return "Unclassified";
 }
 
-function boqDescFromItem(item, stripMetaFn) {
+function _boqDescFromItem(item, stripMetaFn) {
   // keep it clean like BoQ descriptions
   const d = stripMetaFn
     ? stripMetaFn(item?.description)
@@ -336,7 +336,9 @@ function readCache(tool, projectId) {
 function writeCache(tool, projectId, payload) {
   try {
     localStorage.setItem(cacheKey(tool, projectId), JSON.stringify(payload));
-  } catch {}
+  } catch {
+    // Ignore local-only storage failures and keep the UI usable.
+  }
 }
 
 function linkKey(tool, projectId) {
@@ -355,14 +357,18 @@ function readLinkCache(tool, projectId) {
 function writeLinkCache(tool, projectId, payload) {
   try {
     localStorage.setItem(linkKey(tool, projectId), JSON.stringify(payload));
-  } catch {}
+  } catch {
+    // Ignore local-only storage failures and keep the UI usable.
+  }
 }
 
 function purgeLocal(tool, projectId) {
   try {
     localStorage.removeItem(cacheKey(tool, projectId));
     localStorage.removeItem(linkKey(tool, projectId));
-  } catch {}
+  } catch {
+    // Ignore local-only storage failures and keep the UI usable.
+  }
 }
 
 function normalizeUnit(u) {
@@ -610,7 +616,9 @@ function readAutoFillPref() {
 function writeAutoFillPref(v) {
   try {
     localStorage.setItem(AUTO_FILL_PREF_KEY, v ? "1" : "0");
-  } catch {}
+  } catch {
+    // Ignore local-only storage failures and keep the UI usable.
+  }
 }
 
 function entitlementActive(ent) {
@@ -669,9 +677,9 @@ export default function ProjectsGeneric() {
   // search projects list
   const [projectQuery, setProjectQuery] = React.useState("");
 
-  const boqFileRef = React.useRef(null);
+  const _boqFileRef = React.useRef(null);
   const [exportOpen, setExportOpen] = React.useState(false);
-  const [boqTemplateReady, setBoqTemplateReady] = React.useState(
+  const [_boqTemplateReady, setBoqTemplateReady] = React.useState(
     !!loadBoqTemplateFromLocal(),
   );
 
@@ -729,7 +737,7 @@ export default function ProjectsGeneric() {
     return !!(groupId && linkedGroups?.[groupId]);
   }
 
-  async function onUploadBoqTemplate(e) {
+  async function _onUploadBoqTemplate(e) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -2265,3 +2273,4 @@ export default function ProjectsGeneric() {
     </div>
   );
 }
+

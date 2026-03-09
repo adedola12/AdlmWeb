@@ -62,7 +62,7 @@ export default function AdminCoupons() {
   // edit modal
   const [editing, setEditing] = React.useState(null); // coupon object or null
 
-  async function loadAll() {
+  const loadAll = React.useCallback(async () => {
     setMsg("");
     try {
       const [list, stats] = await Promise.all([
@@ -75,13 +75,12 @@ export default function AdminCoupons() {
     } catch (e) {
       setMsg(e.message || "Failed to load coupons");
     }
-  }
+  }, [accessToken]);
 
   // Load products for product-specific selection (using PUBLIC products endpoint is safest)
   // Load products for product-specific selection (ADMIN endpoint = all products in DB)
-  async function loadProducts() {
+  const loadProducts = React.useCallback(async () => {
     try {
-      // admin/products already returns ALL (based on your Products.jsx logic)
       const res = await apiAuthed("/admin/products", { token: accessToken });
       const list = Array.isArray(res) ? res : [];
       setProducts(list);
@@ -89,12 +88,12 @@ export default function AdminCoupons() {
       console.error(e);
       setProducts([]);
     }
-  }
+  }, [accessToken]);
 
   React.useEffect(() => {
     loadAll();
     loadProducts();
-  }, []);
+  }, [loadAll, loadProducts]);
 
   async function create(e) {
     e.preventDefault();
@@ -735,3 +734,8 @@ export default function AdminCoupons() {
     </div>
   );
 }
+
+
+
+
+

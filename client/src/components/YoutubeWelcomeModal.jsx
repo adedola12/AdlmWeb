@@ -15,7 +15,7 @@ function loadYouTubeIframeAPI() {
     };
 
     const existing = document.querySelector(
-      'script[src="https://www.youtube.com/iframe_api"]'
+      'script[src="https://www.youtube.com/iframe_api"]',
     );
     if (!existing) {
       const s = document.createElement("script");
@@ -34,8 +34,6 @@ export default function YoutubeWelcomeModal({
   title = "Watch this quick intro",
   maxSeconds = 20,
   closeOnOutsideClick = true,
-
-  // ✅ add this: if you want no timeline at all
   hideControls = true,
 }) {
   const mountRef = React.useRef(null);
@@ -68,15 +66,15 @@ export default function YoutubeWelcomeModal({
       const YT = await loadYouTubeIframeAPI();
       if (cancelled) return;
 
-      // destroy previous
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
-        } catch {}
+        } catch {
+          // Ignore player cleanup errors while remounting.
+        }
         playerRef.current = null;
       }
 
-      // clear mount
       if (mountRef.current) mountRef.current.innerHTML = "";
 
       playerRef.current = new YT.Player(mountRef.current, {
@@ -89,24 +87,24 @@ export default function YoutubeWelcomeModal({
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
-          controls: hideControls ? 0 : 1, // ✅ timeline hidden if true
+          controls: hideControls ? 0 : 1,
           fs: 0,
-          iv_load_policy: 3, // hide annotations
+          iv_load_policy: 3,
           disablekb: 1,
-          origin: window.location.origin, // helps some embed behaviors
+          origin: window.location.origin,
         },
         events: {
           onReady: (e) => {
             try {
-              // start at 0 always
               e.target.seekTo(0, true);
               e.target.playVideo();
-            } catch {}
+            } catch {
+              // Ignore autoplay restrictions from the embed runtime.
+            }
           },
         },
       });
 
-      // ✅ hard loop back to 0 at maxSeconds
       clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         const p = playerRef.current;
@@ -116,6 +114,7 @@ export default function YoutubeWelcomeModal({
         try {
           t = p.getCurrentTime();
         } catch {
+          // Ignore transient player state errors while polling.
           return;
         }
 
@@ -123,7 +122,9 @@ export default function YoutubeWelcomeModal({
           try {
             p.seekTo(0, true);
             p.playVideo();
-          } catch {}
+          } catch {
+            // Ignore loop restart failures and keep the modal usable.
+          }
         }
       }, 200);
     }
@@ -138,7 +139,9 @@ export default function YoutubeWelcomeModal({
       if (playerRef.current) {
         try {
           playerRef.current.destroy();
-        } catch {}
+        } catch {
+          // Ignore player cleanup errors while unmounting.
+        }
         playerRef.current = null;
       }
     };
@@ -176,9 +179,7 @@ export default function YoutubeWelcomeModal({
             </button>
           </div>
 
-          {/* ✅ Video container */}
           <div className="relative w-full aspect-video bg-black overflow-hidden">
-            {/* ✅ Force the iframe to fill the box */}
             <div
               ref={mountRef}
               className="yt-player absolute inset-0"
@@ -201,7 +202,6 @@ export default function YoutubeWelcomeModal({
         </div>
       </div>
 
-      {/* ✅ crucial: make the generated iframe cover 100% */}
       <style>{`
         .yt-player iframe {
           width: 100% !important;

@@ -14,7 +14,9 @@ function normalizeYouTubeId(input) {
       const m = u.pathname.match(/\/(embed|v)\/([^/?#]+)/);
       if (m) id = m[2];
     }
-  } catch {}
+  } catch {
+    // Invalid YouTube URLs should fall back to the raw input value.
+  }
   return id;
 }
 
@@ -27,7 +29,7 @@ export default function AdminLearn() {
   const [progress, setProgress] = React.useState(0);
   const previewUrlInputRef = React.useRef(null);
 
-  async function load() {
+  const load = React.useCallback(async () => {
     setMsg("");
     try {
       const [fv, pc] = await Promise.all([
@@ -39,10 +41,11 @@ export default function AdminLearn() {
     } catch (e) {
       setMsg(e.message);
     }
-  }
+  }, [accessToken]);
+
   React.useEffect(() => {
-    load(); // eslint-disable-line
-  }, []);
+    load();
+  }, [load]);
 
   // ---- Free videos
   async function addFree(e) {
@@ -421,3 +424,6 @@ export default function AdminLearn() {
     </div>
   );
 }
+
+
+

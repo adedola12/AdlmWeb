@@ -25,7 +25,9 @@ function extractYouTubeId(input = "") {
       const m = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
       if (m) return m[1];
     }
-  } catch {}
+  } catch {
+    // Ignore invalid or partial YouTube URLs and fall back to no embed id.
+  }
   return "";
 }
 
@@ -40,7 +42,9 @@ async function fetchJsonStrict(url, options = {}) {
     let detail = "";
     try {
       detail = isJson ? JSON.stringify(await res.json()) : await res.text();
-    } catch {}
+    } catch {
+      // Ignore unreadable error payloads and keep the HTTP status context.
+    }
     const err = new Error(
       `Request failed (${res.status})${detail ? `: ${detail.slice(0, 180)}` : ""}`,
     );
@@ -211,9 +215,12 @@ export default function ProductDetail() {
   React.useEffect(() => setActiveSlide(0), [key]);
 
   const hasMany = slides.length > 1;
-  const prevSlide = () =>
+  const prevSlide = React.useCallback(() => {
     setActiveSlide((i) => (i - 1 + slides.length) % slides.length);
-  const nextSlide = () => setActiveSlide((i) => (i + 1) % slides.length);
+  }, [slides.length]);
+  const nextSlide = React.useCallback(() => {
+    setActiveSlide((i) => (i + 1) % slides.length);
+  }, [slides.length]);
 
   React.useEffect(() => {
     if (!hasMany) return;
@@ -223,7 +230,7 @@ export default function ProductDetail() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasMany, slides.length]);
+  }, [hasMany, nextSlide, prevSlide]);
 
   function purchase() {
     const productKey = getProductKey(p) || key;
@@ -446,3 +453,6 @@ export default function ProductDetail() {
     </div>
   );
 }
+
+
+

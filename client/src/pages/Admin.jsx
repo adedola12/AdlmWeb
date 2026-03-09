@@ -947,7 +947,10 @@ export default function Admin() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [productKeys.join("|")]);
 
-    const rows = productMap.get(activeProduct) || [];
+    const rows = React.useMemo(
+      () => productMap.get(activeProduct) || [],
+      [productMap, activeProduct],
+    );
 
     const sortedRows = [...rows].sort((a, b) => {
       const ax = a.expiresAt ? new Date(a.expiresAt).getTime() : 0;
@@ -2445,3 +2448,5 @@ export default function Admin() {
     </div>
   );
 }
+
+

@@ -722,7 +722,7 @@ router.get("/library/rates/updates", async (req, res, next) => {
 // }
 
 /**
- * POST /library/material-prices/resolve
+ * POST /library/material-prices/resolve-legacy
  * Body:
  *  {
  *    items?: [{ name, unit }],
@@ -742,7 +742,7 @@ router.get("/library/rates/updates", async (req, res, next) => {
  *    stats: {...}
  *  }
  */
-router.post("/library/material-prices/resolve", async (req, res, next) => {
+router.post("/library/material-prices/resolve-legacy", async (req, res, next) => {
   try {
     await ensureDb();
 
@@ -938,3 +938,4 @@ router.post("/library/material-prices/resolve", async (req, res, next) => {
 });
 
 export default router;
+

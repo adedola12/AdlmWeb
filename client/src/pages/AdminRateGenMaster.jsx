@@ -148,12 +148,6 @@ export default function AdminRateGenMaster() {
     // eslint-disable-next-line
   }, [accessToken]);
 
-  // ✅ if URL kind changes, sync state
-  React.useEffect(() => {
-    if (qpKind !== kind) setKind(qpKind);
-    // eslint-disable-next-line
-  }, [qpKind]);
-
   // ✅ load grid when kind/filter changes
   React.useEffect(() => {
     loadGrid().catch(() => {});
@@ -186,9 +180,6 @@ export default function AdminRateGenMaster() {
   React.useEffect(() => {
     if (!qpAdd) return;
     if (!zones.length) return;
-
-    // ensure kind matches URL
-    if (kind !== qpKind) setKind(qpKind);
 
     openAddModal();
 
@@ -890,3 +881,4 @@ export default function AdminRateGenMaster() {
     </div>
   );
 }
+

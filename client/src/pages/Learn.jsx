@@ -2,17 +2,15 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config";
 
-// Cloudinary 60s preview
 function makePreviewUrl(url, seconds = 60, startAt = 0) {
   if (!url) return url;
   return url.replace(
     /\/upload\/(?!.*\/upload\/)/,
-    `/upload/so_${startAt},du_${seconds}/`
+    `/upload/so_${startAt},du_${seconds}/`,
   );
 }
 
-// Robust YT ID extractor
-export function extractYouTubeId(input = "") {
+function extractYouTubeId(input = "") {
   try {
     if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
     const url = new URL(input);
@@ -23,11 +21,12 @@ export function extractYouTubeId(input = "") {
       const m = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
       if (m) return m[1];
     }
-  } catch {}
+  } catch {
+    // Invalid URLs should just fall back to an empty id.
+  }
   return "";
 }
 
-/* --------- Hover helpers --------- */
 function HoverVideo({ src, poster }) {
   const ref = React.useRef(null);
   const [hovered, setHovered] = React.useState(false);
@@ -38,7 +37,9 @@ function HoverVideo({ src, poster }) {
     if (hovered) {
       el.currentTime = 0;
       el.muted = true;
-      el.play().catch(() => {});
+      el.play().catch(() => {
+        // Preview autoplay can be blocked by the browser.
+      });
     } else {
       el.pause();
       el.currentTime = 0;
@@ -100,7 +101,6 @@ function HoverYouTube({ id, title, thumb }) {
   );
 }
 
-/* --------- Cards --------- */
 function FreeCard({ v }) {
   const id = extractYouTubeId(v.youtubeId);
   return (
@@ -118,9 +118,11 @@ function FreeCard({ v }) {
 
 function PaidCard({ c }) {
   const preview = makePreviewUrl(c.previewUrl, 60, 0);
+  const purchaseKey = c.productKey || c.sku;
+
   return (
     <div className="group card p-0">
-      <HoverVideo src={preview || c.previewUrl} />
+      <HoverVideo src={preview || c.previewUrl} poster={c.thumbnailUrl} />
       <Link
         to={`/learn/course/${encodeURIComponent(c.sku)}`}
         className="block p-3 text-sm font-medium group-hover:text-blue-700"
@@ -129,7 +131,7 @@ function PaidCard({ c }) {
       </Link>
       <div className="px-3 pb-3">
         <Link
-          to={`/purchase?product=${encodeURIComponent(c.sku)}&months=12`}
+          to={`/purchase?product=${encodeURIComponent(purchaseKey)}&months=12`}
           className="btn btn-sm"
         >
           Purchase
@@ -139,7 +141,6 @@ function PaidCard({ c }) {
   );
 }
 
-/* --------- Page --------- */
 export default function Learn() {
   const [free, setFree] = React.useState({
     items: [],
@@ -151,22 +152,20 @@ export default function Learn() {
   const [loadingFree, setLoadingFree] = React.useState(false);
   const [loadingCourses, setLoadingCourses] = React.useState(false);
 
-  // client-side pagination for paid: 9 per page
   const [coursePage, setCoursePage] = React.useState(1);
   const perPage = 9;
   const totalCoursePages = Math.max(Math.ceil(courses.length / perPage), 1);
   const pageSlice = courses.slice(
     (coursePage - 1) * perPage,
-    coursePage * perPage
+    coursePage * perPage,
   );
 
   async function loadFree(page = 1) {
     setLoadingFree(true);
     try {
-      const res = await fetch(
-        `${API_BASE}/learn/free?page=${page}&pageSize=5`,
-        { credentials: "include" }
-      );
+      const res = await fetch(`${API_BASE}/learn/free?page=${page}&pageSize=5`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error(`Free videos: ${res.status}`);
       setFree(await res.json());
     } finally {
@@ -197,7 +196,6 @@ export default function Learn() {
 
   return (
     <div className="space-y-10">
-      {/* Free (YouTube) */}
       <section className="card">
         <h2 className="text-xl font-semibold mb-4">Free Courses (YouTube)</h2>
         <p className="text-sm text-slate-600 mb-4">
@@ -205,7 +203,7 @@ export default function Learn() {
         </p>
 
         {loadingFree ? (
-          <div className="text-sm text-slate-600">Loading…</div>
+          <div className="text-sm text-slate-600">Loading...</div>
         ) : (
           <>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -225,8 +223,7 @@ export default function Learn() {
                 Previous
               </button>
               <div className="text-sm text-slate-600">
-                Page {free.page} of{" "}
-                {Math.max(Math.ceil(free.total / free.pageSize), 1)}
+                Page {free.page} of {Math.max(Math.ceil(free.total / free.pageSize), 1)}
               </div>
               <button
                 className="btn btn-sm"
@@ -240,16 +237,15 @@ export default function Learn() {
         )}
       </section>
 
-      {/* Paid */}
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Paid Courses</h2>
         {loadingCourses ? (
-          <div className="text-sm text-slate-600">Loading…</div>
+          <div className="text-sm text-slate-600">Loading...</div>
         ) : courses.length ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {pageSlice.map((c) => (
-                <PaidCard key={c._id} c={c} />
+                <PaidCard key={c._id || c.sku} c={c} />
               ))}
             </div>
             <div className="mt-2 flex items-center justify-between">
@@ -266,9 +262,7 @@ export default function Learn() {
               <button
                 className="btn btn-sm"
                 disabled={coursePage >= totalCoursePages}
-                onClick={() =>
-                  setCoursePage((p) => Math.min(p + 1, totalCoursePages))
-                }
+                onClick={() => setCoursePage((p) => Math.min(p + 1, totalCoursePages))}
               >
                 Next
               </button>

@@ -58,7 +58,6 @@ function evalFormula(input, ctx) {
   }
 
   try {
-    // eslint-disable-next-line no-new-func
     const out = Function(`"use strict"; return (${expr});`)();
     const val = Number(out);
     if (!Number.isFinite(val))
@@ -224,7 +223,6 @@ export default function AdminAddRate() {
 
         for (const url of tryUrls) {
           try {
-            // eslint-disable-next-line no-await-in-loop
             res = await apiAuthed(url, { token: accessToken });
             break;
           } catch (e) {
@@ -471,7 +469,7 @@ export default function AdminAddRate() {
     setSaving(true);
     try {
       if (editingId) {
-        const res = await apiAuthed(
+        await apiAuthed(
           `${ADMIN_RATEGEN_V2_BASE}/rates/${editingId}`,
           {
             token: accessToken,
@@ -962,3 +960,6 @@ export default function AdminAddRate() {
     </div>
   );
 }
+
+
+

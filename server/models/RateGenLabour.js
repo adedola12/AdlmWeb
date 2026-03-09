@@ -13,9 +13,8 @@ const RateGenLabourSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-RateGenLabourSchema.index({ name: 1 });
-RateGenLabourSchema.index({ key: 1 });
 
 export const RateGenLabour =
   mongoose.models.RateGenLabour ||
   mongoose.model("RateGenLabour", RateGenLabourSchema);
+

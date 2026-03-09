@@ -245,17 +245,18 @@ export default function AdminCourses() {
     return j.secure_url;
   }
 
-  async function load() {
+  const load = React.useCallback(async () => {
     try {
       const data = await apiAuthed("/admin/courses", { token: accessToken });
       setItems(data);
     } catch (e) {
       setMsg(e.message);
     }
-  }
+  }, [accessToken]);
+
   React.useEffect(() => {
-    load(); // eslint-disable-line
-  }, []);
+    load();
+  }, [load]);
 
   React.useEffect(() => {
     (async () => {
@@ -277,7 +278,7 @@ export default function AdminCourses() {
           sort: c.sort ?? 0,
           modules: Array.isArray(c.modules) ? c.modules : [],
         });
-      } catch (e) {
+      } catch {
         try {
           const prod = await apiAuthed(
             `/admin/products/${encodeURIComponent(editingSku)}`,
@@ -318,7 +319,7 @@ export default function AdminCourses() {
         }
       }
     })();
-  }, [editingSku, accessToken]);
+  }, [editingSku, accessToken, load]);
 
   async function createCourse(e) {
     e.preventDefault();
@@ -614,3 +615,10 @@ export default function AdminCourses() {
     </div>
   );
 }
+
+
+
+
+
+
+

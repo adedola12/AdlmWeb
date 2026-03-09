@@ -183,10 +183,24 @@ function enforceDeviceBinding(ent, incomingFingerprint) {
   return { ok: true, changed: true };
 }
 
+function getLicenseJwtSecret() {
+  const configured = String(process.env.LICENSE_JWT_SECRET || "").trim();
+  if (configured) return configured;
+
+  if (process.env.NODE_ENV !== "production") {
+    return "adlm_dev_license_secret_local_only";
+  }
+
+  console.error(
+    "[/auth/login] LICENSE_JWT_SECRET is missing; plugin license token signing is unavailable.",
+  );
+  return "";
+}
+
 // Create offline license JWT (HS256) for plugin use
 function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
-  const secret =
-    process.env.LICENSE_JWT_SECRET || "[REDACTED-JWT-LICENSE-SECRET]";
+  const secret = getLicenseJwtSecret();
+  if (!secret) return null;
 
   const expMs = expiresAt?.getTime?.() || 0;
   const expSec = expMs ? Math.floor(expMs / 1000) : null;
@@ -220,7 +234,7 @@ function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
     algorithm: "HS256",
     issuer: "adlm",
     audience: "adlm-plugin",
-    expiresIn: expSec - nowSec, // until entitlement expiry
+    expiresIn: expSec - nowSec,
   });
 }
 
@@ -290,196 +304,7 @@ router.post("/signup", async (req, res) => {
     };
 
     const accessToken = signAccess(payload);
-    const refreshToken = signRefresh({ sub: payload._id });
 
-    await Refresh.create({
-      userId: user._id,
-      token: refreshToken,
-      ua: req.headers["user-agent"] || "",
-      ip: req.ip,
-    });
-
-    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
-    res.status(201).json({ accessToken, user: payload });
-  } catch (err) {
-    console.error("[/auth/signup] error:", err);
-    res.status(500).json({ error: "Signup failed" });
-  }
-});
-
-/* -------------------- LOGIN (web vs plugin) -------------------- */
-router.post("/login", async (req, res) => {
-  try {
-    await ensureDb();
-
-    const { identifier, password } = req.body || {};
-    const productKeyIn = req.body?.productKey;
-    const dfpIn = req.body?.device_fingerprint;
-
-    if (!identifier || !password) {
-      return res
-        .status(400)
-        .json({ error: "identifier and password required" });
-    }
-
-    const user = await findByIdentifier(identifier);
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
-    if (user.disabled)
-      return res.status(403).json({ error: "Account disabled" });
-
-    // password check (supports legacy `password`)
-    let ok = false;
-    let needsSave = false;
-
-    if (user.passwordHash) {
-      ok = await bcrypt.compare(password, user.passwordHash);
-    } else if (user.password) {
-      ok = password === user.password;
-      if (ok) {
-        user.passwordHash = await bcrypt.hash(password, 10);
-        user.password = undefined;
-        needsSave = true;
-      }
-    }
-
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-
-    const pluginLogin = isPluginClient(req);
-
-    // for plugin license token signing
-    let licenseToken = null;
-    let chosenPk = null;
-    let chosenDfp = null;
-    let chosenExpiresAt = null;
-
-    if (pluginLogin) {
-      const pk = String(productKeyIn || "")
-        .trim()
-        .toLowerCase();
-      const dfp = String(dfpIn || "").trim();
-
-      if (!pk) {
-        return res.status(400).json({
-          error: "productKey required",
-          code: "PRODUCT_KEY_REQUIRED",
-        });
-      }
-      if (!dfp) {
-        return res.status(400).json({
-          error: "device_fingerprint required",
-          code: "DFP_REQUIRED",
-        });
-      }
-
-      // find ALL entitlements for this productKey (case-insensitive)
-      const entList = (user.entitlements || []).filter(
-        (e) =>
-          String(e.productKey || "")
-            .trim()
-            .toLowerCase() === pk,
-      );
-
-      if (!entList.length) {
-        return res.status(403).json({
-          error: "You do not have access to this product.",
-          code: "NOT_ENTITLED",
-          productKey: pk,
-        });
-      }
-
-      const now = new Date();
-
-      // pick the “best” entitlement:
-      // 1) active + not expired (best)
-      // 2) else latest expiresAt
-      const ranked = entList
-        .map((e) => {
-          const status = String(e.status || "")
-            .trim()
-            .toLowerCase();
-          const expOk = normalizeExpiryMaybe(e.expiresAt);
-          const isActive = status === "active";
-          const notExpired = expOk ? expOk.getTime() > now.getTime() : false;
-          return { e, status, expOk, isActive, notExpired };
-        })
-        .sort((a, b) => {
-          const aGood = a.isActive && a.notExpired ? 1 : 0;
-          const bGood = b.isActive && b.notExpired ? 1 : 0;
-          if (bGood !== aGood) return bGood - aGood;
-
-          const at = a.expOk ? a.expOk.getTime() : 0;
-          const bt = b.expOk ? b.expOk.getTime() : 0;
-          return bt - at;
-        });
-
-      const ent = ranked[0].e;
-      const status = String(ent.status || "")
-        .trim()
-        .toLowerCase();
-      const expiresAt = normalizeExpiryMaybe(ent.expiresAt);
-
-      if (status !== "active") {
-        return res.status(403).json({
-          error: "Your subscription is not active.",
-          code: "SUBSCRIPTION_INACTIVE",
-          productKey: pk,
-          expiresAt: ent.expiresAt || null,
-        });
-      }
-
-      if (!expiresAt || expiresAt.getTime() <= now.getTime()) {
-        return res.status(403).json({
-          error: "Your subscription has expired.",
-          code: "SUBSCRIPTION_EXPIRED",
-          productKey: pk,
-          expiresAt: ent.expiresAt || null,
-        });
-      }
-
-      // ✅ seat-aware multi-device binding
-      const bind = enforceDeviceBinding(ent, dfp);
-      if (!bind.ok) {
-        return res
-          .status(bind.status)
-          .json({ error: bind.error, code: bind.code });
-      }
-
-      // persist lastSeen / devices[] / legacy fields
-      needsSave = true;
-
-      chosenPk = pk;
-      chosenDfp = dfp;
-      chosenExpiresAt = expiresAt;
-    }
-
-    if (needsSave) await user.save();
-
-    const payload = {
-      _id: String(user._id),
-      email: user.email,
-      role: user.role || "user",
-      zone: user.zone || "",
-      entitlements: user.entitlements || [],
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
-      whatsapp: user.whatsapp || "",
-      username: user.username || "",
-      avatarUrl: user.avatarUrl || "",
-    };
-
-    const accessToken = signAccess(payload);
-    const refreshToken = signRefresh({ sub: payload._id });
-
-    await Refresh.create({
-      userId: user._id,
-      token: refreshToken,
-      ua: req.headers["user-agent"] || "",
-      ip: req.ip,
-    });
-
-    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
-
-    // offline license token ONLY for plugin clients
     if (pluginLogin && chosenPk && chosenDfp && chosenExpiresAt) {
       licenseToken = signLicenseToken({
         user,
@@ -487,7 +312,25 @@ router.post("/login", async (req, res) => {
         deviceFingerprint: chosenDfp,
         expiresAt: chosenExpiresAt,
       });
+
+      if (!licenseToken) {
+        return res.status(503).json({
+          error: "License token signing is unavailable. Please contact support.",
+          code: "LICENSE_TOKEN_UNAVAILABLE",
+        });
+      }
     }
+
+    const refreshToken = signRefresh({ sub: payload._id });
+
+    await Refresh.create({
+      userId: user._id,
+      token: refreshToken,
+      ua: req.headers["user-agent"] || "",
+      ip: req.ip,
+    });
+
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
 
     return res.json({ accessToken, user: payload, licenseToken });
   } catch (err) {
@@ -677,3 +520,5 @@ router.post("/app/lookup", async (req, res) => {
 });
 
 export default router;
+
+

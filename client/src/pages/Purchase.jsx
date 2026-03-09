@@ -164,7 +164,7 @@ export default function Purchase() {
             [k]: { periods: p, seats: 1, firstTime: false },
           },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [qs]);
 
   function updateItem(key, patch) {
@@ -313,8 +313,8 @@ export default function Purchase() {
           ? org
           : { name: "", email: "", phone: "" },
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, licenseType, org.name, org.email, org.phone]);
+
+  }, [cart, licenseType, org]);
 
   React.useEffect(() => {
     if (licenseType === "organization") return;
@@ -794,3 +794,6 @@ export default function Purchase() {
     </div>
   );
 }
+
+
+

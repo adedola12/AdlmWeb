@@ -47,7 +47,9 @@ export default function Nav() {
   React.useEffect(() => {
     const orig = document.body.style.overflow;
     document.body.style.overflow = open ? "hidden" : orig || "";
-    return () => (document.body.style.overflow = orig || "");
+    return () => {
+      document.body.style.overflow = orig || "";
+    };
   }, [open]);
 
   async function logout() {
@@ -55,7 +57,9 @@ export default function Nav() {
     setBusy(true);
     try {
       await api("/auth/logout", { method: "POST" });
-    } catch {}
+    } catch {
+      // Clear local auth even if logout request fails.
+    }
     clear();
     navigate("/login", { replace: true });
     setTimeout(() => window.location.reload(), 0);
@@ -65,7 +69,6 @@ export default function Nav() {
 
   return (
     <>
-      {/* DARK TOP BAR */}
       <header className="sticky top-0 z-50 bg-blue-950/95 backdrop-blur border-b border-blue-900">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
@@ -75,7 +78,6 @@ export default function Nav() {
             </span>
           </Link>
 
-          {/* Center links (desktop) */}
           <nav className="hidden md:flex items-center gap-1">
             <DesktopLink to="/">Home</DesktopLink>
             <DesktopLink to="/products">Products</DesktopLink>
@@ -83,7 +85,6 @@ export default function Nav() {
             <DesktopLink to="/learn">Learn</DesktopLink>
           </nav>
 
-          {/* Right side actions */}
           <div className="hidden md:flex items-center gap-2">
             {!user ? (
               <>
@@ -105,21 +106,18 @@ export default function Nav() {
                 <DesktopLink to="/purchase">Purchase</DesktopLink>
                 <DesktopLink to="/dashboard">Dashboard</DesktopLink>
                 <DesktopLink to="/profile">Profile</DesktopLink>
-                {user.role === "admin" && (
-                  <DesktopLink to="/admin">Admin</DesktopLink>
-                )}
+                {user.role === "admin" && <DesktopLink to="/admin">Admin</DesktopLink>}
                 <button
                   onClick={logout}
                   className="ml-1 px-3 py-1 rounded bg-white text-blue-900 text-sm font-medium hover:bg-blue-50"
                   disabled={busy}
                 >
-                  {busy ? "Logging out…" : "Logout"}
+                  {busy ? "Logging out..." : "Logout"}
                 </button>
               </>
             )}
           </div>
 
-          {/* Mobile hamburger */}
           <button
             className="md:hidden inline-flex items-center justify-center p-2 rounded text-white/90 hover:bg-white/10"
             onClick={() => setOpen(true)}
@@ -138,7 +136,6 @@ export default function Nav() {
         </div>
       </header>
 
-      {/* Mobile overlay */}
       <div
         className={`fixed inset-0 z-50 bg-black/50 transition-opacity md:hidden ${
           open ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -146,10 +143,10 @@ export default function Nav() {
         onClick={() => setOpen(false)}
       />
 
-      {/* Mobile drawer */}
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85%] bg-blue-950 text-white shadow-lg transition-transform md:hidden
-        ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85%] bg-blue-950 text-white shadow-lg transition-transform md:hidden ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
       >
         <div className="h-14 px-4 flex items-center justify-between border-b border-white/10">
           <Link to="/" onClick={() => setOpen(false)} className="font-semibold">
@@ -185,16 +182,10 @@ export default function Nav() {
 
           {!user ? (
             <>
-              <MobileLink
-                to={`/login?next=${next}`}
-                onClick={() => setOpen(false)}
-              >
+              <MobileLink to={`/login?next=${next}`} onClick={() => setOpen(false)}>
                 Sign in
               </MobileLink>
-              <MobileLink
-                to={`/signup?next=${next}`}
-                onClick={() => setOpen(false)}
-              >
+              <MobileLink to={`/signup?next=${next}`} onClick={() => setOpen(false)}>
                 Sign up
               </MobileLink>
             </>
@@ -220,7 +211,7 @@ export default function Nav() {
                   className="w-full px-4 py-2 rounded bg-white text-blue-900 font-medium hover:bg-blue-50"
                   disabled={busy}
                 >
-                  {busy ? "Logging out…" : "Logout"}
+                  {busy ? "Logging out..." : "Logout"}
                 </button>
               </div>
             </>
@@ -228,7 +219,7 @@ export default function Nav() {
         </nav>
 
         <div className="mt-auto px-4 py-3 border-t border-white/10 text-xs text-white/60">
-          © {new Date().getFullYear()} ADLM Studio
+          (c) {new Date().getFullYear()} ADLM Studio
         </div>
       </aside>
     </>

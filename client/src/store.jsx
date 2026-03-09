@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React from "react";
 
 const AuthCtx = React.createContext({
@@ -26,7 +27,7 @@ function syncLegacyTokenKeys(accessToken) {
       keys.forEach((k) => localStorage.removeItem(k));
     }
   } catch {
-    // ignore storage errors (some mobile/in-app browsers)
+    // Ignore storage errors in restricted browser environments.
   }
 }
 
@@ -51,7 +52,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem("auth", JSON.stringify(auth));
       syncLegacyTokenKeys(auth?.accessToken);
     } catch {
-      // ignore
+      // Ignore storage errors in restricted browser environments.
     }
   }, [auth]);
 
@@ -59,7 +60,7 @@ export function AuthProvider({ children }) {
     let cancelled = false;
 
     async function hydrate() {
-      if (auth.accessToken) return; // already authed
+      if (auth.accessToken) return;
       try {
         const base = import.meta.env.VITE_API_BASE;
         const res = await fetch(`${base}/auth/refresh`, {
@@ -71,7 +72,7 @@ export function AuthProvider({ children }) {
           if (!cancelled) setAuth((prev) => ({ ...prev, ...data }));
         }
       } catch {
-        // ignore
+        // Ignore refresh failures and leave auth empty.
       }
     }
 
@@ -87,24 +88,21 @@ export function AuthProvider({ children }) {
   }, [auth.accessToken]);
 
   React.useEffect(() => {
-    const id = setInterval(
-      async () => {
-        try {
-          const base = import.meta.env.VITE_API_BASE;
-          const res = await fetch(`${base}/auth/refresh`, {
-            method: "POST",
-            credentials: "include",
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setAuth((prev) => ({ ...prev, ...data }));
-          }
-        } catch {
-          // ignore
+    const id = setInterval(async () => {
+      try {
+        const base = import.meta.env.VITE_API_BASE;
+        const res = await fetch(`${base}/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAuth((prev) => ({ ...prev, ...data }));
         }
-      },
-      10 * 60 * 1000,
-    );
+      } catch {
+        // Ignore background refresh failures and keep current session state.
+      }
+    }, 10 * 60 * 1000);
 
     return () => clearInterval(id);
   }, []);
@@ -116,15 +114,11 @@ export function AuthProvider({ children }) {
       localStorage.setItem("auth", JSON.stringify(empty));
       syncLegacyTokenKeys("");
     } catch {
-      // ignore
+      // Ignore storage errors in restricted browser environments.
     }
   }, []);
 
-  return (
-    <AuthCtx.Provider value={{ ...auth, setAuth, clear }}>
-      {children}
-    </AuthCtx.Provider>
-  );
+  return <AuthCtx.Provider value={{ ...auth, setAuth, clear }}>{children}</AuthCtx.Provider>;
 }
 
 export const useAuth = () => React.useContext(AuthCtx);
