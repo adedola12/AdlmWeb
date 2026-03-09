@@ -808,6 +808,14 @@ export default function AdminProducts() {
               <Link className="btn btn-sm" to={`/admin/products/${p._id}/edit`}>
                 Edit
               </Link>
+              {p.isCourse && p.courseSku ? (
+                <Link
+                  className="btn btn-sm"
+                  to={`/admin/courses?edit=${encodeURIComponent(p.courseSku)}`}
+                >
+                  Course setup
+                </Link>
+              ) : null}
               <button className="btn btn-sm" onClick={() => toggle(p)}>
                 {p.isPublished ? "Unpublish" : "Publish"}
               </button>

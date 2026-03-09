@@ -182,7 +182,7 @@ export default function CourseDetail() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Open Google Classroom
+                  Go to Google Classroom
                 </a>
               ) : null}
 

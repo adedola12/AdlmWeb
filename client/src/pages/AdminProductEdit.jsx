@@ -568,7 +568,12 @@ export default function AdminProductEdit() {
     }
   }
 
-  if (!p) return <div className="card">Loading…</div>;
+  if (!p) return <div className="card">Loading...</div>;
+
+  const isCourseProduct = !!p?.isCourse && !!p?.courseSku;
+  const courseAdminUrl = isCourseProduct
+    ? `/admin/courses?edit=${encodeURIComponent(p.courseSku)}`
+    : "/admin/courses";
 
   return (
     <div className="space-y-4">
@@ -578,6 +583,11 @@ export default function AdminProductEdit() {
           <Link className="btn btn-sm" to="/admin/products">
             Back to admin products
           </Link>
+          {isCourseProduct ? (
+            <Link className="btn btn-sm" to={courseAdminUrl}>
+              Course setup
+            </Link>
+          ) : null}
 
           <button className="btn btn-sm" onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Save"}
@@ -586,6 +596,22 @@ export default function AdminProductEdit() {
       </div>
 
       {msg && <div className="text-sm">{msg}</div>}
+
+      {isCourseProduct ? (
+        <div className="card flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="font-medium">Course delivery</div>
+            <div className="mt-1 text-sm text-slate-600">
+              Add the Google Classroom link and learner instructions from the course setup page. Once saved there, the classroom button appears automatically on the dashboard and inside the enrolled course.
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link className="btn btn-sm" to={courseAdminUrl}>
+              Open course setup
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* LEFT */}

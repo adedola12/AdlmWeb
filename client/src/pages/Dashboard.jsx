@@ -891,7 +891,7 @@ function LearningTab({
                           target="_blank"
                           rel="noreferrer"
                         >
-                          Open classroom
+                          Go to classroom
                         </a>
                       ) : null}
                     </div>

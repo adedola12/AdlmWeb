@@ -21,6 +21,7 @@ import CourseDetail from "./pages/CourseDetail.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
 import Admin from "./pages/Admin.jsx";
 import AdminLearn from "./pages/AdminLearn.jsx";
+import AdminCourses from "./pages/AdminCourses.jsx";
 import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminProductEdit from "./pages/AdminProductEdit.jsx";
 import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
@@ -194,6 +195,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin"]}>
             <Admin />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/courses",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <AdminCourses />
           </AdminRoute>
         ),
       },
