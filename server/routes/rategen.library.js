@@ -742,200 +742,205 @@ router.get("/library/rates/updates", async (req, res, next) => {
  *    stats: {...}
  *  }
  */
-router.post("/library/material-prices/resolve-legacy", async (req, res, next) => {
-  try {
-    await ensureDb();
 
-    const {
-      items,
-      names,
-      includeMaster = true,
-      includeUser = true,
-      limitCandidates = 10,
-    } = req.body || {};
+router.post(
+  "/library/material-prices/resolve-legacy",
+  async (req, res, next) => {
+    try {
+      await ensureDb();
 
-    const wanted =
-      Array.isArray(items) && items.length
-        ? items.map((x) => ({ name: x?.name, unit: x?.unit }))
-        : Array.isArray(names) && names.length
-          ? names.map((n) => ({ name: n, unit: "" }))
-          : [];
+      const {
+        items,
+        names,
+        includeMaster = true,
+        includeUser = true,
+        limitCandidates = 10,
+      } = req.body || {};
 
-    const cleanedWanted = wanted
-      .slice(0, 2000)
-      .map((x) => ({
-        name: String(x?.name || "").trim(),
-        unit: String(x?.unit || "").trim(),
-      }))
-      .filter((x) => x.name);
+      const wanted =
+        Array.isArray(items) && items.length
+          ? items.map((x) => ({ name: x?.name, unit: x?.unit }))
+          : Array.isArray(names) && names.length
+            ? names.map((n) => ({ name: n, unit: "" }))
+            : [];
 
-    if (!cleanedWanted.length) {
+      const cleanedWanted = wanted
+        .slice(0, 2000)
+        .map((x) => ({
+          name: String(x?.name || "").trim(),
+          unit: String(x?.unit || "").trim(),
+        }))
+        .filter((x) => x.name);
+
+      if (!cleanedWanted.length) {
+        return res.json({
+          ok: true,
+          results: [],
+          pricesByKey: {},
+          candidatesByKey: {},
+          requested: [],
+          stats: { requested: 0 },
+        });
+      }
+
+      // ---- Build pool (master + user) ----
+      const pool = [];
+
+      let masterCount = 0;
+      if (includeMaster) {
+        const master = await RateGenMaterial.find({ enabled: true })
+          .select({ sn: 1, name: 1, unit: 1, defaultUnitPrice: 1, category: 1 })
+          .lean();
+
+        masterCount = Array.isArray(master) ? master.length : 0;
+
+        for (const m of master || []) {
+          const price = Number(m?.defaultUnitPrice || 0);
+          const desc = String(m?.name || "").trim();
+          if (!desc || !Number.isFinite(price) || price <= 0) continue;
+
+          pool.push({
+            sn: m?.sn ?? null,
+            description: desc,
+            unit: m?.unit || "",
+            price,
+            category: m?.category || "",
+            source: "master",
+          });
+        }
+      }
+
+      let userCount = 0;
+      if (includeUser) {
+        const lib = await RateGenLibrary.findOne({
+          userId: req.user._id,
+        }).lean();
+        const mats = Array.isArray(lib?.materials) ? lib.materials : [];
+        userCount = mats.length;
+
+        for (const m of mats) {
+          const desc = String(m?.description || m?.name || "").trim();
+          const price = Number(m?.price || 0);
+          if (!desc || !Number.isFinite(price) || price <= 0) continue;
+
+          pool.push({
+            sn: m?.sn ?? null,
+            description: desc,
+            unit: m?.unit || "",
+            price,
+            category: m?.category || "",
+            source: "user",
+          });
+        }
+      }
+
+      const prepared = pool
+        .map((x) => {
+          const d = String(x.description || "").trim();
+          return {
+            ...x,
+            _descNorm: normText(d),
+            _tokens: tokens(d),
+            _unitNorm: normUnit(x.unit),
+          };
+        })
+        .filter((x) => x._descNorm && x.price > 0);
+
+      const maxCands = Math.max(
+        3,
+        Math.min(20, clampInt(limitCandidates, 3, 20, 10)),
+      );
+
+      const pricesByKey = {};
+      const candidatesByKey = {};
+      const results = [];
+
+      for (const w of cleanedWanted) {
+        const key = normText(w.name);
+        const reqToks = tokens(w.name);
+        const reqUnit = normUnit(w.unit);
+
+        const scored = prepared
+          .map((c) => {
+            let s = scoreMatch(reqToks, c._tokens);
+
+            // small boost for exact normalized equality
+            if (key && c._descNorm === key) s += 0.15;
+
+            // soft penalty for unit mismatch (still show candidates)
+            if (reqUnit && c._unitNorm && reqUnit !== c._unitNorm) s *= 0.75;
+
+            return { ...c, score: s };
+          })
+          .filter((x) => x.score >= 0.35)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, maxCands);
+
+        const best = scored[0] || null;
+
+        candidatesByKey[key] = scored.map((x) => ({
+          sn: x.sn,
+          description: x.description,
+          unit: x.unit,
+          price: x.price,
+          category: x.category,
+          source: x.source,
+          score: Number(x.score.toFixed(4)),
+        }));
+
+        pricesByKey[key] = best
+          ? {
+              description: best.description,
+              unit: best.unit,
+              price: best.price,
+              category: best.category,
+              source: best.source,
+              score: Number(best.score.toFixed(4)),
+            }
+          : null;
+
+        results.push({
+          key,
+          requested: { name: w.name, unit: w.unit },
+          best: pricesByKey[key],
+          candidates: candidatesByKey[key],
+        });
+      }
+
+      // legacy-friendly list (so old clients won’t break)
+      const requested = cleanedWanted.map((w) => {
+        const key = normText(w.name);
+        const hit = pricesByKey[key];
+        return {
+          query: w.name,
+          key,
+          match: hit
+            ? {
+                name: hit.description,
+                unit: hit.unit,
+                price: hit.price,
+                source: hit.source,
+              }
+            : null,
+        };
+      });
+
       return res.json({
         ok: true,
-        results: [],
-        pricesByKey: {},
-        candidatesByKey: {},
-        requested: [],
-        stats: { requested: 0 },
+        results,
+        pricesByKey,
+        candidatesByKey,
+        requested,
+        stats: {
+          requested: cleanedWanted.length,
+          pool: prepared.length,
+          sources: { master: masterCount, user: userCount },
+        },
       });
+    } catch (err) {
+      next(err);
     }
-
-    // ---- Build pool (master + user) ----
-    const pool = [];
-
-    let masterCount = 0;
-    if (includeMaster) {
-      const master = await RateGenMaterial.find({ enabled: true })
-        .select({ sn: 1, name: 1, unit: 1, defaultUnitPrice: 1, category: 1 })
-        .lean();
-
-      masterCount = Array.isArray(master) ? master.length : 0;
-
-      for (const m of master || []) {
-        const price = Number(m?.defaultUnitPrice || 0);
-        const desc = String(m?.name || "").trim();
-        if (!desc || !Number.isFinite(price) || price <= 0) continue;
-
-        pool.push({
-          sn: m?.sn ?? null,
-          description: desc,
-          unit: m?.unit || "",
-          price,
-          category: m?.category || "",
-          source: "master",
-        });
-      }
-    }
-
-    let userCount = 0;
-    if (includeUser) {
-      const lib = await RateGenLibrary.findOne({ userId: req.user._id }).lean();
-      const mats = Array.isArray(lib?.materials) ? lib.materials : [];
-      userCount = mats.length;
-
-      for (const m of mats) {
-        const desc = String(m?.description || m?.name || "").trim();
-        const price = Number(m?.price || 0);
-        if (!desc || !Number.isFinite(price) || price <= 0) continue;
-
-        pool.push({
-          sn: m?.sn ?? null,
-          description: desc,
-          unit: m?.unit || "",
-          price,
-          category: m?.category || "",
-          source: "user",
-        });
-      }
-    }
-
-    const prepared = pool
-      .map((x) => {
-        const d = String(x.description || "").trim();
-        return {
-          ...x,
-          _descNorm: normText(d),
-          _tokens: tokens(d),
-          _unitNorm: normUnit(x.unit),
-        };
-      })
-      .filter((x) => x._descNorm && x.price > 0);
-
-    const maxCands = Math.max(
-      3,
-      Math.min(20, clampInt(limitCandidates, 3, 20, 10)),
-    );
-
-    const pricesByKey = {};
-    const candidatesByKey = {};
-    const results = [];
-
-    for (const w of cleanedWanted) {
-      const key = normText(w.name);
-      const reqToks = tokens(w.name);
-      const reqUnit = normUnit(w.unit);
-
-      const scored = prepared
-        .map((c) => {
-          let s = scoreMatch(reqToks, c._tokens);
-
-          // small boost for exact normalized equality
-          if (key && c._descNorm === key) s += 0.15;
-
-          // soft penalty for unit mismatch (still show candidates)
-          if (reqUnit && c._unitNorm && reqUnit !== c._unitNorm) s *= 0.75;
-
-          return { ...c, score: s };
-        })
-        .filter((x) => x.score >= 0.35)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, maxCands);
-
-      const best = scored[0] || null;
-
-      candidatesByKey[key] = scored.map((x) => ({
-        sn: x.sn,
-        description: x.description,
-        unit: x.unit,
-        price: x.price,
-        category: x.category,
-        source: x.source,
-        score: Number(x.score.toFixed(4)),
-      }));
-
-      pricesByKey[key] = best
-        ? {
-            description: best.description,
-            unit: best.unit,
-            price: best.price,
-            category: best.category,
-            source: best.source,
-            score: Number(best.score.toFixed(4)),
-          }
-        : null;
-
-      results.push({
-        key,
-        requested: { name: w.name, unit: w.unit },
-        best: pricesByKey[key],
-        candidates: candidatesByKey[key],
-      });
-    }
-
-    // legacy-friendly list (so old clients won’t break)
-    const requested = cleanedWanted.map((w) => {
-      const key = normText(w.name);
-      const hit = pricesByKey[key];
-      return {
-        query: w.name,
-        key,
-        match: hit
-          ? {
-              name: hit.description,
-              unit: hit.unit,
-              price: hit.price,
-              source: hit.source,
-            }
-          : null,
-      };
-    });
-
-    return res.json({
-      ok: true,
-      results,
-      pricesByKey,
-      candidatesByKey,
-      requested,
-      stats: {
-        requested: cleanedWanted.length,
-        pool: prepared.length,
-        sources: { master: masterCount, user: userCount },
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+  },
+);
 
 export default router;
-

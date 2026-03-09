@@ -1,4 +1,3 @@
-// server/routes/auth.js
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -18,88 +17,87 @@ import {
 
 const router = express.Router();
 
-/* -------------------- helpers -------------------- */
-const normalizeWhatsApp = (v) => (!v ? "" : String(v).replace(/[^\d+]/g, ""));
+const normalizeWhatsApp = (value) =>
+  !value ? "" : String(value).replace(/[^\d+]/g, "");
 
 async function findByIdentifier(identifier) {
-  const id = String(identifier || "").trim();
-  return (
-    (await User.findOne({ email: id })) ||
-    (await User.findOne({ username: id }))
-  );
+  const raw = String(identifier || "").trim();
+  if (!raw) return null;
+
+  const email = raw.toLowerCase();
+  return User.findOne({
+    $or: [{ email }, { username: raw }],
+  });
 }
 
-// Treat these clients as "native/plugin" => enforce entitlement + device binding
+function buildAuthPayload(user) {
+  return {
+    _id: String(user._id),
+    email: user.email,
+    role: user.role || "user",
+    zone: user.zone || "",
+    entitlements: user.entitlements || [],
+    firstName: user.firstName || "",
+    lastName: user.lastName || "",
+    whatsapp: user.whatsapp || "",
+    username: user.username || "",
+    avatarUrl: user.avatarUrl || "",
+  };
+}
+
 function isPluginClient(req) {
-  const h = (s) => (req.get(s) || "").toLowerCase();
-
-  // Option A: explicit header from your Windows apps
-  // e.g. X-ADLM-Client: planswift-plugin
-  const kind = h("x-adlm-client");
+  const header = (name) => (req.get(name) || "").toLowerCase();
+  const kind = header("x-adlm-client");
   if (kind && /win|plugin|desktop/i.test(kind)) return true;
-
-  // Option B: fallback signal via body
   if ((req.body?.client || "").toLowerCase() === "plugin") return true;
-
-  // Option C: if request sends a device fingerprint at all, assume plugin
   if (req.body?.device_fingerprint) return true;
-
   return false;
 }
 
-// If your expiresAt is saved like "YYYY-MM-DD", treat as end of that day (UTC)
-function normalizeExpiryMaybe(expValue) {
-  if (!expValue) return null;
-  const d = new Date(expValue);
-  if (isNaN(d.getTime())) return null;
+function normalizeExpiryMaybe(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
 
-  if (typeof expValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(expValue)) {
-    d.setUTCHours(23, 59, 59, 999);
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    date.setUTCHours(23, 59, 59, 999);
   }
-  return d;
+  return date;
 }
 
-/** Legacy -> devices[] migration */
-function normalizeLegacyEnt(ent) {
-  if (!ent) return;
+function normalizeLegacyEnt(entitlement) {
+  if (!entitlement) return;
 
-  if (!ent.seats || ent.seats < 1) ent.seats = 1;
-  if (!Array.isArray(ent.devices)) ent.devices = [];
+  if (!entitlement.seats || entitlement.seats < 1) entitlement.seats = 1;
+  if (!Array.isArray(entitlement.devices)) entitlement.devices = [];
 
-  // ✅ infer correct licenseType from seats (fix wrong "personal" on multi-seat)
-  const seats = Math.max(Number(ent.seats || 1), 1);
-  const lt = String(ent.licenseType || "").toLowerCase();
-  if (lt !== "organization" && seats > 1) ent.licenseType = "organization";
-  if (!ent.licenseType)
-    ent.licenseType = seats > 1 ? "organization" : "personal";
+  const seats = Math.max(Number(entitlement.seats || 1), 1);
+  const licenseType = String(entitlement.licenseType || "").toLowerCase();
+  if (licenseType !== "organization" && seats > 1) {
+    entitlement.licenseType = "organization";
+  }
+  if (!entitlement.licenseType) {
+    entitlement.licenseType = seats > 1 ? "organization" : "personal";
+  }
 
-  // migrate legacy single-device -> devices[]
-  if (ent.devices.length === 0 && ent.deviceFingerprint) {
-    ent.devices.push({
-      fingerprint: ent.deviceFingerprint,
+  if (entitlement.devices.length === 0 && entitlement.deviceFingerprint) {
+    entitlement.devices.push({
+      fingerprint: entitlement.deviceFingerprint,
       name: "",
-      boundAt: ent.deviceBoundAt || new Date(),
+      boundAt: entitlement.deviceBoundAt || new Date(),
       lastSeenAt: new Date(),
       revokedAt: null,
     });
   }
 }
 
-
-function activeDevices(ent) {
-  return (ent?.devices || []).filter((d) => !d.revokedAt);
+function activeDevices(entitlement) {
+  return (entitlement?.devices || []).filter((device) => !device.revokedAt);
 }
 
-/**
- * Enforce device rules:
- * - personal (single-seat): only 1 device
- * - organization OR seats>1: allow up to `seats` devices
- *
- * Returns { ok:true } or { ok:false, status, code, error }
- */
-function enforceDeviceBinding(ent, incomingFingerprint) {
-  const fp = String(incomingFingerprint || "").trim();
-  if (!fp) {
+function enforceDeviceBinding(entitlement, incomingFingerprint) {
+  const fingerprint = String(incomingFingerprint || "").trim();
+  if (!fingerprint) {
     return {
       ok: false,
       status: 400,
@@ -108,34 +106,33 @@ function enforceDeviceBinding(ent, incomingFingerprint) {
     };
   }
 
-  normalizeLegacyEnt(ent);
+  normalizeLegacyEnt(entitlement);
 
-  const seats = Math.max(Number(ent.seats || 1), 1);
+  const seats = Math.max(Number(entitlement.seats || 1), 1);
   const isOrg =
-    String(ent.licenseType || "").toLowerCase() === "organization" || seats > 1;
+    String(entitlement.licenseType || "").toLowerCase() === "organization" ||
+    seats > 1;
 
-  // ✅ MULTI-DEVICE PATH
   if (isOrg) {
-    const act = activeDevices(ent);
-    const exists = act.find((d) => d.fingerprint === fp);
+    const devices = activeDevices(entitlement);
+    const existing = devices.find((device) => device.fingerprint === fingerprint);
 
-    if (exists) {
-      exists.lastSeenAt = new Date();
-      return { ok: true, changed: true }; // lastSeen update
+    if (existing) {
+      existing.lastSeenAt = new Date();
+      return { ok: true, changed: true };
     }
 
-    if (act.length < seats) {
-      ent.devices.push({
-        fingerprint: fp,
+    if (devices.length < seats) {
+      entitlement.devices.push({
+        fingerprint,
         name: "",
         boundAt: new Date(),
         lastSeenAt: new Date(),
         revokedAt: null,
       });
 
-      // keep legacy fields populated for backward compatibility
-      if (!ent.deviceFingerprint) ent.deviceFingerprint = fp;
-      if (!ent.deviceBoundAt) ent.deviceBoundAt = new Date();
+      if (!entitlement.deviceFingerprint) entitlement.deviceFingerprint = fingerprint;
+      if (!entitlement.deviceBoundAt) entitlement.deviceBoundAt = new Date();
 
       return { ok: true, changed: true };
     }
@@ -148,8 +145,7 @@ function enforceDeviceBinding(ent, incomingFingerprint) {
     };
   }
 
-  // ✅ SINGLE-DEVICE PATH (personal / seats=1)
-  if (ent.deviceFingerprint && ent.deviceFingerprint !== fp) {
+  if (entitlement.deviceFingerprint && entitlement.deviceFingerprint !== fingerprint) {
     return {
       ok: false,
       status: 403,
@@ -158,26 +154,23 @@ function enforceDeviceBinding(ent, incomingFingerprint) {
     };
   }
 
-  // bind if not yet bound
-  if (!ent.deviceFingerprint) {
-    ent.deviceFingerprint = fp;
-    ent.deviceBoundAt = new Date();
+  if (!entitlement.deviceFingerprint) {
+    entitlement.deviceFingerprint = fingerprint;
+    entitlement.deviceBoundAt = new Date();
   }
 
-  // also keep devices[] in sync for admin UI
-  const act = activeDevices(ent);
-  if (!act.some((d) => d.fingerprint === fp)) {
-    ent.devices.push({
-      fingerprint: fp,
+  const devices = activeDevices(entitlement);
+  if (!devices.some((device) => device.fingerprint === fingerprint)) {
+    entitlement.devices.push({
+      fingerprint,
       name: "",
-      boundAt: ent.deviceBoundAt || new Date(),
+      boundAt: entitlement.deviceBoundAt || new Date(),
       lastSeenAt: new Date(),
       revokedAt: null,
     });
   } else {
-    // update last seen for single-seat too
-    const d = act.find((d) => d.fingerprint === fp);
-    if (d) d.lastSeenAt = new Date();
+    const device = devices.find((item) => item.fingerprint === fingerprint);
+    if (device) device.lastSeenAt = new Date();
   }
 
   return { ok: true, changed: true };
@@ -197,35 +190,38 @@ function getLicenseJwtSecret() {
   return "";
 }
 
-// Create offline license JWT (HS256) for plugin use
+function offlineLicenseExpiryFor(entitlement) {
+  const normalized = normalizeExpiryMaybe(entitlement?.expiresAt);
+  if (normalized) return normalized;
+  return new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+}
+
 function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
   const secret = getLicenseJwtSecret();
   if (!secret) return null;
 
   const expMs = expiresAt?.getTime?.() || 0;
   const expSec = expMs ? Math.floor(expMs / 1000) : null;
-
   const nowSec = Math.floor(Date.now() / 1000);
   if (!expSec || expSec <= nowSec) return null;
 
-  const chosenPk = String(productKey || "").toLowerCase();
-  const dfp = String(deviceFingerprint || "");
+  const chosenProductKey = String(productKey || "").toLowerCase();
+  const fingerprint = String(deviceFingerprint || "");
 
   const payload = {
     ver: 1,
     sub: String(user._id),
     email: user.email,
-    productKey: chosenPk,
-    deviceFingerprint: dfp,
-
-    // Important: for the chosen productKey, embed THIS device fingerprint
-    entitlements: (user.entitlements || []).map((e) => {
-      const pk = String(e.productKey || "").toLowerCase();
+    productKey: chosenProductKey,
+    deviceFingerprint: fingerprint,
+    entitlements: (user.entitlements || []).map((entitlement) => {
+      const key = String(entitlement.productKey || "").toLowerCase();
       return {
-        productKey: pk,
-        status: e.status,
-        expiresAt: e.expiresAt || null,
-        deviceFingerprint: pk === chosenPk ? dfp : e.deviceFingerprint || null,
+        productKey: key,
+        status: entitlement.status,
+        expiresAt: entitlement.expiresAt || null,
+        deviceFingerprint:
+          key === chosenProductKey ? fingerprint : entitlement.deviceFingerprint || null,
       };
     }),
   };
@@ -238,15 +234,15 @@ function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
   });
 }
 
-/* -------------------- SIGNUP -------------------- */
 router.post("/signup", async (req, res) => {
   try {
     await ensureDb();
     const { email, username, password, zone, firstName, lastName, whatsapp } =
       req.body || {};
 
-    if (!email || !password)
+    if (!email || !password) {
       return res.status(400).json({ error: "email and password required" });
+    }
 
     if (!firstName || !lastName || !whatsapp) {
       return res
@@ -254,15 +250,23 @@ router.post("/signup", async (req, res) => {
         .json({ error: "firstName, lastName and whatsapp are required" });
     }
 
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedUsername = String(
+      username || normalizedEmail.split("@")[0],
+    ).trim();
+
     const exists = await User.findOne({
-      $or: [{ email }, ...(username ? [{ username }] : [])],
+      $or: [
+        { email: normalizedEmail },
+        ...(normalizedUsername ? [{ username: normalizedUsername }] : []),
+      ],
     });
     if (exists) return res.status(409).json({ error: "User exists" });
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({
-      email,
-      username: username || email.split("@")[0],
+      email: normalizedEmail,
+      username: normalizedUsername,
       passwordHash,
       role: "user",
       zone: zone || null,
@@ -290,26 +294,115 @@ router.post("/signup", async (req, res) => {
       console.error("[/auth/signup] welcome mail error:", mailErr);
     }
 
-    const payload = {
-      _id: String(user._id),
-      email: user.email,
-      role: user.role,
-      zone: user.zone || "",
-      entitlements: user.entitlements || [],
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
-      whatsapp: user.whatsapp || "",
-      username: user.username || "",
-      avatarUrl: user.avatarUrl || "",
-    };
-
+    const payload = buildAuthPayload(user);
     const accessToken = signAccess(payload);
+    const refreshToken = signRefresh({ sub: payload._id });
 
-    if (pluginLogin && chosenPk && chosenDfp && chosenExpiresAt) {
+    await Refresh.create({
+      userId: user._id,
+      token: refreshToken,
+      ua: req.headers["user-agent"] || "",
+      ip: req.ip,
+    });
+
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
+    return res.json({ accessToken, user: payload, licenseToken: null });
+  } catch (err) {
+    console.error("[/auth/signup] error:", err);
+    res.status(500).json({ error: "Signup failed" });
+  }
+});
+
+router.post("/login", async (req, res) => {
+  try {
+    await ensureDb();
+    const { identifier, password } = req.body || {};
+    if (!identifier || !password) {
+      return res.status(400).json({ error: "identifier and password required" });
+    }
+
+    const user = await findByIdentifier(identifier);
+    if (!user?.passwordHash) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const ok = await bcrypt.compare(String(password), user.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    if (user.disabled) {
+      return res
+        .status(403)
+        .json({ error: "Account disabled. Please contact support." });
+    }
+
+    let licenseToken = null;
+    let changed = false;
+
+    if (isPluginClient(req)) {
+      const chosenProductKey = String(
+        req.body?.productKey || req.body?.product_key || "",
+      )
+        .trim()
+        .toLowerCase();
+      const chosenFingerprint = String(
+        req.body?.device_fingerprint || "",
+      ).trim();
+
+      if (!chosenProductKey) {
+        return res.status(400).json({
+          error: "productKey required for plugin login",
+          code: "PRODUCT_REQUIRED",
+        });
+      }
+
+      const entitlement = (user.entitlements || []).find(
+        (item) =>
+          String(item?.productKey || "").toLowerCase() === chosenProductKey,
+      );
+
+      if (!entitlement) {
+        return res.status(403).json({
+          error: "No entitlement found for this product.",
+          code: "NO_ENTITLEMENT",
+        });
+      }
+
+      normalizeLegacyEnt(entitlement);
+
+      const status = String(entitlement.status || "inactive").toLowerCase();
+      if (status !== "active") {
+        return res.status(403).json({
+          error: "Entitlement is not active for this product.",
+          code: "ENTITLEMENT_INACTIVE",
+        });
+      }
+
+      const entitlementExpiry = normalizeExpiryMaybe(entitlement.expiresAt);
+      if (entitlementExpiry && entitlementExpiry.getTime() < Date.now()) {
+        entitlement.status = "expired";
+        changed = true;
+        return res.status(403).json({
+          error: "This subscription has expired.",
+          code: "ENTITLEMENT_EXPIRED",
+        });
+      }
+
+      const binding = enforceDeviceBinding(entitlement, chosenFingerprint);
+      if (!binding.ok) {
+        return res.status(binding.status).json({
+          error: binding.error,
+          code: binding.code,
+        });
+      }
+      changed ||= !!binding.changed;
+
+      const chosenExpiresAt = offlineLicenseExpiryFor(entitlement);
       licenseToken = signLicenseToken({
         user,
-        productKey: chosenPk,
-        deviceFingerprint: chosenDfp,
+        productKey: chosenProductKey,
+        deviceFingerprint: chosenFingerprint,
         expiresAt: chosenExpiresAt,
       });
 
@@ -321,6 +414,12 @@ router.post("/signup", async (req, res) => {
       }
     }
 
+    if (changed) {
+      await user.save();
+    }
+
+    const payload = buildAuthPayload(user);
+    const accessToken = signAccess(payload);
     const refreshToken = signRefresh({ sub: payload._id });
 
     await Refresh.create({
@@ -331,7 +430,6 @@ router.post("/signup", async (req, res) => {
     });
 
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
-
     return res.json({ accessToken, user: payload, licenseToken });
   } catch (err) {
     console.error("[/auth/login] error:", err);
@@ -339,7 +437,6 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-/* -------------------- REFRESH -------------------- */
 router.post("/refresh", async (req, res) => {
   try {
     await ensureDb();
@@ -353,25 +450,13 @@ router.post("/refresh", async (req, res) => {
       return res.status(401).json({ error: "Bad refresh token" });
     }
 
-    const rec = await Refresh.findOne({ token });
-    if (!rec) return res.status(401).json({ error: "Refresh not found" });
+    const record = await Refresh.findOne({ token });
+    if (!record) return res.status(401).json({ error: "Refresh not found" });
 
-    const user = await User.findById(rec.userId).lean();
+    const user = await User.findById(record.userId).lean();
     if (!user) return res.status(401).json({ error: "User missing" });
 
-    const payload = {
-      _id: String(user._id),
-      email: user.email,
-      role: user.role || "user",
-      zone: user.zone || "",
-      entitlements: user.entitlements || [],
-      firstName: user.firstName || "",
-      lastName: user.lastName || "",
-      whatsapp: user.whatsapp || "",
-      username: user.username || "",
-      avatarUrl: user.avatarUrl || "",
-    };
-
+    const payload = buildAuthPayload(user);
     const accessToken = signAccess(payload);
     res.json({ accessToken, user: payload });
   } catch (err) {
@@ -380,7 +465,6 @@ router.post("/refresh", async (req, res) => {
   }
 });
 
-/* -------------------- LOGOUT -------------------- */
 router.post("/logout", async (req, res) => {
   try {
     const token = req.cookies?.[REFRESH_COOKIE];
@@ -393,16 +477,16 @@ router.post("/logout", async (req, res) => {
   }
 });
 
-/* -------------------- PASSWORD: FORGOT -------------------- */
 router.post("/password/forgot", async (req, res) => {
   try {
     await ensureDb();
     const { identifier } = req.body || {};
-    if (!identifier)
+    if (!identifier) {
       return res.status(400).json({ error: "identifier required" });
+    }
 
     const user = await findByIdentifier(identifier);
-    if (!user) return res.json({ ok: true }); // avoid enumeration
+    if (!user) return res.json({ ok: true });
 
     const existing = await PasswordReset.findOne({
       userId: user._id,
@@ -442,42 +526,45 @@ router.post("/password/forgot", async (req, res) => {
   }
 });
 
-/* -------------------- PASSWORD: RESET -------------------- */
 router.post("/password/reset", async (req, res) => {
   try {
     await ensureDb();
     const { identifier, code, newPassword } = req.body || {};
-    if (!identifier || !code || !newPassword)
+    if (!identifier || !code || !newPassword) {
       return res
         .status(400)
         .json({ error: "identifier, code, newPassword required" });
+    }
 
     const user = await findByIdentifier(identifier);
     if (!user) return res.status(400).json({ error: "Invalid code" });
 
-    const rec = await PasswordReset.findOne({
+    const record = await PasswordReset.findOne({
       userId: user._id,
       code: String(code),
       usedAt: null,
       expiresAt: { $gt: new Date() },
     });
-    if (!rec) return res.status(400).json({ error: "Invalid or expired code" });
+    if (!record) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
 
-    if (rec.attempts >= 5)
+    if (record.attempts >= 5) {
       return res
         .status(429)
         .json({ error: "Too many attempts. Request a new code." });
+    }
 
-    if (String(code) !== String(rec.code)) {
-      rec.attempts += 1;
-      await rec.save();
+    if (String(code) !== String(record.code)) {
+      record.attempts += 1;
+      await record.save();
       return res.status(400).json({ error: "Invalid or expired code" });
     }
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await user.save();
-    rec.usedAt = new Date();
-    await rec.save();
+    record.usedAt = new Date();
+    await record.save();
 
     await Refresh.deleteMany({ userId: user._id });
     res.json({ ok: true });
@@ -487,17 +574,13 @@ router.post("/password/reset", async (req, res) => {
   }
 });
 
-/* -------------------- APP LOOKUP (FREE APPS) -------------------- */
-/**
- * For free desktop apps: verify user exists (no password), return basic profile.
- * This does NOT return tokens.
- */
 router.post("/app/lookup", async (req, res) => {
   try {
     await ensureDb();
     const { identifier } = req.body || {};
-    if (!identifier)
+    if (!identifier) {
       return res.status(400).json({ error: "identifier required" });
+    }
 
     const user = await findByIdentifier(String(identifier).trim());
     if (!user) return res.json({ exists: false });
@@ -520,5 +603,3 @@ router.post("/app/lookup", async (req, res) => {
 });
 
 export default router;
-
-

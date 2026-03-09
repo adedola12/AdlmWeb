@@ -7,10 +7,61 @@ function requireAdmin(req, res, next) {
   return res.status(403).json({ error: "Admin only" });
 }
 
+function hasOwn(body, key) {
+  return Object.prototype.hasOwnProperty.call(body || {}, key);
+}
+
+function sanitizeCourseBody(body = {}, { partial = false } = {}) {
+  const out = {};
+  const assign = (key, value) => {
+    if (!partial || value !== undefined) out[key] = value;
+  };
+  const stringField = (key) =>
+    hasOwn(body, key) ? String(body[key] || "").trim() : undefined;
+
+  assign("sku", stringField("sku"));
+  assign("title", stringField("title"));
+  assign("blurb", stringField("blurb"));
+  assign("description", stringField("description"));
+  assign("thumbnailUrl", stringField("thumbnailUrl"));
+  assign("onboardingVideoUrl", stringField("onboardingVideoUrl"));
+  assign("classroomJoinUrl", stringField("classroomJoinUrl"));
+  assign(
+    "classroomProvider",
+    hasOwn(body, "classroomProvider")
+      ? String(body.classroomProvider || "google_classroom").trim() === "other"
+        ? "other"
+        : "google_classroom"
+      : undefined,
+  );
+  assign("classroomCourseId", stringField("classroomCourseId"));
+  assign("classroomNotes", stringField("classroomNotes"));
+  assign("certificateTemplateUrl", stringField("certificateTemplateUrl"));
+  assign(
+    "isPublished",
+    hasOwn(body, "isPublished") ? body.isPublished !== false : partial ? undefined : true,
+  );
+  assign(
+    "sort",
+    hasOwn(body, "sort") ? Number(body.sort ?? 0) || 0 : partial ? undefined : 0,
+  );
+  assign(
+    "modules",
+    hasOwn(body, "modules")
+      ? Array.isArray(body.modules)
+        ? body.modules
+        : []
+      : partial
+        ? undefined
+        : [],
+  );
+
+  return out;
+}
+
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
 
-// List
 router.get("/", async (_req, res) => {
   const items = await PaidCourse.find({})
     .sort({ sort: -1, createdAt: -1 })
@@ -18,60 +69,37 @@ router.get("/", async (_req, res) => {
   res.json(items);
 });
 
-// Get one
 router.get("/:sku", async (req, res) => {
   const sku = req.params.sku;
-  const c = await PaidCourse.findOne({ sku }).lean();
-  if (!c) return res.status(404).json({ error: "Not found" });
-  res.json(c);
+  const course = await PaidCourse.findOne({ sku }).lean();
+  if (!course) return res.status(404).json({ error: "Not found" });
+  res.json(course);
 });
 
-// Create
 router.post("/", async (req, res) => {
-  const {
-    sku,
-    title,
-    blurb,
-    thumbnailUrl,
-    onboardingVideoUrl,
-    classroomJoinUrl,
-    modules = [],
-    certificateTemplateUrl,
-    isPublished = true,
-    sort = 0,
-  } = req.body || {};
-  if (!sku || !title)
+  const payload = sanitizeCourseBody(req.body || {});
+  if (!payload.sku || !payload.title) {
     return res.status(400).json({ error: "sku and title required" });
-  const exists = await PaidCourse.findOne({ sku });
+  }
+
+  const exists = await PaidCourse.findOne({ sku: payload.sku });
   if (exists) return res.status(409).json({ error: "sku exists" });
 
-  const doc = await PaidCourse.create({
-    sku,
-    title,
-    blurb,
-    thumbnailUrl,
-    onboardingVideoUrl,
-    classroomJoinUrl,
-    modules,
-    certificateTemplateUrl,
-    isPublished,
-    sort,
-  });
+  const doc = await PaidCourse.create(payload);
   res.json(doc);
 });
 
-// Update
 router.patch("/:sku", async (req, res) => {
-  const c = await PaidCourse.findOneAndUpdate(
+  const payload = sanitizeCourseBody(req.body || {}, { partial: true });
+  const course = await PaidCourse.findOneAndUpdate(
     { sku: req.params.sku },
-    req.body,
-    { new: true }
+    payload,
+    { new: true },
   );
-  if (!c) return res.status(404).json({ error: "Not found" });
-  res.json(c);
+  if (!course) return res.status(404).json({ error: "Not found" });
+  res.json(course);
 });
 
-// Delete
 router.delete("/:sku", async (req, res) => {
   const out = await PaidCourse.findOneAndDelete({ sku: req.params.sku });
   if (!out) return res.status(404).json({ error: "Not found" });

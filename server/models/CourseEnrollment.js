@@ -9,8 +9,12 @@ const CourseEnrollmentSchema = new mongoose.Schema(
     completedModules: { type: [String], default: [] },
     certificateUrl: { type: String },
     certificateIssuedAt: { type: Date },
+    accessStartedAt: { type: Date, default: null },
+    accessExpiresAt: { type: Date, default: null },
+    lastProgressAt: { type: Date, default: null },
+    classroomLastSyncedAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const CourseEnrollment =

@@ -179,6 +179,8 @@ export default function Dashboard() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
   const [courses, setCourses] = React.useState(null);
+  const [coursesErr, setCoursesErr] = React.useState("");
+  const [loadingCourses, setLoadingCourses] = React.useState(false);
   const [err, setErr] = React.useState("");
   const [loadingSummary, setLoadingSummary] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState("subscriptions");
@@ -222,11 +224,16 @@ export default function Dashboard() {
   }, [accessToken]);
 
   const loadCourses = React.useCallback(async () => {
+    setLoadingCourses(true);
+    setCoursesErr("");
     try {
       const data = await apiAuthed(`/me/courses`, { token: accessToken });
       setCourses(data || []);
     } catch (e) {
-      console.error(e);
+      setCourses([]);
+      setCoursesErr(e.message || "Failed to load online courses");
+    } finally {
+      setLoadingCourses(false);
     }
   }, [accessToken]);
 
@@ -460,6 +467,9 @@ export default function Dashboard() {
               {activeTab === "learning" && (
                 <LearningTab
                   courses={courses}
+                  loadingCourses={loadingCourses}
+                  coursesError={coursesErr}
+                  onRefreshCourses={loadCourses}
                   pEnrollments={approvedPTrainings}
                   loadingPTrainings={loadingPEnrollments}
                   pTrainingsError={pEnrollmentsErr}
@@ -754,6 +764,9 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
 
 function LearningTab({
   courses = [],
+  loadingCourses,
+  coursesError,
+  onRefreshCourses,
   pEnrollments = [],
   loadingPTrainings,
   pTrainingsError,
@@ -763,58 +776,125 @@ function LearningTab({
 
   return (
     <div className="space-y-6">
-      {/* Online */}
       <div>
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-semibold">Online Courses</h3>
+          <button
+            type="button"
+            className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
+            onClick={() => onRefreshCourses?.()}
+            disabled={loadingCourses}
+          >
+            Refresh
+          </button>
         </div>
 
-        {!courses ? (
-          <div>Loading…</div>
+        {coursesError ? (
+          <div className="mt-2 text-sm text-red-600">{coursesError}</div>
+        ) : null}
+
+        {loadingCourses && !courses ? (
+          <div className="mt-2 text-sm text-slate-600">Loading online courses...</div>
         ) : !hasOnline ? (
-          <div className="text-sm text-slate-600">No enrolled courses yet.</div>
+          <div className="mt-2 text-sm text-slate-600">No enrolled courses yet.</div>
         ) : (
-          <div className="space-y-3 mt-3">
-            {courses.map((c) => {
-              const course = c.course || {};
-              const progress = c.progress || 0;
+          <div className="mt-3 space-y-3">
+            {courses.map((entry) => {
+              const course = entry.course || {};
+              const summary = entry.summary || {};
+              const access = entry.access || {};
+              const classroom = entry.classroom || {};
+              const accessPill = access.isExpired
+                ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+                : typeof access.daysLeft === "number" && access.daysLeft <= 7
+                  ? "bg-amber-50 text-amber-800 ring-1 ring-amber-100"
+                  : access.expiresAt
+                    ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                    : "bg-slate-50 text-slate-700 ring-1 ring-slate-100";
+              const accessLine = access.expiresAt
+                ? `Access until ${dayjs(access.expiresAt).format("MMM D, YYYY")}`
+                : "Open access";
+
               return (
                 <div
-                  key={course.sku || c.enrollment?.courseSku}
-                  className="rounded-xl ring-1 ring-slate-200 p-3 bg-white shadow-sm flex gap-3 items-center"
+                  key={course.sku || entry.enrollment?.courseSku}
+                  className="rounded-xl ring-1 ring-slate-200 bg-white p-4 shadow-sm"
                 >
-                  <div className="w-16 h-12 bg-slate-100 rounded overflow-hidden">
-                    {course.thumbnailUrl ? (
-                      <img
-                        src={course.thumbnailUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-slate-100" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">
-                      {course.title || c.enrollment?.courseSku}
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                    <div className="h-20 w-28 overflow-hidden rounded-lg bg-slate-100 shrink-0">
+                      {course.thumbnailUrl ? (
+                        <img
+                          src={course.thumbnailUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full bg-slate-100" />
+                      )}
                     </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      Progress: {progress}%
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-semibold text-slate-900">
+                          {course.title || entry.enrollment?.courseSku}
+                        </div>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${accessPill}`}>
+                          {access.label || "Open access"}
+                        </span>
+                        {classroom.joinUrl ? (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+                            Google Classroom linked
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {course.blurb ? (
+                        <div className="mt-1 text-sm text-slate-600">{course.blurb}</div>
+                      ) : null}
+
+                      <div className="mt-3 h-2 overflow-hidden rounded bg-slate-100">
+                        <div
+                          className="h-full rounded bg-blue-600"
+                          style={{ width: `${Math.min(100, entry.progress || 0)}%` }}
+                        />
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                        <div>
+                          Modules: {summary.completedModules || 0}/{summary.totalModules || 0}
+                        </div>
+                        <div>
+                          Assignments: {summary.submittedAssignments || 0}/{summary.requiredAssignments || 0}
+                        </div>
+                        <div>{accessLine}</div>
+                        <div>Pending review: {summary.pendingAssignments || 0}</div>
+                      </div>
+
+                      {classroom.notes ? (
+                        <div className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
+                          {classroom.notes}
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="w-full bg-slate-100 h-2 rounded mt-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded"
-                        style={{ width: `${Math.min(100, progress)}%` }}
-                      />
+
+                    <div className="flex flex-wrap gap-2 md:w-auto">
+                      <a
+                        className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
+                        href={course.sku ? `/learn/course/${course.sku}` : "#"}
+                      >
+                        Open course
+                      </a>
+                      {classroom.joinUrl ? (
+                        <a
+                          className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                          href={classroom.joinUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open classroom
+                        </a>
+                      ) : null}
                     </div>
-                  </div>
-                  <div>
-                    <a
-                      className="text-blue-600 text-sm"
-                      href={course.sku ? `/learn/course/${course.sku}` : "#"}
-                    >
-                      Open
-                    </a>
                   </div>
                 </div>
               );
@@ -823,7 +903,6 @@ function LearningTab({
         )}
       </div>
 
-      {/* Physical Trainings */}
       <div>
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-semibold">Physical Trainings</h3>
@@ -835,12 +914,11 @@ function LearningTab({
 
         {loadingPTrainings ? (
           <div className="text-sm text-slate-600 mt-2">
-            Loading physical trainings…
+            Loading physical trainings...
           </div>
         ) : !hasPhysical ? (
           <div className="text-sm text-slate-600 mt-2">
-            No approved physical trainings yet. (Check Order History for pending
-            approvals.)
+            No approved physical trainings yet. (Check Order History for pending approvals.)
           </div>
         ) : (
           <div className="space-y-3 mt-3">
@@ -854,15 +932,13 @@ function LearningTab({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-xs text-slate-500">
-                        Physical training
-                      </div>
-                      <div className="font-semibold mt-1">{t.title || "—"}</div>
+                      <div className="text-xs text-slate-500">Physical training</div>
+                      <div className="font-semibold mt-1">{t.title || "-"}</div>
                       <div className="text-sm text-slate-600 mt-1">
                         Duration: {trainingDurationText(t)}
                       </div>
                       <div className="text-sm text-slate-600 mt-1">
-                        Location: {address || "—"}
+                        Location: {address || "-"}
                       </div>
                     </div>
 

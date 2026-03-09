@@ -182,9 +182,13 @@ export default function AdminCourses() {
     sku: "",
     title: "",
     blurb: "",
+    description: "",
     thumbnailUrl: "",
     onboardingVideoUrl: "",
     classroomJoinUrl: "",
+    classroomProvider: "google_classroom",
+    classroomCourseId: "",
+    classroomNotes: "",
     certificateTemplateUrl: "",
     isPublished: true,
     sort: 0,
@@ -270,9 +274,13 @@ export default function AdminCourses() {
           sku: c.sku,
           title: c.title || "",
           blurb: c.blurb || "",
+          description: c.description || "",
           thumbnailUrl: c.thumbnailUrl || "",
           onboardingVideoUrl: c.onboardingVideoUrl || "",
           classroomJoinUrl: c.classroomJoinUrl || "",
+          classroomProvider: c.classroomProvider || "google_classroom",
+          classroomCourseId: c.classroomCourseId || "",
+          classroomNotes: c.classroomNotes || "",
           certificateTemplateUrl: c.certificateTemplateUrl || "",
           isPublished: !!c.isPublished,
           sort: c.sort ?? 0,
@@ -292,9 +300,13 @@ export default function AdminCourses() {
               sku: editingSku,
               title: prod.name || editingSku,
               blurb: prod.blurb || "",
+              description: prod.description || "",
               thumbnailUrl: prod.thumbnailUrl || prod.images?.[0] || "",
               onboardingVideoUrl: prod.previewUrl || "",
               classroomJoinUrl: "",
+              classroomProvider: "google_classroom",
+              classroomCourseId: "",
+              classroomNotes: "",
               certificateTemplateUrl: "",
               isPublished: false,
               sort: prod.sort ?? 0,
@@ -305,9 +317,13 @@ export default function AdminCourses() {
             sku: created.sku,
             title: created.title || "",
             blurb: created.blurb || "",
+            description: created.description || "",
             thumbnailUrl: created.thumbnailUrl || "",
             onboardingVideoUrl: created.onboardingVideoUrl || "",
             classroomJoinUrl: created.classroomJoinUrl || "",
+            classroomProvider: created.classroomProvider || "google_classroom",
+            classroomCourseId: created.classroomCourseId || "",
+            classroomNotes: created.classroomNotes || "",
             certificateTemplateUrl: created.certificateTemplateUrl || "",
             isPublished: !!created.isPublished,
             sort: created.sort ?? 0,
@@ -333,9 +349,13 @@ export default function AdminCourses() {
       sku: "",
       title: "",
       blurb: "",
+      description: "",
       thumbnailUrl: "",
       onboardingVideoUrl: "",
       classroomJoinUrl: "",
+      classroomProvider: "google_classroom",
+      classroomCourseId: "",
+      classroomNotes: "",
       certificateTemplateUrl: "",
       isPublished: true,
       sort: 0,
@@ -408,6 +428,16 @@ export default function AdminCourses() {
             placeholder="Blurb"
             value={draft.blurb}
             onChange={(e) => setDraft((d) => ({ ...d, blurb: e.target.value }))}
+          />
+
+          <textarea
+            className="input sm:col-span-2"
+            rows={3}
+            placeholder="Course description"
+            value={draft.description}
+            onChange={(e) =>
+              setDraft((d) => ({ ...d, description: e.target.value }))
+            }
           />
 
           <label className="text-sm">
@@ -499,6 +529,71 @@ export default function AdminCourses() {
               </div>
             )}
           </div>
+
+          <label className="text-sm sm:col-span-2">
+            <div className="mb-1">Google Classroom join link</div>
+            <input
+              className="input"
+              placeholder="https://classroom.google.com/..."
+              value={draft.classroomJoinUrl}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, classroomJoinUrl: e.target.value }))
+              }
+            />
+          </label>
+
+          <label className="text-sm">
+            <div className="mb-1">Classroom provider</div>
+            <select
+              className="input"
+              value={draft.classroomProvider}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, classroomProvider: e.target.value }))
+              }
+            >
+              <option value="google_classroom">Google Classroom</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+
+          <label className="text-sm">
+            <div className="mb-1">Classroom course ID</div>
+            <input
+              className="input"
+              placeholder="Optional Google course id"
+              value={draft.classroomCourseId}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, classroomCourseId: e.target.value }))
+              }
+            />
+          </label>
+
+          <label className="text-sm sm:col-span-2">
+            <div className="mb-1">Learner note</div>
+            <textarea
+              className="input"
+              rows={3}
+              placeholder="Instructions for joining or using the classroom"
+              value={draft.classroomNotes}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, classroomNotes: e.target.value }))
+              }
+            />
+          </label>
+
+          <label className="text-sm sm:col-span-2">
+            <div className="mb-1">Certificate template URL</div>
+            <input
+              className="input"
+              value={draft.certificateTemplateUrl}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  certificateTemplateUrl: e.target.value,
+                }))
+              }
+            />
+          </label>
 
           <div className="sm:col-span-2 space-y-2">
             <div className="font-medium">Modules</div>

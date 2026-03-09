@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from "react";
+import { API_BASE } from "./config";
 
 const AuthCtx = React.createContext({
   user: null,
@@ -62,8 +63,8 @@ export function AuthProvider({ children }) {
     async function hydrate() {
       if (auth.accessToken) return;
       try {
-        const base = import.meta.env.VITE_API_BASE;
-        const res = await fetch(`${base}/auth/refresh`, {
+        if (!API_BASE) return;
+        const res = await fetch(`${API_BASE}/auth/refresh`, {
           method: "POST",
           credentials: "include",
         });
@@ -90,8 +91,8 @@ export function AuthProvider({ children }) {
   React.useEffect(() => {
     const id = setInterval(async () => {
       try {
-        const base = import.meta.env.VITE_API_BASE;
-        const res = await fetch(`${base}/auth/refresh`, {
+        if (!API_BASE) return;
+        const res = await fetch(`${API_BASE}/auth/refresh`, {
           method: "POST",
           credentials: "include",
         });
