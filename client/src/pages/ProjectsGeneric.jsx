@@ -5,9 +5,7 @@ import { apiAuthed } from "../http.js";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { API_BASE } from "../config";
 import {
-  FaTrash,
   FaInfoCircle,
-  FaLink,
   FaSearch,
   FaTimes,
   FaFolder,
@@ -15,6 +13,8 @@ import {
   FaArrowLeft,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
+import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
+import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
 
 const DASHBOARD_PATH = "/dashboard";
 
@@ -89,16 +89,18 @@ function getEndpoints(tool) {
 
   if (t === "revit-materials" || t === "revit-material") {
     return {
-      list: `/projects/revit/materials`,
-      one: (id) => `/projects/revit/materials/${id}`,
-      del: (id) => `/projects/revit/materials/${id}`,
+      list: "/projects/revit/materials",
+      one: (id) => "/projects/revit/materials/" + id,
+      del: (id) => "/projects/revit/materials/" + id,
+      valuations: (id) => "/projects/revit/materials/" + id + "/valuations",
     };
   }
 
   return {
-    list: `/projects/${t}`,
-    one: (id) => `/projects/${t}/${id}`,
-    del: (id) => `/projects/${t}/${id}`,
+    list: "/projects/" + t,
+    one: (id) => "/projects/" + t + "/" + id,
+    del: (id) => "/projects/" + t + "/" + id,
+    valuations: (id) => "/projects/" + t + "/" + id + "/valuations",
   };
 }
 
@@ -112,11 +114,6 @@ function materialDescription(it) {
 function safeNum(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function money(n) {
-  const x = safeNum(n);
-  return x.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function sanitizeFilename(name) {
@@ -135,7 +132,7 @@ const BOQ_DEFAULT_TEMPLATE_URL = "/boq-template.xlsx";
 /**
  * IMPORTANT:
  * - Make sure your Excel template already has enough pre-formatted blank rows
- *   for line items (e.g. 300–800 rows), because SheetJS Community won't
+ *   for line items (e.g. 300ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ800 rows), because SheetJS Community won't
  *   reliably preserve styling if we insert rows dynamically.
  *
  * Adjust these to match YOUR template layout:
@@ -318,6 +315,16 @@ function ratesEqual(a, b) {
   return true;
 }
 
+function statusMapsEqual(a, b) {
+  const A = a || {};
+  const B = b || {};
+  const keys = new Set([...Object.keys(A), ...Object.keys(B)]);
+  for (const k of keys) {
+    if (Boolean(A[k]) !== Boolean(B[k])) return false;
+  }
+  return true;
+}
+
 /** ---------------- Local cache helpers ----------------
  * v2 keys so old buggy cache won't override new behavior
  */
@@ -386,7 +393,7 @@ function normalizeUnit(u) {
   )
     return "t";
   const compact = raw.replace(/\s+/g, "");
-  if (compact === "m3" || compact === "m³" || compact === "cum") return "m3";
+  if (compact === "m3" || compact === "mÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³" || compact === "cum") return "m3";
   if (/\b(litre|liter|ltr|l)\b/.test(raw)) return "l";
   return raw;
 }
@@ -454,7 +461,7 @@ function normalizeToken(w) {
 function tokenize(desc) {
   const s = stripMeta(desc)
     .toLowerCase()
-    .replace(/–|—/g, "-")
+    .replace(/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ|ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â/g, "-")
     .replace(NON_WORD_RE, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -481,7 +488,7 @@ function groupLabelFromDesc(desc) {
     .map((x) => x.trim())
     .filter(Boolean);
   const label = parts.slice(0, 2).join(" - ") || s;
-  return label.length > 60 ? `${label.slice(0, 60)}…` : label;
+  return label.length > 60 ? `${label.slice(0, 60)}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦` : label;
 }
 
 function buildSimilarityGroups(items, getText) {
@@ -585,12 +592,12 @@ function buildMaterialGroups(items) {
 
     if (!groupMeta[gid]) {
       const label = isBlockMaterial(matNorm)
-        ? `${(it.materialName || "Block").trim()} — ${(it.takeoffLine || "").trim()}`.trim()
+        ? `${(it.materialName || "Block").trim()} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ${(it.takeoffLine || "").trim()}`.trim()
         : `${(it.materialName || "Unknown Material").trim()}`;
 
       groupMeta[gid] = {
         id: gid,
-        label: label.length > 60 ? `${label.slice(0, 60)}…` : label,
+        label: label.length > 60 ? `${label.slice(0, 60)}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦` : label,
         count: 0,
       };
     }
@@ -643,6 +650,11 @@ export default function ProjectsGeneric() {
 
   const showMaterials = isMaterialsTool(tool);
   const showRevitToggle = toolNorm === "revit" || isMaterialsTool(tool);
+  const statusField = showMaterials ? "purchased" : "completed";
+  const statusLabel = showMaterials ? "Purchased" : "Completed";
+  const statusPastLabel = showMaterials
+    ? "Purchased to date"
+    : "Completed to date";
 
   const sidebarMeta = React.useMemo(() => getSidebarMeta(tool), [tool]);
   const SidebarIcon = sidebarMeta.Icon;
@@ -662,6 +674,8 @@ export default function ProjectsGeneric() {
   // rates editing
   const [rates, setRates] = React.useState({});
   const [baseRates, setBaseRates] = React.useState({});
+  const [statusMap, setStatusMap] = React.useState({});
+  const [baseStatusMap, setBaseStatusMap] = React.useState({});
 
   // linked groups
   const [linkedGroups, setLinkedGroups] = React.useState({});
@@ -670,6 +684,10 @@ export default function ProjectsGeneric() {
   // save UX
   const [saving, setSaving] = React.useState(false);
   const [notice, setNotice] = React.useState("");
+  const [valuations, setValuations] = React.useState([]);
+  const [valuationErr, setValuationErr] = React.useState("");
+  const [loadingValuations, setLoadingValuations] = React.useState(false);
+  const [selectedValuationDate, setSelectedValuationDate] = React.useState("");
 
   // search (items)
   const [itemQuery, setItemQuery] = React.useState("");
@@ -759,15 +777,21 @@ export default function ProjectsGeneric() {
 
     const base = {};
     const ui = {};
+    const baseStatuses = {};
+    const uiStatuses = {};
 
     for (let i = 0; i < its.length; i++) {
       const k = itemKey(its[i], i);
       const r = safeNum(its[i]?.rate);
       base[k] = r;
       ui[k] = r > 0 ? String(r) : "";
+      baseStatuses[k] = Boolean(its[i]?.[statusField]);
+      uiStatuses[k] = Boolean(its[i]?.[statusField]);
     }
 
     setBaseRates(base);
+    setBaseStatusMap(baseStatuses);
+    setStatusMap(uiStatuses);
 
     const cached = project?._id ? readCache(tool, project._id) : null;
     if (cached && cached?.rates && typeof cached.rates === "object") {
@@ -802,7 +826,12 @@ export default function ProjectsGeneric() {
     setSel(null);
     setRates({});
     setBaseRates({});
+    setStatusMap({});
+    setBaseStatusMap({});
     setLinkedGroups({});
+    setValuations([]);
+    setValuationErr("");
+    setSelectedValuationDate("");
     setItemQuery("");
     setNotice("");
     setErr("");
@@ -811,6 +840,36 @@ export default function ProjectsGeneric() {
       next.delete("project");
       return next;
     });
+  }
+
+  async function loadValuations(projectId = selectedId) {
+    if (!projectId) {
+      setValuations([]);
+      setValuationErr("");
+      setSelectedValuationDate("");
+      return;
+    }
+
+    setLoadingValuations(true);
+    setValuationErr("");
+
+    try {
+      const data = await apiAuthed(endpoints.valuations(projectId), {
+        token: accessToken,
+      });
+      const logs = Array.isArray(data?.logs) ? data.logs : [];
+      setValuations(logs);
+      setSelectedValuationDate((prev) => {
+        if (prev && logs.some((log) => log.date === prev)) return prev;
+        return logs[0]?.date || "";
+      });
+    } catch (e) {
+      setValuations([]);
+      setSelectedValuationDate("");
+      setValuationErr(e.message || "Failed to load valuation log");
+    } finally {
+      setLoadingValuations(false);
+    }
   }
 
   async function load({ keepSelection = true } = {}) {
@@ -824,7 +883,7 @@ export default function ProjectsGeneric() {
 
       if (!keepSelection) setSelectedMap({});
 
-      // ✅ Only auto-open if ?project= exists (file-explorer UX)
+      // ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ Only auto-open if ?project= exists (file-explorer UX)
       const preselectId = searchParams.get("project");
       if (preselectId) {
         const found = safeList.find((x) => rowId(x) === preselectId);
@@ -853,6 +912,7 @@ export default function ProjectsGeneric() {
     setErr("");
     setNotice("");
     setItemQuery("");
+    setValuationErr("");
 
     try {
       const p = await apiAuthed(endpoints.one(id), { token: accessToken });
@@ -865,6 +925,7 @@ export default function ProjectsGeneric() {
       });
 
       initRatesFromProject(p);
+      await loadValuations(p?._id || p?.id || id);
     } catch (e) {
       setErr(e.message || "Failed to open project");
       closeProject();
@@ -1066,7 +1127,18 @@ export default function ProjectsGeneric() {
     });
   }
 
-  const isDirty = !ratesEqual(rates, baseRates);
+  function handleStatusToggle(rowIndex, checked) {
+    if (!sel) return;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const it = its[rowIndex];
+    if (!it) return;
+
+    const key = itemKey(it, rowIndex);
+    setStatusMap((prev) => ({ ...(prev || {}), [key]: Boolean(checked) }));
+  }
+
+  const isDirty =
+    !ratesEqual(rates, baseRates) || !statusMapsEqual(statusMap, baseStatusMap);
 
   async function saveRatesToCloud() {
     if (!sel || !selectedId) return;
@@ -1084,7 +1156,8 @@ export default function ProjectsGeneric() {
         const raw = rates?.[k];
         const use =
           String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
-        return { ...it, rate: use };
+        const statusValue = Boolean(statusMap?.[k]);
+        return { ...it, rate: use, [statusField]: statusValue };
       });
 
       const payload = { baseVersion: sel?.version, items: updatedItems };
@@ -1097,8 +1170,9 @@ export default function ProjectsGeneric() {
 
       setSel(updated);
       initRatesFromProject(updated);
+      await loadValuations(updated?._id || updated?.id || selectedId);
 
-      setNotice("Saved. Your rates will remain after refresh/reload.");
+      setNotice("Saved. Rates and valuation progress were updated.");
     } catch (e) {
       const msg = e?.message || "Failed to save";
       if (String(msg).toLowerCase().includes("conflict")) {
@@ -1384,17 +1458,40 @@ export default function ProjectsGeneric() {
     if (v && sel) autoFillMaterialRates(sel);
   }
 
+  function getCandidatesForItem(item) {
+    if (!showMaterials) return [];
+    const matKey = normalizeMaterialName(item?.materialName);
+    return Array.isArray(matResolved?.candidatesByKey?.[matKey])
+      ? matResolved.candidatesByKey[matKey]
+      : [];
+  }
+
+  function handlePickCandidate(rowIndex, candidate) {
+    if (!candidate) return;
+    const it = items[rowIndex];
+    if (!it) return;
+
+    const mk = normalizeMaterialName(it.materialName);
+    const pk = pickKeyFromCandidate(candidate);
+
+    setMatPicks((prev) => ({
+      ...(prev || {}),
+      [mk]: pk,
+    }));
+    handleRateChange(rowIndex, String(safeNum(candidate.price) || 0));
+    setOpenPickKey(null);
+  }
+
   // compute all rows
   const computedAll = items.map((it, i) => {
     const k = itemKey(it, i);
     const qty = safeNum(it?.qty);
-
     const rate =
       String(rates?.[k] ?? "").trim() === ""
         ? safeNum(it?.rate)
         : safeNum(rates?.[k]);
-
-    const amount = rate * qty;
+    const fullAmount = rate * qty;
+    const isMarked = Boolean(statusMap?.[k]);
     const gid = groupIdForIndex(i);
 
     return {
@@ -1408,12 +1505,25 @@ export default function ProjectsGeneric() {
       groupLabel: groupLabel(gid),
       groupCount: groupCount(gid),
       rate,
-      amount,
+      fullAmount,
+      amount: isMarked ? 0 : fullAmount,
+      valuedAmount: isMarked ? fullAmount : 0,
+      isMarked,
+      markedAt:
+        statusField === "purchased" ? it?.purchasedAt || null : it?.completedAt || null,
     };
   });
 
+  const grossAmount = computedAll.reduce(
+    (acc, row) => acc + safeNum(row.fullAmount),
+    0,
+  );
+  const valuedAmount = computedAll.reduce(
+    (acc, row) => acc + safeNum(row.valuedAmount),
+    0,
+  );
   const totalAmount = computedAll.reduce(
-    (acc, r) => acc + safeNum(r.amount),
+    (acc, row) => acc + safeNum(row.amount),
     0,
   );
 
@@ -1422,35 +1532,43 @@ export default function ProjectsGeneric() {
     .toLowerCase();
   const computedShown = !q
     ? computedAll
-    : computedAll.filter((r) => {
+    : computedAll.filter((row) => {
         return (
-          String(r.description || "")
+          String(row.description || "")
             .toLowerCase()
             .includes(q) ||
-          String(r.groupLabel || "")
+          String(row.groupLabel || "")
             .toLowerCase()
             .includes(q) ||
-          String(r.sn || "")
+          String(row.sn || "")
             .toLowerCase()
             .includes(q)
         );
       });
+
+  const selectedValuation = React.useMemo(
+    () =>
+      valuations.find((log) => log.date === selectedValuationDate) ||
+      valuations[0] ||
+      null,
+    [valuations, selectedValuationDate],
+  );
 
   function exportGenericBoQ() {
     if (!sel) return;
 
     const headers = ["S/N", "Description", "Qty", "Unit", "Rate", "Amount"];
 
-    const rowsAoa = computedAll.map((r) => [
-      r.sn,
-      r.description,
-      Number(r.qty.toFixed(2)),
-      r.unit,
-      Number(r.rate.toFixed(2)),
-      Number(r.amount.toFixed(2)),
+    const rowsAoa = computedAll.map((row) => [
+      row.sn,
+      row.description,
+      Number(row.qty.toFixed(2)),
+      row.unit,
+      Number(row.rate.toFixed(2)),
+      Number(row.fullAmount.toFixed(2)),
     ]);
 
-    rowsAoa.push(["", "", "", "", "TOTAL", Number(totalAmount.toFixed(2))]);
+    rowsAoa.push(["", "", "", "", "TOTAL", Number(grossAmount.toFixed(2))]);
 
     const aoa = [headers, ...rowsAoa];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -1509,7 +1627,7 @@ export default function ProjectsGeneric() {
 
     const ct = String(res.headers.get("content-type") || "").toLowerCase();
 
-    // If we accidentally got HTML/JSON, don’t download it as .xlsx
+    // If we accidentally got HTML/JSON, donÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢t download it as .xlsx
     const looksExcel =
       ct.includes("spreadsheetml.sheet") ||
       ct.includes("application/octet-stream");
@@ -1716,556 +1834,105 @@ export default function ProjectsGeneric() {
               )}
             </div>
 
-            {/* EXPLORER VIEW */}
             {!sel ? (
-              <div className="mt-5">
-                {/* Bulk actions */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div className="text-sm text-slate-600">
-                    {rowsShown.length} project(s)
-                    {selectedIds.length ? (
-                      <>
-                        {" "}
-                        • <b>{selectedIds.length}</b> selected
-                      </>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={selectAllShown}
-                      disabled={!rowsShown.length || bulkBusy}
-                      title="Select all projects in this view"
-                    >
-                      Select all
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={clearSelection}
-                      disabled={!selectedIds.length || bulkBusy}
-                      title="Clear selection"
-                    >
-                      Clear
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() =>
-                        deleteMany(selectedIds, {
-                          confirmLabel: "Delete selected projects",
-                        })
-                      }
-                      disabled={!selectedIds.length || bulkBusy}
-                      title="Delete selected"
-                    >
-                      <span className="inline-flex items-center gap-2 text-orange-700">
-                        <FaTrash className="text-[13px]" /> Delete selected
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() =>
-                        deleteMany(rows.map((r) => rowId(r)).filter(Boolean), {
-                          confirmLabel: "Delete ALL projects",
-                        })
-                      }
-                      disabled={!rows.length || bulkBusy}
-                      title="Delete all projects"
-                    >
-                      <span className="inline-flex items-center gap-2 text-orange-700">
-                        <FaTrash className="text-[13px]" /> Delete all
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Folder grid */}
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {rowsShown.map((r) => {
-                    const id = rowId(r);
-                    const checked = !!selectedMap?.[id];
-
-                    const updated = r?.updatedAt
-                      ? new Date(r.updatedAt).toLocaleString()
-                      : "—";
-
-                    return (
-                      <div
-                        key={id || Math.random()}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => id && view(id)}
-                        onKeyDown={(e) => {
-                          if ((e.key === "Enter" || e.key === " ") && id)
-                            view(id);
-                        }}
-                        className={[
-                          "relative rounded-xl border bg-white p-3 hover:shadow-sm transition cursor-pointer",
-                          checked ? "ring-2 ring-blue-200 border-blue-200" : "",
-                          !id ? "opacity-60 cursor-not-allowed" : "",
-                        ].join(" ")}
-                      >
-                        {/* Checkbox (no border around it) */}
-                        <button
-                          type="button"
-                          className={[
-                            "absolute top-2 left-2 w-8 h-8 rounded-md bg-white/90 flex items-center justify-center",
-                            "hover:bg-slate-50 transition shadow-sm",
-                          ].join(" ")}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!id) return;
-                            toggleSelect(id);
-                          }}
-                          title={checked ? "Unselect" : "Select"}
-                          disabled={!id || bulkBusy}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            readOnly
-                            className={checkboxCls}
-                          />
-                        </button>
-
-                        {/* Folder icon */}
-                        <div className="mt-2 flex items-center justify-center">
-                          <div className="w-14 h-14 rounded-xl bg-slate-50 flex items-center justify-center">
-                            <FaFolder className="text-slate-600 text-2xl" />
-                          </div>
-                        </div>
-
-                        {/* Name */}
-                        <div className="mt-3 text-center">
-                          <div className="font-medium text-sm line-clamp-2">
-                            {r?.name || "Untitled"}
-                          </div>
-                          <div className="text-xs text-slate-500 mt-1">
-                            {r?.itemCount ?? 0} items
-                          </div>
-                          <div className="text-[11px] text-slate-400 mt-1">
-                            {updated}
-                          </div>
-                        </div>
-
-                        {/* Quick delete (smaller + dark, orange hover) */}
-                        <button
-                          type="button"
-                          className="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-700 hover:text-orange-700 hover:bg-orange-50"
-                          title="Delete project"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            delProject(id, r?.name);
-                          }}
-                          disabled={!id || bulkBusy}
-                        >
-                          <FaTrash className="text-[13px]" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {rowsShown.length === 0 && (
-                  <div className="text-sm text-slate-600 mt-4">
-                    No projects found.
-                  </div>
-                )}
-              </div>
+              <ProjectExplorerGrid
+                rowsShown={rowsShown}
+                selectedIdsCount={selectedIds.length}
+                bulkBusy={bulkBusy}
+                selectedMap={selectedMap}
+                checkboxCls={checkboxCls}
+                onSelectAllShown={selectAllShown}
+                onClearSelection={clearSelection}
+                onDeleteSelected={() =>
+                  deleteMany(selectedIds, {
+                    confirmLabel: "Delete selected projects",
+                  })
+                }
+                onDeleteAll={() =>
+                  deleteMany(
+                    rows.map((row) => rowId(row)).filter(Boolean),
+                    {
+                      confirmLabel: "Delete ALL projects",
+                    },
+                  )
+                }
+                onOpenProject={view}
+                onToggleSelect={toggleSelect}
+                onDeleteProject={delProject}
+              />
             ) : (
-              /* PROJECT OPEN VIEW (your existing table UI) */
-              <div className="mt-5">
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="btn btn-sm"
-                        onClick={closeProject}
-                        title="Back to projects"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <FaArrowLeft /> Back to projects
-                        </span>
-                      </button>
-
-                      <button
-                        className="btn btn-sm"
-                        onClick={() => delProject(selectedId, sel?.name)}
-                        title="Delete this project"
-                      >
-                        <span className="inline-flex items-center gap-2 text-orange-700">
-                          <FaTrash className="text-[13px]" /> Delete
-                        </span>
-                      </button>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-700">
-                      <label className="inline-flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={onlyFillEmpty}
-                          onChange={(e) => setOnlyFillEmpty(e.target.checked)}
-                          className={checkboxCls}
-                        />
-                        Only fill empty rates
-                      </label>
-
-                      {showMaterials && canRateGen && (
-                        <label className="inline-flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={autoFillMaterialsRates}
-                            onChange={(e) => toggleAutoFill(e.target.checked)}
-                            disabled={autoFillBusy}
-                            className={checkboxCls}
-                          />
-                          Auto-fill material rates (Rate Gen)
-                        </label>
-                      )}
-
-                      {showMaterials && canRateGen && (
-                        <button
-                          type="button"
-                          className="btn btn-xs"
-                          onClick={() => sel && autoFillMaterialRates(sel)}
-                          disabled={autoFillBusy}
-                          title="Fetch prices and auto-fill again"
-                        >
-                          {autoFillBusy ? "Syncing..." : "Sync prices"}
-                        </button>
-                      )}
-
-                      <span className="inline-flex items-center gap-2">
-                        <Tip
-                          text={
-                            showMaterials
-                              ? canRateGen
-                                ? "Auto-fill uses Admin RateGen + your saved material prices."
-                                : "Subscribe to Rate Gen to auto-fill material prices."
-                              : "Subscribe to the Rate Gen for rate update."
-                          }
-                        />
-                      </span>
-
-                      <span className="text-slate-500">
-                        Linked groups:{" "}
-                        <b className="text-slate-700">
-                          {Object.keys(linkedGroups).filter(
-                            (g) => linkedGroups[g],
-                          ).length || 0}
-                        </b>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    <button
-                      className={`btn btn-sm ${isDirty ? "btn-primary" : ""}`}
-                      onClick={saveRatesToCloud}
-                      disabled={!isDirty || saving}
-                      title={
-                        !isDirty ? "No changes to save" : "Save rates to cloud"
-                      }
-                    >
-                      {saving ? "Saving..." : "Save"}
-                    </button>
-
-                    <div className="relative">
-                      <button
-                        className="btn btn-sm"
-                        onClick={() => setExportOpen((v) => !v)}
-                      >
-                        Export ▾
-                      </button>
-
-                      {exportOpen && (
-                        <div className="absolute right-0 mt-2 w-56 bg-white border rounded-lg shadow-lg z-30 overflow-hidden">
-                          <button
-                            type="button"
-                            className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm"
-                            onClick={() => {
-                              setExportOpen(false);
-                              exportGenericBoQ();
-                            }}
-                          >
-                            Export Generic BoQ
-                          </button>
-
-                          <button
-                            className="btn btn-sm"
-                            onClick={() => exportElementalBoQFromBackend()}
-                          >
-                            Export Elemental BoQ
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {err && <div className="text-red-600 text-sm mt-3">{err}</div>}
-
-                {/* item search */}
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 border rounded-md px-2 py-2 bg-white w-full">
-                    <FaSearch className="text-slate-500" />
-                    <input
-                      className="w-full outline-none text-sm"
-                      placeholder="Search items (description / group / S/N)..."
-                      value={itemQuery}
-                      onChange={(e) => setItemQuery(e.target.value)}
-                    />
-                    {!!itemQuery && (
-                      <button
-                        type="button"
-                        className="text-slate-500 hover:text-slate-700"
-                        onClick={() => setItemQuery("")}
-                        title="Clear"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-3 mb-3 flex items-center justify-end">
-                  <div className="px-3 py-2 rounded-lg bg-slate-50 border text-sm">
-                    <span className="text-slate-600 mr-2">Total Amount:</span>
-                    <span className="font-semibold">{money(totalAmount)}</span>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="text-left border-b">
-                        <th className="py-2 pr-4">S/N</th>
-                        <th className="py-2 pr-4">Description</th>
-                        <th className="py-2 pr-4">Qty</th>
-                        <th className="py-2 pr-4">Unit</th>
-                        <th className="py-2 pr-4">Rate</th>
-                        <th className="py-2 pr-4">Amount</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {computedShown.map((r) => {
-                        const it = items[r.i];
-                        const gid = r.groupId;
-                        const linked = isGroupLinked(gid);
-                        const canLink = gid && r.groupCount >= 2;
-
-                        const matKey = showMaterials
-                          ? normalizeMaterialName(it?.materialName)
-                          : "";
-                        const candidates = showMaterials
-                          ? Array.isArray(
-                              matResolved?.candidatesByKey?.[matKey],
-                            )
-                            ? matResolved.candidatesByKey[matKey]
-                            : []
-                          : [];
-
-                        const pickCandidate = (cand) => {
-                          if (!cand) return;
-                          const it0 = items[r.i];
-                          if (!it0) return;
-
-                          const mk = normalizeMaterialName(it0.materialName);
-                          const pk = pickKeyFromCandidate(cand);
-
-                          setMatPicks((prev) => ({
-                            ...(prev || {}),
-                            [mk]: pk,
-                          }));
-                          handleRateChange(
-                            r.i,
-                            String(safeNum(cand.price) || 0),
-                          );
-                          setOpenPickKey(null);
-                        };
-
-                        return (
-                          <tr key={r.key || r.i} className="border-b align-top">
-                            <td className="py-2 pr-4">{r.sn}</td>
-                            <td className="py-2 pr-4">{r.description}</td>
-                            <td className="py-2 pr-4">{r.qty.toFixed(2)}</td>
-                            <td className="py-2 pr-4">{r.unit}</td>
-
-                            <td className="py-2 pr-4">
-                              <div className="flex items-center gap-2">
-                                <input
-                                  className="input !h-9 !py-1 !px-2 w-[140px]"
-                                  type="number"
-                                  step="any"
-                                  value={rates?.[r.key] ?? ""}
-                                  placeholder={String(safeNum(it?.rate) || 0)}
-                                  onChange={(e) =>
-                                    handleRateChange(r.i, e.target.value)
-                                  }
-                                />
-
-                                <button
-                                  type="button"
-                                  className={`inline-flex items-center justify-center w-9 h-9 rounded-md border transition ${
-                                    canLink
-                                      ? linked
-                                        ? "bg-blue-50 border-blue-300"
-                                        : "hover:bg-slate-50"
-                                      : "opacity-40 cursor-not-allowed"
-                                  }`}
-                                  title={
-                                    canLink
-                                      ? linked
-                                        ? `Linked: changes propagate to similar items`
-                                        : `Click to link similar items`
-                                      : "No similar items found to link"
-                                  }
-                                  disabled={!canLink}
-                                  onClick={() => toggleGroupLink(gid, r.i)}
-                                >
-                                  <FaLink
-                                    className={
-                                      linked
-                                        ? "text-blue-700"
-                                        : "text-slate-600"
-                                    }
-                                  />
-                                </button>
-
-                                {showMaterials && candidates.length > 0 && (
-                                  <div className="relative">
-                                    <button
-                                      type="button"
-                                      className="inline-flex items-center justify-center w-9 h-9 rounded-md border hover:bg-slate-50"
-                                      title="Pick matching material from RateGen"
-                                      onClick={() =>
-                                        setOpenPickKey(
-                                          openPickKey === r.key ? null : r.key,
-                                        )
-                                      }
-                                    >
-                                      <FaSearch className="text-slate-600" />
-                                    </button>
-
-                                    {openPickKey === r.key && (
-                                      <div className="absolute right-0 mt-2 w-80 z-30 bg-white border rounded-lg shadow-lg overflow-hidden">
-                                        <div className="px-3 py-2 text-xs text-slate-600 border-b">
-                                          Choose match for:{" "}
-                                          <b>
-                                            {String(
-                                              it?.materialName || "",
-                                            ).trim()}
-                                          </b>
-                                        </div>
-
-                                        <div className="max-h-64 overflow-auto">
-                                          {candidates.slice(0, 10).map((c) => {
-                                            const unitBad =
-                                              normalizeUnit(it?.unit) &&
-                                              normalizeUnit(c?.unit) &&
-                                              normalizeUnit(it?.unit) !==
-                                                normalizeUnit(c?.unit);
-
-                                            return (
-                                              <button
-                                                key={pickKeyFromCandidate(c)}
-                                                type="button"
-                                                className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b"
-                                                onClick={() => pickCandidate(c)}
-                                              >
-                                                <div className="flex items-center justify-between gap-3">
-                                                  <div className="font-medium truncate">
-                                                    {c.description}
-                                                  </div>
-                                                  <div className="font-semibold">
-                                                    {money(c.price)}
-                                                  </div>
-                                                </div>
-                                                <div className="text-xs text-slate-500 mt-0.5">
-                                                  {c.unit} • {c.source}
-                                                  {unitBad && (
-                                                    <span className="text-amber-700 font-medium">
-                                                      {" "}
-                                                      • unit mismatch
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </button>
-                                            );
-                                          })}
-                                        </div>
-
-                                        <div className="p-2 flex justify-end">
-                                          <button
-                                            type="button"
-                                            className="btn btn-xs"
-                                            onClick={() => setOpenPickKey(null)}
-                                          >
-                                            Close
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-
-                              {!!gid && (
-                                <div className="text-[11px] mt-1">
-                                  <span className="text-slate-500">Group:</span>{" "}
-                                  <span className="text-slate-700">
-                                    {r.groupLabel} ({r.groupCount})
-                                  </span>{" "}
-                                  {linked && (
-                                    <span className="text-blue-700 font-medium">
-                                      • linked
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-
-                            <td className="py-2 pr-4 font-medium">
-                              {money(r.amount)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-
-                      {items.length > 0 && (
-                        <tr className="border-t">
-                          <td className="py-3 pr-4" />
-                          <td className="py-3 pr-4" />
-                          <td className="py-3 pr-4" />
-                          <td className="py-3 pr-4" />
-                          <td className="py-3 pr-4 font-semibold">TOTAL</td>
-                          <td className="py-3 pr-4 font-semibold">
-                            {money(totalAmount)}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="text-xs text-slate-500 mt-3 space-y-1">
-                  <div>
-                    Project ID: <code>{selectedId}</code>
-                  </div>
-                  <div>
-                    <b>Tip:</b> You can still use the Project ID in your Windows
-                    plugin’s “Open from Cloud”.
-                  </div>
-                </div>
-              </div>
+              <ProjectOpenView
+                projectName={sel?.name || "Project"}
+                selectedId={selectedId}
+                showMaterials={showMaterials}
+                statusLabel={statusLabel}
+                statusPastLabel={statusPastLabel}
+                checkboxCls={checkboxCls}
+                onlyFillEmpty={onlyFillEmpty}
+                onToggleOnlyFillEmpty={setOnlyFillEmpty}
+                canRateGen={canRateGen}
+                autoFillMaterialsRates={autoFillMaterialsRates}
+                onToggleAutoFill={toggleAutoFill}
+                autoFillBusy={autoFillBusy}
+                onSyncPrices={() => sel && autoFillMaterialRates(sel)}
+                rateInfoText={
+                  showMaterials
+                    ? canRateGen
+                      ? "Auto-fill uses Admin RateGen and your saved material prices."
+                      : "Subscribe to RateGen to auto-fill material prices."
+                    : "Update rates and completion status, then save to keep the valuation log current."
+                }
+                linkedGroupsCount={
+                  Object.keys(linkedGroups).filter(
+                    (groupId) => linkedGroups[groupId],
+                  ).length || 0
+                }
+                isDirty={isDirty}
+                saving={saving}
+                onSave={saveRatesToCloud}
+                exportOpen={exportOpen}
+                onToggleExportOpen={() => setExportOpen((value) => !value)}
+                onExportGenericBoQ={() => {
+                  setExportOpen(false);
+                  exportGenericBoQ();
+                }}
+                onExportElementalBoQ={async () => {
+                  setExportOpen(false);
+                  try {
+                    await exportElementalBoQFromBackend();
+                  } catch (e) {
+                    setErr(e?.message || "Failed to export BoQ");
+                  }
+                }}
+                itemQuery={itemQuery}
+                onItemQueryChange={setItemQuery}
+                onClearItemQuery={() => setItemQuery("")}
+                grossAmount={grossAmount}
+                valuedAmount={valuedAmount}
+                remainingAmount={totalAmount}
+                valuations={valuations}
+                selectedValuation={selectedValuation}
+                selectedValuationDate={selectedValuationDate}
+                onSelectValuationDate={setSelectedValuationDate}
+                loadingValuations={loadingValuations}
+                valuationErr={valuationErr}
+                computedShown={computedShown}
+                items={items}
+                rates={rates}
+                openPickKey={openPickKey}
+                onToggleOpenPickKey={(key) =>
+                  setOpenPickKey((prev) => (prev === key ? null : key))
+                }
+                onClosePickKey={() => setOpenPickKey(null)}
+                onPickCandidate={handlePickCandidate}
+                onRateChange={handleRateChange}
+                onStatusToggle={handleStatusToggle}
+                onToggleGroupLink={toggleGroupLink}
+                isGroupLinked={isGroupLinked}
+                getCandidatesForItem={getCandidatesForItem}
+                onBack={closeProject}
+                onDelete={() => delProject(selectedId, sel?.name)}
+              />
             )}
           </div>
         </main>
@@ -2273,4 +1940,5 @@ export default function ProjectsGeneric() {
     </div>
   );
 }
+
 
