@@ -17,8 +17,10 @@ import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 // routes
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
+import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import adminRoutes from "./routes/admin.js";
+import adminDeploymentsRoutes from "./routes/admin.deployments.js";
 import adminCourses from "./routes/adminCourses.js";
 import adminCourseGrading from "./routes/adminCourseGrading.js";
 import purchaseRoutes from "./routes/purchase.js";
@@ -164,6 +166,7 @@ app.use("/webhooks", webhooksRouter);
 
 app.use("/auth", authRoutes);
 app.use("/me", meRoutes);
+app.use("/me/deployments", meDeploymentsRoutes);
 app.use("/me/courses", meCourses);
 app.use("/purchase", purchaseRoutes);
 
@@ -195,6 +198,7 @@ app.use("/admin/showcase", adminShowcase);
 
 app.use("/admin/coupons", adminCoupons);
 app.use("/admin/products", adminProducts);
+app.use("/admin/deployments", adminDeploymentsRoutes);
 app.use("/admin/courses", adminCourses);
 app.use("/admin/course-grading", adminCourseGrading);
 app.use("/admin/settings", adminSettings);
