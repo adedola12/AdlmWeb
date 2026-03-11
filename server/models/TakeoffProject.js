@@ -1,4 +1,33 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
+
+const DefaultValuationSettings = Object.freeze({
+  showDailyLog: true,
+  retentionPct: 5,
+  vatPct: 7.5,
+  withholdingPct: 2.5,
+});
+
+const ValuationSettingsSchema = new mongoose.Schema(
+  {
+    showDailyLog: {
+      type: Boolean,
+      default: DefaultValuationSettings.showDailyLog,
+    },
+    retentionPct: {
+      type: Number,
+      default: DefaultValuationSettings.retentionPct,
+    },
+    vatPct: {
+      type: Number,
+      default: DefaultValuationSettings.vatPct,
+    },
+    withholdingPct: {
+      type: Number,
+      default: DefaultValuationSettings.withholdingPct,
+    },
+  },
+  { _id: false },
+);
 
 const ValuationEventSchema = new mongoose.Schema(
   {
@@ -56,6 +85,10 @@ const TakeoffProjectSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     checklistCompositeKeys: { type: [String], default: [] },
     items: { type: [ItemSchema], default: [] },
+    valuationSettings: {
+      type: ValuationSettingsSchema,
+      default: () => ({ ...DefaultValuationSettings }),
+    },
     valuationEvents: { type: [ValuationEventSchema], default: [] },
     version: { type: Number, default: 1 },
   },

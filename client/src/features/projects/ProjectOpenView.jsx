@@ -69,8 +69,13 @@ export default function ProjectOpenView({
   onToggleGroupLink,
   onToggleOnlyFillEmpty,
   onToggleOpenPickKey,
+  onToggleShowDailyValuationLog,
+  onValuationSettingChange,
   onlyFillEmpty = true,
   openPickKey = null,
+  progressCount = 0,
+  progressPercent = 0,
+  progressTotal = 0,
   projectName = "Project",
   rateInfoText = "",
   rates = {},
@@ -79,10 +84,12 @@ export default function ProjectOpenView({
   selectedId = "",
   selectedValuation = null,
   selectedValuationDate = "",
+  showDailyValuationLog = true,
   showMaterials = false,
   statusLabel = "Completed",
   statusPastLabel = "Completed to date",
   valuationErr = "",
+  valuationSettings,
   valuations = [],
   valuedAmount = 0,
 }) {
@@ -138,6 +145,16 @@ export default function ProjectOpenView({
                 className={checkboxCls}
               />
               Only fill empty rates
+            </label>
+
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showDailyValuationLog}
+                onChange={(e) => onToggleShowDailyValuationLog?.(e.target.checked)}
+                className={checkboxCls}
+              />
+              Show daily valuation log
             </label>
 
             {showMaterials && canRateGen ? (
@@ -228,6 +245,12 @@ export default function ProjectOpenView({
         onSelectValuationDate={onSelectValuationDate}
         loadingValuations={loadingValuations}
         valuationErr={valuationErr}
+        valuationSettings={valuationSettings}
+        onValuationSettingChange={onValuationSettingChange}
+        showDailyValuationLog={showDailyValuationLog}
+        progressPercent={progressPercent}
+        progressCount={progressCount}
+        progressTotal={progressTotal}
       />
 
       <div className="flex items-center gap-2 rounded-md border bg-white px-2 py-2">

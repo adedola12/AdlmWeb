@@ -114,6 +114,42 @@ function safeNum(value) {
   return Number.isFinite(num) ? num : 0;
 }
 
+const DEFAULT_VALUATION_SETTINGS = Object.freeze({
+  showDailyLog: true,
+  retentionPct: 5,
+  vatPct: 7.5,
+  withholdingPct: 2.5,
+});
+
+function clampPercentage(value, fallback = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(100, Math.max(0, num));
+}
+
+function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTINGS) {
+  const source = settings && typeof settings === "object" ? settings : {};
+  const base = current && typeof current === "object"
+    ? current
+    : DEFAULT_VALUATION_SETTINGS;
+
+  return {
+    showDailyLog:
+      typeof source.showDailyLog === "boolean"
+        ? source.showDailyLog
+        : Boolean(base.showDailyLog),
+    retentionPct: clampPercentage(
+      source.retentionPct,
+      safeNum(base.retentionPct),
+    ),
+    vatPct: clampPercentage(source.vatPct, safeNum(base.vatPct)),
+    withholdingPct: clampPercentage(
+      source.withholdingPct,
+      safeNum(base.withholdingPct),
+    ),
+  };
+}
+
 function itemIdentity(item, index) {
   const sn = safeNum(item?.sn) || index + 1;
   const parts = [
@@ -318,6 +354,7 @@ async function createProject(req, res) {
       mergeSameTypeLevel,
       mergeSameLine,
       checklistCompositeKeys,
+      valuationSettings,
     } = req.body || {};
 
     if (!name) return res.status(400).json({ error: "name required" });
@@ -350,6 +387,7 @@ async function createProject(req, res) {
             ? mergeSameLine
             : true,
       checklistCompositeKeys: normalizeChecklistKeys(checklistCompositeKeys),
+      valuationSettings: normalizeValuationSettings(valuationSettings),
     });
 
     res.json(project);
@@ -430,6 +468,7 @@ async function updateProject(req, res) {
       mergeSameLine,
       checklistCompositeKeys,
       clientProjectKey,
+      valuationSettings,
     } = req.body || {};
 
     const userId = getUserObjectId(req);
@@ -476,6 +515,13 @@ async function updateProject(req, res) {
 
     if (Array.isArray(checklistCompositeKeys)) {
       project.checklistCompositeKeys = normalizeChecklistKeys(checklistCompositeKeys);
+    }
+
+    if (valuationSettings !== undefined) {
+      project.valuationSettings = normalizeValuationSettings(
+        valuationSettings,
+        project.valuationSettings || DEFAULT_VALUATION_SETTINGS,
+      );
     }
 
     project.version += 1;
