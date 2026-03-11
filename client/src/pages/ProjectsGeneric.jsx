@@ -115,6 +115,25 @@ function safeNum(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
+function parseOptionalNumber(value) {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+function actualInputValue(value) {
+  const parsed = parseOptionalNumber(value);
+  return parsed == null ? "" : String(parsed);
+}
+function optionalNumberMapsEqual(a, b) {
+  const A = a || {};
+  const B = b || {};
+  const keys = new Set([...Object.keys(A), ...Object.keys(B)]);
+  for (const k of keys) {
+    if (parseOptionalNumber(A[k]) !== parseOptionalNumber(B[k])) return false;
+  }
+  return true;
+}
 
 function sanitizeFilename(name) {
   return String(name || "BoQ")
@@ -325,9 +344,12 @@ function statusMapsEqual(a, b) {
   return true;
 }
 
+const DASHBOARD_CHART_MODES = new Set(["pie", "ribbon", "line"]);
 const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   showDailyLog: true,
   showValuationSettings: true,
+  showActualColumns: false,
+  dashboardChartMode: "pie",
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
@@ -337,6 +359,11 @@ function clampPercentage(value, fallback = 0) {
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
   return Math.min(100, Math.max(0, num));
+}
+
+function normalizeChartMode(value, fallback = DEFAULT_VALUATION_SETTINGS.dashboardChartMode) {
+  const mode = String(value || "").trim().toLowerCase();
+  return DASHBOARD_CHART_MODES.has(mode) ? mode : fallback;
 }
 
 function normalizeValuationSettings(settings) {
@@ -350,6 +377,11 @@ function normalizeValuationSettings(settings) {
       typeof source.showValuationSettings === "boolean"
         ? source.showValuationSettings
         : DEFAULT_VALUATION_SETTINGS.showValuationSettings,
+    showActualColumns:
+      typeof source.showActualColumns === "boolean"
+        ? source.showActualColumns
+        : DEFAULT_VALUATION_SETTINGS.showActualColumns,
+    dashboardChartMode: normalizeChartMode(source.dashboardChartMode),
     retentionPct: clampPercentage(
       source.retentionPct,
       DEFAULT_VALUATION_SETTINGS.retentionPct,
@@ -368,6 +400,8 @@ function valuationSettingsEqual(a, b) {
   return (
     A.showDailyLog === B.showDailyLog &&
     A.showValuationSettings === B.showValuationSettings &&
+    A.showActualColumns === B.showActualColumns &&
+    A.dashboardChartMode === B.dashboardChartMode &&
     safeNum(A.retentionPct) === safeNum(B.retentionPct) &&
     safeNum(A.vatPct) === safeNum(B.vatPct) &&
     safeNum(A.withholdingPct) === safeNum(B.withholdingPct)
@@ -566,7 +600,7 @@ function normalizeToken(w) {
 function tokenize(desc) {
   const s = stripMeta(desc)
     .toLowerCase()
-    .replace(/[–—-]+/g, "-")
+    .replace(/[â€“â€”-]+/g, "-")
     .replace(NON_WORD_RE, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -779,6 +813,10 @@ export default function ProjectsGeneric() {
   // rates editing
   const [rates, setRates] = React.useState({});
   const [baseRates, setBaseRates] = React.useState({});
+  const [actualQtyMap, setActualQtyMap] = React.useState({});
+  const [baseActualQtyMap, setBaseActualQtyMap] = React.useState({});
+  const [actualRateMap, setActualRateMap] = React.useState({});
+  const [baseActualRateMap, setBaseActualRateMap] = React.useState({});
   const [statusMap, setStatusMap] = React.useState({});
   const [baseStatusMap, setBaseStatusMap] = React.useState({});
   const [valuationSettings, setValuationSettings] = React.useState(
@@ -885,31 +923,40 @@ export default function ProjectsGeneric() {
 
   function initRatesFromProject(project) {
     const its = Array.isArray(project?.items) ? project.items : [];
-
     const base = {};
     const ui = {};
+    const baseActualQty = {};
+    const uiActualQty = {};
+    const baseActualRate = {};
+    const uiActualRate = {};
     const baseStatuses = {};
     const uiStatuses = {};
-
     for (let i = 0; i < its.length; i++) {
       const k = itemKey(its[i], i);
       const r = safeNum(its[i]?.rate);
+      const actualQty = parseOptionalNumber(its[i]?.actualQty);
+      const actualRate = parseOptionalNumber(its[i]?.actualRate);
       base[k] = r;
       ui[k] = r > 0 ? String(r) : "";
+      baseActualQty[k] = actualQty;
+      uiActualQty[k] = actualInputValue(actualQty);
+      baseActualRate[k] = actualRate;
+      uiActualRate[k] = actualInputValue(actualRate);
       baseStatuses[k] = Boolean(its[i]?.[statusField]);
       uiStatuses[k] = Boolean(its[i]?.[statusField]);
     }
-
     setBaseRates(base);
+    setBaseActualQtyMap(baseActualQty);
+    setActualQtyMap(uiActualQty);
+    setBaseActualRateMap(baseActualRate);
+    setActualRateMap(uiActualRate);
     setBaseStatusMap(baseStatuses);
     setStatusMap(uiStatuses);
-
     const normalizedSettings = normalizeValuationSettings(
       project?.valuationSettings,
     );
     setBaseValuationSettings(normalizedSettings);
     setValuationSettings(normalizedSettings);
-
     const cached = project?._id ? readCache(tool, project._id) : null;
     if (cached && cached?.rates && typeof cached.rates === "object") {
       const nextUi = { ...ui };
@@ -923,7 +970,30 @@ export default function ProjectsGeneric() {
     } else {
       setRates(ui);
     }
-
+    if (cached && cached?.actualQty && typeof cached.actualQty === "object") {
+      const nextActualQty = { ...uiActualQty };
+      for (const [k, v] of Object.entries(cached.actualQty)) {
+        if (!(k in nextActualQty)) continue;
+        const serverVal = parseOptionalNumber(baseActualQty[k]);
+        const cacheVal = parseOptionalNumber(v);
+        if (serverVal == null && cacheVal != null) {
+          nextActualQty[k] = actualInputValue(cacheVal);
+        }
+      }
+      setActualQtyMap(nextActualQty);
+    }
+    if (cached && cached?.actualRate && typeof cached.actualRate === "object") {
+      const nextActualRate = { ...uiActualRate };
+      for (const [k, v] of Object.entries(cached.actualRate)) {
+        if (!(k in nextActualRate)) continue;
+        const serverVal = parseOptionalNumber(baseActualRate[k]);
+        const cacheVal = parseOptionalNumber(v);
+        if (serverVal == null && cacheVal != null) {
+          nextActualRate[k] = actualInputValue(cacheVal);
+        }
+      }
+      setActualRateMap(nextActualRate);
+    }
     if (project?._id) {
       const lk = readLinkCache(tool, project._id);
       if (lk && typeof lk === "object") {
@@ -943,6 +1013,10 @@ export default function ProjectsGeneric() {
     setSel(null);
     setRates({});
     setBaseRates({});
+    setActualQtyMap({});
+    setBaseActualQtyMap({});
+    setActualRateMap({});
+    setBaseActualRateMap({});
     setStatusMap({});
     setBaseStatusMap({});
     setValuationSettings(DEFAULT_VALUATION_SETTINGS);
@@ -1216,40 +1290,47 @@ export default function ProjectsGeneric() {
     const its = Array.isArray(sel?.items) ? sel.items : [];
     const it = its[rowIndex];
     if (!it) return;
-
     const k0 = itemKey(it, rowIndex);
     const groupId = groupIdForIndex(rowIndex);
-
     setRates((prev) => {
       const next = { ...(prev || {}), [k0]: value };
-
       if (!groupId || !isGroupLinked(groupId)) return next;
       if (String(value ?? "").trim() === "") return next;
-
       for (let j = 0; j < its.length; j++) {
         if (j === rowIndex) continue;
         if (groupIdForIndex(j) !== groupId) continue;
-
         const kj = itemKey(its[j], j);
-
         const existing =
           String(next[kj] ?? "").trim() === ""
             ? safeNum(its[j]?.rate)
             : safeNum(next[kj]);
-
         if (onlyFillEmpty && existing !== 0) continue;
         next[kj] = value;
       }
       return next;
     });
   }
-
+  function handleActualQtyChange(rowIndex, value) {
+    if (!sel) return;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const it = its[rowIndex];
+    if (!it) return;
+    const key = itemKey(it, rowIndex);
+    setActualQtyMap((prev) => ({ ...(prev || {}), [key]: value }));
+  }
+  function handleActualRateChange(rowIndex, value) {
+    if (!sel) return;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const it = its[rowIndex];
+    if (!it) return;
+    const key = itemKey(it, rowIndex);
+    setActualRateMap((prev) => ({ ...(prev || {}), [key]: value }));
+  }
   function handleStatusToggle(rowIndex, checked) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
     const it = its[rowIndex];
     if (!it) return;
-
     const key = itemKey(it, rowIndex);
     setStatusMap((prev) => ({ ...(prev || {}), [key]: Boolean(checked) }));
   }
@@ -1261,6 +1342,10 @@ export default function ProjectsGeneric() {
         next.showDailyLog = Boolean(value);
       } else if (field === "showValuationSettings") {
         next.showValuationSettings = Boolean(value);
+      } else if (field === "showActualColumns") {
+        next.showActualColumns = Boolean(value);
+      } else if (field === "dashboardChartMode") {
+        next.dashboardChartMode = normalizeChartMode(value, next.dashboardChartMode);
       } else if (
         field === "retentionPct" ||
         field === "vatPct" ||
@@ -1274,41 +1359,51 @@ export default function ProjectsGeneric() {
 
   const isDirty =
     !ratesEqual(rates, baseRates) ||
+    !optionalNumberMapsEqual(actualQtyMap, baseActualQtyMap) ||
+    !optionalNumberMapsEqual(actualRateMap, baseActualRateMap) ||
     !statusMapsEqual(statusMap, baseStatusMap) ||
     !valuationSettingsEqual(valuationSettings, baseValuationSettings);
 
   async function saveRatesToCloud() {
     if (!sel || !selectedId) return;
     if (!isDirty) return;
-
     setSaving(true);
     setErr("");
     setNotice("");
-
     try {
       const its = Array.isArray(sel?.items) ? sel.items : [];
-
       const updatedItems = its.map((it, i) => {
         const k = itemKey(it, i);
         const raw = rates?.[k];
         const use =
           String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
         const statusValue = Boolean(statusMap?.[k]);
-        return { ...it, rate: use, [statusField]: statusValue };
+        const nextActualQty =
+          String(actualQtyMap?.[k] ?? "").trim() === ""
+            ? parseOptionalNumber(it?.actualQty)
+            : parseOptionalNumber(actualQtyMap?.[k]);
+        const nextActualRate =
+          String(actualRateMap?.[k] ?? "").trim() === ""
+            ? parseOptionalNumber(it?.actualRate)
+            : parseOptionalNumber(actualRateMap?.[k]);
+        return {
+          ...it,
+          rate: use,
+          actualQty: nextActualQty,
+          actualRate: nextActualRate,
+          [statusField]: statusValue,
+        };
       });
-
       const payload = {
         baseVersion: sel?.version,
         items: updatedItems,
         valuationSettings: normalizeValuationSettings(valuationSettings),
       };
-
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
         method: "PUT",
         body: payload,
       });
-
       setSel(updated);
       initRatesFromProject(updated);
       setRows((prev) =>
@@ -1328,8 +1423,7 @@ export default function ProjectsGeneric() {
           : prev,
       );
       await loadValuations(updated?._id || updated?.id || selectedId);
-
-      setNotice("Saved. Rates, valuation settings, and progress were updated.");
+      setNotice("Saved. Rates, actuals, valuation settings, and progress were updated.");
     } catch (e) {
       const msg = e?.message || "Failed to save";
       if (String(msg).toLowerCase().includes("conflict")) {
@@ -1349,10 +1443,11 @@ export default function ProjectsGeneric() {
     writeCache(tool, selectedId, {
       version: sel?.version ?? 0,
       rates: rates || {},
+      actualQty: actualQtyMap || {},
+      actualRate: actualRateMap || {},
       savedAt: Date.now(),
     });
-  }, [tool, selectedId, sel?.version, rates]);
-
+  }, [tool, selectedId, sel?.version, rates, actualQtyMap, actualRateMap]);
   React.useEffect(() => {
     if (!selectedId) return;
     writeLinkCache(tool, selectedId, {
@@ -1648,9 +1743,22 @@ export default function ProjectsGeneric() {
         ? safeNum(it?.rate)
         : safeNum(rates?.[k]);
     const fullAmount = rate * qty;
+    const actualQty =
+      String(actualQtyMap?.[k] ?? "").trim() === ""
+        ? parseOptionalNumber(it?.actualQty)
+        : parseOptionalNumber(actualQtyMap?.[k]);
+    const actualRate =
+      String(actualRateMap?.[k] ?? "").trim() === ""
+        ? parseOptionalNumber(it?.actualRate)
+        : parseOptionalNumber(actualRateMap?.[k]);
+    const actualHasData = actualQty != null || actualRate != null;
+    const resolvedActualQty = actualQty != null ? actualQty : qty;
+    const resolvedActualRate = actualRate != null ? actualRate : rate;
+    const actualAmount = actualHasData
+      ? resolvedActualQty * resolvedActualRate
+      : null;
     const isMarked = Boolean(statusMap?.[k]);
     const gid = groupIdForIndex(i);
-
     return {
       i,
       key: k,
@@ -1663,6 +1771,14 @@ export default function ProjectsGeneric() {
       groupCount: groupCount(gid),
       rate,
       fullAmount,
+      actualQty,
+      actualRate,
+      actualAmount,
+      actualHasData,
+      actualVarianceAmount:
+        actualAmount == null ? null : actualAmount - fullAmount,
+      actualRecordedAt: it?.actualRecordedAt || null,
+      actualUpdatedAt: it?.actualUpdatedAt || null,
       amount: isMarked ? 0 : fullAmount,
       valuedAmount: isMarked ? fullAmount : 0,
       isMarked,
@@ -1670,7 +1786,6 @@ export default function ProjectsGeneric() {
         statusField === "purchased" ? it?.purchasedAt || null : it?.completedAt || null,
     };
   });
-
   const grossAmount = computedAll.reduce(
     (acc, row) => acc + safeNum(row.fullAmount),
     0,
@@ -1687,6 +1802,35 @@ export default function ProjectsGeneric() {
   const progressPercent = computedAll.length
     ? (progressCount / computedAll.length) * 100
     : 0;
+  const actualRows = computedAll.filter((row) => row.actualHasData);
+  const actualCoverageCount = actualRows.length;
+  const actualCoveragePercent = computedAll.length
+    ? (actualCoverageCount / computedAll.length) * 100
+    : 0;
+  const plannedActualScopeAmount = actualRows.reduce(
+    (acc, row) => acc + safeNum(row.fullAmount),
+    0,
+  );
+  const actualTrackedAmount = actualRows.reduce(
+    (acc, row) => acc + safeNum(row.actualAmount),
+    0,
+  );
+  const actualVarianceAmount = actualTrackedAmount - plannedActualScopeAmount;
+  const actualVariancePercent = plannedActualScopeAmount > 0
+    ? (actualVarianceAmount / plannedActualScopeAmount) * 100
+    : 0;
+  const actualQtyOverrideCount = actualRows.filter(
+    (row) => row.actualQty != null,
+  ).length;
+  const actualRateOverrideCount = actualRows.filter(
+    (row) => row.actualRate != null,
+  ).length;
+  const latestActualDate = actualRows.reduce((latest, row) => {
+    const candidate = new Date(row.actualUpdatedAt || row.actualRecordedAt || 0);
+    if (Number.isNaN(candidate.getTime())) return latest;
+    if (!latest) return candidate;
+    return candidate.getTime() > latest.getTime() ? candidate : latest;
+  }, null);
   const liveProjectSummary = React.useMemo(
     () => ({
       itemCount: computedAll.length,
@@ -1695,6 +1839,9 @@ export default function ProjectsGeneric() {
       valuedAmount,
       remainingAmount: totalAmount,
       progressPercent,
+      actualCoverageCount,
+      actualTrackedAmount,
+      actualVarianceAmount,
     }),
     [
       computedAll.length,
@@ -1703,6 +1850,9 @@ export default function ProjectsGeneric() {
       valuedAmount,
       totalAmount,
       progressPercent,
+      actualCoverageCount,
+      actualTrackedAmount,
+      actualVarianceAmount,
     ],
   );
   React.useEffect(() => {
@@ -2062,10 +2212,22 @@ export default function ProjectsGeneric() {
               />
             ) : (
               <ProjectOpenView
+                actualCoverageCount={actualCoverageCount}
+                actualCoveragePercent={actualCoveragePercent}
+                actualLatestAt={latestActualDate}
+                actualPlannedAmount={plannedActualScopeAmount}
+                actualQtyInputs={actualQtyMap}
+                actualQtyOverrideCount={actualQtyOverrideCount}
+                actualRateInputs={actualRateMap}
+                actualRateOverrideCount={actualRateOverrideCount}
+                actualTrackedAmount={actualTrackedAmount}
+                actualVarianceAmount={actualVarianceAmount}
+                actualVariancePercent={actualVariancePercent}
                 projectName={sel?.name || "Project"}
                 selectedId={selectedId}
                 showMaterials={showMaterials}
                 statusLabel={statusLabel}
+                statusPastLabel={statusPastLabel}
                 checkboxCls={checkboxCls}
                 onlyFillEmpty={onlyFillEmpty}
                 onToggleOnlyFillEmpty={setOnlyFillEmpty}
@@ -2079,7 +2241,7 @@ export default function ProjectsGeneric() {
                     ? canRateGen
                       ? "Auto-fill uses Admin RateGen and your saved material prices."
                       : "Subscribe to RateGen to auto-fill material prices."
-                    : "Update rates and completion status, then save to keep the valuation log current."
+                    : "Update rates, actuals, and completion status, then save to keep the valuation log current."
                 }
                 linkedGroupsCount={
                   Object.keys(linkedGroups).filter(
@@ -2109,6 +2271,10 @@ export default function ProjectsGeneric() {
                 grossAmount={grossAmount}
                 valuedAmount={valuedAmount}
                 remainingAmount={totalAmount}
+                dashboardChartMode={valuationSettings?.dashboardChartMode || "pie"}
+                onDashboardChartModeChange={(mode) =>
+                  handleValuationSettingChange("dashboardChartMode", mode)
+                }
                 valuations={valuations}
                 selectedValuation={selectedValuation}
                 selectedValuationDate={selectedValuationDate}
@@ -2125,9 +2291,14 @@ export default function ProjectsGeneric() {
                 onToggleShowValuationSettings={(checked) =>
                   handleValuationSettingChange("showValuationSettings", checked)
                 }
+                showActualColumns={Boolean(valuationSettings?.showActualColumns)}
+                onToggleShowActualColumns={(checked) =>
+                  handleValuationSettingChange("showActualColumns", checked)
+                }
                 progressPercent={progressPercent}
                 progressCount={progressCount}
                 progressTotal={computedAll.length}
+                comparisonRows={computedAll}
                 computedShown={computedShown}
                 items={items}
                 rates={rates}
@@ -2138,6 +2309,8 @@ export default function ProjectsGeneric() {
                 onClosePickKey={() => setOpenPickKey(null)}
                 onPickCandidate={handlePickCandidate}
                 onRateChange={handleRateChange}
+                onActualQtyChange={handleActualQtyChange}
+                onActualRateChange={handleActualRateChange}
                 onStatusToggle={handleStatusToggle}
                 onToggleGroupLink={toggleGroupLink}
                 isGroupLinked={isGroupLinked}

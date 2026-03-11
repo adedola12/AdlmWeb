@@ -3,6 +3,8 @@
 const DefaultValuationSettings = Object.freeze({
   showDailyLog: true,
   showValuationSettings: true,
+  showActualColumns: false,
+  dashboardChartMode: "pie",
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
@@ -17,6 +19,15 @@ const ValuationSettingsSchema = new mongoose.Schema(
     showValuationSettings: {
       type: Boolean,
       default: DefaultValuationSettings.showValuationSettings,
+    },
+    showActualColumns: {
+      type: Boolean,
+      default: DefaultValuationSettings.showActualColumns,
+    },
+    dashboardChartMode: {
+      type: String,
+      enum: ["pie", "ribbon", "line"],
+      default: DefaultValuationSettings.dashboardChartMode,
     },
     retentionPct: {
       type: Number,
@@ -63,6 +74,10 @@ const ItemSchema = new mongoose.Schema(
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },
     rate: { type: Number, default: 0 },
+    actualQty: { type: Number, default: null },
+    actualRate: { type: Number, default: null },
+    actualRecordedAt: { type: Date, default: null },
+    actualUpdatedAt: { type: Date, default: null },
     purchased: { type: Boolean, default: false },
     purchasedAt: { type: Date, default: null },
     completed: { type: Boolean, default: false },
@@ -107,4 +122,3 @@ export const TakeoffProject = mongoose.model(
   "TakeoffProject",
   TakeoffProjectSchema,
 );
-

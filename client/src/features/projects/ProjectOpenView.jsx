@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { FaArrowLeft, FaTrash } from "react-icons/fa";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
@@ -23,11 +23,24 @@ const TAB_OPTIONS = [
 ];
 
 export default function ProjectOpenView({
+  actualCoverageCount = 0,
+  actualCoveragePercent = 0,
+  actualLatestAt = null,
+  actualPlannedAmount = 0,
+  actualQtyInputs = {},
+  actualQtyOverrideCount = 0,
+  actualRateInputs = {},
+  actualRateOverrideCount = 0,
+  actualTrackedAmount = 0,
+  actualVarianceAmount = 0,
+  actualVariancePercent = 0,
   autoFillBusy = false,
   autoFillMaterialsRates = false,
   canRateGen = false,
   checkboxCls = "",
+  comparisonRows = [],
   computedShown = [],
+  dashboardChartMode = "pie",
   exportOpen = false,
   getCandidatesForItem,
   grossAmount = 0,
@@ -37,9 +50,12 @@ export default function ProjectOpenView({
   items = [],
   linkedGroupsCount = 0,
   loadingValuations = false,
+  onActualQtyChange,
+  onActualRateChange,
   onBack,
   onClearItemQuery,
   onClosePickKey,
+  onDashboardChartModeChange,
   onDelete,
   onExportElementalBoQ,
   onExportGenericBoQ,
@@ -55,6 +71,7 @@ export default function ProjectOpenView({
   onToggleGroupLink,
   onToggleOnlyFillEmpty,
   onToggleOpenPickKey,
+  onToggleShowActualColumns,
   onToggleShowDailyValuationLog,
   onToggleShowValuationSettings,
   onValuationSettingChange,
@@ -71,6 +88,7 @@ export default function ProjectOpenView({
   selectedId = "",
   selectedValuation = null,
   selectedValuationDate = "",
+  showActualColumns = false,
   showDailyValuationLog = true,
   showMaterials = false,
   showValuationSettings = true,
@@ -187,14 +205,26 @@ export default function ProjectOpenView({
 
       {activeTab === "dashboard" ? (
         <ProjectDashboardSummary
+          actualCoverageCount={actualCoverageCount}
+          actualCoveragePercent={actualCoveragePercent}
+          actualLatestAt={actualLatestAt}
+          actualPlannedAmount={actualPlannedAmount}
+          actualQtyOverrideCount={actualQtyOverrideCount}
+          actualRateOverrideCount={actualRateOverrideCount}
+          actualTrackedAmount={actualTrackedAmount}
+          actualVarianceAmount={actualVarianceAmount}
+          actualVariancePercent={actualVariancePercent}
+          chartMode={dashboardChartMode}
+          comparisonRows={comparisonRows}
           grossAmount={grossAmount}
-          valuedAmount={valuedAmount}
-          remainingAmount={remainingAmount}
-          progressPercent={progressPercent}
+          onChartModeChange={onDashboardChartModeChange}
           progressCount={progressCount}
+          progressPercent={progressPercent}
           progressTotal={progressTotal}
+          remainingAmount={remainingAmount}
           statusLabel={statusLabel}
           statusPastLabel={statusPastLabel}
+          valuedAmount={valuedAmount}
         />
       ) : null}
 
@@ -254,6 +284,9 @@ export default function ProjectOpenView({
 
       {activeTab === "bill" ? (
         <ProjectBillTable
+          actualQtyInputs={actualQtyInputs}
+          actualRateInputs={actualRateInputs}
+          actualTrackedAmount={actualTrackedAmount}
           autoFillBusy={autoFillBusy}
           autoFillMaterialsRates={autoFillMaterialsRates}
           canRateGen={canRateGen}
@@ -265,6 +298,8 @@ export default function ProjectOpenView({
           itemQuery={itemQuery}
           items={items}
           linkedGroupsCount={linkedGroupsCount}
+          onActualQtyChange={onActualQtyChange}
+          onActualRateChange={onActualRateChange}
           onClearItemQuery={onClearItemQuery}
           onClosePickKey={onClosePickKey}
           onItemQueryChange={onItemQueryChange}
@@ -276,11 +311,13 @@ export default function ProjectOpenView({
           onToggleGroupLink={onToggleGroupLink}
           onToggleOnlyFillEmpty={onToggleOnlyFillEmpty}
           onToggleOpenPickKey={onToggleOpenPickKey}
+          onToggleShowActualColumns={onToggleShowActualColumns}
           onlyFillEmpty={onlyFillEmpty}
           openPickKey={openPickKey}
           rateInfoText={rateInfoText}
           rates={rates}
           remainingAmount={remainingAmount}
+          showActualColumns={showActualColumns}
           showMaterials={showMaterials}
           statusLabel={statusLabel}
           valuedAmount={valuedAmount}

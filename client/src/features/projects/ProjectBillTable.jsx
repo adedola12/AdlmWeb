@@ -1,19 +1,26 @@
-﻿import React from "react";
+import React from "react";
 import { FaInfoCircle, FaLink, FaSearch, FaTimes } from "react-icons/fa";
 
-function money(value) {
+function safeNum(value) {
   const num = Number(value);
-  const safe = Number.isFinite(num) ? num : 0;
-  return safe.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return Number.isFinite(num) ? num : 0;
 }
 
-function formatDate(value) {
+function money(value) {
+  return safeNum(value).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatDateTime(value) {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat(undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   }).format(date);
 }
 
@@ -29,6 +36,9 @@ function InfoTip({ text }) {
 }
 
 export default function ProjectBillTable({
+  actualQtyInputs = {},
+  actualRateInputs = {},
+  actualTrackedAmount = 0,
   autoFillBusy = false,
   autoFillMaterialsRates = false,
   canRateGen = false,
@@ -40,6 +50,8 @@ export default function ProjectBillTable({
   itemQuery = "",
   items = [],
   linkedGroupsCount = 0,
+  onActualQtyChange,
+  onActualRateChange,
   onClearItemQuery,
   onClosePickKey,
   onItemQueryChange,
@@ -51,11 +63,13 @@ export default function ProjectBillTable({
   onToggleGroupLink,
   onToggleOnlyFillEmpty,
   onToggleOpenPickKey,
+  onToggleShowActualColumns,
   onlyFillEmpty = true,
   openPickKey = null,
   rateInfoText = "",
   rates = {},
   remainingAmount = 0,
+  showActualColumns = false,
   showMaterials = false,
   statusLabel = "Completed",
   valuedAmount = 0,
@@ -68,6 +82,7 @@ export default function ProjectBillTable({
   const statusPendingText = showMaterials
     ? "Save to log this purchase date and deduct it from the balance."
     : "Save to log this completion date and deduct it from the balance.";
+
 
   return (
     <div className="space-y-4">
@@ -82,6 +97,16 @@ export default function ProjectBillTable({
                 className={checkboxCls}
               />
               Only fill empty rates
+            </label>
+
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showActualColumns}
+                onChange={(e) => onToggleShowActualColumns?.(e.target.checked)}
+                className={checkboxCls}
+              />
+              Show actual qty / rate columns
             </label>
 
             {showMaterials && canRateGen ? (
@@ -116,10 +141,23 @@ export default function ProjectBillTable({
             ) : null}
           </div>
 
-          <span className="text-xs text-slate-500">
-            Linked groups: <b className="text-slate-700">{linkedGroupsCount}</b>
-          </span>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <span>
+              Linked groups: <b className="text-slate-700">{linkedGroupsCount}</b>
+            </span>
+            {showActualColumns ? (
+              <span>
+                Actual tracked value: <b className="text-slate-700">{money(actualTrackedAmount)}</b>
+              </span>
+            ) : null}
+          </div>
         </div>
+
+        {showActualColumns ? (
+          <div className="mt-3 text-xs text-slate-500">
+            Actual amount uses the entered actual qty and actual rate. If only one actual field is entered, the other value falls back to the planned quantity or rate for comparison.
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2 rounded-md border bg-white px-2 py-2">
@@ -165,6 +203,10 @@ export default function ProjectBillTable({
                 <th className="px-4 py-3">Qty</th>
                 <th className="px-4 py-3">Unit</th>
                 <th className="px-4 py-3">Rate</th>
+                {showActualColumns ? <th className="px-4 py-3">Actual qty</th> : null}
+                {showActualColumns ? <th className="px-4 py-3">Actual rate</th> : null}
+                {showActualColumns ? <th className="px-4 py-3">Actual amount</th> : null}
+                {showActualColumns ? <th className="px-4 py-3">Actual added</th> : null}
                 <th className="px-4 py-3">Gross amount</th>
                 <th className="px-4 py-3">Deducted</th>
                 <th className="px-4 py-3">Balance</th>
@@ -181,6 +223,11 @@ export default function ProjectBillTable({
                   ? getCandidatesForItem?.(item) || []
                   : [];
                 const rateValue = rates?.[row.key] ?? "";
+                const actualQtyValue = actualQtyInputs?.[row.key] ?? "";
+                const actualRateValue = actualRateInputs?.[row.key] ?? "";
+                const actualDateLabel = formatDateTime(
+                  row.actualUpdatedAt || row.actualRecordedAt,
+                );
 
                 return (
                   <tr
@@ -203,7 +250,7 @@ export default function ProjectBillTable({
                       <div className="mt-1 text-[11px] text-slate-500">
                         {row.isMarked
                           ? row.markedAt
-                            ? `Logged ${formatDate(row.markedAt)}`
+                            ? `Logged ${formatDateTime(row.markedAt)}`
                             : statusPendingText
                           : `Unchecked items stay in the outstanding balance until marked ${statusLabelLower}.`}
                       </div>
@@ -306,6 +353,44 @@ export default function ProjectBillTable({
                       </div>
                     </td>
 
+                    {showActualColumns ? (
+                      <td className="px-4 py-3">
+                        <input
+                          className="input !h-9 !w-[120px] !px-2 !py-1"
+                          type="number"
+                          step="any"
+                          value={actualQtyValue}
+                          placeholder={String(Number(row.qty || 0))}
+                          onChange={(e) => onActualQtyChange?.(row.i, e.target.value)}
+                        />
+                      </td>
+                    ) : null}
+
+                    {showActualColumns ? (
+                      <td className="px-4 py-3">
+                        <input
+                          className="input !h-9 !w-[120px] !px-2 !py-1"
+                          type="number"
+                          step="any"
+                          value={actualRateValue}
+                          placeholder={String(Number(row.rate || 0))}
+                          onChange={(e) => onActualRateChange?.(row.i, e.target.value)}
+                        />
+                      </td>
+                    ) : null}
+
+                    {showActualColumns ? (
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        {row.actualHasData ? money(row.actualAmount) : "-"}
+                      </td>
+                    ) : null}
+
+                    {showActualColumns ? (
+                      <td className="px-4 py-3 text-[11px] text-slate-500">
+                        {actualDateLabel || (row.actualHasData ? "Pending save" : "-")}
+                      </td>
+                    ) : null}
+
                     <td className="px-4 py-3 font-medium text-slate-900">{money(row.fullAmount)}</td>
                     <td className="px-4 py-3 font-medium text-emerald-700">{money(row.valuedAmount)}</td>
                     <td className="px-4 py-3 font-semibold text-slate-900">{money(row.amount)}</td>
@@ -319,6 +404,10 @@ export default function ProjectBillTable({
                 <td className="px-4 py-3" colSpan={6}>
                   Totals
                 </td>
+                {showActualColumns ? <td className="px-4 py-3" /> : null}
+                {showActualColumns ? <td className="px-4 py-3" /> : null}
+                {showActualColumns ? <td className="px-4 py-3 text-blue-700">{money(actualTrackedAmount)}</td> : null}
+                {showActualColumns ? <td className="px-4 py-3" /> : null}
                 <td className="px-4 py-3">{money(grossAmount)}</td>
                 <td className="px-4 py-3 text-emerald-700">{money(valuedAmount)}</td>
                 <td className="px-4 py-3">{money(remainingAmount)}</td>

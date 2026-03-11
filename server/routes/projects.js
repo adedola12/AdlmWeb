@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
@@ -114,9 +114,25 @@ function safeNum(value) {
   return Number.isFinite(num) ? num : 0;
 }
 
+function parseOptionalNumber(value) {
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function optionalNumberEquals(a, b) {
+  const left = parseOptionalNumber(a);
+  const right = parseOptionalNumber(b);
+  return left === right;
+}
+
+const DASHBOARD_CHART_MODES = new Set(["pie", "ribbon", "line"]);
 const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   showDailyLog: true,
   showValuationSettings: true,
+  showActualColumns: false,
+  dashboardChartMode: "pie",
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
@@ -126,6 +142,11 @@ function clampPercentage(value, fallback = 0) {
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
   return Math.min(100, Math.max(0, num));
+}
+
+function normalizeChartMode(value, fallback = DEFAULT_VALUATION_SETTINGS.dashboardChartMode) {
+  const mode = String(value || "").trim().toLowerCase();
+  return DASHBOARD_CHART_MODES.has(mode) ? mode : fallback;
 }
 
 function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTINGS) {
@@ -143,6 +164,14 @@ function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTIN
       typeof source.showValuationSettings === "boolean"
         ? source.showValuationSettings
         : Boolean(base.showValuationSettings),
+    showActualColumns:
+      typeof source.showActualColumns === "boolean"
+        ? source.showActualColumns
+        : Boolean(base.showActualColumns),
+    dashboardChartMode: normalizeChartMode(
+      source.dashboardChartMode,
+      normalizeChartMode(base.dashboardChartMode),
+    ),
     retentionPct: clampPercentage(
       source.retentionPct,
       safeNum(base.retentionPct),
@@ -208,6 +237,10 @@ function sanitizeItems(items) {
       qty: Number.isFinite(Number(item.qty)) ? Number(item.qty) : 0,
       unit: item.unit != null ? String(item.unit) : "",
       rate: Number.isFinite(Number(item.rate)) ? Number(item.rate) : 0,
+      actualQty: parseOptionalNumber(item.actualQty),
+      actualRate: parseOptionalNumber(item.actualRate),
+      actualRecordedAt: parseOptionalDate(item.actualRecordedAt),
+      actualUpdatedAt: parseOptionalDate(item.actualUpdatedAt),
       purchased: Boolean(item.purchased),
       purchasedAt: parseOptionalDate(item.purchasedAt),
       completed: Boolean(item.completed),
@@ -259,11 +292,35 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
     const previousStatusAt = parseOptionalDate(previousItem?.[statusDateField]);
     const previousOtherAt = parseOptionalDate(previousItem?.[otherStatusDateField]);
     const previousUpdatedAt = parseOptionalDate(previousItem?.statusUpdatedAt);
+    const previousActualQty = parseOptionalNumber(previousItem?.actualQty);
+    const previousActualRate = parseOptionalNumber(previousItem?.actualRate);
+    const nextActualQty = parseOptionalNumber(item?.actualQty);
+    const nextActualRate = parseOptionalNumber(item?.actualRate);
+    const previousActualRecordedAt = parseOptionalDate(previousItem?.actualRecordedAt);
+    const previousActualUpdatedAt = parseOptionalDate(previousItem?.actualUpdatedAt);
+    const previousHasActual = previousActualQty != null || previousActualRate != null;
+    const nextHasActual = nextActualQty != null || nextActualRate != null;
+    const actualChanged =
+      !optionalNumberEquals(previousActualQty, nextActualQty) ||
+      !optionalNumberEquals(previousActualRate, nextActualRate);
 
     const nextItem = {
       ...item,
+      actualQty: nextActualQty,
+      actualRate: nextActualRate,
+      actualRecordedAt: nextHasActual
+        ? previousHasActual && previousActualRecordedAt
+          ? previousActualRecordedAt
+          : now
+        : null,
+      actualUpdatedAt: nextHasActual
+        ? actualChanged
+          ? now
+          : previousActualUpdatedAt || previousActualRecordedAt || now
+        : null,
       purchased: Boolean(item?.purchased),
       completed: Boolean(item?.completed),
+      [otherStatusField]: Boolean(item?.[otherStatusField]),
       [otherStatusDateField]: previousOtherAt,
       [statusDateField]: nextStatus
         ? previousStatus && previousStatusAt
