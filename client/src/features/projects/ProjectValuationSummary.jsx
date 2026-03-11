@@ -1,4 +1,5 @@
 import React from "react";
+import * as XLSX from "xlsx";
 
 function safeNum(value) {
   const num = Number(value);
@@ -29,6 +30,28 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function sanitizeFilename(name) {
+  return String(name || "Project")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .slice(0, 120);
+}
+
+function safeSheetName(name, fallback = "Sheet") {
+  const cleaned = String(name || fallback)
+    .replace(/[\\/?*[]:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 31);
+  return cleaned || fallback;
+}
+
+function setWorksheetColumns(ws, widths) {
+  ws["!cols"] = widths.map((width) => ({ wch: width }));
+  return ws;
+}
+
 function alphaIndex(index) {
   let value = Number(index) || 0;
   let label = "";
@@ -41,7 +64,7 @@ function alphaIndex(index) {
   return label;
 }
 
-function buildCertificate(selectedValuation, valuations, valuationSettings) {
+function buildCertificate(selectedValuation, valuations, valuationSettings, progressTotal) {
   if (!selectedValuation) return null;
 
   const sorted = [...(valuations || [])].sort((a, b) =>
@@ -74,6 +97,26 @@ function buildCertificate(selectedValuation, valuations, valuationSettings) {
   const withholdingAmount = amountBeforeTax * withholdingPct / 100;
   const amountDue = amountBeforeTax + vatAmount - withholdingAmount;
 
+  const progressKeys = new Set();
+  toDateEntries.forEach((entry) => {
+    (entry?.items || []).forEach((item, index) => {
+      const key =
+        item?.itemKey ||
+        `${entry?.date || "valuation"}::${item?.itemSn || item?.sn || index}::${item?.description || ""}`;
+      progressKeys.add(String(key));
+    });
+  });
+  const fallbackProgressCount = toDateEntries.reduce(
+    (sum, entry) => sum + safeNum(entry?.itemCount),
+    0,
+  );
+  const progressCountToDate = progressTotal > 0
+    ? Math.min(progressTotal, progressKeys.size || fallbackProgressCount)
+    : progressKeys.size || fallbackProgressCount;
+  const progressPercentToDate = progressTotal > 0
+    ? (progressCountToDate / progressTotal) * 100
+    : 0;
+
   return {
     valuationNumber,
     currentValuationAmount,
@@ -89,6 +132,9 @@ function buildCertificate(selectedValuation, valuations, valuationSettings) {
     withholdingPct,
     withholdingAmount,
     amountDue,
+    progressCountToDate,
+    progressPercentToDate,
+    progressTotal: safeNum(progressTotal),
   };
 }
 
@@ -96,9 +142,6 @@ function buildPrintHtml({
   certificate,
   dateLabel,
   items,
-  progressCount,
-  progressPercent,
-  progressTotal,
   projectName,
   statusLabel,
 }) {
@@ -148,17 +191,17 @@ function buildPrintHtml({
     "</head>",
     "<body>",
     "<h1>INTERIM PAYMENT APPLICATION</h1>",
-    "<table class=\"meta\">",
+    '<table class="meta">',
     `<tr><td>Project No and Description</td><td>${escapeHtml(projectName)}</td></tr>`,
     `<tr><td>Application No.</td><td>${escapeHtml(String(certificate.valuationNumber).padStart(2, "0"))}</td></tr>`,
     `<tr><td>Valuation Date</td><td>${escapeHtml(dateLabel)}</td></tr>`,
-    `<tr><td>Progress</td><td>${escapeHtml(`${progressPercent.toFixed(1)}% (${progressCount} of ${progressTotal} lines marked ${statusLabel.toLowerCase()})`)}</td></tr>`,
+    `<tr><td>Progress</td><td>${escapeHtml(`${certificate.progressPercentToDate.toFixed(1)}% (${certificate.progressCountToDate} of ${certificate.progressTotal} lines marked ${String(statusLabel || "Completed").toLowerCase()})`)}</td></tr>`,
     "</table>",
     "<table>",
-    "<thead><tr><th>Ref</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th></tr></thead>",
+    '<thead><tr><th>Ref</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th></tr></thead>',
     `<tbody>${itemRows}</tbody>`,
     "</table>",
-    "<table class=\"summary\">",
+    '<table class="summary">',
     `<tr><td>${escapeHtml(statusLabel)} items in this valuation</td><td>${escapeHtml(money(certificate.currentValuationAmount))}</td></tr>`,
     `<tr><td>Gross value of works to date</td><td>${escapeHtml(money(certificate.grossToDate))}</td></tr>`,
     `<tr><td>Less retention (${escapeHtml(certificate.retentionPct)}%)</td><td>${escapeHtml(money(certificate.retentionAmount))}</td></tr>`,
@@ -175,21 +218,128 @@ function buildPrintHtml({
   ].join("");
 }
 
-function StatCard({ label, value, helper, format = "money" }) {
-  const displayValue =
-    format === "percent"
-      ? `${safeNum(value).toFixed(1)}%`
-      : money(value);
+function buildWorkbookDashboardSheet({
+  grossAmount,
+  progressCount,
+  progressPercent,
+  progressTotal,
+  projectName,
+  remainingAmount,
+  statusLabel,
+  valuationRows,
+  valuationSettings,
+  valuedAmount,
+}) {
+  const aoa = [
+    ["PROJECT VALUATION DASHBOARD"],
+    [],
+    ["Project name", projectName],
+    ["Overall progress", `${safeNum(progressPercent).toFixed(1)}%`],
+    ["Marked lines", `${safeNum(progressCount)} of ${safeNum(progressTotal)}`],
+    ["Total project cost", safeNum(grossAmount)],
+    [`${statusLabel} value`, safeNum(valuedAmount)],
+    ["Amount left", safeNum(remainingAmount)],
+    [],
+    ["Saved project percentages"],
+    ["Retention %", safeNum(valuationSettings?.retentionPct)],
+    ["VAT %", safeNum(valuationSettings?.vatPct)],
+    ["Withholding tax %", safeNum(valuationSettings?.withholdingPct)],
+    [],
+    ["Saved valuations"],
+    [
+      "Valuation No.",
+      "Date",
+      "Items",
+      "Gross to date",
+      "Previous payments",
+      "Amount due",
+    ],
+  ];
 
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-slate-900">
-        {displayValue}
-      </div>
-      <div className="mt-1 text-xs text-slate-500">{helper}</div>
-    </div>
+  valuationRows.forEach(({ entry, certificate }) => {
+    aoa.push([
+      `Valuation ${certificate.valuationNumber}`,
+      formatDate(entry?.date),
+      safeNum(entry?.itemCount),
+      safeNum(certificate.grossToDate),
+      safeNum(certificate.previousPayments),
+      safeNum(certificate.amountDue),
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+  return setWorksheetColumns(ws, [24, 26, 14, 16, 18, 16]);
+}
+
+function buildWorkbookValuationSheet({
+  certificate,
+  dateLabel,
+  entry,
+  projectName,
+  statusLabel,
+}) {
+  const aoa = [
+    ["INTERIM PAYMENT APPLICATION"],
+    [],
+    ["Project No and Description", projectName],
+    ["Application No.", String(certificate.valuationNumber).padStart(2, "0")],
+    ["Contract No and Description", ""],
+    ["Client", ""],
+    ["Project Management Consultant", ""],
+    ["Cost Consultant", ""],
+    ["Valuation Date", dateLabel],
+    ["Progress", `${certificate.progressPercentToDate.toFixed(1)}% (${certificate.progressCountToDate} of ${certificate.progressTotal} lines)`],
+    [],
+    ["Ref", "Description", "Qty", "Unit", "Rate", "Amount"],
+  ];
+
+  (entry?.items || []).forEach((item, index) => {
+    aoa.push([
+      alphaIndex(index),
+      item?.description || "",
+      safeNum(item?.qty),
+      item?.unit || "",
+      safeNum(item?.rate),
+      safeNum(item?.amount),
+    ]);
+  });
+
+  aoa.push(
+    [],
+    ["Summary"],
+    [`${statusLabel} items in this valuation`, safeNum(certificate.currentValuationAmount)],
+    ["Gross value of works to date", safeNum(certificate.grossToDate)],
+    [`Less retention (${safeNum(certificate.retentionPct)}%)`, safeNum(certificate.retentionAmount)],
+    ["Net valuation to date", safeNum(certificate.netValuationToDate)],
+    [
+      "Less previous payments",
+      certificate.previousPayments > 0
+        ? safeNum(certificate.previousPayments)
+        : "Not applicable for first valuation",
+    ],
   );
+
+  certificate.previousEntries.forEach((previousEntry, index) => {
+    aoa.push([
+      `Valuation No. ${index + 1} (${formatDate(previousEntry?.date)})`,
+      safeNum(previousEntry?.totalAmount),
+    ]);
+  });
+
+  aoa.push(
+    ["Subtotal before taxes", safeNum(certificate.amountBeforeTax)],
+    [`Add VAT (${safeNum(certificate.vatPct)}%)`, safeNum(certificate.vatAmount)],
+    [
+      `Less withholding tax (${safeNum(certificate.withholdingPct)}%)`,
+      safeNum(certificate.withholdingAmount),
+    ],
+    ["TOTAL AMOUNT DUE FOR PAYMENT", safeNum(certificate.amountDue)],
+  );
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+  return setWorksheetColumns(ws, [12, 60, 12, 10, 14, 16]);
 }
 
 function PercentageField({ label, value, onChange }) {
@@ -222,16 +372,33 @@ export default function ProjectValuationSummary({
   selectedValuation = null,
   selectedValuationDate = "",
   showDailyValuationLog = true,
+  showValuationSettings = true,
   statusLabel = "Completed",
-  statusPastLabel = "Completed to date",
   valuationErr = "",
   valuationSettings,
   valuations = [],
   valuedAmount = 0,
 }) {
+  const sortedValuations = React.useMemo(
+    () =>
+      [...(valuations || [])].sort((a, b) =>
+        String(a?.date || "").localeCompare(String(b?.date || "")),
+      ),
+    [valuations],
+  );
   const certificate = React.useMemo(
-    () => buildCertificate(selectedValuation, valuations, valuationSettings),
-    [selectedValuation, valuationSettings, valuations],
+    () => buildCertificate(selectedValuation, sortedValuations, valuationSettings, progressTotal),
+    [selectedValuation, sortedValuations, valuationSettings, progressTotal],
+  );
+  const valuationWorkbookRows = React.useMemo(
+    () =>
+      sortedValuations
+        .map((entry) => ({
+          entry,
+          certificate: buildCertificate(entry, sortedValuations, valuationSettings, progressTotal),
+        }))
+        .filter((row) => row.certificate),
+    [sortedValuations, valuationSettings, progressTotal],
   );
   const printFrameRef = React.useRef(null);
 
@@ -272,103 +439,101 @@ export default function ProjectValuationSummary({
       certificate,
       dateLabel: formatDate(selectedValuation.date),
       items: selectedValuation.items || [],
-      progressCount,
-      progressPercent,
-      progressTotal,
       projectName,
       statusLabel,
     });
   }
 
+  function handleExportExcel() {
+    if (!valuationWorkbookRows.length) return;
+
+    const workbook = XLSX.utils.book_new();
+    const dashboardSheet = buildWorkbookDashboardSheet({
+      grossAmount,
+      progressCount,
+      progressPercent,
+      progressTotal,
+      projectName,
+      remainingAmount,
+      statusLabel,
+      valuationRows: valuationWorkbookRows,
+      valuationSettings,
+      valuedAmount,
+    });
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      dashboardSheet,
+      safeSheetName(`${projectName} Dashboard`, "Dashboard"),
+    );
+
+    valuationWorkbookRows.forEach(({ entry, certificate: rowCertificate }) => {
+      const sheet = buildWorkbookValuationSheet({
+        certificate: rowCertificate,
+        dateLabel: formatDate(entry?.date),
+        entry,
+        projectName,
+        statusLabel,
+      });
+      XLSX.utils.book_append_sheet(
+        workbook,
+        sheet,
+        safeSheetName(`Val ${rowCertificate.valuationNumber} ${formatDate(entry?.date)}`, `Val ${rowCertificate.valuationNumber}`),
+      );
+    });
+
+    XLSX.writeFile(
+      workbook,
+      `${sanitizeFilename(projectName)} - Valuations.xlsx`,
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Gross project total"
-          value={grossAmount}
-          helper="All items before deductions"
-        />
-        <StatCard
-          label={statusPastLabel}
-          value={valuedAmount}
-          helper={`${statusLabel} items already deducted`}
-        />
-        <StatCard
-          label="Outstanding balance"
-          value={remainingAmount}
-          helper="Current project amount remaining"
-        />
-        <StatCard
-          label="Progress"
-          value={progressPercent}
-          format="percent"
-          helper={`${progressCount} of ${progressTotal} lines marked ${statusLabel.toLowerCase()}`}
-        />
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="font-medium">Overall progress</div>
-            <div className="mt-1 text-sm text-slate-600">
-              {progressCount} of {progressTotal} line items marked {statusLabel.toLowerCase()}.
-            </div>
+      {showValuationSettings ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="font-medium">Valuation settings</div>
+          <div className="mt-1 text-sm text-slate-600">
+            Saved per project and reused for every valuation sheet.
           </div>
-          <div className="text-lg font-semibold text-slate-900">
-            {safeNum(progressPercent).toFixed(1)}%
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <PercentageField
+              label="Retention %"
+              value={valuationSettings?.retentionPct}
+              onChange={(value) => onValuationSettingChange?.("retentionPct", value)}
+            />
+            <PercentageField
+              label="VAT %"
+              value={valuationSettings?.vatPct}
+              onChange={(value) => onValuationSettingChange?.("vatPct", value)}
+            />
+            <PercentageField
+              label="Withholding tax %"
+              value={valuationSettings?.withholdingPct}
+              onChange={(value) =>
+                onValuationSettingChange?.("withholdingPct", value)
+              }
+            />
           </div>
         </div>
-
-        <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-blue-600 transition-all"
-            style={{ width: `${Math.min(100, Math.max(0, safeNum(progressPercent)))}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="font-medium">Valuation settings</div>
-        <div className="mt-1 text-sm text-slate-600">
-          Saved per project and reused for every valuation sheet.
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <PercentageField
-            label="Retention %"
-            value={valuationSettings?.retentionPct}
-            onChange={(value) => onValuationSettingChange?.("retentionPct", value)}
-          />
-          <PercentageField
-            label="VAT %"
-            value={valuationSettings?.vatPct}
-            onChange={(value) => onValuationSettingChange?.("vatPct", value)}
-          />
-          <PercentageField
-            label="Withholding tax %"
-            value={valuationSettings?.withholdingPct}
-            onChange={(value) =>
-              onValuationSettingChange?.("withholdingPct", value)
-            }
-          />
-        </div>
-      </div>
+      ) : null}
 
       {!showDailyValuationLog ? null : (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
               <div className="font-medium">Daily valuation log</div>
               <div className="mt-1 text-sm text-slate-600">
-                Select a valuation day to preview the certificate and print the valuation sheet.
+                Select a valuation day to preview the certificate, print it, or export all saved valuations to Excel.
               </div>
             </div>
 
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="text-sm">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end sm:justify-end">
+              <label className="text-sm sm:min-w-[260px]">
                 <div className="mb-1 text-xs text-slate-500">Valuation date</div>
                 <select
-                  className="input min-w-[240px]"
+                  className="input w-full"
                   value={selectedValuationDate}
                   onChange={(e) => onSelectValuationDate?.(e.target.value)}
                   disabled={!valuations.length || loadingValuations}
@@ -376,16 +541,23 @@ export default function ProjectValuationSummary({
                   <option value="">
                     {loadingValuations ? "Loading valuations..." : "Select valuation day"}
                   </option>
-                  {valuations
-                    .slice()
-                    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-                    .map((log, index) => (
-                      <option key={log.date} value={log.date}>
-                        Valuation {index + 1} - {formatDate(log.date)} ({log.itemCount} item{log.itemCount === 1 ? "" : "s"})
-                      </option>
-                    ))}
+                  {sortedValuations.map((log, index) => (
+                    <option key={log.date} value={log.date}>
+                      Valuation {index + 1} - {formatDate(log.date)} ({log.itemCount} item{log.itemCount === 1 ? "" : "s"})
+                    </option>
+                  ))}
                 </select>
               </label>
+
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={handleExportExcel}
+                disabled={!valuationWorkbookRows.length}
+                title={!valuationWorkbookRows.length ? "No valuation log to export yet" : "Export editable Excel workbook"}
+              >
+                Export Excel
+              </button>
 
               <button
                 type="button"
@@ -415,8 +587,12 @@ export default function ProjectValuationSummary({
                 <div className="font-medium text-slate-900">
                   Valuation {certificate.valuationNumber} for {formatDate(selectedValuation.date)}
                 </div>
-                <div className="mt-1">
-                  {selectedValuation.itemCount} item{selectedValuation.itemCount === 1 ? "" : "s"} in this certificate | Amount due {money(certificate.amountDue)}
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                  <span>
+                    {selectedValuation.itemCount} item{selectedValuation.itemCount === 1 ? "" : "s"} in this certificate
+                  </span>
+                  <span>Amount due {money(certificate.amountDue)}</span>
+                  <span>Progress {certificate.progressPercentToDate.toFixed(1)}%</span>
                 </div>
               </div>
 
@@ -510,3 +686,4 @@ export default function ProjectValuationSummary({
     </div>
   );
 }
+

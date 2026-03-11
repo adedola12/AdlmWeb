@@ -1,5 +1,6 @@
-import React from "react";
+﻿import React from "react";
 import { FaFolder, FaTrash } from "react-icons/fa";
+import ProjectSectionSummary from "./ProjectSectionSummary.jsx";
 
 function rowId(row) {
   return row?._id || row?.id || null;
@@ -16,12 +17,19 @@ export default function ProjectExplorerGrid({
   onSelectAllShown,
   onToggleSelect,
   rowsShown = [],
+  sectionSummary,
   selectedIdsCount = 0,
   selectedMap = {},
+  statusPastLabel = "Completed to date",
 }) {
   return (
     <div className="mt-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <ProjectSectionSummary
+        statusPastLabel={statusPastLabel}
+        summary={sectionSummary}
+      />
+
+      <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="text-sm text-slate-600">
           {rowsShown.length} project(s)
           {selectedIdsCount ? (
@@ -78,7 +86,7 @@ export default function ProjectExplorerGrid({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {rowsShown.map((row, index) => {
           const id = rowId(row);
           const checked = !!selectedMap?.[id];
@@ -139,7 +147,7 @@ export default function ProjectExplorerGrid({
                 <div className="mt-1 text-xs text-slate-500">
                   {row?.itemCount ?? 0} items
                 </div>
-                <div className="mt-1 text-[11px] text-slate-400">{updated}</div>
+                <div className="mt-2 text-[11px] text-slate-400">{updated}</div>
               </div>
 
               <button

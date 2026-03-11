@@ -327,6 +327,7 @@ function statusMapsEqual(a, b) {
 
 const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   showDailyLog: true,
+  showValuationSettings: true,
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
@@ -345,6 +346,10 @@ function normalizeValuationSettings(settings) {
       typeof source.showDailyLog === "boolean"
         ? source.showDailyLog
         : DEFAULT_VALUATION_SETTINGS.showDailyLog,
+    showValuationSettings:
+      typeof source.showValuationSettings === "boolean"
+        ? source.showValuationSettings
+        : DEFAULT_VALUATION_SETTINGS.showValuationSettings,
     retentionPct: clampPercentage(
       source.retentionPct,
       DEFAULT_VALUATION_SETTINGS.retentionPct,
@@ -362,10 +367,67 @@ function valuationSettingsEqual(a, b) {
   const B = normalizeValuationSettings(b);
   return (
     A.showDailyLog === B.showDailyLog &&
+    A.showValuationSettings === B.showValuationSettings &&
     safeNum(A.retentionPct) === safeNum(B.retentionPct) &&
     safeNum(A.vatPct) === safeNum(B.vatPct) &&
     safeNum(A.withholdingPct) === safeNum(B.withholdingPct)
   );
+}
+
+function summarizeProjectItems(items, statusField) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const itemCount = safeItems.length;
+  let markedCount = 0;
+  let totalCost = 0;
+  let valuedAmount = 0;
+
+  safeItems.forEach((item) => {
+    const lineAmount = safeNum(item?.qty) * safeNum(item?.rate);
+    totalCost += lineAmount;
+    if (item?.[statusField]) {
+      markedCount += 1;
+      valuedAmount += lineAmount;
+    }
+  });
+
+  return {
+    itemCount,
+    markedCount,
+    totalCost,
+    valuedAmount,
+    remainingAmount: totalCost - valuedAmount,
+    progressPercent: itemCount ? (markedCount / itemCount) * 100 : 0,
+  };
+}
+
+function summarizeProjectRows(rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const summary = safeRows.reduce(
+    (acc, row) => {
+      acc.projectCount += 1;
+      acc.itemCount += safeNum(row?.itemCount);
+      acc.markedCount += safeNum(row?.markedCount);
+      acc.totalCost += safeNum(row?.totalCost);
+      acc.valuedAmount += safeNum(row?.valuedAmount);
+      acc.remainingAmount += safeNum(row?.remainingAmount);
+      return acc;
+    },
+    {
+      projectCount: 0,
+      itemCount: 0,
+      markedCount: 0,
+      totalCost: 0,
+      valuedAmount: 0,
+      remainingAmount: 0,
+      progressPercent: 0,
+    },
+  );
+
+  summary.progressPercent = summary.itemCount
+    ? (summary.markedCount / summary.itemCount) * 100
+    : 0;
+
+  return summary;
 }
 
 /** ---------------- Local cache helpers ----------------
@@ -504,7 +566,7 @@ function normalizeToken(w) {
 function tokenize(desc) {
   const s = stripMeta(desc)
     .toLowerCase()
-    .replace(/[–—-]+/g, "-")
+    .replace(/[â€“â€”-]+/g, "-")
     .replace(NON_WORD_RE, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -1024,13 +1086,11 @@ export default function ProjectsGeneric() {
       });
 
       for (const id of deletedIds) purgeLocal(tool, id);
-
       setRows((prev) =>
         Array.isArray(prev)
           ? prev.filter((r) => !deletedIds.includes(rowId(r)))
           : [],
       );
-
       // If current open project was deleted, go back to explorer
       if (selectedId && deletedIds.includes(selectedId)) {
         closeProject();
@@ -1199,6 +1259,8 @@ export default function ProjectsGeneric() {
       const next = normalizeValuationSettings(prev);
       if (field === "showDailyLog") {
         next.showDailyLog = Boolean(value);
+      } else if (field === "showValuationSettings") {
+        next.showValuationSettings = Boolean(value);
       } else if (
         field === "retentionPct" ||
         field === "vatPct" ||
@@ -1249,6 +1311,22 @@ export default function ProjectsGeneric() {
 
       setSel(updated);
       initRatesFromProject(updated);
+      setRows((prev) =>
+        Array.isArray(prev)
+          ? prev.map((row) =>
+              rowId(row) === selectedId
+                ? {
+                    ...row,
+                    id: updated?._id || updated?.id || selectedId,
+                    name: updated?.name || row?.name,
+                    updatedAt: updated?.updatedAt || row?.updatedAt,
+                    version: updated?.version ?? row?.version,
+                    ...summarizeProjectItems(updated?.items, statusField),
+                  }
+                : row,
+            )
+          : prev,
+      );
       await loadValuations(updated?._id || updated?.id || selectedId);
 
       setNotice("Saved. Rates, valuation settings, and progress were updated.");
@@ -1609,7 +1687,40 @@ export default function ProjectsGeneric() {
   const progressPercent = computedAll.length
     ? (progressCount / computedAll.length) * 100
     : 0;
-
+  const liveProjectSummary = React.useMemo(
+    () => ({
+      itemCount: computedAll.length,
+      markedCount: progressCount,
+      totalCost: grossAmount,
+      valuedAmount,
+      remainingAmount: totalAmount,
+      progressPercent,
+    }),
+    [
+      computedAll.length,
+      progressCount,
+      grossAmount,
+      valuedAmount,
+      totalAmount,
+      progressPercent,
+    ],
+  );
+  React.useEffect(() => {
+    if (!selectedId) return;
+    setRows((prev) =>
+      Array.isArray(prev)
+        ? prev.map((row) =>
+            rowId(row) === selectedId
+              ? {
+                  ...row,
+                  ...liveProjectSummary,
+                  updatedAt: sel?.updatedAt || row?.updatedAt,
+                }
+              : row,
+          )
+        : prev,
+    );
+  }, [liveProjectSummary, selectedId, sel?.updatedAt]);
   const q = String(itemQuery || "")
     .trim()
     .toLowerCase();
@@ -1750,6 +1861,10 @@ export default function ProjectsGeneric() {
           .toLowerCase()
           .includes(projectQ),
       );
+  const sectionSummary = React.useMemo(
+    () => summarizeProjectRows(rowsShown),
+    [rowsShown],
+  );
 
   // Explorer selection helpers
   function toggleSelect(id) {
@@ -1942,6 +2057,8 @@ export default function ProjectsGeneric() {
                 onOpenProject={view}
                 onToggleSelect={toggleSelect}
                 onDeleteProject={delProject}
+                sectionSummary={sectionSummary}
+                statusPastLabel={statusPastLabel}
               />
             ) : (
               <ProjectOpenView
@@ -1949,7 +2066,6 @@ export default function ProjectsGeneric() {
                 selectedId={selectedId}
                 showMaterials={showMaterials}
                 statusLabel={statusLabel}
-                statusPastLabel={statusPastLabel}
                 checkboxCls={checkboxCls}
                 onlyFillEmpty={onlyFillEmpty}
                 onToggleOnlyFillEmpty={setOnlyFillEmpty}
@@ -2005,6 +2121,10 @@ export default function ProjectsGeneric() {
                 onToggleShowDailyValuationLog={(checked) =>
                   handleValuationSettingChange("showDailyLog", checked)
                 }
+                showValuationSettings={Boolean(valuationSettings?.showValuationSettings)}
+                onToggleShowValuationSettings={(checked) =>
+                  handleValuationSettingChange("showValuationSettings", checked)
+                }
                 progressPercent={progressPercent}
                 progressCount={progressCount}
                 progressTotal={computedAll.length}
@@ -2032,5 +2152,9 @@ export default function ProjectsGeneric() {
     </div>
   );
 }
+
+
+
+
 
 

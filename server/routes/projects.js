@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
@@ -116,6 +116,7 @@ function safeNum(value) {
 
 const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   showDailyLog: true,
+  showValuationSettings: true,
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
@@ -138,6 +139,10 @@ function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTIN
       typeof source.showDailyLog === "boolean"
         ? source.showDailyLog
         : Boolean(base.showDailyLog),
+    showValuationSettings:
+      typeof source.showValuationSettings === "boolean"
+        ? source.showValuationSettings
+        : Boolean(base.showValuationSettings),
     retentionPct: clampPercentage(
       source.retentionPct,
       safeNum(base.retentionPct),
@@ -405,9 +410,36 @@ async function listProjects(req, res) {
       return res.status(401).json({ error: "Invalid user id in token" });
     }
 
+    const statusField = statusFieldForProductKey(productKey);
+    const markedPath = `$$item.${statusField}`;
+    const lineAmountExpression = {
+      $multiply: [
+        {
+          $convert: {
+            input: "$$item.qty",
+            to: "double",
+            onError: 0,
+            onNull: 0,
+          },
+        },
+        {
+          $convert: {
+            input: "$$item.rate",
+            to: "double",
+            onError: 0,
+            onNull: 0,
+          },
+        },
+      ],
+    };
+
     const list = await TakeoffProject.aggregate([
       { $match: { userId, productKey } },
-      { $sort: { updatedAt: -1 } },
+      {
+        $addFields: {
+          safeItems: { $ifNull: ["$items", []] },
+        },
+      },
       {
         $project: {
           _id: 0,
@@ -415,9 +447,55 @@ async function listProjects(req, res) {
           name: 1,
           updatedAt: 1,
           version: 1,
-          itemCount: { $size: { $ifNull: ["$items", []] } },
+          itemCount: { $size: "$safeItems" },
+          markedCount: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: { $eq: [{ $ifNull: [markedPath, false] }, true] },
+              },
+            },
+          },
+          totalCost: {
+            $sum: {
+              $map: {
+                input: "$safeItems",
+                as: "item",
+                in: lineAmountExpression,
+              },
+            },
+          },
+          valuedAmount: {
+            $sum: {
+              $map: {
+                input: "$safeItems",
+                as: "item",
+                in: {
+                  $cond: [
+                    { $eq: [{ $ifNull: [markedPath, false] }, true] },
+                    lineAmountExpression,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
         },
       },
+      {
+        $addFields: {
+          remainingAmount: { $subtract: ["$totalCost", "$valuedAmount"] },
+          progressPercent: {
+            $cond: [
+              { $gt: ["$itemCount", 0] },
+              { $multiply: [{ $divide: ["$markedCount", "$itemCount"] }, 100] },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { updatedAt: -1 } },
     ]);
 
     res.json(list);
@@ -677,3 +755,6 @@ router.delete(
 );
 
 export default router;
+
+
+

@@ -1,7 +1,8 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 
 const DefaultValuationSettings = Object.freeze({
   showDailyLog: true,
+  showValuationSettings: true,
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
@@ -12,6 +13,10 @@ const ValuationSettingsSchema = new mongoose.Schema(
     showDailyLog: {
       type: Boolean,
       default: DefaultValuationSettings.showDailyLog,
+    },
+    showValuationSettings: {
+      type: Boolean,
+      default: DefaultValuationSettings.showValuationSettings,
     },
     retentionPct: {
       type: Number,
@@ -102,3 +107,4 @@ export const TakeoffProject = mongoose.model(
   "TakeoffProject",
   TakeoffProjectSchema,
 );
+
