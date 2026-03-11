@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import multer from "multer";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
@@ -19,8 +19,12 @@ function normalizeOperation(raw) {
   if (!raw) return null;
 
   const typeRaw = String(raw.type || "copyDirectory").trim().toLowerCase();
-  const type = typeRaw === "copyfile" ? "copyFile" : "copyDirectory";
-  const source = String(raw.source ?? ".").trim() || ".";
+  let type = "copyDirectory";
+  if (typeRaw === "copyfile") type = "copyFile";
+  if (typeRaw === "createshortcut") type = "createShortcut";
+
+  const sourceDefault = type === "copyDirectory" ? "." : "";
+  const source = String(raw.source ?? sourceDefault).trim() || sourceDefault;
   const target = String(raw.target || "").trim();
 
   if (!target) return null;
@@ -175,3 +179,4 @@ router.delete(
 );
 
 export default router;
+

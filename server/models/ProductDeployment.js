@@ -1,10 +1,10 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 
 const InstallOperationSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["copyDirectory", "copyFile"],
+      enum: ["copyDirectory", "copyFile", "createShortcut"],
       default: "copyDirectory",
     },
     source: { type: String, trim: true, default: "." },
@@ -49,3 +49,4 @@ const ProductDeploymentSchema = new mongoose.Schema(
 export const ProductDeployment =
   mongoose.models.ProductDeployment ||
   mongoose.model("ProductDeployment", ProductDeploymentSchema);
+

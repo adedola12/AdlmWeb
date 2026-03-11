@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import dayjs from "dayjs";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
@@ -67,19 +67,10 @@ router.get(
         .toLowerCase();
 
       for (const key of collectPurchaseKeys(purchase)) {
-        if (installStatus === "complete") {
-          lockedKeys.add(key);
-          continue;
-        }
-
-        if (installStatus === "pending") {
+        if (installStatus === "pending" || installStatus === "complete") {
           allowedKeys.add(key);
         }
       }
-    }
-
-    for (const lockedKey of lockedKeys) {
-      allowedKeys.delete(lockedKey);
     }
 
     if (allowedKeys.size === 0) {
@@ -99,3 +90,4 @@ router.get(
 );
 
 export default router;
+
