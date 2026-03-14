@@ -11,6 +11,15 @@ import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
 import { RateGenRate } from "../models/RateGenRate.js";
 import { ensureMeta } from "../models/RateGenMeta.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import {
+  buildUserRateKey,
+  getUserId,
+  mergeRatesWithUserData,
+  normalizeCustomRate,
+  normalizeRateOverride,
+  normalizeSectionKey,
+  toUserRateDefinition,
+} from "../util/rategenUserRates.js";
 
 const router = express.Router();
 
@@ -204,7 +213,7 @@ router.post("/library/material-prices/resolve", async (req, res, next) => {
 
     let userCount = 0;
     if (includeUser) {
-      const lib = await RateGenLibrary.findOne({ userId: req.user._id }).lean();
+      const lib = await RateGenLibrary.findOne({ userId: getUserId(req) }).lean();
       const mats = Array.isArray(lib?.materials) ? lib.materials : [];
       userCount = mats.length;
 
@@ -372,23 +381,47 @@ function parseCursor(cursor) {
   return { ts, id: null };
 }
 
-// keep in sync with admin normalize logic
-function normalizeSectionKey(raw) {
-  const s = String(raw || "")
-    .trim()
-    .toLowerCase();
-  if (!s) return "";
+async function ensureUserLibrary(req) {
+  const userId = getUserId(req);
+  let lib = await RateGenLibrary.findOne({ userId });
+  if (!lib) lib = await RateGenLibrary.create({ userId });
+  return lib;
+}
 
-  if (s === "painting") return "paint";
-  if (s.includes("door") || s.includes("window")) return "doors_windows";
-  if (s.includes("steel")) return "steelwork";
-  if (s.includes("roof")) return "roofing";
-  if (s.includes("paint")) return "paint";
-  if (s.includes("ground") || s.includes("substructure")) return "ground";
-  if (s.includes("concrete")) return "concrete";
-  if (s.includes("finish")) return "finishes";
-  if (s.includes("block")) return "blockwork";
-  return s;
+function matchesSection(item, sectionKey) {
+  return !sectionKey || normalizeSectionKey(item?.sectionKey) === sectionKey;
+}
+
+function mapUserRateOverride(item) {
+  return toUserRateDefinition(item, {
+    id: item?.rateId || buildUserRateKey(item),
+    rateId: item?.rateId || null,
+    baseRateId: item?.rateId || null,
+    source: "user-override",
+  });
+}
+
+function mapUserCustomRate(item) {
+  return toUserRateDefinition(item, {
+    id: item?.customRateId || "",
+    rateId: null,
+    customRateId: item?.customRateId || null,
+    source: "user-custom",
+  });
+}
+
+function normalizeUserRateOverridePayload(rateId, body) {
+  return normalizeRateOverride({
+    ...(body || {}),
+    rateId,
+  });
+}
+
+function normalizeUserCustomRatePayload(customRateId, body) {
+  return normalizeCustomRate({
+    ...(body || {}),
+    customRateId,
+  });
 }
 
 function toComputeItemDefinition(x) {
@@ -464,14 +497,15 @@ function toRateDefinition(r) {
 /**
  * GET /library/meta
  */
-router.get("/library/meta", async (_req, res, next) => {
+router.get("/library/meta", async (req, res, next) => {
   try {
     await ensureDb();
-    const [m, l, c, r] = await Promise.all([
+    const [m, l, c, r, lib] = await Promise.all([
       ensureMeta("materials"),
       ensureMeta("labour"),
       ensureMeta("compute"),
       ensureMeta("rates"),
+      ensureUserLibrary(req),
     ]);
 
     res.json({
@@ -481,6 +515,15 @@ router.get("/library/meta", async (_req, res, next) => {
         labour: { version: l.version, updatedAt: l.updatedAt },
         compute: { version: c.version, updatedAt: c.updatedAt },
         rates: { version: r.version, updatedAt: r.updatedAt },
+        library: { version: lib.version ?? 1, updatedAt: lib.updatedAt },
+        userRates: {
+          version: lib.ratesVersion ?? 1,
+          updatedAt: lib.updatedAt,
+        },
+        customRates: {
+          version: lib.customRatesVersion ?? 1,
+          updatedAt: lib.updatedAt,
+        },
       },
     });
   } catch (err) {
@@ -492,18 +535,28 @@ router.get("/library/meta", async (_req, res, next) => {
  * GET /library/all
  * (kept for legacy clients)
  */
-router.get("/library/all", async (_req, res, next) => {
+router.get("/library/all", async (req, res, next) => {
   try {
     await ensureDb();
 
-    const [mMeta, lMeta, cMeta, rMeta, materials, labours] = await Promise.all([
+    const sectionKey = normalizeSectionKey(req.query.sectionKey);
+
+    const [mMeta, lMeta, cMeta, rMeta, materials, labours, lib] = await Promise.all([
       ensureMeta("materials"),
       ensureMeta("labour"),
       ensureMeta("compute"),
       ensureMeta("rates"),
       RateGenMaterial.find({ enabled: true }).sort({ sn: 1 }).lean(),
       RateGenLabour.find({ enabled: true }).sort({ sn: 1 }).lean(),
+      ensureUserLibrary(req),
     ]);
+
+    const userRateOverrides = (lib.rateOverrides || [])
+      .filter((item) => matchesSection(item, sectionKey))
+      .map(mapUserRateOverride);
+    const userCustomRates = (lib.customRates || [])
+      .filter((item) => matchesSection(item, sectionKey))
+      .map(mapUserCustomRate);
 
     res.json({
       ok: true,
@@ -512,9 +565,375 @@ router.get("/library/all", async (_req, res, next) => {
         labourVersion: lMeta.version,
         computeVersion: cMeta.version,
         ratesVersion: rMeta.version,
+        libraryVersion: lib.version ?? 1,
+        userRatesVersion: lib.ratesVersion ?? 1,
+        customRatesVersion: lib.customRatesVersion ?? 1,
       },
       materials,
       labours,
+      userMaterials: lib.materials || [],
+      userLabour: lib.labour || [],
+      userRateOverrides,
+      userCustomRates,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /library/user-rates
+ */
+router.get("/library/user-rates", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const sectionKey = normalizeSectionKey(req.query.sectionKey);
+    const lib = await ensureUserLibrary(req);
+
+    const rateOverrides = (lib.rateOverrides || [])
+      .filter((item) => matchesSection(item, sectionKey))
+      .map(mapUserRateOverride);
+    const customRates = (lib.customRates || [])
+      .filter((item) => matchesSection(item, sectionKey))
+      .map(mapUserCustomRate);
+
+    res.json({
+      ok: true,
+      meta: {
+        ratesVersion: lib.ratesVersion ?? 1,
+        customRatesVersion: lib.customRatesVersion ?? 1,
+        updatedAt: lib.updatedAt,
+      },
+      rateOverrides,
+      customRates,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /library/user-rates
+ */
+router.put("/library/user-rates", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const {
+      rateOverrides,
+      customRates,
+      ratesBaseVersion,
+      customRatesBaseVersion,
+    } = req.body || {};
+
+    const lib = await ensureUserLibrary(req);
+
+    if (
+      Number.isFinite(ratesBaseVersion) &&
+      ratesBaseVersion > 0 &&
+      ratesBaseVersion !== (lib.ratesVersion ?? 1)
+    ) {
+      return res.status(409).json({
+        error: "User rates version conflict",
+        ratesVersion: lib.ratesVersion ?? 1,
+        customRatesVersion: lib.customRatesVersion ?? 1,
+      });
+    }
+
+    if (
+      Number.isFinite(customRatesBaseVersion) &&
+      customRatesBaseVersion > 0 &&
+      customRatesBaseVersion !== (lib.customRatesVersion ?? 1)
+    ) {
+      return res.status(409).json({
+        error: "Custom rates version conflict",
+        ratesVersion: lib.ratesVersion ?? 1,
+        customRatesVersion: lib.customRatesVersion ?? 1,
+      });
+    }
+
+    if (Array.isArray(rateOverrides)) {
+      lib.rateOverrides = rateOverrides.map((item) => normalizeRateOverride(item));
+      lib.ratesVersion = (lib.ratesVersion ?? 1) + 1;
+    }
+
+    if (Array.isArray(customRates)) {
+      lib.customRates = customRates.map((item) => normalizeCustomRate(item));
+      lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+    }
+
+    await lib.save();
+
+    res.json({
+      ok: true,
+      meta: {
+        ratesVersion: lib.ratesVersion ?? 1,
+        customRatesVersion: lib.customRatesVersion ?? 1,
+        updatedAt: lib.updatedAt,
+      },
+      rateOverrides: (lib.rateOverrides || []).map(mapUserRateOverride),
+      customRates: (lib.customRates || []).map(mapUserCustomRate),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /library/user-rates/merged
+ */
+router.get("/library/user-rates/merged", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const sectionKey = normalizeSectionKey(req.query.sectionKey);
+    const [ratesMeta, lib, masterRates] = await Promise.all([
+      ensureMeta("rates"),
+      ensureUserLibrary(req),
+      RateGenRate.find(sectionKey ? { sectionKey } : {})
+        .sort({ sectionKey: 1, itemNo: 1, description: 1, _id: 1 })
+        .lean(),
+    ]);
+
+    const items = mergeRatesWithUserData(
+      masterRates,
+      (lib.rateOverrides || []).filter((item) => matchesSection(item, sectionKey)),
+      (lib.customRates || []).filter((item) => matchesSection(item, sectionKey))
+    );
+
+    res.json({
+      ok: true,
+      meta: {
+        ratesVersion: ratesMeta.version,
+        userRatesVersion: lib.ratesVersion ?? 1,
+        customRatesVersion: lib.customRatesVersion ?? 1,
+        updatedAt: lib.updatedAt,
+      },
+      items,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /library/user-rates/override/:rateId
+ */
+router.put("/library/user-rates/override/:rateId", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const rateId = String(req.params.rateId || "").trim();
+    if (!rateId) return res.status(400).json({ error: "rateId is required" });
+
+    const ratesBaseVersion = Number(req.body?.ratesBaseVersion || 0);
+    const lib = await ensureUserLibrary(req);
+
+    if (
+      ratesBaseVersion > 0 &&
+      ratesBaseVersion !== (lib.ratesVersion ?? 1)
+    ) {
+      return res.status(409).json({
+        error: "User rates version conflict",
+        ratesVersion: lib.ratesVersion ?? 1,
+      });
+    }
+
+    const item = normalizeUserRateOverridePayload(rateId, req.body);
+    if (!item.description) {
+      return res.status(400).json({ error: "description is required" });
+    }
+    if (!item.unit) {
+      return res.status(400).json({ error: "unit is required" });
+    }
+
+    const nextItems = [...(lib.rateOverrides || [])];
+    const exactIndex = nextItems.findIndex(
+      (candidate) => String(candidate?.rateId || "") === rateId
+    );
+    const keyIndex =
+      exactIndex >= 0
+        ? exactIndex
+        : nextItems.findIndex(
+            (candidate) => buildUserRateKey(candidate) === buildUserRateKey(item)
+          );
+
+    if (keyIndex >= 0) nextItems[keyIndex] = item;
+    else nextItems.push(item);
+
+    lib.rateOverrides = nextItems;
+    lib.ratesVersion = (lib.ratesVersion ?? 1) + 1;
+    await lib.save();
+
+    res.json({
+      ok: true,
+      ratesVersion: lib.ratesVersion ?? 1,
+      item: mapUserRateOverride(item),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /library/user-rates/override/:rateId
+ */
+router.delete("/library/user-rates/override/:rateId", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const rateId = String(req.params.rateId || "").trim();
+    if (!rateId) return res.status(400).json({ error: "rateId is required" });
+
+    const ratesBaseVersion = Number(req.query.ratesBaseVersion || 0);
+    const lib = await ensureUserLibrary(req);
+
+    if (
+      ratesBaseVersion > 0 &&
+      ratesBaseVersion !== (lib.ratesVersion ?? 1)
+    ) {
+      return res.status(409).json({
+        error: "User rates version conflict",
+        ratesVersion: lib.ratesVersion ?? 1,
+      });
+    }
+
+    const before = (lib.rateOverrides || []).length;
+    lib.rateOverrides = (lib.rateOverrides || []).filter(
+      (item) => String(item?.rateId || "") !== rateId
+    );
+
+    if (lib.rateOverrides.length !== before) {
+      lib.ratesVersion = (lib.ratesVersion ?? 1) + 1;
+      await lib.save();
+    }
+
+    res.json({
+      ok: true,
+      ratesVersion: lib.ratesVersion ?? 1,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /library/custom-rates
+ */
+router.get("/library/custom-rates", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const sectionKey = normalizeSectionKey(req.query.sectionKey);
+    const lib = await ensureUserLibrary(req);
+
+    const items = (lib.customRates || [])
+      .filter((item) => matchesSection(item, sectionKey))
+      .map(mapUserCustomRate);
+
+    res.json({
+      ok: true,
+      customRatesVersion: lib.customRatesVersion ?? 1,
+      items,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PUT /library/custom-rates/:customRateId
+ */
+router.put("/library/custom-rates/:customRateId", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const customRateId = String(req.params.customRateId || "").trim();
+    if (!customRateId) {
+      return res.status(400).json({ error: "customRateId is required" });
+    }
+
+    const customRatesBaseVersion = Number(req.body?.customRatesBaseVersion || 0);
+    const lib = await ensureUserLibrary(req);
+
+    if (
+      customRatesBaseVersion > 0 &&
+      customRatesBaseVersion !== (lib.customRatesVersion ?? 1)
+    ) {
+      return res.status(409).json({
+        error: "Custom rates version conflict",
+        customRatesVersion: lib.customRatesVersion ?? 1,
+      });
+    }
+
+    const item = normalizeUserCustomRatePayload(customRateId, req.body);
+    if (!item.title && !item.description) {
+      return res
+        .status(400)
+        .json({ error: "title or description is required" });
+    }
+
+    const nextItems = [...(lib.customRates || [])];
+    const existingIndex = nextItems.findIndex(
+      (candidate) => String(candidate?.customRateId || "") === customRateId
+    );
+
+    if (existingIndex >= 0) nextItems[existingIndex] = item;
+    else nextItems.push(item);
+
+    lib.customRates = nextItems;
+    lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+    await lib.save();
+
+    res.json({
+      ok: true,
+      customRatesVersion: lib.customRatesVersion ?? 1,
+      item: mapUserCustomRate(item),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /library/custom-rates/:customRateId
+ */
+router.delete("/library/custom-rates/:customRateId", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const customRateId = String(req.params.customRateId || "").trim();
+    if (!customRateId) {
+      return res.status(400).json({ error: "customRateId is required" });
+    }
+
+    const customRatesBaseVersion = Number(req.query.customRatesBaseVersion || 0);
+    const lib = await ensureUserLibrary(req);
+
+    if (
+      customRatesBaseVersion > 0 &&
+      customRatesBaseVersion !== (lib.customRatesVersion ?? 1)
+    ) {
+      return res.status(409).json({
+        error: "Custom rates version conflict",
+        customRatesVersion: lib.customRatesVersion ?? 1,
+      });
+    }
+
+    const before = (lib.customRates || []).length;
+    lib.customRates = (lib.customRates || []).filter(
+      (item) => String(item?.customRateId || "") !== customRateId
+    );
+
+    if (lib.customRates.length !== before) {
+      lib.customRatesVersion = (lib.customRatesVersion ?? 1) + 1;
+      await lib.save();
+    }
+
+    res.json({
+      ok: true,
+      customRatesVersion: lib.customRatesVersion ?? 1,
     });
   } catch (err) {
     next(err);
@@ -813,7 +1232,7 @@ router.post(
       let userCount = 0;
       if (includeUser) {
         const lib = await RateGenLibrary.findOne({
-          userId: req.user._id,
+          userId: getUserId(req),
         }).lean();
         const mats = Array.isArray(lib?.materials) ? lib.materials : [];
         userCount = mats.length;

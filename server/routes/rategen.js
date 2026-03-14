@@ -7,6 +7,11 @@ import {
   fetchMasterMaterials,
   fetchMasterLabour,
 } from "../util/rategenMaster.js";
+import {
+  getUserId,
+  normalizeCustomRate,
+  normalizeRateOverride,
+} from "../util/rategenUserRates.js";
 import { normalizeZone, ZONES } from "../util/zones.js";
 import { ensureDb } from "../db.js";
 
@@ -39,34 +44,87 @@ router.get("/master", async (req, res) => {
 
 router.get("/library", async (req, res) => {
   await ensureDb();
-  let lib = await RateGenLibrary.findOne({ userId: req.user._id });
-  if (!lib) lib = await RateGenLibrary.create({ userId: req.user._id });
+  const userId = getUserId(req);
+  let lib = await RateGenLibrary.findOne({ userId });
+  if (!lib) lib = await RateGenLibrary.create({ userId });
   res.json(lib);
 });
 
 router.put("/library", async (req, res) => {
   await ensureDb();
-  const { materials, labour, baseVersion } = req.body || {};
+  const {
+    materials,
+    labour,
+    baseVersion,
+    rateOverrides,
+    customRates,
+    ratesBaseVersion,
+    customRatesBaseVersion,
+  } = req.body || {};
 
-  let lib = await RateGenLibrary.findOne({ userId: req.user._id });
-  if (!lib) lib = await RateGenLibrary.create({ userId: req.user._id });
+  const userId = getUserId(req);
+  let lib = await RateGenLibrary.findOne({ userId });
+  if (!lib) lib = await RateGenLibrary.create({ userId });
 
   if (
     Number.isFinite(baseVersion) &&
     baseVersion > 0 &&
     baseVersion !== lib.version
   ) {
-    return res.status(409).json({ error: "Version conflict" });
+    return res.status(409).json({
+      error: "Library version conflict",
+      version: lib.version,
+      ratesVersion: lib.ratesVersion,
+      customRatesVersion: lib.customRatesVersion,
+    });
   }
 
-  // if (typeof baseVersion === "number" && baseVersion !== lib.version) {
-  //   return res.status(409).json({ error: "Version conflict" });
-  // }
+  if (
+    Number.isFinite(ratesBaseVersion) &&
+    ratesBaseVersion > 0 &&
+    ratesBaseVersion !== lib.ratesVersion
+  ) {
+    return res.status(409).json({
+      error: "User rates version conflict",
+      version: lib.version,
+      ratesVersion: lib.ratesVersion,
+      customRatesVersion: lib.customRatesVersion,
+    });
+  }
 
-  if (Array.isArray(materials)) lib.materials = materials;
-  if (Array.isArray(labour)) lib.labour = labour;
+  if (
+    Number.isFinite(customRatesBaseVersion) &&
+    customRatesBaseVersion > 0 &&
+    customRatesBaseVersion !== lib.customRatesVersion
+  ) {
+    return res.status(409).json({
+      error: "Custom rates version conflict",
+      version: lib.version,
+      ratesVersion: lib.ratesVersion,
+      customRatesVersion: lib.customRatesVersion,
+    });
+  }
 
-  lib.version += 1;
+  let touchedLibrary = false;
+
+  if (Array.isArray(materials)) {
+    lib.materials = materials;
+    touchedLibrary = true;
+  }
+  if (Array.isArray(labour)) {
+    lib.labour = labour;
+    touchedLibrary = true;
+  }
+  if (Array.isArray(rateOverrides)) {
+    lib.rateOverrides = rateOverrides.map((item) => normalizeRateOverride(item));
+    lib.ratesVersion += 1;
+  }
+  if (Array.isArray(customRates)) {
+    lib.customRates = customRates.map((item) => normalizeCustomRate(item));
+    lib.customRatesVersion += 1;
+  }
+
+  if (touchedLibrary) lib.version += 1;
   await lib.save();
   res.json(lib);
 });
