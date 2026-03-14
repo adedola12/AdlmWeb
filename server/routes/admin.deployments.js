@@ -3,6 +3,7 @@ import multer from "multer";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
+import { isR2Configured, uploadBufferToR2 } from "../utils/r2Upload.js";
 
 const router = express.Router();
 const upload = multer({
@@ -14,6 +15,60 @@ router.use(requireAuth, requireAdmin);
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
+
+const DEFAULT_R2_THRESHOLD_BYTES = 8 * 1024 * 1024;
+
+function getR2ThresholdBytes() {
+  const raw = Number(process.env.INSTALLER_R2_THRESHOLD_BYTES || 0);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_R2_THRESHOLD_BYTES;
+}
+
+function sanitizeBaseName(value, fallback) {
+  return String(value || fallback || "")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^a-zA-Z0-9/_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || fallback;
+}
+
+function sanitizeFileName(value, fallback) {
+  return String(value || fallback || "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || fallback;
+}
+
+function getOriginalName(file) {
+  return String(file?.originalname || "package.bin").trim() || "package.bin";
+}
+
+function getPackageKindFromName(name) {
+  return String(name || "").toLowerCase().endsWith(".zip") ? "zip" : "file";
+}
+
+function getUploadFolder(req) {
+  return (
+    String(req.body?.folder || process.env.CLOUDINARY_INSTALLERS_FOLDER || "adlm/installers").trim() ||
+    "adlm/installers"
+  );
+}
+
+function buildUploadNames(req) {
+  const originalName = getOriginalName(req.file);
+  const folder = getUploadFolder(req);
+  const fallbackBase = `package-${Date.now()}`;
+  const requestedId = req.body?.publicId || originalName || fallbackBase;
+  const baseName = sanitizeBaseName(requestedId, fallbackBase);
+  const safeOriginalName = sanitizeFileName(originalName, "package.bin");
+
+  return {
+    folder,
+    originalName,
+    baseName,
+    fileName: safeOriginalName,
+    packageKind: getPackageKindFromName(originalName),
+  };
+}
 
 function normalizeOperation(raw) {
   if (!raw) return null;
@@ -80,24 +135,34 @@ router.post(
       return res.status(400).json({ error: "file is required" });
     }
 
-    const folder =
-      String(req.body?.folder || process.env.CLOUDINARY_INSTALLERS_FOLDER || "adlm/installers").trim() ||
-      "adlm/installers";
+    const { folder, baseName, fileName, originalName, packageKind } = buildUploadNames(req);
+    const thresholdBytes = getR2ThresholdBytes();
+    const useR2 = req.file.size > thresholdBytes;
 
-    const baseName = String(req.body?.publicId || req.file.originalname || `package-${Date.now()}`)
-      .replace(/\.[^.]+$/, "")
-      .replace(/[^a-zA-Z0-9/_-]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "") || `package-${Date.now()}`;
+    if (useR2 && !isR2Configured()) {
+      return res.status(503).json({
+        error:
+          "This package is larger than 8 MB and Cloudflare R2 is not configured yet. Add R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, and R2_PUBLIC_BASE_URL on the server.",
+      });
+    }
 
-    const out = await uploadBufferToCloudinary(req.file.buffer, {
-      folder,
-      publicId: baseName,
-      resourceType: "raw",
-    });
+    let out;
+    let storageProvider = "cloudinary";
 
-    const originalName = String(req.file.originalname || "package.bin").trim() || "package.bin";
-    const kind = originalName.toLowerCase().endsWith(".zip") ? "zip" : "file";
+    if (useR2) {
+      const objectKey = `${folder.replace(/^\/+|\/+$/g, "")}/${baseName}/${fileName}`;
+      out = await uploadBufferToR2(req.file.buffer, {
+        key: objectKey,
+        contentType: req.file.mimetype || "application/octet-stream",
+      });
+      storageProvider = "r2";
+    } else {
+      out = await uploadBufferToCloudinary(req.file.buffer, {
+        folder,
+        publicId: baseName,
+        resourceType: "raw",
+      });
+    }
 
     return res.json({
       ok: true,
@@ -105,7 +170,9 @@ router.post(
       publicId: out.public_id,
       originalName,
       bytes: req.file.size,
-      packageKind: kind,
+      packageKind,
+      storageProvider,
+      thresholdBytes,
     });
   }),
 );
