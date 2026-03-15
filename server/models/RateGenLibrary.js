@@ -27,7 +27,7 @@ const RateItemSchema = new mongoose.Schema(
 
 const UserRateOverrideSchema = new mongoose.Schema(
   {
-    rateId: { type: mongoose.Schema.Types.ObjectId, ref: "RateGenRate" },
+    rateId: { type: String, trim: true, default: "" },
     sectionKey: { type: String, trim: true, default: "" },
     sectionLabel: { type: String, trim: true, default: "" },
     itemNo: { type: Number, default: null },

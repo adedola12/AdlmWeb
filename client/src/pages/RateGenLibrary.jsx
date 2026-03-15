@@ -264,6 +264,22 @@ function matchesSearch(row, fields, search) {
   );
 }
 
+function buildFallbackMergedRates(mine) {
+  const rateOverrides = Array.isArray(mine?.rateOverrides) ? mine.rateOverrides : [];
+  const customRates = Array.isArray(mine?.customRates) ? mine.customRates : [];
+
+  return [
+    ...rateOverrides.map((row) => ({
+      ...row,
+      source: row?.source || "user-override",
+    })),
+    ...customRates.map((row) => ({
+      ...row,
+      source: row?.source || "user-custom",
+    })),
+  ];
+}
+
 export default function RateGenLibrary() {
   const navigate = useNavigate();
   const { accessToken } = useAuth();
@@ -280,9 +296,14 @@ export default function RateGenLibrary() {
   const [autoRefresh, setAutoRefresh] = React.useState(true);
   const [lastLoadedAt, setLastLoadedAt] = React.useState(null);
   const [updatesCount, setUpdatesCount] = React.useState(0);
+  const latestMineRef = React.useRef(null);
 
   const zone = master?.zone || "";
   const trimmedSearch = search.trim().toLowerCase();
+
+  React.useEffect(() => {
+    latestMineRef.current = mine;
+  }, [mine]);
 
   const loadUpdatesCount = React.useCallback(async () => {
     if (!accessToken) return;
@@ -320,7 +341,7 @@ export default function RateGenLibrary() {
       setErr("");
 
       try {
-        const [masterRes, mineRes, mergedRes, metaRes] = await Promise.all([
+        const [masterRes, mineRes, mergedRes, metaRes] = await Promise.allSettled([
           apiAuthed("/rategen/master", { token: accessToken }),
           apiAuthed("/rategen/library", { token: accessToken }),
           apiAuthed("/rategen-v2/library/user-rates/merged", {
@@ -329,11 +350,49 @@ export default function RateGenLibrary() {
           apiAuthed("/rategen-v2/library/meta", { token: accessToken }),
         ]);
 
-        setMaster(masterRes || null);
-        setMine(mineRes || null);
-        setMergedRates(Array.isArray(mergedRes?.items) ? mergedRes.items : []);
-        setMeta(metaRes?.meta || null);
-        setLastLoadedAt(new Date());
+        const partialErrors = [];
+        let nextMine = latestMineRef.current;
+        let hadAnySuccess = false;
+
+        if (masterRes.status === "fulfilled") {
+          setMaster(masterRes.value || null);
+          hadAnySuccess = true;
+        } else {
+          partialErrors.push("master library");
+        }
+
+        if (mineRes.status === "fulfilled") {
+          nextMine = mineRes.value || null;
+          setMine(nextMine);
+          hadAnySuccess = true;
+        } else {
+          partialErrors.push("your synced library");
+        }
+
+        if (mergedRes.status === "fulfilled") {
+          setMergedRates(Array.isArray(mergedRes.value?.items) ? mergedRes.value.items : []);
+          hadAnySuccess = true;
+        } else {
+          setMergedRates(buildFallbackMergedRates(nextMine));
+          partialErrors.push("effective rates");
+        }
+
+        if (metaRes.status === "fulfilled") {
+          setMeta(metaRes.value?.meta || null);
+          hadAnySuccess = true;
+        } else {
+          partialErrors.push("library metadata");
+        }
+
+        if (hadAnySuccess) {
+          setLastLoadedAt(new Date());
+        }
+
+        if (partialErrors.length > 0) {
+          setErr(
+            `Some RateGen data could not refresh (${partialErrors.join(", ")}). Showing the latest synced data that is available.`
+          );
+        }
       } catch (error) {
         setErr(error.message || "Failed to load RateGen dashboard.");
       } finally {
@@ -355,7 +414,7 @@ export default function RateGenLibrary() {
     const interval = window.setInterval(() => {
       loadAll({ silent: true });
       loadUpdatesCount();
-    }, 30000);
+    }, 10000);
 
     return () => window.clearInterval(interval);
   }, [accessToken, autoRefresh, loadAll, loadUpdatesCount]);
@@ -364,6 +423,10 @@ export default function RateGenLibrary() {
     if (!accessToken) return undefined;
 
     const refreshOnFocus = () => {
+      if (document.visibilityState && document.visibilityState !== "visible") {
+        return;
+      }
+
       loadAll({ silent: true });
       loadUpdatesCount();
     };

@@ -8,9 +8,11 @@ import {
   fetchMasterLabour,
 } from "../util/rategenMaster.js";
 import {
+  buildUserRateKey,
   getUserId,
   normalizeCustomRate,
   normalizeRateOverride,
+  toUserRateDefinition,
 } from "../util/rategenUserRates.js";
 import { normalizeZone, ZONES } from "../util/zones.js";
 import { ensureDb } from "../db.js";
@@ -18,6 +20,36 @@ import { ensureDb } from "../db.js";
 const router = express.Router();
 
 router.use(requireAuth, requireEntitlement("rategen"));
+
+function mapUserRateOverride(item) {
+  return toUserRateDefinition(item, {
+    id: item?.rateId || buildUserRateKey(item),
+    rateId: item?.rateId || null,
+    baseRateId: item?.rateId || null,
+    source: "user-override",
+  });
+}
+
+function mapUserCustomRate(item) {
+  return toUserRateDefinition(item, {
+    id: item?.customRateId || "",
+    rateId: null,
+    customRateId: item?.customRateId || null,
+    source: "user-custom",
+  });
+}
+
+function toLibraryResponse(lib) {
+  const plain = lib?.toObject ? lib.toObject() : { ...(lib || {}) };
+  return {
+    ...plain,
+    rateOverrides: (plain.rateOverrides || []).map(mapUserRateOverride),
+    customRates: (plain.customRates || []).map(mapUserCustomRate),
+    ratesVersion: plain.ratesVersion ?? 1,
+    customRatesVersion: plain.customRatesVersion ?? 1,
+    version: plain.version ?? 1,
+  };
+}
 
 router.get("/zones", (_req, res) => res.json(ZONES));
 
@@ -47,7 +79,7 @@ router.get("/library", async (req, res) => {
   const userId = getUserId(req);
   let lib = await RateGenLibrary.findOne({ userId });
   if (!lib) lib = await RateGenLibrary.create({ userId });
-  res.json(lib);
+  res.json(toLibraryResponse(lib));
 });
 
 router.put("/library", async (req, res) => {
@@ -126,7 +158,7 @@ router.put("/library", async (req, res) => {
 
   if (touchedLibrary) lib.version += 1;
   await lib.save();
-  res.json(lib);
+  res.json(toLibraryResponse(lib));
 });
 
 export default router;
