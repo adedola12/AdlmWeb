@@ -359,6 +359,16 @@ function buildValuationLogs(project, productKey) {
   const logsByDay = new Map();
   const events = Array.isArray(project?.valuationEvents) ? [...project.valuationEvents] : [];
 
+  // Build a Set of itemKeys that are CURRENTLY marked, so the valuation
+  // only reflects the current state — not stale historical events.
+  const currentlyMarked = new Set();
+  const projectItems = Array.isArray(project?.items) ? project.items : [];
+  for (let i = 0; i < projectItems.length; i++) {
+    if (Boolean(projectItems[i]?.[statusField])) {
+      currentlyMarked.add(itemIdentity(projectItems[i], i));
+    }
+  }
+
   events.sort((a, b) => {
     const ax = parseOptionalDate(a?.markedAt)?.getTime() || 0;
     const bx = parseOptionalDate(b?.markedAt)?.getTime() || 0;
@@ -370,10 +380,15 @@ function buildValuationLogs(project, productKey) {
     const day = String(event?.markedDay || isoDay(event?.markedAt) || "").trim();
     if (!day) continue;
 
+    const eventKey = String(event?.itemKey || "");
+
+    // Skip events for items that are NOT currently marked
+    if (eventKey && !currentlyMarked.has(eventKey)) continue;
+
     const byItem = logsByDay.get(day) || new Map();
     const fallbackKey = `${event?.itemSn || 0}::${event?.description || ""}::${event?.materialName || ""}`;
-    byItem.set(String(event?.itemKey || fallbackKey), {
-      itemKey: String(event?.itemKey || fallbackKey),
+    byItem.set(eventKey || fallbackKey, {
+      itemKey: eventKey || fallbackKey,
       sn: safeNum(event?.itemSn),
       description: displayItemDescription(event, productKey),
       qty: safeNum(event?.qty),

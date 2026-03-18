@@ -41,9 +41,15 @@ export default function ProjectBillTable({
   actualTrackedAmount = 0,
   autoFillBusy = false,
   autoFillMaterialsRates = false,
+  autoFillBoqRates = false,
+  autoFillBoqBusy = false,
   canRateGen = false,
+  canRateGenBoq = false,
+  rateSyncEnabled = false,
+  onToggleRateSyncEnabled,
   checkboxCls = "",
   computedShown = [],
+  getBoqCandidatesForItem,
   getCandidatesForItem,
   grossAmount = 0,
   isGroupLinked,
@@ -53,18 +59,24 @@ export default function ProjectBillTable({
   onActualQtyChange,
   onActualRateChange,
   onClearItemQuery,
+  onCloseBoqPickKey,
   onClosePickKey,
   onItemQueryChange,
+  onPickBoqCandidate,
   onPickCandidate,
   onRateChange,
   onStatusToggle,
+  onSyncBoqRates,
   onSyncPrices,
   onToggleAutoFill,
+  onToggleAutoFillBoq,
   onToggleGroupLink,
   onToggleOnlyFillEmpty,
+  onToggleOpenBoqPickKey,
   onToggleOpenPickKey,
   onToggleShowActualColumns,
   onlyFillEmpty = true,
+  openBoqPickKey = null,
   openPickKey = null,
   rateInfoText = "",
   rates = {},
@@ -132,6 +144,43 @@ export default function ProjectBillTable({
               >
                 {autoFillBusy ? "Syncing..." : "Sync prices"}
               </button>
+            ) : null}
+
+            {canRateGenBoq ? (
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={autoFillBoqRates}
+                  onChange={(e) => onToggleAutoFillBoq?.(e.target.checked)}
+                  disabled={autoFillBoqBusy}
+                  className={checkboxCls}
+                />
+                Auto-sync rates (RateGen)
+              </label>
+            ) : null}
+
+            {canRateGenBoq ? (
+              <button
+                type="button"
+                className="btn btn-xs"
+                onClick={onSyncBoqRates}
+                disabled={autoFillBoqBusy}
+                title="Fetch rates from RateGen library and auto-fill"
+              >
+                {autoFillBoqBusy ? "Syncing..." : "Sync rates from RateGen"}
+              </button>
+            ) : null}
+
+            {canRateGenBoq ? (
+              <label className="inline-flex items-center gap-2" title="When enabled, project rates auto-update when RateGen rates change (saved per project)">
+                <input
+                  type="checkbox"
+                  checked={rateSyncEnabled}
+                  onChange={(e) => onToggleRateSyncEnabled?.(e.target.checked)}
+                  className={checkboxCls}
+                />
+                Live rate sync
+              </label>
             ) : null}
 
             {rateInfoText ? (
@@ -350,6 +399,60 @@ export default function ProjectBillTable({
                             ) : null}
                           </div>
                         ) : null}
+
+                        {!showMaterials && canRateGenBoq ? (() => {
+                          const boqCandidates = getBoqCandidatesForItem?.(item) || [];
+                          if (!boqCandidates.length) return null;
+                          return (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-slate-50"
+                                title="Pick a rate from RateGen library"
+                                onClick={() => onToggleOpenBoqPickKey?.(row.key)}
+                              >
+                                <FaSearch className="text-slate-600" />
+                              </button>
+
+                              {openBoqPickKey === row.key ? (
+                                <div className="absolute right-0 z-30 mt-2 w-96 overflow-hidden rounded-lg border bg-white shadow-lg">
+                                  <div className="border-b px-3 py-2 text-xs text-slate-600">
+                                    RateGen rates for <b>{String(item?.description || "").trim().slice(0, 60)}</b>
+                                  </div>
+
+                                  <div className="max-h-64 overflow-auto">
+                                    {boqCandidates.slice(0, 10).map((candidate) => (
+                                      <button
+                                        key={`${candidate.description}-${candidate.unit}-${candidate.source}`}
+                                        type="button"
+                                        className="w-full border-b px-3 py-2 text-left hover:bg-slate-50"
+                                        onClick={() => onPickBoqCandidate?.(row.i, candidate)}
+                                      >
+                                        <div className="flex items-center justify-between gap-3">
+                                          <div className="truncate font-medium text-slate-900">
+                                            {candidate.description}
+                                          </div>
+                                          <div className="font-semibold text-slate-900 whitespace-nowrap">
+                                            {money(candidate.totalCost)}
+                                          </div>
+                                        </div>
+                                        <div className="mt-0.5 text-xs text-slate-500">
+                                          {candidate.unit} | {candidate.sectionLabel} | {candidate.source}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  <div className="flex justify-end p-2">
+                                    <button type="button" className="btn btn-xs" onClick={onCloseBoqPickKey}>
+                                      Close
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })() : null}
                       </div>
                     </td>
 
@@ -360,7 +463,7 @@ export default function ProjectBillTable({
                           type="number"
                           step="any"
                           value={actualQtyValue}
-                          placeholder={String(Number(row.qty || 0))}
+                          placeholder="Measured qty"
                           onChange={(e) => onActualQtyChange?.(row.i, e.target.value)}
                         />
                       </td>
@@ -373,7 +476,7 @@ export default function ProjectBillTable({
                           type="number"
                           step="any"
                           value={actualRateValue}
-                          placeholder={String(Number(row.rate || 0))}
+                          placeholder="Measured rate"
                           onChange={(e) => onActualRateChange?.(row.i, e.target.value)}
                         />
                       </td>

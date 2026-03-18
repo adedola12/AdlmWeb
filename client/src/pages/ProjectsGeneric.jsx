@@ -391,6 +391,10 @@ function normalizeValuationSettings(settings) {
       source.withholdingPct,
       DEFAULT_VALUATION_SETTINGS.withholdingPct,
     ),
+    rateSyncEnabled:
+      typeof source.rateSyncEnabled === "boolean"
+        ? source.rateSyncEnabled
+        : false,
   };
 }
 
@@ -404,7 +408,8 @@ function valuationSettingsEqual(a, b) {
     A.dashboardChartMode === B.dashboardChartMode &&
     safeNum(A.retentionPct) === safeNum(B.retentionPct) &&
     safeNum(A.vatPct) === safeNum(B.vatPct) &&
-    safeNum(A.withholdingPct) === safeNum(B.withholdingPct)
+    safeNum(A.withholdingPct) === safeNum(B.withholdingPct) &&
+    A.rateSyncEnabled === B.rateSyncEnabled
   );
 }
 
@@ -865,6 +870,13 @@ export default function ProjectsGeneric() {
   const [autoFillBusy, setAutoFillBusy] = React.useState(false);
   const autoFillAppliedRef = React.useRef({});
 
+  // BOQ rate sync from RateGen (non-materials view)
+  const [boqRateResolved, setBoqRateResolved] = React.useState(null);
+  const [autoFillBoqRates, setAutoFillBoqRates] = React.useState(false);
+  const [autoFillBoqBusy, setAutoFillBoqBusy] = React.useState(false);
+  const autoFillBoqAppliedRef = React.useRef({});
+  const [openBoqPickKey, setOpenBoqPickKey] = React.useState(null);
+
   const rowId = (r) => r?._id || r?.id || null;
   const selectedId = sel?._id || sel?.id;
 
@@ -976,7 +988,11 @@ export default function ProjectsGeneric() {
         if (!(k in nextActualQty)) continue;
         const serverVal = parseOptionalNumber(baseActualQty[k]);
         const cacheVal = parseOptionalNumber(v);
-        if (serverVal == null && cacheVal != null) {
+        // Only restore from cache if the server item has never had actuals
+        // recorded — if actualRecordedAt is set, the server value is authoritative.
+        const idx = its.findIndex((it, i) => itemKey(it, i) === k);
+        const serverEverRecorded = idx >= 0 && its[idx]?.actualRecordedAt != null;
+        if (!serverEverRecorded && serverVal == null && cacheVal != null) {
           nextActualQty[k] = actualInputValue(cacheVal);
         }
       }
@@ -988,7 +1004,11 @@ export default function ProjectsGeneric() {
         if (!(k in nextActualRate)) continue;
         const serverVal = parseOptionalNumber(baseActualRate[k]);
         const cacheVal = parseOptionalNumber(v);
-        if (serverVal == null && cacheVal != null) {
+        // Only restore from cache if the server item has never had actuals
+        // recorded — if actualRecordedAt is set, the server value is authoritative.
+        const idx = its.findIndex((it, i) => itemKey(it, i) === k);
+        const serverEverRecorded = idx >= 0 && its[idx]?.actualRecordedAt != null;
+        if (!serverEverRecorded && serverVal == null && cacheVal != null) {
           nextActualRate[k] = actualInputValue(cacheVal);
         }
       }
@@ -1352,6 +1372,8 @@ export default function ProjectsGeneric() {
         field === "withholdingPct"
       ) {
         next[field] = clampPercentage(value, next[field]);
+      } else if (field === "rateSyncEnabled") {
+        next.rateSyncEnabled = Boolean(value);
       }
       return { ...next };
     });
@@ -1732,6 +1754,135 @@ export default function ProjectsGeneric() {
     }));
     handleRateChange(rowIndex, String(safeNum(candidate.price) || 0));
     setOpenPickKey(null);
+  }
+
+  /* ---------- BOQ Rate Sync from RateGen (non-materials) ---------- */
+
+  function normalizeBoqDescription(desc) {
+    return String(desc || "")
+      .toLowerCase()
+      .replace(/\[.*?\]/g, " ")
+      .replace(/\(.*?\)/g, " ")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  async function syncBoqRates(project) {
+    if (showMaterials) return;
+    if (!canRateGen) return;
+    if (!project?._id) return;
+
+    const its = Array.isArray(project?.items) ? project.items : [];
+
+    const uniq = new Map();
+    for (const it of its) {
+      const desc = String(it?.description || "").trim();
+      if (!desc) continue;
+      const unit = String(it?.unit || "").trim();
+      const key = `${normalizeBoqDescription(desc)}|${normalizeUnit(unit)}`;
+      if (!uniq.has(key)) uniq.set(key, { description: desc, unit });
+    }
+
+    const reqItems = Array.from(uniq.values());
+    if (!reqItems.length) return;
+
+    setAutoFillBoqBusy(true);
+    setErr("");
+    setNotice("");
+
+    try {
+      const result = await apiAuthed("/rategen-v2/library/rate-items/resolve", {
+        token: accessToken,
+        method: "POST",
+        body: { items: reqItems, limitCandidates: 10 },
+      });
+
+      setBoqRateResolved(result);
+
+      let matched = 0;
+      let filled = 0;
+
+      setRates((prev) => {
+        const next = { ...(prev || {}) };
+
+        for (let i = 0; i < its.length; i++) {
+          const it = its[i] || {};
+          const k = itemKey(it, i);
+          const descKey = normalizeBoqDescription(it.description);
+          const candidates = Array.isArray(result?.candidatesByKey?.[descKey])
+            ? result.candidatesByKey[descKey]
+            : [];
+
+          if (!candidates.length) continue;
+
+          const best = candidates[0];
+          if (!best) continue;
+
+          matched += 1;
+
+          const totalCost = safeNum(best.totalCost);
+          if (totalCost <= 0) continue;
+
+          const existing =
+            String(next[k] ?? "").trim() === ""
+              ? safeNum(it?.rate)
+              : safeNum(next[k]);
+
+          if (onlyFillEmpty && existing !== 0) continue;
+
+          next[k] = String(totalCost);
+          filled += 1;
+        }
+
+        return next;
+      });
+
+      setNotice(
+        filled > 0
+          ? `Synced ${filled} rate(s) from RateGen. (${matched} match(es) found)`
+          : `No rates filled. (${matched} match(es) found)`,
+      );
+    } catch (e) {
+      setErr(e?.message || "Failed to sync rates from RateGen");
+    } finally {
+      setAutoFillBoqBusy(false);
+    }
+  }
+
+  // Auto-sync rates from RateGen when toggle is on or rateSyncEnabled is saved
+  const shouldAutoSyncBoq = autoFillBoqRates || Boolean(valuationSettings?.rateSyncEnabled);
+  React.useEffect(() => {
+    if (showMaterials) return;
+    if (!shouldAutoSyncBoq) return;
+    if (!canRateGen) return;
+    if (!sel || !selectedId) return;
+
+    if (autoFillBoqAppliedRef.current[selectedId]) return;
+    autoFillBoqAppliedRef.current[selectedId] = true;
+
+    syncBoqRates(sel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMaterials, shouldAutoSyncBoq, canRateGen, selectedId]);
+
+  function toggleAutoFillBoq(v) {
+    setAutoFillBoqRates(v);
+    if (selectedId) delete autoFillBoqAppliedRef.current[selectedId];
+    if (v && sel) syncBoqRates(sel);
+  }
+
+  function getBoqCandidatesForItem(item) {
+    if (showMaterials) return [];
+    const descKey = normalizeBoqDescription(item?.description);
+    return Array.isArray(boqRateResolved?.candidatesByKey?.[descKey])
+      ? boqRateResolved.candidatesByKey[descKey]
+      : [];
+  }
+
+  function handlePickBoqCandidate(rowIndex, candidate) {
+    if (!candidate) return;
+    handleRateChange(rowIndex, String(safeNum(candidate.totalCost) || 0));
+    setOpenBoqPickKey(null);
   }
 
   // compute all rows
@@ -2236,6 +2387,22 @@ export default function ProjectsGeneric() {
                 onToggleAutoFill={toggleAutoFill}
                 autoFillBusy={autoFillBusy}
                 onSyncPrices={() => sel && autoFillMaterialRates(sel)}
+                autoFillBoqRates={autoFillBoqRates}
+                autoFillBoqBusy={autoFillBoqBusy}
+                canRateGenBoq={!showMaterials && canRateGen}
+                onSyncBoqRates={() => sel && syncBoqRates(sel)}
+                onToggleAutoFillBoq={toggleAutoFillBoq}
+                getBoqCandidatesForItem={getBoqCandidatesForItem}
+                onPickBoqCandidate={handlePickBoqCandidate}
+                openBoqPickKey={openBoqPickKey}
+                onToggleOpenBoqPickKey={(key) =>
+                  setOpenBoqPickKey((prev) => (prev === key ? null : key))
+                }
+                onCloseBoqPickKey={() => setOpenBoqPickKey(null)}
+                rateSyncEnabled={Boolean(valuationSettings?.rateSyncEnabled)}
+                onToggleRateSyncEnabled={(checked) =>
+                  handleValuationSettingChange("rateSyncEnabled", checked)
+                }
                 rateInfoText={
                   showMaterials
                     ? canRateGen

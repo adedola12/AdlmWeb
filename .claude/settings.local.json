@@ -10,7 +10,11 @@
       "Bash(node --check middleware/requireEntitlement.js)",
       "Bash(node --check util/expiryNotifier.js)",
       "Bash(node --check index.js)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(find /c/Users/ADLM/source/repos/ADLMWebsite/client/src/pages -type f -name *boq* -o -name *takeoff* -o -name *valuation*)",
+      "Bash(node --check routes/projects.js)",
+      "Bash(node --check routes/rategen.library.js)",
+      "Bash(node --check models/TakeoffProject.js)"
     ]
   }
 }

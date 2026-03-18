@@ -41,6 +41,10 @@ const ValuationSettingsSchema = new mongoose.Schema(
       type: Number,
       default: DefaultValuationSettings.withholdingPct,
     },
+    rateSyncEnabled: {
+      type: Boolean,
+      default: false,
+    },
   },
   { _id: false },
 );

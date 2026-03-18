@@ -369,6 +369,125 @@ router.post("/library/material-prices/resolve", async (req, res, next) => {
   }
 });
 
+/**
+ * POST /library/rate-items/resolve
+ * Fuzzy-match BOQ item descriptions against the user's effective RateGen rates.
+ * Body: { items: [{ description, unit }], limitCandidates?: number }
+ * Returns: { ok, results, ratesByKey, candidatesByKey }
+ */
+router.post("/library/rate-items/resolve", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const { items, limitCandidates = 10 } = req.body || {};
+
+    const wanted = (Array.isArray(items) ? items : [])
+      .slice(0, 2000)
+      .map((x) => ({
+        description: String(x?.description || "").trim(),
+        unit: String(x?.unit || "").trim(),
+      }))
+      .filter((x) => x.description);
+
+    if (!wanted.length) {
+      return res.json({ ok: true, results: [], ratesByKey: {}, candidatesByKey: {} });
+    }
+
+    // Fetch user's effective rates (master + overrides + custom)
+    const masterRates = await RateGenRate.find({}).lean();
+    const lib = await RateGenLibrary.findOne({ userId: getUserId(req) }).lean();
+    const rateOverrides = Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [];
+    const customRates = Array.isArray(lib?.customRates) ? lib.customRates : [];
+
+    const merged = mergeRatesWithUserData(masterRates, rateOverrides, customRates);
+
+    // Prepare pool from merged rates
+    const pool = merged
+      .map((r) => {
+        const desc = String(r?.description || "").trim();
+        const total = Number(r?.totalCost || 0);
+        if (!desc || !Number.isFinite(total) || total <= 0) return null;
+        return {
+          description: desc,
+          unit: String(r?.unit || ""),
+          totalCost: total,
+          netCost: Number(r?.netCost || 0),
+          sectionKey: String(r?.sectionKey || ""),
+          sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
+          source: String(r?.source || "master"),
+          rateId: r?.rateId || r?.id || r?._id || null,
+          _tokens: tokens(desc),
+          _unitNorm: normUnit(r?.unit),
+        };
+      })
+      .filter(Boolean);
+
+    const maxCands = Math.max(3, Math.min(20, Number(limitCandidates) || 10));
+    const ratesByKey = {};
+    const candidatesByKey = {};
+    const results = [];
+
+    for (const w of wanted) {
+      const reqToks = tokens(w.description);
+      const reqUnit = normUnit(w.unit);
+      const descKey = normText(w.description);
+
+      let candidates = pool
+        .map((c) => {
+          let s = scoreMatch(reqToks, c._tokens);
+          if (reqUnit && c._unitNorm && reqUnit === c._unitNorm) s += 0.1;
+          if (reqUnit && c._unitNorm && reqUnit !== c._unitNorm) s *= 0.75;
+          return { ...c, score: s };
+        })
+        .filter((x) => x.score >= 0.25)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxCands);
+
+      const best = candidates[0] || null;
+
+      const mapped = candidates.map((c) => ({
+        description: c.description,
+        unit: c.unit,
+        totalCost: c.totalCost,
+        netCost: c.netCost,
+        sectionKey: c.sectionKey,
+        sectionLabel: c.sectionLabel,
+        source: c.source,
+        score: Number((c.score || 0).toFixed(4)),
+      }));
+
+      candidatesByKey[descKey] = mapped;
+      ratesByKey[descKey] = best
+        ? {
+            description: best.description,
+            unit: best.unit,
+            totalCost: best.totalCost,
+            sectionLabel: best.sectionLabel,
+            source: best.source,
+            score: Number((best.score || 0).toFixed(4)),
+          }
+        : null;
+
+      results.push({
+        key: descKey,
+        requested: { description: w.description, unit: w.unit },
+        best: ratesByKey[descKey],
+        candidates: mapped,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      results,
+      ratesByKey,
+      candidatesByKey,
+      stats: { requested: wanted.length, pool: pool.length },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function parseCursor(cursor) {
   if (!cursor) return null;
   const [tsRaw, idRaw] = String(cursor).split("|");
