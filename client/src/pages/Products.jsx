@@ -91,7 +91,7 @@ function CardVideo({ src, poster }) {
           poster={poster || undefined}
         />
       ) : poster ? (
-        <img src={poster} className="w-full h-full object-cover" alt="" />
+        <img src={poster} className="w-full h-full object-cover" alt="Product thumbnail" />
       ) : (
         <div className="w-full h-full bg-slate-900" />
       )}
@@ -122,7 +122,7 @@ function TrainingCard({ t }) {
     <article className="rounded-2xl bg-white p-3 md:p-4 shadow-sm ring-1 ring-black/5 hover:shadow-lg hover:ring-black/10 transition">
       <div className="rounded-xl overflow-hidden aspect-video bg-slate-100 ring-1 ring-black/5">
         {img ? (
-          <img src={img} alt="" className="w-full h-full object-cover" />
+          <img src={img} alt={t?.title || "Training"} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full bg-slate-200" />
         )}

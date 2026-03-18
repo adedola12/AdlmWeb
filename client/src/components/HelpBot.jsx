@@ -251,8 +251,14 @@ export default function HelpBot() {
     setMessages(DEFAULT_MESSAGES);
   }
 
+  const msgIdRef = React.useRef(0);
+
   function pushBot(text, actions = []) {
-    setMessages((prev) => [...prev, { role: "bot", text, actions }]);
+    setMessages((prev) => {
+      const next = [...prev, { role: "bot", text, actions, _id: ++msgIdRef.current }];
+      // Cap message history to prevent unbounded memory growth
+      return next.length > 100 ? next.slice(-80) : next;
+    });
   }
 
   React.useEffect(() => {
@@ -299,7 +305,10 @@ export default function HelpBot() {
     const userText = String(text || input).trim();
     if (!userText) return;
 
-    setMessages((prev) => [...prev, { role: "user", text: userText }]);
+    setMessages((prev) => {
+      const next = [...prev, { role: "user", text: userText, _id: ++msgIdRef.current }];
+      return next.length > 100 ? next.slice(-80) : next;
+    });
     setInput("");
 
     // 1) site navigation match
@@ -465,7 +474,7 @@ export default function HelpBot() {
           <div className="h-[380px] overflow-auto p-3 space-y-3 whitespace-pre-line">
             {messages.map((m, i) => (
               <div
-                key={i}
+                key={m._id ?? i}
                 className={`flex ${
                   m.role === "user" ? "justify-end" : "justify-start"
                 }`}
@@ -485,7 +494,7 @@ export default function HelpBot() {
                       <div className="mt-2 flex flex-wrap gap-2">
                         {m.actions.map((a, idx) => (
                           <button
-                            key={idx}
+                            key={a.label || idx}
                             onClick={() => onAction(a)}
                             className="text-xs px-2 py-1 rounded-full bg-white ring-1 ring-black/10 hover:bg-slate-50"
                           >

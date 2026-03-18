@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -i \"project\\\\|takeoff\" models/*.js)",
+      "Bash(node --check routes/admin.js)",
+      "Bash(node --check routes/purchase.js)",
+      "Bash(node --check routes/auth.js)",
+      "Bash(node --check middleware/requireAdminKey.js)",
+      "Bash(node --check routes/webhooks.js)",
+      "Bash(node --check middleware/requireEntitlement.js)",
+      "Bash(node --check util/expiryNotifier.js)",
+      "Bash(node --check index.js)",
+      "Bash(node -e \":*)"
+    ]
+  }
+}

@@ -177,7 +177,7 @@ export default function Profile() {
   }
 
   const placeholder = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-    user?.email || "A",
+    user?.username || user?.email || "A",
   )}`;
 
   const imgSrc = (avatarUrl || "").trim() || placeholder;

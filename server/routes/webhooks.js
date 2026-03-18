@@ -23,22 +23,28 @@ router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
     const ref = event.data?.reference;
     if (!ref) return res.json({ ok: true });
 
-    const purchase = await Purchase.findOne({ paystackRef: ref });
-    if (!purchase) return res.json({ ok: true });
+    // Atomic update to prevent race condition with concurrent webhook calls
+    const purchase = await Purchase.findOneAndUpdate(
+      { paystackRef: ref, paid: { $ne: true } },
+      { $set: { paid: true, status: "approved" } },
+      { new: true },
+    );
 
-    if (!purchase.paid) {
-      purchase.paid = true;
-      purchase.status = "approved";
-      await purchase.save();
-      const { applyEntitlementsFromPurchase } = await import(
-        "../util/applyEntitlements.js"
-      );
-      await applyEntitlementsFromPurchase(purchase);
-      await autoEnrollFromPurchase(purchase);
+    if (!purchase) {
+      // Already paid or not found — idempotent success
+      return res.json({ ok: true });
     }
+
+    const { applyEntitlementsFromPurchase } = await import(
+      "../util/applyEntitlements.js"
+    );
+    await applyEntitlementsFromPurchase(purchase);
+    await autoEnrollFromPurchase(purchase);
+
     res.json({ ok: true });
-  } catch (_e) {
-    // Always 200 so Paystack doesn't retry forever
+  } catch (e) {
+    // Log the error for debugging but always 200 so Paystack doesn't retry forever
+    console.error("[webhook/paystack] error:", e?.message || e);
     res.status(200).json({ ok: true });
   }
 });

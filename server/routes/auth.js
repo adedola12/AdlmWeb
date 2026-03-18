@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ensureDb } from "../db.js";
@@ -187,7 +188,7 @@ function getLicenseJwtSecret() {
   console.error(
     "[/auth/login] LICENSE_JWT_SECRET is missing; plugin license token signing is unavailable.",
   );
-  return "";
+  return null;
 }
 
 function offlineLicenseExpiryFor(entitlement) {
@@ -251,6 +252,12 @@ router.post("/signup", async (req, res) => {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
+
+    // Basic email format validation
+    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRx.test(normalizedEmail)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
     const normalizedUsername = String(
       username || normalizedEmail.split("@")[0],
     ).trim();
@@ -495,7 +502,7 @@ router.post("/password/forgot", async (req, res) => {
     });
     if (existing) return res.json({ ok: true });
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = String(crypto.randomInt(100000, 999999));
     const expires = new Date(Date.now() + 10 * 60 * 1000);
 
     await PasswordReset.create({
@@ -555,7 +562,9 @@ router.post("/password/reset", async (req, res) => {
         .json({ error: "Too many attempts. Request a new code." });
     }
 
-    if (String(code) !== String(record.code)) {
+    const codeA = Buffer.from(String(code));
+    const codeB = Buffer.from(String(record.code));
+    if (codeA.length !== codeB.length || !crypto.timingSafeEqual(codeA, codeB)) {
       record.attempts += 1;
       await record.save();
       return res.status(400).json({ error: "Invalid or expired code" });

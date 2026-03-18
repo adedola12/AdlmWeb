@@ -75,7 +75,11 @@ export default function YoutubeWelcomeModal({
         playerRef.current = null;
       }
 
-      if (mountRef.current) mountRef.current.innerHTML = "";
+      if (mountRef.current) {
+        while (mountRef.current.firstChild) {
+          mountRef.current.removeChild(mountRef.current.firstChild);
+        }
+      }
 
       playerRef.current = new YT.Player(mountRef.current, {
         videoId,

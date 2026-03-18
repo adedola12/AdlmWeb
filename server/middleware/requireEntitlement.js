@@ -12,8 +12,14 @@ function entitlementKeyFor(productKey) {
 /** requireEntitlement("revit" | "revitmep" | "planswift" | "rategen") */
 export function requireEntitlement(productKey) {
   return async (req, res, next) => {
+    if (!req.user?._id) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
     const u = await User.findById(req.user._id, { entitlements: 1 });
-    const e = (u?.entitlements || []).find(
+    if (!u) {
+      return res.status(401).json({ error: "User not found" });
+    }
+    const e = (u.entitlements || []).find(
       (x) => x.productKey === productKey && x.status === "active"
     );
     if (!e) return res.status(403).json({ error: "No active subscription" });

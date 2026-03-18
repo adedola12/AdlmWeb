@@ -176,6 +176,7 @@ export async function runExpiryNotifier({ dryRun = false, limit = 0 } = {}) {
 
     const cursor = User.find(query)
       .select("email username firstName disabled refreshVersion entitlements")
+      .batchSize(100)
       .cursor();
 
     let scannedUsers = 0;

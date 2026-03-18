@@ -63,6 +63,7 @@ export default function Purchase() {
 
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
+  const [bankDetails, setBankDetails] = React.useState(null);
 
   // ---------- money helpers ----------
   const round2 = (x) =>
@@ -99,10 +100,11 @@ export default function Purchase() {
         const res = await fetch(`${API_BASE}/products?page=1&pageSize=200`, {
           credentials: "include",
         });
+        if (!res.ok) throw new Error(`Failed to load products (${res.status})`);
         const json = await res.json();
-        setProducts(Array.isArray(json.items) ? json.items : []);
+        setProducts(Array.isArray(json?.items) ? json.items : []);
       } catch (e) {
-        console.error(e);
+        console.error("Purchase products load error:", e);
         setProducts([]);
       }
     })();
@@ -372,6 +374,17 @@ export default function Purchase() {
       });
 
       setPendingPurchaseId(out.purchaseId || null);
+
+      // Fetch bank details from server (not hardcoded in frontend)
+      try {
+        const bd = await apiAuthed("/purchase/bank-details", {
+          token: accessToken,
+        });
+        setBankDetails(bd);
+      } catch {
+        setBankDetails(null);
+      }
+
       setShowManualPayModal(true);
       setMsg(out.message || "Order created. Please pay manually and confirm.");
     } catch (e) {
@@ -756,13 +769,13 @@ export default function Purchase() {
 
             <div className="space-y-2 mb-4">
               <div className="font-medium">Account number</div>
-              <div className="text-lg">1634998770</div>
+              <div className="text-lg">{bankDetails?.accountNumber || "Loading…"}</div>
 
               <div className="font-medium mt-2">Account name</div>
-              <div className="text-lg">ADLM Studio</div>
+              <div className="text-lg">{bankDetails?.accountName || "Loading…"}</div>
 
               <div className="font-medium mt-2">Bank</div>
-              <div className="text-lg">Access Bank</div>
+              <div className="text-lg">{bankDetails?.bankName || "Loading…"}</div>
 
               <div className="text-xs text-slate-500 mt-2">
                 After you click "I have paid", we clear your cart locally and

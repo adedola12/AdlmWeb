@@ -448,7 +448,8 @@ router.get(
     const { q } = req.query;
     const find = {};
     if (q) {
-      const rx = new RegExp(String(q).trim(), "i");
+      const escaped = String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rx = new RegExp(escaped, "i");
       find.$or = [{ email: rx }, { username: rx }];
     }
 

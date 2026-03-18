@@ -18,15 +18,14 @@ function safeJsonParse(s, fallback) {
   }
 }
 
-function syncLegacyTokenKeys(accessToken) {
+function syncLegacyTokenKeys(_accessToken) {
+  // Legacy token keys removed — tokens should not be duplicated across
+  // multiple localStorage keys as each copy increases XSS exposure surface.
+  // The auth object in "auth" key is the single source of truth.
   try {
-    const t = String(accessToken || "").trim();
-    const keys = ["accessToken", "adlm_accessToken", "token", "access_token"];
-    if (t) {
-      keys.forEach((k) => localStorage.setItem(k, t));
-    } else {
-      keys.forEach((k) => localStorage.removeItem(k));
-    }
+    ["accessToken", "adlm_accessToken", "token", "access_token"].forEach((k) =>
+      localStorage.removeItem(k),
+    );
   } catch {
     // Ignore storage errors in restricted browser environments.
   }

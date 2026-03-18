@@ -109,8 +109,8 @@ router.post("/cart", requireAuth, async (req, res) => {
           .status(400)
           .json({ error: `Invalid product: ${i.productKey}` });
 
-      const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10), 1);
-      const periods = Math.max(parseInt(i.periods ?? 1, 10), 1);
+      const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10) || 1, 1);
+      const periods = Math.max(parseInt(i.periods ?? 1, 10) || 1, 1);
       const firstTime = !!i.firstTime;
 
       const unitNGN =
@@ -256,7 +256,8 @@ router.post("/cart", requireAuth, async (req, res) => {
         "Manual payment requested. Please pay to the provided account and click 'I have paid' in the client UI. Admin will verify.",
     });
   } catch (e) {
-    return res.status(500).json({ error: e.message || "Cart purchase failed" });
+    console.error("Cart purchase error:", e);
+    return res.status(500).json({ error: "Cart purchase failed" });
   }
 });
 
@@ -284,14 +285,22 @@ router.get("/verify", async (req, res) => {
     const paidOk = data?.data?.status === "success";
     if (!paidOk) return res.json({ ok: false, status: data?.data?.status });
 
-    const purchase = await Purchase.findOne({ paystackRef: reference });
-    if (!purchase)
-      return res.json({ ok: false, message: "Purchase not found" });
+    const purchase = await Purchase.findOneAndUpdate(
+      { paystackRef: reference, paid: { $ne: true } },
+      { $set: { paid: true, status: "approved" } },
+      { new: true },
+    );
 
-    if (!purchase.paid) {
-      purchase.paid = true;
-      purchase.status = "approved";
-      await purchase.save();
+    if (!purchase) {
+      // Either not found or already paid — check which
+      const existing = await Purchase.findOne({ paystackRef: reference });
+      if (!existing)
+        return res.json({ ok: false, message: "Purchase not found" });
+      // Already paid — return success idempotently
+      return res.json({ ok: true, status: "success", purchaseId: existing._id });
+    }
+
+    {
 
       const { applyEntitlementsFromPurchase } =
         await import("../util/applyEntitlements.js");
@@ -303,8 +312,18 @@ router.get("/verify", async (req, res) => {
 
     return res.json({ ok: true, status: "success", purchaseId: purchase._id });
   } catch (e) {
-    return res.status(500).json({ error: e.message || "Verify failed" });
+    console.error("Payment verify error:", e);
+    return res.status(500).json({ error: "Verify failed" });
   }
+});
+
+// Bank details served from env — keeps sensitive data out of frontend source
+router.get("/bank-details", requireAuth, (_req, res) => {
+  res.json({
+    accountNumber: process.env.BANK_ACCOUNT_NUMBER || "1634998770",
+    accountName: process.env.BANK_ACCOUNT_NAME || "ADLM Studio",
+    bankName: process.env.BANK_NAME || "Access Bank",
+  });
 });
 
 router.post("/:id/confirm-manual", requireAuth, async (req, res) => {
