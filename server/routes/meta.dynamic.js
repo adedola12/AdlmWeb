@@ -3,6 +3,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { TrainingEvent } from "../models/TrainingEvent.js";
+import { Product } from "../models/Product.js";
+import { ensureDb } from "../db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +27,6 @@ function indexHtmlExists() {
 }
 
 function readIndexHtmlSafe() {
-  // ✅ Never crash the server if dist/index.html is missing
   if (!indexHtmlExists()) return null;
 
   try {
@@ -109,7 +110,10 @@ function isAssetRequest(reqPath) {
 function isApiPath(reqPath) {
   const p = String(reqPath || "");
 
-  // ✅ Block ALL server API prefixes so meta never hijacks API calls
+  // Block server API prefixes that conflict with client routes.
+  // Note: /product/:key (singular) is safe — no server route for it.
+  // /products, /learn, /trainings are server API routes that respond with JSON
+  // before this middleware runs, so we block them here.
   return (
     p.startsWith("/auth") ||
     p.startsWith("/me") ||
@@ -121,12 +125,14 @@ function isApiPath(reqPath) {
     p.startsWith("/rategen-v2") ||
     p.startsWith("/helpbot") ||
     p.startsWith("/freebies") ||
-    p.startsWith("/projects") ||
-    p.startsWith("/learn") ||
-    p.startsWith("/products") || // ✅ IMPORTANT (your issue)
-    p.startsWith("/coupons") || // ✅ IMPORTANT (your issue)
-    p.startsWith("/trainings") || // server has trainings API
+    p.startsWith("/coupons") ||
     p.startsWith("/showcase") ||
+    // These exact paths have server API handlers that respond first
+    p === "/products" ||
+    p === "/learn" ||
+    p === "/trainings" ||
+    // Project API routes (but NOT /projects/shared/* which is public)
+    (p.startsWith("/projects") && !p.startsWith("/projects/shared")) ||
     // ptrainings API endpoints (keep)
     p.startsWith("/ptrainings/events") ||
     p.startsWith("/ptrainings/enrollments") ||
@@ -134,36 +140,58 @@ function isApiPath(reqPath) {
   );
 }
 
-// ✅ Only serve injected HTML for real document navigations
+// Only serve injected HTML for real document navigations
 function isDocumentNavigation(req) {
   const accept = String(req.headers.accept || "").toLowerCase();
   const secFetchDest = String(
     req.headers["sec-fetch-dest"] || "",
   ).toLowerCase();
 
-  // Browser nav typically has text/html and dest=document
   if (secFetchDest && secFetchDest !== "document") return false;
-
-  // Require HTML accept. This blocks fetch() default Accept:*/*
   if (!accept.includes("text/html")) return false;
 
   return true;
 }
 
-// ✅ Allow-list which page routes you want OG injection for
+// Allow-list which page routes get OG injection
 function isAllowedHtmlPath(reqPath) {
   const p = String(reqPath || "");
-  // Only support your meta pages here (expand if you later need more)
   return (
     p === "/" ||
+    // Products
+    /^\/products\/?$/i.test(p) ||
+    /^\/product\/[^/]+\/?$/i.test(p) ||
+    // Courses / Learn
+    /^\/learn\/?$/i.test(p) ||
+    /^\/learn\/course\/[^/]+\/?$/i.test(p) ||
+    /^\/learn\/free\/[^/]+\/?$/i.test(p) ||
+    // Physical trainings
     /^\/ptrainings\/?$/i.test(p) ||
-    /^\/ptrainings\/[^/]+\/?$/i.test(p)
+    /^\/ptrainings\/[^/]+\/?$/i.test(p) ||
+    // Online trainings
+    /^\/trainings\/?$/i.test(p) ||
+    /^\/trainings\/[^/]+\/?$/i.test(p) ||
+    // Static pages
+    /^\/about\/?$/i.test(p) ||
+    /^\/support\/?$/i.test(p) ||
+    /^\/testimonials\/?$/i.test(p) ||
+    // Public shared project dashboard
+    /^\/projects\/shared\/[^/]+\/?$/i.test(p) ||
+    // RateGen
+    /^\/rategen\/?$/i.test(p) ||
+    // Dashboard (generic)
+    /^\/dashboard\/?$/i.test(p) ||
+    // Profile
+    /^\/profile\/?$/i.test(p) ||
+    // Login / Signup
+    /^\/login\/?$/i.test(p) ||
+    /^\/signup\/?$/i.test(p)
   );
 }
 
 function shouldServeInjectedHtml(req) {
   if (req.method !== "GET" && req.method !== "HEAD") return false;
-  if (!indexHtmlExists()) return false; // ✅ skip entirely if no dist build
+  if (!indexHtmlExists()) return false;
   if (isAssetRequest(req.path)) return false;
   if (isApiPath(req.path)) return false;
   if (!isAllowedHtmlPath(req.path)) return false;
@@ -176,7 +204,6 @@ function shouldServeInjectedHtml(req) {
 function rewriteTag(html, { type, key, value }) {
   const v = escapeHtml(value);
 
-  // <title>...</title>
   if (type === "title") {
     if (/<title>.*?<\/title>/is.test(html)) {
       return html.replace(/<title>.*?<\/title>/is, `<title>${v}</title>`);
@@ -184,7 +211,6 @@ function rewriteTag(html, { type, key, value }) {
     return html.replace(/<\/head>/i, `<title>${v}</title>\n</head>`);
   }
 
-  // <meta name="description" ...>
   if (type === "metaName") {
     const re = new RegExp(`<meta\\s+[^>]*name=["']${key}["'][^>]*>`, "i");
     const tag = `<meta name="${key}" content="${v}" />`;
@@ -192,7 +218,6 @@ function rewriteTag(html, { type, key, value }) {
     return html.replace(/<\/head>/i, `${tag}\n</head>`);
   }
 
-  // <meta property="og:..." ...>
   if (type === "metaProp") {
     const re = new RegExp(`<meta\\s+[^>]*property=["']${key}["'][^>]*>`, "i");
     const tag = `<meta property="${key}" content="${v}" />`;
@@ -200,7 +225,6 @@ function rewriteTag(html, { type, key, value }) {
     return html.replace(/<\/head>/i, `${tag}\n</head>`);
   }
 
-  // <link rel="canonical" ...>
   if (type === "canonical") {
     const re = /<link\s+[^>]*rel=["']canonical["'][^>]*>/i;
     const tag = `<link rel="canonical" href="${v}" />`;
@@ -265,79 +289,197 @@ function injectMeta(html, meta) {
   return out;
 }
 
-/* -------------------- Meta resolution -------------------- */
+/* -------------------- Path extractors -------------------- */
 
-function resolvePTrainingSlug(reqPath) {
-  // Match /ptrainings/:slug but exclude API segments
-  const m = String(reqPath || "").match(/^\/ptrainings\/([^/]+)\/?$/i);
+function extractSlug(reqPath, prefix) {
+  const re = new RegExp(`^\\/${prefix}\\/([^/]+)\\/?$`, "i");
+  const m = String(reqPath || "").match(re);
   if (!m) return "";
   const slug = decodeURIComponent(m[1] || "");
-  const reserved = new Set([
-    "events",
-    "enrollments",
-    "enrollment",
-    "admin",
-    "api",
-  ]);
-  if (reserved.has(String(slug).toLowerCase())) return "";
+  const reserved = new Set(["events", "enrollments", "enrollment", "admin", "api"]);
+  if (reserved.has(slug.toLowerCase())) return "";
   return slug;
 }
 
+/* -------------------- Meta resolution -------------------- */
+
 async function resolveMeta(req) {
   const baseUrl = getBaseUrl(req);
-
   const cleanPath = String(req.originalUrl || "").split("?")[0] || "/";
   const pageUrl = new URL(cleanPath, baseUrl).toString();
+  const defaultImage = new URL("/Logo.png", baseUrl).toString();
 
-  // Defaults
+  // Defaults (ADLM Logo for any page without a specific image)
   let meta = {
     title: "ADLM Studio",
     description: "BIM Training, QS Tools, and Digital Construction Solutions.",
     url: pageUrl,
-    image: new URL("/og-default.jpg", baseUrl).toString(),
+    image: defaultImage,
   };
 
-  // ✅ Physical training detail: /ptrainings/:slug (use flyer as OG image)
-  const slug = resolvePTrainingSlug(req.path);
-  if (slug) {
-    const training = await TrainingEvent.findOne({ slug })
-      .select("title subtitle description flyerUrl ogImageUrl slug")
-      .lean();
-
-    const title = training?.title
-      ? `${training.title} | ADLM Studio`
-      : "ADLM Physical Training | ADLM Studio";
-
-    const description =
-      truncate(
-        training?.subtitle ||
-          training?.description ||
-          "Register for ADLM Physical Training.",
-        180,
-      ) || "Register for ADLM Physical Training.";
-
-    const chosen = training?.ogImageUrl || training?.flyerUrl || meta.image;
-
-    let image = absolutizeUrl(chosen, baseUrl) || meta.image;
-    image = cloudinaryOg(image) || image;
-
-    meta = { ...meta, title, description, url: pageUrl, image };
+  try {
+    await ensureDb();
+  } catch {
     return meta;
   }
 
-  // ✅ Listing page: /ptrainings
-  if (/^\/ptrainings\/?$/i.test(req.path)) {
-    meta.title = "ADLM Physical Trainings | ADLM Studio";
-    meta.description =
-      "Explore and register for upcoming ADLM physical trainings.";
-    return meta;
-  }
+  const p = req.path;
 
-  // Home
-  if (req.path === "/") {
+  // ── Home ──
+  if (p === "/") {
     meta.title = "ADLM Studio | BIM Training & QS Tools";
-    meta.description =
-      "BIM Training, QS Tools, and Digital Construction Solutions.";
+    return meta;
+  }
+
+  // ── Product detail: /product/:key ──
+  const productKey = extractSlug(p, "product");
+  if (productKey) {
+    const product = await Product.findOne({ key: productKey })
+      .select("name blurb thumbnailUrl images")
+      .lean();
+    if (product) {
+      meta.title = product.name
+        ? `${product.name} | ADLM Studio`
+        : "Product | ADLM Studio";
+      meta.description = truncate(product.blurb || product.name || "ADLM Studio product");
+      const img = product.thumbnailUrl || (product.images && product.images[0]) || "";
+      if (img) {
+        meta.image = cloudinaryOg(absolutizeUrl(img, baseUrl)) || meta.image;
+      }
+    }
+    return meta;
+  }
+
+  // ── Products listing ──
+  if (/^\/products\/?$/i.test(p)) {
+    meta.title = "Products | ADLM Studio";
+    meta.description = "Explore ADLM Studio software products for BIM, QS, and construction workflows.";
+    return meta;
+  }
+
+  // ── Physical training detail: /ptrainings/:slug ──
+  const ptSlug = extractSlug(p, "ptrainings");
+  if (ptSlug) {
+    const training = await TrainingEvent.findOne({ slug: ptSlug })
+      .select("title subtitle description flyerUrl ogImageUrl")
+      .lean();
+    if (training) {
+      meta.title = training.title
+        ? `${training.title} | ADLM Studio`
+        : "Physical Training | ADLM Studio";
+      meta.description = truncate(
+        training.subtitle || training.description || "Register for ADLM Physical Training.",
+      );
+      const img = training.ogImageUrl || training.flyerUrl || "";
+      if (img) {
+        meta.image = cloudinaryOg(absolutizeUrl(img, baseUrl)) || meta.image;
+      }
+    }
+    return meta;
+  }
+
+  // ── Physical trainings listing ──
+  if (/^\/ptrainings\/?$/i.test(p)) {
+    meta.title = "Physical Trainings | ADLM Studio";
+    meta.description = "Explore and register for upcoming ADLM physical trainings.";
+    return meta;
+  }
+
+  // ── Online training detail: /trainings/:id ──
+  const trainingId = extractSlug(p, "trainings");
+  if (trainingId) {
+    meta.title = "Online Training | ADLM Studio";
+    meta.description = "Join ADLM online training courses for BIM and construction professionals.";
+    return meta;
+  }
+
+  // ── Trainings listing ──
+  if (/^\/trainings\/?$/i.test(p)) {
+    meta.title = "Trainings | ADLM Studio";
+    meta.description = "Browse ADLM training programs for BIM and construction industry professionals.";
+    return meta;
+  }
+
+  // ── Course detail: /learn/course/:sku ──
+  const courseSku = extractSlug(p, "learn\\/course");
+  if (courseSku) {
+    // Try to load from Product model (courses are products with isCourse=true)
+    const course = await Product.findOne({ key: courseSku })
+      .select("name blurb thumbnailUrl images")
+      .lean();
+    if (course) {
+      meta.title = course.name
+        ? `${course.name} | ADLM Studio`
+        : "Course | ADLM Studio";
+      meta.description = truncate(course.blurb || course.name || "ADLM Studio course");
+      const img = course.thumbnailUrl || (course.images && course.images[0]) || "";
+      if (img) {
+        meta.image = cloudinaryOg(absolutizeUrl(img, baseUrl)) || meta.image;
+      }
+    }
+    return meta;
+  }
+
+  // ── Free video: /learn/free/:id ──
+  if (/^\/learn\/free\/[^/]+\/?$/i.test(p)) {
+    meta.title = "Free Learning | ADLM Studio";
+    meta.description = "Watch free BIM and construction tutorials from ADLM Studio.";
+    return meta;
+  }
+
+  // ── Learn listing ──
+  if (/^\/learn\/?$/i.test(p)) {
+    meta.title = "Learn | ADLM Studio";
+    meta.description = "Free tutorials and paid courses for BIM, Revit, and construction professionals.";
+    return meta;
+  }
+
+  // ── Public shared project dashboard: /projects/shared/:token ──
+  if (/^\/projects\/shared\/[^/]+\/?$/i.test(p)) {
+    meta.title = "Shared Project Dashboard | ADLM Studio";
+    meta.description = "View project progress, cost summary, and delivery status — shared via ADLM Studio.";
+    return meta;
+  }
+
+  // ── Static pages ──
+  if (/^\/about\/?$/i.test(p)) {
+    meta.title = "About | ADLM Studio";
+    meta.description = "Learn about ADLM Studio — BIM training, QS tools, and digital construction solutions.";
+    return meta;
+  }
+  if (/^\/support\/?$/i.test(p)) {
+    meta.title = "Support | ADLM Studio";
+    meta.description = "Get help with ADLM Studio products, subscriptions, and training courses.";
+    return meta;
+  }
+  if (/^\/testimonials\/?$/i.test(p)) {
+    meta.title = "Testimonials | ADLM Studio";
+    meta.description = "See what BIM and construction professionals say about ADLM Studio tools and training.";
+    return meta;
+  }
+  if (/^\/login\/?$/i.test(p)) {
+    meta.title = "Sign In | ADLM Studio";
+    meta.description = "Sign in to your ADLM Studio account.";
+    return meta;
+  }
+  if (/^\/signup\/?$/i.test(p)) {
+    meta.title = "Create Account | ADLM Studio";
+    meta.description = "Create your free ADLM Studio account for BIM training and QS tools.";
+    return meta;
+  }
+  if (/^\/dashboard\/?$/i.test(p)) {
+    meta.title = "Dashboard | ADLM Studio";
+    meta.description = "Your ADLM Studio dashboard — manage subscriptions, products, and courses.";
+    return meta;
+  }
+  if (/^\/profile\/?$/i.test(p)) {
+    meta.title = "Profile | ADLM Studio";
+    meta.description = "Manage your ADLM Studio profile settings.";
+    return meta;
+  }
+  if (/^\/rategen\/?$/i.test(p)) {
+    meta.title = "RateGen | ADLM Studio";
+    meta.description = "RateGen — construction rate generation and cost estimation tool by ADLM Studio.";
     return meta;
   }
 
@@ -352,7 +494,7 @@ export function registerDynamicMetaRoutes(app) {
       if (!shouldServeInjectedHtml(req)) return next();
 
       const template = readIndexHtmlSafe();
-      if (!template) return next(); // ✅ no dist build, skip silently
+      if (!template) return next();
 
       const meta = await resolveMeta(req);
       const html = injectMeta(template, meta);
