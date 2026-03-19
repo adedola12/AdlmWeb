@@ -147,7 +147,7 @@ export default function ProjectDashboardChart({
 
       {actualCoverageCount === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-          No actual data yet. Add an actual qty or actual rate in the Bill / Quantity tab, then save to compare the project against plan here.
+          No actual data yet. Add an actual qty or actual rate in the Bill of Quantity tab, then save to compare the project against plan here.
         </div>
       ) : null}
 

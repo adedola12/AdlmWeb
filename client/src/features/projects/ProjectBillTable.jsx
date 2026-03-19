@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import { FaInfoCircle, FaLink, FaSearch, FaTimes } from "react-icons/fa";
 
 /**
@@ -72,6 +72,241 @@ function InfoTip({ text }) {
   );
 }
 
+/**
+ * Format a number with thousands separator and 2 decimal places.
+ * e.g. 138625.24 → "138,625.24", 2138 → "2,138.00"
+ */
+function formatRate(value) {
+  const n = safeNum(value);
+  if (n === 0) return "";
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
+ * RateCell — An inline rate input that:
+ * 1. Shows formatted value with thousands separators when not focused
+ * 2. On focus, expands into a popup overlay with a full-width input
+ * 3. Supports typing a rate name to search RateGen library suggestions
+ * 4. Clicking a suggestion fills the totalCost into the rate
+ */
+function RateCell({
+  value,
+  placeholder,
+  onChange,
+  onSearchRateGen,
+  canRateGenBoq,
+  boqCandidates = [],
+}) {
+  const [focused, setFocused] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+  const debounceRef = useRef(null);
+
+  // Close popup when clicking outside
+  useEffect(() => {
+    if (!focused) return;
+    function handleClick(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setFocused(false);
+        setSearchQuery("");
+        setSearchResults([]);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [focused]);
+
+  // Debounced search when typing a name
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2 || !canRateGenBoq) {
+      setSearchResults([]);
+      return;
+    }
+    // If it looks like a number, don't search
+    if (/^\d+\.?\d*$/.test(searchQuery.trim())) {
+      setSearchResults([]);
+      return;
+    }
+
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await onSearchRateGen?.(searchQuery);
+        setSearchResults(Array.isArray(results) ? results : []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(debounceRef.current);
+  }, [searchQuery, canRateGenBoq, onSearchRateGen]);
+
+  const handleFocus = () => {
+    setFocused(true);
+    // Existing candidates from batch sync
+    setSearchResults(boqCandidates.length ? boqCandidates : []);
+  };
+
+  const handleInputChange = (e) => {
+    const v = e.target.value;
+    // If it's a number, treat as direct rate input
+    if (/^[\d.,]*$/.test(v)) {
+      onChange?.(v.replace(/,/g, ""));
+      setSearchQuery("");
+    } else {
+      // Text — search RateGen
+      setSearchQuery(v);
+    }
+  };
+
+  const pickRate = (candidate) => {
+    const cost = safeNum(candidate?.totalCost);
+    onChange?.(String(cost));
+    setFocused(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
+  const displayValue = value !== "" && value != null ? formatRate(value) : "";
+  const inputDisplay = focused
+    ? (searchQuery || (value != null && value !== "" ? String(value) : ""))
+    : "";
+
+  return (
+    <div ref={wrapRef} className="relative">
+      {/* Static display — shown when not focused */}
+      {!focused ? (
+        <button
+          type="button"
+          className="input !h-8 w-full !min-w-0 !px-1.5 !py-0.5 text-xs text-left cursor-text"
+          onClick={handleFocus}
+        >
+          {displayValue || <span className="text-slate-400">{formatRate(placeholder) || "0"}</span>}
+        </button>
+      ) : (
+        /* Expanded popup overlay on focus */
+        <div className="absolute left-0 top-0 z-40 w-72 rounded-lg border border-blue-300 bg-white shadow-xl">
+          <div className="p-2">
+            <input
+              ref={inputRef}
+              autoFocus
+              className="input !h-9 w-full !px-2 !py-1 text-sm"
+              type="text"
+              value={searchQuery || (value != null && value !== "" ? String(value) : "")}
+              placeholder={canRateGenBoq ? "Enter rate or search by name..." : "Enter rate..."}
+              onChange={handleInputChange}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setFocused(false);
+                  setSearchQuery("");
+                }
+              }}
+            />
+            {canRateGenBoq && (
+              <div className="mt-1 text-[10px] text-slate-400">
+                Type a number for direct rate, or a name to search RateGen
+              </div>
+            )}
+          </div>
+
+          {/* Search results / candidates dropdown */}
+          {(searchResults.length > 0 || searching) && (
+            <div className="border-t">
+              {searching && (
+                <div className="px-3 py-2 text-xs text-slate-500">Searching rates...</div>
+              )}
+              <div className="max-h-48 overflow-auto">
+                {searchResults.slice(0, 8).map((c, idx) => (
+                  <button
+                    key={`${c.description}-${c.unit}-${idx}`}
+                    type="button"
+                    className="w-full border-b px-3 py-1.5 text-left hover:bg-blue-50 last:border-b-0"
+                    onClick={() => pickRate(c)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="truncate text-xs font-medium text-slate-800">
+                        {c.description}
+                      </div>
+                      <div className="whitespace-nowrap text-xs font-semibold text-blue-700">
+                        {formatRate(c.totalCost)}
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                      {c.unit}{c.sectionLabel ? ` | ${c.sectionLabel}` : ""}{c.source ? ` | ${c.source}` : ""}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ExpandInput — On focus, shows a popup overlay with full-width input
+ * for Actual Qty and Actual Rate fields.
+ */
+function ExpandInput({ value, placeholder, onChange, type = "number" }) {
+  const [focused, setFocused] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!focused) return;
+    function handleClick(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setFocused(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [focused]);
+
+  if (!focused) {
+    return (
+      <button
+        type="button"
+        className="input !h-8 w-full !min-w-0 !px-1.5 !py-0.5 text-xs text-left cursor-text"
+        onClick={() => setFocused(true)}
+      >
+        {value !== "" && value != null
+          ? <span>{type === "number" ? formatRate(value) : value}</span>
+          : <span className="text-slate-400">{placeholder}</span>
+        }
+      </button>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="absolute left-0 top-0 z-40 w-56">
+      <input
+        autoFocus
+        className="input !h-9 w-full !px-2 !py-1 text-sm shadow-lg border-blue-300 rounded-lg"
+        type={type}
+        step="any"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange?.(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setFocused(false);
+          if (e.key === "Enter") setFocused(false);
+        }}
+      />
+    </div>
+  );
+}
+
 export default function ProjectBillTable({
   actualQtyInputs = {},
   actualRateInputs = {},
@@ -102,6 +337,7 @@ export default function ProjectBillTable({
   onPickBoqCandidate,
   onPickCandidate,
   onRateChange,
+  onSearchRateGen,
   onStatusToggle,
   onSyncBoqRates,
   onSyncPrices,
@@ -404,166 +640,123 @@ export default function ProjectBillTable({
                     <td className="px-2 py-2 text-xs text-slate-700">{row.qty.toFixed(2)}</td>
                     <td className="px-2 py-2 text-xs text-slate-700">{row.unit}</td>
 
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2 relative">
                       <div className="flex items-start gap-1">
-                        <input
-                          className="input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs"
-                          type="number"
-                          step="any"
-                          value={rateValue}
-                          placeholder={String(Number(item?.rate || 0))}
-                          onChange={(e) => onRateChange?.(row.i, e.target.value)}
-                        />
+                        {showMaterials ? (
+                          /* Materials view — keep simple number input + picker */
+                          <>
+                            <input
+                              className="input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs"
+                              type="number"
+                              step="any"
+                              value={rateValue}
+                              placeholder={formatRate(item?.rate || 0)}
+                              onChange={(e) => onRateChange?.(row.i, e.target.value)}
+                            />
 
-                        <button
-                          type="button"
-                          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition ${canLink ? linked ? "border-blue-300 bg-blue-50" : "hover:bg-slate-50" : "cursor-not-allowed opacity-40"}`}
-                          title={canLink ? linked ? "Linked: rate changes propagate to similar items" : "Link similar items" : "No similar items found to link"}
-                          disabled={!canLink}
-                          onClick={() => onToggleGroupLink?.(groupId, row.i)}
-                        >
-                          <FaLink className={`text-xs ${linked ? "text-blue-700" : "text-slate-600"}`} />
-                        </button>
+                            {candidates.length ? (
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border hover:bg-slate-50"
+                                  title="Pick a matching material price"
+                                  onClick={() => onToggleOpenPickKey?.(row.key)}
+                                >
+                                  <FaSearch className="text-xs text-slate-600" />
+                                </button>
 
-                        {showMaterials && candidates.length ? (
-                          <div className="relative">
-                            <button
-                              type="button"
-                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border hover:bg-slate-50"
-                              title="Pick a matching material price"
-                              onClick={() => onToggleOpenPickKey?.(row.key)}
-                            >
-                              <FaSearch className="text-xs text-slate-600" />
-                            </button>
+                                {openPickKey === row.key ? (
+                                  <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border bg-white shadow-lg">
+                                    <div className="border-b px-3 py-2 text-xs text-slate-600">
+                                      Choose a price for <b>{String(item?.materialName || "").trim()}</b>
+                                    </div>
 
-                            {openPickKey === row.key ? (
-                              <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border bg-white shadow-lg">
-                                <div className="border-b px-3 py-2 text-xs text-slate-600">
-                                  Choose a price for <b>{String(item?.materialName || "").trim()}</b>
-                                </div>
+                                    <div className="max-h-64 overflow-auto">
+                                      {candidates.slice(0, 10).map((candidate) => {
+                                        const unitMismatch =
+                                          String(item?.unit || "").trim() &&
+                                          String(candidate?.unit || "").trim() &&
+                                          String(item.unit).trim().toLowerCase() !==
+                                            String(candidate.unit).trim().toLowerCase();
 
-                                <div className="max-h-64 overflow-auto">
-                                  {candidates.slice(0, 10).map((candidate) => {
-                                    const unitMismatch =
-                                      String(item?.unit || "").trim() &&
-                                      String(candidate?.unit || "").trim() &&
-                                      String(item.unit).trim().toLowerCase() !==
-                                        String(candidate.unit).trim().toLowerCase();
+                                        return (
+                                          <button
+                                            key={`${candidate.description || "candidate"}-${candidate.unit || ""}-${candidate.source || ""}`}
+                                            type="button"
+                                            className="w-full border-b px-3 py-2 text-left hover:bg-slate-50"
+                                            onClick={() => onPickCandidate?.(row.i, candidate)}
+                                          >
+                                            <div className="flex items-center justify-between gap-3">
+                                              <div className="truncate font-medium text-slate-900">
+                                                {candidate.description}
+                                              </div>
+                                              <div className="font-semibold text-slate-900">
+                                                {money(candidate.price)}
+                                              </div>
+                                            </div>
+                                            <div className="mt-0.5 text-xs text-slate-500">
+                                              {candidate.unit} | {candidate.source}
+                                              {unitMismatch ? (
+                                                <span className="font-medium text-amber-700"> | unit mismatch</span>
+                                              ) : null}
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
 
-                                    return (
-                                      <button
-                                        key={`${candidate.description || "candidate"}-${candidate.unit || ""}-${candidate.source || ""}`}
-                                        type="button"
-                                        className="w-full border-b px-3 py-2 text-left hover:bg-slate-50"
-                                        onClick={() => onPickCandidate?.(row.i, candidate)}
-                                      >
-                                        <div className="flex items-center justify-between gap-3">
-                                          <div className="truncate font-medium text-slate-900">
-                                            {candidate.description}
-                                          </div>
-                                          <div className="font-semibold text-slate-900">
-                                            {money(candidate.price)}
-                                          </div>
-                                        </div>
-                                        <div className="mt-0.5 text-xs text-slate-500">
-                                          {candidate.unit} | {candidate.source}
-                                          {unitMismatch ? (
-                                            <span className="font-medium text-amber-700"> | unit mismatch</span>
-                                          ) : null}
-                                        </div>
+                                    <div className="flex justify-end p-2">
+                                      <button type="button" className="btn btn-xs" onClick={onClosePickKey}>
+                                        Close
                                       </button>
-                                    );
-                                  })}
-                                </div>
-
-                                <div className="flex justify-end p-2">
-                                  <button type="button" className="btn btn-xs" onClick={onClosePickKey}>
-                                    Close
-                                  </button>
-                                </div>
+                                    </div>
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
-                          </div>
-                        ) : null}
+                          </>
+                        ) : (
+                          /* BOQ view — smart RateCell with formatting + RateGen search */
+                          <>
+                            <RateCell
+                              value={rateValue}
+                              placeholder={String(Number(item?.rate || 0))}
+                              onChange={(v) => onRateChange?.(row.i, v)}
+                              onSearchRateGen={onSearchRateGen}
+                              canRateGenBoq={canRateGenBoq}
+                              boqCandidates={getBoqCandidatesForItem?.(item) || []}
+                            />
 
-                        {!showMaterials && canRateGenBoq ? (() => {
-                          const boqCandidates = getBoqCandidatesForItem?.(item) || [];
-                          if (!boqCandidates.length) return null;
-                          return (
-                            <div className="relative">
-                              <button
-                                type="button"
-                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border hover:bg-slate-50"
-                                title="Pick a rate from RateGen library"
-                                onClick={() => onToggleOpenBoqPickKey?.(row.key)}
-                              >
-                                <FaSearch className="text-xs text-slate-600" />
-                              </button>
-
-                              {openBoqPickKey === row.key ? (
-                                <div className="absolute right-0 z-30 mt-2 w-96 overflow-hidden rounded-lg border bg-white shadow-lg">
-                                  <div className="border-b px-3 py-2 text-xs text-slate-600">
-                                    RateGen rates for <b>{String(item?.description || "").trim().slice(0, 60)}</b>
-                                  </div>
-
-                                  <div className="max-h-64 overflow-auto">
-                                    {boqCandidates.slice(0, 10).map((candidate) => (
-                                      <button
-                                        key={`${candidate.description}-${candidate.unit}-${candidate.source}`}
-                                        type="button"
-                                        className="w-full border-b px-3 py-2 text-left hover:bg-slate-50"
-                                        onClick={() => onPickBoqCandidate?.(row.i, candidate)}
-                                      >
-                                        <div className="flex items-center justify-between gap-3">
-                                          <div className="truncate font-medium text-slate-900">
-                                            {candidate.description}
-                                          </div>
-                                          <div className="font-semibold text-slate-900 whitespace-nowrap">
-                                            {money(candidate.totalCost)}
-                                          </div>
-                                        </div>
-                                        <div className="mt-0.5 text-xs text-slate-500">
-                                          {candidate.unit} | {candidate.sectionLabel} | {candidate.source}
-                                        </div>
-                                      </button>
-                                    ))}
-                                  </div>
-
-                                  <div className="flex justify-end p-2">
-                                    <button type="button" className="btn btn-xs" onClick={onCloseBoqPickKey}>
-                                      Close
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })() : null}
+                            <button
+                              type="button"
+                              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition ${canLink ? linked ? "border-blue-300 bg-blue-50" : "hover:bg-slate-50" : "cursor-not-allowed opacity-40"}`}
+                              title={canLink ? linked ? "Linked: rate changes propagate to similar items" : "Link similar items" : "No similar items found to link"}
+                              disabled={!canLink}
+                              onClick={() => onToggleGroupLink?.(groupId, row.i)}
+                            >
+                              <FaLink className={`text-xs ${linked ? "text-blue-700" : "text-slate-600"}`} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
 
                     {showActualColumns ? (
-                      <td className="px-2 py-2">
-                        <input
-                          className="input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs"
-                          type="number"
-                          step="any"
+                      <td className="px-2 py-2 relative">
+                        <ExpandInput
                           value={actualQtyValue}
                           placeholder="Measured qty"
-                          onChange={(e) => onActualQtyChange?.(row.i, e.target.value)}
+                          onChange={(v) => onActualQtyChange?.(row.i, v)}
                         />
                       </td>
                     ) : null}
 
                     {showActualColumns ? (
-                      <td className="px-2 py-2">
-                        <input
-                          className="input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs"
-                          type="number"
-                          step="any"
+                      <td className="px-2 py-2 relative">
+                        <ExpandInput
                           value={actualRateValue}
                           placeholder="Measured rate"
-                          onChange={(e) => onActualRateChange?.(row.i, e.target.value)}
+                          onChange={(v) => onActualRateChange?.(row.i, v)}
                         />
                       </td>
                     ) : null}

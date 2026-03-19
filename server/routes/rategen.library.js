@@ -488,6 +488,64 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
   }
 });
 
+/**
+ * GET /library/rate-items/search?q=...&limit=8
+ * Lightweight type-ahead: search user's effective rates by description keyword.
+ * Returns: { ok, results: [{ description, unit, totalCost, sectionLabel, source }] }
+ */
+router.get("/library/rate-items/search", async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const q = String(req.query?.q || "").trim().toLowerCase();
+    const limit = Math.max(1, Math.min(20, Number(req.query?.limit) || 8));
+
+    if (!q || q.length < 2) {
+      return res.json({ ok: true, results: [] });
+    }
+
+    const masterRates = await RateGenRate.find({}).lean();
+    const lib = await RateGenLibrary.findOne({ userId: getUserId(req) }).lean();
+    const rateOverrides = Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [];
+    const customRates = Array.isArray(lib?.customRates) ? lib.customRates : [];
+
+    const merged = mergeRatesWithUserData(masterRates, rateOverrides, customRates);
+
+    const qWords = q.split(/\s+/).filter(Boolean);
+
+    const matches = merged
+      .map((r) => {
+        const desc = String(r?.description || "").trim();
+        const total = Number(r?.totalCost || 0);
+        if (!desc || !Number.isFinite(total) || total <= 0) return null;
+
+        const descLower = desc.toLowerCase();
+        let score = 0;
+        for (const w of qWords) {
+          if (descLower.includes(w)) score += 1;
+        }
+        if (score === 0) return null;
+
+        return {
+          description: desc,
+          unit: String(r?.unit || ""),
+          totalCost: total,
+          netCost: Number(r?.netCost || 0),
+          sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
+          source: String(r?.source || "master"),
+          score,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score || a.description.localeCompare(b.description))
+      .slice(0, limit);
+
+    return res.json({ ok: true, results: matches });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function parseCursor(cursor) {
   if (!cursor) return null;
   const [tsRaw, idRaw] = String(cursor).split("|");

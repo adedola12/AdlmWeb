@@ -17,7 +17,7 @@ const TAB_OPTIONS = [
   },
   {
     id: "bill",
-    label: "Bill / Quantity",
+    label: "Bill of Quantity",
     helper: "Rates and line items",
   },
 ];
@@ -61,22 +61,35 @@ export default function ProjectOpenView({
   onExportGenericBoQ,
   onItemQueryChange,
   onPickCandidate,
+  onPickBoqCandidate,
   onRateChange,
+  onSearchRateGen,
   onSave,
   onSelectValuationDate,
   onStatusToggle,
   onSyncPrices,
   onToggleAutoFill,
+  onToggleAutoFillBoq,
   onToggleExportOpen,
   onToggleGroupLink,
   onToggleOnlyFillEmpty,
   onToggleOpenPickKey,
+  onToggleOpenBoqPickKey,
+  onCloseBoqPickKey,
   onToggleShowActualColumns,
   onToggleShowDailyValuationLog,
   onToggleShowValuationSettings,
   onValuationSettingChange,
   onlyFillEmpty = true,
   openPickKey = null,
+  openBoqPickKey = null,
+  autoFillBoqRates = false,
+  autoFillBoqBusy = false,
+  canRateGenBoq = false,
+  rateSyncEnabled = false,
+  onToggleRateSyncEnabled,
+  onSyncBoqRates,
+  getBoqCandidatesForItem,
   progressCount = 0,
   progressPercent = 0,
   progressTotal = 0,
@@ -305,15 +318,23 @@ export default function ProjectOpenView({
           onItemQueryChange={onItemQueryChange}
           onPickCandidate={onPickCandidate}
           onRateChange={onRateChange}
+          onSearchRateGen={onSearchRateGen}
           onStatusToggle={onStatusToggle}
           onSyncPrices={onSyncPrices}
+          onSyncBoqRates={onSyncBoqRates}
           onToggleAutoFill={onToggleAutoFill}
+          onToggleAutoFillBoq={onToggleAutoFillBoq}
           onToggleGroupLink={onToggleGroupLink}
           onToggleOnlyFillEmpty={onToggleOnlyFillEmpty}
           onToggleOpenPickKey={onToggleOpenPickKey}
+          onToggleOpenBoqPickKey={onToggleOpenBoqPickKey}
+          onCloseBoqPickKey={onCloseBoqPickKey}
           onToggleShowActualColumns={onToggleShowActualColumns}
+          onToggleRateSyncEnabled={onToggleRateSyncEnabled}
           onlyFillEmpty={onlyFillEmpty}
           openPickKey={openPickKey}
+          openBoqPickKey={openBoqPickKey}
+          onPickBoqCandidate={onPickBoqCandidate}
           rateInfoText={rateInfoText}
           rates={rates}
           remainingAmount={remainingAmount}
@@ -321,6 +342,11 @@ export default function ProjectOpenView({
           showMaterials={showMaterials}
           statusLabel={statusLabel}
           valuedAmount={valuedAmount}
+          canRateGenBoq={canRateGenBoq}
+          autoFillBoqRates={autoFillBoqRates}
+          autoFillBoqBusy={autoFillBoqBusy}
+          rateSyncEnabled={rateSyncEnabled}
+          getBoqCandidatesForItem={getBoqCandidatesForItem}
         />
       ) : null}
     </div>

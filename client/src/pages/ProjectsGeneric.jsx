@@ -1885,6 +1885,23 @@ export default function ProjectsGeneric() {
     setOpenBoqPickKey(null);
   }
 
+  /**
+   * Type-ahead search for RateGen rates by name.
+   * Called from the RateCell component when user types text in the rate field.
+   */
+  async function searchRateGen(query) {
+    if (!canRateGen || !accessToken) return [];
+    try {
+      const result = await apiAuthed(
+        `/rategen-v2/library/rate-items/search?q=${encodeURIComponent(query)}&limit=8`,
+        { token: accessToken },
+      );
+      return Array.isArray(result?.results) ? result.results : [];
+    } catch {
+      return [];
+    }
+  }
+
   // compute all rows
   const computedAll = items.map((it, i) => {
     const k = itemKey(it, i);
@@ -2476,6 +2493,7 @@ export default function ProjectsGeneric() {
                 onClosePickKey={() => setOpenPickKey(null)}
                 onPickCandidate={handlePickCandidate}
                 onRateChange={handleRateChange}
+                onSearchRateGen={searchRateGen}
                 onActualQtyChange={handleActualQtyChange}
                 onActualRateChange={handleActualRateChange}
                 onStatusToggle={handleStatusToggle}

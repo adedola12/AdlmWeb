@@ -15,7 +15,8 @@
       "Bash(node --check routes/projects.js)",
       "Bash(node --check routes/rategen.library.js)",
       "Bash(node --check models/TakeoffProject.js)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(grep -E \"^[a-z].*\\\\.js$\")"
     ]
   }
 }
