@@ -86,11 +86,105 @@ function formatRate(value) {
 }
 
 /**
+ * Normalize a unit string for comparison.
+ */
+function normUnit(u) {
+  const raw = String(u || "").trim().toLowerCase().replace(/\s+/g, "");
+  if (!raw) return "";
+  if (raw === "m³" || raw === "cum" || raw === "m3") return "m3";
+  if (raw === "m²" || raw === "sqm" || raw === "m2") return "m2";
+  if (raw === "m" || raw === "lm" || raw === "rm") return "m";
+  if (raw === "kg" || raw === "kgs" || raw === "kilogram" || raw === "kilograms") return "kg";
+  if (raw === "t" || raw === "ton" || raw === "tons" || raw === "tonne" || raw === "tonnes") return "ton";
+  if (raw === "bag" || raw === "bags") return "bag";
+  if (raw === "nr" || raw === "no" || raw === "nos" || raw === "number") return "nr";
+  return raw;
+}
+
+/**
+ * Convert a rate's totalCost from the rate's unit to the BOQ item's unit.
+ * Returns { convertedCost, conversionNote } or null if no conversion needed.
+ *
+ * Supported conversions:
+ * - m2 → m: multiply by default slab thickness (0.15m)
+ * - ton → kg: divide by 1000
+ * - kg → ton: multiply by 1000
+ */
+function convertRateUnit(rateCost, rateUnit, boqUnit, boqDescription) {
+  const from = normUnit(rateUnit);
+  const to = normUnit(boqUnit);
+
+  if (!from || !to || from === to) return null;
+
+  // m2 → m (e.g., formwork rate per m2, but BOQ item is linear metres)
+  if (from === "m2" && to === "m") {
+    // Try to extract slab thickness from description, default 0.15m
+    let thickness = 0.15;
+    const desc = String(boqDescription || "").toLowerCase();
+    // Look for patterns like "150mm", "200mm", "0.15m"
+    const mmMatch = desc.match(/(\d{2,4})\s*mm/);
+    const mMatch = desc.match(/(\d+\.?\d*)\s*m\b/);
+    if (mmMatch) {
+      const mm = Number(mmMatch[1]);
+      if (mm > 0 && mm < 2000) thickness = mm / 1000;
+    } else if (mMatch) {
+      const m = Number(mMatch[1]);
+      if (m > 0 && m < 2) thickness = m;
+    }
+    return {
+      convertedCost: rateCost * thickness,
+      conversionNote: `m² → m (×${thickness}m thickness)`,
+    };
+  }
+
+  // m → m2 (reverse)
+  if (from === "m" && to === "m2") {
+    return {
+      convertedCost: rateCost / 0.15,
+      conversionNote: "m → m² (÷0.15m)",
+    };
+  }
+
+  // ton → kg
+  if (from === "ton" && to === "kg") {
+    return {
+      convertedCost: rateCost / 1000,
+      conversionNote: "ton → kg (÷1,000)",
+    };
+  }
+
+  // kg → ton
+  if (from === "kg" && to === "ton") {
+    return {
+      convertedCost: rateCost * 1000,
+      conversionNote: "kg → ton (×1,000)",
+    };
+  }
+
+  // m3 → m2 (e.g., concrete rate per m3, item is m2 — multiply by thickness)
+  if (from === "m3" && to === "m2") {
+    let thickness = 0.15;
+    const desc = String(boqDescription || "").toLowerCase();
+    const mmMatch = desc.match(/(\d{2,4})\s*mm/);
+    if (mmMatch) {
+      const mm = Number(mmMatch[1]);
+      if (mm > 0 && mm < 2000) thickness = mm / 1000;
+    }
+    return {
+      convertedCost: rateCost * thickness,
+      conversionNote: `m³ → m² (×${thickness}m thickness)`,
+    };
+  }
+
+  return null; // no known conversion
+}
+
+/**
  * RateCell — An inline rate input that:
  * 1. Shows formatted value with thousands separators when not focused
  * 2. On focus, expands into a popup overlay with a full-width input
  * 3. Supports typing a rate name to search RateGen library suggestions
- * 4. Clicking a suggestion fills the totalCost into the rate
+ * 4. Clicking a suggestion fills the totalCost into the rate (with unit conversion)
  */
 function RateCell({
   value,
@@ -99,6 +193,8 @@ function RateCell({
   onSearchRateGen,
   canRateGenBoq,
   boqCandidates = [],
+  itemUnit = "",
+  itemDescription = "",
 }) {
   const [focused, setFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -177,8 +273,21 @@ function RateCell({
     }
   };
 
-  const pickRate = (candidate) => {
-    const cost = safeNum(candidate?.totalCost);
+  const pickRate = (candidate, useConverted = false) => {
+    let cost = safeNum(candidate?.totalCost);
+
+    if (useConverted && candidate?._conversion) {
+      cost = candidate._conversion.convertedCost;
+    } else {
+      // Auto-convert if units differ
+      const conversion = convertRateUnit(cost, candidate?.unit, itemUnit, itemDescription);
+      if (conversion) {
+        cost = conversion.convertedCost;
+      }
+    }
+
+    // Round to 2 decimal places
+    cost = Math.round(cost * 100) / 100;
     onChange?.(String(cost));
     setFocused(false);
     setSearchQuery("");
@@ -231,26 +340,59 @@ function RateCell({
                 <div className="px-3 py-2 text-xs text-slate-500 animate-pulse">Searching rates...</div>
               )}
               <div className="max-h-60 overflow-auto">
-                {searchResults.slice(0, 10).map((c, idx) => (
-                  <button
-                    key={`${c.description}-${c.unit}-${idx}`}
-                    type="button"
-                    className="w-full border-b px-3 py-1.5 text-left hover:bg-blue-50 last:border-b-0"
-                    onClick={() => pickRate(c)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="truncate text-xs font-medium text-slate-800">
-                        {c.description}
+                {searchResults.slice(0, 10).map((c, idx) => {
+                  const conversion = convertRateUnit(
+                    safeNum(c.totalCost), c.unit, itemUnit, itemDescription
+                  );
+                  const convertedCost = conversion
+                    ? Math.round(conversion.convertedCost * 100) / 100
+                    : null;
+                  const unitMismatch = itemUnit && c.unit &&
+                    normUnit(c.unit) !== normUnit(itemUnit);
+
+                  return (
+                    <button
+                      key={`${c.description}-${c.unit}-${idx}`}
+                      type="button"
+                      className="w-full border-b px-3 py-1.5 text-left hover:bg-blue-50 last:border-b-0"
+                      onClick={() => pickRate({ ...c, _conversion: conversion })}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-xs font-medium text-slate-800">
+                          {c.description}
+                        </div>
+                        <div className="text-right">
+                          {conversion ? (
+                            <>
+                              <div className="whitespace-nowrap text-xs font-semibold text-blue-700">
+                                {formatRate(convertedCost)}/{normUnit(itemUnit) || itemUnit}
+                              </div>
+                              <div className="whitespace-nowrap text-[9px] text-slate-400 line-through">
+                                {formatRate(c.totalCost)}/{c.unit}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="whitespace-nowrap text-xs font-semibold text-blue-700">
+                              {formatRate(c.totalCost)}/{c.unit || "—"}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="whitespace-nowrap text-xs font-semibold text-blue-700">
-                        {formatRate(c.totalCost)}
+                      <div className="text-[10px] text-slate-500">
+                        {c.unit}{c.sectionLabel ? ` | ${c.sectionLabel}` : ""}{c.source ? ` | ${c.source}` : ""}
+                        {conversion ? (
+                          <span className="ml-1 font-medium text-amber-600">
+                            • {conversion.conversionNote}
+                          </span>
+                        ) : unitMismatch ? (
+                          <span className="ml-1 font-medium text-amber-600">
+                            • unit mismatch ({c.unit} → {itemUnit})
+                          </span>
+                        ) : null}
                       </div>
-                    </div>
-                    <div className="text-[10px] text-slate-500">
-                      {c.unit}{c.sectionLabel ? ` | ${c.sectionLabel}` : ""}{c.source ? ` | ${c.source}` : ""}
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
               {searchResults.length > 0 && (
                 <div className="border-t px-3 py-1.5 text-[10px] text-slate-400">
@@ -363,6 +505,10 @@ export default function ProjectBillTable({
   openBoqPickKey = null,
   openPickKey = null,
   rateInfoText = "",
+  rateGenPoolCount = 0,
+  rateGenPoolLoading = false,
+  rateGenPoolLoaded = false,
+  onReloadRateGenPool,
   rates = {},
   remainingAmount = 0,
   showActualColumns = false,
@@ -540,6 +686,32 @@ export default function ProjectBillTable({
             {showActualColumns ? (
               <span>
                 Actual tracked value: <b className="text-slate-700">{money(actualTrackedAmount)}</b>
+              </span>
+            ) : null}
+            {!showMaterials && canRateGenBoq ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    rateGenPoolLoading ? "bg-amber-400 animate-pulse" :
+                    rateGenPoolLoaded ? "bg-emerald-500" :
+                    "bg-slate-300"
+                  }`}
+                />
+                {rateGenPoolLoading ? (
+                  "Loading rates..."
+                ) : rateGenPoolLoaded ? (
+                  <>
+                    <b className="text-slate-700">{rateGenPoolCount}</b> RateGen rates loaded
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-blue-600 hover:underline"
+                    onClick={onReloadRateGenPool}
+                  >
+                    Load RateGen rates
+                  </button>
+                )}
               </span>
             ) : null}
           </div>
@@ -780,6 +952,8 @@ export default function ProjectBillTable({
                               onSearchRateGen={onSearchRateGen}
                               canRateGenBoq={canRateGenBoq}
                               boqCandidates={getBoqCandidatesForItem?.(item) || []}
+                              itemUnit={row.unit || item?.unit || ""}
+                              itemDescription={row.description || item?.description || ""}
                             />
 
                             <button

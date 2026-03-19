@@ -164,6 +164,13 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: "projects/shared/:token",
+        async lazy() {
+          const { default: PublicProjectDashboard } = await import("./pages/PublicProjectDashboard.jsx");
+          return { element: <PublicProjectDashboard /> };
+        },
+      },
+      {
         path: "projects/:tool",
         element: (
           <ProtectedRoute>

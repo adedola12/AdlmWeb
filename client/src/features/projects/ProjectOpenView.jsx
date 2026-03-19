@@ -1,8 +1,97 @@
 import React from "react";
-import { FaArrowLeft, FaTrash } from "react-icons/fa";
+import { FaArrowLeft, FaTrash, FaShareAlt, FaCopy, FaCheck } from "react-icons/fa";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
+
+function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }) {
+  const [open, setOpen] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+
+  const shareUrl = publicToken
+    ? `${window.location.origin}/projects/shared/${publicToken}`
+    : "";
+
+  async function handleToggle(enable) {
+    setBusy(true);
+    await onToggleShare?.(enable);
+    setBusy(false);
+  }
+
+  function copyUrl() {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <FaShareAlt className={publicShareEnabled ? "text-blue-600" : "text-slate-400"} />
+        {publicShareEnabled ? "Shared" : "Share"}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border bg-white p-4 shadow-xl">
+          <div className="text-sm font-semibold text-slate-900 mb-2">Share Dashboard</div>
+          <p className="text-xs text-slate-500 mb-3">
+            Generate a public link so clients can view the project dashboard (progress & cost summary only).
+          </p>
+
+          <label className="flex items-center gap-2 text-xs text-slate-700 mb-3">
+            <input
+              type="checkbox"
+              checked={publicShareEnabled}
+              disabled={busy}
+              onChange={(e) => handleToggle(e.target.checked)}
+              className="rounded"
+            />
+            {busy ? "Updating..." : "Enable public link"}
+          </label>
+
+          {publicShareEnabled && shareUrl ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-1 rounded-lg border bg-slate-50 px-2 py-1.5">
+                <input
+                  readOnly
+                  value={shareUrl}
+                  className="flex-1 bg-transparent text-xs text-slate-700 outline-none truncate"
+                />
+                <button
+                  type="button"
+                  onClick={copyUrl}
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                >
+                  {copied ? <><FaCheck /> Copied</> : <><FaCopy /> Copy</>}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Anyone with this link can view the dashboard summary and chart (no editing, no item details).
+              </p>
+            </div>
+          ) : null}
+
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              className="text-xs text-slate-500 hover:text-slate-700"
+              onClick={() => setOpen(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const TAB_OPTIONS = [
   {
@@ -90,6 +179,13 @@ export default function ProjectOpenView({
   onToggleRateSyncEnabled,
   onSyncBoqRates,
   getBoqCandidatesForItem,
+  rateGenPoolCount = 0,
+  rateGenPoolLoading = false,
+  rateGenPoolLoaded = false,
+  onReloadRateGenPool,
+  publicShareEnabled = false,
+  publicToken = null,
+  onToggleShare,
   progressCount = 0,
   progressPercent = 0,
   progressTotal = 0,
@@ -217,6 +313,15 @@ export default function ProjectOpenView({
       </div>
 
       {activeTab === "dashboard" ? (
+        <>
+        {/* Share Dashboard Button */}
+        <div className="flex items-center justify-end gap-2 mb-3">
+          <ShareDashboardButton
+            publicShareEnabled={publicShareEnabled}
+            publicToken={publicToken}
+            onToggleShare={onToggleShare}
+          />
+        </div>
         <ProjectDashboardSummary
           actualCoverageCount={actualCoverageCount}
           actualCoveragePercent={actualCoveragePercent}
@@ -239,6 +344,7 @@ export default function ProjectOpenView({
           statusPastLabel={statusPastLabel}
           valuedAmount={valuedAmount}
         />
+        </>
       ) : null}
 
       {activeTab === "valuation" ? (
@@ -347,6 +453,10 @@ export default function ProjectOpenView({
           autoFillBoqBusy={autoFillBoqBusy}
           rateSyncEnabled={rateSyncEnabled}
           getBoqCandidatesForItem={getBoqCandidatesForItem}
+          rateGenPoolCount={rateGenPoolCount}
+          rateGenPoolLoading={rateGenPoolLoading}
+          rateGenPoolLoaded={rateGenPoolLoaded}
+          onReloadRateGenPool={onReloadRateGenPool}
         />
       ) : null}
     </div>

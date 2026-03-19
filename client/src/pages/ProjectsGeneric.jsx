@@ -91,16 +91,20 @@ function getEndpoints(tool) {
     return {
       list: "/projects/revit/materials",
       one: (id) => "/projects/revit/materials/" + id,
+      bySlug: (slug) => "/projects/revit/materials/by-slug/" + slug,
       del: (id) => "/projects/revit/materials/" + id,
       valuations: (id) => "/projects/revit/materials/" + id + "/valuations",
+      share: (id) => "/projects/revit/materials/" + id + "/share",
     };
   }
 
   return {
     list: "/projects/" + t,
     one: (id) => "/projects/" + t + "/" + id,
+    bySlug: (slug) => "/projects/" + t + "/by-slug/" + slug,
     del: (id) => "/projects/" + t + "/" + id,
     valuations: (id) => "/projects/" + t + "/" + id + "/valuations",
+    share: (id) => "/projects/" + t + "/" + id + "/share",
   };
 }
 
@@ -786,7 +790,7 @@ function pickKeyFromCandidate(c) {
 
 export default function ProjectsGeneric() {
   const { tool } = useParams();
-  const { accessToken } = useAuth();
+  const { accessToken, user: authUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const toolNorm = normTool(tool);
@@ -875,6 +879,7 @@ export default function ProjectsGeneric() {
   const [autoFillBoqRates, setAutoFillBoqRates] = React.useState(false);
   const [autoFillBoqBusy, setAutoFillBoqBusy] = React.useState(false);
   const autoFillBoqAppliedRef = React.useRef({});
+  const prevZoneRef = React.useRef(authUser?.zone);
   const [openBoqPickKey, setOpenBoqPickKey] = React.useState(null);
 
   const rowId = (r) => r?._id || r?.id || null;
@@ -1097,11 +1102,34 @@ export default function ProjectsGeneric() {
       if (!keepSelection) setSelectedMap({});
 
       // Only auto-open if ?project= exists (file-explorer UX)
-      const preselectId = searchParams.get("project");
-      if (preselectId) {
-        const found = safeList.find((x) => rowId(x) === preselectId);
-        if (found) await view(preselectId);
-        else closeProject();
+      const preselectKey = searchParams.get("project");
+      if (preselectKey) {
+        const isObjectId = /^[a-f\d]{24}$/i.test(preselectKey);
+        if (isObjectId) {
+          // Legacy: load by ObjectId
+          const found = safeList.find((x) => rowId(x) === preselectKey);
+          if (found) await view(preselectKey);
+          else closeProject();
+        } else {
+          // New: load by slug
+          const found = safeList.find((x) => x.slug === preselectKey);
+          if (found) await view(rowId(found));
+          else {
+            // Try loading by slug from server directly
+            try {
+              const p = await apiAuthed(endpoints.bySlug(preselectKey), { token: accessToken });
+              if (p) {
+                setSel(p);
+                initRatesFromProject(p);
+                await loadValuations(p?._id || p?.id);
+              } else {
+                closeProject();
+              }
+            } catch {
+              closeProject();
+            }
+          }
+        }
       } else {
         // keep current open project if still valid
         if (selectedId) {
@@ -1131,9 +1159,11 @@ export default function ProjectsGeneric() {
       const p = await apiAuthed(endpoints.one(id), { token: accessToken });
       setSel(p);
 
+      // Use slug in URL if available, otherwise fall back to ID
+      const urlKey = p?.slug || id;
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
-        next.set("project", id);
+        next.set("project", urlKey);
         return next;
       });
 
@@ -1865,6 +1895,26 @@ export default function ProjectsGeneric() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMaterials, shouldAutoSyncBoq, canRateGen, selectedId]);
 
+  // Detect zone changes and re-sync rates
+  React.useEffect(() => {
+    const currentZone = authUser?.zone;
+    if (!currentZone) return;
+    if (prevZoneRef.current === currentZone) return;
+
+    prevZoneRef.current = currentZone;
+
+    // Zone changed: invalidate pool + sync caches
+    setRateGenPool([]);
+    setRateGenPoolLoaded(false);
+    autoFillBoqAppliedRef.current = {};
+
+    // Re-sync for the currently open project
+    if (shouldAutoSyncBoq && sel && selectedId) {
+      syncBoqRates(sel);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser?.zone]);
+
   function toggleAutoFillBoq(v) {
     setAutoFillBoqRates(v);
     if (selectedId) delete autoFillBoqAppliedRef.current[selectedId];
@@ -1885,20 +1935,116 @@ export default function ProjectsGeneric() {
     setOpenBoqPickKey(null);
   }
 
+  // ── Pre-loaded RateGen user rates for client-side search ──
+  const [rateGenPool, setRateGenPool] = React.useState([]);
+  const [rateGenPoolLoading, setRateGenPoolLoading] = React.useState(false);
+  const [rateGenPoolLoaded, setRateGenPoolLoaded] = React.useState(false);
+
+  const loadRateGenPool = React.useCallback(async () => {
+    if (!canRateGen || !accessToken) return;
+    setRateGenPoolLoading(true);
+    try {
+      // Fetch the user's library which contains rateOverrides[] and customRates[]
+      // This matches what the RateGen page shows under "My Rate Overrides" and "My Custom Rates"
+      const lib = await apiAuthed("/rategen/library", { token: accessToken });
+
+      const rateOverrides = Array.isArray(lib?.rateOverrides) ? lib.rateOverrides : [];
+      const customRates = Array.isArray(lib?.customRates) ? lib.customRates : [];
+
+      // Normalize both sources into a unified pool for searching
+      const pool = [];
+
+      for (const r of rateOverrides) {
+        const desc = String(r?.description || "").trim();
+        const total = Number(r?.totalCost || 0);
+        if (!desc || !Number.isFinite(total) || total <= 0) continue;
+        pool.push({
+          description: desc,
+          unit: String(r?.unit || ""),
+          totalCost: total,
+          netCost: Number(r?.netCost || 0),
+          sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
+          source: "user-override",
+        });
+      }
+
+      for (const r of customRates) {
+        const desc = String(r?.description || r?.title || "").trim();
+        const total = Number(r?.totalCost || 0);
+        if (!desc || !Number.isFinite(total) || total <= 0) continue;
+        pool.push({
+          description: desc,
+          unit: String(r?.unit || ""),
+          totalCost: total,
+          netCost: Number(r?.netCost || 0),
+          sectionLabel: String(r?.sectionLabel || r?.sectionKey || ""),
+          source: "user-custom",
+        });
+      }
+
+      setRateGenPool(pool);
+      setRateGenPoolLoaded(true);
+    } catch {
+      setRateGenPool([]);
+    } finally {
+      setRateGenPoolLoading(false);
+    }
+  }, [canRateGen, accessToken]);
+
+  // Auto-load pool when RateGen is available
+  React.useEffect(() => {
+    if (canRateGen && !rateGenPoolLoaded && !rateGenPoolLoading) {
+      loadRateGenPool();
+    }
+  }, [canRateGen, rateGenPoolLoaded, rateGenPoolLoading, loadRateGenPool]);
+
   /**
-   * Type-ahead search for RateGen rates by name.
-   * Called from the RateCell component when user types text in the rate field.
+   * Client-side fuzzy search for RateGen rates by name.
+   * Searches the pre-loaded pool — instant, no API call.
    */
   async function searchRateGen(query) {
-    if (!canRateGen || !accessToken) return [];
+    if (!query || query.length < 2) return [];
+    const q = query.trim().toLowerCase();
+    const qWords = q.split(/\s+/).filter(Boolean);
+
+    const matches = rateGenPool
+      .map((r) => {
+        const descLower = r.description.toLowerCase();
+        const sectionLower = r.sectionLabel.toLowerCase();
+        let score = 0;
+        for (const w of qWords) {
+          if (descLower.includes(w)) score += 2;
+          else if (sectionLower.includes(w)) score += 1;
+        }
+        if (score === 0) return null;
+        return { ...r, score };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score || a.description.localeCompare(b.description))
+      .slice(0, 10);
+
+    return matches;
+  }
+
+  // ── Share project dashboard ──
+  async function handleToggleShare(enable) {
+    if (!selectedId || !accessToken) return null;
     try {
-      const result = await apiAuthed(
-        `/rategen-v2/library/rate-items/search?q=${encodeURIComponent(query)}&limit=10`,
-        { token: accessToken },
-      );
-      return Array.isArray(result?.results) ? result.results : [];
-    } catch {
-      return [];
+      const result = await apiAuthed(endpoints.share(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: { enable },
+      });
+      // Update sel with new share state
+      setSel((prev) => prev ? {
+        ...prev,
+        publicShareEnabled: result.publicShareEnabled,
+        publicToken: result.publicToken,
+      } : prev);
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to toggle sharing");
+      return null;
     }
   }
 
@@ -2420,6 +2566,10 @@ export default function ProjectsGeneric() {
                 onToggleRateSyncEnabled={(checked) =>
                   handleValuationSettingChange("rateSyncEnabled", checked)
                 }
+                rateGenPoolCount={rateGenPool.length}
+                rateGenPoolLoading={rateGenPoolLoading}
+                rateGenPoolLoaded={rateGenPoolLoaded}
+                onReloadRateGenPool={loadRateGenPool}
                 rateInfoText={
                   showMaterials
                     ? canRateGen
@@ -2500,6 +2650,9 @@ export default function ProjectsGeneric() {
                 onToggleGroupLink={toggleGroupLink}
                 isGroupLinked={isGroupLinked}
                 getCandidatesForItem={getCandidatesForItem}
+                publicShareEnabled={Boolean(sel?.publicShareEnabled)}
+                publicToken={sel?.publicToken || null}
+                onToggleShare={handleToggleShare}
                 onBack={closeProject}
                 onDelete={() => delProject(selectedId, sel?.name)}
               />

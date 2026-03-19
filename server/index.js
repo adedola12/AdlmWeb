@@ -172,6 +172,11 @@ app.use("/purchase", purchaseRoutes);
 
 app.use("/learn", learnPublic);
 app.use("/products", productsPublic);
+// Public project dashboard route (no auth required)
+import { getPublicDashboard } from "./routes/projects.js";
+app.get("/projects/public/:token", getPublicDashboard);
+app.get("/api/projects/public/:token", getPublicDashboard);
+
 app.use("/projects", projectRoutes);
 app.use("/api/projects", projectRoutes);
 

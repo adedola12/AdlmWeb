@@ -64,6 +64,26 @@ export default function Profile() {
       user: { ...(prev?.user || {}), ...(updatedUser || {}) },
     }));
 
+    // If zone changed, force a token refresh so the new JWT includes the updated zone
+    // This ensures RateGen API calls immediately use the new zone
+    if (body.zone && body.zone !== user?.zone) {
+      try {
+        const refreshRes = await fetch("/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          if (refreshData?.accessToken) {
+            setAuth((prev) => ({ ...prev, accessToken: refreshData.accessToken }));
+            window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: refreshData }));
+          }
+        }
+      } catch {
+        // Non-critical — token will refresh naturally within 15 min
+      }
+    }
+
     return updatedUser;
   }
 

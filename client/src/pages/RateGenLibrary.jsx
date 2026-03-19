@@ -16,7 +16,7 @@ const TABS = [
   { key: "master-labour", label: "Master Labour" },
   { key: "my-materials", label: "My Materials" },
   { key: "my-labour", label: "My Labour" },
-  { key: "my-rate-overrides", label: "My Rate Overrides" },
+  // { key: "my-rate-overrides", label: "My Rate Overrides" }, HIDDEN FOR NOW- DEBUG ONLY
   { key: "my-custom-rates", label: "My Custom Rates" },
   { key: "effective-rates", label: "Effective Rates" },
 ];
@@ -107,7 +107,9 @@ function LibraryTable({ rows }) {
               <td className="px-4 py-3 text-slate-700">
                 {formatMoney(row.price)}
               </td>
-              <td className="px-4 py-3 text-slate-500">{row.category || "-"}</td>
+              <td className="px-4 py-3 text-slate-500">
+                {row.category || "-"}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -157,7 +159,9 @@ function RateTable({ rows }) {
                 <td className="px-4 py-3 text-slate-700">
                   {row.sectionLabel || row.sectionKey || "-"}
                 </td>
-                <td className="px-4 py-3 text-slate-700">{row.itemNo ?? "-"}</td>
+                <td className="px-4 py-3 text-slate-700">
+                  {row.itemNo ?? "-"}
+                </td>
                 <td className="px-4 py-3 font-medium text-slate-900">
                   {row.description || "-"}
                 </td>
@@ -260,12 +264,14 @@ function matchesSearch(row, fields, search) {
   return fields.some((field) =>
     String(row?.[field] ?? "")
       .toLowerCase()
-      .includes(search)
+      .includes(search),
   );
 }
 
 function buildFallbackMergedRates(mine) {
-  const rateOverrides = Array.isArray(mine?.rateOverrides) ? mine.rateOverrides : [];
+  const rateOverrides = Array.isArray(mine?.rateOverrides)
+    ? mine.rateOverrides
+    : [];
   const customRates = Array.isArray(mine?.customRates) ? mine.customRates : [];
 
   return [
@@ -309,9 +315,12 @@ export default function RateGenLibrary() {
     if (!accessToken) return;
 
     try {
-      const res = await apiAuthed("/rategen-v2/library/rates/updates?limit=200", {
-        token: accessToken,
-      });
+      const res = await apiAuthed(
+        "/rategen-v2/library/rates/updates?limit=200",
+        {
+          token: accessToken,
+        },
+      );
 
       const items = Array.isArray(res?.items) ? res.items : [];
       const lastSeenMs = getLastSeenMs();
@@ -341,14 +350,15 @@ export default function RateGenLibrary() {
       setErr("");
 
       try {
-        const [masterRes, mineRes, mergedRes, metaRes] = await Promise.allSettled([
-          apiAuthed("/rategen/master", { token: accessToken }),
-          apiAuthed("/rategen/library", { token: accessToken }),
-          apiAuthed("/rategen-v2/library/user-rates/merged", {
-            token: accessToken,
-          }),
-          apiAuthed("/rategen-v2/library/meta", { token: accessToken }),
-        ]);
+        const [masterRes, mineRes, mergedRes, metaRes] =
+          await Promise.allSettled([
+            apiAuthed("/rategen/master", { token: accessToken }),
+            apiAuthed("/rategen/library", { token: accessToken }),
+            apiAuthed("/rategen-v2/library/user-rates/merged", {
+              token: accessToken,
+            }),
+            apiAuthed("/rategen-v2/library/meta", { token: accessToken }),
+          ]);
 
         const partialErrors = [];
         let nextMine = latestMineRef.current;
@@ -370,7 +380,9 @@ export default function RateGenLibrary() {
         }
 
         if (mergedRes.status === "fulfilled") {
-          setMergedRates(Array.isArray(mergedRes.value?.items) ? mergedRes.value.items : []);
+          setMergedRates(
+            Array.isArray(mergedRes.value?.items) ? mergedRes.value.items : [],
+          );
           hadAnySuccess = true;
         } else {
           setMergedRates(buildFallbackMergedRates(nextMine));
@@ -390,7 +402,7 @@ export default function RateGenLibrary() {
 
         if (partialErrors.length > 0) {
           setErr(
-            `Some RateGen data could not refresh (${partialErrors.join(", ")}). Showing the latest synced data that is available.`
+            `Some RateGen data could not refresh (${partialErrors.join(", ")}). Showing the latest synced data that is available.`,
           );
         }
       } catch (error) {
@@ -400,7 +412,7 @@ export default function RateGenLibrary() {
         setRefreshing(false);
       }
     },
-    [accessToken]
+    [accessToken],
   );
 
   React.useEffect(() => {
@@ -441,12 +453,18 @@ export default function RateGenLibrary() {
   }, [accessToken, loadAll, loadUpdatesCount]);
 
   const datasets = React.useMemo(() => {
-    const rateOverrides = Array.isArray(mine?.rateOverrides) ? mine.rateOverrides : [];
-    const customRates = Array.isArray(mine?.customRates) ? mine.customRates : [];
+    const rateOverrides = Array.isArray(mine?.rateOverrides)
+      ? mine.rateOverrides
+      : [];
+    const customRates = Array.isArray(mine?.customRates)
+      ? mine.customRates
+      : [];
     const effective = Array.isArray(mergedRates) ? mergedRates : [];
 
     return {
-      "master-materials": Array.isArray(master?.materials) ? master.materials : [],
+      "master-materials": Array.isArray(master?.materials)
+        ? master.materials
+        : [],
       "master-labour": Array.isArray(master?.labour) ? master.labour : [],
       "my-materials": Array.isArray(mine?.materials) ? mine.materials : [],
       "my-labour": Array.isArray(mine?.labour) ? mine.labour : [],
@@ -471,7 +489,11 @@ export default function RateGenLibrary() {
       tab === "my-labour"
     ) {
       return rows.filter((row) =>
-        matchesSearch(row, ["description", "unit", "category", "sn"], trimmedSearch)
+        matchesSearch(
+          row,
+          ["description", "unit", "category", "sn"],
+          trimmedSearch,
+        ),
       );
     }
 
@@ -479,18 +501,31 @@ export default function RateGenLibrary() {
       return rows.filter((row) =>
         matchesSearch(
           row,
-          ["title", "description", "customRateId", "sectionLabel", "sectionKey"],
-          trimmedSearch
-        )
+          [
+            "title",
+            "description",
+            "customRateId",
+            "sectionLabel",
+            "sectionKey",
+          ],
+          trimmedSearch,
+        ),
       );
     }
 
     return rows.filter((row) =>
       matchesSearch(
         row,
-        ["sectionLabel", "sectionKey", "description", "source", "unit", "itemNo"],
-        trimmedSearch
-      )
+        [
+          "sectionLabel",
+          "sectionKey",
+          "description",
+          "source",
+          "unit",
+          "itemNo",
+        ],
+        trimmedSearch,
+      ),
     );
   }, [datasets, tab, trimmedSearch]);
 
@@ -517,9 +552,9 @@ export default function RateGenLibrary() {
                 My Rates, Materials, and Live Catalog Sync
               </h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-600">
-                This page combines the master RateGen catalog, your personal material
-                and labour library, your custom built-up rates, and the merged rates
-                other ADLM software can consume from the API.
+                This page combines the master RateGen catalog, your personal
+                material and labour library, your custom built-up rates, and the
+                merged rates other ADLM software can consume from the API.
               </p>
             </div>
           </div>
@@ -628,7 +663,8 @@ export default function RateGenLibrary() {
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="text-xs text-slate-500">
-              Showing {filteredRows.length} of {(datasets[tab] || []).length} rows
+              Showing {filteredRows.length} of {(datasets[tab] || []).length}{" "}
+              rows
             </div>
             <input
               type="text"

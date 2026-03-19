@@ -1,5 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
+import crypto from "crypto";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
@@ -46,6 +47,34 @@ const MAX_ITEMS = Number(process.env.PROJECT_MAX_ITEMS || 8000);
 const MATERIAL_PRODUCT_KEY = "revit-materials";
 const VALUATION_TIME_ZONE =
   process.env.PROJECT_VALUATION_TIMEZONE || "Africa/Lagos";
+
+function generateSlug(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "project";
+}
+
+async function uniqueSlug(userId, productKey, baseSlug, excludeId = null) {
+  let slug = baseSlug;
+  let counter = 0;
+  const query = { userId, productKey, slug };
+  if (excludeId) query._id = { $ne: excludeId };
+  while (await TakeoffProject.findOne(query).select("_id").lean()) {
+    counter++;
+    slug = `${baseSlug}-${counter}`;
+    query.slug = slug;
+  }
+  return slug;
+}
+
+function generatePublicToken() {
+  return crypto.randomBytes(16).toString("hex");
+}
 
 function forceMaterialsProductKey(req, _res, next) {
   req.productKeyOriginal = MATERIAL_PRODUCT_KEY;
@@ -463,10 +492,15 @@ async function createProject(req, res) {
       previousEvents: [],
     });
 
+    const trimmedName = String(name).trim();
+    const baseSlug = generateSlug(trimmedName);
+    const slug = await uniqueSlug(userId, productKey, baseSlug);
+
     const project = await TakeoffProject.create({
       userId,
       productKey,
-      name: String(name).trim(),
+      name: trimmedName,
+      slug,
       items: tracked.items,
       valuationEvents: tracked.valuationEvents,
       clientProjectKey: clientProjectKey || "",
@@ -532,6 +566,8 @@ async function listProjects(req, res) {
           _id: 0,
           id: "$_id",
           name: 1,
+          slug: 1,
+          publicShareEnabled: 1,
           updatedAt: 1,
           version: 1,
           itemCount: { $size: "$safeItems" },
@@ -607,6 +643,13 @@ async function getProject(req, res) {
 
     const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    // Lazy slug generation for existing projects without slugs
+    if (!project.slug) {
+      const baseSlug = generateSlug(project.name);
+      project.slug = await uniqueSlug(userId, productKey, baseSlug, project._id);
+      await project.save();
+    }
 
     res.json(project);
   } catch (err) {
@@ -757,6 +800,150 @@ async function getProjectValuations(req, res) {
   }
 }
 
+// ── Get project by slug ──
+async function getProjectBySlug(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const slug = String(req.params.slug || "").trim().toLowerCase();
+    if (!slug) return res.status(400).json({ error: "Missing slug" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ slug, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    res.json(project);
+  } catch (err) {
+    console.error("GET project by slug error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── Toggle public sharing ──
+async function toggleShare(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const enable = req.body?.enable !== false;
+    if (enable && !project.publicToken) {
+      project.publicToken = generatePublicToken();
+    }
+    project.publicShareEnabled = enable;
+    await project.save();
+
+    res.json({
+      ok: true,
+      publicShareEnabled: project.publicShareEnabled,
+      publicToken: project.publicShareEnabled ? project.publicToken : null,
+      slug: project.slug || null,
+    });
+  } catch (err) {
+    console.error("POST share error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── Public dashboard (NO AUTH) ──
+async function getPublicDashboard(req, res) {
+  try {
+    const token = String(req.params.token || "").trim();
+    if (!token) return res.status(400).json({ error: "Missing token" });
+
+    const project = await TakeoffProject.findOne({
+      publicToken: token,
+      publicShareEnabled: true,
+    });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const items = project.items || [];
+    const isMaterials = project.productKey === MATERIAL_PRODUCT_KEY;
+    const statusField = isMaterials ? "purchased" : "completed";
+
+    const progressTotal = items.length;
+    let progressCount = 0;
+    let grossAmount = 0;
+    let valuedAmount = 0;
+    let actualTrackedAmount = 0;
+    let actualTrackedCount = 0;
+
+    const comparisonRows = [];
+
+    for (const it of items) {
+      const qty = Number(it.qty || 0);
+      const rate = Number(it.rate || 0);
+      const amount = qty * rate;
+      grossAmount += amount;
+
+      if (it[statusField]) {
+        progressCount++;
+        valuedAmount += amount;
+      }
+
+      const aQty = it.actualQty != null ? Number(it.actualQty) : null;
+      const aRate = it.actualRate != null ? Number(it.actualRate) : null;
+      const hasActual = aQty != null || aRate != null;
+
+      if (hasActual) {
+        const effectiveQty = aQty != null ? aQty : qty;
+        const effectiveRate = aRate != null ? aRate : rate;
+        const actualAmount = effectiveQty * effectiveRate;
+        actualTrackedAmount += actualAmount;
+        actualTrackedCount++;
+
+        comparisonRows.push({
+          description: it.description || "",
+          unit: it.unit || "",
+          plannedAmount: amount,
+          actualAmount,
+          variance: actualAmount - amount,
+        });
+      }
+    }
+
+    const progressPercent = progressTotal > 0 ? (progressCount / progressTotal) * 100 : 0;
+    const remainingAmount = grossAmount - valuedAmount;
+    const actualVarianceAmount = actualTrackedAmount - grossAmount;
+    const actualVariancePercent = grossAmount > 0
+      ? ((actualTrackedAmount - grossAmount) / grossAmount) * 100
+      : 0;
+
+    res.json({
+      ok: true,
+      name: project.name,
+      productKey: project.productKey,
+      statusLabel: isMaterials ? "Purchased" : "Completed",
+      progressTotal,
+      progressCount,
+      progressPercent: Math.round(progressPercent * 10) / 10,
+      grossAmount,
+      valuedAmount,
+      remainingAmount,
+      actualTrackedAmount,
+      actualTrackedCount,
+      actualVarianceAmount,
+      actualVariancePercent: Math.round(actualVariancePercent * 10) / 10,
+      comparisonRows,
+      updatedAt: project.updatedAt,
+    });
+  } catch (err) {
+    console.error("GET public dashboard error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── PUBLIC route (no auth) — must be before requireAuth ──
+// This is exported separately and mounted in index.js
+export { getPublicDashboard };
+
 router.post(
   "/revit/materials",
   forceMaterialsProductKey,
@@ -818,6 +1005,20 @@ router.get(
   mapEntitlementParam,
   requireEntitlementParam,
   getProjectValuations,
+);
+
+router.get(
+  "/:productKey/by-slug/:slug",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  getProjectBySlug,
+);
+
+router.post(
+  "/:productKey/:id/share",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  toggleShare,
 );
 
 router.get(
