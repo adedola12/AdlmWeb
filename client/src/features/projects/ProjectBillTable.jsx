@@ -1,5 +1,42 @@
-import React from "react";
+import React, { useRef, useCallback } from "react";
 import { FaInfoCircle, FaLink, FaSearch, FaTimes } from "react-icons/fa";
+
+/**
+ * Draggable column-resize handle.
+ * Attach to a <th> — it tracks horizontal mouse movement and adjusts
+ * the column width via the nearest <col> in the table's <colgroup>.
+ */
+function useColResize() {
+  const colRef = useRef(null);
+
+  const onMouseDown = useCallback((e) => {
+    const th = e.currentTarget.closest("th");
+    if (!th) return;
+    const table = th.closest("table");
+    if (!table) return;
+    const thIndex = Array.from(th.parentElement.children).indexOf(th);
+    const col = table.querySelector("colgroup")?.children[thIndex];
+    if (!col) return;
+    colRef.current = col;
+
+    const startX = e.clientX;
+    const startW = th.getBoundingClientRect().width;
+
+    const onMove = (ev) => {
+      const newW = Math.max(40, startW + ev.clientX - startX);
+      col.style.width = newW + "px";
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    e.preventDefault();
+  }, []);
+
+  return onMouseDown;
+}
 
 function safeNum(value) {
   const num = Number(value);
@@ -95,6 +132,7 @@ export default function ProjectBillTable({
     ? "Save to log this purchase date and deduct it from the balance."
     : "Save to log this completion date and deduct it from the balance.";
 
+  const handleColResize = useColResize();
 
   return (
     <div className="space-y-4">
@@ -242,33 +280,49 @@ export default function ProjectBillTable({
       ) : null}
 
       {computedShown.length ? (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className={`w-full text-sm ${showActualColumns ? "min-w-[1400px]" : "min-w-[1050px]"}`} style={{ tableLayout: "fixed" }}>
+        <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white max-w-full">
+          <table className="w-full text-sm" style={{ tableLayout: "auto", minWidth: 0 }}>
             <colgroup>
-              <col style={{ width: "46px" }} />          {/* S/N */}
-              <col style={{ width: showActualColumns ? "120px" : "140px" }} /> {/* Status */}
-              <col />                                     {/* Description — stretches */}
-              <col style={{ width: "70px" }} />           {/* Qty */}
-              <col style={{ width: "46px" }} />           {/* Unit */}
-              <col style={{ width: showActualColumns ? "150px" : "200px" }} /> {/* Rate */}
-              {showActualColumns ? <col style={{ width: "110px" }} /> : null}  {/* Actual qty */}
-              {showActualColumns ? <col style={{ width: "110px" }} /> : null}  {/* Actual rate */}
-              {showActualColumns ? <col style={{ width: "100px" }} /> : null}  {/* Actual amount */}
-              {showActualColumns ? <col style={{ width: "90px" }} /> : null}   {/* Actual added */}
-              <col style={{ width: "100px" }} />          {/* Gross amount */}
-              <col style={{ width: "80px" }} />           {/* Deducted */}
-              <col style={{ width: "80px" }} />           {/* Balance */}
+              <col className="w-10" />                                         {/* S/N */}
+              <col className={showActualColumns ? "w-10" : "w-[130px]"} />     {/* Status */}
+              <col style={{ width: showActualColumns ? "22%" : "30%" }} />      {/* Description — % based */}
+              <col className="w-16" />                                          {/* Qty */}
+              <col className="w-10" />                                          {/* Unit */}
+              <col style={{ width: showActualColumns ? "12%" : "18%" }} />      {/* Rate */}
+              {showActualColumns ? <col className="w-[100px]" /> : null}        {/* Actual qty */}
+              {showActualColumns ? <col className="w-[100px]" /> : null}        {/* Actual rate */}
+              {showActualColumns ? <col className="w-[90px]" /> : null}         {/* Actual amount */}
+              {showActualColumns ? <col className="w-[72px]" /> : null}         {/* Actual added */}
+              <col className="w-[90px]" />                                      {/* Gross amount */}
+              <col className="w-[72px]" />                                      {/* Deducted */}
+              <col className="w-[72px]" />                                      {/* Balance */}
             </colgroup>
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
                 <th className="px-2 py-2 text-xs">S/N</th>
-                <th className="px-2 py-2 text-xs">{statusLabel}</th>
-                <th className="px-2 py-2 text-xs">Description</th>
+                <th className="px-2 py-2 text-xs" title={statusLabel}>{showActualColumns ? "✓" : statusLabel}</th>
+                <th className="relative px-2 py-2 text-xs select-none">
+                  Description
+                  <span onMouseDown={handleColResize} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40" />
+                </th>
                 <th className="px-2 py-2 text-xs">Qty</th>
                 <th className="px-2 py-2 text-xs">Unit</th>
-                <th className="px-2 py-2 text-xs">Rate</th>
-                {showActualColumns ? <th className="px-2 py-2 text-xs">Actual qty</th> : null}
-                {showActualColumns ? <th className="px-2 py-2 text-xs">Actual rate</th> : null}
+                <th className="relative px-2 py-2 text-xs select-none">
+                  Rate
+                  <span onMouseDown={handleColResize} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40" />
+                </th>
+                {showActualColumns ? (
+                  <th className="relative px-2 py-2 text-xs select-none">
+                    Actual qty
+                    <span onMouseDown={handleColResize} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40" />
+                  </th>
+                ) : null}
+                {showActualColumns ? (
+                  <th className="relative px-2 py-2 text-xs select-none">
+                    Actual rate
+                    <span onMouseDown={handleColResize} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40" />
+                  </th>
+                ) : null}
                 {showActualColumns ? <th className="px-2 py-2 text-xs">Actual amt</th> : null}
                 {showActualColumns ? <th className="px-2 py-2 text-xs">Added</th> : null}
                 <th className="px-2 py-2 text-xs">Gross amt</th>
@@ -301,27 +355,44 @@ export default function ProjectBillTable({
                     <td className="px-2 py-2 font-medium text-slate-700">{row.sn}</td>
 
                     <td className="px-2 py-2">
-                      <label className="inline-flex items-center gap-1.5 font-medium text-slate-800">
-                        <input
-                          type="checkbox"
-                          className={checkboxCls}
-                          checked={row.isMarked}
-                          onChange={(e) => onStatusToggle?.(row.i, e.target.checked)}
-                          aria-label={statusActionText}
-                        />
-                        <span className="text-xs">{row.isMarked ? statusLabel : statusOffText}</span>
-                      </label>
-                      <div className="mt-0.5 text-[10px] leading-tight text-slate-500">
-                        {row.isMarked
-                          ? row.markedAt
-                            ? `Logged ${formatDateTime(row.markedAt)}`
-                            : statusPendingText
-                          : `Unchecked items stay in the outstanding balance until marked ${statusLabelLower}.`}
-                      </div>
+                      {showActualColumns ? (
+                        /* Compact: checkbox only when actual columns are visible */
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className={checkboxCls}
+                            checked={row.isMarked}
+                            onChange={(e) => onStatusToggle?.(row.i, e.target.checked)}
+                            aria-label={statusActionText}
+                            title={row.isMarked ? statusLabel : statusOffText}
+                          />
+                        </div>
+                      ) : (
+                        /* Full: checkbox + label + info text when space is available */
+                        <>
+                          <label className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+                            <input
+                              type="checkbox"
+                              className={checkboxCls}
+                              checked={row.isMarked}
+                              onChange={(e) => onStatusToggle?.(row.i, e.target.checked)}
+                              aria-label={statusActionText}
+                            />
+                            <span className="text-xs">{row.isMarked ? statusLabel : statusOffText}</span>
+                          </label>
+                          <div className="mt-0.5 text-[10px] leading-tight text-slate-500">
+                            {row.isMarked
+                              ? row.markedAt
+                                ? `Logged ${formatDateTime(row.markedAt)}`
+                                : statusPendingText
+                              : `Unchecked items stay in the outstanding balance until marked ${statusLabelLower}.`}
+                          </div>
+                        </>
+                      )}
                     </td>
 
-                    <td className="px-2 py-2 overflow-hidden">
-                      <div className="font-medium text-slate-900 text-xs break-words">{row.description}</div>
+                    <td className="px-2 py-2 overflow-hidden" title={row.description}>
+                      <div className="font-medium text-slate-900 text-xs break-words leading-snug">{row.description}</div>
                       {row.groupId ? (
                         <div className="mt-0.5 text-[10px] text-slate-500">
                           Group: <span className="text-slate-700">{row.groupLabel} ({row.groupCount})</span>
