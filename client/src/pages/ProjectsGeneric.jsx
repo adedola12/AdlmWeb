@@ -1893,7 +1893,7 @@ export default function ProjectsGeneric() {
     if (!canRateGen || !accessToken) return [];
     try {
       const result = await apiAuthed(
-        `/rategen-v2/library/rate-items/search?q=${encodeURIComponent(query)}&limit=8`,
+        `/rategen-v2/library/rate-items/search?q=${encodeURIComponent(query)}&limit=10`,
         { token: accessToken },
       );
       return Array.isArray(result?.results) ? result.results : [];

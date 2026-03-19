@@ -107,6 +107,9 @@ function RateCell({
   const wrapRef = useRef(null);
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
+  // Stable ref for the search callback so the effect doesn't re-run on every render
+  const searchFnRef = useRef(onSearchRateGen);
+  searchFnRef.current = onSearchRateGen;
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -125,7 +128,7 @@ function RateCell({
   // Debounced search when typing a name
   useEffect(() => {
     if (!searchQuery || searchQuery.length < 2 || !canRateGenBoq) {
-      setSearchResults([]);
+      if (!searchQuery) setSearchResults((prev) => prev); // keep existing candidates
       return;
     }
     // If it looks like a number, don't search
@@ -134,24 +137,29 @@ function RateCell({
       return;
     }
 
+    setSearching(true);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      setSearching(true);
       try {
-        const results = await onSearchRateGen?.(searchQuery);
+        const fn = searchFnRef.current;
+        const results = fn ? await fn(searchQuery) : [];
         setSearchResults(Array.isArray(results) ? results : []);
       } catch {
         setSearchResults([]);
       } finally {
         setSearching(false);
       }
-    }, 300);
+    }, 350);
 
-    return () => clearTimeout(debounceRef.current);
-  }, [searchQuery, canRateGenBoq, onSearchRateGen]);
+    return () => {
+      clearTimeout(debounceRef.current);
+      setSearching(false);
+    };
+  }, [searchQuery, canRateGenBoq]); // removed onSearchRateGen — use ref instead
 
   const handleFocus = () => {
     setFocused(true);
+    setSearchQuery("");
     // Existing candidates from batch sync
     setSearchResults(boqCandidates.length ? boqCandidates : []);
   };
@@ -162,6 +170,7 @@ function RateCell({
     if (/^[\d.,]*$/.test(v)) {
       onChange?.(v.replace(/,/g, ""));
       setSearchQuery("");
+      setSearchResults([]);
     } else {
       // Text — search RateGen
       setSearchQuery(v);
@@ -177,9 +186,6 @@ function RateCell({
   };
 
   const displayValue = value !== "" && value != null ? formatRate(value) : "";
-  const inputDisplay = focused
-    ? (searchQuery || (value != null && value !== "" ? String(value) : ""))
-    : "";
 
   return (
     <div ref={wrapRef} className="relative">
@@ -194,7 +200,7 @@ function RateCell({
         </button>
       ) : (
         /* Expanded popup overlay on focus */
-        <div className="absolute left-0 top-0 z-40 w-72 rounded-lg border border-blue-300 bg-white shadow-xl">
+        <div className="absolute left-0 top-0 z-40 w-80 rounded-lg border border-blue-300 bg-white shadow-xl">
           <div className="p-2">
             <input
               ref={inputRef}
@@ -202,7 +208,7 @@ function RateCell({
               className="input !h-9 w-full !px-2 !py-1 text-sm"
               type="text"
               value={searchQuery || (value != null && value !== "" ? String(value) : "")}
-              placeholder={canRateGenBoq ? "Enter rate or search by name..." : "Enter rate..."}
+              placeholder={canRateGenBoq ? "Enter rate or type name to search..." : "Enter rate..."}
               onChange={handleInputChange}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
@@ -219,13 +225,13 @@ function RateCell({
           </div>
 
           {/* Search results / candidates dropdown */}
-          {(searchResults.length > 0 || searching) && (
+          {(searchResults.length > 0 || searching) ? (
             <div className="border-t">
               {searching && (
-                <div className="px-3 py-2 text-xs text-slate-500">Searching rates...</div>
+                <div className="px-3 py-2 text-xs text-slate-500 animate-pulse">Searching rates...</div>
               )}
-              <div className="max-h-48 overflow-auto">
-                {searchResults.slice(0, 8).map((c, idx) => (
+              <div className="max-h-60 overflow-auto">
+                {searchResults.slice(0, 10).map((c, idx) => (
                   <button
                     key={`${c.description}-${c.unit}-${idx}`}
                     type="button"
@@ -246,8 +252,13 @@ function RateCell({
                   </button>
                 ))}
               </div>
+              {searchResults.length > 0 && (
+                <div className="border-t px-3 py-1.5 text-[10px] text-slate-400">
+                  {searchResults.length} rate{searchResults.length !== 1 ? "s" : ""} found
+                </div>
+              )}
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>
@@ -369,6 +380,64 @@ export default function ProjectBillTable({
     : "Save to log this completion date and deduct it from the balance.";
 
   const handleColResize = useColResize();
+
+  // Column sorting state
+  const [sortCol, setSortCol] = useState(null);   // "sn" | "description" | "qty" | "unit" | "rate" | "grossAmt" | "balance" | null
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const handleSort = useCallback((col) => {
+    if (sortCol === col) {
+      setSortAsc((prev) => !prev);
+    } else {
+      setSortCol(col);
+      setSortAsc(true);
+    }
+  }, [sortCol]);
+
+  // Apply sorting to computedShown
+  const sortedShown = React.useMemo(() => {
+    if (!sortCol) return computedShown;
+    const sorted = [...computedShown];
+    const dir = sortAsc ? 1 : -1;
+
+    sorted.sort((a, b) => {
+      let va, vb;
+      switch (sortCol) {
+        case "sn": va = a.sn; vb = b.sn; break;
+        case "description": va = (a.description || "").toLowerCase(); vb = (b.description || "").toLowerCase();
+          return dir * va.localeCompare(vb);
+        case "qty": va = a.qty || 0; vb = b.qty || 0; break;
+        case "unit": va = (a.unit || "").toLowerCase(); vb = (b.unit || "").toLowerCase();
+          return dir * va.localeCompare(vb);
+        case "rate": va = a.fullAmount / (a.qty || 1); vb = b.fullAmount / (b.qty || 1); break;
+        case "grossAmt": va = a.fullAmount || 0; vb = b.fullAmount || 0; break;
+        case "deducted": va = a.valuedAmount || 0; vb = b.valuedAmount || 0; break;
+        case "balance": va = a.amount || 0; vb = b.amount || 0; break;
+        default: return 0;
+      }
+      return dir * (va < vb ? -1 : va > vb ? 1 : 0);
+    });
+    return sorted;
+  }, [computedShown, sortCol, sortAsc]);
+
+  // Helper for sortable header
+  const SortHeader = ({ col, children, className = "", ...rest }) => (
+    <th
+      className={`px-2 py-2 text-xs cursor-pointer select-none hover:bg-slate-100 transition-colors ${className}`}
+      onClick={() => handleSort(col)}
+      title={`Sort by ${children}`}
+      {...rest}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        {sortCol === col ? (
+          <span className="text-blue-600">{sortAsc ? "▲" : "▼"}</span>
+        ) : (
+          <span className="text-slate-300">⇅</span>
+        )}
+      </span>
+    </th>
+  );
 
   return (
     <div className="space-y-4">
@@ -535,40 +604,26 @@ export default function ProjectBillTable({
             </colgroup>
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
-                <th className="px-2 py-2 text-xs">S/N</th>
+                <SortHeader col="sn">S/N</SortHeader>
                 <th className="px-2 py-2 text-xs" title={statusLabel}>{showActualColumns ? "✓" : statusLabel}</th>
-                <th className="relative px-2 py-2 text-xs select-none">
+                <SortHeader col="description" className="relative px-2 py-2 text-xs cursor-pointer select-none hover:bg-slate-100">
                   Description
-                  <span onMouseDown={handleColResize} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40" />
-                </th>
-                <th className="px-2 py-2 text-xs">Qty</th>
-                <th className="px-2 py-2 text-xs">Unit</th>
-                <th className="relative px-2 py-2 text-xs select-none">
-                  Rate
-                  <span onMouseDown={handleColResize} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40" />
-                </th>
-                {showActualColumns ? (
-                  <th className="relative px-2 py-2 text-xs select-none">
-                    Actual qty
-                    <span onMouseDown={handleColResize} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40" />
-                  </th>
-                ) : null}
-                {showActualColumns ? (
-                  <th className="relative px-2 py-2 text-xs select-none">
-                    Actual rate
-                    <span onMouseDown={handleColResize} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-400/40" />
-                  </th>
-                ) : null}
+                </SortHeader>
+                <SortHeader col="qty">Qty</SortHeader>
+                <SortHeader col="unit">Unit</SortHeader>
+                <SortHeader col="rate">Rate</SortHeader>
+                {showActualColumns ? <th className="px-2 py-2 text-xs">Actual qty</th> : null}
+                {showActualColumns ? <th className="px-2 py-2 text-xs">Actual rate</th> : null}
                 {showActualColumns ? <th className="px-2 py-2 text-xs">Actual amt</th> : null}
                 {showActualColumns ? <th className="px-2 py-2 text-xs">Added</th> : null}
-                <th className="px-2 py-2 text-xs">Gross amt</th>
-                <th className="px-2 py-2 text-xs">Deducted</th>
-                <th className="px-2 py-2 text-xs">Balance</th>
+                <SortHeader col="grossAmt">Gross amt</SortHeader>
+                <SortHeader col="deducted">Deducted</SortHeader>
+                <SortHeader col="balance">Balance</SortHeader>
               </tr>
             </thead>
 
             <tbody>
-              {computedShown.map((row) => {
+              {sortedShown.map((row) => {
                 const item = items[row.i] || {};
                 const groupId = row.groupId;
                 const canLink = Boolean(groupId) && row.groupCount >= 2;

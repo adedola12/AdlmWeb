@@ -520,9 +520,12 @@ router.get("/library/rate-items/search", async (req, res, next) => {
         if (!desc || !Number.isFinite(total) || total <= 0) return null;
 
         const descLower = desc.toLowerCase();
+        const sectionLower = String(r?.sectionLabel || r?.sectionKey || "").toLowerCase();
         let score = 0;
         for (const w of qWords) {
-          if (descLower.includes(w)) score += 1;
+          // Match against description (higher weight) and section label
+          if (descLower.includes(w)) score += 2;
+          else if (sectionLower.includes(w)) score += 1;
         }
         if (score === 0) return null;
 
