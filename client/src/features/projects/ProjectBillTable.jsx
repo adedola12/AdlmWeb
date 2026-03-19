@@ -243,22 +243,37 @@ export default function ProjectBillTable({
 
       {computedShown.length ? (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="min-w-[1250px] text-sm">
+          <table className={`w-full text-sm ${showActualColumns ? "min-w-[1400px]" : "min-w-[1050px]"}`} style={{ tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: "46px" }} />          {/* S/N */}
+              <col style={{ width: showActualColumns ? "120px" : "140px" }} /> {/* Status */}
+              <col />                                     {/* Description — stretches */}
+              <col style={{ width: "70px" }} />           {/* Qty */}
+              <col style={{ width: "46px" }} />           {/* Unit */}
+              <col style={{ width: showActualColumns ? "150px" : "200px" }} /> {/* Rate */}
+              {showActualColumns ? <col style={{ width: "110px" }} /> : null}  {/* Actual qty */}
+              {showActualColumns ? <col style={{ width: "110px" }} /> : null}  {/* Actual rate */}
+              {showActualColumns ? <col style={{ width: "100px" }} /> : null}  {/* Actual amount */}
+              {showActualColumns ? <col style={{ width: "90px" }} /> : null}   {/* Actual added */}
+              <col style={{ width: "100px" }} />          {/* Gross amount */}
+              <col style={{ width: "80px" }} />           {/* Deducted */}
+              <col style={{ width: "80px" }} />           {/* Balance */}
+            </colgroup>
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
-                <th className="px-4 py-3">S/N</th>
-                <th className="px-4 py-3">{statusLabel}</th>
-                <th className="px-4 py-3">Description</th>
-                <th className="px-4 py-3">Qty</th>
-                <th className="px-4 py-3">Unit</th>
-                <th className="px-4 py-3">Rate</th>
-                {showActualColumns ? <th className="px-4 py-3">Actual qty</th> : null}
-                {showActualColumns ? <th className="px-4 py-3">Actual rate</th> : null}
-                {showActualColumns ? <th className="px-4 py-3">Actual amount</th> : null}
-                {showActualColumns ? <th className="px-4 py-3">Actual added</th> : null}
-                <th className="px-4 py-3">Gross amount</th>
-                <th className="px-4 py-3">Deducted</th>
-                <th className="px-4 py-3">Balance</th>
+                <th className="px-2 py-2 text-xs">S/N</th>
+                <th className="px-2 py-2 text-xs">{statusLabel}</th>
+                <th className="px-2 py-2 text-xs">Description</th>
+                <th className="px-2 py-2 text-xs">Qty</th>
+                <th className="px-2 py-2 text-xs">Unit</th>
+                <th className="px-2 py-2 text-xs">Rate</th>
+                {showActualColumns ? <th className="px-2 py-2 text-xs">Actual qty</th> : null}
+                {showActualColumns ? <th className="px-2 py-2 text-xs">Actual rate</th> : null}
+                {showActualColumns ? <th className="px-2 py-2 text-xs">Actual amt</th> : null}
+                {showActualColumns ? <th className="px-2 py-2 text-xs">Added</th> : null}
+                <th className="px-2 py-2 text-xs">Gross amt</th>
+                <th className="px-2 py-2 text-xs">Deducted</th>
+                <th className="px-2 py-2 text-xs">Balance</th>
               </tr>
             </thead>
 
@@ -283,10 +298,10 @@ export default function ProjectBillTable({
                     key={row.key || row.i}
                     className={`border-t align-top ${row.isMarked ? "bg-emerald-50/40" : "bg-white"}`}
                   >
-                    <td className="px-4 py-3 font-medium text-slate-700">{row.sn}</td>
+                    <td className="px-2 py-2 font-medium text-slate-700">{row.sn}</td>
 
-                    <td className="px-4 py-3">
-                      <label className="inline-flex items-center gap-2 font-medium text-slate-800">
+                    <td className="px-2 py-2">
+                      <label className="inline-flex items-center gap-1.5 font-medium text-slate-800">
                         <input
                           type="checkbox"
                           className={checkboxCls}
@@ -294,9 +309,9 @@ export default function ProjectBillTable({
                           onChange={(e) => onStatusToggle?.(row.i, e.target.checked)}
                           aria-label={statusActionText}
                         />
-                        <span>{row.isMarked ? statusLabel : statusOffText}</span>
+                        <span className="text-xs">{row.isMarked ? statusLabel : statusOffText}</span>
                       </label>
-                      <div className="mt-1 text-[11px] text-slate-500">
+                      <div className="mt-0.5 text-[10px] leading-tight text-slate-500">
                         {row.isMarked
                           ? row.markedAt
                             ? `Logged ${formatDateTime(row.markedAt)}`
@@ -305,23 +320,23 @@ export default function ProjectBillTable({
                       </div>
                     </td>
 
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-900">{row.description}</div>
+                    <td className="px-2 py-2 overflow-hidden">
+                      <div className="font-medium text-slate-900 text-xs break-words">{row.description}</div>
                       {row.groupId ? (
-                        <div className="mt-1 text-[11px] text-slate-500">
+                        <div className="mt-0.5 text-[10px] text-slate-500">
                           Group: <span className="text-slate-700">{row.groupLabel} ({row.groupCount})</span>
                           {linked ? <span className="font-medium text-blue-700"> | linked</span> : null}
                         </div>
                       ) : null}
                     </td>
 
-                    <td className="px-4 py-3 text-slate-700">{row.qty.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-slate-700">{row.unit}</td>
+                    <td className="px-2 py-2 text-xs text-slate-700">{row.qty.toFixed(2)}</td>
+                    <td className="px-2 py-2 text-xs text-slate-700">{row.unit}</td>
 
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-[240px] items-start gap-2">
+                    <td className="px-2 py-2">
+                      <div className="flex items-start gap-1">
                         <input
-                          className="input !h-9 !w-[140px] !px-2 !py-1"
+                          className="input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs"
                           type="number"
                           step="any"
                           value={rateValue}
@@ -331,23 +346,23 @@ export default function ProjectBillTable({
 
                         <button
                           type="button"
-                          className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition ${canLink ? linked ? "border-blue-300 bg-blue-50" : "hover:bg-slate-50" : "cursor-not-allowed opacity-40"}`}
+                          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition ${canLink ? linked ? "border-blue-300 bg-blue-50" : "hover:bg-slate-50" : "cursor-not-allowed opacity-40"}`}
                           title={canLink ? linked ? "Linked: rate changes propagate to similar items" : "Link similar items" : "No similar items found to link"}
                           disabled={!canLink}
                           onClick={() => onToggleGroupLink?.(groupId, row.i)}
                         >
-                          <FaLink className={linked ? "text-blue-700" : "text-slate-600"} />
+                          <FaLink className={`text-xs ${linked ? "text-blue-700" : "text-slate-600"}`} />
                         </button>
 
                         {showMaterials && candidates.length ? (
                           <div className="relative">
                             <button
                               type="button"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-slate-50"
+                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border hover:bg-slate-50"
                               title="Pick a matching material price"
                               onClick={() => onToggleOpenPickKey?.(row.key)}
                             >
-                              <FaSearch className="text-slate-600" />
+                              <FaSearch className="text-xs text-slate-600" />
                             </button>
 
                             {openPickKey === row.key ? (
@@ -407,11 +422,11 @@ export default function ProjectBillTable({
                             <div className="relative">
                               <button
                                 type="button"
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-slate-50"
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border hover:bg-slate-50"
                                 title="Pick a rate from RateGen library"
                                 onClick={() => onToggleOpenBoqPickKey?.(row.key)}
                               >
-                                <FaSearch className="text-slate-600" />
+                                <FaSearch className="text-xs text-slate-600" />
                               </button>
 
                               {openBoqPickKey === row.key ? (
@@ -457,9 +472,9 @@ export default function ProjectBillTable({
                     </td>
 
                     {showActualColumns ? (
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-2">
                         <input
-                          className="input !h-9 !w-[120px] !px-2 !py-1"
+                          className="input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs"
                           type="number"
                           step="any"
                           value={actualQtyValue}
@@ -470,9 +485,9 @@ export default function ProjectBillTable({
                     ) : null}
 
                     {showActualColumns ? (
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-2">
                         <input
-                          className="input !h-9 !w-[120px] !px-2 !py-1"
+                          className="input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs"
                           type="number"
                           step="any"
                           value={actualRateValue}
@@ -483,37 +498,37 @@ export default function ProjectBillTable({
                     ) : null}
 
                     {showActualColumns ? (
-                      <td className="px-4 py-3 font-medium text-slate-900">
+                      <td className="px-2 py-2 text-xs font-medium text-slate-900">
                         {row.actualHasData ? money(row.actualAmount) : "-"}
                       </td>
                     ) : null}
 
                     {showActualColumns ? (
-                      <td className="px-4 py-3 text-[11px] text-slate-500">
+                      <td className="px-2 py-2 text-[10px] text-slate-500">
                         {actualDateLabel || (row.actualHasData ? "Pending save" : "-")}
                       </td>
                     ) : null}
 
-                    <td className="px-4 py-3 font-medium text-slate-900">{money(row.fullAmount)}</td>
-                    <td className="px-4 py-3 font-medium text-emerald-700">{money(row.valuedAmount)}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">{money(row.amount)}</td>
+                    <td className="px-2 py-2 text-xs font-medium text-slate-900">{money(row.fullAmount)}</td>
+                    <td className="px-2 py-2 text-xs font-medium text-emerald-700">{money(row.valuedAmount)}</td>
+                    <td className="px-2 py-2 text-xs font-semibold text-slate-900">{money(row.amount)}</td>
                   </tr>
                 );
               })}
             </tbody>
 
             <tfoot className="bg-slate-50">
-              <tr className="border-t font-semibold text-slate-900">
-                <td className="px-4 py-3" colSpan={6}>
+              <tr className="border-t font-semibold text-slate-900 text-xs">
+                <td className="px-2 py-2" colSpan={6}>
                   Totals
                 </td>
-                {showActualColumns ? <td className="px-4 py-3" /> : null}
-                {showActualColumns ? <td className="px-4 py-3" /> : null}
-                {showActualColumns ? <td className="px-4 py-3 text-blue-700">{money(actualTrackedAmount)}</td> : null}
-                {showActualColumns ? <td className="px-4 py-3" /> : null}
-                <td className="px-4 py-3">{money(grossAmount)}</td>
-                <td className="px-4 py-3 text-emerald-700">{money(valuedAmount)}</td>
-                <td className="px-4 py-3">{money(remainingAmount)}</td>
+                {showActualColumns ? <td className="px-2 py-2" /> : null}
+                {showActualColumns ? <td className="px-2 py-2" /> : null}
+                {showActualColumns ? <td className="px-2 py-2 text-blue-700">{money(actualTrackedAmount)}</td> : null}
+                {showActualColumns ? <td className="px-2 py-2" /> : null}
+                <td className="px-2 py-2">{money(grossAmount)}</td>
+                <td className="px-2 py-2 text-emerald-700">{money(valuedAmount)}</td>
+                <td className="px-2 py-2">{money(remainingAmount)}</td>
               </tr>
             </tfoot>
           </table>
