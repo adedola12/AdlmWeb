@@ -232,15 +232,30 @@ function sanitizeItems(items) {
           .filter((value) => Number.isFinite(value) && value > 0)
       : [];
 
+    // The Revit plugin's quantity takeoff sends the planned rate in actualRate
+    // (its DTO has no rate field). Detect this: if rate is 0/missing but
+    // actualRate has a value and no actualRecordedAt exists, promote
+    // actualRate → rate and clear the actual fields.
+    let parsedRate = Number.isFinite(Number(item.rate)) ? Number(item.rate) : 0;
+    let parsedActualRate = parseOptionalNumber(item.actualRate);
+    let parsedActualRecordedAt = parseOptionalDate(item.actualRecordedAt);
+    let parsedActualUpdatedAt = parseOptionalDate(item.actualUpdatedAt);
+
+    if (parsedRate === 0 && parsedActualRate != null && parsedActualRate > 0 && !parsedActualRecordedAt) {
+      parsedRate = parsedActualRate;
+      parsedActualRate = null;
+      parsedActualUpdatedAt = null;
+    }
+
     safe.push({
       sn: Number.isFinite(Number(item.sn)) ? Number(item.sn) : i + 1,
       qty: Number.isFinite(Number(item.qty)) ? Number(item.qty) : 0,
       unit: item.unit != null ? String(item.unit) : "",
-      rate: Number.isFinite(Number(item.rate)) ? Number(item.rate) : 0,
+      rate: parsedRate,
       actualQty: parseOptionalNumber(item.actualQty),
-      actualRate: parseOptionalNumber(item.actualRate),
-      actualRecordedAt: parseOptionalDate(item.actualRecordedAt),
-      actualUpdatedAt: parseOptionalDate(item.actualUpdatedAt),
+      actualRate: parsedActualRate,
+      actualRecordedAt: parsedActualRecordedAt,
+      actualUpdatedAt: parsedActualUpdatedAt,
       purchased: Boolean(item.purchased),
       purchasedAt: parseOptionalDate(item.purchasedAt),
       completed: Boolean(item.completed),
