@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { User } from "../models/User.js";
 
 const router = express.Router();
 
@@ -73,7 +74,8 @@ async function uniqueSlug(userId, productKey, baseSlug, excludeId = null) {
 }
 
 function generatePublicToken() {
-  return crypto.randomBytes(16).toString("hex");
+  // 8 bytes = 16 hex chars — compact but collision-safe for per-user projects
+  return crypto.randomBytes(8).toString("hex");
 }
 
 function forceMaterialsProductKey(req, _res, next) {
@@ -864,6 +866,16 @@ async function getPublicDashboard(req, res) {
     });
     if (!project) return res.status(404).json({ error: "Not found" });
 
+    // Look up the project owner's display name
+    let sharedBy = "";
+    if (project.userId) {
+      const owner = await User.findById(project.userId).select("username firstName lastName").lean();
+      if (owner) {
+        const full = [owner.firstName, owner.lastName].filter(Boolean).join(" ").trim();
+        sharedBy = full || owner.username || "";
+      }
+    }
+
     const items = project.items || [];
     const isMaterials = project.productKey === MATERIAL_PRODUCT_KEY;
     const statusField = isMaterials ? "purchased" : "completed";
@@ -919,6 +931,7 @@ async function getPublicDashboard(req, res) {
     res.json({
       ok: true,
       name: project.name,
+      sharedBy,
       productKey: project.productKey,
       statusLabel: isMaterials ? "Purchased" : "Completed",
       progressTotal,

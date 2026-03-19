@@ -134,8 +134,14 @@ export default function PublicProjectDashboard() {
           <div>
             <div className="text-xs text-slate-400 uppercase tracking-wider">Project Dashboard</div>
             <div className="text-lg font-semibold">{data.name}</div>
+            {data.sharedBy ? (
+              <div className="text-xs text-slate-400 mt-0.5">Shared by {data.sharedBy}</div>
+            ) : null}
           </div>
-          <div className="text-xs text-slate-400">Powered by ADLM Studio</div>
+          <div className="text-right">
+            <div className="text-xs text-slate-400">Powered by</div>
+            <div className="text-sm font-medium text-white">ADLM Studio</div>
+          </div>
         </div>
       </div>
 
