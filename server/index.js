@@ -257,7 +257,9 @@ if (SERVE_CLIENT && hasClientBuild) {
   app.get("*", (req, res, next) => {
     if (req.method !== "GET") return next();
     const accept = String(req.headers.accept || "");
-    if (!accept.includes("text/html")) return next();
+    const ua = String(req.headers["user-agent"] || "");
+    const isBot = /whatsapp|facebookexternalhit|facebot|twitterbot|linkedinbot|telegrambot|slackbot|discordbot|googlebot/i.test(ua);
+    if (!isBot && !accept.includes("text/html")) return next();
     res.sendFile(indexHtml);
   });
 } else {

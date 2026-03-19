@@ -140,8 +140,20 @@ function isApiPath(reqPath) {
   );
 }
 
-// Only serve injected HTML for real document navigations
+// Known social-media / messaging crawler bots that fetch OG tags
+const BOT_UA_RE =
+  /whatsapp|facebookexternalhit|facebot|twitterbot|linkedinbot|telegrambot|slackbot|discordbot|googlebot|bingbot|baiduspider|yandexbot|duckduckbot|applebot|pinterestbot|redditbot|skypeuripreview|embedly|quora link preview|outbrain|vkshare|tumblr|bitlybot|flipboard|nuzzel|W3C_Validator/i;
+
+function isCrawlerBot(req) {
+  const ua = String(req.headers["user-agent"] || "");
+  return BOT_UA_RE.test(ua);
+}
+
+// Only serve injected HTML for real document navigations or crawler bots
 function isDocumentNavigation(req) {
+  // Always serve to known crawler bots (they need OG tags)
+  if (isCrawlerBot(req)) return true;
+
   const accept = String(req.headers.accept || "").toLowerCase();
   const secFetchDest = String(
     req.headers["sec-fetch-dest"] || "",
@@ -268,8 +280,17 @@ function injectMeta(html, meta) {
     key: "og:image:secure_url",
     value: meta.image,
   });
+  if (meta.imageWidth) {
+    out = rewriteTag(out, { type: "metaProp", key: "og:image:width", value: String(meta.imageWidth) });
+    out = rewriteTag(out, { type: "metaProp", key: "og:image:height", value: String(meta.imageHeight) });
+  }
 
   // Twitter
+  out = rewriteTag(out, {
+    type: "metaName",
+    key: "twitter:card",
+    value: meta.twitterCard || "summary",
+  });
   out = rewriteTag(out, {
     type: "metaName",
     key: "twitter:title",
@@ -315,6 +336,9 @@ async function resolveMeta(req) {
     description: "BIM Training, QS Tools, and Digital Construction Solutions.",
     url: pageUrl,
     image: defaultImage,
+    twitterCard: "summary", // square logo → use "summary"; pages with landscape images override to "summary_large_image"
+    imageWidth: 771,
+    imageHeight: 646,
   };
 
   try {
@@ -345,6 +369,9 @@ async function resolveMeta(req) {
       const img = product.thumbnailUrl || (product.images && product.images[0]) || "";
       if (img) {
         meta.image = cloudinaryOg(absolutizeUrl(img, baseUrl)) || meta.image;
+        meta.twitterCard = "summary_large_image";
+        meta.imageWidth = 1200;
+        meta.imageHeight = 630;
       }
     }
     return meta;
@@ -373,6 +400,9 @@ async function resolveMeta(req) {
       const img = training.ogImageUrl || training.flyerUrl || "";
       if (img) {
         meta.image = cloudinaryOg(absolutizeUrl(img, baseUrl)) || meta.image;
+        meta.twitterCard = "summary_large_image";
+        meta.imageWidth = 1200;
+        meta.imageHeight = 630;
       }
     }
     return meta;
@@ -415,6 +445,9 @@ async function resolveMeta(req) {
       const img = course.thumbnailUrl || (course.images && course.images[0]) || "";
       if (img) {
         meta.image = cloudinaryOg(absolutizeUrl(img, baseUrl)) || meta.image;
+        meta.twitterCard = "summary_large_image";
+        meta.imageWidth = 1200;
+        meta.imageHeight = 630;
       }
     }
     return meta;

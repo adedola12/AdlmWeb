@@ -18,7 +18,8 @@
       "Bash(npx vite:*)",
       "Bash(grep -E \"^[a-z].*\\\\.js$\")",
       "Bash(ls -la /c/Users/ADLM/source/repos/ADLMWebsite/client/public/og-*)",
-      "Bash(node --check routes/meta.dynamic.js)"
+      "Bash(node --check routes/meta.dynamic.js)",
+      "Bash(npm run:*)"
     ]
   }
 }
