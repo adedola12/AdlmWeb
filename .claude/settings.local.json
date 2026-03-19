@@ -14,7 +14,8 @@
       "Bash(find /c/Users/ADLM/source/repos/ADLMWebsite/client/src/pages -type f -name *boq* -o -name *takeoff* -o -name *valuation*)",
       "Bash(node --check routes/projects.js)",
       "Bash(node --check routes/rategen.library.js)",
-      "Bash(node --check models/TakeoffProject.js)"
+      "Bash(node --check models/TakeoffProject.js)",
+      "Bash(npx vite:*)"
     ]
   }
 }
