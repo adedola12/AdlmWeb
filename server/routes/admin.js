@@ -657,11 +657,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const q = {
       status: "approved",
-      $or: [
-        { "installation.status": "pending" },
-        { "installation.entitlementsApplied": false },
-        { "installation.entitlementsApplied": { $exists: false } },
-      ],
+      "installation.status": { $in: ["pending", "complete"] },
     };
 
     const list = await Purchase.find(q).sort({ decidedAt: -1 }).limit(500);
@@ -750,6 +746,45 @@ router.post(
       message: wasComplete
         ? "Installation already complete. Ensured entitlements/coupon are finalized."
         : "Installation marked complete. Subscription started and coupon finalized.",
+    });
+  }),
+);
+
+router.post(
+  "/installations/:id/toggle",
+  asyncHandler(async (req, res) => {
+    const p = await Purchase.findById(req.params.id);
+    if (!p) return res.status(404).json({ error: "Purchase not found" });
+
+    p.installation = p.installation || {};
+    const currentStatus = p.installation.status || "none";
+
+    if (currentStatus === "complete") {
+      p.installation.status = "pending";
+      p.installation.markedBy = null;
+      p.installation.markedAt = null;
+      await p.save();
+      return res.json({
+        ok: true,
+        purchase: p,
+        message: "Installation reset to pending. The user can now reinstall.",
+      });
+    }
+
+    if (currentStatus === "pending") {
+      p.installation.status = "complete";
+      p.installation.markedBy = req.user?.email || "admin";
+      p.installation.markedAt = new Date();
+      await p.save();
+      return res.json({
+        ok: true,
+        purchase: p,
+        message: "Installation marked complete.",
+      });
+    }
+
+    return res.status(400).json({
+      error: `Cannot toggle installation with status "${currentStatus}".`,
     });
   }),
 );
