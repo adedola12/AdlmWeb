@@ -192,6 +192,17 @@ app.use("/showcase", showcasePublic);
 app.use("/coupons", couponsPublic);
 app.use("/helpbot", helpbotRoutes);
 
+// Public settings (no auth) — mobile app URL etc.
+import { Setting } from "./models/Setting.js";
+app.get("/settings/mobile-app-url", async (_req, res) => {
+  try {
+    const s = await Setting.findOne({ key: "global" }).lean();
+    res.json({ mobileAppUrl: s?.mobileAppUrl || "" });
+  } catch {
+    res.json({ mobileAppUrl: "" });
+  }
+});
+
 /* =========================
    ✅ ADMIN ROUTES
    ========================= */

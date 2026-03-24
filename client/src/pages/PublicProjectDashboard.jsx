@@ -129,7 +129,7 @@ export default function PublicProjectDashboard() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="bg-[#1e293b] text-white px-6 py-4">
+      <div className="bg-adlm-navy-tertiary text-white px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
             <div className="text-xs text-slate-400 uppercase tracking-wider">Project Dashboard</div>

@@ -62,9 +62,20 @@ function CountUp({ to = 100, duration = 1200, decimals = 0, suffix = "" }) {
  * Hero uses a background image at /public/hero-construction.jpg.
  * Swap the URL if you prefer a different image.
  */
+const FALLBACK_APP_URL =
+  "https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link";
+
 export default function Home() {
   const { accessToken, user } = useAuth();
   const isAuthed = Boolean(accessToken || (user && user.email));
+
+  const [appUrl, setAppUrl] = React.useState(FALLBACK_APP_URL);
+  React.useEffect(() => {
+    fetch("/settings/mobile-app-url")
+      .then((r) => r.json())
+      .then((d) => { if (d?.mobileAppUrl) setAppUrl(d.mobileAppUrl); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-slate-900">
@@ -77,13 +88,13 @@ export default function Home() {
       `}</style>
 
       {/* HERO */}
-      <section className="relative bg-blue-900 text-white">
+      <section className="relative bg-adlm-navy text-white">
         {/* background + overlay */}
         <div
           className="absolute inset-0 bg-[url('/hero-construction.jpg')] bg-cover bg-center opacity-40"
           aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-blue-900/70" aria-hidden="true" />
+        <div className="absolute inset-0 bg-adlm-navy/70" aria-hidden="true" />
 
         <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 pt-16 pb-24 sm:pt-24 sm:pb-28">
           <div
@@ -118,12 +129,14 @@ export default function Home() {
               >
                 Explore Products
               </Link>
-              <Link
-                to="https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link"
+              <a
+                href={appUrl}
+                target="_blank"
+                rel="noreferrer"
                 className="inline-flex items-center gap-2 rounded bg-white text-blue-700 px-4 py-2 font-medium hover:bg-blue-50 transition"
               >
                 Download Mobile App
-              </Link>
+              </a>
               {!isAuthed && (
                 <Link
                   to="/signup"
@@ -257,7 +270,7 @@ management."
       </section>
 
       {/* CTA */}
-      <section className="bg-blue-900 text-white">
+      <section className="bg-adlm-navy text-white">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-12 sm:py-16 text-center">
           <h3 className="text-xl sm:text-2xl font-semibold">
             Ready to work faster and defend your numbers with confidence?
@@ -269,7 +282,7 @@ management."
           <div className="mt-6">
             <Link
               to="/products"
-              className="inline-block bg-white text-blue-700 rounded px-5 py-2 font-medium hover:bg-blue-50 transition"
+              className="inline-block bg-white text-adlm-blue-700 rounded px-5 py-2 font-medium hover:bg-blue-50 transition"
             >
               Get Started Today
             </Link>

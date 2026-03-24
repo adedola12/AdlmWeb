@@ -69,7 +69,7 @@ export default function Nav() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-blue-950/95 backdrop-blur border-b border-blue-900">
+      <header className="sticky top-0 z-50 bg-adlm-navy/95 backdrop-blur border-b border-adlm-navy-tertiary">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <img src={adlmLogo} alt="ADLM Logo" className="w-7 h-7" />
@@ -144,7 +144,7 @@ export default function Nav() {
       />
 
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85%] bg-blue-950 text-white shadow-lg transition-transform md:hidden ${
+        className={`fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85%] bg-adlm-navy text-white shadow-lg transition-transform md:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

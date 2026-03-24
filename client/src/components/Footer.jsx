@@ -1,13 +1,21 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import appleLogo from "../assets/icons/apple-logo.png";
 import googlePlayLogo from "../assets/icons/playstore.png";
 import ComingSoonModal from "./ComingSoonModal.jsx";
 
-const DRIVE_APP_URL =
+const FALLBACK_APP_URL =
   "https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link";
 
 export default function Footer() {
+  const [appUrl, setAppUrl] = useState(FALLBACK_APP_URL);
+
+  useEffect(() => {
+    fetch("/settings/mobile-app-url")
+      .then((r) => r.json())
+      .then((d) => { if (d?.mobileAppUrl) setAppUrl(d.mobileAppUrl); })
+      .catch(() => {});
+  }, []);
   const navigate = useNavigate();
 
   // ✅ routes that REALLY exist in your router
@@ -79,7 +87,7 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-blue-950 text-white">
+    <footer className="bg-adlm-navy text-white">
       {/* ComingSoonModal remains your existing modal component */}
       <ComingSoonModal
         show={showComingSoonModal}
@@ -103,7 +111,7 @@ export default function Footer() {
             </Link>
 
             <a
-              href={DRIVE_APP_URL}
+              href={appUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-emerald-500 text-white font-semibold hover:bg-emerald-600"
@@ -229,7 +237,7 @@ export default function Footer() {
 
               {/* Google Play = your Drive build for now */}
               <a
-                href={DRIVE_APP_URL}
+                href={appUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700"

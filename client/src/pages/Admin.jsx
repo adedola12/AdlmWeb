@@ -529,6 +529,44 @@ export default function Admin() {
     productKey: "",
   });
 
+  // ── Settings state ──
+  const [settingsMobileAppUrl, setSettingsMobileAppUrl] = React.useState("");
+  const [settingsMobileAppDraft, setSettingsMobileAppDraft] = React.useState("");
+  const [settingsBusy, setSettingsBusy] = React.useState(false);
+  const [settingsMsg, setSettingsMsg] = React.useState("");
+
+  const loadSettings = React.useCallback(async () => {
+    try {
+      const data = await apiAuthed("/admin/settings/mobile-app-url", { token: accessToken });
+      const url = data?.mobileAppUrl || "";
+      setSettingsMobileAppUrl(url);
+      setSettingsMobileAppDraft(url);
+    } catch { /* ignore */ }
+  }, [accessToken]);
+
+  // load settings when switching to settings tab
+  React.useEffect(() => {
+    if (tab === "settings" && accessToken) loadSettings();
+  }, [tab, accessToken, loadSettings]);
+
+  const saveMobileAppUrl = async () => {
+    setSettingsBusy(true);
+    setSettingsMsg("");
+    try {
+      await apiAuthed("/admin/settings/mobile-app-url", {
+        token: accessToken,
+        method: "POST",
+        body: { mobileAppUrl: settingsMobileAppDraft },
+      });
+      setSettingsMobileAppUrl(settingsMobileAppDraft);
+      setSettingsMsg("Mobile app URL saved!");
+    } catch (e) {
+      setSettingsMsg(e?.message || "Failed to save");
+    } finally {
+      setSettingsBusy(false);
+    }
+  };
+
   async function load() {
     setLoading(true);
     setMsg("");
@@ -1452,6 +1490,17 @@ export default function Admin() {
               }`}
             >
               Installations ({installations.length})
+            </button>
+
+            <button
+              onClick={() => setTab("settings")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "settings"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Settings
             </button>
           </nav>
         </div>
@@ -2423,6 +2472,55 @@ export default function Admin() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ------------------ settings tab ------------------ */}
+      {tab === "settings" && (
+        <div className="card">
+          <h2 className="font-semibold text-lg mb-4">Site Settings</h2>
+
+          <div className="space-y-6">
+            {/* Mobile App URL */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Mobile App Download URL (APK)
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                This link is used on the home page and footer for the "Download Mobile App" button.
+                Paste a Google Drive link, direct APK URL, or Play Store link.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  className="flex-1 border rounded px-3 py-2 text-sm"
+                  placeholder="https://drive.google.com/file/d/..."
+                  value={settingsMobileAppDraft}
+                  onChange={(e) => setSettingsMobileAppDraft(e.target.value)}
+                />
+                <button
+                  onClick={saveMobileAppUrl}
+                  disabled={settingsBusy || settingsMobileAppDraft === settingsMobileAppUrl}
+                  className="px-4 py-2 rounded bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {settingsBusy ? "Saving…" : "Save"}
+                </button>
+              </div>
+              {settingsMsg && (
+                <p className={`mt-2 text-sm ${settingsMsg.includes("Failed") ? "text-red-600" : "text-green-600"}`}>
+                  {settingsMsg}
+                </p>
+              )}
+              {settingsMobileAppUrl && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Current:{" "}
+                  <a href={settingsMobileAppUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline break-all">
+                    {settingsMobileAppUrl}
+                  </a>
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

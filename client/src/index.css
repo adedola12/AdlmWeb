@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=Prata&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&family=Prata&display=swap');
 /* @tailwind base;
 @tailwind components;
 @tailwind utilities; */
@@ -6,35 +6,102 @@
 
 @import "tailwindcss";
 
+@theme {
+  /* ── ADLM Design System – Tailwind v4 theme tokens ── */
+  --font-sans: 'Lexend', sans-serif;
+  --font-display: 'Lexend', sans-serif;
+
+  /* Brand colors */
+  --color-adlm-orange: #E86A27;
+  --color-adlm-blue-600: #239cff;
+  --color-adlm-blue-700: #005be3;
+
+  /* Navy palette */
+  --color-adlm-navy: #05111f;
+  --color-adlm-navy-deep: #040d18;
+  --color-adlm-navy-mid: #061528;
+  --color-adlm-navy-tertiary: #091e39;
+
+  /* Border radii */
+  --radius-adlm: 8px;
+  --radius-adlm-lg: 12px;
+  --radius-adlm-xl: 16px;
+}
+
 
 a.active hr{
     display: block ;
 }
 
 *{
-    font-family: Outfit;
+    font-family: 'Lexend', sans-serif;
 }
 
 :root{
-  --adlm-primary: #1d4ed8;   /* adjust to your "Primary 600" */
-  --adlm-primary-700:#1e40af;
-  --adlm-navy:#0f172a;
+  /* ── ADLM Design System Tokens ── */
+  /* Primary brand colors */
+  --adlm-orange: #E86A27;
+  --adlm-blue-600: #239cff;
+  --adlm-blue-700: #005be3;
+
+  /* Dark palette */
+  --adlm-navy: #05111f;
+  --adlm-navy-deep: #040d18;
+  --adlm-navy-mid: #061528;
+  --adlm-navy-tertiary: #091e39;
+
+  /* Semantic aliases (backward compat) */
+  --adlm-primary: #005be3;
+  --adlm-primary-700: #005be3;
+
+  /* Spacing scale */
+  --adlm-space-1: 4px;
+  --adlm-space-2: 6px;
+  --adlm-space-3: 8px;
+
+  /* Radii */
+  --adlm-radius-sm: 6px;
+  --adlm-radius-md: 8px;
+  --adlm-radius-lg: 12px;
+  --adlm-radius-xl: 16px;
+  --adlm-radius-pill: 9999px;
 }
 
-/* src/index.css (or your global CSS where .btn is defined) */
+/* ── Global button ── */
 .btn {
-  @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium
-         bg-blue-600 text-white transition duration-150
-         hover:bg-blue-700 hover:shadow-md
-         active:scale-[.98]                        /* micro press */
+  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium
+         text-white transition duration-150
+         hover:shadow-md
+         active:scale-[.98]
          focus:outline-none focus:ring-2 focus:ring-blue-500/50
-         cursor-pointer select-none;               /* cursor effect */
+         cursor-pointer select-none;
+  background-color: var(--adlm-blue-700);
+  border-radius: var(--adlm-radius-md);
+}
+.btn:hover {
+  background-color: #0050c8;
 }
 
 .btn-sm { @apply px-3 py-1 text-xs; }
 
-.input { @apply w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500; }
-.card { @apply rounded-2xl bg-white p-6 shadow-sm border; }
+/* ── Global input ── */
+.input {
+  @apply w-full px-3 py-2 text-sm
+         focus:outline-none focus:ring-2;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--adlm-radius-md);
+  font-family: 'Lexend', sans-serif;
+}
+.input:focus {
+  border-color: var(--adlm-blue-700);
+  --tw-ring-color: rgba(0, 91, 227, 0.3);
+}
+
+/* ── Card ── */
+.card {
+  @apply bg-white p-6 shadow-sm border;
+  border-radius: var(--adlm-radius-xl);
+}
 
 .prata-regular {
     font-family: "Prata", serif;
@@ -70,12 +137,19 @@ a.active hr{
 
   @layer utilities {
     .form-label {
-      @apply block mb-1 text-sm font-medium text-gray-900;
+      @apply block mb-1 text-sm font-medium;
+      color: var(--adlm-navy-mid);
     }
     .input {
-      @apply w-full rounded border border-gray-300 bg-white
-             px-3 py-2 text-sm placeholder:text-gray-400
-             outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500;
+      @apply w-full bg-white px-3 py-2 text-sm placeholder:text-gray-400
+             outline-none focus:ring-1;
+      border: 1px solid #cbd5e1;
+      border-radius: var(--adlm-radius-md);
+      font-family: 'Lexend', sans-serif;
+    }
+    .input:focus {
+      border-color: var(--adlm-blue-700);
+      --tw-ring-color: rgba(0, 91, 227, 0.3);
     }
   }
   
@@ -175,8 +249,8 @@ a.active hr{
 /* ACTIVE appearance */
 .tab-active {
   color: #fff;
-  background: #2563eb;                  /* blue-600 */
-  box-shadow: 0 2px 10px rgba(37,99,235,.18),
+  background: var(--adlm-blue-700, #005be3);
+  box-shadow: 0 2px 10px rgba(0,91,227,.18),
               inset 0 0 0 1px rgba(255,255,255,.15);
 }
 

@@ -77,8 +77,9 @@ function normalizeOperation(raw) {
   let type = "copyDirectory";
   if (typeRaw === "copyfile") type = "copyFile";
   if (typeRaw === "createshortcut") type = "createShortcut";
+  if (typeRaw === "hidedirectory") type = "hideDirectory";
 
-  const sourceDefault = type === "copyDirectory" ? "." : "";
+  const sourceDefault = type === "copyDirectory" || type === "hideDirectory" ? "." : "";
   const source = String(raw.source ?? sourceDefault).trim() || sourceDefault;
   const target = String(raw.target || "").trim();
 
