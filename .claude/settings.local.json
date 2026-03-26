@@ -21,7 +21,14 @@
       "Bash(node --check routes/meta.dynamic.js)",
       "Bash(npm run:*)",
       "Bash(grep -o adlm[a-z-]* C:UsersADLMsourcereposADLMWebsiteclientdistassetsindex-*.css)",
-      "Bash(ls \"C:\\\\Users\\\\ADLM\\\\source\\\\repos\\\\ADLMWebsite\\\\client\\\\dist\\\\assets/\"*.css)"
+      "Bash(ls \"C:\\\\Users\\\\ADLM\\\\source\\\\repos\\\\ADLMWebsite\\\\client\\\\dist\\\\assets/\"*.css)",
+      "Bash(find C:UsersADLMsourcereposADLMWebsiteclientsrcpages -type f -name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js)",
+      "Bash(find C:UsersADLMsourcereposADLMWebsiteclientsrccomponents -type f \\\\\\(-name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js \\\\\\))",
+      "Bash(find pages/ components/ -name \"*.jsx\" -exec sed -i -e 's/bg-blue-600/bg-adlm-blue-700/g' -e 's/hover:bg-blue-700/hover:bg-\\\\[#0050c8\\\\]/g' -e 's/hover:bg-blue-500/hover:bg-\\\\[#0050c8\\\\]/g' -e 's/text-blue-600/text-adlm-blue-700/g' -e 's/text-blue-700/text-adlm-blue-700/g' -e 's/border-blue-600/border-adlm-blue-700/g' -e 's/border-blue-700/border-adlm-blue-700/g' -e 's/ring-blue-600/ring-adlm-blue-700/g' -e 's/ring-blue-500/ring-adlm-blue-700/g' -e 's/focus:border-blue-500/focus:border-adlm-blue-700/g' -e 's/bg-blue-900/bg-adlm-navy/g' -e 's/bg-blue-800/bg-adlm-navy-tertiary/g' -e 's/bg-blue-700/bg-adlm-blue-700/g' -e 's/bg-slate-900/bg-adlm-navy/g' -e 's/text-blue-900/text-adlm-navy/g' -e 's/text-blue-800/text-adlm-navy-mid/g' {} +)",
+      "Bash(find components/Testimonial/ -name \"*.jsx\" -exec sed -i -e 's/bg-\\\\[#1E4AAE\\\\]/bg-adlm-navy-tertiary/g' {} +)",
+      "Bash(find pages/ components/ -name \"*.jsx\" -exec sed -i -e 's/from-blue-600/from-adlm-blue-700/g' -e 's/to-blue-800/to-adlm-navy-tertiary/g' -e 's/from-blue-800/from-adlm-navy-tertiary/g' -e 's/to-blue-700/to-adlm-blue-700/g' -e 's/to-blue-900/to-adlm-navy/g' -e 's/from-blue-50/from-blue-50/g' {} +)",
+      "Bash(find features/ -name \"*.jsx\" -exec sed -i -e 's/bg-blue-600/bg-adlm-blue-700/g' -e 's/hover:bg-blue-700/hover:bg-\\\\[#0050c8\\\\]/g' -e 's/text-blue-600/text-adlm-blue-700/g' -e 's/text-blue-700/text-adlm-blue-700/g' -e 's/border-blue-600/border-adlm-blue-700/g' -e 's/ring-blue-500/ring-adlm-blue-700/g' -e 's/bg-blue-900/bg-adlm-navy/g' -e 's/bg-blue-800/bg-adlm-navy-tertiary/g' -e 's/text-blue-900/text-adlm-navy/g' -e 's/bg-blue-700/bg-adlm-blue-700/g' {} +)",
+      "Bash(find features/ -name \"*.jsx\" -exec sed -i -e 's/#2563eb/#005be3/g' -e 's/#1d4ed8/#005be3/g' -e 's/#3b82f6/#239cff/g' {} +)"
     ]
   }
 }

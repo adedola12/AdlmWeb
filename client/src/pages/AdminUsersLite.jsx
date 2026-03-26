@@ -193,7 +193,7 @@ export default function AdminUsersLite() {
           </button>
 
           <button
-            className="rounded-lg px-3 py-2 bg-blue-600 text-white hover:bg-blue-700"
+            className="rounded-lg px-3 py-2 bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
             onClick={onExport}
             type="button"
             disabled={loading || filtered.length === 0}
@@ -221,7 +221,7 @@ export default function AdminUsersLite() {
                 className={`px-3 py-2 rounded-xl text-sm whitespace-nowrap ring-1 transition
                   ${
                     active
-                      ? "bg-blue-600 text-white ring-blue-600"
+                      ? "bg-adlm-blue-700 text-white ring-adlm-blue-700"
                       : "bg-white text-slate-700 ring-black/10 hover:bg-slate-50"
                   }`}
                 title={t.title}
@@ -249,7 +249,7 @@ export default function AdminUsersLite() {
                 ? "Search by name, email, or attempted purchase…"
                 : "Search by name or email…"
             }
-            className="w-full rounded-lg px-3 py-2 ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-blue-600"
+            className="w-full rounded-lg px-3 py-2 ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-adlm-blue-700"
           />
         </div>
 
@@ -258,7 +258,7 @@ export default function AdminUsersLite() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="rounded-lg px-3 py-2 ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-blue-600"
+            className="rounded-lg px-3 py-2 ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-adlm-blue-700"
           >
             <option value="name_asc">Name (A–Z)</option>
             <option value="name_desc">Name (Z–A)</option>

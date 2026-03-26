@@ -364,7 +364,7 @@ function RateCell({
                         <div className="text-right">
                           {conversion ? (
                             <>
-                              <div className="whitespace-nowrap text-xs font-semibold text-blue-700">
+                              <div className="whitespace-nowrap text-xs font-semibold text-adlm-blue-700">
                                 {formatRate(convertedCost)}/{normUnit(itemUnit) || itemUnit}
                               </div>
                               <div className="whitespace-nowrap text-[9px] text-slate-400 line-through">
@@ -372,7 +372,7 @@ function RateCell({
                               </div>
                             </>
                           ) : (
-                            <div className="whitespace-nowrap text-xs font-semibold text-blue-700">
+                            <div className="whitespace-nowrap text-xs font-semibold text-adlm-blue-700">
                               {formatRate(c.totalCost)}/{c.unit || "—"}
                             </div>
                           )}
@@ -577,7 +577,7 @@ export default function ProjectBillTable({
       <span className="inline-flex items-center gap-1">
         {children}
         {sortCol === col ? (
-          <span className="text-blue-600">{sortAsc ? "▲" : "▼"}</span>
+          <span className="text-adlm-blue-700">{sortAsc ? "▲" : "▼"}</span>
         ) : (
           <span className="text-slate-300">⇅</span>
         )}
@@ -706,7 +706,7 @@ export default function ProjectBillTable({
                 ) : (
                   <button
                     type="button"
-                    className="text-blue-600 hover:underline"
+                    className="text-adlm-blue-700 hover:underline"
                     onClick={onReloadRateGenPool}
                   >
                     Load RateGen rates
@@ -859,7 +859,7 @@ export default function ProjectBillTable({
                       {row.groupId ? (
                         <div className="mt-0.5 text-[10px] text-slate-500">
                           Group: <span className="text-slate-700">{row.groupLabel} ({row.groupCount})</span>
-                          {linked ? <span className="font-medium text-blue-700"> | linked</span> : null}
+                          {linked ? <span className="font-medium text-adlm-blue-700"> | linked</span> : null}
                         </div>
                       ) : null}
                     </td>
@@ -963,7 +963,7 @@ export default function ProjectBillTable({
                               disabled={!canLink}
                               onClick={() => onToggleGroupLink?.(groupId, row.i)}
                             >
-                              <FaLink className={`text-xs ${linked ? "text-blue-700" : "text-slate-600"}`} />
+                              <FaLink className={`text-xs ${linked ? "text-adlm-blue-700" : "text-slate-600"}`} />
                             </button>
                           </>
                         )}
@@ -1017,7 +1017,7 @@ export default function ProjectBillTable({
                 </td>
                 {showActualColumns ? <td className="px-2 py-2" /> : null}
                 {showActualColumns ? <td className="px-2 py-2" /> : null}
-                {showActualColumns ? <td className="px-2 py-2 text-blue-700">{money(actualTrackedAmount)}</td> : null}
+                {showActualColumns ? <td className="px-2 py-2 text-adlm-blue-700">{money(actualTrackedAmount)}</td> : null}
                 {showActualColumns ? <td className="px-2 py-2" /> : null}
                 <td className="px-2 py-2">{money(grossAmount)}</td>
                 <td className="px-2 py-2 text-emerald-700">{money(valuedAmount)}</td>

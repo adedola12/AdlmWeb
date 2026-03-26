@@ -133,7 +133,7 @@ export default function ProjectDashboardChart({
                 className={[
                   "rounded-full border px-3 py-1.5 text-sm transition",
                   active
-                    ? "border-blue-600 bg-blue-600 text-white"
+                    ? "border-adlm-blue-700 bg-adlm-blue-700 text-white"
                     : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
                 onClick={() => onChartModeChange?.(mode.id)}
@@ -165,7 +165,7 @@ export default function ProjectDashboardChart({
               <div
                 className="absolute inset-9 rounded-full"
                 style={{
-                  background: `conic-gradient(#2563eb 0 ${actualPct}%, #dbeafe ${actualPct}% 100%)`,
+                  background: `conic-gradient(#005be3 0 ${actualPct}%, #dbeafe ${actualPct}% 100%)`,
                 }}
               />
               <div className="absolute inset-16 flex flex-col items-center justify-center rounded-full bg-white px-3 text-center shadow-inner">
@@ -188,7 +188,7 @@ export default function ProjectDashboardChart({
               </div>
               <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
                 <span className="inline-flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-blue-600" /> Actual tracked value
+                  <span className="h-3 w-3 rounded-full bg-adlm-blue-700" /> Actual tracked value
                 </span>
                 <span className="font-medium text-slate-900">{money(actualTrackedAmount)}</span>
               </div>
@@ -225,7 +225,7 @@ export default function ProjectDashboardChart({
             maxValue={scaleMax}
           />
           <RibbonBar
-            color="#2563eb"
+            color="#005be3"
             label="Actual tracked value"
             value={actualTrackedAmount}
             maxValue={scaleMax}
@@ -272,7 +272,7 @@ export default function ProjectDashboardChart({
                 })}
 
                 <path d={plannedPath} fill="none" stroke="#94a3b8" strokeWidth="4" strokeLinecap="round" />
-                <path d={actualPath} fill="none" stroke="#2563eb" strokeWidth="4" strokeLinecap="round" />
+                <path d={actualPath} fill="none" stroke="#005be3" strokeWidth="4" strokeLinecap="round" />
 
                 {lineSeries.map((point, index) => {
                   const x =
@@ -284,7 +284,7 @@ export default function ProjectDashboardChart({
                   return (
                     <g key={point.label}>
                       <circle cx={x} cy={plannedY} r="4" fill="#94a3b8" />
-                      <circle cx={x} cy={actualY} r="4" fill="#2563eb" />
+                      <circle cx={x} cy={actualY} r="4" fill="#005be3" />
                       <text x={x} y={viewHeight - 6} textAnchor="middle" fontSize="11" fill="#64748b">
                         {point.label}
                       </text>
@@ -298,7 +298,7 @@ export default function ProjectDashboardChart({
                   <span className="h-3 w-3 rounded-full bg-slate-400" /> Planned cumulative value
                 </span>
                 <span className="inline-flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full bg-blue-600" /> Actual cumulative value
+                  <span className="h-3 w-3 rounded-full bg-adlm-blue-700" /> Actual cumulative value
                 </span>
               </div>
             </div>

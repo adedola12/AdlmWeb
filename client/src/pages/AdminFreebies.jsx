@@ -423,7 +423,7 @@ export default function AdminFreebies() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      <div className="rounded-xl bg-slate-900 text-white p-5 shadow">
+      <div className="rounded-xl bg-adlm-navy text-white p-5 shadow">
         <div className="text-xl font-semibold">Admin · Freebies</div>
         <div className="text-sm text-slate-300 mt-1">
           Add image, download link, description, and related videos.
@@ -503,7 +503,7 @@ export default function AdminFreebies() {
                   <div className="flex items-center gap-2 text-xs text-slate-600">
                     <div className="flex-1 h-2 bg-slate-200 rounded overflow-hidden">
                       <div
-                        className="h-2 bg-blue-600 transition-all"
+                        className="h-2 bg-adlm-blue-700 transition-all"
                         style={{ width: `${pct}%` }}
                       />
                     </div>

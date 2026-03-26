@@ -28,7 +28,7 @@ function ProgressRing({ percent = 0, count = 0, total = 0 }) {
         <circle cx="80" cy="80" r={r} fill="none" stroke="#e2e8f0" strokeWidth="12" />
         <circle
           cx="80" cy="80" r={r} fill="none"
-          stroke="#3b82f6" strokeWidth="12"
+          stroke="#005be3" strokeWidth="12"
           strokeDasharray={c} strokeDashoffset={offset}
           strokeLinecap="round"
           transform="rotate(-90 80 80)"
@@ -116,7 +116,7 @@ export default function PublicProjectDashboard() {
         <div className="text-center space-y-3">
           <div className="text-lg font-semibold text-slate-900">Project Not Found</div>
           <div className="text-sm text-slate-500">{error || "This shared link is no longer available."}</div>
-          <Link to="/" className="inline-block text-sm text-blue-600 hover:underline">
+          <Link to="/" className="inline-block text-sm text-adlm-blue-700 hover:underline">
             Go to ADLM Studio
           </Link>
         </div>
@@ -194,7 +194,7 @@ export default function PublicProjectDashboard() {
             label="Outstanding Balance"
             value={money(data.remainingAmount)}
             detail="Remaining project amount"
-            color="text-blue-700"
+            color="text-adlm-blue-700"
           />
         </div>
 

@@ -210,7 +210,7 @@ export default function PTrainingEnrollment() {
         {err.toLowerCase().includes("login") ? (
           <button
             onClick={() => nav("/login")}
-            className="mt-3 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+            className="mt-3 px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8]"
           >
             Go to Login
           </button>
@@ -237,7 +237,7 @@ export default function PTrainingEnrollment() {
             <div className="mt-2">
               <Link
                 to="/dashboard"
-                className="inline-flex px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                className="inline-flex px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8]"
               >
                 Go to Dashboard →
               </Link>
@@ -247,7 +247,7 @@ export default function PTrainingEnrollment() {
 
         <Link
           to={`/ptrainings/${trainingKey}`}
-          className="text-blue-600 hover:underline font-semibold"
+          className="text-adlm-blue-700 hover:underline font-semibold"
         >
           View Training Page →
         </Link>
@@ -492,7 +492,7 @@ export default function PTrainingEnrollment() {
             <button
               onClick={submitForm}
               disabled={busy}
-              className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+              className="px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8]"
             >
               {busy ? "Submitting…" : "Submit Form"}
             </button>
@@ -563,7 +563,7 @@ export default function PTrainingEnrollment() {
                     <div className="font-semibold text-gray-800">{c.label}</div>
                     {c.helpUrl ? (
                       <a
-                        className="text-blue-600 hover:underline text-sm font-semibold"
+                        className="text-adlm-blue-700 hover:underline text-sm font-semibold"
                         href={c.helpUrl}
                         target="_blank"
                         rel="noreferrer"

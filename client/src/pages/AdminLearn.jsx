@@ -341,7 +341,7 @@ export default function AdminLearn() {
                 <div className="flex items-center gap-2">
                   <div className="w-40 h-2 bg-slate-200 rounded">
                     <div
-                      className="h-2 bg-blue-600 rounded"
+                      className="h-2 bg-adlm-blue-700 rounded"
                       style={{ width: `${progress}%` }}
                     />
                   </div>

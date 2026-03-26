@@ -14,7 +14,7 @@ function formatDate(dateStr) {
 function modeBadgeClasses(mode) {
   switch (mode) {
     case "online":
-      return "bg-blue-600";
+      return "bg-adlm-blue-700";
     case "office":
       return "bg-green-600";
     case "conference":
@@ -69,7 +69,7 @@ function SmallTrainingCard({ t }) {
       <div className="p-4">
         <Link
           to={`/trainings/${t._id}`}
-          className="font-semibold text-slate-900 text-sm line-clamp-2 hover:text-blue-700"
+          className="font-semibold text-slate-900 text-sm line-clamp-2 hover:text-adlm-blue-700"
         >
           {t.title}
         </Link>
@@ -371,7 +371,7 @@ export default function TrainingDetail() {
           <p className="text-sm text-red-600">{error}</p>
           <Link
             to="/trainings"
-            className="text-sm text-blue-700 hover:underline"
+            className="text-sm text-adlm-blue-700 hover:underline"
           >
             Back to trainings
           </Link>
@@ -387,7 +387,7 @@ export default function TrainingDetail() {
           <p className="text-sm text-slate-700">Training not found.</p>
           <Link
             to="/trainings"
-            className="text-sm text-blue-700 hover:underline"
+            className="text-sm text-adlm-blue-700 hover:underline"
           >
             Back to trainings
           </Link>
@@ -553,7 +553,7 @@ export default function TrainingDetail() {
                     }}
                     className={`h-14 w-20 sm:h-16 sm:w-24 rounded-lg overflow-hidden border ${
                       idx === activeIndex
-                        ? "border-blue-600"
+                        ? "border-adlm-blue-700"
                         : "border-slate-200"
                     }`}
                     title={`Open image ${idx + 1}`}
@@ -580,7 +580,7 @@ export default function TrainingDetail() {
             </h2>
             <Link
               to="/trainings"
-              className="text-sm text-blue-700 hover:underline"
+              className="text-sm text-adlm-blue-700 hover:underline"
             >
               View all
             </Link>

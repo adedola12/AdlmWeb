@@ -125,7 +125,7 @@ export default function Home() {
             >
               <Link
                 to="/products"
-                className="inline-flex items-center gap-2 rounded bg-white text-blue-700 px-4 py-2 font-medium hover:bg-blue-50 transition"
+                className="inline-flex items-center gap-2 rounded bg-white text-adlm-blue-700 px-4 py-2 font-medium hover:bg-blue-50 transition"
               >
                 Explore Products
               </Link>
@@ -133,7 +133,7 @@ export default function Home() {
                 href={appUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded bg-white text-blue-700 px-4 py-2 font-medium hover:bg-blue-50 transition"
+                className="inline-flex items-center gap-2 rounded bg-white text-adlm-blue-700 px-4 py-2 font-medium hover:bg-blue-50 transition"
               >
                 Download Mobile App
               </a>
@@ -150,7 +150,7 @@ export default function Home() {
         </div>
 
         {/* STATS */}
-        <div className="relative z-10 bg-white text-blue-900">
+        <div className="relative z-10 bg-white text-adlm-navy">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-200">
               <Stat label="Tools" valueNode={<CountUp to={4} suffix="+" />} />
@@ -179,7 +179,7 @@ export default function Home() {
           className="text-center opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
           style={{ animationDelay: "120ms" }}
         >
-          <h2 className="text-xl sm:text-2xl font-semibold text-blue-900">
+          <h2 className="text-xl sm:text-2xl font-semibold text-adlm-navy">
             Why QS Professionals Choose ADLM Studio
           </h2>
         </div>
@@ -325,7 +325,7 @@ function FeatureCard({ icon, title, text, delay = "0ms" }) {
       "
       style={{ animationDelay: delay }}
     >
-      <div className="text-blue-700">{icon}</div>
+      <div className="text-adlm-blue-700">{icon}</div>
       <div className="mt-3 font-medium">{title}</div>
       <div className="mt-1 text-sm text-slate-600">{text}</div>
     </div>

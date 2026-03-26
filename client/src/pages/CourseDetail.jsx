@@ -170,14 +170,14 @@ export default function CourseDetail() {
             <p className="mt-2 text-sm text-slate-600">{course.blurb}</p>
 
             <div className="mt-3 h-2 overflow-hidden rounded bg-slate-200">
-              <div className="h-full bg-blue-600" style={{ width: `${progress}%` }} />
+              <div className="h-full bg-adlm-blue-700" style={{ width: `${progress}%` }} />
             </div>
             <div className="mt-1 text-xs text-slate-600">{progress}% complete</div>
 
             <div className="mt-4 flex flex-wrap gap-2">
               {classroom?.joinUrl ? (
                 <a
-                  className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                  className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
                   href={classroom.joinUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -322,7 +322,7 @@ export default function CourseDetail() {
               <button
                 key={module.moduleCode}
                 className={`w-full rounded border p-3 text-left hover:bg-slate-50 ${
-                  activeCode === module.moduleCode ? "ring-2 ring-blue-600" : ""
+                  activeCode === module.moduleCode ? "ring-2 ring-adlm-blue-700" : ""
                 }`}
                 onClick={() => setActiveCode(module.moduleCode)}
               >

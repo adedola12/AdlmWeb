@@ -9,7 +9,7 @@ function CompanyLogo({ code, name, logoUrl }) {
   const showImage = logoUrl && !imgError;
 
   return (
-    <div className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-md bg-[#1E4AAE] text-white text-sm md:text-base font-semibold overflow-hidden">
+    <div className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-md bg-adlm-navy-tertiary text-white text-sm md:text-base font-semibold overflow-hidden">
       {showImage ? (
         <img
           src={logoUrl}
@@ -59,7 +59,7 @@ const TestInd = () => {
     <section className="w-full bg-white py-12 md:py-16 px-4">
       <div className="max-w-6xl mx-auto text-center">
         {/* Heading */}
-        <div className="flex items-center justify-center gap-2 text-blue-800 text-sm md:text-base">
+        <div className="flex items-center justify-center gap-2 text-adlm-navy-mid text-sm md:text-base">
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-blue-400 text-xs">
             ★
           </span>
@@ -117,7 +117,7 @@ const TestInd = () => {
                     className="
                       pointer-events-none
                       absolute -top-10 left-1/2 -translate-x-1/2
-                      whitespace-nowrap rounded-md bg-slate-900 text-white
+                      whitespace-nowrap rounded-md bg-adlm-navy text-white
                       text-[10px] md:text-xs px-2 py-1 shadow-md
                       opacity-0 scale-95 translate-y-1
                       group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0

@@ -138,7 +138,7 @@ function JourneyTimeline() {
       <div ref={ref} className="relative mt-10">
         {/* Center spine */}
         <div
-          className="absolute left-1/2 -translate-x-1/2 top-0 w-1 rounded-full bg-gradient-to-b from-blue-600 to-blue-800"
+          className="absolute left-1/2 -translate-x-1/2 top-0 w-1 rounded-full bg-gradient-to-b from-adlm-blue-700 to-adlm-navy-tertiary"
           style={{
             height: shown ? "100%" : 0,
             animation: shown
@@ -157,7 +157,7 @@ function JourneyTimeline() {
               <li key={m.year} className="relative">
                 {/* dot */}
                 <span
-                  className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-blue-700"
+                  className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-adlm-blue-700"
                   style={{
                     boxShadow: "0 0 0 6px rgba(59,130,246,.25)",
                     animation: shown
@@ -189,7 +189,7 @@ function JourneyTimeline() {
                     } w-10 h-px bg-blue-200`}
                   />
                   <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm px-5 py-4">
-                    <div className="text-blue-700 font-semibold">{m.year}</div>
+                    <div className="text-adlm-blue-700 font-semibold">{m.year}</div>
                     <div className="text-slate-700">{m.title}</div>
                   </div>
                 </div>
@@ -319,7 +319,7 @@ export default function AboutADLM() {
       <style>{styles}</style>
 
       {/* HERO */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-blue-800 to-blue-700 text-white">
+      <section className="relative overflow-hidden bg-gradient-to-b from-adlm-navy-tertiary to-adlm-blue-700 text-white">
         <SafeImg
           src={ph.hero}
           alt=""
@@ -349,7 +349,7 @@ export default function AboutADLM() {
               </Link>
               <Link
                 to="/trainings"
-                className="inline-flex items-center rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2"
+                className="inline-flex items-center rounded-lg bg-adlm-blue-700 hover:bg-[#0050c8] px-4 py-2"
               >
                 Training & Events
               </Link>
@@ -404,7 +404,7 @@ export default function AboutADLM() {
           {values.map((v, i) => (
             <Reveal key={v.title} delay={100 * i}>
               <div className="rounded-xl bg-white p-5 ring-1 ring-slate-200 shadow-sm hover:shadow-lg transition hover:-translate-y-0.5">
-                <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center ring-1 ring-blue-200">
+                <div className="w-9 h-9 rounded-full bg-blue-50 text-adlm-blue-700 flex items-center justify-center ring-1 ring-blue-200">
                   {v.icon}
                 </div>
                 <div className="mt-3 font-medium">{v.title}</div>
@@ -466,7 +466,7 @@ export default function AboutADLM() {
       </section>
 
       {/* NUMBERS (dark band) */}
-      <section className="mt-10 bg-blue-800 text-white">
+      <section className="mt-10 bg-adlm-navy-tertiary text-white">
         <div className="max-w-6xl mx-auto px-4 py-10">
           <Reveal>
             <h2 className="text-center text-2xl md:text-3xl font-semibold">
@@ -518,7 +518,7 @@ export default function AboutADLM() {
           <div className="mt-8 flex flex-wrap gap-3 justify-center">
             <Link
               to="http://wa.me/2348106503524"
-              className="rounded-lg bg-blue-600 text-white px-5 py-2 hover:bg-blue-700 active:animate-[pop_200ms_ease-out]"
+              className="rounded-lg bg-adlm-blue-700 text-white px-5 py-2 hover:bg-[#0050c8] active:animate-[pop_200ms_ease-out]"
             >
               Talk to Us
             </Link>

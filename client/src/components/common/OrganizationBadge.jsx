@@ -90,7 +90,7 @@ export default function OrganizationBadge({
   const base =
     "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ring-1 whitespace-nowrap";
   const tone = isOrg
-    ? "bg-blue-50 text-blue-700 ring-blue-100"
+    ? "bg-blue-50 text-adlm-blue-700 ring-blue-100"
     : "bg-slate-50 text-slate-600 ring-slate-200";
 
   return (

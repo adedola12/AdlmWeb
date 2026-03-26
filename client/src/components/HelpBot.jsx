@@ -451,7 +451,7 @@ export default function HelpBot() {
     <>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed right-5 top-1/2 -translate-y-1/2 z-50 rounded-full p-4 shadow-lg bg-blue-600 text-white hover:bg-blue-700
+        className="fixed right-5 top-1/2 -translate-y-1/2 z-50 rounded-full p-4 shadow-lg bg-adlm-blue-700 text-white hover:bg-[#0050c8]
            animate-help-bounce active:scale-95 transition-transform"
         aria-label={open ? "Close help chat" : "Open help chat"}
         title={open ? "Close help" : "Need help?"}
@@ -464,7 +464,7 @@ export default function HelpBot() {
           ref={panelRef}
           className="fixed bottom-20 right-5 z-50 w-[380px] max-w-[92vw] rounded-2xl bg-white shadow-xl ring-1 ring-black/10 overflow-hidden"
         >
-          <div className="px-4 py-3 bg-slate-900 text-white">
+          <div className="px-4 py-3 bg-adlm-navy text-white">
             <div className="font-semibold">ADLM Help</div>
             <div className="text-xs opacity-80">
               Make fast enquiries • Site Map • WhatsApp Support
@@ -482,7 +482,7 @@ export default function HelpBot() {
                 <div
                   className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm ring-1 ${
                     m.role === "user"
-                      ? "bg-blue-600 text-white ring-blue-600/20"
+                      ? "bg-adlm-blue-700 text-white ring-adlm-blue-700/20"
                       : "bg-slate-50 text-slate-900 ring-black/5"
                   }`}
                 >
@@ -510,14 +510,14 @@ export default function HelpBot() {
 
           <div className="p-3 border-t flex gap-2">
             <input
-              className="flex-1 rounded-xl px-3 py-2 text-sm ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-blue-600"
+              className="flex-1 rounded-xl px-3 py-2 text-sm ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-adlm-blue-700"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder='Ask… (e.g. "RateGen", "BIM course")'
               onKeyDown={(e) => e.key === "Enter" && send()}
             />
             <button
-              className="rounded-xl px-3 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700"
+              className="rounded-xl px-3 py-2 text-sm bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
               onClick={() => send()}
             >
               Send

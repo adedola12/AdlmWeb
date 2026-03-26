@@ -362,7 +362,7 @@ export default function Dashboard() {
         @keyframes statIn { to { opacity:1; transform: translateY(0) scale(1); } }
       `}</style>
 
-      <div className="rounded-lg overflow-hidden bg-blue-800 text-white shadow-md">
+      <div className="rounded-lg overflow-hidden bg-adlm-navy-tertiary text-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
           <h1 className="text-xl md:text-2xl font-semibold">Dashboard</h1>
           <p className="text-sm text-blue-100/90 mt-1">
@@ -438,7 +438,7 @@ export default function Dashboard() {
                 <div className="ml-auto">
                   <a
                     href="/admin/products"
-                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-blue-700 transition"
+                    className="inline-flex items-center gap-2 bg-adlm-blue-700 text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#0050c8] transition"
                   >
                     + Add product
                   </a>
@@ -550,7 +550,7 @@ export default function Dashboard() {
 
               <div className="mt-4">
                 <button
-                  className="text-left bg-blue-600 text-white text-sm py-2 px-3 rounded-md hover:bg-slate-50 hover:text-black transition"
+                  className="text-left bg-adlm-blue-700 text-white text-sm py-2 px-3 rounded-md hover:bg-slate-50 hover:text-black transition"
                   onClick={() => navigate("/freebies")}
                 >
                   ADLM Freebies
@@ -627,7 +627,7 @@ function TabBtn({ label, active, onClick }) {
     <button
       onClick={onClick}
       className={`px-3 py-2 rounded-md text-sm ${
-        active ? "bg-blue-600 text-white" : "text-slate-700 hover:bg-slate-50"
+        active ? "bg-adlm-blue-700 text-white" : "text-slate-700 hover:bg-slate-50"
       }`}
     >
       {label}
@@ -669,7 +669,7 @@ function ProductsTab({ products = [], loading }) {
           </div>
           <div>
             <a
-              className="text-blue-600 text-sm"
+              className="text-adlm-blue-700 text-sm"
               href={`/product/${encodeURIComponent(p.key)}`}
             >
               View
@@ -741,7 +741,7 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
 
             <div className="mt-4 flex gap-2">
               <button
-                className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={expired}
                 onClick={() => onOpen(s)}
               >
@@ -842,7 +842,7 @@ function LearningTab({
                           {access.label || "Open access"}
                         </span>
                         {classroom.joinUrl ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-50 text-adlm-blue-700 ring-1 ring-blue-100">
                             Google Classroom linked
                           </span>
                         ) : null}
@@ -854,7 +854,7 @@ function LearningTab({
 
                       <div className="mt-3 h-2 overflow-hidden rounded bg-slate-100">
                         <div
-                          className="h-full rounded bg-blue-600"
+                          className="h-full rounded bg-adlm-blue-700"
                           style={{ width: `${Math.min(100, entry.progress || 0)}%` }}
                         />
                       </div>
@@ -886,7 +886,7 @@ function LearningTab({
                       </a>
                       {classroom.joinUrl ? (
                         <a
-                          className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                          className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
                           href={classroom.joinUrl}
                           target="_blank"
                           rel="noreferrer"
@@ -958,7 +958,7 @@ function LearningTab({
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <a
-                      className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                      className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
                       href={mapsUrlForTraining(t)}
                       target="_blank"
                       rel="noreferrer"
@@ -1101,7 +1101,7 @@ function OrdersTab({
                       {canPrintReceipt(o) && (
                         <button
                           type="button"
-                          className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                          className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
                           onClick={() => onOpenReceipt?.(o._id)}
                           title="Open receipt page to print or download PDF"
                         >
@@ -1201,7 +1201,7 @@ function OrdersTab({
                     onClick={() => goTo(p)}
                     className={`min-w-[36px] px-3 py-2 rounded-md text-sm border ${
                       p === page
-                        ? "bg-blue-600 text-white border-blue-600"
+                        ? "bg-adlm-blue-700 text-white border-adlm-blue-700"
                         : "hover:bg-slate-50"
                     }`}
                   >
@@ -1319,7 +1319,7 @@ function OrdersTab({
 
                     {enr?.receiptUrl ? (
                       <a
-                        className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                        className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
                         href={enr.receiptUrl}
                         target="_blank"
                         rel="noreferrer"
@@ -1460,7 +1460,7 @@ function InstallationsTab({
                             {it.label}{" "}
                             {it.helpUrl ? (
                               <a
-                                className="text-blue-600"
+                                className="text-adlm-blue-700"
                                 href={it.helpUrl}
                                 target="_blank"
                                 rel="noreferrer"
@@ -1484,7 +1484,7 @@ function InstallationsTab({
                         <li>
                           Download AnyDesk:{" "}
                           <a
-                            className="text-blue-600"
+                            className="text-adlm-blue-700"
                             href="https://anydesk.com/en/downloads/windows"
                             target="_blank"
                             rel="noreferrer"
@@ -1511,7 +1511,7 @@ function InstallationsTab({
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     <a
-                      className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+                      className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
                       href={mapsUrlForTraining(t)}
                       target="_blank"
                       rel="noreferrer"
@@ -1608,7 +1608,7 @@ function InstallationsTab({
                         <li>
                           Download AnyDesk:{" "}
                           <a
-                            className="text-blue-600"
+                            className="text-adlm-blue-700"
                             href={p.installation?.anydeskUrl}
                             target="_blank"
                             rel="noreferrer"
@@ -1620,7 +1620,7 @@ function InstallationsTab({
                         <li>
                           Watch installation process video:{" "}
                           <a
-                            className="text-blue-600"
+                            className="text-adlm-blue-700"
                             href={p.installation?.installVideoUrl}
                             target="_blank"
                             rel="noreferrer"

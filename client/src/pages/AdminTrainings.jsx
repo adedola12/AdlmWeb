@@ -663,7 +663,7 @@ export default function AdminTrainings() {
 
                         <div className="h-2 w-full bg-gray-200 rounded mt-1 overflow-hidden">
                           <div
-                            className="h-2 bg-blue-600"
+                            className="h-2 bg-adlm-blue-700"
                             style={{ width: `${img.progress}%` }}
                           />
                         </div>
@@ -684,7 +684,7 @@ export default function AdminTrainings() {
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                className="inline-flex items-center rounded-md bg-adlm-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-[#0050c8] disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Save Training"}
               </button>

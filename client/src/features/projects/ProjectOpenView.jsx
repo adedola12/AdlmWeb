@@ -34,7 +34,7 @@ function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }
         className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
         onClick={() => setOpen((v) => !v)}
       >
-        <FaShareAlt className={publicShareEnabled ? "text-blue-600" : "text-slate-400"} />
+        <FaShareAlt className={publicShareEnabled ? "text-adlm-blue-700" : "text-slate-400"} />
         {publicShareEnabled ? "Shared" : "Share"}
       </button>
 
@@ -67,7 +67,7 @@ function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }
                 <button
                   type="button"
                   onClick={copyUrl}
-                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-adlm-blue-700 hover:bg-blue-50"
                 >
                   {copied ? <><FaCheck /> Copied</> : <><FaCopy /> Copy</>}
                 </button>
@@ -298,7 +298,7 @@ export default function ProjectOpenView({
                 className={[
                   "min-w-[170px] flex-1 rounded-lg px-4 py-3 text-left transition",
                   active
-                    ? "bg-blue-600 text-white shadow-sm"
+                    ? "bg-adlm-blue-700 text-white shadow-sm"
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
               >

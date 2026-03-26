@@ -543,7 +543,7 @@ export default function Purchase() {
           return (
             <div
               key={p._id || k}
-              className={`border rounded p-3 ${inCart ? "ring-2 ring-blue-500" : ""}`}
+              className={`border rounded p-3 ${inCart ? "ring-2 ring-adlm-blue-700" : ""}`}
             >
               <div className="font-medium">{p.name}</div>
               <div className="text-sm text-slate-600 clamp-2">{p.blurb}</div>

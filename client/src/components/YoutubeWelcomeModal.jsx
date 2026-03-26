@@ -198,7 +198,7 @@ export default function YoutubeWelcomeModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700"
+              className="rounded-md bg-adlm-blue-700 text-white px-4 py-2 text-sm font-medium hover:bg-[#0050c8]"
             >
               Continue to website
             </button>

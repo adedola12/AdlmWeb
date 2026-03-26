@@ -43,7 +43,7 @@ export default function AppError() {
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-2xl rounded-2xl bg-white ring-1 ring-black/5 shadow-sm p-6 md:p-8">
         <div className="flex items-start gap-4">
-          <div className="shrink-0 rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100 p-3">
+          <div className="shrink-0 rounded-xl bg-blue-50 text-adlm-blue-700 ring-1 ring-blue-100 p-3">
             <svg
               className="w-6 h-6"
               viewBox="0 0 24 24"
@@ -70,7 +70,7 @@ export default function AppError() {
               <button
                 type="button"
                 onClick={() => window.location.reload()}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+                className="px-4 py-2 rounded-lg bg-adlm-blue-700 text-white text-sm font-medium hover:bg-[#0050c8]"
               >
                 Try again
               </button>

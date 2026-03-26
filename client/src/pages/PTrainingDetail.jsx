@@ -564,7 +564,7 @@ export default function PTrainingDetail() {
             className={`px-4 py-2 rounded-xl font-semibold shadow-sm ${
               closed
                 ? "bg-gray-200 text-gray-500"
-                : "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
             }`}
           >
             {busy ? "Processing…" : "Register Now"}
@@ -601,7 +601,7 @@ export default function PTrainingDetail() {
                     <div className="min-w-0">
                       <Link
                         to={p.to}
-                        className="font-semibold text-blue-700 hover:underline break-words"
+                        className="font-semibold text-adlm-blue-700 hover:underline break-words"
                         title="Open product page"
                       >
                         {p.name}
@@ -631,7 +631,7 @@ export default function PTrainingDetail() {
               <ul className="mt-3 space-y-2">
                 {t.whatYouGet.map((x, i) => (
                   <li key={i} className="flex gap-2">
-                    <span className="mt-1 h-2 w-2 rounded-full bg-blue-600 shrink-0" />
+                    <span className="mt-1 h-2 w-2 rounded-full bg-adlm-blue-700 shrink-0" />
                     <span className="text-gray-700">{x}</span>
                   </li>
                 ))}
@@ -976,7 +976,7 @@ export default function PTrainingDetail() {
               }}
             >
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
-                <div className="text-sm text-blue-700">
+                <div className="text-sm text-adlm-blue-700">
                   Amount: <b>{money(Number(payInfo?.amountNGN || 0))}</b>
                 </div>
               </div>
@@ -1082,7 +1082,7 @@ export default function PTrainingDetail() {
               <div className="pt-2 grid grid-cols-1 gap-2">
                 <button
                   onClick={confirmPaymentSubmission}
-                  className="w-full px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+                  className="w-full px-4 py-3 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] disabled:opacity-60"
                   disabled={receiptUploading}
                 >
                   I’ve Paid / Continue

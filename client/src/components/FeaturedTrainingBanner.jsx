@@ -160,7 +160,7 @@ export default function FeaturedTrainingBanner() {
         title="Click to view full training details"
       >
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-blue-700">
+          <div className="text-sm font-semibold text-adlm-blue-700">
             ADLM Physical Training
           </div>
 
@@ -203,7 +203,7 @@ export default function FeaturedTrainingBanner() {
               e.stopPropagation();
               nav(to);
             }}
-            className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+            className="px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8]"
           >
             View Details
           </button>

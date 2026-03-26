@@ -88,8 +88,8 @@ function TrainingCard({ training }) {
           to={`/trainings/${_id}`}
           className="
             text-gray-900 text-base font-semibold line-clamp-2
-            hover:text-blue-700 transition-colors
-            focus:outline-none focus:ring-2 focus:ring-blue-500/50 rounded
+            hover:text-adlm-blue-700 transition-colors
+            focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/50 rounded
           "
           title="View training details"
         >
@@ -172,7 +172,7 @@ export default function Trainings() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header Banner */}
-      <section className="w-full bg-blue-900 text-white pt-20 pb-12 px-4 md:px-12 lg:px-24">
+      <section className="w-full bg-adlm-navy text-white pt-20 pb-12 px-4 md:px-12 lg:px-24">
         <div className="max-w-6xl mx-auto space-y-6">
           <div>
             <p className="text-sm md:text-base opacity-80">

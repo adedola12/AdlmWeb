@@ -128,7 +128,7 @@ export default function Login() {
         <div className="text-right">
           <button
             type="button"
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm text-adlm-blue-700 hover:underline"
             onClick={() => {
               setShowForgot(true);
               setFpEmail(email);
@@ -194,7 +194,7 @@ export default function Login() {
               </button>
               <button
                 type="button"
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-adlm-blue-700 hover:underline"
                 onClick={() => setFpStage("request")}
               >
                 Didn’t get a code? Resend

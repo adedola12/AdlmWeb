@@ -63,7 +63,7 @@ function ProgressOverviewCard({
   const chartStyle = {
     background:
       normalizedProgress > 0
-        ? `conic-gradient(#2563eb 0 ${normalizedProgress}%, #cbd5e1 ${normalizedProgress}% 100%)`
+        ? `conic-gradient(#005be3 0 ${normalizedProgress}%, #cbd5e1 ${normalizedProgress}% 100%)`
         : "conic-gradient(#e2e8f0 0 100%)",
   };
 
@@ -93,7 +93,7 @@ function ProgressOverviewCard({
 
             <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-600">
               <span className="inline-flex items-center gap-2">
-                <span className="h-3 w-3 rounded-full bg-blue-600" />
+                <span className="h-3 w-3 rounded-full bg-adlm-blue-700" />
                 {statusLabel}
               </span>
               <span className="inline-flex items-center gap-2">

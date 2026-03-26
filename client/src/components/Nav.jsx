@@ -96,7 +96,7 @@ export default function Nav() {
                 </Link>
                 <Link
                   to={`/signup?next=${next}`}
-                  className="px-3 py-1 rounded bg-white text-blue-800 text-sm font-medium hover:bg-blue-50"
+                  className="px-3 py-1 rounded bg-white text-adlm-navy-mid text-sm font-medium hover:bg-blue-50"
                 >
                   Sign up
                 </Link>
@@ -109,7 +109,7 @@ export default function Nav() {
                 {user.role === "admin" && <DesktopLink to="/admin">Admin</DesktopLink>}
                 <button
                   onClick={logout}
-                  className="ml-1 px-3 py-1 rounded bg-white text-blue-900 text-sm font-medium hover:bg-blue-50"
+                  className="ml-1 px-3 py-1 rounded bg-white text-adlm-navy text-sm font-medium hover:bg-blue-50"
                   disabled={busy}
                 >
                   {busy ? "Logging out..." : "Logout"}
@@ -208,7 +208,7 @@ export default function Nav() {
               <div className="px-4 pt-2">
                 <button
                   onClick={logout}
-                  className="w-full px-4 py-2 rounded bg-white text-blue-900 font-medium hover:bg-blue-50"
+                  className="w-full px-4 py-2 rounded bg-white text-adlm-navy font-medium hover:bg-blue-50"
                   disabled={busy}
                 >
                   {busy ? "Logging out..." : "Logout"}

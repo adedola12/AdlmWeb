@@ -338,7 +338,7 @@ export default function ProductDetail() {
                 type="button"
                 onClick={() => setActiveSlide(i)}
                 className={`rounded border overflow-hidden text-left ${
-                  i === activeSlide ? "ring-2 ring-blue-500" : ""
+                  i === activeSlide ? "ring-2 ring-adlm-blue-700" : ""
                 }`}
                 title={s.type === "video" ? "Video preview" : "Image"}
               >

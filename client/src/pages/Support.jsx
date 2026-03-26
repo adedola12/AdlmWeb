@@ -56,7 +56,7 @@ export default function Support() {
   return (
     <div className="w-full">
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-blue-900 text-white p-8 md:p-12 shadow-lg">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-adlm-navy via-adlm-navy to-adlm-navy-tertiary text-white p-8 md:p-12 shadow-lg">
         <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
         <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
 
@@ -115,7 +115,7 @@ export default function Support() {
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-xl bg-slate-900 text-white flex items-center justify-center group-hover:scale-105 transition">
+                    <div className="h-11 w-11 rounded-xl bg-adlm-navy text-white flex items-center justify-center group-hover:scale-105 transition">
                       <Icon className="text-xl" />
                     </div>
                     <div>
@@ -144,7 +144,7 @@ export default function Support() {
               </div>
 
               {/* Accent bar */}
-              <div className="h-1 w-full bg-gradient-to-r from-blue-600 via-slate-900 to-emerald-500 opacity-70" />
+              <div className="h-1 w-full bg-gradient-to-r from-adlm-blue-700 via-adlm-navy to-emerald-500 opacity-70" />
             </a>
           );
         })}

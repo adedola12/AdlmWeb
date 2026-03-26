@@ -20,7 +20,7 @@ function Badge({ label, tone = "slate" }) {
     tone === "yellow"
       ? "bg-yellow-100 text-yellow-800 border-yellow-200"
       : tone === "blue"
-        ? "bg-blue-100 text-blue-800 border-blue-200"
+        ? "bg-blue-100 text-adlm-navy-mid border-blue-200"
         : tone === "red"
           ? "bg-red-100 text-red-800 border-red-200"
           : tone === "green"
@@ -1038,7 +1038,7 @@ export default function Admin() {
                   onClick={() => setActiveProduct(pk)}
                   className={`py-2 -mb-px border-b-2 transition text-sm ${
                     active
-                      ? "border-blue-600 text-blue-700"
+                      ? "border-adlm-blue-700 text-adlm-blue-700"
                       : "border-transparent text-slate-600 hover:text-slate-800"
                   }`}
                   title={`${subs} subscriptions · ${seats} seats · ${used} devices used`}
@@ -1433,7 +1433,7 @@ export default function Admin() {
               onClick={() => setTab("pending")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "pending"
-                  ? "border-blue-600 text-blue-700"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
             >
@@ -1444,7 +1444,7 @@ export default function Admin() {
               onClick={() => setTab("active")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "active"
-                  ? "border-blue-600 text-blue-700"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
             >
@@ -1455,7 +1455,7 @@ export default function Admin() {
               onClick={() => setTab("ptrainings")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "ptrainings"
-                  ? "border-blue-600 text-blue-700"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
             >
@@ -1473,7 +1473,7 @@ export default function Admin() {
               onClick={() => setTab("subscriptions")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "subscriptions"
-                  ? "border-blue-600 text-blue-700"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
               title="Shows Active + Expired + Disabled entitlements"
@@ -1485,7 +1485,7 @@ export default function Admin() {
               onClick={() => setTab("installations")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "installations"
-                  ? "border-blue-600 text-blue-700"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
             >
@@ -1496,7 +1496,7 @@ export default function Admin() {
               onClick={() => setTab("settings")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "settings"
-                  ? "border-blue-600 text-blue-700"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
             >
@@ -1792,7 +1792,7 @@ export default function Admin() {
                                 <div className="mt-2">
                                   <button
                                     type="button"
-                                    className="text-sm font-semibold text-blue-700 hover:underline"
+                                    className="text-sm font-semibold text-adlm-blue-700 hover:underline"
                                     onClick={() =>
                                       setReceiptModal({
                                         open: true,
@@ -2501,7 +2501,7 @@ export default function Admin() {
                 <button
                   onClick={saveMobileAppUrl}
                   disabled={settingsBusy || settingsMobileAppDraft === settingsMobileAppUrl}
-                  className="px-4 py-2 rounded bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 rounded bg-adlm-blue-700 text-white text-sm font-medium hover:bg-[#0050c8] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {settingsBusy ? "Saving…" : "Save"}
                 </button>
@@ -2514,7 +2514,7 @@ export default function Admin() {
               {settingsMobileAppUrl && (
                 <p className="mt-2 text-xs text-slate-500">
                   Current:{" "}
-                  <a href={settingsMobileAppUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline break-all">
+                  <a href={settingsMobileAppUrl} target="_blank" rel="noreferrer" className="text-adlm-blue-700 underline break-all">
                     {settingsMobileAppUrl}
                   </a>
                 </p>

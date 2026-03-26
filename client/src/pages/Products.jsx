@@ -93,7 +93,7 @@ function CardVideo({ src, poster }) {
       ) : poster ? (
         <img src={poster} className="w-full h-full object-cover" alt="Product thumbnail" />
       ) : (
-        <div className="w-full h-full bg-slate-900" />
+        <div className="w-full h-full bg-adlm-navy" />
       )}
     </div>
   );
@@ -145,7 +145,7 @@ function TrainingCard({ t }) {
           <div className="text-sm font-semibold">{ngn(t?.priceNGN || 0)}</div>
           <Link
             to={`/ptrainings/${t.slug || t._id}`}
-            className="rounded-md px-3 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition"
+            className="rounded-md px-3 py-2 text-sm font-medium bg-adlm-blue-700 text-white hover:bg-[#0050c8] transition"
           >
             View
           </Link>
@@ -448,7 +448,7 @@ export default function Products() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search products…"
-              className="w-full rounded-lg px-10 py-2 outline-none ring-1 ring-black/5 focus:ring-2 focus:ring-blue-600"
+              className="w-full rounded-lg px-10 py-2 outline-none ring-1 ring-black/5 focus:ring-2 focus:ring-adlm-blue-700"
             />
             <svg
               className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
@@ -463,7 +463,7 @@ export default function Products() {
           </div>
 
           <select
-            className="rounded-lg px-3 py-2 ring-1 ring-black/5 focus:ring-2 focus:ring-blue-600"
+            className="rounded-lg px-3 py-2 ring-1 ring-black/5 focus:ring-2 focus:ring-adlm-blue-700"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             title="Category"
@@ -497,7 +497,7 @@ export default function Products() {
             title="Cart"
           >
             Cart
-            <span className="ml-2 inline-flex items-center justify-center text-xs px-2 h-5 rounded-full bg-blue-600 text-white">
+            <span className="ml-2 inline-flex items-center justify-center text-xs px-2 h-5 rounded-full bg-adlm-blue-700 text-white">
               {cartCount}
             </span>
           </button>
@@ -682,7 +682,7 @@ function ProductCard({
             className={`text-[11px] px-2 py-0.5 rounded-full backdrop-blur ring-1 ${
               outOfStock
                 ? "bg-red-50 text-red-700 ring-red-200"
-                : "bg-blue-50 text-blue-700 ring-blue-200"
+                : "bg-blue-50 text-adlm-blue-700 ring-blue-200"
             }`}
           >
             {outOfStock ? "Out of Stock" : "Popular"}
@@ -716,7 +716,7 @@ function ProductCard({
 
       <Link
         to={`/product/${encodeURIComponent(productKey)}`}
-        className="mt-2 text-base md:text-lg font-semibold hover:text-blue-700 line-clamp-2"
+        className="mt-2 text-base md:text-lg font-semibold hover:text-adlm-blue-700 line-clamp-2"
         title={p.name}
       >
         {p.name}
@@ -801,7 +801,7 @@ function ProductCard({
           </button>
 
           <Link
-            className="rounded-md px-3 py-2 text-sm font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition active:animate-[pop_180ms_ease-out]"
+            className="rounded-md px-3 py-2 text-sm font-medium text-center bg-adlm-blue-700 text-white hover:bg-[#0050c8] transition active:animate-[pop_180ms_ease-out]"
             to={`/product/${encodeURIComponent(productKey)}`}
             title="View details"
           >

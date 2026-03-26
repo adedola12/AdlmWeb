@@ -84,7 +84,7 @@ function TestimonialCard({ t }) {
             <div className="flex items-center gap-1 text-sm font-medium text-slate-900">
               {t.name}
               {/* small blue tick */}
-              <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-blue-600 text-[9px] text-white">
+              <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-adlm-blue-700 text-[9px] text-white">
                 ✓
               </span>
             </div>
@@ -96,7 +96,7 @@ function TestimonialCard({ t }) {
           </div>
         </div>
 
-        <span className="text-[11px] px-2 py-1 rounded-full bg-blue-50 text-blue-700 whitespace-nowrap">
+        <span className="text-[11px] px-2 py-1 rounded-full bg-blue-50 text-adlm-blue-700 whitespace-nowrap">
           {t.category}
         </span>
       </div>
@@ -187,7 +187,7 @@ const TestUser = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name, company, or location..."
-                className="w-full pl-9 pr-3 py-2 rounded-full border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500"
+                className="w-full pl-9 pr-3 py-2 rounded-full border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/60 focus:border-adlm-blue-700"
               />
             </div>
           </div>
@@ -203,7 +203,7 @@ const TestUser = () => {
                     onClick={() => setActiveCat(cat)}
                     className={`px-3 md:px-4 py-1.5 rounded-full text-xs md:text-sm border transition ${
                       active
-                        ? "bg-blue-700 text-white border-blue-700"
+                        ? "bg-adlm-blue-700 text-white border-adlm-blue-700"
                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                     }`}
                   >
@@ -259,7 +259,7 @@ const TestUser = () => {
                   onClick={() => setPage(num)}
                   className={`h-8 w-8 flex items-center justify-center rounded-full text-xs border ${
                     active
-                      ? "bg-blue-700 text-white border-blue-700"
+                      ? "bg-adlm-blue-700 text-white border-adlm-blue-700"
                       : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                   }`}
                 >

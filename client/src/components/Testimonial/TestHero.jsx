@@ -39,7 +39,7 @@ function CountUp({ end, duration = 1200, decimals = 0, suffix = "" }) {
 
 function StatCard({ value, label }) {
   return (
-    <div className="bg-[#1E4AAE] rounded-md py-4 px-3 md:py-5 md:px-4 flex flex-col items-center justify-center">
+    <div className="bg-adlm-navy-tertiary rounded-md py-4 px-3 md:py-5 md:px-4 flex flex-col items-center justify-center">
       <div className="text-lg md:text-xl font-semibold mb-1">{value}</div>
       <div className="text-[11px] md:text-xs opacity-80">{label}</div>
     </div>

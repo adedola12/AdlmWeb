@@ -122,7 +122,7 @@ export default function TrainingEnrollment() {
         </div>
         <Link
           to={`/trainings/${training._id}`}
-          className="text-blue-600 hover:underline font-semibold"
+          className="text-adlm-blue-700 hover:underline font-semibold"
         >
           View Training Page →
         </Link>
@@ -276,7 +276,7 @@ export default function TrainingEnrollment() {
             <button
               onClick={submitForm}
               disabled={busy}
-              className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+              className="px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8]"
             >
               {busy ? "Submitting…" : "Submit Form"}
             </button>
@@ -348,7 +348,7 @@ export default function TrainingEnrollment() {
                     <div className="font-semibold text-gray-800">{c.label}</div>
                     {c.helpUrl ? (
                       <a
-                        className="text-blue-600 hover:underline text-sm font-semibold"
+                        className="text-adlm-blue-700 hover:underline text-sm font-semibold"
                         href={c.helpUrl}
                         target="_blank"
                         rel="noreferrer"

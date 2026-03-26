@@ -186,7 +186,7 @@ function buildPrintHtml({
     "th { background: #e2e8f0; }",
     ".meta td:first-child, .summary td:first-child { width: 68%; font-weight: 600; }",
     ".summary .subrow td { color: #475569; font-size: 12px; }",
-    ".total td { background: #1d4ed8; color: white; font-weight: 700; }",
+    ".total td { background: #005be3; color: white; font-weight: 700; }",
     "</style>",
     "</head>",
     "<body>",
@@ -672,7 +672,7 @@ export default function ProjectValuationSummary({
                       <td className="px-3 py-2 font-medium">Less withholding tax ({safeNum(certificate.withholdingPct)}%)</td>
                       <td className="px-3 py-2 text-right">{money(certificate.withholdingAmount)}</td>
                     </tr>
-                    <tr className="border-t bg-blue-600 text-white">
+                    <tr className="border-t bg-adlm-blue-700 text-white">
                       <td className="px-3 py-2 font-semibold">TOTAL AMOUNT DUE FOR PAYMENT</td>
                       <td className="px-3 py-2 text-right font-semibold">{money(certificate.amountDue)}</td>
                     </tr>

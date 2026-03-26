@@ -416,7 +416,7 @@ function AdminShowcase() {
   const tabButtonClass = (tab) =>
     `px-3 py-1.5 rounded-full text-xs md:text-sm border ${
       activeTab === tab
-        ? "bg-blue-600 text-white border-blue-600"
+        ? "bg-adlm-blue-700 text-white border-adlm-blue-700"
         : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
     }`;
 
@@ -472,7 +472,7 @@ function AdminShowcase() {
             <span>Uploading logo…</span>
             <div className="flex-1 h-2 bg-gray-200 rounded overflow-hidden max-w-[200px]">
               <div
-                className="h-2 bg-blue-600 transition-all"
+                className="h-2 bg-adlm-blue-700 transition-all"
                 style={{ width: `${uploadPct}%` }}
               />
             </div>
@@ -640,7 +640,7 @@ function AdminShowcase() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                    className="inline-flex items-center rounded-md bg-adlm-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-[#0050c8] disabled:opacity-60"
                   >
                     {loading ? "Saving..." : "Save Testimonial"}
                   </button>
@@ -797,7 +797,7 @@ function AdminShowcase() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                    className="inline-flex items-center rounded-md bg-adlm-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-[#0050c8] disabled:opacity-60"
                   >
                     {loading ? "Saving..." : "Save Company"}
                   </button>
@@ -950,7 +950,7 @@ function AdminShowcase() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                    className="inline-flex items-center rounded-md bg-adlm-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-[#0050c8] disabled:opacity-60"
                   >
                     {loading ? "Saving..." : "Save Industry Leader"}
                   </button>

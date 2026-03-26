@@ -158,7 +158,7 @@ function ProgressBar({ pct, label }) {
       </div>
       <div className="mt-2 h-2 w-full rounded-full bg-gray-200 overflow-hidden">
         <div
-          className="h-full bg-blue-600 transition-all"
+          className="h-full bg-adlm-blue-700 transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -835,7 +835,7 @@ async function deleteEvent() {
         <button
           className={`px-4 py-2 rounded-xl font-semibold ${
             tab === "events"
-              ? "bg-blue-600 text-white"
+              ? "bg-adlm-blue-700 text-white"
               : "border hover:bg-gray-50"
           }`}
           onClick={() => setTab("events")}
@@ -846,7 +846,7 @@ async function deleteEvent() {
         <button
           className={`px-4 py-2 rounded-xl font-semibold ${
             tab === "enrollments"
-              ? "bg-blue-600 text-white"
+              ? "bg-adlm-blue-700 text-white"
               : "border hover:bg-gray-50"
           }`}
           onClick={() => setTab("enrollments")}
@@ -873,7 +873,7 @@ async function deleteEvent() {
             <div className="font-bold">Training Events</div>
 
             <button
-              className="text-sm font-semibold text-blue-600 hover:underline"
+              className="text-sm font-semibold text-adlm-blue-700 hover:underline"
               onClick={newEvent}
               type="button"
             >
@@ -923,7 +923,7 @@ async function deleteEvent() {
                   </button>
                 ) : null}
                 <button
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+                  className="px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] disabled:opacity-60"
                   onClick={saveEvent}
                   type="button"
                   disabled={uploading}
@@ -1045,7 +1045,7 @@ async function deleteEvent() {
 
                   <div className="flex flex-wrap gap-2">
                     <label
-                      className={`px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 cursor-pointer ${
+                      className={`px-3 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] cursor-pointer ${
                         uploading ? "opacity-60 pointer-events-none" : ""
                       }`}
                     >
@@ -1243,7 +1243,7 @@ async function deleteEvent() {
 
                       <div className="flex flex-wrap gap-2">
                         <label
-                          className={`px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 cursor-pointer ${
+                          className={`px-3 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] cursor-pointer ${
                             uploading ? "opacity-60 pointer-events-none" : ""
                           }`}
                         >
@@ -1359,7 +1359,7 @@ async function deleteEvent() {
                   <div className="font-bold">Location Photos (Images)</div>
                   <button
                     type="button"
-                    className="px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+                    className="px-3 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] disabled:opacity-60"
                     onClick={() =>
                       update("location.photos", [
                         ...(draft.location?.photos || []),
@@ -1428,7 +1428,7 @@ async function deleteEvent() {
 
                       <div className="mt-3 flex flex-wrap gap-2">
                         <label
-                          className={`px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 cursor-pointer ${
+                          className={`px-3 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] cursor-pointer ${
                             uploading ? "opacity-60 pointer-events-none" : ""
                           }`}
                         >
@@ -1754,7 +1754,7 @@ async function deleteEvent() {
                 <div className="font-bold text-lg">Installation Checklist</div>
                 <button
                   type="button"
-                  className="px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+                  className="px-3 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] disabled:opacity-60"
                   onClick={() =>
                     update("installationChecklist", [
                       ...(draft.installationChecklist || []),
@@ -1974,7 +1974,7 @@ function SimpleStringListEditor({
         />
         <button
           type="button"
-          className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+          className="px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8]"
           onClick={() => {
             const s = (v || "").trim();
             if (!s) return;
@@ -2026,7 +2026,7 @@ function AmenityEditor({ items, onChange }) {
         />
         <button
           type="button"
-          className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+          className="px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8]"
           onClick={() => {
             const s = (v || "").trim();
             if (!s) return;
@@ -2108,7 +2108,7 @@ function FormFieldsEditor({ items, onChange, disabled }) {
         <div className="font-bold">Form Fields</div>
         <button
           type="button"
-          className="px-3 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+          className="px-3 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] disabled:opacity-60"
           onClick={addField}
           disabled={disabled}
         >
@@ -2255,7 +2255,7 @@ function OptionListEditor({ items, onChange, disabled }) {
         />
         <button
           type="button"
-          className="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
+          className="px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] disabled:opacity-60"
           onClick={() => {
             const s = String(v || "").trim();
             if (!s) return;

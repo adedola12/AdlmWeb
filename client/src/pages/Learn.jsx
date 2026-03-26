@@ -108,7 +108,7 @@ function FreeCard({ v }) {
       <HoverYouTube id={id} title={v.title} thumb={v.thumbnailUrl} />
       <Link
         to={`/learn/free/${encodeURIComponent(v._id)}`}
-        className="block p-3 text-sm font-medium group-hover:text-blue-700"
+        className="block p-3 text-sm font-medium group-hover:text-adlm-blue-700"
       >
         {v.title}
       </Link>
@@ -125,7 +125,7 @@ function PaidCard({ c }) {
       <HoverVideo src={preview || c.previewUrl} poster={c.thumbnailUrl} />
       <Link
         to={`/learn/course/${encodeURIComponent(c.sku)}`}
-        className="block p-3 text-sm font-medium group-hover:text-blue-700"
+        className="block p-3 text-sm font-medium group-hover:text-adlm-blue-700"
       >
         {c.title}
       </Link>

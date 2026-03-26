@@ -250,7 +250,7 @@ export default function Profile() {
                 <div className="flex items-center gap-2 text-xs text-slate-600 w-full max-w-[220px]">
                   <div className="flex-1 h-2 bg-slate-200 rounded overflow-hidden">
                     <div
-                      className="h-2 bg-blue-600 transition-all"
+                      className="h-2 bg-adlm-blue-700 transition-all"
                       style={{ width: `${pct}%` }}
                     />
                   </div>

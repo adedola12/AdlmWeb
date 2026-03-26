@@ -156,7 +156,7 @@ export default function Receipt() {
               Print
             </button>
             <button
-              className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
+              className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8]"
               onClick={downloadPdf}
             >
               Download PDF

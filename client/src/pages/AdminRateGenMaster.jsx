@@ -363,7 +363,7 @@ export default function AdminRateGenMaster() {
                 className={[
                   "px-3 py-1.5 text-sm rounded-full",
                   kind === "material"
-                    ? "bg-blue-600 text-white"
+                    ? "bg-adlm-blue-700 text-white"
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
                 onClick={() => setKindAndUrl("material")}
@@ -375,7 +375,7 @@ export default function AdminRateGenMaster() {
                 className={[
                   "px-3 py-1.5 text-sm rounded-full",
                   kind === "labour"
-                    ? "bg-blue-600 text-white"
+                    ? "bg-adlm-blue-700 text-white"
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
                 onClick={() => setKindAndUrl("labour")}
@@ -390,7 +390,7 @@ export default function AdminRateGenMaster() {
                 className={[
                   "px-3 py-1.5 text-sm rounded-full",
                   sourceFilter === ""
-                    ? "bg-slate-900 text-white"
+                    ? "bg-adlm-navy text-white"
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
                 onClick={() => setSourceFilter("")}
@@ -402,7 +402,7 @@ export default function AdminRateGenMaster() {
                 className={[
                   "px-3 py-1.5 text-sm rounded-full",
                   sourceFilter === "web"
-                    ? "bg-slate-900 text-white"
+                    ? "bg-adlm-navy text-white"
                     : "text-slate-700 hover:bg-slate-50",
                 ].join(" ")}
                 onClick={() => setSourceFilter("web")}
@@ -462,7 +462,7 @@ export default function AdminRateGenMaster() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={`Search ${kind} name…`}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-adlm-blue-700"
             />
           </div>
 
@@ -573,7 +573,7 @@ export default function AdminRateGenMaster() {
                           ].join(" ")}
                         />
                         <button
-                          className="text-xs text-blue-700 hover:underline"
+                          className="text-xs text-adlm-blue-700 hover:underline"
                           onClick={() => copyZoneToAll(idx, z)}
                           title="Copy this zone price to all zones"
                           type="button"
@@ -688,7 +688,7 @@ export default function AdminRateGenMaster() {
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                 />
                 <button
-                  className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"
+                  className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-adlm-blue-700"
                   onClick={() => copyZoneToAll(idx, activeZone)}
                   type="button"
                 >
@@ -787,7 +787,7 @@ export default function AdminRateGenMaster() {
                     className={[
                       "px-3 py-1.5 text-sm rounded-full",
                       singlePriceMode
-                        ? "bg-blue-600 text-white"
+                        ? "bg-adlm-blue-700 text-white"
                         : "text-slate-700 hover:bg-slate-50",
                     ].join(" ")}
                     onClick={() => setSinglePriceMode(true)}
@@ -799,7 +799,7 @@ export default function AdminRateGenMaster() {
                     className={[
                       "px-3 py-1.5 text-sm rounded-full",
                       !singlePriceMode
-                        ? "bg-blue-600 text-white"
+                        ? "bg-adlm-blue-700 text-white"
                         : "text-slate-700 hover:bg-slate-50",
                     ].join(" ")}
                     onClick={() => setSinglePriceMode(false)}

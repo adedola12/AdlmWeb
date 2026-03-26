@@ -22,7 +22,7 @@ export default function CouponBanner({ banner, onClose }) {
       : "";
 
   return (
-    <div className="w-full bg-blue-600 text-white px-3 py-2">
+    <div className="w-full bg-adlm-blue-700 text-white px-3 py-2">
       <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
         <div className="text-sm">
           <b className="mr-2">{banner.code}</b>

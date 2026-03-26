@@ -100,7 +100,7 @@ function VideoModal({ open, onClose, video }) {
                 href={url}
                 target="_blank"
                 rel="noreferrer"
-                className="text-blue-600 hover:underline break-all"
+                className="text-adlm-blue-700 hover:underline break-all"
               >
                 Open video link
               </a>
@@ -169,7 +169,7 @@ export default function Freebies() {
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 space-y-4 md:space-y-5 pb-10">
       {/* Header */}
-      <div className="rounded-2xl bg-gradient-to-br from-blue-800 to-slate-900 text-white p-4 sm:p-5 shadow">
+      <div className="rounded-2xl bg-gradient-to-br from-adlm-navy-tertiary to-adlm-navy text-white p-4 sm:p-5 shadow">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-lg sm:text-xl font-semibold">
@@ -301,7 +301,7 @@ function FreebieCard({ item, onOpenVideo }) {
 
               <button
                 type="button"
-                className="mt-1 text-xs text-blue-700 hover:underline"
+                className="mt-1 text-xs text-adlm-blue-700 hover:underline"
                 onClick={() => setExpanded((s) => !s)}
               >
                 {expanded ? "Show less" : "Show more"}
@@ -317,7 +317,7 @@ function FreebieCard({ item, onOpenVideo }) {
               href={downloadUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 transition"
+              className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
             >
               Download
             </a>

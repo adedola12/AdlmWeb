@@ -271,7 +271,7 @@ export default function RateGenUpdates() {
       `}</style>
 
       {/* Header */}
-      <div className="rounded-xl overflow-hidden bg-blue-800 text-white shadow-md">
+      <div className="rounded-xl overflow-hidden bg-adlm-navy-tertiary text-white shadow-md">
         <div className="max-w-6xl mx-auto px-4 py-6 md:py-8">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -293,7 +293,7 @@ export default function RateGenUpdates() {
 
               <button
                 onClick={load}
-                className="px-3 py-2 rounded-md bg-white text-blue-900 text-sm hover:bg-blue-50"
+                className="px-3 py-2 rounded-md bg-white text-adlm-navy text-sm hover:bg-blue-50"
                 disabled={loading}
               >
                 {loading ? "Refreshing..." : "Refresh"}
@@ -340,7 +340,7 @@ export default function RateGenUpdates() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search rate name, unit, section…"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-adlm-blue-700"
               />
             </div>
 
@@ -349,7 +349,7 @@ export default function RateGenUpdates() {
               <select
                 value={sectionKey}
                 onChange={(e) => setSectionKey(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-adlm-blue-700"
               >
                 {SECTIONS.map((s) => (
                   <option key={s.key} value={s.key}>
@@ -364,7 +364,7 @@ export default function RateGenUpdates() {
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-adlm-blue-700"
               >
                 <option value="newest">Newest</option>
                 <option value="amount_desc">Amount (High → Low)</option>
@@ -420,7 +420,7 @@ export default function RateGenUpdates() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           {isNew && (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-adlm-blue-700 ring-1 ring-blue-100">
                               NEW
                             </span>
                           )}
@@ -467,7 +467,7 @@ export default function RateGenUpdates() {
       {/* Toast */}
       {toast ? (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-          <div className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm shadow-lg">
+          <div className="px-4 py-2 rounded-full bg-adlm-navy text-white text-sm shadow-lg">
             {toast}
           </div>
         </div>
@@ -547,7 +547,7 @@ export default function RateGenUpdates() {
 
                 <div className="mt-3 flex flex-col sm:flex-row gap-2">
                   <button
-                    className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
+                    className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8]"
                     onClick={() => {
                       copyText(open.description);
                     }}

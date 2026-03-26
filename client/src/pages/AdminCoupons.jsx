@@ -43,7 +43,7 @@ function BannerPreview({
       : "";
 
   return (
-    <div className="border rounded bg-blue-600 text-white px-3 py-2 text-sm">
+    <div className="border rounded bg-adlm-blue-700 text-white px-3 py-2 text-sm">
       <b className="mr-2">{code || "CODE"}</b>
       {text}
       <span className="opacity-90">{duration}</span>
@@ -447,7 +447,7 @@ export default function AdminCoupons() {
                   <div className="font-semibold flex items-center gap-2">
                     <span>{c.code}</span>
                     {c.isBanner && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                      <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-adlm-blue-700">
                         Banner
                       </span>
                     )}

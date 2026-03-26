@@ -58,7 +58,7 @@ export default function LaunchCountdownBanner({
 
   return (
     <div className="sticky top-0 z-50">
-      <div className="w-full bg-slate-900 text-white">
+      <div className="w-full bg-adlm-navy text-white">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
           <div className="min-w-0">
             <div className="text-xs sm:text-sm text-white/80 font-medium">

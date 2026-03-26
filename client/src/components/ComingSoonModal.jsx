@@ -19,7 +19,7 @@ export default function ComingSoonModal({
         <div className="mt-6 text-right">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+            className="px-4 py-2 rounded-md bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
           >
             Close
           </button>
