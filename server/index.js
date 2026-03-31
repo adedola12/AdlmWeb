@@ -66,6 +66,7 @@ import adminFreebies from "./routes/admin.freebies.js";
 import entitlementsRouter from "./routes/entitlements.js";
 import adminUsersLite from "./routes/admin.usersLite.js";
 import projectsBoqRoutes from "./routes/projects.boq.js";
+import modelCheckRoutes from "./routes/model-checks.js";
 
 const app = express();
 
@@ -247,6 +248,10 @@ app.use("/api/entitlements", entitlementsRouter);
 // app.use("/projectsboq", projectsBoqRoutes);
 app.use("/projectsboq", projectsBoqRoutes);
 app.use("/api/projectsboq", projectsBoqRoutes); // optional convenience
+
+// ─── Model Checker ───
+app.use("/api/model-checks", modelCheckRoutes);
+app.use("/model-checks", modelCheckRoutes);
 
 /* =========================
    ✅ OPTIONAL: serve frontend + dynamic meta
