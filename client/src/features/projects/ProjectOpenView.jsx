@@ -146,9 +146,11 @@ export default function ProjectOpenView({
   onClosePickKey,
   onDashboardChartModeChange,
   onDelete,
+  onDeleteItem,
   onExportElementalBoQ,
   onExportGenericBoQ,
   onItemQueryChange,
+  onMoveItem,
   onPickCandidate,
   onPickBoqCandidate,
   onRateChange,
@@ -416,6 +418,8 @@ export default function ProjectOpenView({
           isGroupLinked={isGroupLinked}
           itemQuery={itemQuery}
           items={items}
+          onDeleteItem={onDeleteItem}
+          onMoveItem={onMoveItem}
           linkedGroupsCount={linkedGroupsCount}
           onActualQtyChange={onActualQtyChange}
           onActualRateChange={onActualRateChange}

@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useState, useEffect } from "react";
-import { FaInfoCircle, FaLink, FaSearch, FaTimes } from "react-icons/fa";
+import { FaInfoCircle, FaLink, FaSearch, FaTimes, FaTrashAlt, FaArrowUp, FaArrowDown, FaGripVertical } from "react-icons/fa";
 
 /**
  * Draggable column-resize handle.
@@ -480,6 +480,8 @@ export default function ProjectBillTable({
   isGroupLinked,
   itemQuery = "",
   items = [],
+  onDeleteItem,
+  onMoveItem,
   linkedGroupsCount = 0,
   onActualQtyChange,
   onActualRateChange,
@@ -762,10 +764,10 @@ export default function ProjectBillTable({
             <colgroup>
               <col className="w-10" />                                         {/* S/N */}
               <col className={showActualColumns ? "w-10" : "w-[130px]"} />     {/* Status */}
-              <col style={{ width: showActualColumns ? "22%" : "30%" }} />      {/* Description — % based */}
+              <col style={{ width: showActualColumns ? "22%" : "28%" }} />      {/* Description — % based */}
               <col className="w-16" />                                          {/* Qty */}
               <col className="w-10" />                                          {/* Unit */}
-              <col style={{ width: showActualColumns ? "12%" : "18%" }} />      {/* Rate */}
+              <col style={{ width: showActualColumns ? "12%" : "16%" }} />      {/* Rate */}
               {showActualColumns ? <col className="w-[100px]" /> : null}        {/* Actual qty */}
               {showActualColumns ? <col className="w-[100px]" /> : null}        {/* Actual rate */}
               {showActualColumns ? <col className="w-[90px]" /> : null}         {/* Actual amount */}
@@ -773,6 +775,7 @@ export default function ProjectBillTable({
               <col className="w-[90px]" />                                      {/* Gross amount */}
               <col className="w-[72px]" />                                      {/* Deducted */}
               <col className="w-[72px]" />                                      {/* Balance */}
+              <col className="w-[80px]" />                                      {/* Actions */}
             </colgroup>
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
@@ -791,6 +794,7 @@ export default function ProjectBillTable({
                 <SortHeader col="grossAmt">Gross amt</SortHeader>
                 <SortHeader col="deducted">Deducted</SortHeader>
                 <SortHeader col="balance">Balance</SortHeader>
+                <th className="px-2 py-2 text-xs text-center">Actions</th>
               </tr>
             </thead>
 
@@ -1005,6 +1009,42 @@ export default function ProjectBillTable({
                     <td className="px-2 py-2 text-xs font-medium text-slate-900">{money(row.fullAmount)}</td>
                     <td className="px-2 py-2 text-xs font-medium text-emerald-700">{money(row.valuedAmount)}</td>
                     <td className="px-2 py-2 text-xs font-semibold text-slate-900">{money(row.amount)}</td>
+
+                    {/* Actions: move up / move down / delete */}
+                    <td className="px-1 py-2">
+                      <div className="flex items-center justify-center gap-0.5">
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move up"
+                          disabled={row.i === 0}
+                          onClick={() => onMoveItem?.(row.i, row.i - 1)}
+                        >
+                          <FaArrowUp className="text-[10px]" />
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move down"
+                          disabled={row.i >= items.length - 1}
+                          onClick={() => onMoveItem?.(row.i, row.i + 1)}
+                        >
+                          <FaArrowDown className="text-[10px]" />
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition"
+                          title="Delete row"
+                          onClick={() => {
+                            if (window.confirm(`Delete "${row.description}"?`)) {
+                              onDeleteItem?.(row.i);
+                            }
+                          }}
+                        >
+                          <FaTrashAlt className="text-[10px]" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -1022,6 +1062,7 @@ export default function ProjectBillTable({
                 <td className="px-2 py-2">{money(grossAmount)}</td>
                 <td className="px-2 py-2 text-emerald-700">{money(valuedAmount)}</td>
                 <td className="px-2 py-2">{money(remainingAmount)}</td>
+                <td className="px-2 py-2" />
               </tr>
             </tfoot>
           </table>

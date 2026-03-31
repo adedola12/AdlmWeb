@@ -1490,6 +1490,32 @@ export default function ProjectsGeneric() {
     }
   }
 
+  /* ---------- Delete / reorder BOQ rows ---------- */
+  function deleteItem(rowIndex) {
+    if (!sel) return;
+    const its = Array.isArray(sel?.items) ? [...sel.items] : [];
+    if (rowIndex < 0 || rowIndex >= its.length) return;
+    its.splice(rowIndex, 1);
+    setSel((prev) => (prev ? { ...prev, items: its } : prev));
+    // clear rate/status caches for the removed index
+    setRates((prev) => {
+      const next = {};
+      its.forEach((it, i) => { next[itemKey(it, i)] = prev?.[itemKey(it, i)] ?? ""; });
+      return next;
+    });
+  }
+
+  function moveItem(fromIndex, toIndex) {
+    if (!sel) return;
+    const its = Array.isArray(sel?.items) ? [...sel.items] : [];
+    if (fromIndex < 0 || fromIndex >= its.length) return;
+    if (toIndex < 0 || toIndex >= its.length) return;
+    if (fromIndex === toIndex) return;
+    const [moved] = its.splice(fromIndex, 1);
+    its.splice(toIndex, 0, moved);
+    setSel((prev) => (prev ? { ...prev, items: its } : prev));
+  }
+
   React.useEffect(() => {
     if (!selectedId) return;
     writeCache(tool, selectedId, {
@@ -2635,6 +2661,8 @@ export default function ProjectsGeneric() {
                 comparisonRows={computedAll}
                 computedShown={computedShown}
                 items={items}
+                onDeleteItem={deleteItem}
+                onMoveItem={moveItem}
                 rates={rates}
                 openPickKey={openPickKey}
                 onToggleOpenPickKey={(key) =>
