@@ -30,6 +30,7 @@ function isValidObjectId(id) {
 function entitlementKeyFor(productKeyOriginal) {
   const key = normalizeProductKey(productKeyOriginal);
   if (key === "revit-materials") return "revit";
+  if (key === "planswift-materials") return "planswift";
   return key;
 }
 
@@ -46,6 +47,7 @@ function requestedProductKey(req) {
 
 const MAX_ITEMS = Number(process.env.PROJECT_MAX_ITEMS || 8000);
 const MATERIAL_PRODUCT_KEY = "revit-materials";
+const PS_MATERIAL_PRODUCT_KEY = "planswift-materials";
 const VALUATION_TIME_ZONE =
   process.env.PROJECT_VALUATION_TIMEZONE || "Africa/Lagos";
 
@@ -84,9 +86,16 @@ function forceMaterialsProductKey(req, _res, next) {
   next();
 }
 
+function forcePsMaterialsProductKey(req, _res, next) {
+  req.productKeyOriginal = PS_MATERIAL_PRODUCT_KEY;
+  req.params.productKey = entitlementKeyFor(PS_MATERIAL_PRODUCT_KEY);
+  next();
+}
+
 function isMaterialsProductKey(productKey) {
   const key = normalizeProductKey(productKey);
-  return key === "revit-materials" || key === "revit-material";
+  return key === "revit-materials" || key === "revit-material"
+      || key === "planswift-materials" || key === "planswift-material";
 }
 
 function statusFieldForProductKey(productKey) {
@@ -995,6 +1004,49 @@ router.put(
 router.delete(
   "/revit/materials/:id",
   forceMaterialsProductKey,
+  requireEntitlementParam,
+  deleteProject,
+);
+
+/* ── PlanSwift Materials routes ── */
+router.post(
+  "/planswift/materials",
+  forcePsMaterialsProductKey,
+  requireEntitlementParam,
+  createProject,
+);
+
+router.get(
+  "/planswift/materials",
+  forcePsMaterialsProductKey,
+  requireEntitlementParam,
+  listProjects,
+);
+
+router.get(
+  "/planswift/materials/:id/valuations",
+  forcePsMaterialsProductKey,
+  requireEntitlementParam,
+  getProjectValuations,
+);
+
+router.get(
+  "/planswift/materials/:id",
+  forcePsMaterialsProductKey,
+  requireEntitlementParam,
+  getProject,
+);
+
+router.put(
+  "/planswift/materials/:id",
+  forcePsMaterialsProductKey,
+  requireEntitlementParam,
+  updateProject,
+);
+
+router.delete(
+  "/planswift/materials/:id",
+  forcePsMaterialsProductKey,
   requireEntitlementParam,
   deleteProject,
 );

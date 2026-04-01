@@ -122,6 +122,42 @@ router.get("/:id", requireAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// GET /model-checks/public/:id   — PUBLIC (no auth) view of a check
+// Used by QR code scanning — anyone with the link can view
+// ─────────────────────────────────────────────────────────────
+router.get("/public/:id", async (req, res) => {
+  try {
+    const check = await ModelCheck.findById(req.params.id).lean();
+
+    if (!check) {
+      return res.status(404).json({ error: "Model check not found." });
+    }
+
+    // Return the full report (safe — no sensitive user data)
+    return res.json({
+      id: check._id.toString(),
+      projectName: check.projectName,
+      projectNumber: check.projectNumber,
+      modelType: check.modelType,
+      checkedAt: check.checkedAt,
+      checkedByUser: check.checkedByUser,
+      readinessScore: check.readinessScore,
+      overallStatus: check.overallStatus,
+      totalElements: check.totalElements,
+      missingCategories: check.missingCategories,
+      overlapCount: check.overlapCount,
+      qsQueryText: check.qsQueryText,
+      categories: check.categories,
+      rebarAnalysis: check.rebarAnalysis,
+      createdAt: check.createdAt,
+    });
+  } catch (err) {
+    console.error("GET /model-checks/public/:id error:", err);
+    return res.status(500).json({ error: "Failed to fetch model check." });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // DELETE /model-checks/:id  — Delete a check
 // ─────────────────────────────────────────────────────────────
 router.delete("/:id", requireAuth, async (req, res) => {

@@ -170,6 +170,15 @@ const router = createBrowserRouter([
           return { element: <PublicProjectDashboard /> };
         },
       },
+
+      // ✅ Public model check report (no auth — accessed via QR code scan)
+      {
+        path: "model-check/:id",
+        async lazy() {
+          const { default: ModelCheckReport } = await import("./pages/ModelCheckReport.jsx");
+          return { element: <ModelCheckReport /> };
+        },
+      },
       {
         path: "projects/:tool",
         element: (

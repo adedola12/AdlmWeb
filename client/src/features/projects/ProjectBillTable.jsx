@@ -533,6 +533,10 @@ export default function ProjectBillTable({
   const [sortCol, setSortCol] = useState(null);   // "sn" | "description" | "qty" | "unit" | "rate" | "grossAmt" | "balance" | null
   const [sortAsc, setSortAsc] = useState(true);
 
+  // Drag-and-drop reorder state
+  const [dragIdx, setDragIdx] = useState(null);    // items-array index being dragged
+  const [dragOverIdx, setDragOverIdx] = useState(null); // items-array index being hovered
+
   const handleSort = useCallback((col) => {
     if (sortCol === col) {
       setSortAsc((prev) => !prev);
@@ -814,12 +818,67 @@ export default function ProjectBillTable({
                   row.actualUpdatedAt || row.actualRecordedAt,
                 );
 
+                const isDragging = dragIdx === row.i;
+                const isOver = dragOverIdx === row.i;
+
                 return (
                   <tr
                     key={row.key || row.i}
-                    className={`border-t align-top ${row.isMarked ? "bg-emerald-50/40" : "bg-white"}`}
+                    draggable={!sortCol}
+                    onDragStart={(e) => {
+                      setDragIdx(row.i);
+                      e.dataTransfer.effectAllowed = "move";
+                      // Make the drag image semi-transparent
+                      if (e.currentTarget) {
+                        e.dataTransfer.setDragImage(e.currentTarget, 0, 0);
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragIdx != null && row.i !== dragIdx) {
+                        setDragOverIdx(row.i);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      setDragOverIdx((prev) => (prev === row.i ? null : prev));
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragIdx != null && dragIdx !== row.i) {
+                        onMoveItem?.(dragIdx, row.i);
+                      }
+                      setDragIdx(null);
+                      setDragOverIdx(null);
+                    }}
+                    onDragEnd={() => {
+                      setDragIdx(null);
+                      setDragOverIdx(null);
+                    }}
+                    className={[
+                      "border-t align-top transition-colors",
+                      isDragging ? "opacity-40 bg-slate-100" : row.isMarked ? "bg-emerald-50/40" : "bg-white",
+                      isOver && dragIdx != null && dragIdx !== row.i
+                        ? dragIdx < row.i
+                          ? "border-b-2 border-b-adlm-blue-700"
+                          : "border-t-2 border-t-adlm-blue-700"
+                        : "",
+                    ].join(" ")}
                   >
-                    <td className="px-2 py-2 font-medium text-slate-700">{row.sn}</td>
+                    {/* Drag handle + S/N */}
+                    <td className="px-1 py-2">
+                      <div className="flex items-center gap-1">
+                        {!sortCol && (
+                          <span
+                            className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none"
+                            title="Drag to reorder"
+                          >
+                            <FaGripVertical className="text-[10px]" />
+                          </span>
+                        )}
+                        <span className="font-medium text-slate-700">{row.sn}</span>
+                      </div>
+                    </td>
 
                     <td className="px-2 py-2">
                       {showActualColumns ? (

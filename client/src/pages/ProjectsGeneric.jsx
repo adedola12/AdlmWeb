@@ -24,6 +24,8 @@ const TITLES = {
   planswift: "PlanSwift Projects",
   "revit-materials": "Revit Materials",
   "revit-material": "Revit Materials",
+  "planswift-materials": "PlanSwift Materials",
+  "planswift-material": "PlanSwift Materials",
 };
 
 function normTool(t) {
@@ -34,7 +36,8 @@ function normTool(t) {
 
 function isMaterialsTool(tool) {
   const t = normTool(tool);
-  return t === "revit-materials" || t === "revit-material";
+  return t === "revit-materials" || t === "revit-material"
+      || t === "planswift-materials" || t === "planswift-material";
 }
 
 function getSidebarMeta(tool) {
@@ -76,6 +79,15 @@ function getSidebarMeta(tool) {
     };
   }
 
+  if (t === "planswift-materials" || t === "planswift-material") {
+    return {
+      app: "PlanSwift",
+      section: "Materials",
+      hint: "Browse material projects from PlanSwift",
+      Icon: FaCubes,
+    };
+  }
+
   return {
     app: "Projects",
     section: "Browser",
@@ -95,6 +107,17 @@ function getEndpoints(tool) {
       del: (id) => "/projects/revit/materials/" + id,
       valuations: (id) => "/projects/revit/materials/" + id + "/valuations",
       share: (id) => "/projects/revit/materials/" + id + "/share",
+    };
+  }
+
+  if (t === "planswift-materials" || t === "planswift-material") {
+    return {
+      list: "/projects/planswift/materials",
+      one: (id) => "/projects/planswift/materials/" + id,
+      bySlug: (slug) => "/projects/planswift/materials/by-slug/" + slug,
+      del: (id) => "/projects/planswift/materials/" + id,
+      valuations: (id) => "/projects/planswift/materials/" + id + "/valuations",
+      share: (id) => "/projects/planswift/materials/" + id + "/share",
     };
   }
 
@@ -797,7 +820,13 @@ export default function ProjectsGeneric() {
   const endpoints = React.useMemo(() => getEndpoints(tool), [tool]);
 
   const showMaterials = isMaterialsTool(tool);
-  const showRevitToggle = toolNorm === "revit" || isMaterialsTool(tool);
+  // Show Takeoffs / Materials toggle for tools that have both modes
+  const toolFamily = toolNorm === "revit" || toolNorm === "revit-materials" || toolNorm === "revit-material"
+    ? "revit"
+    : toolNorm === "planswift" || toolNorm === "planswift-materials" || toolNorm === "planswift-material"
+      ? "planswift"
+      : null;
+  const showRevitToggle = Boolean(toolFamily);
   const statusField = showMaterials ? "purchased" : "completed";
   const statusLabel = showMaterials ? "Purchased" : "Completed";
   const statusPastLabel = showMaterials
@@ -2420,10 +2449,10 @@ export default function ProjectsGeneric() {
             {showRevitToggle && (
               <div className="mt-4 space-y-2">
                 <Link
-                  to="/projects/revit"
+                  to={`/projects/${toolFamily}`}
                   className={[
                     "w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border transition",
-                    toolNorm === "revit"
+                    toolNorm === toolFamily
                       ? "bg-adlm-blue-700 text-white border-adlm-blue-700"
                       : "hover:bg-slate-50",
                   ].join(" ")}
@@ -2433,7 +2462,7 @@ export default function ProjectsGeneric() {
                 </Link>
 
                 <Link
-                  to="/projects/revit-materials"
+                  to={`/projects/${toolFamily}-materials`}
                   className={[
                     "w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border transition",
                     isMaterialsTool(tool)

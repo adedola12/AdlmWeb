@@ -6,6 +6,7 @@ function entitlementKeyFor(productKey) {
     .trim()
     .toLowerCase();
   if (k === "revit-materials") return "revit";
+  if (k === "planswift-materials") return "planswift";
   return k;
 }
 
