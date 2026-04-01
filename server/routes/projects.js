@@ -476,10 +476,12 @@ function buildValuationLogs(project, productKey) {
 
 async function createProject(req, res) {
   try {
-    const productKey = requestedProductKey(req);
+    let productKey = requestedProductKey(req);
+
     const {
       name,
       items,
+      isMaterials: bodyIsMaterials,
       clientProjectKey,
       fingerprint,
       modelFingerprint,
@@ -488,6 +490,22 @@ async function createProject(req, res) {
       checklistCompositeKeys,
       valuationSettings,
     } = req.body || {};
+
+    // Auto-detect material projects from base product keys.
+    // If the request body says isMaterials:true OR items have materialName
+    // fields, upgrade the productKey to the materials variant.
+    if (!isMaterialsProductKey(productKey)) {
+      const hasMaterialItems =
+        bodyIsMaterials ||
+        (Array.isArray(items) &&
+          items.length > 0 &&
+          items.some((it) => String(it?.materialName || "").trim()));
+
+      if (hasMaterialItems) {
+        // e.g. "planswift" → "planswift-materials", "revit" → "revit-materials"
+        productKey = productKey + "-materials";
+      }
+    }
 
     if (!name) return res.status(400).json({ error: "name required" });
 
@@ -886,7 +904,7 @@ async function getPublicDashboard(req, res) {
     }
 
     const items = project.items || [];
-    const isMaterials = project.productKey === MATERIAL_PRODUCT_KEY;
+    const isMaterials = isMaterialsProductKey(project.productKey);
     const statusField = isMaterials ? "purchased" : "completed";
 
     const progressTotal = items.length;
