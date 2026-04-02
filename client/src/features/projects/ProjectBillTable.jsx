@@ -803,7 +803,7 @@ export default function ProjectBillTable({
             </thead>
 
             <tbody>
-              {sortedShown.map((row) => {
+              {sortedShown.map((row, displayIndex) => {
                 const item = items[row.i] || {};
                 const groupId = row.groupId;
                 const canLink = Boolean(groupId) && row.groupCount >= 2;
@@ -876,7 +876,7 @@ export default function ProjectBillTable({
                             <FaGripVertical className="text-[10px]" />
                           </span>
                         )}
-                        <span className="font-medium text-slate-700">{row.sn}</span>
+                        <span className="font-medium text-slate-700">{displayIndex + 1}</span>
                       </div>
                     </td>
 

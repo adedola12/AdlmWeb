@@ -3,7 +3,8 @@ import multer from "multer";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
-import { isR2Configured, uploadBufferToR2 } from "../utils/r2Upload.js";
+import { isR2Configured, uploadBufferToR2, deleteFromR2 } from "../utils/r2Upload.js";
+import { deleteAsset } from "../utils/cloudinary.js";
 
 const router = express.Router();
 const upload = multer({
@@ -242,7 +243,33 @@ router.delete(
       return res.status(404).json({ error: "Deployment not found" });
     }
 
-    return res.json({ ok: true });
+    // Clean up cloud-stored package file
+    const packageUri = String(out.packageUri || "").trim();
+    const cleanupErrors = [];
+
+    if (packageUri) {
+      try {
+        const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
+        if (publicBaseUrl && packageUri.startsWith(publicBaseUrl)) {
+          // R2-hosted file — extract the object key from the URL
+          const objectKey = decodeURIComponent(packageUri.slice(publicBaseUrl.length + 1));
+          await deleteFromR2(objectKey);
+        } else if (packageUri.includes("res.cloudinary.com")) {
+          // Cloudinary-hosted file — extract public_id
+          const match = packageUri.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[^.]+)?$/);
+          if (match?.[1]) {
+            await deleteAsset(match[1], "raw");
+          }
+        }
+      } catch (err) {
+        cleanupErrors.push(err.message || "Cloud cleanup failed");
+      }
+    }
+
+    return res.json({
+      ok: true,
+      cleanupErrors: cleanupErrors.length > 0 ? cleanupErrors : undefined,
+    });
   }),
 );
 

@@ -655,10 +655,17 @@ router.post(
 router.get(
   "/installations",
   asyncHandler(async (req, res) => {
-    const q = {
-      status: "approved",
-      "installation.status": { $in: ["pending", "complete"] },
-    };
+    // ?view=all  → return every approved purchase that has an installation record
+    // default   → only pending + complete (legacy behaviour)
+    const view = String(req.query.view || "").toLowerCase();
+    const q = { status: "approved" };
+
+    if (view === "all") {
+      // Return everything that has an installation status
+      q["installation.status"] = { $exists: true };
+    } else {
+      q["installation.status"] = { $in: ["pending", "complete"] };
+    }
 
     const list = await Purchase.find(q).sort({ decidedAt: -1 }).limit(500);
     return res.json(list);
@@ -783,8 +790,43 @@ router.post(
       });
     }
 
+    if (currentStatus === "uninstalled") {
+      p.installation.status = "pending";
+      p.installation.markedBy = null;
+      p.installation.markedAt = null;
+      p.installation.uninstalledBy = null;
+      p.installation.uninstalledAt = null;
+      await p.save();
+      return res.json({
+        ok: true,
+        purchase: p,
+        message: "Installation reverted from uninstalled to pending.",
+      });
+    }
+
     return res.status(400).json({
       error: `Cannot toggle installation with status "${currentStatus}".`,
+    });
+  }),
+);
+
+/** Set an installation to "uninstalled" — reverses a completed installation */
+router.post(
+  "/installations/:id/uninstall",
+  asyncHandler(async (req, res) => {
+    const p = await Purchase.findById(req.params.id);
+    if (!p) return res.status(404).json({ error: "Purchase not found" });
+
+    p.installation = p.installation || {};
+    p.installation.status = "uninstalled";
+    p.installation.uninstalledBy = req.user?.email || "admin";
+    p.installation.uninstalledAt = new Date();
+    await p.save();
+
+    return res.json({
+      ok: true,
+      purchase: p,
+      message: "Installation marked as uninstalled.",
     });
   }),
 );

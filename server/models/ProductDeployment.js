@@ -10,6 +10,8 @@ const InstallOperationSchema = new mongoose.Schema(
     source: { type: String, trim: true, default: "." },
     target: { type: String, trim: true, required: true },
     overwrite: { type: Boolean, default: true },
+    cleanTargetOnUpdate: { type: Boolean, default: false },
+    preservePatterns: { type: [String], default: [] },
     notes: { type: String, trim: true, default: "" },
   },
   { _id: false },

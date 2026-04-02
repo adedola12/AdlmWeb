@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 function requiredEnv(name) {
   const value = String(process.env[name] || "").trim();
@@ -52,6 +52,20 @@ export function isR2Configured() {
     "R2_BUCKET",
     "R2_PUBLIC_BASE_URL",
   ].every((name) => String(process.env[name] || "").trim());
+}
+
+export async function deleteFromR2(objectKey) {
+  if (!objectKey || !isR2Configured()) return;
+
+  const bucket = requiredEnv("R2_BUCKET");
+  const client = createClient();
+
+  await client.send(
+    new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: objectKey,
+    }),
+  );
 }
 
 export async function uploadBufferToR2(

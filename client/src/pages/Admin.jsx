@@ -575,7 +575,7 @@ export default function Admin() {
       const [uRes, pRes, iRes, tRes, teRes] = await Promise.all([
         apiAuthed(`/admin/users${qs}`, { token: accessToken }),
         apiAuthed(`/admin/purchases?status=pending`, { token: accessToken }),
-        apiAuthed(`/admin/installations`, { token: accessToken }),
+        apiAuthed(`/admin/installations?view=all`, { token: accessToken }),
         apiAuthed(`/admin/ptrainings/events`, { token: accessToken }),
         apiAuthed(`/admin/ptrainings/enrollments`, { token: accessToken }),
       ]);
@@ -1240,6 +1240,8 @@ export default function Admin() {
     );
   }
 
+  const [installSubTab, setInstallSubTab] = React.useState("pending");
+
   const sortedInstallations = React.useMemo(() => {
     const arr = Array.isArray(installations) ? [...installations] : [];
     arr.sort((a, b) => {
@@ -1252,6 +1254,19 @@ export default function Admin() {
     });
     return arr;
   }, [installations]);
+
+  const pendingInstalls = React.useMemo(
+    () => sortedInstallations.filter((p) => (p?.installation?.status || "pending") === "pending"),
+    [sortedInstallations],
+  );
+  const completedInstalls = React.useMemo(
+    () => sortedInstallations.filter((p) => p?.installation?.status === "complete"),
+    [sortedInstallations],
+  );
+  const uninstalledInstalls = React.useMemo(
+    () => sortedInstallations.filter((p) => p?.installation?.status === "uninstalled"),
+    [sortedInstallations],
+  );
 
   const pTrainingsSorted = React.useMemo(() => {
     const arr = Array.isArray(ptrainings) ? [...ptrainings] : [];
@@ -1489,7 +1504,7 @@ export default function Admin() {
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
             >
-              Installations ({installations.length})
+              Installations ({pendingInstalls.length})
             </button>
 
             <button
@@ -2355,123 +2370,194 @@ export default function Admin() {
         <div className="card">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="font-semibold">Installations</h2>
-            <div className="text-xs text-slate-500">
-              Shows installs that are pending OR completed but entitlements not
-              applied OR legacy records.
-            </div>
           </div>
+
+          {/* Sub-tabs */}
+          <nav className="flex gap-4 border-b mb-4 text-sm">
+            {[
+              { key: "pending", label: "Pending", count: pendingInstalls.length },
+              { key: "completed", label: "Completed", count: completedInstalls.length },
+              { key: "uninstalled", label: "Uninstalled", count: uninstalledInstalls.length },
+            ].map((st) => (
+              <button
+                key={st.key}
+                onClick={() => setInstallSubTab(st.key)}
+                className={`py-2 -mb-px border-b-2 transition ${
+                  installSubTab === st.key
+                    ? "border-adlm-blue-700 text-adlm-blue-700 font-medium"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {st.label} ({st.count})
+              </button>
+            ))}
+          </nav>
 
           {loading ? (
             <div className="text-sm text-slate-600">Loading…</div>
-          ) : sortedInstallations.length === 0 ? (
-            <div className="text-sm text-slate-600">
-              No installations to review.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {sortedInstallations.map((p) => {
-                const badge = getInstallState(p);
-                const grants = formatGrants(p);
+          ) : (() => {
+            const visibleList =
+              installSubTab === "completed" ? completedInstalls
+              : installSubTab === "uninstalled" ? uninstalledInstalls
+              : pendingInstalls;
 
-                const seatsTotal = seatsForPurchaseBadge(p);
-                const lt = inferLicenseType(
-                  p.licenseType,
-                  seatsTotal,
-                  p?.organization?.name,
-                );
+            if (visibleList.length === 0) {
+              return (
+                <div className="text-sm text-slate-600">
+                  No {installSubTab} installations.
+                </div>
+              );
+            }
 
-                const inst = p?.installation || {};
-                const canMarkComplete =
-                  String(inst.status || "").toLowerCase() !== "complete" ||
-                  inst.entitlementsApplied === false ||
-                  typeof inst.entitlementsApplied !== "boolean";
+            return (
+              <div className="space-y-2">
+                {visibleList.map((p) => {
+                  const badge = getInstallState(p);
+                  const grants = formatGrants(p);
 
-                return (
-                  <div
-                    key={p._id}
-                    className="border rounded p-3 flex items-start justify-between gap-4"
-                  >
-                    <div className="text-sm min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="font-medium truncate">
-                          {p.email || "Unknown email"}
+                  const seatsTotal = seatsForPurchaseBadge(p);
+                  const lt = inferLicenseType(
+                    p.licenseType,
+                    seatsTotal,
+                    p?.organization?.name,
+                  );
+
+                  const inst = p?.installation || {};
+                  const instStatus = String(inst.status || "pending").toLowerCase();
+
+                  return (
+                    <div
+                      key={p._id}
+                      className="border rounded p-3 flex items-start justify-between gap-4"
+                    >
+                      <div className="text-sm min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="font-medium truncate">
+                            {p.email || "Unknown email"}
+                          </div>
+                          <OrganizationBadge
+                            licenseType={lt}
+                            organization={p.organization}
+                            organizationName={p?.organization?.name}
+                            seats={seatsTotal}
+                          />
+                          <Badge label={badge.label} tone={badge.tone} />
                         </div>
-                        <OrganizationBadge
-                          licenseType={lt}
-                          organization={p.organization}
-                          organizationName={p?.organization?.name}
-                          seats={seatsTotal}
-                        />
-                        <Badge label={badge.label} tone={badge.tone} />
+
+                        <div className="text-slate-600 mt-1">
+                          Approved:{" "}
+                          {p.decidedAt
+                            ? dayjs(p.decidedAt).format("YYYY-MM-DD HH:mm")
+                            : "—"}
+                        </div>
+
+                        <div className="mt-2">
+                          <div className="text-xs text-slate-500 mb-1">
+                            Product(s)
+                          </div>
+                          <div className="text-sm text-slate-800 break-words">
+                            {grants.text}
+                          </div>
+                        </div>
+
+                        <div className="mt-2 text-xs text-slate-500">
+                          Status:{" "}
+                          <b className="text-slate-700">
+                            {instStatus}
+                          </b>
+                          {" · "}
+                          EntitlementsApplied:{" "}
+                          <b className="text-slate-700">
+                            {typeof inst.entitlementsApplied === "boolean"
+                              ? String(inst.entitlementsApplied)
+                              : "missing (legacy)"}
+                          </b>
+                          {inst.uninstalledAt && (
+                            <>
+                              {" · "}
+                              Uninstalled: <b className="text-slate-700">{dayjs(inst.uninstalledAt).format("YYYY-MM-DD HH:mm")}</b>
+                              {inst.uninstalledBy ? ` by ${inst.uninstalledBy}` : ""}
+                            </>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="text-slate-600 mt-1">
-                        Approved:{" "}
-                        {p.decidedAt
-                          ? dayjs(p.decidedAt).format("YYYY-MM-DD HH:mm")
-                          : "—"}
-                      </div>
+                      <div className="shrink-0 flex flex-col items-end gap-2">
+                        {/* Pending → Mark Complete */}
+                        {instStatus === "pending" && (
+                          <button
+                            className="btn"
+                            title="Mark installation complete and apply entitlements"
+                            onClick={async () => {
+                              setMsg("");
+                              try {
+                                const res = await apiAuthed(
+                                  `/admin/installations/${p._id}/complete`,
+                                  { token: accessToken, method: "POST" },
+                                );
+                                await load();
+                                setMsg(res?.message || "Installation marked complete");
+                              } catch (e) {
+                                setMsg(e?.message || "Failed to mark complete");
+                              }
+                            }}
+                          >
+                            Mark complete
+                          </button>
+                        )}
 
-                      <div className="mt-2">
-                        <div className="text-xs text-slate-500 mb-1">
-                          Pending product(s)
-                        </div>
-                        <div className="text-sm text-slate-800 break-words">
-                          {grants.text}
-                        </div>
-                      </div>
+                        {/* Completed → Mark Uninstalled */}
+                        {instStatus === "complete" && (
+                          <button
+                            className="px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm hover:bg-amber-100 transition"
+                            title="Mark as uninstalled — reverses the installation status"
+                            onClick={async () => {
+                              setMsg("");
+                              try {
+                                const res = await apiAuthed(
+                                  `/admin/installations/${p._id}/uninstall`,
+                                  { token: accessToken, method: "POST" },
+                                );
+                                await load();
+                                setMsg(res?.message || "Installation marked as uninstalled");
+                              } catch (e) {
+                                setMsg(e?.message || "Failed to mark uninstalled");
+                              }
+                            }}
+                          >
+                            Mark uninstalled
+                          </button>
+                        )}
 
-                      <div className="mt-2 text-xs text-slate-500">
-                        Status:{" "}
-                        <b className="text-slate-700">
-                          {String(inst.status || "—")}
-                        </b>
-                        {" · "}
-                        EntitlementsApplied:{" "}
-                        <b className="text-slate-700">
-                          {typeof inst.entitlementsApplied === "boolean"
-                            ? String(inst.entitlementsApplied)
-                            : "missing (legacy)"}
-                        </b>
+                        {/* Uninstalled → Revert to Pending */}
+                        {instStatus === "uninstalled" && (
+                          <button
+                            className="btn"
+                            title="Revert to pending — allows re-installation"
+                            onClick={async () => {
+                              setMsg("");
+                              try {
+                                const res = await apiAuthed(
+                                  `/admin/installations/${p._id}/toggle`,
+                                  { token: accessToken, method: "POST" },
+                                );
+                                await load();
+                                setMsg(res?.message || "Installation reverted to pending");
+                              } catch (e) {
+                                setMsg(e?.message || "Failed to revert");
+                              }
+                            }}
+                          >
+                            Revert to pending
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    <div className="shrink-0 flex flex-col items-end gap-2">
-                      <button
-                        className="btn"
-                        disabled={!canMarkComplete}
-                        title={
-                          canMarkComplete
-                            ? "Mark installation complete and apply entitlements"
-                            : "Already finalized"
-                        }
-                        onClick={async () => {
-                          setMsg("");
-                          try {
-                            const res = await apiAuthed(
-                              `/admin/installations/${p._id}/complete`,
-                              {
-                                token: accessToken,
-                                method: "POST",
-                              },
-                            );
-                            await load();
-                            setMsg(
-                              res?.message || "Installation marked complete",
-                            );
-                          } catch (e) {
-                            setMsg(e?.message || "Failed to mark complete");
-                          }
-                        }}
-                      >
-                        Mark complete
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
