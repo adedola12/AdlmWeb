@@ -15,7 +15,7 @@ export default function App() {
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
 
-  const VIDEO_ID = "YX6vJTaAUXA";
+  const VIDEO_ID = "m3smR7ebia4";
   const MAX_SECONDS = 300;
 
   React.useEffect(() => {
