@@ -261,6 +261,14 @@ export default function ProductDetail() {
   const unitUSD =
     p.billingInterval === "yearly" ? p.price?.yearlyUSD : p.price?.monthlyUSD;
 
+  // Discounted price (sale)
+  const discNGN =
+    p.billingInterval === "yearly"
+      ? p.price?.discountedYearlyNGN
+      : p.price?.discountedMonthlyNGN;
+  const hasDiscount = discNGN != null && discNGN > 0 && discNGN < unitNGN;
+  const pctOff = hasDiscount ? Math.round(((unitNGN - discNGN) / unitNGN) * 100) : 0;
+
   const related = Array.isArray(p.relatedFreeVideoIds)
     ? p.relatedFreeVideoIds
     : [];
@@ -270,9 +278,18 @@ export default function ProductDetail() {
       <div className="card">
         <h1 className="text-2xl font-semibold">
           {p.name} ·{" "}
-          <span className="text-slate-700">
-            {ngn(unitNGN)} / {cadence}
-          </span>
+          {hasDiscount ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="text-slate-400 line-through font-normal text-lg">{ngn(unitNGN)}</span>
+              <span className="text-slate-900">{ngn(discNGN)}</span>
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{pctOff}% OFF</span>
+              <span className="text-slate-500 text-base font-normal">/ {cadence}</span>
+            </span>
+          ) : (
+            <span className="text-slate-700">
+              {ngn(unitNGN)} / {cadence}
+            </span>
+          )}
         </h1>
 
         <div className="mt-3 rounded-xl overflow-hidden border bg-black relative">

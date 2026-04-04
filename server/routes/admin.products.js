@@ -41,24 +41,33 @@ function cleanDiscounts(discounts) {
   return next;
 }
 
+function optNum(v) {
+  if (v === "" || v == null) return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 function normalizePrice(price, fallback = {}) {
   const p = price || {};
   return {
     monthlyNGN: Number(p.monthlyNGN ?? fallback.monthlyNGN ?? 0) || 0,
     yearlyNGN: Number(p.yearlyNGN ?? fallback.yearlyNGN ?? 0) || 0,
     installNGN: Number(p.installNGN ?? fallback.installNGN ?? 0) || 0,
-    monthlyUSD:
-      p.monthlyUSD === "" || p.monthlyUSD == null
-        ? undefined
-        : Number(p.monthlyUSD),
-    yearlyUSD:
-      p.yearlyUSD === "" || p.yearlyUSD == null
-        ? undefined
-        : Number(p.yearlyUSD),
-    installUSD:
-      p.installUSD === "" || p.installUSD == null
-        ? undefined
-        : Number(p.installUSD),
+    monthlyUSD: optNum(p.monthlyUSD),
+    yearlyUSD: optNum(p.yearlyUSD),
+    installUSD: optNum(p.installUSD),
+
+    // 6-month tier
+    sixMonthNGN: Number(p.sixMonthNGN ?? 0) || 0,
+    sixMonthUSD: optNum(p.sixMonthUSD),
+
+    // Discounted (sale) prices
+    discountedMonthlyNGN: optNum(p.discountedMonthlyNGN),
+    discountedMonthlyUSD: optNum(p.discountedMonthlyUSD),
+    discountedSixMonthNGN: optNum(p.discountedSixMonthNGN),
+    discountedSixMonthUSD: optNum(p.discountedSixMonthUSD),
+    discountedYearlyNGN: optNum(p.discountedYearlyNGN),
+    discountedYearlyUSD: optNum(p.discountedYearlyUSD),
   };
 }
 

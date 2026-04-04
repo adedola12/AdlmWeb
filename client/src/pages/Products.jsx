@@ -631,6 +631,11 @@ function ProductCard({
   const cadence = p.billingInterval === "yearly" ? "year" : "month";
   const unit = p.billingInterval === "yearly" ? yearly : monthly;
 
+  const discUnit = p.billingInterval === "yearly"
+    ? p.price?.discountedYearlyNGN : p.price?.discountedMonthlyNGN;
+  const hasDiscount = discUnit != null && discUnit > 0 && discUnit < unit;
+  const pctOff = hasDiscount ? Math.round(((unit - discUnit) / unit) * 100) : 0;
+
   const cardRef = React.useRef(null);
   const inView = useInView(cardRef);
   const delay = 80 + idx * 30;
@@ -729,12 +734,27 @@ function ProductCard({
       )}
 
       <div className="mt-3">
-        <div className="text-slate-900 tracking-tight">
-          <span className="text-base align-top mr-1">NGN</span>
-          <span className="text-2xl md:text-3xl font-bold">
-            {(Number(unit) || 0).toLocaleString()}
-          </span>
-        </div>
+        {hasDiscount ? (
+          <>
+            <div className="text-slate-400 tracking-tight line-through text-sm">
+              NGN {(Number(unit) || 0).toLocaleString()}
+            </div>
+            <div className="text-slate-900 tracking-tight flex items-center gap-2">
+              <span className="text-base align-top mr-1">NGN</span>
+              <span className="text-2xl md:text-3xl font-bold">
+                {(Number(discUnit) || 0).toLocaleString()}
+              </span>
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{pctOff}% OFF</span>
+            </div>
+          </>
+        ) : (
+          <div className="text-slate-900 tracking-tight">
+            <span className="text-base align-top mr-1">NGN</span>
+            <span className="text-2xl md:text-3xl font-bold">
+              {(Number(unit) || 0).toLocaleString()}
+            </span>
+          </div>
+        )}
         <div className="text-[11px] text-slate-500 -mt-0.5">per {cadence}</div>
       </div>
 

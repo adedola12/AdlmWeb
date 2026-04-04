@@ -71,27 +71,9 @@ export default function Purchase() {
   const money = (x) =>
     currency === "USD" ? round2(x) : Math.round(Number(x || 0));
 
-  function pickBundleDiscount(p, periods) {
-    const d = p?.discounts || null;
-    if (!d) return null;
-
-    if (p.billingInterval === "yearly") {
-      return periods === 1 ? d.oneYear || null : null;
-    }
-
-    if (periods === 6) return d.sixMonths || null;
-    if (periods === 12) return d.oneYear || null;
-    return null;
-  }
-
-  function discountFixedValue(d, currencyNow) {
-    if (!d || d.type !== "fixed") return 0;
-    if (currencyNow === "USD") {
-      // NOTE: only applies if valueUSD is set (no fx conversion client-side)
-      return Number(d.valueUSD || 0);
-    }
-    return Number(d.valueNGN || 0);
-  }
+  // Kept for backward compatibility — unused by new tier logic
+  function pickBundleDiscount() { return null; }
+  function discountFixedValue() { return 0; }
 
   // ---------- load products ----------
   React.useEffect(() => {
@@ -194,58 +176,82 @@ export default function Purchase() {
     );
   }
 
-  function getPrices(p) {
-    const monthly =
-      currency === "USD" ? p.price?.monthlyUSD : p.price?.monthlyNGN;
-    const yearly = currency === "USD" ? p.price?.yearlyUSD : p.price?.yearlyNGN;
-    const install =
-      currency === "USD" ? p.price?.installUSD : p.price?.installNGN;
+  /** Pick the best price: discounted if set, otherwise actual */
+  function resolve(actual, discounted) {
+    const d = Number(discounted || 0);
+    const a = Number(actual || 0);
+    return d > 0 && d < a ? d : a;
+  }
 
-    return {
-      monthly: money(monthly || 0),
-      yearly: money(yearly || 0),
-      install: money(install || 0),
-    };
+  function getPrices(p) {
+    const isUSD = currency === "USD";
+    const pr = p?.price || {};
+
+    const monthly = money(isUSD ? (pr.monthlyUSD || 0) : (pr.monthlyNGN || 0));
+    const yearly = money(isUSD ? (pr.yearlyUSD || 0) : (pr.yearlyNGN || 0));
+    const sixMonth = money(isUSD ? (pr.sixMonthUSD || 0) : (pr.sixMonthNGN || 0));
+    const install = money(isUSD ? (pr.installUSD || 0) : (pr.installNGN || 0));
+
+    const discountedMonthly = money(isUSD ? (pr.discountedMonthlyUSD || 0) : (pr.discountedMonthlyNGN || 0));
+    const discountedYearly = money(isUSD ? (pr.discountedYearlyUSD || 0) : (pr.discountedYearlyNGN || 0));
+    const discountedSixMonth = money(isUSD ? (pr.discountedSixMonthUSD || 0) : (pr.discountedSixMonthNGN || 0));
+
+    return { monthly, yearly, sixMonth, install, discountedMonthly, discountedYearly, discountedSixMonth };
   }
 
   function lineCalc(p, entry) {
     if (!entry) return { recurring: 0, install: 0, total: 0 };
 
-    const { monthly, yearly, install } = getPrices(p);
-    const unit = p.billingInterval === "yearly" ? yearly : monthly;
-
+    const prices = getPrices(p);
     const periods = Math.max(parseInt(entry.periods || 1, 10), 1);
     const seats =
       licenseType === "organization"
         ? Math.max(parseInt(entry.seats || 1, 10), 1)
         : 1;
 
-    let recurring = money(unit * seats * periods);
+    let recurring = 0;
+    const effMonthly = resolve(prices.monthly, prices.discountedMonthly);
+    const effSixMonth = resolve(prices.sixMonth, prices.discountedSixMonth);
+    const effYearly = resolve(prices.yearly, prices.discountedYearly);
 
-    const disc = pickBundleDiscount(p, periods);
-
-    if (disc?.type === "percent") {
-      const pct = Number(disc.valueNGN || 0);
-      const factor = Math.max(0, 1 - pct / 100);
-      recurring = money(unit * seats * periods * factor);
+    if (p.billingInterval === "yearly") {
+      // Yearly-billed products: just yearly x periods x seats
+      recurring = money(effYearly * periods * seats);
+    } else {
+      // Monthly-billed products: tier logic
+      if (periods < 6) {
+        // 1-5 months: monthly x months
+        recurring = money(effMonthly * periods * seats);
+      } else if (periods === 6) {
+        // 6 months: use 6-month price if set, fallback to monthly x 6
+        recurring = money((effSixMonth > 0 ? effSixMonth : effMonthly * 6) * seats);
+      } else if (periods > 6 && periods < 12) {
+        // 7-11 months: 6-month price + monthly x extra months
+        const sixBase = effSixMonth > 0 ? effSixMonth : effMonthly * 6;
+        const extra = effMonthly * (periods - 6);
+        recurring = money((sixBase + extra) * seats);
+      } else if (periods === 12) {
+        // 12 months: use yearly price if set, fallback to monthly x 12
+        recurring = money((effYearly > 0 ? effYearly : effMonthly * 12) * seats);
+      } else {
+        // 13+: yearly + monthly x (months - 12)
+        const yearBase = effYearly > 0 ? effYearly : effMonthly * 12;
+        const extra = effMonthly * (periods - 12);
+        recurring = money((yearBase + extra) * seats);
+      }
     }
 
-    if (disc?.type === "fixed") {
-      const fixedPerSeat = discountFixedValue(disc, currency);
-      if (fixedPerSeat > 0) recurring = money(fixedPerSeat * seats);
-    }
-
-    const installFee = entry.firstTime ? money(install) : 0;
+    const installFee = entry.firstTime ? money(prices.install) : 0;
 
     return {
       recurring,
       install: installFee,
       total: money(recurring + installFee),
-      unit,
+      unit: p.billingInterval === "yearly" ? effYearly : effMonthly,
       seats,
       periods,
-      discountApplied: !!disc,
-      discountType: disc?.type || null,
+      discountApplied: false,
+      discountType: null,
     };
   }
 

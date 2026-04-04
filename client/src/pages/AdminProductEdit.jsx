@@ -405,6 +405,14 @@ export default function AdminProductEdit() {
     monthlyUSD: "",
     yearlyUSD: "",
     installUSD: "",
+    sixMonthNGN: 0,
+    sixMonthUSD: "",
+    discountedMonthlyNGN: "",
+    discountedMonthlyUSD: "",
+    discountedSixMonthNGN: "",
+    discountedSixMonthUSD: "",
+    discountedYearlyNGN: "",
+    discountedYearlyUSD: "",
   });
 
   // ✅ NEW: discounts state for edit page
@@ -486,6 +494,14 @@ export default function AdminProductEdit() {
           monthlyUSD: data.price?.monthlyUSD ?? "",
           yearlyUSD: data.price?.yearlyUSD ?? "",
           installUSD: data.price?.installUSD ?? "",
+          sixMonthNGN: data.price?.sixMonthNGN ?? 0,
+          sixMonthUSD: data.price?.sixMonthUSD ?? "",
+          discountedMonthlyNGN: data.price?.discountedMonthlyNGN ?? "",
+          discountedMonthlyUSD: data.price?.discountedMonthlyUSD ?? "",
+          discountedSixMonthNGN: data.price?.discountedSixMonthNGN ?? "",
+          discountedSixMonthUSD: data.price?.discountedSixMonthUSD ?? "",
+          discountedYearlyNGN: data.price?.discountedYearlyNGN ?? "",
+          discountedYearlyUSD: data.price?.discountedYearlyUSD ?? "",
         });
 
         // ✅ NEW: load existing discounts into UI
@@ -552,6 +568,25 @@ export default function AdminProductEdit() {
         payload.price.yearlyUSD = Number(price.yearlyUSD);
       if (price.installUSD !== "")
         payload.price.installUSD = Number(price.installUSD);
+
+      // 6-month tier
+      payload.price.sixMonthNGN = Number(price.sixMonthNGN || 0);
+      if (price.sixMonthUSD !== "")
+        payload.price.sixMonthUSD = Number(price.sixMonthUSD);
+
+      // Discounted prices
+      if (price.discountedMonthlyNGN !== "")
+        payload.price.discountedMonthlyNGN = Number(price.discountedMonthlyNGN);
+      if (price.discountedMonthlyUSD !== "")
+        payload.price.discountedMonthlyUSD = Number(price.discountedMonthlyUSD);
+      if (price.discountedSixMonthNGN !== "")
+        payload.price.discountedSixMonthNGN = Number(price.discountedSixMonthNGN);
+      if (price.discountedSixMonthUSD !== "")
+        payload.price.discountedSixMonthUSD = Number(price.discountedSixMonthUSD);
+      if (price.discountedYearlyNGN !== "")
+        payload.price.discountedYearlyNGN = Number(price.discountedYearlyNGN);
+      if (price.discountedYearlyUSD !== "")
+        payload.price.discountedYearlyUSD = Number(price.discountedYearlyUSD);
 
       await apiAuthed(`/admin/products/${id}`, {
         token: accessToken,
@@ -651,221 +686,121 @@ export default function AdminProductEdit() {
             </select>
           </label>
 
-          <div className="grid grid-cols-3 gap-2">
+          {/* Install Fee */}
+          <div className="grid grid-cols-2 gap-2">
             <label className="text-xs">
-              NGN / month
-              <input
-                className="input mt-1"
-                type="number"
-                value={price.monthlyNGN}
-                onChange={(e) =>
-                  setPrice((d) => ({ ...d, monthlyNGN: e.target.value }))
-                }
-              />
+              Install Fee NGN (one-time)
+              <input className="input mt-1" type="number" value={price.installNGN}
+                onChange={(e) => setPrice((d) => ({ ...d, installNGN: e.target.value }))} />
             </label>
             <label className="text-xs">
-              NGN / year
-              <input
-                className="input mt-1"
-                type="number"
-                value={price.yearlyNGN}
-                onChange={(e) =>
-                  setPrice((d) => ({ ...d, yearlyNGN: e.target.value }))
-                }
-              />
-            </label>
-            <label className="text-xs">
-              NGN install
-              <input
-                className="input mt-1"
-                type="number"
-                value={price.installNGN}
-                onChange={(e) =>
-                  setPrice((d) => ({ ...d, installNGN: e.target.value }))
-                }
-              />
+              Install Fee USD (opt)
+              <input className="input mt-1" type="number" value={price.installUSD}
+                onChange={(e) => setPrice((d) => ({ ...d, installUSD: e.target.value }))} />
             </label>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <label className="text-xs">
-              USD / month (opt)
-              <input
-                className="input mt-1"
-                type="number"
-                value={price.monthlyUSD}
-                onChange={(e) =>
-                  setPrice((d) => ({ ...d, monthlyUSD: e.target.value }))
-                }
-              />
-            </label>
-            <label className="text-xs">
-              USD / year (opt)
-              <input
-                className="input mt-1"
-                type="number"
-                value={price.yearlyUSD}
-                onChange={(e) =>
-                  setPrice((d) => ({ ...d, yearlyUSD: e.target.value }))
-                }
-              />
-            </label>
-            <label className="text-xs">
-              USD install (opt)
-              <input
-                className="input mt-1"
-                type="number"
-                value={price.installUSD}
-                onChange={(e) =>
-                  setPrice((d) => ({ ...d, installUSD: e.target.value }))
-                }
-              />
-            </label>
-          </div>
-
-          {/* ✅ NEW: DISCOUNTS UI */}
-          <div className="border rounded-lg p-3 space-y-3">
-            <div className="font-medium">Bundle Discounts (optional)</div>
-            <div className="text-xs text-slate-500">
-              Applies to <b>recurring only</b>. Install fee is added separately.
-              <br />
-              For <b>monthly</b> products: 6 months = 6 periods, 1 year = 12
-              periods. For <b>yearly</b> products: 1 year = 1 period.
+          {/* Tier Pricing */}
+          <div className="border rounded-lg p-3 space-y-4">
+            <div>
+              <div className="font-medium">Tier Pricing</div>
+              <div className="text-xs text-slate-500 mt-1">
+                Set the actual (list) price and optional discounted (sale) price for each tier.
+                If a discounted price is set, it becomes the active price and the actual price is shown as struck-through.
+              </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-3">
-              {/* 6 Months */}
-              <div className="border rounded p-3">
-                <div className="font-medium text-sm mb-2">
-                  6 Months Discount
-                </div>
-
-                <label className="text-sm block">
-                  Type
-                  <select
-                    className="input mt-1"
-                    value={discountsUi.sixMonths.type}
-                    onChange={(e) =>
-                      setDiscountsUi((d) => ({
-                        ...d,
-                        sixMonths: { ...d.sixMonths, type: e.target.value },
-                      }))
-                    }
-                  >
-                    <option value="none">None</option>
-                    <option value="percent">Percent off</option>
-                    <option value="fixed">Fixed bundle price</option>
-                  </select>
+            {/* Monthly */}
+            <div className="border rounded p-3 space-y-2">
+              <div className="text-sm font-medium">Monthly Fee</div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  Actual NGN / month
+                  <input className="input mt-1" type="number" value={price.monthlyNGN}
+                    onChange={(e) => setPrice((d) => ({ ...d, monthlyNGN: e.target.value }))} />
                 </label>
-
-                <label className="text-sm block mt-2">
-                  Value (NGN)
-                  <input
-                    className="input mt-1"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="e.g. 10 OR 38000"
-                    value={discountsUi.sixMonths.valueNGN}
-                    onChange={(e) =>
-                      setDiscountsUi((d) => ({
-                        ...d,
-                        sixMonths: { ...d.sixMonths, valueNGN: e.target.value },
-                      }))
-                    }
-                  />
-                </label>
-
-                <label className="text-sm block mt-2">
-                  Value (USD, optional)
-                  <input
-                    className="input mt-1"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={discountsUi.sixMonths.valueUSD}
-                    onChange={(e) =>
-                      setDiscountsUi((d) => ({
-                        ...d,
-                        sixMonths: { ...d.sixMonths, valueUSD: e.target.value },
-                      }))
-                    }
-                  />
+                <label className="text-xs">
+                  Actual USD / month (opt)
+                  <input className="input mt-1" type="number" value={price.monthlyUSD}
+                    onChange={(e) => setPrice((d) => ({ ...d, monthlyUSD: e.target.value }))} />
                 </label>
               </div>
-
-              {/* 1 Year */}
-              <div className="border rounded p-3">
-                <div className="font-medium text-sm mb-2">1 Year Discount</div>
-
-                <label className="text-sm block">
-                  Type
-                  <select
-                    className="input mt-1"
-                    value={discountsUi.oneYear.type}
-                    onChange={(e) =>
-                      setDiscountsUi((d) => ({
-                        ...d,
-                        oneYear: { ...d.oneYear, type: e.target.value },
-                      }))
-                    }
-                  >
-                    <option value="none">None</option>
-                    <option value="percent">Percent off</option>
-                    <option value="fixed">Fixed bundle price</option>
-                  </select>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  <span className="text-emerald-700">Discounted NGN / month (opt)</span>
+                  <input className="input mt-1" type="number" value={price.discountedMonthlyNGN}
+                    onChange={(e) => setPrice((d) => ({ ...d, discountedMonthlyNGN: e.target.value }))} />
                 </label>
-
-                <label className="text-sm block mt-2">
-                  Value (NGN)
-                  <input
-                    className="input mt-1"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="e.g. 10 OR 75000"
-                    value={discountsUi.oneYear.valueNGN}
-                    onChange={(e) =>
-                      setDiscountsUi((d) => ({
-                        ...d,
-                        oneYear: { ...d.oneYear, valueNGN: e.target.value },
-                      }))
-                    }
-                  />
-                </label>
-
-                <label className="text-sm block mt-2">
-                  Value (USD, optional)
-                  <input
-                    className="input mt-1"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={discountsUi.oneYear.valueUSD}
-                    onChange={(e) =>
-                      setDiscountsUi((d) => ({
-                        ...d,
-                        oneYear: { ...d.oneYear, valueUSD: e.target.value },
-                      }))
-                    }
-                  />
+                <label className="text-xs">
+                  <span className="text-emerald-700">Discounted USD / month (opt)</span>
+                  <input className="input mt-1" type="number" value={price.discountedMonthlyUSD}
+                    onChange={(e) => setPrice((d) => ({ ...d, discountedMonthlyUSD: e.target.value }))} />
                 </label>
               </div>
             </div>
 
-            <div className="flex items-center justify-end">
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() =>
-                  setDiscountsUi({
-                    sixMonths: { type: "none", valueNGN: "", valueUSD: "" },
-                    oneYear: { type: "none", valueNGN: "", valueUSD: "" },
-                  })
-                }
-              >
-                Clear discounts
-              </button>
+            {/* 6-Month */}
+            <div className="border rounded p-3 space-y-2">
+              <div className="text-sm font-medium">6-Month Fee <span className="text-xs text-slate-500 font-normal">(total for 6 months, not per-month)</span></div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  Actual NGN / 6 months
+                  <input className="input mt-1" type="number" value={price.sixMonthNGN}
+                    onChange={(e) => setPrice((d) => ({ ...d, sixMonthNGN: e.target.value }))} />
+                </label>
+                <label className="text-xs">
+                  Actual USD / 6 months (opt)
+                  <input className="input mt-1" type="number" value={price.sixMonthUSD}
+                    onChange={(e) => setPrice((d) => ({ ...d, sixMonthUSD: e.target.value }))} />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  <span className="text-emerald-700">Discounted NGN / 6 months (opt)</span>
+                  <input className="input mt-1" type="number" value={price.discountedSixMonthNGN}
+                    onChange={(e) => setPrice((d) => ({ ...d, discountedSixMonthNGN: e.target.value }))} />
+                </label>
+                <label className="text-xs">
+                  <span className="text-emerald-700">Discounted USD / 6 months (opt)</span>
+                  <input className="input mt-1" type="number" value={price.discountedSixMonthUSD}
+                    onChange={(e) => setPrice((d) => ({ ...d, discountedSixMonthUSD: e.target.value }))} />
+                </label>
+              </div>
+            </div>
+
+            {/* Yearly */}
+            <div className="border rounded p-3 space-y-2">
+              <div className="text-sm font-medium">Yearly Fee</div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  Actual NGN / year
+                  <input className="input mt-1" type="number" value={price.yearlyNGN}
+                    onChange={(e) => setPrice((d) => ({ ...d, yearlyNGN: e.target.value }))} />
+                </label>
+                <label className="text-xs">
+                  Actual USD / year (opt)
+                  <input className="input mt-1" type="number" value={price.yearlyUSD}
+                    onChange={(e) => setPrice((d) => ({ ...d, yearlyUSD: e.target.value }))} />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  <span className="text-emerald-700">Discounted NGN / year (opt)</span>
+                  <input className="input mt-1" type="number" value={price.discountedYearlyNGN}
+                    onChange={(e) => setPrice((d) => ({ ...d, discountedYearlyNGN: e.target.value }))} />
+                </label>
+                <label className="text-xs">
+                  <span className="text-emerald-700">Discounted USD / year (opt)</span>
+                  <input className="input mt-1" type="number" value={price.discountedYearlyUSD}
+                    onChange={(e) => setPrice((d) => ({ ...d, discountedYearlyUSD: e.target.value }))} />
+                </label>
+              </div>
+            </div>
+
+            {/* Checkout logic info */}
+            <div className="bg-slate-50 rounded p-2 text-xs text-slate-600">
+              <b>Checkout tier logic:</b> 1-5 months = monthly x months | 6 months = 6-month fee |
+              7-11 months = 6-month fee + monthly x extra months | 12 months = yearly fee
             </div>
           </div>
 

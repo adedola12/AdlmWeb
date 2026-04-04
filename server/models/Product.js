@@ -19,14 +19,27 @@ const DiscountSchema = new mongoose.Schema(
 
 const PriceSchema = new mongoose.Schema(
   {
-    monthlyNGN: { type: Number, default: 0 }, // per month
-    yearlyNGN: { type: Number, default: 0 }, // per year
-    installNGN: { type: Number, default: 0 }, // one-time
+    monthlyNGN: { type: Number, default: 0 }, // per month (actual / list price)
+    yearlyNGN: { type: Number, default: 0 }, // per year (actual / list price)
+    installNGN: { type: Number, default: 0 }, // one-time install fee
 
     // Optional explicit USD overrides. If not provided, server will compute = NGN * fxRate
     monthlyUSD: { type: Number, default: undefined },
     yearlyUSD: { type: Number, default: undefined },
     installUSD: { type: Number, default: undefined },
+
+    // 6-month tier — total price for 6 months (not per-month)
+    sixMonthNGN: { type: Number, default: 0 },
+    sixMonthUSD: { type: Number, default: undefined },
+
+    // Discounted (sale) prices — when set, shown as the active price with
+    // the actual price struck through. If null/0, actual price is used.
+    discountedMonthlyNGN: { type: Number, default: undefined },
+    discountedMonthlyUSD: { type: Number, default: undefined },
+    discountedSixMonthNGN: { type: Number, default: undefined },
+    discountedSixMonthUSD: { type: Number, default: undefined },
+    discountedYearlyNGN: { type: Number, default: undefined },
+    discountedYearlyUSD: { type: Number, default: undefined },
   },
   { _id: false },
 );
