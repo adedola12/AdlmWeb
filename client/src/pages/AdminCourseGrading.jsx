@@ -5,7 +5,7 @@ import { apiAuthed } from "../http.js";
 
 export default function AdminCourseGrading() {
   const { accessToken } = useAuth();
-  const [tab, setTab] = React.useState("submissions");
+  const [tab, setTab] = React.useState("enrollments");
   const [items, setItems] = React.useState([]);
   const [msg, setMsg] = React.useState("");
 
@@ -13,6 +13,8 @@ export default function AdminCourseGrading() {
   const [enrollments, setEnrollments] = React.useState([]);
   const [enrMsg, setEnrMsg] = React.useState("");
   const [enrFilter, setEnrFilter] = React.useState("");
+  const [courseFilter, setCourseFilter] = React.useState("all");
+  const [statusFilter, setStatusFilter] = React.useState("all");
 
   async function load() {
     try {
@@ -55,7 +57,7 @@ export default function AdminCourseGrading() {
   }
 
   async function markComplete(id) {
-    if (!window.confirm("Mark this enrollment as completed?")) return;
+    if (!window.confirm("Mark this enrollment as completed? The user will be able to download their certificate.")) return;
     try {
       setEnrMsg("");
       const res = await apiAuthed(
@@ -69,7 +71,7 @@ export default function AdminCourseGrading() {
       if (res.alreadyCompleted) {
         setEnrMsg("Already completed.");
       } else {
-        setEnrMsg("Marked as completed.");
+        setEnrMsg("Marked as completed. The user can now download their certificate.");
       }
       loadEnrollments();
     } catch (e) {
@@ -77,15 +79,46 @@ export default function AdminCourseGrading() {
     }
   }
 
-  const filteredEnrollments = enrFilter
-    ? enrollments.filter(
+  // unique course titles for dropdown
+  const courseOptions = React.useMemo(() => {
+    const set = new Map();
+    enrollments.forEach((e) => {
+      if (e.courseSku && e.courseTitle) set.set(e.courseSku, e.courseTitle);
+    });
+    return [...set.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [enrollments]);
+
+  const filteredEnrollments = React.useMemo(() => {
+    let rows = enrollments;
+
+    // course filter
+    if (courseFilter !== "all") {
+      rows = rows.filter((e) => e.courseSku === courseFilter);
+    }
+
+    // status filter
+    if (statusFilter !== "all") {
+      rows = rows.filter((e) => e.status === statusFilter);
+    }
+
+    // text search
+    if (enrFilter) {
+      const q = enrFilter.toLowerCase();
+      rows = rows.filter(
         (e) =>
-          (e.email || "").toLowerCase().includes(enrFilter.toLowerCase()) ||
-          (e.courseTitle || "").toLowerCase().includes(enrFilter.toLowerCase()) ||
-          (e.firstName || "").toLowerCase().includes(enrFilter.toLowerCase()) ||
-          (e.lastName || "").toLowerCase().includes(enrFilter.toLowerCase()),
-      )
-    : enrollments;
+          (e.email || "").toLowerCase().includes(q) ||
+          (e.courseTitle || "").toLowerCase().includes(q) ||
+          (e.firstName || "").toLowerCase().includes(q) ||
+          (e.lastName || "").toLowerCase().includes(q),
+      );
+    }
+
+    return rows;
+  }, [enrollments, courseFilter, statusFilter, enrFilter]);
+
+  // counts
+  const activeCount = enrollments.filter((e) => e.status === "active").length;
+  const completedCount = enrollments.filter((e) => e.status === "completed").length;
 
   const tabClass = (t) =>
     `px-4 py-2 text-sm font-medium rounded-t-md border-b-2 transition ${
@@ -97,18 +130,148 @@ export default function AdminCourseGrading() {
   return (
     <div className="space-y-6">
       <div className="card">
-        <h1 className="text-xl font-semibold">Admin - Course Grading</h1>
+        <h1 className="text-xl font-semibold">Admin - Course Grading & Enrollments</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Manage course enrollments and mark users as complete so they can download their certificate.
+        </p>
         <div className="mt-3 flex gap-1 border-b">
-          <button className={tabClass("submissions")} onClick={() => setTab("submissions")}>
-            Pending Submissions
-          </button>
           <button className={tabClass("enrollments")} onClick={() => setTab("enrollments")}>
-            Enrollments
+            Enrollments ({enrollments.length})
+          </button>
+          <button className={tabClass("submissions")} onClick={() => setTab("submissions")}>
+            Pending Submissions ({items.length})
           </button>
         </div>
       </div>
 
-      {tab === "submissions" ? (
+      {tab === "enrollments" ? (
+        <div className="space-y-4">
+          {enrMsg && (
+            <div className="text-sm px-3 py-2 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
+              {enrMsg}
+            </div>
+          )}
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border p-3 text-center">
+              <div className="text-2xl font-bold">{enrollments.length}</div>
+              <div className="text-xs text-slate-500">Total</div>
+            </div>
+            <div className="rounded-xl border p-3 text-center">
+              <div className="text-2xl font-bold text-amber-600">{activeCount}</div>
+              <div className="text-xs text-slate-500">Active</div>
+            </div>
+            <div className="rounded-xl border p-3 text-center">
+              <div className="text-2xl font-bold text-emerald-600">{completedCount}</div>
+              <div className="text-xs text-slate-500">Completed</div>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <select
+              className="input w-auto"
+              value={courseFilter}
+              onChange={(e) => setCourseFilter(e.target.value)}
+            >
+              <option value="all">All courses</option>
+              {courseOptions.map(([sku, title]) => (
+                <option key={sku} value={sku}>
+                  {title}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="input w-auto"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active only</option>
+              <option value="completed">Completed only</option>
+            </select>
+
+            <input
+              className="input flex-1 min-w-[200px]"
+              placeholder="Search by email or name..."
+              value={enrFilter}
+              onChange={(e) => setEnrFilter(e.target.value)}
+            />
+
+            <button className="btn btn-sm" onClick={loadEnrollments}>
+              Refresh
+            </button>
+          </div>
+
+          {/* Results */}
+          {filteredEnrollments.length === 0 ? (
+            <div className="text-sm text-slate-600">No enrollments found.</div>
+          ) : (
+            <div className="space-y-2">
+              {filteredEnrollments.map((enr) => (
+                <div
+                  key={enr._id}
+                  className={`border rounded-lg p-4 ${
+                    enr.status === "completed" ? "bg-emerald-50/30" : "bg-white"
+                  }`}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-sm min-w-0">
+                      <div className="font-semibold text-base">
+                        {enr.firstName || enr.lastName
+                          ? `${enr.firstName} ${enr.lastName}`.trim()
+                          : enr.email}
+                      </div>
+                      <div className="text-slate-500">{enr.email}</div>
+                      <div className="text-slate-600 mt-1 font-medium">
+                        {enr.courseTitle}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-1">
+                        Enrolled: {new Date(enr.createdAt).toLocaleDateString()}
+                        {enr.completedModules?.length > 0 && (
+                          <span className="ml-2">
+                            Modules completed: {enr.completedModules.length}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span
+                        className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
+                          enr.status === "completed"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {enr.status === "completed" ? "Completed" : "Active"}
+                      </span>
+
+                      {enr.status !== "completed" ? (
+                        <button
+                          className="px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition"
+                          onClick={() => markComplete(enr._id)}
+                        >
+                          Mark Complete
+                        </button>
+                      ) : (
+                        enr.certificateIssuedAt && (
+                          <span className="text-xs text-emerald-600">
+                            Completed{" "}
+                            {new Date(enr.certificateIssuedAt).toLocaleDateString()}
+                          </span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
         <div className="space-y-2">
           {msg && <div className="text-sm text-red-600">{msg}</div>}
           {items.map((s) => (
@@ -150,63 +313,6 @@ export default function AdminCourseGrading() {
           ))}
           {!items.length && (
             <div className="text-sm text-slate-600">No pending submissions.</div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {enrMsg && <div className="text-sm text-amber-700">{enrMsg}</div>}
-
-          <input
-            className="input w-full max-w-sm"
-            placeholder="Filter by email, name, or course..."
-            value={enrFilter}
-            onChange={(e) => setEnrFilter(e.target.value)}
-          />
-
-          {filteredEnrollments.length === 0 ? (
-            <div className="text-sm text-slate-600">No enrollments found.</div>
-          ) : (
-            filteredEnrollments.map((enr) => (
-              <div key={enr._id} className="border rounded p-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm min-w-0">
-                    <div className="font-medium">
-                      {enr.firstName || enr.lastName
-                        ? `${enr.firstName} ${enr.lastName}`.trim()
-                        : enr.email}
-                    </div>
-                    <div className="text-slate-600">{enr.email}</div>
-                    <div className="text-slate-500 mt-1">{enr.courseTitle}</div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                        enr.status === "completed"
-                          ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                          : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
-                      }`}
-                    >
-                      {enr.status}
-                    </span>
-                    {enr.status !== "completed" ? (
-                      <button
-                        className="btn btn-sm"
-                        onClick={() => markComplete(enr._id)}
-                      >
-                        Mark Complete
-                      </button>
-                    ) : (
-                      enr.certificateIssuedAt && (
-                        <span className="text-xs text-slate-500">
-                          Completed{" "}
-                          {new Date(enr.certificateIssuedAt).toLocaleDateString()}
-                        </span>
-                      )
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
           )}
         </div>
       )}

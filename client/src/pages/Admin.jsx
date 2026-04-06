@@ -1430,6 +1430,14 @@ export default function Admin() {
             >
               AddFreebie
             </button>
+
+            <button
+              className="btn btn-sm"
+              onClick={() => navigate("/admin/course-grading")}
+              title="Grade submissions & mark course enrollments as complete"
+            >
+              Course Grading
+            </button>
           </div>
         </div>
 
