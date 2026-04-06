@@ -6,6 +6,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useNavigate } from "react-router-dom";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
+import { parseBunny, bunnyIframeSrc } from "../lib/video";
 
 dayjs.extend(relativeTime);
 
@@ -773,6 +774,7 @@ function LearningTab({
 }) {
   const hasOnline = Array.isArray(courses) && courses.length > 0;
   const hasPhysical = Array.isArray(pEnrollments) && pEnrollments.length > 0;
+  const [onboardingModal, setOnboardingModal] = React.useState(null);
 
   return (
     <div className="space-y-6">
@@ -884,6 +886,19 @@ function LearningTab({
                       >
                         Open course
                       </a>
+                      {course.onboardingVideoUrl ? (
+                        <button
+                          className="px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 transition"
+                          onClick={() =>
+                            setOnboardingModal({
+                              title: course.title,
+                              url: course.onboardingVideoUrl,
+                            })
+                          }
+                        >
+                          Watch Onboarding
+                        </button>
+                      ) : null}
                       {classroom.joinUrl ? (
                         <a
                           className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
@@ -982,6 +997,63 @@ function LearningTab({
           </div>
         )}
       </div>
+
+      {onboardingModal ? (() => {
+        const parsed = parseBunny(onboardingModal.url || "");
+        const isBunny = parsed?.kind === "bunny";
+        const src = isBunny
+          ? bunnyIframeSrc(parsed.libId, parsed.videoId)
+          : parsed?.src;
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            onClick={() => setOnboardingModal(null)}
+          >
+            <div
+              className="relative w-full max-w-3xl mx-4 rounded-xl bg-white shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <h3 className="font-semibold text-sm truncate">
+                  {onboardingModal.title} &mdash; Onboarding Video
+                </h3>
+                <button
+                  className="text-slate-400 hover:text-slate-700 text-xl leading-none"
+                  onClick={() => setOnboardingModal(null)}
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="bg-black">
+                {src ? (
+                  isBunny ? (
+                    <iframe
+                      src={src}
+                      allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                      allowFullScreen
+                      className="w-full aspect-video"
+                      title="onboarding-video"
+                    />
+                  ) : (
+                    <video
+                      className="w-full aspect-video"
+                      src={src}
+                      controls
+                      autoPlay
+                      preload="metadata"
+                    />
+                  )
+                ) : (
+                  <div className="flex items-center justify-center h-64 text-white text-sm">
+                    Video unavailable
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }

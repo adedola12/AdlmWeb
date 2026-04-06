@@ -225,18 +225,9 @@ export default function AdminCourses() {
     if (!file) return;
     try {
       setOnboardingBusy(true);
-      setOnboardingProg(1);
-      const created = await bunnyCreate(
-        accessToken,
-        `onboarding-${draft.sku || "course"}-${Date.now()}`,
-      );
-      const uploaded = await bunnyUploadWithProgress({
-        token: accessToken,
-        videoId: created.videoId,
-        file,
-        onProgress: (pct) => setOnboardingProg(pct),
-      });
-      setDraft((prev) => ({ ...prev, onboardingVideoUrl: uploaded.shorthand }));
+      setOnboardingProg(50);
+      const url = await uploadToCloudinary(file, "video");
+      setDraft((prev) => ({ ...prev, onboardingVideoUrl: url }));
     } catch (err) {
       alert(err.message || "Upload failed");
     } finally {
@@ -517,7 +508,7 @@ export default function AdminCourses() {
           </div>
 
           <label className="text-sm sm:col-span-2">
-            <div className="mb-1">Onboarding video (Bunny or direct)</div>
+            <div className="mb-1">Onboarding video</div>
             <input
               className="input"
               value={draft.onboardingVideoUrl}
@@ -529,7 +520,7 @@ export default function AdminCourses() {
 
           <div className="flex items-center gap-2 sm:col-span-2">
             <label className={`btn btn-sm ${onboardingBusy ? "opacity-60" : ""}`}>
-              Upload to Bunny
+              Upload video
               <input
                 type="file"
                 accept="video/*"

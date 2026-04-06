@@ -4,7 +4,7 @@ const InstallOperationSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["copyDirectory", "copyFile", "createShortcut", "hideDirectory"],
+      enum: ["copyDirectory", "copyFile", "createShortcut", "hideDirectory", "runExe"],
       default: "copyDirectory",
     },
     source: { type: String, trim: true, default: "." },
