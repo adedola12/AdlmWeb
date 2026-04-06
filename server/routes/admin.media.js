@@ -33,6 +33,8 @@ router.post("/sign", async (req, res) => {
     const paramsToSign = { timestamp, folder };
     if (public_id) paramsToSign.public_id = public_id;
     if (eager) paramsToSign.eager = eager;
+    // raw uploads (PDFs, etc.) need public access mode to be viewable
+    if (resource_type === "raw") paramsToSign.access_mode = "public";
 
     const signature = cloudinary.utils.api_sign_request(
       paramsToSign,
@@ -48,6 +50,7 @@ router.post("/sign", async (req, res) => {
       resource_type, // returned for client to pick /image|/video endpoint
       ...(public_id ? { public_id } : {}),
       ...(eager ? { eager } : {}),
+      ...(resource_type === "raw" ? { access_mode: "public" } : {}),
     });
   } catch (e) {
     return res.status(500).json({ error: e.message || "Failed to sign" });

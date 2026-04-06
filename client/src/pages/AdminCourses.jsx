@@ -254,6 +254,7 @@ export default function AdminCourses() {
       fd.append("timestamp", sig.timestamp);
       fd.append("signature", sig.signature);
       if (sig.folder) fd.append("folder", sig.folder);
+      if (sig.access_mode) fd.append("access_mode", sig.access_mode);
     }
 
     const endpoint = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resourceType}/upload`;
