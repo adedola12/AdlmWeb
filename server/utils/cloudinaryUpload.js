@@ -26,6 +26,8 @@ export function uploadBufferToCloudinary(
         folder,
         public_id: publicId, // let Cloudinary generate one if omitted
         resource_type: resourceType, // "video"
+        // raw uploads (PDFs etc.) must be public to be viewable via URL
+        ...(resourceType === "raw" ? { access_mode: "public" } : {}),
         ...extra,
       },
       (error, result) => {

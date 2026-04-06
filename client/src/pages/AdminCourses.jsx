@@ -644,9 +644,18 @@ export default function AdminCourses() {
                     return;
                   }
                   try {
-                    const url = await uploadToCloudinary(file, "raw");
-                    if (url) {
-                      setDraft((prev) => ({ ...prev, certificateTemplateUrl: url }));
+                    // Use server-side upload for PDFs (raw) to ensure public access
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    fd.append("resourceType", "raw");
+                    fd.append("folder", "adlm/certificates");
+                    const res = await apiAuthed("/admin/media/upload-file", {
+                      token: accessToken,
+                      method: "POST",
+                      body: fd,
+                    });
+                    if (res?.secure_url) {
+                      setDraft((prev) => ({ ...prev, certificateTemplateUrl: res.secure_url }));
                     }
                   } catch (err) {
                     alert(err.message || "Certificate upload failed");
