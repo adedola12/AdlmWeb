@@ -1,31 +1,40 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 /**
- * Generate a certificate PDF by loading an admin-uploaded PDF template
- * and overlaying the user's verified name and completion date.
+ * Generate a certificate PDF by loading the template via a server proxy
+ * (bypasses CORS), then overlaying the user's verified name and date.
  *
  * @param {object} opts
- * @param {string} opts.templateImageUrl - Cloudinary URL of the certificate PDF template
+ * @param {string} opts.proxyUrl - Server proxy URL e.g. "/me/courses/sku/certificate-template"
+ * @param {string} opts.accessToken - Bearer token for authenticated fetch
  * @param {string} opts.fullName - User's verified full name
  * @param {string} opts.courseDescription - e.g. "for the BIM Course on Building Works"
- * @param {string} opts.dateString - e.g. "4th of April, 2026"
- * @param {string} [opts.filename] - Download filename (default: ADLM_Certificate.pdf)
+ * @param {string} opts.dateString - e.g. "4 April 2026"
+ * @param {string} [opts.filename] - Download filename
  */
 export async function generateCertificatePdf({
-  templateImageUrl,
+  proxyUrl,
+  accessToken,
   fullName,
   courseDescription,
   dateString,
   filename = "ADLM_Certificate.pdf",
 }) {
-  if (!templateImageUrl) throw new Error("Certificate template URL is required");
+  if (!proxyUrl) throw new Error("Certificate proxy URL is required");
   if (!fullName?.trim()) throw new Error("Name is required");
 
-  // Fetch the PDF template
-  const templateBytes = await fetch(templateImageUrl).then((res) => {
-    if (!res.ok) throw new Error("Failed to fetch certificate template");
-    return res.arrayBuffer();
+  // Fetch via server proxy (no CORS issues)
+  const API_BASE = import.meta.env.VITE_API_BASE || "";
+  const url = `${API_BASE}${proxyUrl}`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(text || "Failed to fetch certificate template");
+  }
+  const templateBytes = await response.arrayBuffer();
 
   // Load the existing PDF
   const pdfDoc = await PDFDocument.load(templateBytes);
@@ -39,12 +48,10 @@ export async function generateCertificatePdf({
   const { width, height } = page.getSize();
 
   // --- Overlay the user's name ---
-  // Centered horizontally, positioned at roughly 38% from bottom
-  // (matches "Babajide Akande" position in the Figma design)
   const nameFontSize = 36;
   const nameWidth = nameFont.widthOfTextAtSize(fullName.trim(), nameFontSize);
   const nameX = (width - nameWidth) / 2;
-  const nameY = height * 0.38; // ~38% from bottom of the page
+  const nameY = height * 0.38;
 
   page.drawText(fullName.trim(), {
     x: nameX,
@@ -59,10 +66,10 @@ export async function generateCertificatePdf({
     const descFontSize = 10;
     const descWidth = textFont.widthOfTextAtSize(courseDescription, descFontSize);
     const descX = (width - descWidth) / 2;
-    const descY = nameY - 50; // below the name
+    const descY = nameY - 50;
 
     page.drawText(courseDescription, {
-      x: Math.max(descX, 50), // keep within page margins
+      x: Math.max(descX, 50),
       y: descY,
       size: descFontSize,
       font: textFont,
@@ -74,7 +81,6 @@ export async function generateCertificatePdf({
   if (dateString) {
     const dateFontSize = 10;
     const dateWidth = textFont.widthOfTextAtSize(dateString, dateFontSize);
-    // Position in the DATE area (bottom-left region of the certificate)
     const dateX = width * 0.35 - dateWidth / 2;
     const dateY = height * 0.13;
 
@@ -87,17 +93,15 @@ export async function generateCertificatePdf({
     });
   }
 
-  // Serialize the modified PDF
+  // Serialize and download
   const pdfBytes = await pdfDoc.save();
-
-  // Trigger browser download
   const blob = new Blob([pdfBytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
+  const blobUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
+  a.href = blobUrl;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(blobUrl);
 }

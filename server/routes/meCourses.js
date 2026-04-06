@@ -286,4 +286,53 @@ router.get("/:sku", async (req, res) => {
   res.json(response);
 });
 
+/**
+ * GET /me/courses/:sku/certificate-template
+ * Proxies the certificate PDF template so the client can load it
+ * without CORS issues (R2 / Cloudinary may block cross-origin fetch).
+ */
+router.get("/:sku/certificate-template", async (req, res) => {
+  try {
+    const sku = req.params.sku;
+
+    const enrollment = await CourseEnrollment.findOne({
+      userId: req.user._id,
+      courseSku: sku,
+    }).lean();
+    if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
+    if (enrollment.status !== "completed") {
+      return res.status(403).json({ error: "Course not completed" });
+    }
+
+    const course = await PaidCourse.findOne({ sku }).lean();
+    if (!course?.certificateTemplateUrl) {
+      return res.status(404).json({ error: "No certificate template" });
+    }
+
+    // Fetch the PDF from R2/Cloudinary and pipe it to the client
+    const upstream = await fetch(course.certificateTemplateUrl);
+    if (!upstream.ok) {
+      return res.status(502).json({ error: "Failed to fetch certificate template" });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+
+    const reader = upstream.body.getReader();
+    const pump = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(value);
+      }
+      res.end();
+    };
+    await pump();
+  } catch (e) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: e.message || "Certificate proxy failed" });
+    }
+  }
+});
+
 export default router;

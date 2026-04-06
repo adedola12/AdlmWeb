@@ -879,53 +879,53 @@ function LearningTab({
                           {classroom.notes}
                         </div>
                       ) : null}
-                    </div>
 
-                    <div className="flex flex-wrap gap-2 md:w-auto">
-                      <a
-                        className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
-                        href={course.sku ? `/learn/course/${course.sku}` : "#"}
-                      >
-                        Open course
-                      </a>
-                      {course.onboardingVideoUrl ? (
-                        <button
-                          className="px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 transition"
-                          onClick={() =>
-                            setOnboardingModal({
-                              title: course.title,
-                              url: course.onboardingVideoUrl,
-                            })
-                          }
-                        >
-                          Watch Onboarding
-                        </button>
-                      ) : null}
-                      {classroom.joinUrl ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <a
-                          className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
-                          href={classroom.joinUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                          className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
+                          href={course.sku ? `/learn/course/${course.sku}` : "#"}
                         >
-                          Go to classroom
+                          Open course
                         </a>
-                      ) : null}
-                      {entry.enrollment?.status === "completed" && course.certificateTemplateUrl ? (
-                        <button
-                          className="px-3 py-2 rounded-md bg-amber-600 text-white text-sm hover:bg-amber-700 transition"
-                          onClick={() =>
-                            setCertModal({
-                              templateUrl: course.certificateTemplateUrl,
-                              title: course.title,
-                              description: course.blurb || "",
-                              completionDate: entry.enrollment?.certificateIssuedAt || entry.enrollment?.updatedAt,
-                            })
-                          }
-                        >
-                          Download Certificate
-                        </button>
-                      ) : null}
+                        {course.onboardingVideoUrl ? (
+                          <button
+                            className="px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 transition"
+                            onClick={() =>
+                              setOnboardingModal({
+                                title: course.title,
+                                url: course.onboardingVideoUrl,
+                              })
+                            }
+                          >
+                            Watch Onboarding
+                          </button>
+                        ) : null}
+                        {classroom.joinUrl ? (
+                          <a
+                            className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
+                            href={classroom.joinUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Go to classroom
+                          </a>
+                        ) : null}
+                        {entry.enrollment?.status === "completed" && course.certificateTemplateUrl ? (
+                          <button
+                            className="px-3 py-2 rounded-md bg-amber-600 text-white text-sm hover:bg-amber-700 transition"
+                            onClick={() =>
+                              setCertModal({
+                                sku: course.sku || entry.enrollment?.courseSku,
+                                title: course.title,
+                                description: course.blurb || "",
+                                completionDate: entry.enrollment?.certificateIssuedAt || entry.enrollment?.updatedAt,
+                              })
+                            }
+                          >
+                            Download Certificate
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1018,7 +1018,7 @@ function LearningTab({
       <CertificateNameModal
         open={!!certModal}
         onClose={() => setCertModal(null)}
-        certificateTemplateUrl={certModal?.templateUrl}
+        courseSku={certModal?.sku}
         courseTitle={certModal?.title}
         courseDescription={certModal?.description}
         completionDate={certModal?.completionDate}

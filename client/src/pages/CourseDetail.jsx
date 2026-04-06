@@ -369,7 +369,7 @@ export default function CourseDetail() {
       <CertificateNameModal
         open={certModalOpen}
         onClose={() => setCertModalOpen(false)}
-        certificateTemplateUrl={course?.certificateTemplateUrl}
+        courseSku={course?.sku || sku}
         courseTitle={course?.title}
         courseDescription={course?.blurb || ""}
         completionDate={enrollment?.certificateIssuedAt || enrollment?.updatedAt}

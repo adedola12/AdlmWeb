@@ -7,22 +7,22 @@ import { generateCertificatePdf } from "../lib/generateCertificatePdf.js";
  * a certificate PDF generated client-side from the course template.
  *
  * Props:
- *   open                  - boolean
- *   onClose               - () => void
- *   certificateTemplateUrl - Cloudinary URL of the certificate background PNG
- *   courseTitle            - used for the filename
- *   courseDescription      - text placed on the certificate (e.g. "for the BIM Course on Building Works")
- *   completionDate        - ISO date string or Date
+ *   open              - boolean
+ *   onClose           - () => void
+ *   courseSku         - course SKU (used to build the proxy URL)
+ *   courseTitle        - used for the filename
+ *   courseDescription  - text placed on the certificate
+ *   completionDate    - ISO date string or Date
  */
 export default function CertificateNameModal({
   open,
   onClose,
-  certificateTemplateUrl,
+  courseSku,
   courseTitle,
   courseDescription,
   completionDate,
 }) {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [firstName, setFirstName] = React.useState(user?.firstName || "");
   const [lastName, setLastName] = React.useState(user?.lastName || "");
   const [generating, setGenerating] = React.useState(false);
@@ -53,11 +53,16 @@ export default function CertificateNameModal({
       setError("Please enter both your first name and last name.");
       return;
     }
+    if (!courseSku) {
+      setError("Course information is missing.");
+      return;
+    }
     setError("");
     setGenerating(true);
     try {
       await generateCertificatePdf({
-        templateImageUrl: certificateTemplateUrl,
+        proxyUrl: `/me/courses/${encodeURIComponent(courseSku)}/certificate-template`,
+        accessToken,
         fullName: `${fn} ${ln}`,
         courseDescription: courseDescription || "",
         dateString: formatDate(completionDate),
