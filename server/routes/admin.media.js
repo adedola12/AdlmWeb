@@ -5,6 +5,7 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import cloudinary from "../cloudinary.js"; // configured v2 client
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { uploadAsset, deleteAsset } from "../utils/cloudinary.js";
+import { uploadBufferToR2, isR2Configured } from "../utils/r2Upload.js";
 
 const router = express.Router();
 
@@ -171,6 +172,38 @@ router.get("/assets", async (req, res) => {
     res.json({ items, next: out.next_cursor || null });
   } catch (e) {
     res.status(500).json({ error: e.message || "Cloudinary list failed" });
+  }
+});
+
+/**
+ * POST /admin/media/upload-certificate
+ * Uploads a PDF certificate template to Cloudflare R2.
+ * R2 serves files with correct Content-Type so PDFs open in-browser.
+ */
+router.post("/upload-certificate", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "file is required" });
+
+    const mime = req.file.mimetype || "";
+    if (mime !== "application/pdf") {
+      return res.status(400).json({ error: "Only PDF files are allowed" });
+    }
+
+    if (!isR2Configured()) {
+      return res.status(500).json({
+        error: "Cloudflare R2 is not configured. Add R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, and R2_PUBLIC_BASE_URL.",
+      });
+    }
+
+    const key = `adlm/certificates/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const out = await uploadBufferToR2(req.file.buffer, {
+      key,
+      contentType: "application/pdf",
+    });
+
+    return res.json(out);
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Certificate upload failed" });
   }
 });
 

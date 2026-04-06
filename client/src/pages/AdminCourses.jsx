@@ -644,12 +644,10 @@ export default function AdminCourses() {
                     return;
                   }
                   try {
-                    // Use server-side upload for PDFs (raw) to ensure public access
+                    // Upload PDF to Cloudflare R2 (serves with correct Content-Type)
                     const fd = new FormData();
                     fd.append("file", file);
-                    fd.append("resourceType", "raw");
-                    fd.append("folder", "adlm/certificates");
-                    const res = await apiAuthed("/admin/media/upload-file", {
+                    const res = await apiAuthed("/admin/media/upload-certificate", {
                       token: accessToken,
                       method: "POST",
                       body: fd,
