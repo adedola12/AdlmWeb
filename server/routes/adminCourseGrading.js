@@ -3,6 +3,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
+import { User } from "../models/User.js";
 import PDFDocument from "pdfkit";
 import cloudinary from "../utils/cloudinaryConfig.js";
 
@@ -68,6 +69,70 @@ router.post("/submissions/:id/grade", async (req, res) => {
   }
 
   res.json({ ok: true });
+});
+
+// list all enrollments with user + course info
+router.get("/enrollments", async (_req, res) => {
+  try {
+    const enrollments = await CourseEnrollment.find({})
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!enrollments.length) return res.json([]);
+
+    const userIds = [...new Set(enrollments.map((e) => e.userId).filter(Boolean))];
+    const skus = [...new Set(enrollments.map((e) => e.courseSku).filter(Boolean))];
+
+    const [users, courses] = await Promise.all([
+      User.find({ _id: { $in: userIds } }).select("firstName lastName email").lean(),
+      PaidCourse.find({ sku: { $in: skus } }).select("sku title").lean(),
+    ]);
+
+    const userMap = Object.fromEntries(users.map((u) => [String(u._id), u]));
+    const courseMap = Object.fromEntries(courses.map((c) => [c.sku, c]));
+
+    const out = enrollments.map((enr) => {
+      const user = userMap[String(enr.userId)] || {};
+      const course = courseMap[enr.courseSku] || {};
+      return {
+        _id: enr._id,
+        userId: enr.userId,
+        email: enr.email || user.email || "",
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        courseSku: enr.courseSku,
+        courseTitle: course.title || enr.courseSku,
+        status: enr.status,
+        completedModules: enr.completedModules || [],
+        certificateIssuedAt: enr.certificateIssuedAt || null,
+        createdAt: enr.createdAt,
+      };
+    });
+
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed to load enrollments" });
+  }
+});
+
+// admin marks enrollment as completed
+router.post("/enrollments/:id/complete", async (req, res) => {
+  try {
+    const enr = await CourseEnrollment.findById(req.params.id);
+    if (!enr) return res.status(404).json({ error: "Enrollment not found" });
+
+    if (enr.status === "completed") {
+      return res.json({ ok: true, alreadyCompleted: true });
+    }
+
+    enr.status = "completed";
+    enr.certificateIssuedAt = new Date();
+    await enr.save();
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed to mark complete" });
+  }
 });
 
 // --- certificate helper --- //

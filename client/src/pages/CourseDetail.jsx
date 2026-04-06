@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
+import CertificateNameModal from "../components/CertificateNameModal.jsx";
 
 function accessTone(access) {
   if (access?.isExpired) {
@@ -29,6 +30,7 @@ export default function CourseDetail() {
   const [err, setErr] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
   const [activeCode, setActiveCode] = React.useState("");
+  const [certModalOpen, setCertModalOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
     try {
@@ -195,7 +197,14 @@ export default function CourseDetail() {
                 </a>
               ) : null}
 
-              {enrollment?.certificateUrl ? (
+              {enrollment?.status === "completed" && course?.certificateTemplateUrl ? (
+                <button
+                  className="px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 transition"
+                  onClick={() => setCertModalOpen(true)}
+                >
+                  Download Certificate
+                </button>
+              ) : enrollment?.certificateUrl ? (
                 <a
                   className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
                   href={enrollment.certificateUrl}
@@ -356,6 +365,15 @@ export default function CourseDetail() {
           </div>
         </div>
       </div>
+
+      <CertificateNameModal
+        open={certModalOpen}
+        onClose={() => setCertModalOpen(false)}
+        certificateTemplateUrl={course?.certificateTemplateUrl}
+        courseTitle={course?.title}
+        courseDescription={course?.blurb || ""}
+        completionDate={enrollment?.certificateIssuedAt || enrollment?.updatedAt}
+      />
     </div>
   );
 }

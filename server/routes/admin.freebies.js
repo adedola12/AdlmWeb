@@ -100,6 +100,7 @@ router.post("/", requireAuth, requireStaff, async (req, res) => {
     const doc = await Freebie.create({
       title,
       description: (req.body.description || "").trim(),
+      productKey: (req.body.productKey || "").trim().toLowerCase(),
       imageUrl: cleanUrl(req.body.imageUrl),
       downloadUrl: cleanUrl(req.body.downloadUrl),
       videos: normalizeVideos(req.body.videos),
@@ -128,6 +129,7 @@ router.put("/:id", requireAuth, requireStaff, async (req, res) => {
     const update = {
       title,
       description: (req.body.description || "").trim(),
+      productKey: (req.body.productKey || "").trim().toLowerCase(),
       imageUrl: cleanUrl(req.body.imageUrl),
       downloadUrl: cleanUrl(req.body.downloadUrl),
       videos: normalizeVideos(req.body.videos),

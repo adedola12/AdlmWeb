@@ -7,6 +7,7 @@ import { apiAuthed } from "../http.js";
 import { useNavigate } from "react-router-dom";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import { parseBunny, bunnyIframeSrc } from "../lib/video";
+import CertificateNameModal from "../components/CertificateNameModal.jsx";
 
 dayjs.extend(relativeTime);
 
@@ -775,6 +776,7 @@ function LearningTab({
   const hasOnline = Array.isArray(courses) && courses.length > 0;
   const hasPhysical = Array.isArray(pEnrollments) && pEnrollments.length > 0;
   const [onboardingModal, setOnboardingModal] = React.useState(null);
+  const [certModal, setCertModal] = React.useState(null);
 
   return (
     <div className="space-y-6">
@@ -909,6 +911,21 @@ function LearningTab({
                           Go to classroom
                         </a>
                       ) : null}
+                      {entry.enrollment?.status === "completed" && course.certificateTemplateUrl ? (
+                        <button
+                          className="px-3 py-2 rounded-md bg-amber-600 text-white text-sm hover:bg-amber-700 transition"
+                          onClick={() =>
+                            setCertModal({
+                              templateUrl: course.certificateTemplateUrl,
+                              title: course.title,
+                              description: course.blurb || "",
+                              completionDate: entry.enrollment?.certificateIssuedAt || entry.enrollment?.updatedAt,
+                            })
+                          }
+                        >
+                          Download Certificate
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -997,6 +1014,15 @@ function LearningTab({
           </div>
         )}
       </div>
+
+      <CertificateNameModal
+        open={!!certModal}
+        onClose={() => setCertModal(null)}
+        certificateTemplateUrl={certModal?.templateUrl}
+        courseTitle={certModal?.title}
+        courseDescription={certModal?.description}
+        completionDate={certModal?.completionDate}
+      />
 
       {onboardingModal ? (() => {
         const parsed = parseBunny(onboardingModal.url || "");

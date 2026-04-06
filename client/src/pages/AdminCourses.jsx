@@ -613,9 +613,10 @@ export default function AdminCourses() {
           </label>
 
           <label className="text-sm sm:col-span-2">
-            <div className="mb-1">Certificate template URL</div>
+            <div className="mb-1">Certificate template (PDF)</div>
             <input
               className="input"
+              placeholder="Cloudinary URL of the certificate PDF"
               value={draft.certificateTemplateUrl}
               onChange={(e) =>
                 setDraft((prev) => ({
@@ -625,6 +626,45 @@ export default function AdminCourses() {
               }
             />
           </label>
+
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <label className="btn btn-sm">
+              Upload certificate (PDF)
+              <input
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.type !== "application/pdf") {
+                    alert("Only PDF files are allowed for the certificate template.");
+                    e.target.value = "";
+                    return;
+                  }
+                  try {
+                    const url = await uploadToCloudinary(file, "raw");
+                    if (url) {
+                      setDraft((prev) => ({ ...prev, certificateTemplateUrl: url }));
+                    }
+                  } catch (err) {
+                    alert(err.message || "Certificate upload failed");
+                  }
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {draft.certificateTemplateUrl ? (
+              <a
+                className="text-sm text-adlm-blue-700 underline truncate max-w-xs"
+                href={draft.certificateTemplateUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View uploaded certificate
+              </a>
+            ) : null}
+          </div>
 
           <div className="space-y-2 sm:col-span-2">
             <div className="font-medium">Modules</div>
