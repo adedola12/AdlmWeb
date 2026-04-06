@@ -12,6 +12,7 @@ const FreebieSchema = new mongoose.Schema(
   {
     title: { type: String, trim: true, required: true, maxlength: 140 },
     description: { type: String, trim: true, default: "", maxlength: 8000 },
+    productKey: { type: String, trim: true, lowercase: true, default: "" },
 
     imageUrl: { type: String, trim: true, default: "" },
     downloadUrl: { type: String, trim: true, default: "" },

@@ -656,15 +656,31 @@ router.get(
   "/installations",
   asyncHandler(async (req, res) => {
     // ?view=all  → return every approved purchase that has an installation record
+    // ?search=email@example.com → filter by user email or username
     // default   → only pending + complete (legacy behaviour)
     const view = String(req.query.view || "").toLowerCase();
+    const search = String(req.query.search || "").trim();
     const q = { status: "approved" };
 
     if (view === "all") {
-      // Return everything that has an installation status
       q["installation.status"] = { $exists: true };
     } else {
       q["installation.status"] = { $in: ["pending", "complete"] };
+    }
+
+    // Filter by email/username if search is provided
+    if (search) {
+      const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const matchingUsers = await User.find(
+        { $or: [{ email: rx }, { username: rx }] },
+        { _id: 1 },
+      ).limit(50).lean();
+      const userIds = matchingUsers.map((u) => u._id);
+      if (userIds.length > 0) {
+        q.userId = { $in: userIds };
+      } else {
+        return res.json([]); // no matching users
+      }
     }
 
     const list = await Purchase.find(q).sort({ decidedAt: -1 }).limit(500);
