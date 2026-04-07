@@ -2,11 +2,11 @@
 import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
-import { requireRole } from "../middleware/requireRole.js";
+import { requireStaff } from "../middleware/roles.js";
 import { ZONES } from "../util/zones.js";
 
 const router = express.Router();
-router.use(requireAuth, requireRole("admin"));
+router.use(requireAuth, requireStaff);
 
 /* --------- connect to the RateGen DB (NOT the auth DB) --------- */
 let rateConn = null;

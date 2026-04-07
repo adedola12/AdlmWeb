@@ -2,13 +2,14 @@
 import express from "express";
 import mongoose from "mongoose";
 import { RateGenRate } from "../models/RateGenRate.js";
-import { requireAdmin } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
+import { requireStaff } from "../middleware/roles.js";
 import { ensureDb } from "../db.js";
 
 const router = express.Router();
 
-// all endpoints here require admin (role-based, not x-admin-key)
-router.use(requireAdmin);
+// admin + mini_admin can manage rates
+router.use(requireAuth, requireStaff);
 
 /** canonical section keys */
 const ALLOWED_SECTION_KEYS = new Set([

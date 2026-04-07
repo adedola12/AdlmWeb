@@ -1,6 +1,7 @@
 // server/routes/admin.rategen.master.js
 import express from "express";
-import { requireAdmin } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
+import { requireStaff } from "../middleware/roles.js";
 import {
   fetchMasterMaterials,
   fetchMasterLabour,
@@ -9,8 +10,8 @@ import { normalizeZone } from "../util/zones.js";
 
 const router = express.Router();
 
-// admin only
-router.use(requireAdmin);
+// admin + mini_admin
+router.use(requireAuth, requireStaff);
 
 // GET /admin/rategen-v2/master?zone=south_west
 router.get("/master", async (req, res, next) => {
