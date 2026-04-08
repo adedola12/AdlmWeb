@@ -15,6 +15,12 @@ router.use(requireAuth, requireAdmin);
 // memory storage keeps file in RAM so we can stream it to Cloudinary
 const upload = multer({ storage: multer.memoryStorage() });
 
+// larger limit for video uploads (up to 200MB)
+const uploadLarge = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 },
+});
+
 /**
  * POST /admin/media/sign
  * Returns signature for signed client upload
@@ -180,7 +186,7 @@ router.get("/assets", async (req, res) => {
  * Uploads a video file to Cloudflare R2 (for large files >10MB).
  * R2 serves with correct Content-Type so videos play in-browser.
  */
-router.post("/upload-video-r2", upload.single("file"), async (req, res) => {
+router.post("/upload-video-r2", uploadLarge.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "file is required" });
 

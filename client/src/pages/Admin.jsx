@@ -611,43 +611,37 @@ export default function Admin() {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
+    setIhUploadProg(1);
 
     const TEN_MB = 10 * 1024 * 1024;
     const isLarge = file.size > TEN_MB;
-    const endpoint = isLarge ? "/admin/media/upload-video-r2" : "/admin/media/upload-file";
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", endpoint);
-    xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
-
-    const fd = new FormData();
-    fd.append("file", file);
-    if (!isLarge) fd.append("resourceType", "video");
-
-    xhr.upload.onprogress = (ev) => {
-      if (!ev.lengthComputable) return;
-      setIhUploadProg(Math.round((ev.loaded / ev.total) * 100));
-    };
-
-    xhr.onload = () => {
-      setIhUploadProg(0);
+    // Use apiAuthed for server-side upload (handles API_BASE + auth)
+    const doUpload = async () => {
       try {
-        const json = JSON.parse(xhr.responseText || "{}");
-        if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) {
-          setIhVideoDraft(json.secure_url);
+        const fd = new FormData();
+        fd.append("file", file);
+        if (!isLarge) fd.append("resourceType", "video");
+
+        const endpoint = isLarge ? "/admin/media/upload-video-r2" : "/admin/media/upload-file";
+        const res = await apiAuthed(endpoint, {
+          token: accessToken,
+          method: "POST",
+          body: fd,
+        });
+        if (res?.secure_url) {
+          setIhVideoDraft(res.secure_url);
           setIhMsg("Video uploaded! Click Save to apply.");
         } else {
-          setIhMsg(json?.error || "Upload failed");
+          setIhMsg("Upload failed — no URL returned");
         }
-      } catch {
-        setIhMsg("Upload failed");
+      } catch (err) {
+        setIhMsg(err?.message || "Upload failed");
+      } finally {
+        setIhUploadProg(0);
       }
     };
-    xhr.onerror = () => {
-      setIhUploadProg(0);
-      setIhMsg("Network error during upload");
-    };
-    xhr.send(fd);
+    doUpload();
   }
 
   async function load() {
