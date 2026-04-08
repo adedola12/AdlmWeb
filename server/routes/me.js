@@ -130,6 +130,7 @@ function toEntitlementV2(ent) {
 
   const expired = isEntExpiredAt(ent.expiresAt);
   const daysLeft = daysLeftFor(ent.expiresAt);
+  const maxSeats = Math.max(parseInt(ent.seats || 1, 10), 1);
 
   return {
     productKey: ent.productKey,
@@ -140,18 +141,26 @@ function toEntitlementV2(ent) {
     isExpired: expired,
     daysLeft,
 
-    seats: Math.max(parseInt(ent.seats || 1, 10), 1),
+    seats: maxSeats,
     seatsUsed: act.length,
 
     licenseType: ent.licenseType || "personal",
     organizationName: ent.organizationName || "",
 
-    devices: act.map((d) => ({
-      fingerprint: maskFp(d.fingerprint),
-      name: d.name || "",
-      boundAt: d.boundAt || null,
-      lastSeenAt: d.lastSeenAt || null,
-    })),
+    seatsAvailable: maxSeats - act.length,
+
+    // Only send bound devices if ALL seats are used.
+    // When seats are still available, return empty so the desktop client
+    // allows the install (it checks devices.length > 0 to gate access).
+    // The bind-device endpoint will properly register the new device.
+    devices: act.length >= maxSeats
+      ? act.map((d) => ({
+          fingerprint: String(d.fingerprint || ""),
+          name: d.name || "",
+          boundAt: d.boundAt || null,
+          lastSeenAt: d.lastSeenAt || null,
+        }))
+      : [],
   };
 }
 
