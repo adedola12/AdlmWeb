@@ -176,6 +176,36 @@ router.get("/assets", async (req, res) => {
 });
 
 /**
+ * POST /admin/media/upload-video-r2
+ * Uploads a video file to Cloudflare R2 (for large files >10MB).
+ * R2 serves with correct Content-Type so videos play in-browser.
+ */
+router.post("/upload-video-r2", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "file is required" });
+
+    if (!isR2Configured()) {
+      return res.status(500).json({
+        error: "Cloudflare R2 is not configured.",
+      });
+    }
+
+    const mime = req.file.mimetype || "video/mp4";
+    const ext = (req.file.originalname || "video.mp4").split(".").pop() || "mp4";
+    const key = `adlm/videos/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+
+    const out = await uploadBufferToR2(req.file.buffer, {
+      key,
+      contentType: mime,
+    });
+
+    return res.json(out);
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Video upload failed" });
+  }
+});
+
+/**
  * POST /admin/media/upload-certificate
  * Uploads a PDF certificate template to Cloudflare R2.
  * R2 serves files with correct Content-Type so PDFs open in-browser.

@@ -6,6 +6,7 @@ import { User } from "../models/User.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
+import { Setting } from "../models/Setting.js";
 
 const router = express.Router();
 
@@ -455,7 +456,10 @@ router.get(
     });
 
     // 7) Counts/stats used on Dashboard
-    const ordersCount = await Purchase.countDocuments({ userId: req.user._id });
+    const [ordersCount, globalSettings] = await Promise.all([
+      Purchase.countDocuments({ userId: req.user._id }),
+      Setting.findOne({ key: "global" }).select("installerHubUrl installerHubVideoUrl").lean(),
+    ]);
 
     return res.json({
       email: user.email,
@@ -465,6 +469,12 @@ router.get(
       products, // for "My Products" tab + Active Products stat
       entitlements, // for Subscriptions tab (now includes productName/isCourse/billingInterval/installFee)
       installations: installsEnriched,
+
+      // Installer Hub settings (global, admin-configured)
+      installerHub: {
+        downloadUrl: globalSettings?.installerHubUrl || "",
+        videoUrl: globalSettings?.installerHubVideoUrl || "",
+      },
 
       ordersCount, // used by Dashboard total orders stat
       totalOrders: ordersCount, // legacy alias (safe)

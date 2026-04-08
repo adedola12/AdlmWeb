@@ -51,4 +51,38 @@ router.post("/mobile-app-url", async (req, res) => {
   res.json({ ok: true, mobileAppUrl: s.mobileAppUrl });
 });
 
+// GET installer hub settings
+router.get("/installer-hub", async (_req, res) => {
+  const s = await Setting.findOne({ key: "global" }).lean();
+  res.json({
+    installerHubUrl: s?.installerHubUrl || "",
+    installerHubVideoUrl: s?.installerHubVideoUrl || "",
+  });
+});
+
+// POST set installer hub settings { installerHubUrl?, installerHubVideoUrl? }
+router.post("/installer-hub", async (req, res) => {
+  const update = {};
+  if (typeof req.body?.installerHubUrl === "string") {
+    update.installerHubUrl = req.body.installerHubUrl.trim();
+  }
+  if (typeof req.body?.installerHubVideoUrl === "string") {
+    update.installerHubVideoUrl = req.body.installerHubVideoUrl.trim();
+  }
+  if (!Object.keys(update).length) {
+    return res.status(400).json({ error: "Provide installerHubUrl or installerHubVideoUrl" });
+  }
+
+  const s = await Setting.findOneAndUpdate(
+    { key: "global" },
+    update,
+    { upsert: true, new: true },
+  );
+  res.json({
+    ok: true,
+    installerHubUrl: s.installerHubUrl,
+    installerHubVideoUrl: s.installerHubVideoUrl,
+  });
+});
+
 export default router;

@@ -503,6 +503,7 @@ export default function Dashboard() {
               {activeTab === "installations" && (
                 <InstallationsTab
                   installations={summary?.installations || []}
+                  installerHub={summary?.installerHub}
                   // ✅ physical trainings (new)
                   pEnrollments={pEnrollments}
                   loadingPTrainings={loadingPEnrollments}
@@ -1454,11 +1455,13 @@ function OrdersTab({
 
 function InstallationsTab({
   installations = [],
+  installerHub,
   pEnrollments = [],
   loadingPTrainings,
   pTrainingsError,
   onRefreshPTrainings,
 }) {
+  const [setupVideoModal, setSetupVideoModal] = React.useState(false);
   const trainingInstalls = (pEnrollments || []).filter(
     (x) => String(x?.status || "").toLowerCase() === "approved",
   );
@@ -1700,32 +1703,54 @@ function InstallationsTab({
                   </div>
 
                   {isPending && (
-                    <div className="mt-3 text-sm text-slate-700 space-y-2">
+                    <div className="mt-3 text-sm text-slate-700 space-y-3">
                       <div className="font-medium">Next steps</div>
-                      <ul className="list-disc pl-5 space-y-1">
-                        <li>
-                          Download AnyDesk:{" "}
+
+                      <div className="flex flex-wrap gap-2">
+                        {installerHub?.downloadUrl ? (
                           <a
-                            className="text-adlm-blue-700"
-                            href={p.installation?.anydeskUrl}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-adlm-blue-700 text-white text-sm font-medium hover:bg-[#0050c8] transition"
+                            href={installerHub.downloadUrl}
                             target="_blank"
                             rel="noreferrer"
                           >
-                            Click here
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Download Installer Hub
                           </a>
-                        </li>
-                        <li>Send your AnyDesk Address to support</li>
+                        ) : null}
+
+                        {installerHub?.videoUrl ? (
+                          <button
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition"
+                            onClick={() => setSetupVideoModal(true)}
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Watch Setup Guide
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                        {installerHub?.downloadUrl ? (
+                          <li>Download and run the Installer Hub to set up your software</li>
+                        ) : null}
                         <li>
-                          Watch installation process video:{" "}
+                          Or use AnyDesk for remote installation:{" "}
                           <a
-                            className="text-adlm-blue-700"
-                            href={p.installation?.installVideoUrl}
+                            className="text-adlm-blue-700 underline"
+                            href={p.installation?.anydeskUrl || "https://anydesk.com/en/downloads/windows"}
                             target="_blank"
                             rel="noreferrer"
                           >
-                            Watch
+                            Download AnyDesk
                           </a>
                         </li>
+                        <li>Send your AnyDesk Address to support for remote setup</li>
                       </ul>
                     </div>
                   )}
@@ -1742,6 +1767,38 @@ function InstallationsTab({
           </div>
         )}
       </div>
+
+      {/* Setup Guide Video Modal */}
+      {setupVideoModal && installerHub?.videoUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={() => setSetupVideoModal(false)}
+        >
+          <div
+            className="relative w-full max-w-3xl mx-4 rounded-xl bg-white shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="font-semibold text-sm">Installer Hub - Setup Guide</h3>
+              <button
+                className="text-slate-400 hover:text-slate-700 text-xl leading-none"
+                onClick={() => setSetupVideoModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="bg-black">
+              <video
+                className="w-full aspect-video"
+                src={installerHub.videoUrl}
+                controls
+                autoPlay
+                preload="metadata"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

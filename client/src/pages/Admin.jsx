@@ -535,12 +535,29 @@ export default function Admin() {
   const [settingsBusy, setSettingsBusy] = React.useState(false);
   const [settingsMsg, setSettingsMsg] = React.useState("");
 
+  // ── Installer Hub state ──
+  const [ihUrl, setIhUrl] = React.useState("");
+  const [ihUrlDraft, setIhUrlDraft] = React.useState("");
+  const [ihVideoUrl, setIhVideoUrl] = React.useState("");
+  const [ihVideoDraft, setIhVideoDraft] = React.useState("");
+  const [ihBusy, setIhBusy] = React.useState(false);
+  const [ihMsg, setIhMsg] = React.useState("");
+  const [ihUploadProg, setIhUploadProg] = React.useState(0);
+
   const loadSettings = React.useCallback(async () => {
     try {
-      const data = await apiAuthed("/admin/settings/mobile-app-url", { token: accessToken });
-      const url = data?.mobileAppUrl || "";
+      const [mobileData, ihData] = await Promise.all([
+        apiAuthed("/admin/settings/mobile-app-url", { token: accessToken }),
+        apiAuthed("/admin/settings/installer-hub", { token: accessToken }),
+      ]);
+      const url = mobileData?.mobileAppUrl || "";
       setSettingsMobileAppUrl(url);
       setSettingsMobileAppDraft(url);
+
+      setIhUrl(ihData?.installerHubUrl || "");
+      setIhUrlDraft(ihData?.installerHubUrl || "");
+      setIhVideoUrl(ihData?.installerHubVideoUrl || "");
+      setIhVideoDraft(ihData?.installerHubVideoUrl || "");
     } catch { /* ignore */ }
   }, [accessToken]);
 
@@ -566,6 +583,72 @@ export default function Admin() {
       setSettingsBusy(false);
     }
   };
+
+  const saveInstallerHub = async () => {
+    setIhBusy(true);
+    setIhMsg("");
+    try {
+      await apiAuthed("/admin/settings/installer-hub", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          installerHubUrl: ihUrlDraft,
+          installerHubVideoUrl: ihVideoDraft,
+        }),
+      });
+      setIhUrl(ihUrlDraft);
+      setIhVideoUrl(ihVideoDraft);
+      setIhMsg("Installer Hub settings saved!");
+    } catch (e) {
+      setIhMsg(e?.message || "Failed to save");
+    } finally {
+      setIhBusy(false);
+    }
+  };
+
+  function handleIhVideoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    const TEN_MB = 10 * 1024 * 1024;
+    const isLarge = file.size > TEN_MB;
+    const endpoint = isLarge ? "/admin/media/upload-video-r2" : "/admin/media/upload-file";
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", endpoint);
+    xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+
+    const fd = new FormData();
+    fd.append("file", file);
+    if (!isLarge) fd.append("resourceType", "video");
+
+    xhr.upload.onprogress = (ev) => {
+      if (!ev.lengthComputable) return;
+      setIhUploadProg(Math.round((ev.loaded / ev.total) * 100));
+    };
+
+    xhr.onload = () => {
+      setIhUploadProg(0);
+      try {
+        const json = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300 && json.secure_url) {
+          setIhVideoDraft(json.secure_url);
+          setIhMsg("Video uploaded! Click Save to apply.");
+        } else {
+          setIhMsg(json?.error || "Upload failed");
+        }
+      } catch {
+        setIhMsg("Upload failed");
+      }
+    };
+    xhr.onerror = () => {
+      setIhUploadProg(0);
+      setIhMsg("Network error during upload");
+    };
+    xhr.send(fd);
+  }
 
   async function load() {
     setLoading(true);
@@ -2613,6 +2696,95 @@ export default function Admin() {
                   </a>
                 </p>
               )}
+            </div>
+
+            {/* Installer Hub */}
+            <div className="border-t pt-6">
+              <h3 className="font-semibold text-base mb-1">Installer Hub</h3>
+              <p className="text-xs text-slate-500 mb-4">
+                Configure the Installer Hub download link and setup guide video. Users will see these in their Installations section when they have pending installations.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Installer Hub Download URL
+                  </label>
+                  <p className="text-xs text-slate-500 mb-2">
+                    Paste a Google Drive link or direct download URL for the Installer Hub setup file.
+                  </p>
+                  <input
+                    type="url"
+                    className="w-full border rounded px-3 py-2 text-sm"
+                    placeholder="https://drive.google.com/file/d/..."
+                    value={ihUrlDraft}
+                    onChange={(e) => setIhUrlDraft(e.target.value)}
+                  />
+                  {ihUrl && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Current:{" "}
+                      <a href={ihUrl} target="_blank" rel="noreferrer" className="text-adlm-blue-700 underline break-all">
+                        {ihUrl.length > 80 ? ihUrl.slice(0, 80) + "..." : ihUrl}
+                      </a>
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Setup Guide Video URL
+                  </label>
+                  <p className="text-xs text-slate-500 mb-2">
+                    Upload a video or paste a URL. Files over 10MB go to Cloudflare R2, smaller files to Cloudinary.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      className="flex-1 border rounded px-3 py-2 text-sm"
+                      placeholder="https://..."
+                      value={ihVideoDraft}
+                      onChange={(e) => setIhVideoDraft(e.target.value)}
+                    />
+                    <label className="px-3 py-2 rounded bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 cursor-pointer transition shrink-0">
+                      Upload video
+                      <input
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={handleIhVideoUpload}
+                      />
+                    </label>
+                  </div>
+                  {ihUploadProg > 0 && (
+                    <div className="mt-2 h-2 overflow-hidden rounded bg-slate-200">
+                      <div className="h-full bg-adlm-blue-700 transition-all" style={{ width: `${ihUploadProg}%` }} />
+                    </div>
+                  )}
+                  {ihVideoUrl && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Current:{" "}
+                      <a href={ihVideoUrl} target="_blank" rel="noreferrer" className="text-adlm-blue-700 underline break-all">
+                        {ihVideoUrl.length > 80 ? ihVideoUrl.slice(0, 80) + "..." : ihVideoUrl}
+                      </a>
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={saveInstallerHub}
+                    disabled={ihBusy || (ihUrlDraft === ihUrl && ihVideoDraft === ihVideoUrl)}
+                    className="px-4 py-2 rounded bg-adlm-blue-700 text-white text-sm font-medium hover:bg-[#0050c8] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {ihBusy ? "Saving..." : "Save Installer Hub Settings"}
+                  </button>
+                  {ihMsg && (
+                    <span className={`text-sm ${ihMsg.includes("Failed") || ihMsg.includes("error") ? "text-red-600" : "text-green-600"}`}>
+                      {ihMsg}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
