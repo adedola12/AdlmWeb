@@ -1,6 +1,7 @@
 import express from "express";
 import PDFDocument from "pdfkit";
 import dayjs from "dayjs";
+import QRCode from "qrcode";
 import { requireAuth, requireAdmin, verifyAccess } from "../middleware/auth.js";
 import { Invoice } from "../models/Invoice.js";
 import { sendMail } from "../util/mailer.js";
@@ -197,263 +198,204 @@ router.delete(
   }),
 );
 
-// Generate PDF
+// Generate PDF — Figma-matched ADLM invoice design
 router.get(
   "/:id/pdf",
   asyncHandler(async (req, res) => {
     const inv = await Invoice.findById(req.params.id).lean();
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    // Generate QR code as data URL
+    let qrDataUrl = "";
+    try {
+      qrDataUrl = await QRCode.toDataURL("https://www.adlmstudio.net", {
+        width: 80, margin: 1,
+      });
+    } catch { /* ignore */ }
+
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${inv.invoiceNumber}.pdf"`,
+      `inline; filename="${inv.invoiceNumber}.pdf"`,
     );
     doc.pipe(res);
 
-    const leftCol = 50;
+    const leftCol = 40;
     const rightCol = 350;
-    const pageWidth = 595.28 - 100; // A4 width minus margins
+    const pageWidth = 595.28 - 80; // A4 width minus margins
 
-    // ── Header ──
+    const curr = inv.currency === "USD" ? "$" : "\u20A6";
+    const fmtN = (n) => `${curr}${Number(n || 0).toLocaleString()}`;
+
+    // ── Header: ADLM Studio + Invoice ──
     doc
-      .fontSize(22)
+      .fontSize(18)
       .font("Helvetica-Bold")
-      .fillColor("#1a2b4a")
-      .text("ADLM Studio", leftCol, 50);
+      .fillColor("#091E39")
+      .text("ADLM Studio", leftCol, 40);
 
     doc
-      .fontSize(22)
+      .fontSize(28)
       .font("Helvetica-Bold")
-      .fillColor("#e96830")
-      .text("Invoice", rightCol + 50, 50, { align: "right", width: 150 });
+      .fillColor("#091E39")
+      .text("Invoice", rightCol, 36, { align: "right", width: pageWidth - rightCol + leftCol });
 
-    // Company details
-    doc
-      .fontSize(8)
-      .font("Helvetica")
-      .fillColor("#555")
-      .text("ADLM Studio", leftCol, 80)
-      .text("Lagos, Nigeria", leftCol, 92)
-      .text("hello@adlmstudio.net", leftCol, 104)
-      .text("www.adlmstudio.net", leftCol, 116);
-
-    // Invoice meta
     doc
       .fontSize(9)
       .font("Helvetica")
-      .fillColor("#333")
-      .text(`Invoice #: ${inv.invoiceNumber}`, rightCol, 80)
-      .text(
-        `Date: ${dayjs(inv.invoiceDate).format("MMMM D, YYYY")}`,
-        rightCol,
-        94,
-      );
+      .fillColor("#3e3e3e")
+      .text(`NO: ${inv.invoiceNumber}`, rightCol, 68, { align: "right", width: pageWidth - rightCol + leftCol });
 
-    if (inv.dueDate) {
-      doc.text(
-        `Due: ${dayjs(inv.dueDate).format("MMMM D, YYYY")}`,
-        rightCol,
-        108,
-      );
-    }
-
-    // ── Bill To ──
-    let y = 150;
-
+    // ── Invoice To ──
+    let y = 90;
     doc
       .fontSize(10)
       .font("Helvetica-Bold")
-      .fillColor("#1a2b4a")
-      .text("Bill To:", leftCol, y);
+      .fillColor("#3e3e3e")
+      .text("INVOICE TO:", leftCol, y);
 
-    y += 16;
-    doc.fontSize(9).font("Helvetica").fillColor("#333");
+    const toX = leftCol + 75;
+    doc.fontSize(10).font("Helvetica").fillColor("#3e3e3e");
+    if (inv.clientName) doc.text(inv.clientName, toX, y), (y += 14);
+    if (inv.clientOrganization) doc.text(inv.clientOrganization, toX, y), (y += 14);
+    if (inv.clientAddress) doc.text(inv.clientAddress, toX, y), (y += 14);
+    if (inv.clientEmail) doc.text(inv.clientEmail, toX, y), (y += 14);
+    if (inv.clientPhone) doc.text(inv.clientPhone, toX, y), (y += 14);
 
-    if (inv.clientOrganization)
-      doc.text(inv.clientOrganization, leftCol, y), (y += 13);
-    if (inv.clientName) doc.text(inv.clientName, leftCol, y), (y += 13);
-    if (inv.clientEmail) doc.text(inv.clientEmail, leftCol, y), (y += 13);
-    if (inv.clientPhone) doc.text(inv.clientPhone, leftCol, y), (y += 13);
-    if (inv.clientAddress) doc.text(inv.clientAddress, leftCol, y), (y += 13);
+    // Date line
+    y += 4;
+    doc.fontSize(9).font("Helvetica").fillColor("#3e3e3e");
+    if (inv.invoiceDate)
+      doc.text(`Date: ${dayjs(inv.invoiceDate).format("MMMM D, YYYY")}`, leftCol, y);
+    if (inv.dueDate)
+      doc.text(`Due: ${dayjs(inv.dueDate).format("MMMM D, YYYY")}`, leftCol + 200, y);
+
+    // ── Separator ──
+    y += 18;
+    doc.moveTo(leftCol, y).lineTo(leftCol + pageWidth, y).strokeColor("#d0d0d0").lineWidth(0.5).stroke();
+    y += 10;
 
     // ── Line items table ──
-    y = Math.max(y + 15, 240);
+    const colSN = leftCol;
+    const colDesc = leftCol + 35;
+    const colQty = 330;
+    const colUnit = 370;
+    const colRate = 415;
+    const colAmt = 475;
+    const tableW = pageWidth;
+    const rowH = 28;
 
     // Header row
-    const colDesc = leftCol;
-    const colQty = 320;
-    const colUnit = 380;
-    const colTotal = 460;
+    doc.roundedRect(leftCol, y, tableW, 24, 4).fill("#091E39");
 
-    doc
-      .rect(leftCol, y, pageWidth, 22)
-      .fill("#1a2b4a");
+    doc.fontSize(9).font("Helvetica-Bold").fillColor("#fff");
+    doc.text("S/N", colSN + 4, y + 7, { width: 30, align: "center" });
+    doc.text("DESCRIPTION", colDesc, y + 7, { width: colQty - colDesc });
+    doc.text("QTY.", colQty, y + 7, { width: 35, align: "center" });
+    doc.text("UNIT", colUnit, y + 7, { width: 40, align: "center" });
+    doc.text("RATE", colRate, y + 7, { width: 55, align: "right" });
+    doc.text("AMOUNT", colAmt, y + 7, { width: 65, align: "right" });
+    y += 24;
 
-    doc
-      .fontSize(9)
-      .font("Helvetica-Bold")
-      .fillColor("#fff")
-      .text("Description", colDesc + 6, y + 6)
-      .text("Qty", colQty, y + 6, { width: 50, align: "center" })
-      .text("Unit Price", colUnit, y + 6, { width: 70, align: "right" })
-      .text("Total", colTotal, y + 6, { width: 80, align: "right" });
+    // Data rows
+    for (let i = 0; i < (inv.items || []).length; i++) {
+      const item = inv.items[i];
+      if (y + rowH > 720) { doc.addPage(); y = 40; }
 
-    y += 22;
-    const curr = inv.currency === "USD" ? "$" : "\u20A6";
+      const bg = i % 2 === 1 ? "#e5e5e5" : "#ffffff";
+      const clr = i % 2 === 1 ? "#091E39" : "#262626";
 
-    for (const item of inv.items || []) {
-      const rowH = 20;
+      doc.rect(leftCol, y, tableW, rowH).fill(bg);
 
-      if (y + rowH > 750) {
-        doc.addPage();
-        y = 50;
-      }
-
-      doc
-        .rect(leftCol, y, pageWidth, rowH)
-        .fill(inv.items.indexOf(item) % 2 === 0 ? "#f8f9fa" : "#fff");
-
-      doc
-        .fontSize(9)
-        .font("Helvetica")
-        .fillColor("#333")
-        .text(item.description || "—", colDesc + 6, y + 5, {
-          width: colQty - colDesc - 12,
-        })
-        .text(String(item.qty || 1), colQty, y + 5, {
-          width: 50,
-          align: "center",
-        })
-        .text(
-          `${curr}${Number(item.unitPrice || 0).toLocaleString()}`,
-          colUnit,
-          y + 5,
-          { width: 70, align: "right" },
-        )
-        .text(
-          `${curr}${Number(item.total || 0).toLocaleString()}`,
-          colTotal,
-          y + 5,
-          { width: 80, align: "right" },
-        );
-
+      doc.fontSize(9).font("Helvetica").fillColor(clr);
+      doc.text(`${i + 1}.`, colSN + 4, y + 8, { width: 30, align: "center" });
+      doc.text(item.description || "—", colDesc, y + 8, { width: colQty - colDesc - 5 });
+      doc.text(String(item.qty || 1), colQty, y + 8, { width: 35, align: "center" });
+      doc.text("Nr", colUnit, y + 8, { width: 40, align: "center" });
+      doc.text(fmtN(item.unitPrice), colRate, y + 8, { width: 55, align: "right" });
+      doc.text(fmtN(item.total), colAmt, y + 8, { width: 65, align: "right" });
       y += rowH;
     }
 
-    // ── Totals ──
-    y += 10;
-
-    const totalX = colUnit;
-    const totalW = colTotal + 80 - colUnit;
-
-    doc
-      .fontSize(9)
-      .font("Helvetica")
-      .fillColor("#555")
-      .text("Subtotal:", totalX, y, { width: 70, align: "right" })
-      .text(
-        `${curr}${Number(inv.subtotal || 0).toLocaleString()}`,
-        colTotal,
-        y,
-        { width: 80, align: "right" },
-      );
+    // ── Summary bar ──
+    y += 6;
+    const summaryW = 220;
+    const summaryX = leftCol + tableW - summaryW;
+    doc.roundedRect(summaryX, y, summaryW, 24, 4).fill("#091E39");
 
     const discPctVal = Number(inv.discountPercent || 0);
     const taxPctVal = Number(inv.taxPercent || 0);
     const discAmtVal = Number(inv.discountAmount || 0);
     const taxAmtVal = Number(inv.taxAmount || 0);
 
-    y += 15;
-    if (discPctVal > 0) {
-      doc
-        .text(`Discount (${discPctVal}%):`, totalX - 20, y, { width: 90, align: "right" })
-        .text(
-          `-${curr}${discAmtVal.toLocaleString()}`,
-          colTotal,
-          y,
-          { width: 80, align: "right" },
-        );
-      y += 15;
+    doc.fontSize(9).font("Helvetica-Bold").fillColor("#fff");
+    doc.text("Summary Total:", summaryX + 12, y + 7, { width: 100 });
+    doc.text(fmtN(inv.total), summaryX + 120, y + 7, { width: 88, align: "right" });
+    y += 24;
+
+    // Discount/tax detail (if any)
+    if (discPctVal > 0 || taxPctVal > 0) {
+      y += 4;
+      doc.fontSize(8).font("Helvetica").fillColor("#555");
+      doc.text(`Subtotal: ${fmtN(inv.subtotal)}`, summaryX, y, { width: summaryW, align: "right" });
+      y += 12;
+      if (discPctVal > 0) {
+        doc.text(`Discount (${discPctVal}%): -${fmtN(discAmtVal)}`, summaryX, y, { width: summaryW, align: "right" });
+        y += 12;
+      }
+      if (taxPctVal > 0) {
+        doc.text(`Tax (${taxPctVal}%): +${fmtN(taxAmtVal)}`, summaryX, y, { width: summaryW, align: "right" });
+        y += 12;
+      }
     }
 
-    if (taxPctVal > 0) {
-      doc
-        .text(`Tax (${taxPctVal}%):`, totalX - 20, y, { width: 90, align: "right" })
-        .text(`${curr}${taxAmtVal.toLocaleString()}`, colTotal, y, {
-          width: 80,
-          align: "right",
-        });
-      y += 15;
+    // ── Separator ──
+    y += 10;
+    doc.moveTo(leftCol, y).lineTo(leftCol + pageWidth, y).strokeColor("#d0d0d0").lineWidth(0.5).stroke();
+    y += 14;
+
+    // ── Payment details + QR code ──
+    if (y + 80 > 720) { doc.addPage(); y = 40; }
+
+    doc.fontSize(10).font("Helvetica-Bold").fillColor("#091E39").text("Payment details:", leftCol, y);
+    y += 14;
+    doc.fontSize(9).font("Helvetica").fillColor("#091E39");
+    doc.text("Account no: 1634998770", leftCol, y); y += 12;
+    doc.text("Name: ADLM Studio", leftCol, y); y += 12;
+    doc.text("Bank: Access Bank", leftCol, y);
+
+    // QR code on the right
+    if (qrDataUrl) {
+      try {
+        doc.image(qrDataUrl, leftCol + pageWidth - 80, y - 36, { width: 70, height: 70 });
+        doc.fontSize(6).font("Helvetica").fillColor("#999")
+          .text("Scan to verify", leftCol + pageWidth - 80, y + 38, { width: 70, align: "center" });
+      } catch { /* ignore */ }
     }
 
-    // Total line
-    doc
-      .moveTo(totalX, y)
-      .lineTo(colTotal + 80, y)
-      .strokeColor("#1a2b4a")
-      .lineWidth(1)
-      .stroke();
-
-    y += 6;
-    doc
-      .fontSize(12)
-      .font("Helvetica-Bold")
-      .fillColor("#1a2b4a")
-      .text("Total:", totalX, y, { width: 70, align: "right" })
-      .text(`${curr}${Number(inv.total || 0).toLocaleString()}`, colTotal, y, {
-        width: 80,
-        align: "right",
-      });
+    y += 24;
 
     // ── Terms ──
-    y += 40;
     if (inv.terms) {
-      doc
-        .fontSize(10)
-        .font("Helvetica-Bold")
-        .fillColor("#1a2b4a")
-        .text("Terms & Conditions", leftCol, y);
-
-      y += 16;
-      doc
-        .fontSize(8)
-        .font("Helvetica")
-        .fillColor("#555")
-        .text(inv.terms, leftCol, y, { width: pageWidth });
-
-      y += doc.heightOfString(inv.terms, { width: pageWidth }) + 10;
+      if (y + 40 > 740) { doc.addPage(); y = 40; }
+      y += 8;
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#091E39").text("Terms:", leftCol, y);
+      y += 14;
+      doc.fontSize(9).font("Helvetica").fillColor("#091E39")
+        .text(inv.terms, leftCol, y, { width: pageWidth * 0.6 });
+      y += doc.heightOfString(inv.terms, { width: pageWidth * 0.6 }) + 8;
     }
 
     // ── Notes ──
     if (inv.notes) {
-      doc
-        .fontSize(10)
-        .font("Helvetica-Bold")
-        .fillColor("#1a2b4a")
-        .text("Notes", leftCol, y);
-
-      y += 16;
-      doc
-        .fontSize(8)
-        .font("Helvetica")
-        .fillColor("#555")
-        .text(inv.notes, leftCol, y, { width: pageWidth });
+      if (y + 30 > 740) { doc.addPage(); y = 40; }
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#091E39").text("Notes:", leftCol, y);
+      y += 14;
+      doc.fontSize(9).font("Helvetica").fillColor("#091E39")
+        .text(inv.notes, leftCol, y, { width: pageWidth * 0.6 });
     }
-
-    // Footer
-    doc
-      .fontSize(7)
-      .font("Helvetica")
-      .fillColor("#999")
-      .text(
-        `\u00A9 ${new Date().getFullYear()} ADLM Studio \u2014 All rights reserved.`,
-        leftCol,
-        760,
-        { width: pageWidth, align: "center" },
-      );
 
     doc.end();
   }),

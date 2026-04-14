@@ -52,39 +52,42 @@ export default function Receipt() {
       const html2canvas = (await import("html2canvas")).default;
       const { jsPDF } = await import("jspdf");
 
-      const canvas = await html2canvas(receiptRef.current, {
+      const el = receiptRef.current;
+      const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: "#ffffff",
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        windowWidth: el.scrollWidth,
       });
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW = pageW;
+      const imgH = (canvas.height * imgW) / canvas.width;
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
+      // First page
+      let yOffset = 0;
+      pdf.addImage(imgData, "PNG", 0, yOffset, imgW, imgH);
 
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
+      // Additional pages
+      let remaining = imgH - pageH;
+      while (remaining > 0) {
         pdf.addPage();
-        position = heightLeft - imgHeight;
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        yOffset -= pageH;
+        pdf.addImage(imgData, "PNG", 0, yOffset, imgW, imgH);
+        remaining -= pageH;
       }
 
       pdf.save(`${receiptNo}.pdf`);
-    } catch {
-      // fallback: user can still use Print -> Save as PDF
+    } catch (err) {
+      console.error("PDF generation error:", err);
       alert(
-        "PDF download needs html2canvas + jspdf installed. You can still print and save as PDF.",
+        "PDF download failed. You can still use Print > Save as PDF.",
       );
     }
   }

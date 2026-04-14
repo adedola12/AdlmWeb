@@ -1,8 +1,10 @@
 import React from "react";
 import dayjs from "dayjs";
+import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { API_BASE } from "../config";
+import adlmLogo from "../assets/logo/adlmLogo.png";
 
 const fmt = (n, currency = "NGN") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
@@ -81,21 +83,26 @@ export default function AdminInvoices() {
   const lineItemOptions = React.useMemo(() => {
     const opts = [{ value: "", label: "— Custom item —", group: "custom" }];
 
-    // Software products
+    // Software products — prefer yearly price; fallback to monthly * 12
     for (const p of products) {
       const key = p.key || p._id;
-      const priceNGN = Number(p.price?.monthlyNGN || p.price?.yearlyNGN || 0);
-      const priceUSD = Number(p.price?.monthlyUSD || p.price?.yearlyUSD || 0);
-      const interval = p.billingInterval === "yearly" ? "/yr" : "/mo";
+      const yearlyNGN = Number(p.price?.yearlyNGN || 0);
+      const yearlyUSD = Number(p.price?.yearlyUSD || 0);
+      const monthlyNGN = Number(p.price?.monthlyNGN || 0);
+      const monthlyUSD = Number(p.price?.monthlyUSD || 0);
+
+      const priceNGN = yearlyNGN > 0 ? yearlyNGN : monthlyNGN * 12;
+      const priceUSD = yearlyUSD > 0 ? yearlyUSD : monthlyUSD * 12;
+
       opts.push({
         value: `product:${key}`,
-        label: `${p.name} (${interval})`,
+        label: `${p.name} (Yearly) per PC/User`,
         group: "Products",
         priceNGN,
         priceUSD,
         installNGN: Number(p.price?.installNGN || 0),
         installUSD: Number(p.price?.installUSD || 0),
-        description: p.name,
+        description: `${p.name} (Yearly) per PC/User`,
       });
     }
 
@@ -879,95 +886,95 @@ export default function AdminInvoices() {
 }
 
 /* ─────────────────────────────────────────────
-   Invoice Preview Component (print-ready)
+   Invoice Preview Component — matches Figma design
    ───────────────────────────────────────────── */
-function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, taxPct, total, onBack, onPrint, onDownloadPdf, onSend, editId, accessToken, busy }) {
+function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, taxPct, total, onBack, onSend, editId, accessToken, busy }) {
   const currency = form?.currency || "NGN";
   const curr = currency === "USD" ? "$" : "\u20A6";
   const previewRef = React.useRef(null);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
 
   async function handleDownloadPdf() {
     if (!previewRef.current) return;
+    setPdfBusy(true);
     try {
       const html2canvas = (await import("html2canvas")).default;
       const { jsPDF } = await import("jspdf");
 
-      const canvas = await html2canvas(previewRef.current, {
+      const el = previewRef.current;
+      const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
         backgroundColor: "#ffffff",
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+        windowWidth: el.scrollWidth,
       });
 
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW = pageW;
+      const imgH = (canvas.height * imgW) / canvas.width;
 
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
+      let y = 0;
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, y, imgW, imgH);
+      let left = imgH - pageH;
+      while (left > 0) {
         pdf.addPage();
-        position = heightLeft - imgHeight;
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        y -= pageH;
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, y, imgW, imgH);
+        left -= pageH;
       }
 
-      const invNum = form?.invoiceNumber || editId || "invoice";
-      pdf.save(`${invNum}.pdf`);
-    } catch {
-      alert("PDF download failed. You can still use Print > Save as PDF.");
+      pdf.save(`${form?.invoiceNumber || "invoice"}.pdf`);
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      alert("PDF download failed. Use Print > Save as PDF instead.");
+    } finally {
+      setPdfBusy(false);
     }
   }
 
+  const fmtN = (n) => {
+    const v = Number(n || 0);
+    return `${curr}${v.toLocaleString()}`;
+  };
+
   return (
-    <div className="space-y-4">
+    <div>
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; }
+          body { background: white !important; margin: 0 !important; padding: 0 !important; }
+          .print-wrap { padding: 0 !important; box-shadow: none !important; border: none !important; }
         }
       `}</style>
 
       {/* Action bar */}
-      <div className="no-print flex items-center justify-between gap-2 flex-wrap">
+      <div className="no-print flex items-center justify-between gap-2 flex-wrap mb-4">
         <button className="btn btn-ghost btn-sm" onClick={onBack}>
           Back to Editor
         </button>
         <div className="flex gap-2">
-          <button
-            className="btn btn-sm"
-            onClick={() => window.print()}
-          >
+          <button className="btn btn-sm" onClick={() => window.print()}>
             Print
           </button>
-          <button
-            className="btn btn-sm"
-            onClick={handleDownloadPdf}
-          >
-            Download PDF
+          <button className="btn btn-sm" onClick={handleDownloadPdf} disabled={pdfBusy}>
+            {pdfBusy ? "Generating…" : "Download PDF"}
           </button>
           {editId && (
             <button
               className="btn btn-sm"
-              onClick={() =>
-                window.open(
-                  `${API_BASE}/admin/invoices/${editId}/pdf?token=${accessToken}`,
-                  "_blank",
-                )
-              }
+              onClick={() => window.open(`${API_BASE}/admin/invoices/${editId}/pdf?token=${accessToken}`, "_blank")}
             >
               Server PDF
             </button>
           )}
           {form?.clientEmail && editId && (
             <button
-              className="btn btn-sm bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
+              className="btn btn-sm text-white"
+              style={{ backgroundColor: "#091E39" }}
               onClick={onSend}
               disabled={busy}
             >
@@ -977,178 +984,168 @@ function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, ta
         </div>
       </div>
 
-      {/* Preview Card */}
+      {/* ══════ Invoice Card (Figma-matched) ══════ */}
       <div
         ref={previewRef}
-        className="bg-white rounded-2xl ring-1 ring-slate-200 shadow-sm p-8 max-w-3xl mx-auto"
-        style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+        className="print-wrap bg-white mx-auto overflow-hidden relative"
+        style={{
+          maxWidth: 595,
+          fontFamily: "'Lexend', 'Segoe UI', Helvetica, Arial, sans-serif",
+          color: "#262626",
+          fontSize: 11,
+          lineHeight: 1.4,
+          padding: "40px 36px 32px",
+          boxShadow: "0 2px 12px rgba(0,0,0,.08)",
+          borderRadius: 12,
+        }}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-2xl font-bold" style={{ color: "#1a2b4a" }}>
-              ADLM Studio
-            </div>
-            <div className="text-xs text-slate-500 mt-1">
-              Lagos, Nigeria<br />
-              hello@adlmstudio.net<br />
-              www.adlmstudio.net
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold" style={{ color: "#e96830" }}>
+        {/* Decorative circles (Figma design) */}
+        <div style={{ position: "absolute", top: -70, left: 240, width: 160, height: 160, borderRadius: "50%", border: "2px solid #e0e0e0", opacity: 0.25 }} />
+        <div style={{ position: "absolute", bottom: -30, right: -20, width: 90, height: 90, borderRadius: "50%", border: "2px solid #e0e0e0", opacity: 0.2 }} />
+
+        {/* ── Header: Logo + Invoice title ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <img
+            src={adlmLogo}
+            alt="ADLM Studio"
+            crossOrigin="anonymous"
+            style={{ height: 32, objectFit: "contain" }}
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "#091E39", letterSpacing: -1.5, lineHeight: 1 }}>
               Invoice
             </div>
-            {form?.invoiceNumber && (
-              <div className="text-sm font-semibold text-slate-700 mt-1">
-                {form.invoiceNumber}
-              </div>
-            )}
-            <div className="text-xs text-slate-500 mt-1">
-              Date: {form?.invoiceDate ? dayjs(form.invoiceDate).format("MMMM D, YYYY") : "—"}
+            <div style={{ fontSize: 10, color: "#3e3e3e", marginTop: 2 }}>
+              NO: {form?.invoiceNumber || "—"}
             </div>
-            {form?.dueDate && (
-              <div className="text-xs text-slate-500">
-                Due: {dayjs(form.dueDate).format("MMMM D, YYYY")}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Bill To */}
-        <div className="mt-6 rounded-lg bg-slate-50 p-4">
-          <div className="text-xs text-slate-500 font-semibold mb-1">
-            Bill To
+        {/* ── Invoice To ── */}
+        <div style={{ marginTop: 18, display: "flex", gap: 6, fontSize: 10 }}>
+          <span style={{ fontWeight: 600, color: "#3e3e3e" }}>INVOICE TO:</span>
+          <div style={{ color: "#3e3e3e", fontWeight: 500 }}>
+            {form?.clientName && <div>{form.clientName}</div>}
+            {form?.clientOrganization && <div>{form.clientOrganization}</div>}
+            {form?.clientAddress && <div>{form.clientAddress}</div>}
+            {form?.clientEmail && <div>{form.clientEmail}</div>}
+            {form?.clientPhone && <div>{form.clientPhone}</div>}
           </div>
-          {form?.clientOrganization && (
-            <div className="font-semibold text-slate-900">
-              {form.clientOrganization}
-            </div>
-          )}
-          {form?.clientName && (
-            <div className="text-sm text-slate-700">{form.clientName}</div>
-          )}
-          {form?.clientEmail && (
-            <div className="text-sm text-slate-600">{form.clientEmail}</div>
-          )}
-          {form?.clientPhone && (
-            <div className="text-sm text-slate-600">{form.clientPhone}</div>
-          )}
-          {form?.clientAddress && (
-            <div className="text-sm text-slate-600">{form.clientAddress}</div>
-          )}
         </div>
 
-        {/* Line items table */}
-        <div className="mt-6 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr
-                style={{ backgroundColor: "#1a2b4a" }}
-                className="text-white"
-              >
-                <th className="py-2 px-3 text-left font-semibold">
-                  Description
-                </th>
-                <th className="py-2 px-3 text-center font-semibold w-16">
-                  Qty
-                </th>
-                <th className="py-2 px-3 text-right font-semibold w-28">
-                  Unit Price
-                </th>
-                <th className="py-2 px-3 text-right font-semibold w-28">
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {(form?.items || []).map((item, idx) => (
-                <tr
-                  key={idx}
-                  className={idx % 2 === 0 ? "bg-slate-50" : "bg-white"}
-                >
-                  <td className="py-2 px-3">{item.description || "—"}</td>
-                  <td className="py-2 px-3 text-center">{item.qty || 1}</td>
-                  <td className="py-2 px-3 text-right">
-                    {fmt(item.unitPrice, currency)}
-                  </td>
-                  <td className="py-2 px-3 text-right font-medium">
-                    {fmt(item.total, currency)}
-                  </td>
+        {/* ── Date info ── */}
+        <div style={{ marginTop: 4, fontSize: 10, color: "#3e3e3e" }}>
+          {form?.invoiceDate && <span>Date: {dayjs(form.invoiceDate).format("MMMM D, YYYY")}</span>}
+          {form?.dueDate && <span style={{ marginLeft: 16 }}>Due: {dayjs(form.dueDate).format("MMMM D, YYYY")}</span>}
+        </div>
+
+        {/* ── Separator ── */}
+        <hr style={{ border: "none", borderTop: "1px solid #d0d0d0", margin: "14px 0" }} />
+
+        {/* ── Line items table ── */}
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+          <thead>
+            <tr style={{ backgroundColor: "#091E39", color: "#fff" }}>
+              <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, width: 32, borderTopLeftRadius: 5 }}>S/N</th>
+              <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600 }}>DESCRIPTION</th>
+              <th style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600, width: 40 }}>QTY.</th>
+              <th style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600, width: 45 }}>UNIT</th>
+              <th style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, width: 75 }}>RATE</th>
+              <th style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, width: 80, borderTopRightRadius: 5 }}>AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(form?.items || []).map((item, idx) => {
+              const bg = idx % 2 === 1 ? "#e5e5e5" : "#fff";
+              const clr = idx % 2 === 1 ? "#091E39" : "#262626";
+              return (
+                <tr key={idx} style={{ backgroundColor: bg, color: clr }}>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>{idx + 1}.</td>
+                  <td style={{ padding: "8px 10px" }}>{item.description || "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>{item.qty || 1}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>Nr</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>{fmtN(item.unitPrice)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>{fmtN(item.total)}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* ── Summary bar ── */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+          <div
+            style={{
+              backgroundColor: "#091E39",
+              color: "#fff",
+              borderRadius: 4,
+              padding: "6px 16px",
+              display: "flex",
+              gap: 24,
+              fontSize: 10,
+              fontWeight: 600,
+            }}
+          >
+            <span>Summary{discPct > 0 || taxPct > 0 ? "" : " Total"}:</span>
+            <span>{fmtN(total)}</span>
+          </div>
         </div>
 
-        {/* Totals */}
-        <div className="mt-4 flex justify-end">
-          <div className="w-64 text-sm space-y-1">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Subtotal</span>
-              <span className="font-medium">{fmt(subtotal, currency)}</span>
+        {/* discount/tax breakdown if present */}
+        {(discPct > 0 || taxPct > 0) && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+            <div style={{ fontSize: 10, textAlign: "right", lineHeight: 1.6 }}>
+              <div>Subtotal: <b>{fmtN(subtotal)}</b></div>
+              {discPct > 0 && (
+                <div style={{ color: "#c0392b" }}>Discount ({discPct}%): -{fmtN(discountAmount)}</div>
+              )}
+              {taxPct > 0 && (
+                <div>Tax ({taxPct}%): +{fmtN(taxAmount)}</div>
+              )}
             </div>
-            {discPct > 0 && (
-              <div className="flex justify-between">
-                <span className="text-slate-500">Discount ({discPct}%)</span>
-                <span className="font-medium text-rose-600">
-                  - {fmt(discountAmount, currency)}
-                </span>
-              </div>
-            )}
-            {taxPct > 0 && (
-              <div className="flex justify-between">
-                <span className="text-slate-500">Tax ({taxPct}%)</span>
-                <span className="font-medium">
-                  + {fmt(taxAmount, currency)}
-                </span>
-              </div>
-            )}
-            <div
-              className="flex justify-between pt-2 mt-2 border-t text-base font-bold"
-              style={{ color: "#1a2b4a" }}
-            >
-              <span>Total</span>
-              <span>{fmt(total, currency)}</span>
+          </div>
+        )}
+
+        {/* ── Separator ── */}
+        <hr style={{ border: "none", borderTop: "1px solid #d0d0d0", margin: "16px 0" }} />
+
+        {/* ── Payment details + QR Code ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24 }}>
+          <div style={{ fontSize: 11, color: "#091E39", lineHeight: 1.5, flex: 1 }}>
+            <div style={{ fontWeight: 600 }}>Payment details:</div>
+            <div>Account no: 1634998770</div>
+            <div>Name: ADLM Studio</div>
+            <div>Bank: Access Bank</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <QRCodeSVG
+              value="https://www.adlmstudio.net"
+              size={72}
+              level="M"
+              style={{ display: "block" }}
+            />
+            <div style={{ fontSize: 7, color: "#888", marginTop: 3 }}>
+              Scan to verify
             </div>
           </div>
         </div>
 
-        {/* Terms */}
+        {/* ── Terms ── */}
         {form?.terms && (
-          <div className="mt-6">
-            <div
-              className="text-sm font-semibold mb-1"
-              style={{ color: "#1a2b4a" }}
-            >
-              Terms & Conditions
-            </div>
-            <div className="text-xs text-slate-500 whitespace-pre-line">
-              {form.terms}
-            </div>
+          <div style={{ marginTop: 14, fontSize: 11, color: "#091E39", lineHeight: 1.5 }}>
+            <div style={{ fontWeight: 600 }}>Terms:</div>
+            <div style={{ whiteSpace: "pre-line" }}>{form.terms}</div>
           </div>
         )}
 
-        {/* Notes */}
+        {/* ── Notes ── */}
         {form?.notes && (
-          <div className="mt-4">
-            <div
-              className="text-sm font-semibold mb-1"
-              style={{ color: "#1a2b4a" }}
-            >
-              Notes
-            </div>
-            <div className="text-xs text-slate-500 whitespace-pre-line">
-              {form.notes}
-            </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: "#091E39", lineHeight: 1.5 }}>
+            <div style={{ fontWeight: 600 }}>Notes:</div>
+            <div style={{ whiteSpace: "pre-line" }}>{form.notes}</div>
           </div>
         )}
-
-        {/* Footer */}
-        <div className="mt-8 pt-4 border-t text-xs text-slate-400 text-center">
-          &copy; {new Date().getFullYear()} ADLM Studio &mdash; All rights
-          reserved.
-        </div>
       </div>
     </div>
   );
