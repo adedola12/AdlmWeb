@@ -9,6 +9,7 @@ import "./index.css";
 import AppError from "./pages/AppError.jsx";
 import Home from "./pages/Home.jsx";
 import Products from "./pages/Products.jsx";
+import Quote from "./pages/Quote.jsx";
 import ProductDetail from "./pages/ProductDetail.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
@@ -68,6 +69,7 @@ const router = createBrowserRouter([
       { index: true, element: <Home /> },
 
       { path: "products", element: <Products /> },
+      { path: "quote", element: <Quote /> },
       { path: "product/:key", element: <ProductDetail /> },
 
       { path: "login", element: <Login /> },

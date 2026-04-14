@@ -71,6 +71,7 @@ import modelCheckRoutes from "./routes/model-checks.js";
 import trainingLocationsPublic from "./routes/training-locations.js";
 import adminTrainingLocations from "./routes/admin.training-locations.js";
 import adminInvoices from "./routes/admin.invoices.js";
+import quoteRoutes from "./routes/quote.js";
 
 const app = express();
 
@@ -250,6 +251,7 @@ app.use("/admin/freebies", adminFreebies);
 app.use("/admin/training-locations", adminTrainingLocations);
 app.use("/admin/invoices", adminInvoices);
 app.use("/training-locations", trainingLocationsPublic);
+app.use("/quote", quoteRoutes);
 app.use("/api/entitlements", entitlementsRouter);
 
 // app.use("/projectsboq", projectsBoqRoutes);
