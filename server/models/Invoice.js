@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const InvoiceItemSchema = new mongoose.Schema(
   {
+    source: { type: String, trim: true, default: "" }, // e.g. "product:revit", "training:abc123", "bim:abc123"
     description: { type: String, trim: true, default: "" },
     qty: { type: Number, default: 1, min: 0 },
     unitPrice: { type: Number, default: 0 },
@@ -34,8 +35,17 @@ const InvoiceSchema = new mongoose.Schema(
 
     currency: { type: String, enum: ["NGN", "USD"], default: "NGN" },
     subtotal: { type: Number, default: 0 },
+
+    discountPercent: { type: Number, default: 0, min: 0, max: 100 },
+    discountAmount: { type: Number, default: 0 },
+
+    taxPercent: { type: Number, default: 0, min: 0, max: 100 },
+    taxAmount: { type: Number, default: 0 },
+
+    // kept for backward compat with old invoices
     discount: { type: Number, default: 0 },
     tax: { type: Number, default: 0 },
+
     total: { type: Number, default: 0 },
 
     // Terms & notes

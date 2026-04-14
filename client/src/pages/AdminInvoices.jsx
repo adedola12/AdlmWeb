@@ -29,10 +29,10 @@ function emptyInvoice() {
     clientPhone: "",
     clientAddress: "",
     clientOrganization: "",
-    items: [{ description: "", qty: 1, unitPrice: 0, total: 0 }],
+    items: [{ source: "", description: "", qty: 1, unitPrice: 0, total: 0 }],
     currency: "NGN",
-    discount: 0,
-    tax: 0,
+    discountPercent: 0,
+    taxPercent: 0,
     terms: DEFAULT_TERMS,
     notes: "",
     status: "draft",
@@ -51,6 +51,80 @@ export default function AdminInvoices() {
   const [form, setForm] = React.useState(null);
   const [editId, setEditId] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
+
+  // Product + training location catalog for line-item dropdown
+  const [products, setProducts] = React.useState([]);
+  const [trainingLocations, setTrainingLocations] = React.useState([]);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const [pRes, tRes] = await Promise.all([
+          fetch(`${API_BASE}/products?page=1&pageSize=200`, {
+            credentials: "include",
+          }).then((r) => r.json()),
+          fetch(`${API_BASE}/training-locations`, {
+            credentials: "include",
+          }).then((r) => r.json()),
+        ]);
+        setProducts(Array.isArray(pRes?.items) ? pRes.items : []);
+        setTrainingLocations(
+          Array.isArray(tRes?.locations) ? tRes.locations : [],
+        );
+      } catch {
+        /* silent */
+      }
+    })();
+  }, []);
+
+  // Build the dropdown options for line items
+  const lineItemOptions = React.useMemo(() => {
+    const opts = [{ value: "", label: "— Custom item —", group: "custom" }];
+
+    // Software products
+    for (const p of products) {
+      const key = p.key || p._id;
+      const priceNGN = Number(p.price?.monthlyNGN || p.price?.yearlyNGN || 0);
+      const priceUSD = Number(p.price?.monthlyUSD || p.price?.yearlyUSD || 0);
+      const interval = p.billingInterval === "yearly" ? "/yr" : "/mo";
+      opts.push({
+        value: `product:${key}`,
+        label: `${p.name} (${interval})`,
+        group: "Products",
+        priceNGN,
+        priceUSD,
+        installNGN: Number(p.price?.installNGN || 0),
+        installUSD: Number(p.price?.installUSD || 0),
+        description: p.name,
+      });
+    }
+
+    // Training locations (physical training)
+    for (const loc of trainingLocations) {
+      opts.push({
+        value: `training:${loc._id}`,
+        label: `Physical Training — ${loc.name}${loc.city ? ` (${loc.city})` : ""}`,
+        group: "Physical Training",
+        priceNGN: Number(loc.trainingCostNGN || 0),
+        priceUSD: Number(loc.trainingCostUSD || 0),
+        description: `Physical Training — ${loc.name}`,
+        durationDays: loc.durationDays || 1,
+      });
+      // BIM Install option per location
+      if (Number(loc.bimInstallCostNGN || 0) > 0 || Number(loc.bimInstallCostUSD || 0) > 0) {
+        opts.push({
+          value: `bim:${loc._id}`,
+          label: `BIM Software Install — ${loc.name}`,
+          group: "Physical Training",
+          priceNGN: Number(loc.bimInstallCostNGN || 0),
+          priceUSD: Number(loc.bimInstallCostUSD || 0),
+          description: `BIM Software Installation — ${loc.name}`,
+        });
+      }
+    }
+
+    return opts;
+  }, [products, trainingLocations]);
 
   async function load() {
     setLoading(true);
@@ -84,10 +158,12 @@ export default function AdminInvoices() {
         ? dayjs(inv.invoiceDate).format("YYYY-MM-DD")
         : "",
       dueDate: inv.dueDate ? dayjs(inv.dueDate).format("YYYY-MM-DD") : "",
+      discountPercent: inv.discountPercent ?? 0,
+      taxPercent: inv.taxPercent ?? 0,
       items:
         inv.items?.length > 0
-          ? inv.items
-          : [{ description: "", qty: 1, unitPrice: 0, total: 0 }],
+          ? inv.items.map((it) => ({ source: it.source || "", ...it }))
+          : [{ source: "", description: "", qty: 1, unitPrice: 0, total: 0 }],
     });
     setEditId(inv._id);
     setMode("form");
@@ -104,10 +180,65 @@ export default function AdminInvoices() {
     });
   }
 
+  /** When user picks from the dropdown, auto-fill description + price */
+  function selectLineSource(idx, sourceValue) {
+    const opt = lineItemOptions.find((o) => o.value === sourceValue);
+    if (!opt || !sourceValue) {
+      // Custom — clear source, keep current description
+      updateItem(idx, { source: "" });
+      return;
+    }
+
+    const currency = form?.currency || "NGN";
+    const price =
+      currency === "USD"
+        ? Number(opt.priceUSD || 0)
+        : Number(opt.priceNGN || 0);
+
+    updateItem(idx, {
+      source: sourceValue,
+      description: opt.description || opt.label,
+      unitPrice: price,
+      qty: 1,
+      total: price,
+    });
+  }
+
+  // When currency changes, re-price items that came from a catalog source
+  React.useEffect(() => {
+    if (!form?.items?.length) return;
+    const currency = form.currency || "NGN";
+    let changed = false;
+
+    const updated = form.items.map((item) => {
+      if (!item.source) return item;
+      const opt = lineItemOptions.find((o) => o.value === item.source);
+      if (!opt) return item;
+      const price =
+        currency === "USD"
+          ? Number(opt.priceUSD || 0)
+          : Number(opt.priceNGN || 0);
+      if (price !== item.unitPrice) {
+        changed = true;
+        return {
+          ...item,
+          unitPrice: price,
+          total: Number(item.qty || 1) * price,
+        };
+      }
+      return item;
+    });
+
+    if (changed) setForm((f) => ({ ...f, items: updated }));
+  }, [form?.currency]);
+
   function addItem() {
     setForm((f) => ({
       ...f,
-      items: [...f.items, { description: "", qty: 1, unitPrice: 0, total: 0 }],
+      items: [
+        ...f.items,
+        { source: "", description: "", qty: 1, unitPrice: 0, total: 0 },
+      ],
     }));
   }
 
@@ -122,10 +253,12 @@ export default function AdminInvoices() {
     (s, it) => s + Number(it.total || 0),
     0,
   );
-  const total = Math.max(
-    subtotal - Number(form?.discount || 0) + Number(form?.tax || 0),
-    0,
-  );
+  const discPct = Math.min(Math.max(Number(form?.discountPercent || 0), 0), 100);
+  const taxPct = Math.min(Math.max(Number(form?.taxPercent || 0), 0), 100);
+  const discountAmount = Math.round((subtotal * discPct) / 100 * 100) / 100;
+  const afterDiscount = subtotal - discountAmount;
+  const taxAmount = Math.round((afterDiscount * taxPct) / 100 * 100) / 100;
+  const total = Math.max(afterDiscount + taxAmount, 0);
 
   async function saveInvoice() {
     if (!form) return;
@@ -140,8 +273,8 @@ export default function AdminInvoices() {
           unitPrice: Number(it.unitPrice || 0),
           total: Number(it.total || 0),
         })),
-        discount: Number(form.discount || 0),
-        tax: Number(form.tax || 0),
+        discountPercent: Number(form.discountPercent || 0),
+        taxPercent: Number(form.taxPercent || 0),
       };
 
       if (editId) {
@@ -284,6 +417,16 @@ export default function AdminInvoices() {
                       </button>
                       <button
                         className="text-adlm-blue-700 hover:underline"
+                        onClick={() => {
+                          startEdit(inv);
+                          // small delay so form state sets, then switch to preview
+                          setTimeout(() => setMode("preview"), 50);
+                        }}
+                      >
+                        Preview
+                      </button>
+                      <button
+                        className="text-adlm-blue-700 hover:underline"
                         onClick={() => downloadPdf(inv._id)}
                       >
                         PDF
@@ -319,6 +462,26 @@ export default function AdminInvoices() {
           </table>
         </div>
       </div>
+    );
+  }
+
+  // ── PREVIEW MODE ──
+  if (mode === "preview" && form) {
+    return (
+      <InvoicePreview
+        form={form}
+        subtotal={subtotal}
+        discountAmount={discountAmount}
+        discPct={discPct}
+        taxAmount={taxAmount}
+        taxPct={taxPct}
+        total={total}
+        editId={editId}
+        accessToken={accessToken}
+        busy={busy}
+        onBack={() => setMode("form")}
+        onSend={() => editId && sendInvoice(editId)}
+      />
     );
   }
 
@@ -448,76 +611,120 @@ export default function AdminInvoices() {
           {/* Line items */}
           <div className="border-t pt-4">
             <div className="text-sm font-semibold mb-2">Line Items</div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="text-left text-slate-600">
-                  <tr className="border-b">
-                    <th className="py-1 pr-2">Description</th>
-                    <th className="py-1 pr-2 w-20">Qty</th>
-                    <th className="py-1 pr-2 w-28">Unit Price</th>
-                    <th className="py-1 pr-2 w-28 text-right">Total</th>
-                    <th className="py-1 w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.items.map((item, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="py-1 pr-2">
-                        <input
-                          className="input"
-                          value={item.description || ""}
-                          onChange={(e) =>
-                            updateItem(idx, { description: e.target.value })
-                          }
-                          placeholder="Item description"
-                        />
-                      </td>
-                      <td className="py-1 pr-2">
-                        <input
-                          type="number"
-                          min="0"
-                          className="input"
-                          value={item.qty || ""}
-                          onChange={(e) =>
-                            updateItem(idx, {
-                              qty: Number(e.target.value || 0),
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="py-1 pr-2">
-                        <input
-                          type="number"
-                          min="0"
-                          className="input"
-                          value={item.unitPrice || ""}
-                          onChange={(e) =>
-                            updateItem(idx, {
-                              unitPrice: Number(e.target.value || 0),
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="py-1 pr-2 text-right font-medium">
+            <div className="space-y-3">
+              {form.items.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="text-xs font-medium text-slate-500">
+                      Item {idx + 1}
+                    </div>
+                    {form.items.length > 1 && (
+                      <button
+                        className="text-rose-500 text-xs hover:underline"
+                        onClick={() => removeItem(idx)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Source dropdown */}
+                  <label className="block text-sm mb-2">
+                    Select product / training
+                    <select
+                      className="input mt-1"
+                      value={item.source || ""}
+                      onChange={(e) => selectLineSource(idx, e.target.value)}
+                    >
+                      <option value="">— Custom item —</option>
+                      {products.length > 0 && (
+                        <optgroup label="Software Products">
+                          {lineItemOptions
+                            .filter((o) => o.group === "Products")
+                            .map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                      {trainingLocations.length > 0 && (
+                        <optgroup label="Physical Training">
+                          {lineItemOptions
+                            .filter((o) => o.group === "Physical Training")
+                            .map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </label>
+
+                  <div className="grid grid-cols-12 gap-2 text-sm">
+                    {/* Description */}
+                    <div className="col-span-5">
+                      <label className="text-xs text-slate-500">
+                        Description
+                      </label>
+                      <input
+                        className="input mt-0.5"
+                        value={item.description || ""}
+                        onChange={(e) =>
+                          updateItem(idx, { description: e.target.value })
+                        }
+                        placeholder="Item description"
+                      />
+                    </div>
+                    {/* Qty */}
+                    <div className="col-span-2">
+                      <label className="text-xs text-slate-500">Qty</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="input mt-0.5"
+                        value={item.qty || ""}
+                        onChange={(e) =>
+                          updateItem(idx, {
+                            qty: Number(e.target.value || 0),
+                          })
+                        }
+                      />
+                    </div>
+                    {/* Unit Price */}
+                    <div className="col-span-2">
+                      <label className="text-xs text-slate-500">
+                        Unit Price
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="input mt-0.5"
+                        value={item.unitPrice || ""}
+                        onChange={(e) =>
+                          updateItem(idx, {
+                            unitPrice: Number(e.target.value || 0),
+                          })
+                        }
+                      />
+                    </div>
+                    {/* Total */}
+                    <div className="col-span-3 text-right">
+                      <label className="text-xs text-slate-500">Total</label>
+                      <div className="font-semibold mt-1.5">
                         {fmt(item.total, form.currency)}
-                      </td>
-                      <td className="py-1">
-                        {form.items.length > 1 && (
-                          <button
-                            className="text-rose-500 text-xs hover:underline"
-                            onClick={() => removeItem(idx)}
-                          >
-                            x
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
             <button
-              className="text-sm text-adlm-blue-700 hover:underline mt-2"
+              className="text-sm text-adlm-blue-700 hover:underline mt-3"
               onClick={addItem}
             >
               + Add line item
@@ -528,34 +735,44 @@ export default function AdminInvoices() {
           <div className="border-t pt-4 grid sm:grid-cols-2 gap-4">
             <div className="space-y-3 text-sm">
               <label>
-                Discount
-                <input
-                  type="number"
-                  min="0"
-                  className="input mt-1"
-                  value={form.discount || 0}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      discount: Number(e.target.value || 0),
-                    }))
-                  }
-                />
+                Discount (%)
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    className="input flex-1"
+                    value={form.discountPercent || 0}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        discountPercent: Number(e.target.value || 0),
+                      }))
+                    }
+                  />
+                  <span className="text-slate-500">%</span>
+                </div>
               </label>
               <label>
-                Tax
-                <input
-                  type="number"
-                  min="0"
-                  className="input mt-1"
-                  value={form.tax || 0}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      tax: Number(e.target.value || 0),
-                    }))
-                  }
-                />
+                Tax (%)
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    className="input flex-1"
+                    value={form.taxPercent || 0}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        taxPercent: Number(e.target.value || 0),
+                      }))
+                    }
+                  />
+                  <span className="text-slate-500">%</span>
+                </div>
               </label>
               <label>
                 Status
@@ -581,19 +798,19 @@ export default function AdminInvoices() {
                   {fmt(subtotal, form.currency)}
                 </span>
               </div>
-              {form.discount > 0 && (
+              {discPct > 0 && (
                 <div>
-                  Discount:{" "}
-                  <span className="font-medium">
-                    - {fmt(form.discount, form.currency)}
+                  Discount ({discPct}%):{" "}
+                  <span className="font-medium text-rose-600">
+                    - {fmt(discountAmount, form.currency)}
                   </span>
                 </div>
               )}
-              {form.tax > 0 && (
+              {taxPct > 0 && (
                 <div>
-                  Tax:{" "}
+                  Tax ({taxPct}%):{" "}
                   <span className="font-medium">
-                    {fmt(form.tax, form.currency)}
+                    + {fmt(taxAmount, form.currency)}
                   </span>
                 </div>
               )}
@@ -640,6 +857,12 @@ export default function AdminInvoices() {
             </button>
             <button
               className="btn btn-ghost"
+              onClick={() => setMode("preview")}
+            >
+              Preview
+            </button>
+            <button
+              className="btn btn-ghost"
               onClick={() => {
                 setMode("list");
                 setForm(null);
@@ -651,6 +874,282 @@ export default function AdminInvoices() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Invoice Preview Component (print-ready)
+   ───────────────────────────────────────────── */
+function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, taxPct, total, onBack, onPrint, onDownloadPdf, onSend, editId, accessToken, busy }) {
+  const currency = form?.currency || "NGN";
+  const curr = currency === "USD" ? "$" : "\u20A6";
+  const previewRef = React.useRef(null);
+
+  async function handleDownloadPdf() {
+    if (!previewRef.current) return;
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const { jsPDF } = await import("jspdf");
+
+      const canvas = await html2canvas(previewRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = heightLeft - imgHeight;
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const invNum = form?.invoiceNumber || editId || "invoice";
+      pdf.save(`${invNum}.pdf`);
+    } catch {
+      alert("PDF download failed. You can still use Print > Save as PDF.");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; }
+        }
+      `}</style>
+
+      {/* Action bar */}
+      <div className="no-print flex items-center justify-between gap-2 flex-wrap">
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>
+          Back to Editor
+        </button>
+        <div className="flex gap-2">
+          <button
+            className="btn btn-sm"
+            onClick={() => window.print()}
+          >
+            Print
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={handleDownloadPdf}
+          >
+            Download PDF
+          </button>
+          {editId && (
+            <button
+              className="btn btn-sm"
+              onClick={() =>
+                window.open(
+                  `${API_BASE}/admin/invoices/${editId}/pdf?token=${accessToken}`,
+                  "_blank",
+                )
+              }
+            >
+              Server PDF
+            </button>
+          )}
+          {form?.clientEmail && editId && (
+            <button
+              className="btn btn-sm bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
+              onClick={onSend}
+              disabled={busy}
+            >
+              {busy ? "Sending…" : "Send to Client"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Preview Card */}
+      <div
+        ref={previewRef}
+        className="bg-white rounded-2xl ring-1 ring-slate-200 shadow-sm p-8 max-w-3xl mx-auto"
+        style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-2xl font-bold" style={{ color: "#1a2b4a" }}>
+              ADLM Studio
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              Lagos, Nigeria<br />
+              hello@adlmstudio.net<br />
+              www.adlmstudio.net
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold" style={{ color: "#e96830" }}>
+              Invoice
+            </div>
+            {form?.invoiceNumber && (
+              <div className="text-sm font-semibold text-slate-700 mt-1">
+                {form.invoiceNumber}
+              </div>
+            )}
+            <div className="text-xs text-slate-500 mt-1">
+              Date: {form?.invoiceDate ? dayjs(form.invoiceDate).format("MMMM D, YYYY") : "—"}
+            </div>
+            {form?.dueDate && (
+              <div className="text-xs text-slate-500">
+                Due: {dayjs(form.dueDate).format("MMMM D, YYYY")}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bill To */}
+        <div className="mt-6 rounded-lg bg-slate-50 p-4">
+          <div className="text-xs text-slate-500 font-semibold mb-1">
+            Bill To
+          </div>
+          {form?.clientOrganization && (
+            <div className="font-semibold text-slate-900">
+              {form.clientOrganization}
+            </div>
+          )}
+          {form?.clientName && (
+            <div className="text-sm text-slate-700">{form.clientName}</div>
+          )}
+          {form?.clientEmail && (
+            <div className="text-sm text-slate-600">{form.clientEmail}</div>
+          )}
+          {form?.clientPhone && (
+            <div className="text-sm text-slate-600">{form.clientPhone}</div>
+          )}
+          {form?.clientAddress && (
+            <div className="text-sm text-slate-600">{form.clientAddress}</div>
+          )}
+        </div>
+
+        {/* Line items table */}
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr
+                style={{ backgroundColor: "#1a2b4a" }}
+                className="text-white"
+              >
+                <th className="py-2 px-3 text-left font-semibold">
+                  Description
+                </th>
+                <th className="py-2 px-3 text-center font-semibold w-16">
+                  Qty
+                </th>
+                <th className="py-2 px-3 text-right font-semibold w-28">
+                  Unit Price
+                </th>
+                <th className="py-2 px-3 text-right font-semibold w-28">
+                  Total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {(form?.items || []).map((item, idx) => (
+                <tr
+                  key={idx}
+                  className={idx % 2 === 0 ? "bg-slate-50" : "bg-white"}
+                >
+                  <td className="py-2 px-3">{item.description || "—"}</td>
+                  <td className="py-2 px-3 text-center">{item.qty || 1}</td>
+                  <td className="py-2 px-3 text-right">
+                    {fmt(item.unitPrice, currency)}
+                  </td>
+                  <td className="py-2 px-3 text-right font-medium">
+                    {fmt(item.total, currency)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals */}
+        <div className="mt-4 flex justify-end">
+          <div className="w-64 text-sm space-y-1">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Subtotal</span>
+              <span className="font-medium">{fmt(subtotal, currency)}</span>
+            </div>
+            {discPct > 0 && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Discount ({discPct}%)</span>
+                <span className="font-medium text-rose-600">
+                  - {fmt(discountAmount, currency)}
+                </span>
+              </div>
+            )}
+            {taxPct > 0 && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Tax ({taxPct}%)</span>
+                <span className="font-medium">
+                  + {fmt(taxAmount, currency)}
+                </span>
+              </div>
+            )}
+            <div
+              className="flex justify-between pt-2 mt-2 border-t text-base font-bold"
+              style={{ color: "#1a2b4a" }}
+            >
+              <span>Total</span>
+              <span>{fmt(total, currency)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Terms */}
+        {form?.terms && (
+          <div className="mt-6">
+            <div
+              className="text-sm font-semibold mb-1"
+              style={{ color: "#1a2b4a" }}
+            >
+              Terms & Conditions
+            </div>
+            <div className="text-xs text-slate-500 whitespace-pre-line">
+              {form.terms}
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        {form?.notes && (
+          <div className="mt-4">
+            <div
+              className="text-sm font-semibold mb-1"
+              style={{ color: "#1a2b4a" }}
+            >
+              Notes
+            </div>
+            <div className="text-xs text-slate-500 whitespace-pre-line">
+              {form.notes}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="mt-8 pt-4 border-t text-xs text-slate-400 text-center">
+          &copy; {new Date().getFullYear()} ADLM Studio &mdash; All rights
+          reserved.
+        </div>
+      </div>
     </div>
   );
 }

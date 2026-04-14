@@ -42,13 +42,20 @@ async function nextInvoiceNumber() {
   };
 }
 
-function computeTotals(items, discount = 0, tax = 0) {
+function computeTotals(items, discountPercent = 0, taxPercent = 0) {
   const subtotal = (items || []).reduce(
     (sum, it) => sum + Number(it.total || 0),
     0,
   );
-  const total = Math.max(subtotal - Number(discount || 0) + Number(tax || 0), 0);
-  return { subtotal, total };
+  const discPct = Math.min(Math.max(Number(discountPercent || 0), 0), 100);
+  const taxPct = Math.min(Math.max(Number(taxPercent || 0), 0), 100);
+
+  const discountAmount = Math.round((subtotal * discPct) / 100 * 100) / 100;
+  const afterDiscount = subtotal - discountAmount;
+  const taxAmount = Math.round((afterDiscount * taxPct) / 100 * 100) / 100;
+  const total = Math.max(afterDiscount + taxAmount, 0);
+
+  return { subtotal, discountAmount, taxAmount, total };
 }
 
 // List invoices
@@ -84,16 +91,17 @@ router.post(
     const { seq, invoiceNumber } = await nextInvoiceNumber();
 
     const items = (req.body.items || []).map((it) => ({
+      source: String(it.source || "").trim(),
       description: String(it.description || "").trim(),
       qty: Number(it.qty || 1),
       unitPrice: Number(it.unitPrice || 0),
       total: Number(it.total || 0),
     }));
 
-    const { subtotal, total } = computeTotals(
-      items,
-      req.body.discount,
-      req.body.tax,
+    const discPct = Math.min(Math.max(Number(req.body.discountPercent || 0), 0), 100);
+    const taxPct = Math.min(Math.max(Number(req.body.taxPercent || 0), 0), 100);
+    const { subtotal, discountAmount, taxAmount, total } = computeTotals(
+      items, discPct, taxPct,
     );
 
     const inv = await Invoice.create({
@@ -111,8 +119,10 @@ router.post(
         ? req.body.currency
         : "NGN",
       subtotal,
-      discount: Number(req.body.discount || 0),
-      tax: Number(req.body.tax || 0),
+      discountPercent: discPct,
+      discountAmount,
+      taxPercent: taxPct,
+      taxAmount,
       total,
       terms: (req.body.terms || "").trim(),
       notes: (req.body.notes || "").trim(),
@@ -135,13 +145,13 @@ router.put(
     const fields = [
       "invoiceDate", "dueDate",
       "clientName", "clientEmail", "clientPhone", "clientAddress", "clientOrganization",
-      "currency", "discount", "tax", "terms", "notes", "status",
+      "currency", "discountPercent", "taxPercent", "terms", "notes", "status",
     ];
 
     for (const f of fields) {
       if (req.body[f] !== undefined) {
-        if (f === "discount" || f === "tax") {
-          inv[f] = Number(req.body[f] || 0);
+        if (f === "discountPercent" || f === "taxPercent") {
+          inv[f] = Math.min(Math.max(Number(req.body[f] || 0), 0), 100);
         } else {
           inv[f] = req.body[f];
         }
@@ -150,6 +160,7 @@ router.put(
 
     if (req.body.items !== undefined) {
       inv.items = (req.body.items || []).map((it) => ({
+        source: String(it.source || "").trim(),
         description: String(it.description || "").trim(),
         qty: Number(it.qty || 1),
         unitPrice: Number(it.unitPrice || 0),
@@ -157,8 +168,12 @@ router.put(
       }));
     }
 
-    const { subtotal, total } = computeTotals(inv.items, inv.discount, inv.tax);
+    const { subtotal, discountAmount, taxAmount, total } = computeTotals(
+      inv.items, inv.discountPercent, inv.taxPercent,
+    );
     inv.subtotal = subtotal;
+    inv.discountAmount = discountAmount;
+    inv.taxAmount = taxAmount;
     inv.total = total;
 
     await inv.save();
@@ -346,12 +361,17 @@ router.get(
         { width: 80, align: "right" },
       );
 
+    const discPctVal = Number(inv.discountPercent || 0);
+    const taxPctVal = Number(inv.taxPercent || 0);
+    const discAmtVal = Number(inv.discountAmount || 0);
+    const taxAmtVal = Number(inv.taxAmount || 0);
+
     y += 15;
-    if (inv.discount > 0) {
+    if (discPctVal > 0) {
       doc
-        .text("Discount:", totalX, y, { width: 70, align: "right" })
+        .text(`Discount (${discPctVal}%):`, totalX - 20, y, { width: 90, align: "right" })
         .text(
-          `-${curr}${Number(inv.discount).toLocaleString()}`,
+          `-${curr}${discAmtVal.toLocaleString()}`,
           colTotal,
           y,
           { width: 80, align: "right" },
@@ -359,10 +379,10 @@ router.get(
       y += 15;
     }
 
-    if (inv.tax > 0) {
+    if (taxPctVal > 0) {
       doc
-        .text("Tax:", totalX, y, { width: 70, align: "right" })
-        .text(`${curr}${Number(inv.tax).toLocaleString()}`, colTotal, y, {
+        .text(`Tax (${taxPctVal}%):`, totalX - 20, y, { width: 90, align: "right" })
+        .text(`${curr}${taxAmtVal.toLocaleString()}`, colTotal, y, {
           width: 80,
           align: "right",
         });
