@@ -629,4 +629,33 @@ router.get(
   }),
 );
 
+/* ──────────── Physical Training Date Confirmation ──────────── */
+
+// Authenticated confirmation (from dashboard)
+router.post(
+  "/orders/:id/confirm-training-date",
+  asyncHandler(async (req, res) => {
+    const purchase = await Purchase.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
+    if (!purchase) return res.status(404).json({ error: "Order not found" });
+
+    if (!purchase.physicalTraining?.requested) {
+      return res.status(400).json({ error: "No physical training on this order" });
+    }
+    if (purchase.physicalTraining.status !== "date_proposed") {
+      return res.status(400).json({ error: "No date has been proposed yet" });
+    }
+
+    purchase.physicalTraining.confirmedByUser = true;
+    purchase.physicalTraining.confirmedAt = new Date();
+    purchase.physicalTraining.status = "confirmed";
+    purchase.physicalTraining.confirmToken = undefined;
+    await purchase.save();
+
+    return res.json({ ok: true, message: "Training date confirmed" });
+  }),
+);
+
 export default router;

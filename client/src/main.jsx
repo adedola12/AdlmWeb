@@ -34,6 +34,7 @@ import Testimonials from "./pages/Testimonials.jsx";
 import AdminShowcase from "./pages/AdminShowcase.jsx";
 import TrainingDetail from "./pages/TrainingDetail.jsx";
 import AdminCoupons from "./pages/AdminCoupons.jsx";
+import AdminInvoices from "./pages/AdminInvoices.jsx";
 import Support from "./pages/Support.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
@@ -243,6 +244,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin"]}>
             <AdminCoupons />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/invoices",
+        element: (
+          <AdminRoute roles={["admin", "mini_admin"]}>
+            <AdminInvoices />
           </AdminRoute>
         ),
       },

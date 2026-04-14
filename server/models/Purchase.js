@@ -48,6 +48,35 @@ const GrantSchema = new mongoose.Schema(
 );
 
 
+const PhysicalTrainingSchema = new mongoose.Schema(
+  {
+    requested: { type: Boolean, default: false },
+    locationId: { type: mongoose.Schema.Types.ObjectId, ref: "TrainingLocation" },
+    locationName: { type: String, trim: true, default: "" },
+    locationCity: { type: String, trim: true, default: "" },
+    locationState: { type: String, trim: true, default: "" },
+    locationAddress: { type: String, trim: true, default: "" },
+    trainingCost: { type: Number, default: 0 },
+    durationDays: { type: Number, default: 0 },
+
+    bimInstallRequested: { type: Boolean, default: false },
+    bimInstallCost: { type: Number, default: 0 },
+
+    scheduledDate: { type: Date, default: null },
+    scheduledEndDate: { type: Date, default: null },
+    confirmedByUser: { type: Boolean, default: false },
+    confirmedAt: { type: Date },
+    confirmToken: { type: String, trim: true },
+
+    status: {
+      type: String,
+      enum: ["pending_date", "date_proposed", "confirmed", "completed"],
+      default: "pending_date",
+    },
+  },
+  { _id: false }
+);
+
 const PurchaseSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -108,6 +137,8 @@ const PurchaseSchema = new mongoose.Schema(
       entitlementsApplied: { type: Boolean, default: false },
       entitlementsAppliedAt: { type: Date },
     },
+
+    physicalTraining: { type: PhysicalTrainingSchema, default: undefined },
 
     userConfirmedAt: { type: Date },
 

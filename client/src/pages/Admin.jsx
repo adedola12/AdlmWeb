@@ -529,6 +529,15 @@ export default function Admin() {
     productKey: "",
   });
 
+  // ── Training Locations state ──
+  const [tLocations, setTLocations] = React.useState([]);
+  const [tLocBusy, setTLocBusy] = React.useState(false);
+  const [tLocMsg, setTLocMsg] = React.useState("");
+  const [tLocForm, setTLocForm] = React.useState(null); // null = closed, {} = new, {_id} = edit
+  const [trainingDateModal, setTrainingDateModal] = React.useState({ open: false, purchaseId: null });
+  const [trainingDateVal, setTrainingDateVal] = React.useState("");
+  const [trainingEndDateVal, setTrainingEndDateVal] = React.useState("");
+
   // ── Settings state ──
   const [settingsMobileAppUrl, setSettingsMobileAppUrl] = React.useState("");
   const [settingsMobileAppDraft, setSettingsMobileAppDraft] = React.useState("");
@@ -565,6 +574,94 @@ export default function Admin() {
   React.useEffect(() => {
     if (tab === "settings" && accessToken) loadSettings();
   }, [tab, accessToken, loadSettings]);
+
+  // ── Training Locations helpers ──
+  const loadTLocations = React.useCallback(async () => {
+    try {
+      const data = await apiAuthed("/admin/training-locations", { token: accessToken });
+      setTLocations(Array.isArray(data?.locations) ? data.locations : []);
+    } catch { /* ignore */ }
+  }, [accessToken]);
+
+  React.useEffect(() => {
+    if (tab === "tlocations" && accessToken) loadTLocations();
+  }, [tab, accessToken, loadTLocations]);
+
+  async function saveTLocation() {
+    if (!tLocForm) return;
+    setTLocBusy(true);
+    setTLocMsg("");
+    try {
+      const isEdit = !!tLocForm._id;
+      await apiAuthed(
+        isEdit ? `/admin/training-locations/${tLocForm._id}` : "/admin/training-locations",
+        {
+          token: accessToken,
+          method: isEdit ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(tLocForm),
+        },
+      );
+      setTLocForm(null);
+      await loadTLocations();
+      setTLocMsg(isEdit ? "Location updated" : "Location created");
+    } catch (e) {
+      setTLocMsg(e.message || "Save failed");
+    } finally {
+      setTLocBusy(false);
+    }
+  }
+
+  async function deleteTLocation(id) {
+    if (!confirm("Delete this training location?")) return;
+    try {
+      await apiAuthed(`/admin/training-locations/${id}`, {
+        token: accessToken,
+        method: "DELETE",
+      });
+      await loadTLocations();
+    } catch (e) {
+      setTLocMsg(e.message || "Delete failed");
+    }
+  }
+
+  async function proposeTrainingDate(purchaseId) {
+    if (!trainingDateVal) return;
+    setTLocBusy(true);
+    try {
+      await apiAuthed(`/admin/purchases/${purchaseId}/propose-training-date`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduledDate: trainingDateVal,
+          scheduledEndDate: trainingEndDateVal || null,
+        }),
+      });
+      setTrainingDateModal({ open: false, purchaseId: null });
+      setTrainingDateVal("");
+      setTrainingEndDateVal("");
+      setMsg("Training date proposed and user notified!");
+      load();
+    } catch (e) {
+      setMsg(e.message || "Failed to propose date");
+    } finally {
+      setTLocBusy(false);
+    }
+  }
+
+  async function completeTraining(purchaseId) {
+    try {
+      await apiAuthed(`/admin/purchases/${purchaseId}/complete-training`, {
+        token: accessToken,
+        method: "POST",
+      });
+      setMsg("Training marked as completed");
+      load();
+    } catch (e) {
+      setMsg(e.message || "Failed");
+    }
+  }
 
   const saveMobileAppUrl = async () => {
     setSettingsBusy(true);
@@ -1515,6 +1612,14 @@ export default function Admin() {
             >
               Course Grading
             </button>
+
+            <button
+              className="btn btn-sm"
+              onClick={() => navigate("/admin/invoices")}
+              title="Create and manage invoices"
+            >
+              Invoices
+            </button>
           </div>
         </div>
 
@@ -1590,6 +1695,17 @@ export default function Admin() {
               }`}
             >
               Installations ({pendingInstalls.length})
+            </button>
+
+            <button
+              onClick={() => setTab("tlocations")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "tlocations"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Training Locations
             </button>
 
             <button
@@ -2643,6 +2759,411 @@ export default function Admin() {
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {/* ------------------ training locations tab ------------------ */}
+      {tab === "tlocations" && (
+        <div className="card">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-semibold">Training Locations</h2>
+              <div className="text-xs text-slate-500">
+                Manage locations for organization physical training, including costs and duration.
+              </div>
+            </div>
+            <button
+              className="btn btn-sm"
+              onClick={() =>
+                setTLocForm({
+                  name: "",
+                  city: "",
+                  state: "",
+                  address: "",
+                  trainingCostNGN: 0,
+                  trainingCostUSD: 0,
+                  bimInstallCostNGN: 0,
+                  bimInstallCostUSD: 0,
+                  durationDays: 1,
+                  isActive: true,
+                })
+              }
+            >
+              + Add Location
+            </button>
+          </div>
+
+          {tLocMsg && (
+            <div className="text-sm text-emerald-700 mb-3">{tLocMsg}</div>
+          )}
+
+          {/* Location form modal */}
+          {tLocForm && (
+            <div className="mb-4 rounded-lg bg-slate-50 ring-1 ring-slate-200 p-4">
+              <h3 className="font-semibold text-sm mb-3">
+                {tLocForm._id ? "Edit Location" : "New Location"}
+              </h3>
+              <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                <label>
+                  Name <span className="text-rose-600">*</span>
+                  <input
+                    className="input mt-1"
+                    value={tLocForm.name || ""}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  City
+                  <input
+                    className="input mt-1"
+                    value={tLocForm.city || ""}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({ ...f, city: e.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  State
+                  <input
+                    className="input mt-1"
+                    value={tLocForm.state || ""}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({ ...f, state: e.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Address
+                  <input
+                    className="input mt-1"
+                    value={tLocForm.address || ""}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({ ...f, address: e.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Training Cost (NGN)
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    value={tLocForm.trainingCostNGN || 0}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({
+                        ...f,
+                        trainingCostNGN: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Training Cost (USD)
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    value={tLocForm.trainingCostUSD || 0}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({
+                        ...f,
+                        trainingCostUSD: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  BIM Install Cost (NGN)
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    value={tLocForm.bimInstallCostNGN || 0}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({
+                        ...f,
+                        bimInstallCostNGN: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  BIM Install Cost (USD)
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    value={tLocForm.bimInstallCostUSD || 0}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({
+                        ...f,
+                        bimInstallCostUSD: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Duration (days)
+                  <input
+                    type="number"
+                    min="1"
+                    className="input mt-1"
+                    value={tLocForm.durationDays || 1}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({
+                        ...f,
+                        durationDays: Math.max(Number(e.target.value), 1),
+                      }))
+                    }
+                  />
+                </label>
+                <label className="flex items-center gap-2 mt-5">
+                  <input
+                    type="checkbox"
+                    checked={tLocForm.isActive !== false}
+                    onChange={(e) =>
+                      setTLocForm((f) => ({ ...f, isActive: e.target.checked }))
+                    }
+                  />
+                  Active
+                </label>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  className="btn btn-sm"
+                  onClick={saveTLocation}
+                  disabled={tLocBusy}
+                >
+                  {tLocBusy ? "Saving…" : "Save"}
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => setTLocForm(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Locations table */}
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-slate-600">
+                <tr className="border-b">
+                  <th className="py-2 pr-3">Name</th>
+                  <th className="py-2 pr-3">City / State</th>
+                  <th className="py-2 pr-3 text-right">Cost NGN</th>
+                  <th className="py-2 pr-3 text-right">Cost USD</th>
+                  <th className="py-2 pr-3 text-right">BIM NGN</th>
+                  <th className="py-2 pr-3 text-right">BIM USD</th>
+                  <th className="py-2 pr-3 text-right">Days</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tLocations.map((loc) => (
+                  <tr key={loc._id} className="border-b">
+                    <td className="py-2 pr-3 font-medium">{loc.name}</td>
+                    <td className="py-2 pr-3">
+                      {loc.city}
+                      {loc.state ? `, ${loc.state}` : ""}
+                    </td>
+                    <td className="py-2 pr-3 text-right">
+                      {Number(loc.trainingCostNGN || 0).toLocaleString()}
+                    </td>
+                    <td className="py-2 pr-3 text-right">
+                      {Number(loc.trainingCostUSD || 0).toLocaleString()}
+                    </td>
+                    <td className="py-2 pr-3 text-right">
+                      {Number(loc.bimInstallCostNGN || 0).toLocaleString()}
+                    </td>
+                    <td className="py-2 pr-3 text-right">
+                      {Number(loc.bimInstallCostUSD || 0).toLocaleString()}
+                    </td>
+                    <td className="py-2 pr-3 text-right">
+                      {loc.durationDays || 1}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {loc.isActive ? (
+                        <span className="text-emerald-700 text-xs font-medium">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">Inactive</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <div className="flex gap-1">
+                        <button
+                          className="text-xs text-adlm-blue-700 hover:underline"
+                          onClick={() => setTLocForm({ ...loc })}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="text-xs text-rose-600 hover:underline"
+                          onClick={() => deleteTLocation(loc._id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {tLocations.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-slate-500" colSpan={9}>
+                      No training locations yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Purchases with physical training (quick view) */}
+          <div className="mt-6 pt-4 border-t">
+            <h3 className="font-semibold text-sm mb-2">
+              Org Purchases with Physical Training
+            </h3>
+            <div className="space-y-2">
+              {purchases
+                .filter((p) => p.physicalTraining?.requested)
+                .map((p) => (
+                  <div
+                    key={p._id}
+                    className="rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3 text-sm"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="font-medium">
+                          {p.email || p.organization?.name || "—"}
+                        </span>
+                        <span className="text-slate-500 ml-2">
+                          {p.physicalTraining.locationName || "—"}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          p.physicalTraining.status === "confirmed"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : p.physicalTraining.status === "completed"
+                              ? "bg-blue-100 text-blue-700"
+                              : p.physicalTraining.status === "date_proposed"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {(p.physicalTraining.status || "pending")
+                          .replace(/_/g, " ")
+                          .replace(/\b\w/g, (c) => c.toUpperCase())}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      Training: {p.currency}{" "}
+                      {Number(
+                        p.physicalTraining.trainingCost || 0,
+                      ).toLocaleString()}
+                      {p.physicalTraining.bimInstallRequested
+                        ? ` + BIM: ${p.currency} ${Number(p.physicalTraining.bimInstallCost || 0).toLocaleString()}`
+                        : ""}
+                      {" · "}
+                      {p.physicalTraining.durationDays || 1} day(s)
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      {p.physicalTraining.status === "pending_date" && (
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => {
+                            setTrainingDateModal({
+                              open: true,
+                              purchaseId: p._id,
+                            });
+                            setTrainingDateVal("");
+                            setTrainingEndDateVal("");
+                          }}
+                        >
+                          Propose Date
+                        </button>
+                      )}
+                      {p.physicalTraining.status === "confirmed" && (
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => completeTraining(p._id)}
+                        >
+                          Mark Completed
+                        </button>
+                      )}
+                      {p.physicalTraining.scheduledDate && (
+                        <span className="text-xs text-slate-600 self-center">
+                          Scheduled:{" "}
+                          {new Date(
+                            p.physicalTraining.scheduledDate,
+                          ).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              {!purchases.some((p) => p.physicalTraining?.requested) && (
+                <div className="text-sm text-slate-500">
+                  No organization purchases with physical training yet.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Training date proposal modal */}
+      {trainingDateModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() =>
+              setTrainingDateModal({ open: false, purchaseId: null })
+            }
+          />
+          <div className="relative bg-white rounded-lg p-6 max-w-md w-full z-10">
+            <h3 className="font-semibold mb-3">Propose Training Date</h3>
+            <label className="block text-sm mb-3">
+              Start date
+              <input
+                type="date"
+                className="input mt-1"
+                value={trainingDateVal}
+                onChange={(e) => setTrainingDateVal(e.target.value)}
+              />
+            </label>
+            <label className="block text-sm mb-3">
+              End date (optional)
+              <input
+                type="date"
+                className="input mt-1"
+                value={trainingEndDateVal}
+                onChange={(e) => setTrainingEndDateVal(e.target.value)}
+              />
+            </label>
+            <div className="flex gap-2 justify-end">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() =>
+                  setTrainingDateModal({ open: false, purchaseId: null })
+                }
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-sm"
+                onClick={() =>
+                  proposeTrainingDate(trainingDateModal.purchaseId)
+                }
+                disabled={!trainingDateVal || tLocBusy}
+              >
+                {tLocBusy ? "Sending…" : "Propose & Notify User"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

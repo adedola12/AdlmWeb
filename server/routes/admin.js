@@ -1121,4 +1121,94 @@ router.post(
   }),
 );
 
+/* ──────────── Physical Training Date Proposal ──────────── */
+
+import crypto from "crypto";
+
+router.post(
+  "/purchases/:id/propose-training-date",
+  asyncHandler(async (req, res) => {
+    const purchase = await Purchase.findById(req.params.id);
+    if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+
+    if (!purchase.physicalTraining?.requested) {
+      return res
+        .status(400)
+        .json({ error: "This purchase has no physical training request" });
+    }
+
+    const { scheduledDate, scheduledEndDate } = req.body || {};
+    if (!scheduledDate) {
+      return res.status(400).json({ error: "scheduledDate is required" });
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    purchase.physicalTraining.scheduledDate = new Date(scheduledDate);
+    purchase.physicalTraining.scheduledEndDate = scheduledEndDate
+      ? new Date(scheduledEndDate)
+      : null;
+    purchase.physicalTraining.status = "date_proposed";
+    purchase.physicalTraining.confirmedByUser = false;
+    purchase.physicalTraining.confirmToken = token;
+
+    await purchase.save();
+
+    // Send email to user with confirm link
+    const user = await User.findById(purchase.userId).lean();
+    if (user?.email) {
+      const apiBase =
+        String(process.env.API_BASE_URL || "").trim() ||
+        "http://localhost:4000";
+      const confirmUrl = `${apiBase}/purchase/confirm-training?orderId=${purchase._id}&token=${token}`;
+      const startStr = dayjs(scheduledDate).format("dddd, MMMM D, YYYY");
+      const endStr = scheduledEndDate
+        ? ` to ${dayjs(scheduledEndDate).format("dddd, MMMM D, YYYY")}`
+        : "";
+
+      await sendMail({
+        to: user.email,
+        subject: "ADLM Studio — Training Date Proposed",
+        html: `
+          <p>Hi ${user.firstName || "there"},</p>
+          <p>Great news! We have proposed a date for your physical training:</p>
+          <p><b>Location:</b> ${purchase.physicalTraining.locationName || "—"}</p>
+          <p><b>Date:</b> ${startStr}${endStr}</p>
+          <p><b>Duration:</b> ${purchase.physicalTraining.durationDays || 1} day(s)</p>
+          ${purchase.physicalTraining.bimInstallRequested ? "<p>BIM software installation is also included.</p>" : ""}
+          <p>
+            <a href="${confirmUrl}" style="display:inline-block;padding:10px 24px;background:#0050c8;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">
+              Confirm Training Date
+            </a>
+          </p>
+          <p>Or you can confirm from your <a href="${joinUrl(WEB_URL, "/dashboard")}">dashboard</a>.</p>
+          <p>If the date doesn't work for you, please reply to this email or contact us.</p>
+          <p>— ADLM Studio</p>
+        `,
+      });
+    }
+
+    return res.json({ ok: true, message: "Training date proposed and user notified" });
+  }),
+);
+
+router.post(
+  "/purchases/:id/complete-training",
+  asyncHandler(async (req, res) => {
+    const purchase = await Purchase.findById(req.params.id);
+    if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+
+    if (!purchase.physicalTraining?.requested) {
+      return res
+        .status(400)
+        .json({ error: "This purchase has no physical training request" });
+    }
+
+    purchase.physicalTraining.status = "completed";
+    await purchase.save();
+
+    return res.json({ ok: true, message: "Training marked as completed" });
+  }),
+);
+
 export default router;

@@ -4,6 +4,7 @@ import { Purchase } from "../models/Purchase.js";
 import { Product } from "../models/Product.js";
 import { getFxRate } from "../util/fx.js";
 import { validateAndComputeDiscount } from "../util/coupons.js";
+import { TrainingLocation } from "../models/TrainingLocation.js";
 
 const router = express.Router();
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
@@ -174,7 +175,9 @@ router.post("/cart", requireAuth, async (req, res) => {
           recurring = toMoney(fixedPerSeat * seats, currency);
       }
 
-      const lineTotal = recurring + install;
+      // install fee is per-seat
+      const totalInstall = install * seats;
+      const lineTotal = recurring + totalInstall;
 
       lines.push({
         productKey: p.key,
@@ -188,7 +191,7 @@ router.post("/cart", requireAuth, async (req, res) => {
         organizationName: organization?.name || undefined,
 
         unit,
-        install,
+        install: totalInstall,
         subtotal:
           currency === "USD" ? round2(lineTotal) : Math.round(lineTotal),
       });
@@ -210,23 +213,69 @@ router.post("/cart", requireAuth, async (req, res) => {
 
     const discount = Number(couponRes.discount || 0);
 
+    // ── Physical training add-on (organization only) ──
+    let physicalTraining = undefined;
+    const ptInput = req.body?.physicalTraining;
+
+    if (purchaseLicenseType === "organization" && ptInput?.requested) {
+      const loc = await TrainingLocation.findById(ptInput.locationId).lean();
+      if (!loc || !loc.isActive) {
+        return res
+          .status(400)
+          .json({ error: "Selected training location is not available" });
+      }
+
+      const trainingCost =
+        currency === "USD"
+          ? round2(Number(loc.trainingCostUSD || 0))
+          : Math.round(Number(loc.trainingCostNGN || 0));
+
+      let bimInstallCost = 0;
+      if (ptInput.bimInstallRequested) {
+        bimInstallCost =
+          currency === "USD"
+            ? round2(Number(loc.bimInstallCostUSD || 0))
+            : Math.round(Number(loc.bimInstallCostNGN || 0));
+      }
+
+      physicalTraining = {
+        requested: true,
+        locationId: loc._id,
+        locationName: loc.name,
+        locationCity: loc.city || "",
+        locationState: loc.state || "",
+        locationAddress: loc.address || "",
+        trainingCost,
+        durationDays: loc.durationDays || 1,
+        bimInstallRequested: !!ptInput.bimInstallRequested,
+        bimInstallCost,
+        status: "pending_date",
+      };
+
+      // Add training costs to total
+      total += trainingCost + bimInstallCost;
+      total =
+        currency === "USD" ? round2(total) : Math.max(Math.round(total), 0);
+    }
+
     const totalAfterDiscount =
       currency === "USD"
-        ? Math.max(round2(totalBeforeDiscount - discount), 0)
-        : Math.max(Math.round(totalBeforeDiscount - discount), 0);
+        ? Math.max(round2(total - discount), 0)
+        : Math.max(Math.round(total - discount), 0);
 
     const purchase = await Purchase.create({
       userId: req.user._id,
       email: req.user.email,
 
       currency,
-      totalBeforeDiscount,
+      totalBeforeDiscount: total,
       totalAmount: totalAfterDiscount,
 
       licenseType: purchaseLicenseType,
       organization,
 
       lines,
+      physicalTraining,
       status: "pending",
 
       coupon: couponRes.coupon
@@ -342,6 +391,48 @@ router.post("/:id/confirm-manual", requireAuth, async (req, res) => {
   await p.save();
 
   return res.json({ ok: true, message: "Payment confirmation received." });
+});
+
+// Token-based training date confirmation (from email link, no auth required)
+router.get("/confirm-training", async (req, res) => {
+  try {
+    const { orderId, token } = req.query;
+    if (!orderId || !token) {
+      return res.status(400).json({ error: "orderId and token are required" });
+    }
+
+    const purchase = await Purchase.findById(orderId);
+    if (!purchase) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (!purchase.physicalTraining?.requested) {
+      return res.status(400).json({ error: "No physical training on this order" });
+    }
+
+    if (purchase.physicalTraining.confirmToken !== token) {
+      return res.status(403).json({ error: "Invalid or expired confirmation token" });
+    }
+
+    if (purchase.physicalTraining.status !== "date_proposed") {
+      return res.status(400).json({ error: "Training date already confirmed or not yet proposed" });
+    }
+
+    purchase.physicalTraining.confirmedByUser = true;
+    purchase.physicalTraining.confirmedAt = new Date();
+    purchase.physicalTraining.status = "confirmed";
+    purchase.physicalTraining.confirmToken = undefined;
+    await purchase.save();
+
+    // Redirect to frontend with success message
+    const webUrl =
+      String(process.env.PUBLIC_WEB_URL || process.env.PUBLIC_APP_URL || "").trim() ||
+      "http://localhost:5173";
+    return res.redirect(`${webUrl}/dashboard?notice=training_confirmed`);
+  } catch (e) {
+    console.error("confirm-training error:", e);
+    return res.status(500).json({ error: "Confirmation failed" });
+  }
 });
 
 export default router;

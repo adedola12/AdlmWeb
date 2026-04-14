@@ -282,6 +282,82 @@ export default function Receipt() {
             </table>
           </div>
 
+          {/* Physical Training Details (organization purchases) */}
+          {order?.physicalTraining?.requested && (
+            <div className="mt-6 rounded-xl bg-blue-50 ring-1 ring-blue-200 p-4">
+              <div className="text-sm font-semibold text-slate-900 mb-2">
+                Physical Training Details
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-slate-500">Location:</span>{" "}
+                  {order.physicalTraining.locationName || "—"}
+                </div>
+                {order.physicalTraining.locationAddress && (
+                  <div>
+                    <span className="text-slate-500">Address:</span>{" "}
+                    {order.physicalTraining.locationAddress}
+                    {order.physicalTraining.locationCity
+                      ? `, ${order.physicalTraining.locationCity}`
+                      : ""}
+                    {order.physicalTraining.locationState
+                      ? `, ${order.physicalTraining.locationState}`
+                      : ""}
+                  </div>
+                )}
+                <div>
+                  <span className="text-slate-500">Duration:</span>{" "}
+                  {order.physicalTraining.durationDays || 1} day(s)
+                </div>
+                <div>
+                  <span className="text-slate-500">Training Cost:</span>{" "}
+                  {currency}{" "}
+                  {Number(
+                    order.physicalTraining.trainingCost || 0,
+                  ).toLocaleString()}
+                </div>
+                {order.physicalTraining.bimInstallRequested && (
+                  <div>
+                    <span className="text-slate-500">
+                      BIM Software Installation:
+                    </span>{" "}
+                    {currency}{" "}
+                    {Number(
+                      order.physicalTraining.bimInstallCost || 0,
+                    ).toLocaleString()}
+                  </div>
+                )}
+                {order.physicalTraining.scheduledDate && (
+                  <div>
+                    <span className="text-slate-500">Scheduled Date:</span>{" "}
+                    {dayjs(order.physicalTraining.scheduledDate).format(
+                      "MMMM D, YYYY",
+                    )}
+                    {order.physicalTraining.scheduledEndDate
+                      ? ` — ${dayjs(order.physicalTraining.scheduledEndDate).format("MMMM D, YYYY")}`
+                      : ""}
+                  </div>
+                )}
+                <div>
+                  <span className="text-slate-500">Status:</span>{" "}
+                  <span
+                    className={
+                      order.physicalTraining.status === "confirmed"
+                        ? "text-emerald-700 font-medium"
+                        : order.physicalTraining.status === "completed"
+                          ? "text-blue-700 font-medium"
+                          : "text-amber-700 font-medium"
+                    }
+                  >
+                    {(order.physicalTraining.status || "pending")
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (c) => c.toUpperCase())}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="mt-6 flex items-start justify-between gap-4">
             <div className="text-xs text-slate-500 max-w-md">
               This receipt confirms an approved purchase on ADLM Studio. If you

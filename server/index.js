@@ -68,6 +68,10 @@ import adminUsersLite from "./routes/admin.usersLite.js";
 import projectsBoqRoutes from "./routes/projects.boq.js";
 import modelCheckRoutes from "./routes/model-checks.js";
 
+import trainingLocationsPublic from "./routes/training-locations.js";
+import adminTrainingLocations from "./routes/admin.training-locations.js";
+import adminInvoices from "./routes/admin.invoices.js";
+
 const app = express();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -243,6 +247,9 @@ app.use("/admin", adminRoutes);
 
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
+app.use("/admin/training-locations", adminTrainingLocations);
+app.use("/admin/invoices", adminInvoices);
+app.use("/training-locations", trainingLocationsPublic);
 app.use("/api/entitlements", entitlementsRouter);
 
 // app.use("/projectsboq", projectsBoqRoutes);

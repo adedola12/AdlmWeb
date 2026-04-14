@@ -65,6 +65,12 @@ export default function Purchase() {
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
   const [bankDetails, setBankDetails] = React.useState(null);
 
+  // Physical training (org only)
+  const [trainingLocations, setTrainingLocations] = React.useState([]);
+  const [wantsTraining, setWantsTraining] = React.useState(false);
+  const [selectedLocationId, setSelectedLocationId] = React.useState("");
+  const [wantsBimInstall, setWantsBimInstall] = React.useState(false);
+
   // ---------- money helpers ----------
   const round2 = (x) =>
     Math.round((Number(x || 0) + Number.EPSILON) * 100) / 100;
@@ -241,7 +247,7 @@ export default function Purchase() {
       }
     }
 
-    const installFee = entry.firstTime ? money(prices.install) : 0;
+    const installFee = entry.firstTime ? money(prices.install * seats) : 0;
 
     return {
       recurring,
@@ -256,12 +262,35 @@ export default function Purchase() {
   }
 
   const chosen = products.filter((p) => !!cart[getProductKey(p)]);
-  const total = money(
+
+  // Physical training cost calculation
+  const selectedLocation = trainingLocations.find(
+    (l) => String(l._id) === selectedLocationId,
+  );
+  const trainingCost =
+    wantsTraining && selectedLocation
+      ? money(
+          currency === "USD"
+            ? selectedLocation.trainingCostUSD || 0
+            : selectedLocation.trainingCostNGN || 0,
+        )
+      : 0;
+  const bimInstallCost =
+    wantsTraining && wantsBimInstall && selectedLocation
+      ? money(
+          currency === "USD"
+            ? selectedLocation.bimInstallCostUSD || 0
+            : selectedLocation.bimInstallCostNGN || 0,
+        )
+      : 0;
+
+  const productsTotal = money(
     chosen.reduce(
       (sum, p) => sum + lineCalc(p, cart[getProductKey(p)]).total,
       0,
     ),
   );
+  const total = money(productsTotal + trainingCost + bimInstallCost);
 
   const grandTotal = money(Math.max(total - Number(discount || 0), 0));
   const productKeys = chosen.map((p) => getProductKey(p));
@@ -333,6 +362,27 @@ export default function Purchase() {
       });
       return next;
     });
+    // Reset training options when switching away from org
+    setWantsTraining(false);
+    setSelectedLocationId("");
+    setWantsBimInstall(false);
+  }, [licenseType]);
+
+  // Load training locations when org is selected
+  React.useEffect(() => {
+    if (licenseType !== "organization") return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/training-locations`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        setTrainingLocations(Array.isArray(json?.locations) ? json.locations : []);
+      } catch {
+        setTrainingLocations([]);
+      }
+    })();
   }, [licenseType]);
 
   async function createPendingPurchaseAndShowModal() {
@@ -347,6 +397,11 @@ export default function Purchase() {
         if (!name) {
           setSubmitting(false);
           setMsg("Organization name is required for organization purchase.");
+          return;
+        }
+        if (wantsTraining && !selectedLocationId) {
+          setSubmitting(false);
+          setMsg("Please select a training location or uncheck the physical training option.");
           return;
         }
       }
@@ -366,17 +421,32 @@ export default function Purchase() {
         };
       });
 
+      const payload = {
+        currency,
+        items,
+        couponCode: couponCode.trim(),
+        licenseType,
+        organization: licenseType === "organization" ? org : null,
+      };
+
+      // Include physical training if org + selected
+      if (
+        licenseType === "organization" &&
+        wantsTraining &&
+        selectedLocationId
+      ) {
+        payload.physicalTraining = {
+          requested: true,
+          locationId: selectedLocationId,
+          bimInstallRequested: wantsBimInstall,
+        };
+      }
+
       const out = await apiAuthed(`/purchase/cart`, {
         token: accessToken,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currency,
-          items,
-          couponCode: couponCode.trim(),
-          licenseType,
-          organization: licenseType === "organization" ? org : null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       setPendingPurchaseId(out.purchaseId || null);
@@ -529,6 +599,89 @@ export default function Purchase() {
           <div className="text-xs text-slate-500 mt-2">
             Seats you choose on each product will be treated as number of
             users/devices your organization needs.
+          </div>
+
+          {/* Physical training option */}
+          <div className="mt-4 pt-4 border-t">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={wantsTraining}
+                onChange={(e) => {
+                  setWantsTraining(e.target.checked);
+                  if (!e.target.checked) {
+                    setSelectedLocationId("");
+                    setWantsBimInstall(false);
+                  }
+                }}
+              />
+              Need physical training for your office?
+            </label>
+            <div className="text-xs text-slate-500 mt-1">
+              An ADLM instructor will come to your office for hands-on training.
+              Training date will be communicated after purchase approval.
+            </div>
+
+            {wantsTraining && (
+              <div className="mt-3 space-y-3">
+                <label className="block text-sm">
+                  Training location <span className="text-rose-600">*</span>
+                  <select
+                    className="input mt-1"
+                    value={selectedLocationId}
+                    onChange={(e) => setSelectedLocationId(e.target.value)}
+                  >
+                    <option value="">— Select location —</option>
+                    {trainingLocations.map((loc) => (
+                      <option key={loc._id} value={loc._id}>
+                        {loc.name}
+                        {loc.city ? ` — ${loc.city}` : ""}
+                        {loc.state ? `, ${loc.state}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {selectedLocation && (
+                  <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3 text-sm space-y-1">
+                    <div>
+                      <span className="text-slate-500">Location:</span>{" "}
+                      {selectedLocation.name}
+                      {selectedLocation.address
+                        ? `, ${selectedLocation.address}`
+                        : ""}
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Duration:</span>{" "}
+                      {selectedLocation.durationDays || 1} day(s)
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Training cost:</span>{" "}
+                      <b>{fmt(trainingCost, currency)}</b>
+                    </div>
+                  </div>
+                )}
+
+                {selectedLocation && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={wantsBimInstall}
+                        onChange={(e) => setWantsBimInstall(e.target.checked)}
+                      />
+                      Also install BIM Softwares on office computers?
+                    </label>
+                    {wantsBimInstall && (
+                      <div className="text-sm">
+                        BIM software installation cost:{" "}
+                        <b>{fmt(bimInstallCost, currency)}</b>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -700,6 +853,38 @@ export default function Purchase() {
                 );
               })}
             </div>
+
+            {/* Physical training line items in summary */}
+            {wantsTraining && selectedLocation && (
+              <div className="mt-3 space-y-2 text-sm border-t pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate">
+                      Physical Training — {selectedLocation.name}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {selectedLocation.durationDays || 1} day(s)
+                    </div>
+                  </div>
+                  <div className="font-medium">
+                    {fmt(trainingCost, currency)}
+                  </div>
+                </div>
+                {wantsBimInstall && bimInstallCost > 0 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate">BIM Software Installation</div>
+                      <div className="text-xs text-slate-500">
+                        Office computers setup
+                      </div>
+                    </div>
+                    <div className="font-medium">
+                      {fmt(bimInstallCost, currency)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Coupon */}
             <div className="mt-4 border-t pt-4">
