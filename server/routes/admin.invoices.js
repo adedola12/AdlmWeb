@@ -7,6 +7,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { requireAuth, requireAdmin, verifyAccess } from "../middleware/auth.js";
 import { Invoice } from "../models/Invoice.js";
+import { User } from "../models/User.js";
 import { sendMail } from "../util/mailer.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -78,6 +79,51 @@ function computeTotals(items, discountPercent = 0, taxPercent = 0) {
   return { subtotal, discountAmount, taxAmount, total };
 }
 
+// Helper: find registered user by email
+async function resolveUserId(email) {
+  if (!email) return null;
+  const u = await User.findOne(
+    { email: email.trim().toLowerCase() },
+    { _id: 1 },
+  ).lean();
+  return u?._id || null;
+}
+
+// Suggest users by email or name (for autocomplete in invoice form)
+router.get(
+  "/user-suggest",
+  asyncHandler(async (req, res) => {
+    const q = String(req.query.q || "").trim();
+    if (q.length < 2) return res.json({ users: [] });
+
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rx = new RegExp(escaped, "i");
+
+    const users = await User.find(
+      {
+        $or: [
+          { email: rx },
+          { firstName: rx },
+          { lastName: rx },
+          { username: rx },
+        ],
+      },
+      { email: 1, firstName: 1, lastName: 1, username: 1, whatsapp: 1 },
+    )
+      .limit(10)
+      .lean();
+
+    return res.json({
+      users: users.map((u) => ({
+        _id: u._id,
+        email: u.email,
+        name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || "",
+        phone: u.whatsapp || "",
+      })),
+    });
+  }),
+);
+
 // List invoices
 router.get(
   "/",
@@ -124,13 +170,17 @@ router.post(
       items, discPct, taxPct,
     );
 
+    const clientEmail = (req.body.clientEmail || "").trim().toLowerCase();
+    const clientUserId = await resolveUserId(clientEmail);
+
     const inv = await Invoice.create({
       invoiceNumber,
       seq,
       invoiceDate: req.body.invoiceDate || new Date(),
       dueDate: req.body.dueDate || null,
+      clientUserId: clientUserId || undefined,
       clientName: (req.body.clientName || "").trim(),
-      clientEmail: (req.body.clientEmail || "").trim().toLowerCase(),
+      clientEmail,
       clientPhone: (req.body.clientPhone || "").trim(),
       clientAddress: (req.body.clientAddress || "").trim(),
       clientOrganization: (req.body.clientOrganization || "").trim(),
@@ -435,6 +485,10 @@ router.get(
 );
 
 // Send invoice to client via email
+const WEB_URL =
+  String(process.env.PUBLIC_WEB_URL || process.env.PUBLIC_APP_URL || "").trim() ||
+  "http://localhost:5173";
+
 router.post(
   "/:id/send",
   asyncHandler(async (req, res) => {
@@ -447,31 +501,116 @@ router.post(
         .json({ error: "Client email is required to send invoice" });
     }
 
-    const curr = inv.currency === "USD" ? "$" : "\u20A6";
+    // Resolve user — might have been created after invoice was made
+    if (!inv.clientUserId) {
+      const uid = await resolveUserId(inv.clientEmail);
+      if (uid) {
+        inv.clientUserId = uid;
+      }
+    }
+
+    const isRegistered = !!inv.clientUserId;
+    const curr = inv.currency === "USD" ? "$" : "N";
+    const clientGreeting = inv.clientName || inv.clientOrganization || "Client";
+    const dashboardUrl = `${WEB_URL}/dashboard`;
+    const signupUrl = `${WEB_URL}/register`;
+
+    // Build line items table for email
+    const itemsHtml = (inv.items || [])
+      .map(
+        (it, i) =>
+          `<tr style="border-bottom:1px solid #eee">
+            <td style="padding:6px 8px;font-size:13px">${i + 1}.</td>
+            <td style="padding:6px 8px;font-size:13px">${it.description || "—"}</td>
+            <td style="padding:6px 8px;font-size:13px;text-align:center">${it.qty || 1}</td>
+            <td style="padding:6px 8px;font-size:13px;text-align:right">${curr}${Number(it.unitPrice || 0).toLocaleString()}</td>
+            <td style="padding:6px 8px;font-size:13px;text-align:right;font-weight:600">${curr}${Number(it.total || 0).toLocaleString()}</td>
+          </tr>`,
+      )
+      .join("");
+
+    const accountSection = isRegistered
+      ? `<p style="margin-top:20px">
+           You can view this invoice and track its status from your dashboard:
+         </p>
+         <p>
+           <a href="${dashboardUrl}" style="display:inline-block;padding:10px 24px;background:#091E39;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">
+             View on Dashboard
+           </a>
+         </p>`
+      : `<div style="margin-top:20px;padding:16px;background:#f0f7ff;border-radius:8px;border:1px solid #c5ddf5">
+           <p style="margin:0 0 8px;font-weight:600;color:#091E39">Create your ADLM Studio account</p>
+           <p style="margin:0 0 12px;font-size:13px;color:#333">
+             Sign up to view invoices, track payments, and access your software subscriptions — all from your personal dashboard.
+           </p>
+           <a href="${signupUrl}" style="display:inline-block;padding:10px 24px;background:#E86A27;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">
+             Sign Up Now
+           </a>
+         </div>`;
 
     await sendMail({
       to: inv.clientEmail,
       subject: `Invoice ${inv.invoiceNumber} from ADLM Studio`,
       html: `
-        <p>Dear ${inv.clientName || inv.clientOrganization || "Client"},</p>
-        <p>Please find your invoice details below:</p>
-        <p>
-          <b>Invoice #:</b> ${inv.invoiceNumber}<br/>
-          <b>Date:</b> ${dayjs(inv.invoiceDate).format("MMMM D, YYYY")}<br/>
-          ${inv.dueDate ? `<b>Due:</b> ${dayjs(inv.dueDate).format("MMMM D, YYYY")}<br/>` : ""}
-          <b>Total:</b> ${curr}${Number(inv.total || 0).toLocaleString()}
-        </p>
-        <p>For full details, please contact us or check your account.</p>
-        <p>— ADLM Studio</p>
+        <div style="max-width:600px;margin:0 auto;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#262626">
+          <div style="background:#091E39;padding:20px 24px;border-radius:8px 8px 0 0">
+            <span style="color:#fff;font-size:18px;font-weight:700">ADLM Studio</span>
+            <span style="color:#E86A27;font-size:18px;font-weight:700;float:right">Invoice</span>
+          </div>
+          <div style="padding:24px;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 8px 8px">
+            <p>Dear ${clientGreeting},</p>
+            <p>Please find your invoice details below:</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0">
+              <tr style="background:#091E39;color:#fff">
+                <th style="padding:8px;text-align:left;font-size:12px">#</th>
+                <th style="padding:8px;text-align:left;font-size:12px">Description</th>
+                <th style="padding:8px;text-align:center;font-size:12px">Qty</th>
+                <th style="padding:8px;text-align:right;font-size:12px">Rate</th>
+                <th style="padding:8px;text-align:right;font-size:12px">Amount</th>
+              </tr>
+              ${itemsHtml}
+            </table>
+            <div style="text-align:right;font-size:14px;line-height:1.8">
+              <div>Subtotal: <b>${curr}${Number(inv.subtotal || 0).toLocaleString()}</b></div>
+              ${Number(inv.discountPercent || 0) > 0 ? `<div style="color:#c0392b">Discount (${inv.discountPercent}%): -${curr}${Number(inv.discountAmount || 0).toLocaleString()}</div>` : ""}
+              ${Number(inv.taxPercent || 0) > 0 ? `<div>Tax (${inv.taxPercent}%): +${curr}${Number(inv.taxAmount || 0).toLocaleString()}</div>` : ""}
+              <div style="font-size:18px;font-weight:700;color:#091E39;border-top:2px solid #091E39;padding-top:8px;margin-top:8px">
+                Total: ${curr}${Number(inv.total || 0).toLocaleString()}
+              </div>
+            </div>
+            <div style="margin-top:20px;padding:12px;background:#f9f9f9;border-radius:6px;font-size:13px">
+              <b>Invoice #:</b> ${inv.invoiceNumber}<br/>
+              <b>Date:</b> ${dayjs(inv.invoiceDate).format("MMMM D, YYYY")}<br/>
+              ${inv.dueDate ? `<b>Due:</b> ${dayjs(inv.dueDate).format("MMMM D, YYYY")}<br/>` : ""}
+            </div>
+            <div style="margin-top:16px;font-size:13px">
+              <b>Payment details:</b><br/>
+              Account no: 1634998770<br/>
+              Name: ADLM Studio<br/>
+              Bank: Access Bank
+            </div>
+            ${accountSection}
+            ${inv.terms ? `<div style="margin-top:16px;font-size:12px;color:#555"><b>Terms:</b><br/>${inv.terms.replace(/\n/g, "<br/>")}</div>` : ""}
+          </div>
+          <div style="text-align:center;padding:12px;font-size:11px;color:#999">
+            &copy; ${new Date().getFullYear()} ADLM Studio &mdash; www.adlmstudio.net
+          </div>
+        </div>
       `,
     });
 
     if (inv.status === "draft") {
       inv.status = "sent";
-      await inv.save();
     }
+    await inv.save();
 
-    return res.json({ ok: true, message: "Invoice sent to client" });
+    return res.json({
+      ok: true,
+      isRegistered,
+      message: isRegistered
+        ? "Invoice sent — client can also view it on their dashboard."
+        : "Invoice sent — client was invited to sign up on ADLM Studio.",
+    });
   }),
 );
 

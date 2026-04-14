@@ -7,6 +7,7 @@ import { ZONES, normalizeZone } from "../util/zones.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
 import { Setting } from "../models/Setting.js";
+import { Invoice } from "../models/Invoice.js";
 
 const router = express.Router();
 
@@ -626,6 +627,55 @@ router.get(
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     return res.json(order);
+  }),
+);
+
+/* ──────────── Client Invoices ──────────── */
+
+// List invoices sent to the current user (matched by email or userId)
+router.get(
+  "/invoices",
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id || req.user.id).lean();
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const invoices = await Invoice.find({
+      $or: [
+        { clientUserId: user._id },
+        { clientEmail: user.email },
+      ],
+      status: { $ne: "draft" }, // only show sent/paid/overdue/cancelled
+    })
+      .sort({ createdAt: -1 })
+      .select(
+        "invoiceNumber invoiceDate dueDate clientName clientOrganization " +
+        "items currency subtotal discountPercent discountAmount taxPercent taxAmount total " +
+        "terms notes status createdAt",
+      )
+      .lean();
+
+    return res.json({ ok: true, invoices });
+  }),
+);
+
+// Get single invoice detail
+router.get(
+  "/invoices/:id",
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id || req.user.id).lean();
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const inv = await Invoice.findOne({
+      _id: req.params.id,
+      $or: [
+        { clientUserId: user._id },
+        { clientEmail: user.email },
+      ],
+      status: { $ne: "draft" },
+    }).lean();
+
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+    return res.json({ ok: true, invoice: inv });
   }),
 );
 

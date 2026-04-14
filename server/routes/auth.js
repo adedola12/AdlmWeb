@@ -8,6 +8,7 @@ import { Refresh } from "../models/Refresh.js";
 import { PasswordReset } from "../models/PasswordReset.js";
 import { sendMail } from "../util/mailer.js";
 import { buildWelcomeEmail } from "../util/welcomeEmail.js";
+import { Invoice } from "../models/Invoice.js";
 import {
   signAccess,
   signRefresh,
@@ -299,6 +300,20 @@ router.post("/signup", async (req, res) => {
       await user.save();
     } catch (mailErr) {
       console.error("[/auth/signup] welcome mail error:", mailErr);
+    }
+
+    // Auto-link any invoices sent to this email address
+    try {
+      await Invoice.updateMany(
+        { clientEmail: normalizedEmail, clientUserId: { $exists: false } },
+        { $set: { clientUserId: user._id } },
+      );
+      await Invoice.updateMany(
+        { clientEmail: normalizedEmail, clientUserId: null },
+        { $set: { clientUserId: user._id } },
+      );
+    } catch (linkErr) {
+      console.error("[/auth/signup] invoice link error:", linkErr);
     }
 
     const payload = buildAuthPayload(user);

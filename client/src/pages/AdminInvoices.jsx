@@ -54,6 +54,48 @@ export default function AdminInvoices() {
   const [editId, setEditId] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
 
+  // User autocomplete for client fields
+  const [userSuggestions, setUserSuggestions] = React.useState([]);
+  const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const suggestTimer = React.useRef(null);
+
+  function handleClientFieldChange(field, value) {
+    setForm((f) => ({ ...f, [field]: value }));
+
+    // Trigger autocomplete on email or name fields
+    if (field === "clientEmail" || field === "clientName") {
+      clearTimeout(suggestTimer.current);
+      if (value.trim().length >= 2) {
+        suggestTimer.current = setTimeout(async () => {
+          try {
+            const data = await apiAuthed(
+              `/admin/invoices/user-suggest?q=${encodeURIComponent(value.trim())}`,
+              { token: accessToken },
+            );
+            setUserSuggestions(data?.users || []);
+            setShowSuggestions(true);
+          } catch {
+            setUserSuggestions([]);
+          }
+        }, 300);
+      } else {
+        setUserSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }
+  }
+
+  function pickSuggestion(user) {
+    setForm((f) => ({
+      ...f,
+      clientEmail: user.email || f.clientEmail,
+      clientName: user.name || f.clientName,
+      clientPhone: user.phone || f.clientPhone,
+    }));
+    setShowSuggestions(false);
+    setUserSuggestions([]);
+  }
+
   // Product + training location catalog for line-item dropdown
   const [products, setProducts] = React.useState([]);
   const [trainingLocations, setTrainingLocations] = React.useState([]);
@@ -569,6 +611,9 @@ export default function AdminInvoices() {
           {/* Client info */}
           <div className="border-t pt-4">
             <div className="text-sm font-semibold mb-2">Bill To</div>
+            <div className="text-xs text-slate-500 mb-2">
+              Start typing a client name or email to search registered users.
+            </div>
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
               <label>
                 Organization
@@ -583,27 +628,75 @@ export default function AdminInvoices() {
                   }
                 />
               </label>
-              <label>
-                Client Name
-                <input
-                  className="input mt-1"
-                  value={form.clientName || ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, clientName: e.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                Email
-                <input
-                  type="email"
-                  className="input mt-1"
-                  value={form.clientEmail || ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, clientEmail: e.target.value }))
-                  }
-                />
-              </label>
+              <div className="relative">
+                <label>
+                  Client Name
+                  <input
+                    className="input mt-1"
+                    value={form.clientName || ""}
+                    onChange={(e) =>
+                      handleClientFieldChange("clientName", e.target.value)
+                    }
+                    onFocus={() =>
+                      userSuggestions.length > 0 && setShowSuggestions(true)
+                    }
+                    onBlur={() =>
+                      setTimeout(() => setShowSuggestions(false), 200)
+                    }
+                    autoComplete="off"
+                  />
+                </label>
+                {showSuggestions && userSuggestions.length > 0 && (
+                  <div className="absolute z-20 left-0 right-0 top-full bg-white rounded-md shadow-lg ring-1 ring-slate-200 max-h-48 overflow-y-auto">
+                    {userSuggestions.map((u) => (
+                      <button
+                        key={u._id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm border-b border-slate-100 last:border-0"
+                        onMouseDown={() => pickSuggestion(u)}
+                      >
+                        <div className="font-medium">{u.name || u.email}</div>
+                        <div className="text-xs text-slate-500">{u.email}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="relative">
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    className="input mt-1"
+                    value={form.clientEmail || ""}
+                    onChange={(e) =>
+                      handleClientFieldChange("clientEmail", e.target.value)
+                    }
+                    onFocus={() =>
+                      userSuggestions.length > 0 && setShowSuggestions(true)
+                    }
+                    onBlur={() =>
+                      setTimeout(() => setShowSuggestions(false), 200)
+                    }
+                    autoComplete="off"
+                  />
+                </label>
+                {showSuggestions && userSuggestions.length > 0 && (
+                  <div className="absolute z-20 left-0 right-0 top-full bg-white rounded-md shadow-lg ring-1 ring-slate-200 max-h-48 overflow-y-auto">
+                    {userSuggestions.map((u) => (
+                      <button
+                        key={u._id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm border-b border-slate-100 last:border-0"
+                        onMouseDown={() => pickSuggestion(u)}
+                      >
+                        <div className="font-medium">{u.name || u.email}</div>
+                        <div className="text-xs text-slate-500">{u.email}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <label>
                 Phone
                 <input

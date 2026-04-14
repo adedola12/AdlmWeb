@@ -200,6 +200,10 @@ export default function Dashboard() {
   const [loadingOrders, setLoadingOrders] = React.useState(false);
   const [ordersErr, setOrdersErr] = React.useState("");
 
+  // Invoices
+  const [invoices, setInvoices] = React.useState([]);
+  const [loadingInvoices, setLoadingInvoices] = React.useState(false);
+
   // ✅ Physical training enrollments (new)
   const [pEnrollments, setPEnrollments] = React.useState([]);
   const [loadingPEnrollments, setLoadingPEnrollments] = React.useState(false);
@@ -283,16 +287,33 @@ export default function Dashboard() {
     }
   }, [accessToken]);
 
+  const loadInvoices = React.useCallback(async () => {
+    setLoadingInvoices(true);
+    try {
+      const data = await apiAuthed(`/me/invoices`, { token: accessToken });
+      setInvoices(Array.isArray(data?.invoices) ? data.invoices : []);
+    } catch {
+      setInvoices([]);
+    } finally {
+      setLoadingInvoices(false);
+    }
+  }, [accessToken]);
+
   React.useEffect(() => {
     loadSummary();
     loadCourses();
     loadPTrainings();
-  }, [loadSummary, loadCourses, loadPTrainings]);
+    loadInvoices();
+  }, [loadSummary, loadCourses, loadPTrainings, loadInvoices]);
 
   React.useEffect(() => {
     if (activeTab !== "orders") return;
     loadOrders(ordersPage);
   }, [activeTab, ordersPage, loadOrders]);
+
+  React.useEffect(() => {
+    if (activeTab === "invoices") loadInvoices();
+  }, [activeTab, loadInvoices]);
 
   // refresh physical trainings when user opens relevant tabs
   React.useEffect(() => {
@@ -431,6 +452,11 @@ export default function Dashboard() {
                 }}
               />
               <TabBtn
+                label={`Invoices${invoices.length ? ` (${invoices.length})` : ""}`}
+                active={activeTab === "invoices"}
+                onClick={() => setActiveTab("invoices")}
+              />
+              <TabBtn
                 label="Installations"
                 active={activeTab === "installations"}
                 onClick={() => setActiveTab("installations")}
@@ -498,6 +524,108 @@ export default function Dashboard() {
                   pTrainingsError={pEnrollmentsErr}
                   onRefreshPTrainings={loadPTrainings}
                 />
+              )}
+
+              {activeTab === "invoices" && (
+                <div className="space-y-3">
+                  <h2 className="font-semibold text-lg">Invoices</h2>
+                  {loadingInvoices && (
+                    <div className="text-sm text-slate-500">Loading invoices…</div>
+                  )}
+                  {!loadingInvoices && invoices.length === 0 && (
+                    <div className="text-sm text-slate-500">No invoices found.</div>
+                  )}
+                  {invoices.map((inv) => {
+                    const curr = inv.currency === "USD" ? "$" : "\u20A6";
+                    const statusColors = {
+                      sent: "bg-blue-100 text-blue-700",
+                      paid: "bg-emerald-100 text-emerald-700",
+                      overdue: "bg-red-100 text-red-700",
+                      cancelled: "bg-slate-200 text-slate-500",
+                    };
+                    return (
+                      <div
+                        key={inv._id}
+                        className="rounded-xl bg-white ring-1 ring-slate-200 p-4"
+                      >
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div>
+                            <div className="font-semibold text-slate-900">
+                              {inv.invoiceNumber}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {dayjs(inv.invoiceDate).format("MMM D, YYYY")}
+                              {inv.dueDate
+                                ? ` · Due: ${dayjs(inv.dueDate).format("MMM D, YYYY")}`
+                                : ""}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[inv.status] || "bg-slate-100 text-slate-600"}`}
+                            >
+                              {inv.status}
+                            </span>
+                            <span className="font-semibold text-slate-900">
+                              {curr}
+                              {Number(inv.total || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Line items */}
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="min-w-full text-xs">
+                            <thead className="text-slate-500">
+                              <tr className="border-b">
+                                <th className="py-1 pr-2 text-left">Item</th>
+                                <th className="py-1 pr-2 text-center w-10">Qty</th>
+                                <th className="py-1 pr-2 text-right w-20">Rate</th>
+                                <th className="py-1 text-right w-24">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(inv.items || []).map((it, idx) => (
+                                <tr key={idx} className="border-b border-slate-100">
+                                  <td className="py-1 pr-2">{it.description || "—"}</td>
+                                  <td className="py-1 pr-2 text-center">{it.qty || 1}</td>
+                                  <td className="py-1 pr-2 text-right">
+                                    {curr}{Number(it.unitPrice || 0).toLocaleString()}
+                                  </td>
+                                  <td className="py-1 text-right font-medium">
+                                    {curr}{Number(it.total || 0).toLocaleString()}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Totals */}
+                        <div className="mt-2 text-xs text-right space-y-0.5">
+                          <div>Subtotal: {curr}{Number(inv.subtotal || 0).toLocaleString()}</div>
+                          {Number(inv.discountPercent || 0) > 0 && (
+                            <div className="text-rose-600">
+                              Discount ({inv.discountPercent}%): -{curr}{Number(inv.discountAmount || 0).toLocaleString()}
+                            </div>
+                          )}
+                          {Number(inv.taxPercent || 0) > 0 && (
+                            <div>
+                              Tax ({inv.taxPercent}%): +{curr}{Number(inv.taxAmount || 0).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Terms */}
+                        {inv.terms && (
+                          <div className="mt-2 text-xs text-slate-500">
+                            <span className="font-medium">Terms:</span> {inv.terms}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
 
               {activeTab === "installations" && (
