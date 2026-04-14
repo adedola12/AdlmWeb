@@ -2,9 +2,28 @@ import express from "express";
 import PDFDocument from "pdfkit";
 import dayjs from "dayjs";
 import QRCode from "qrcode";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 import { requireAuth, requireAdmin, verifyAccess } from "../middleware/auth.js";
 import { Invoice } from "../models/Invoice.js";
 import { sendMail } from "../util/mailer.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Resolve logo path — try multiple locations
+function getLogoPath() {
+  const candidates = [
+    path.resolve(__dirname, "../../client/src/assets/logo/invoiceLogo.png"),
+    path.resolve(__dirname, "../../client/dist/assets/invoiceLogo.png"),
+    path.resolve(__dirname, "../../client/public/invoiceLogo.png"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 const router = express.Router();
 
@@ -226,175 +245,189 @@ router.get(
     const rightCol = 350;
     const pageWidth = 595.28 - 80; // A4 width minus margins
 
-    const curr = inv.currency === "USD" ? "$" : "\u20A6";
+    const curr = inv.currency === "USD" ? "$" : "N";
     const fmtN = (n) => `${curr}${Number(n || 0).toLocaleString()}`;
 
-    // ── Header: ADLM Studio + Invoice ──
-    doc
-      .fontSize(18)
-      .font("Helvetica-Bold")
-      .fillColor("#091E39")
-      .text("ADLM Studio", leftCol, 40);
+    const L = 40;                       // left margin
+    const PW = 595.28 - 80;             // usable page width
+    const R = L + PW;                   // right edge
 
-    doc
-      .fontSize(28)
-      .font("Helvetica-Bold")
-      .fillColor("#091E39")
-      .text("Invoice", rightCol, 36, { align: "right", width: pageWidth - rightCol + leftCol });
+    // ── Decorative elements ──
+    // Top-right circle
+    doc.save().circle(490, -30, 85).lineWidth(1.5).strokeColor("#ddd").strokeOpacity(0.3).stroke().restore();
+    // Bottom-right circle
+    doc.save().circle(520, 830, 55).lineWidth(1.5).strokeColor("#ddd").strokeOpacity(0.25).stroke().restore();
+    // Gray bar behind logo
+    doc.save().roundedRect(0, 72, 160, 28, 14).fill("#fbfbfb").restore();
 
-    doc
-      .fontSize(9)
-      .font("Helvetica")
-      .fillColor("#3e3e3e")
-      .text(`NO: ${inv.invoiceNumber}`, rightCol, 68, { align: "right", width: pageWidth - rightCol + leftCol });
+    // ── Decorative bars (5 small vertical bars) ──
+    for (let i = 0; i < 5; i++) {
+      doc.save().roundedRect(R - 55 + i * 14, 100, 5, 28, 2).fillOpacity(0.1).fill("#091E39").restore();
+    }
+
+    // ── Decorative dot grid (5×3) ──
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 5; c++) {
+        doc.save().circle(R - 50 + c * 11, 155 + r * 11, 2.5).fillOpacity(0.12).fill("#091E39").restore();
+      }
+    }
+
+    // ── Logo ──
+    const logoPath = getLogoPath();
+    if (logoPath) {
+      try {
+        doc.image(logoPath, L, 38, { height: 28 });
+      } catch { /* ignore missing logo */ }
+    } else {
+      doc.fontSize(16).font("Helvetica-Bold").fillColor("#091E39").text("ADLM Studio", L, 42);
+    }
+
+    // ── Invoice title (top-right) ──
+    doc.fontSize(30).font("Helvetica-Bold").fillColor("#091E39")
+      .text("Invoice", 0, 36, { width: R, align: "right" });
+    doc.fontSize(10).font("Helvetica").fillColor("#3e3e3e")
+      .text(`NO: ${inv.invoiceNumber}`, 0, 70, { width: R, align: "right" });
 
     // ── Invoice To ──
-    let y = 90;
-    doc
-      .fontSize(10)
-      .font("Helvetica-Bold")
-      .fillColor("#3e3e3e")
-      .text("INVOICE TO:", leftCol, y);
+    let y = 95;
+    doc.fontSize(10).font("Helvetica-Bold").fillColor("#3e3e3e").text("INVOICE TO:", L, y);
 
-    const toX = leftCol + 75;
+    const toX = L + 80;
     doc.fontSize(10).font("Helvetica").fillColor("#3e3e3e");
-    if (inv.clientName) doc.text(inv.clientName, toX, y), (y += 14);
-    if (inv.clientOrganization) doc.text(inv.clientOrganization, toX, y), (y += 14);
-    if (inv.clientAddress) doc.text(inv.clientAddress, toX, y), (y += 14);
-    if (inv.clientEmail) doc.text(inv.clientEmail, toX, y), (y += 14);
-    if (inv.clientPhone) doc.text(inv.clientPhone, toX, y), (y += 14);
+    if (inv.clientName)         { doc.text(inv.clientName, toX, y); y += 14; }
+    if (inv.clientOrganization) { doc.text(inv.clientOrganization, toX, y); y += 14; }
+    if (inv.clientAddress)      { doc.text(inv.clientAddress, toX, y); y += 14; }
 
-    // Date line
-    y += 4;
+    // Date row
+    y += 6;
     doc.fontSize(9).font("Helvetica").fillColor("#3e3e3e");
-    if (inv.invoiceDate)
-      doc.text(`Date: ${dayjs(inv.invoiceDate).format("MMMM D, YYYY")}`, leftCol, y);
-    if (inv.dueDate)
-      doc.text(`Due: ${dayjs(inv.dueDate).format("MMMM D, YYYY")}`, leftCol + 200, y);
+    if (inv.invoiceDate) doc.text(`Date: ${dayjs(inv.invoiceDate).format("MMMM D, YYYY")}`, L, y);
+    if (inv.dueDate)     doc.text(`Due: ${dayjs(inv.dueDate).format("MMMM D, YYYY")}`, L + 200, y);
 
-    // ── Separator ──
-    y += 18;
-    doc.moveTo(leftCol, y).lineTo(leftCol + pageWidth, y).strokeColor("#d0d0d0").lineWidth(0.5).stroke();
-    y += 10;
+    // ── Separator (gradient-like: thick navy fading to thin gray) ──
+    y += 20;
+    doc.save()
+      .moveTo(L, y).lineTo(L + PW * 0.6, y).lineWidth(2).strokeColor("#091E39").stroke()
+      .moveTo(L + PW * 0.6, y).lineTo(R, y).lineWidth(0.5).strokeColor("#ccc").stroke()
+      .restore();
+    y += 14;
 
-    // ── Line items table ──
-    const colSN = leftCol;
-    const colDesc = leftCol + 35;
-    const colQty = 330;
-    const colUnit = 370;
-    const colRate = 415;
-    const colAmt = 475;
-    const tableW = pageWidth;
-    const rowH = 28;
+    // ── Table ──
+    const colSN = L;
+    const colDesc = L + 38;
+    const colQty = 340;
+    const colUnit = 382;
+    const colRate = 425;
+    const colAmt = 485;
+    const rowH = 30;
 
-    // Header row
-    doc.roundedRect(leftCol, y, tableW, 24, 4).fill("#091E39");
-
+    // Header
+    doc.save().roundedRect(L, y, PW, 26, 4).fill("#091E39").restore();
     doc.fontSize(9).font("Helvetica-Bold").fillColor("#fff");
-    doc.text("S/N", colSN + 4, y + 7, { width: 30, align: "center" });
-    doc.text("DESCRIPTION", colDesc, y + 7, { width: colQty - colDesc });
-    doc.text("QTY.", colQty, y + 7, { width: 35, align: "center" });
-    doc.text("UNIT", colUnit, y + 7, { width: 40, align: "center" });
-    doc.text("RATE", colRate, y + 7, { width: 55, align: "right" });
-    doc.text("AMOUNT", colAmt, y + 7, { width: 65, align: "right" });
-    y += 24;
+    doc.text("S/N",         colSN + 2,  y + 8, { width: 34, align: "center" });
+    doc.text("DESCRIPTION", colDesc,     y + 8, { width: colQty - colDesc });
+    doc.text("QTY.",        colQty,      y + 8, { width: 36, align: "center" });
+    doc.text("UNIT",        colUnit,     y + 8, { width: 38, align: "center" });
+    doc.text("RATE",        colRate,     y + 8, { width: 55, align: "right" });
+    doc.text("AMOUNT",      colAmt,      y + 8, { width: R - colAmt, align: "right" });
+    y += 26;
 
-    // Data rows
+    // Rows
     for (let i = 0; i < (inv.items || []).length; i++) {
       const item = inv.items[i];
       if (y + rowH > 720) { doc.addPage(); y = 40; }
 
-      const bg = i % 2 === 1 ? "#e5e5e5" : "#ffffff";
-      const clr = i % 2 === 1 ? "#091E39" : "#262626";
+      const isGray = i % 2 === 1;
+      doc.save().rect(L, y, PW, rowH).fill(isGray ? "#e5e5e5" : "#ffffff").restore();
 
-      doc.rect(leftCol, y, tableW, rowH).fill(bg);
-
+      const clr = isGray ? "#091E39" : "#262626";
       doc.fontSize(9).font("Helvetica").fillColor(clr);
-      doc.text(`${i + 1}.`, colSN + 4, y + 8, { width: 30, align: "center" });
-      doc.text(item.description || "—", colDesc, y + 8, { width: colQty - colDesc - 5 });
-      doc.text(String(item.qty || 1), colQty, y + 8, { width: 35, align: "center" });
-      doc.text("Nr", colUnit, y + 8, { width: 40, align: "center" });
-      doc.text(fmtN(item.unitPrice), colRate, y + 8, { width: 55, align: "right" });
-      doc.text(fmtN(item.total), colAmt, y + 8, { width: 65, align: "right" });
+      doc.text(`${i + 1}.`,           colSN + 2, y + 9, { width: 34, align: "center" });
+      doc.text(item.description || "—", colDesc,  y + 9, { width: colQty - colDesc - 4 });
+      doc.text(String(item.qty || 1),  colQty,    y + 9, { width: 36, align: "center" });
+      doc.text("Nr",                   colUnit,   y + 9, { width: 38, align: "center" });
+      doc.text(fmtN(item.unitPrice),   colRate,   y + 9, { width: 55, align: "right" });
+      doc.text(fmtN(item.total),       colAmt,    y + 9, { width: R - colAmt, align: "right" });
       y += rowH;
     }
 
     // ── Summary bar ──
-    y += 6;
-    const summaryW = 220;
-    const summaryX = leftCol + tableW - summaryW;
-    doc.roundedRect(summaryX, y, summaryW, 24, 4).fill("#091E39");
+    y += 8;
+    const sumW = 230;
+    const sumX = R - sumW;
+    doc.save().roundedRect(sumX, y, sumW, 26, 4).fill("#091E39").restore();
 
     const discPctVal = Number(inv.discountPercent || 0);
-    const taxPctVal = Number(inv.taxPercent || 0);
+    const taxPctVal  = Number(inv.taxPercent || 0);
     const discAmtVal = Number(inv.discountAmount || 0);
-    const taxAmtVal = Number(inv.taxAmount || 0);
+    const taxAmtVal  = Number(inv.taxAmount || 0);
 
-    doc.fontSize(9).font("Helvetica-Bold").fillColor("#fff");
-    doc.text("Summary Total:", summaryX + 12, y + 7, { width: 100 });
-    doc.text(fmtN(inv.total), summaryX + 120, y + 7, { width: 88, align: "right" });
-    y += 24;
+    doc.fontSize(10).font("Helvetica-Bold").fillColor("#fff");
+    doc.text("Summary Total:", sumX + 14, y + 7, { width: 110 });
+    doc.text(fmtN(inv.total),  sumX + 130, y + 7, { width: 90, align: "right" });
+    y += 26;
 
-    // Discount/tax detail (if any)
+    // Discount / tax detail
     if (discPctVal > 0 || taxPctVal > 0) {
-      y += 4;
-      doc.fontSize(8).font("Helvetica").fillColor("#555");
-      doc.text(`Subtotal: ${fmtN(inv.subtotal)}`, summaryX, y, { width: summaryW, align: "right" });
-      y += 12;
+      y += 5;
+      doc.fontSize(9).font("Helvetica").fillColor("#555");
+      doc.text(`Subtotal: ${fmtN(inv.subtotal)}`, sumX, y, { width: sumW, align: "right" }); y += 13;
       if (discPctVal > 0) {
-        doc.text(`Discount (${discPctVal}%): -${fmtN(discAmtVal)}`, summaryX, y, { width: summaryW, align: "right" });
-        y += 12;
+        doc.text(`Discount (${discPctVal}%): -${fmtN(discAmtVal)}`, sumX, y, { width: sumW, align: "right" }); y += 13;
       }
       if (taxPctVal > 0) {
-        doc.text(`Tax (${taxPctVal}%): +${fmtN(taxAmtVal)}`, summaryX, y, { width: summaryW, align: "right" });
-        y += 12;
+        doc.text(`Tax (${taxPctVal}%): +${fmtN(taxAmtVal)}`, sumX, y, { width: sumW, align: "right" }); y += 13;
       }
     }
 
     // ── Separator ──
-    y += 10;
-    doc.moveTo(leftCol, y).lineTo(leftCol + pageWidth, y).strokeColor("#d0d0d0").lineWidth(0.5).stroke();
-    y += 14;
+    y += 12;
+    doc.save()
+      .moveTo(L, y).lineTo(L + PW * 0.6, y).lineWidth(2).strokeColor("#091E39").stroke()
+      .moveTo(L + PW * 0.6, y).lineTo(R, y).lineWidth(0.5).strokeColor("#ccc").stroke()
+      .restore();
+    y += 16;
 
     // ── Payment details + QR code ──
-    if (y + 80 > 720) { doc.addPage(); y = 40; }
+    if (y + 90 > 740) { doc.addPage(); y = 40; }
 
-    doc.fontSize(10).font("Helvetica-Bold").fillColor("#091E39").text("Payment details:", leftCol, y);
-    y += 14;
-    doc.fontSize(9).font("Helvetica").fillColor("#091E39");
-    doc.text("Account no: 1634998770", leftCol, y); y += 12;
-    doc.text("Name: ADLM Studio", leftCol, y); y += 12;
-    doc.text("Bank: Access Bank", leftCol, y);
+    const payY = y;
+    doc.fontSize(11).font("Helvetica-Bold").fillColor("#091E39").text("Payment details:", L, y);
+    y += 15;
+    doc.fontSize(10).font("Helvetica").fillColor("#091E39");
+    doc.text("Account no: 1634998770", L, y); y += 13;
+    doc.text("Name: ADLM Studio", L, y); y += 13;
+    doc.text("Bank: Access Bank", L, y);
 
-    // QR code on the right
+    // QR code (right-aligned)
     if (qrDataUrl) {
       try {
-        doc.image(qrDataUrl, leftCol + pageWidth - 80, y - 36, { width: 70, height: 70 });
-        doc.fontSize(6).font("Helvetica").fillColor("#999")
-          .text("Scan to verify", leftCol + pageWidth - 80, y + 38, { width: 70, align: "center" });
+        doc.image(qrDataUrl, R - 85, payY, { width: 75, height: 75 });
+        doc.fontSize(7).font("Helvetica").fillColor("#888")
+          .text("Authorized \u00B7 Scan to verify", R - 85, payY + 78, { width: 75, align: "center" });
       } catch { /* ignore */ }
     }
 
-    y += 24;
+    y += 20;
 
     // ── Terms ──
     if (inv.terms) {
       if (y + 40 > 740) { doc.addPage(); y = 40; }
       y += 8;
-      doc.fontSize(10).font("Helvetica-Bold").fillColor("#091E39").text("Terms:", leftCol, y);
-      y += 14;
-      doc.fontSize(9).font("Helvetica").fillColor("#091E39")
-        .text(inv.terms, leftCol, y, { width: pageWidth * 0.6 });
-      y += doc.heightOfString(inv.terms, { width: pageWidth * 0.6 }) + 8;
+      doc.fontSize(11).font("Helvetica-Bold").fillColor("#091E39").text("Terms:", L, y);
+      y += 15;
+      doc.fontSize(10).font("Helvetica").fillColor("#091E39")
+        .text(inv.terms, L, y, { width: PW * 0.6 });
+      y += doc.heightOfString(inv.terms, { width: PW * 0.6 }) + 10;
     }
 
     // ── Notes ──
     if (inv.notes) {
       if (y + 30 > 740) { doc.addPage(); y = 40; }
-      doc.fontSize(10).font("Helvetica-Bold").fillColor("#091E39").text("Notes:", leftCol, y);
-      y += 14;
-      doc.fontSize(9).font("Helvetica").fillColor("#091E39")
-        .text(inv.notes, leftCol, y, { width: pageWidth * 0.6 });
+      doc.fontSize(11).font("Helvetica-Bold").fillColor("#091E39").text("Notes:", L, y);
+      y += 15;
+      doc.fontSize(10).font("Helvetica").fillColor("#091E39")
+        .text(inv.notes, L, y, { width: PW * 0.6 });
     }
 
     doc.end();

@@ -4,7 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { API_BASE } from "../config";
-import adlmLogo from "../assets/logo/adlmLogo.png";
+import invoiceLogo from "../assets/logo/invoiceLogo.png";
 
 const fmt = (n, currency = "NGN") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
@@ -83,27 +83,39 @@ export default function AdminInvoices() {
   const lineItemOptions = React.useMemo(() => {
     const opts = [{ value: "", label: "— Custom item —", group: "custom" }];
 
-    // Software products — prefer yearly price; fallback to monthly * 12
+    // Software products — add both monthly and yearly options
     for (const p of products) {
       const key = p.key || p._id;
-      const yearlyNGN = Number(p.price?.yearlyNGN || 0);
-      const yearlyUSD = Number(p.price?.yearlyUSD || 0);
       const monthlyNGN = Number(p.price?.monthlyNGN || 0);
       const monthlyUSD = Number(p.price?.monthlyUSD || 0);
+      const yearlyNGN = Number(p.price?.yearlyNGN || 0);
+      const yearlyUSD = Number(p.price?.yearlyUSD || 0);
 
-      const priceNGN = yearlyNGN > 0 ? yearlyNGN : monthlyNGN * 12;
-      const priceUSD = yearlyUSD > 0 ? yearlyUSD : monthlyUSD * 12;
+      // Yearly option (prefer yearly price, fallback to monthly * 12)
+      const yrNGN = yearlyNGN > 0 ? yearlyNGN : monthlyNGN * 12;
+      const yrUSD = yearlyUSD > 0 ? yearlyUSD : monthlyUSD * 12;
+      if (yrNGN > 0 || yrUSD > 0) {
+        opts.push({
+          value: `product-yr:${key}`,
+          label: `${p.name} (Yearly) per PC/User`,
+          group: "Products",
+          priceNGN: yrNGN,
+          priceUSD: yrUSD,
+          description: `${p.name} (Yearly) per PC/User`,
+        });
+      }
 
-      opts.push({
-        value: `product:${key}`,
-        label: `${p.name} (Yearly) per PC/User`,
-        group: "Products",
-        priceNGN,
-        priceUSD,
-        installNGN: Number(p.price?.installNGN || 0),
-        installUSD: Number(p.price?.installUSD || 0),
-        description: `${p.name} (Yearly) per PC/User`,
-      });
+      // Monthly option
+      if (monthlyNGN > 0 || monthlyUSD > 0) {
+        opts.push({
+          value: `product-mo:${key}`,
+          label: `${p.name} (Monthly) per PC/User`,
+          group: "Products",
+          priceNGN: monthlyNGN,
+          priceUSD: monthlyUSD,
+          description: `${p.name} (Monthly) per PC/User`,
+        });
+      }
     }
 
     // Training locations (physical training)
@@ -886,11 +898,60 @@ export default function AdminInvoices() {
 }
 
 /* ─────────────────────────────────────────────
-   Invoice Preview Component — matches Figma design
+   Invoice Preview — pixel-match to Figma design
    ───────────────────────────────────────────── */
-function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, taxPct, total, onBack, onSend, editId, accessToken, busy }) {
+
+/* Decorative dot grid (Figma has 5×3 dots on the right side) */
+function DotGrid({ top, right }) {
+  const dots = [];
+  for (let r = 0; r < 3; r++)
+    for (let c = 0; c < 5; c++)
+      dots.push(
+        <circle
+          key={`${r}-${c}`}
+          cx={c * 12 + 6}
+          cy={r * 12 + 6}
+          r={3}
+          fill="#d0d5dd"
+        />,
+      );
+  return (
+    <svg
+      width={60}
+      height={36}
+      style={{ position: "absolute", top, right, opacity: 0.5 }}
+    >
+      {dots}
+    </svg>
+  );
+}
+
+/* Decorative vertical bars (Figma has 5 small bars on the right) */
+function DecoBars({ top, right }) {
+  return (
+    <div style={{ position: "absolute", top, right, display: "flex", gap: 8 }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          style={{
+            width: 5,
+            height: 26,
+            borderRadius: 2,
+            backgroundColor: "#091E39",
+            opacity: 0.12,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function InvoicePreview({
+  form, subtotal, discountAmount, discPct, taxAmount, taxPct, total,
+  onBack, onSend, editId, accessToken, busy,
+}) {
   const currency = form?.currency || "NGN";
-  const curr = currency === "USD" ? "$" : "\u20A6";
+  const curr = currency === "USD" ? "$" : "N";
   const previewRef = React.useRef(null);
   const [pdfBusy, setPdfBusy] = React.useState(false);
 
@@ -902,14 +963,20 @@ function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, ta
       const { jsPDF } = await import("jspdf");
 
       const el = previewRef.current;
+      // Force a fixed width so canvas renders consistently
+      const origW = el.style.width;
+      el.style.width = "595px";
+
       const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: "#ffffff",
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-        windowWidth: el.scrollWidth,
+        width: 595,
+        windowWidth: 595,
       });
+
+      el.style.width = origW;
 
       const pdf = new jsPDF("p", "mm", "a4");
       const pageW = pdf.internal.pageSize.getWidth();
@@ -917,28 +984,97 @@ function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, ta
       const imgW = pageW;
       const imgH = (canvas.height * imgW) / canvas.width;
 
-      let y = 0;
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, y, imgW, imgH);
-      let left = imgH - pageH;
-      while (left > 0) {
+      let yOff = 0;
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, yOff, imgW, imgH);
+      let remaining = imgH - pageH;
+      while (remaining > 0) {
         pdf.addPage();
-        y -= pageH;
-        pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, y, imgW, imgH);
-        left -= pageH;
+        yOff -= pageH;
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, yOff, imgW, imgH);
+        remaining -= pageH;
       }
 
       pdf.save(`${form?.invoiceNumber || "invoice"}.pdf`);
     } catch (err) {
       console.error("PDF generation error:", err);
-      alert("PDF download failed. Use Print > Save as PDF instead.");
+      alert("PDF download failed. Use Print \u2192 Save as PDF instead.");
     } finally {
       setPdfBusy(false);
     }
   }
 
-  const fmtN = (n) => {
-    const v = Number(n || 0);
-    return `${curr}${v.toLocaleString()}`;
+  const fmtN = (n) => `${curr}${Number(n || 0).toLocaleString()}`;
+
+  /* ── Inline styles matching the Figma file exactly ── */
+  const S = {
+    page: {
+      width: 595,
+      minHeight: 842,
+      margin: "0 auto",
+      backgroundColor: "#fff",
+      position: "relative",
+      overflow: "hidden",
+      fontFamily: "'Segoe UI', Helvetica, Arial, sans-serif",
+      color: "#262626",
+      fontSize: 11,
+      lineHeight: 1.45,
+      padding: "40px 36px 36px",
+    },
+    circle1: {
+      position: "absolute", top: -80, left: 260,
+      width: 170, height: 170, borderRadius: "50%",
+      border: "2px solid #ccc", opacity: 0.18,
+    },
+    circle2: {
+      position: "absolute", bottom: -30, right: -25,
+      width: 100, height: 100, borderRadius: "50%",
+      border: "2px solid #ccc", opacity: 0.15,
+    },
+    grayBar: {
+      position: "absolute", top: 72, left: 0,
+      width: 155, height: 28, backgroundColor: "#fbfbfb",
+      borderTopRightRadius: 16, borderBottomRightRadius: 16,
+    },
+    header: {
+      display: "flex", justifyContent: "space-between",
+      alignItems: "flex-start", position: "relative", zIndex: 1,
+    },
+    logo: { height: 28, objectFit: "contain" },
+    invoiceTitle: {
+      fontSize: 30, fontWeight: 700, color: "#091E39",
+      letterSpacing: -2, lineHeight: 1, textAlign: "right",
+    },
+    invoiceNo: {
+      fontSize: 10, color: "#3e3e3e", marginTop: 3, textAlign: "right",
+    },
+    invoiceTo: {
+      marginTop: 20, display: "flex", gap: 8, fontSize: 10.5,
+      position: "relative", zIndex: 1,
+    },
+    separator: {
+      border: "none", height: 1.5,
+      background: "linear-gradient(90deg, #091E39 60%, #d0d0d0 100%)",
+      margin: "16px 0",
+    },
+    thRow: {
+      backgroundColor: "#091E39", color: "#fff",
+    },
+    th: {
+      padding: "9px 10px", fontWeight: 600, fontSize: 10, letterSpacing: -0.5,
+    },
+    td: { padding: "9px 10px", fontSize: 10 },
+    summaryBar: {
+      backgroundColor: "#091E39", color: "#fff", borderRadius: 4,
+      padding: "7px 18px", display: "inline-flex", gap: 30,
+      fontSize: 10.5, fontWeight: 600, marginTop: 8,
+    },
+    paymentSection: {
+      display: "flex", justifyContent: "space-between",
+      alignItems: "flex-start", gap: 20, marginTop: 0,
+    },
+    terms: {
+      marginTop: 16, fontSize: 11, color: "#091E39", lineHeight: 1.5,
+    },
   };
 
   return (
@@ -946,8 +1082,8 @@ function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, ta
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; margin: 0 !important; padding: 0 !important; }
-          .print-wrap { padding: 0 !important; box-shadow: none !important; border: none !important; }
+          body, html { background: white !important; margin: 0 !important; padding: 0 !important; }
+          .inv-page { box-shadow: none !important; }
         }
       `}</style>
 
@@ -957,116 +1093,110 @@ function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, ta
           Back to Editor
         </button>
         <div className="flex gap-2">
-          <button className="btn btn-sm" onClick={() => window.print()}>
-            Print
-          </button>
+          <button className="btn btn-sm" onClick={() => window.print()}>Print</button>
           <button className="btn btn-sm" onClick={handleDownloadPdf} disabled={pdfBusy}>
             {pdfBusy ? "Generating…" : "Download PDF"}
           </button>
           {editId && (
-            <button
-              className="btn btn-sm"
+            <button className="btn btn-sm"
               onClick={() => window.open(`${API_BASE}/admin/invoices/${editId}/pdf?token=${accessToken}`, "_blank")}
-            >
-              Server PDF
-            </button>
+            >Server PDF</button>
           )}
           {form?.clientEmail && editId && (
-            <button
-              className="btn btn-sm text-white"
-              style={{ backgroundColor: "#091E39" }}
-              onClick={onSend}
-              disabled={busy}
-            >
-              {busy ? "Sending…" : "Send to Client"}
-            </button>
+            <button className="btn btn-sm text-white" style={{ backgroundColor: "#091E39" }}
+              onClick={onSend} disabled={busy}
+            >{busy ? "Sending…" : "Send to Client"}</button>
           )}
         </div>
       </div>
 
-      {/* ══════ Invoice Card (Figma-matched) ══════ */}
-      <div
-        ref={previewRef}
-        className="print-wrap bg-white mx-auto overflow-hidden relative"
-        style={{
-          maxWidth: 595,
-          fontFamily: "'Lexend', 'Segoe UI', Helvetica, Arial, sans-serif",
-          color: "#262626",
-          fontSize: 11,
-          lineHeight: 1.4,
-          padding: "40px 36px 32px",
-          boxShadow: "0 2px 12px rgba(0,0,0,.08)",
-          borderRadius: 12,
-        }}
-      >
-        {/* Decorative circles (Figma design) */}
-        <div style={{ position: "absolute", top: -70, left: 240, width: 160, height: 160, borderRadius: "50%", border: "2px solid #e0e0e0", opacity: 0.25 }} />
-        <div style={{ position: "absolute", bottom: -30, right: -20, width: 90, height: 90, borderRadius: "50%", border: "2px solid #e0e0e0", opacity: 0.2 }} />
+      {/* ══════════ Invoice Page ══════════ */}
+      <div ref={previewRef} className="inv-page" style={{
+        ...S.page,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.10)",
+      }}>
+        {/* Decorative elements */}
+        <div style={S.circle1} />
+        <div style={S.circle2} />
+        <div style={S.grayBar} />
+        <DecoBars top={105} right={30} />
+        <DotGrid top={160} right={28} />
 
-        {/* ── Header: Logo + Invoice title ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        {/* ── Header ── */}
+        <div style={S.header}>
           <img
-            src={adlmLogo}
+            src={invoiceLogo}
             alt="ADLM Studio"
             crossOrigin="anonymous"
-            style={{ height: 32, objectFit: "contain" }}
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
+            style={S.logo}
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
           />
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: "#091E39", letterSpacing: -1.5, lineHeight: 1 }}>
-              Invoice
-            </div>
-            <div style={{ fontSize: 10, color: "#3e3e3e", marginTop: 2 }}>
-              NO: {form?.invoiceNumber || "—"}
-            </div>
+          <div>
+            <div style={S.invoiceTitle}>Invoice</div>
+            <div style={S.invoiceNo}>NO: {form?.invoiceNumber || "—"}</div>
           </div>
         </div>
 
         {/* ── Invoice To ── */}
-        <div style={{ marginTop: 18, display: "flex", gap: 6, fontSize: 10 }}>
-          <span style={{ fontWeight: 600, color: "#3e3e3e" }}>INVOICE TO:</span>
-          <div style={{ color: "#3e3e3e", fontWeight: 500 }}>
+        <div style={S.invoiceTo}>
+          <span style={{ fontWeight: 600, color: "#3e3e3e", whiteSpace: "nowrap" }}>
+            INVOICE TO:
+          </span>
+          <div style={{ color: "#3e3e3e", fontWeight: 500, lineHeight: 1.5 }}>
             {form?.clientName && <div>{form.clientName}</div>}
             {form?.clientOrganization && <div>{form.clientOrganization}</div>}
             {form?.clientAddress && <div>{form.clientAddress}</div>}
-            {form?.clientEmail && <div>{form.clientEmail}</div>}
-            {form?.clientPhone && <div>{form.clientPhone}</div>}
           </div>
         </div>
 
-        {/* ── Date info ── */}
-        <div style={{ marginTop: 4, fontSize: 10, color: "#3e3e3e" }}>
-          {form?.invoiceDate && <span>Date: {dayjs(form.invoiceDate).format("MMMM D, YYYY")}</span>}
-          {form?.dueDate && <span style={{ marginLeft: 16 }}>Due: {dayjs(form.dueDate).format("MMMM D, YYYY")}</span>}
-        </div>
+        {/* Date row */}
+        {(form?.invoiceDate || form?.dueDate) && (
+          <div style={{ fontSize: 10, color: "#3e3e3e", marginTop: 6 }}>
+            {form.invoiceDate && (
+              <span>Date: {dayjs(form.invoiceDate).format("MMMM D, YYYY")}</span>
+            )}
+            {form.dueDate && (
+              <span style={{ marginLeft: 24 }}>
+                Due: {dayjs(form.dueDate).format("MMMM D, YYYY")}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* ── Separator ── */}
-        <hr style={{ border: "none", borderTop: "1px solid #d0d0d0", margin: "14px 0" }} />
+        <hr style={S.separator} />
 
         {/* ── Line items table ── */}
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ backgroundColor: "#091E39", color: "#fff" }}>
-              <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, width: 32, borderTopLeftRadius: 5 }}>S/N</th>
-              <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600 }}>DESCRIPTION</th>
-              <th style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600, width: 40 }}>QTY.</th>
-              <th style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600, width: 45 }}>UNIT</th>
-              <th style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, width: 75 }}>RATE</th>
-              <th style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, width: 80, borderTopRightRadius: 5 }}>AMOUNT</th>
+            <tr style={S.thRow}>
+              <th style={{ ...S.th, width: 36, textAlign: "center", borderTopLeftRadius: 5 }}>S/N</th>
+              <th style={{ ...S.th, textAlign: "left" }}>DESCRIPTION</th>
+              <th style={{ ...S.th, width: 38, textAlign: "center" }}>QTY.</th>
+              <th style={{ ...S.th, width: 42, textAlign: "center" }}>UNIT</th>
+              <th style={{ ...S.th, width: 72, textAlign: "right" }}>RATE</th>
+              <th style={{ ...S.th, width: 78, textAlign: "right", borderTopRightRadius: 5 }}>AMOUNT</th>
             </tr>
           </thead>
           <tbody>
             {(form?.items || []).map((item, idx) => {
-              const bg = idx % 2 === 1 ? "#e5e5e5" : "#fff";
-              const clr = idx % 2 === 1 ? "#091E39" : "#262626";
+              const isGray = idx % 2 === 1;
               return (
-                <tr key={idx} style={{ backgroundColor: bg, color: clr }}>
-                  <td style={{ padding: "8px 10px", textAlign: "right" }}>{idx + 1}.</td>
-                  <td style={{ padding: "8px 10px" }}>{item.description || "—"}</td>
-                  <td style={{ padding: "8px 10px", textAlign: "center" }}>{item.qty || 1}</td>
-                  <td style={{ padding: "8px 10px", textAlign: "center" }}>Nr</td>
-                  <td style={{ padding: "8px 10px", textAlign: "right" }}>{fmtN(item.unitPrice)}</td>
-                  <td style={{ padding: "8px 10px", textAlign: "right" }}>{fmtN(item.total)}</td>
+                <tr
+                  key={idx}
+                  style={{
+                    backgroundColor: isGray ? "#e5e5e5" : "#fff",
+                    color: isGray ? "#091E39" : "#262626",
+                  }}
+                >
+                  <td style={{ ...S.td, textAlign: "center" }}>{idx + 1}.</td>
+                  <td style={S.td}>{item.description || "—"}</td>
+                  <td style={{ ...S.td, textAlign: "center" }}>{item.qty || 1}</td>
+                  <td style={{ ...S.td, textAlign: "center" }}>Nr</td>
+                  <td style={{ ...S.td, textAlign: "right" }}>{fmtN(item.unitPrice)}</td>
+                  <td style={{ ...S.td, textAlign: "right", fontWeight: 500 }}>{fmtN(item.total)}</td>
                 </tr>
               );
             })}
@@ -1074,31 +1204,22 @@ function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, ta
         </table>
 
         {/* ── Summary bar ── */}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-          <div
-            style={{
-              backgroundColor: "#091E39",
-              color: "#fff",
-              borderRadius: 4,
-              padding: "6px 16px",
-              display: "flex",
-              gap: 24,
-              fontSize: 10,
-              fontWeight: 600,
-            }}
-          >
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div style={S.summaryBar}>
             <span>Summary{discPct > 0 || taxPct > 0 ? "" : " Total"}:</span>
             <span>{fmtN(total)}</span>
           </div>
         </div>
 
-        {/* discount/tax breakdown if present */}
+        {/* discount / tax breakdown */}
         {(discPct > 0 || taxPct > 0) && (
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-            <div style={{ fontSize: 10, textAlign: "right", lineHeight: 1.6 }}>
+            <div style={{ fontSize: 10, textAlign: "right", lineHeight: 1.7 }}>
               <div>Subtotal: <b>{fmtN(subtotal)}</b></div>
               {discPct > 0 && (
-                <div style={{ color: "#c0392b" }}>Discount ({discPct}%): -{fmtN(discountAmount)}</div>
+                <div style={{ color: "#c0392b" }}>
+                  Discount ({discPct}%): -{fmtN(discountAmount)}
+                </div>
               )}
               {taxPct > 0 && (
                 <div>Tax ({taxPct}%): +{fmtN(taxAmount)}</div>
@@ -1108,41 +1229,42 @@ function InvoicePreview({ form, subtotal, discountAmount, discPct, taxAmount, ta
         )}
 
         {/* ── Separator ── */}
-        <hr style={{ border: "none", borderTop: "1px solid #d0d0d0", margin: "16px 0" }} />
+        <hr style={S.separator} />
 
-        {/* ── Payment details + QR Code ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24 }}>
-          <div style={{ fontSize: 11, color: "#091E39", lineHeight: 1.5, flex: 1 }}>
-            <div style={{ fontWeight: 600 }}>Payment details:</div>
+        {/* ── Payment details + QR code ── */}
+        <div style={S.paymentSection}>
+          <div style={{ fontSize: 11, color: "#091E39", lineHeight: 1.6, flex: 1 }}>
+            <div style={{ fontWeight: 700 }}>Payment details:</div>
             <div>Account no: 1634998770</div>
             <div>Name: ADLM Studio</div>
             <div>Bank: Access Bank</div>
           </div>
-          <div style={{ textAlign: "center" }}>
+          <div style={{ textAlign: "center", flexShrink: 0 }}>
             <QRCodeSVG
               value="https://www.adlmstudio.net"
-              size={72}
+              size={80}
               level="M"
+              fgColor="#091E39"
               style={{ display: "block" }}
             />
-            <div style={{ fontSize: 7, color: "#888", marginTop: 3 }}>
-              Scan to verify
+            <div style={{ fontSize: 7, color: "#666", marginTop: 4, fontStyle: "italic" }}>
+              Authorized &middot; Scan to verify
             </div>
           </div>
         </div>
 
         {/* ── Terms ── */}
         {form?.terms && (
-          <div style={{ marginTop: 14, fontSize: 11, color: "#091E39", lineHeight: 1.5 }}>
-            <div style={{ fontWeight: 600 }}>Terms:</div>
+          <div style={S.terms}>
+            <div style={{ fontWeight: 700 }}>Terms:</div>
             <div style={{ whiteSpace: "pre-line" }}>{form.terms}</div>
           </div>
         )}
 
         {/* ── Notes ── */}
         {form?.notes && (
-          <div style={{ marginTop: 10, fontSize: 11, color: "#091E39", lineHeight: 1.5 }}>
-            <div style={{ fontWeight: 600 }}>Notes:</div>
+          <div style={{ ...S.terms, marginTop: 10 }}>
+            <div style={{ fontWeight: 700 }}>Notes:</div>
             <div style={{ whiteSpace: "pre-line" }}>{form.notes}</div>
           </div>
         )}
