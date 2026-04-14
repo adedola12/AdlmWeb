@@ -632,26 +632,39 @@ router.get(
 
 /* ──────────── Client Invoices ──────────── */
 
-// List invoices sent to the current user (matched by email or userId)
+// Helper: build the query to find invoices for the current user
+async function invoiceMatchQuery(reqUser) {
+  const userId = reqUser._id || reqUser.id;
+  const jwtEmail = (reqUser.email || "").trim().toLowerCase();
+
+  // Also look up the DB record in case JWT email differs or userId needs ObjectId
+  let dbEmail = jwtEmail;
+  try {
+    const dbUser = await User.findById(userId).select("email").lean();
+    if (dbUser?.email) dbEmail = dbUser.email.trim().toLowerCase();
+  } catch { /* ignore */ }
+
+  const emails = [...new Set([jwtEmail, dbEmail].filter(Boolean))];
+
+  const orConditions = [];
+  if (userId) orConditions.push({ clientUserId: userId });
+  for (const em of emails) {
+    orConditions.push({ clientEmail: em });
+  }
+
+  if (!orConditions.length) return null;
+  return { $or: orConditions, status: { $ne: "draft" } };
+}
+
+// List invoices sent to the current user
 router.get(
   "/invoices",
   asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id || req.user.id).lean();
-    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    const query = await invoiceMatchQuery(req.user);
+    if (!query) return res.json({ ok: true, invoices: [] });
 
-    const invoices = await Invoice.find({
-      $or: [
-        { clientUserId: user._id },
-        { clientEmail: user.email },
-      ],
-      status: { $ne: "draft" }, // only show sent/paid/overdue/cancelled
-    })
+    const invoices = await Invoice.find(query)
       .sort({ createdAt: -1 })
-      .select(
-        "invoiceNumber invoiceDate dueDate clientName clientOrganization " +
-        "items currency subtotal discountPercent discountAmount taxPercent taxAmount total " +
-        "terms notes status createdAt",
-      )
       .lean();
 
     return res.json({ ok: true, invoices });
@@ -662,16 +675,12 @@ router.get(
 router.get(
   "/invoices/:id",
   asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id || req.user.id).lean();
-    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    const baseQuery = await invoiceMatchQuery(req.user);
+    if (!baseQuery) return res.status(404).json({ error: "Invoice not found" });
 
     const inv = await Invoice.findOne({
       _id: req.params.id,
-      $or: [
-        { clientUserId: user._id },
-        { clientEmail: user.email },
-      ],
-      status: { $ne: "draft" },
+      ...baseQuery,
     }).lean();
 
     if (!inv) return res.status(404).json({ error: "Invoice not found" });

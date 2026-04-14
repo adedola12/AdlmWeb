@@ -382,12 +382,12 @@ export default function AdminInvoices() {
   async function sendInvoice(id) {
     setBusy(true);
     try {
-      await apiAuthed(`/admin/invoices/${id}/send`, {
+      const result = await apiAuthed(`/admin/invoices/${id}/send`, {
         token: accessToken,
         method: "POST",
       });
       load();
-      setMsg("Invoice sent to client");
+      setMsg(result?.message || "Invoice sent to client");
     } catch (e) {
       setMsg(e.message || "Send failed");
     } finally {
@@ -426,6 +426,23 @@ export default function AdminInvoices() {
               <option value="overdue">Overdue</option>
               <option value="cancelled">Cancelled</option>
             </select>
+            <button
+              className="btn btn-sm btn-ghost text-xs"
+              onClick={async () => {
+                try {
+                  const r = await apiAuthed("/admin/invoices/relink-users", {
+                    token: accessToken,
+                    method: "POST",
+                  });
+                  setMsg(r?.message || "Relinked");
+                } catch (e) {
+                  setMsg(e.message || "Relink failed");
+                }
+              }}
+              title="Link existing invoices to registered user accounts by matching email"
+            >
+              Relink Users
+            </button>
             <button className="btn btn-sm" onClick={startNew}>
               + New Invoice
             </button>

@@ -246,6 +246,12 @@ router.put(
     inv.taxAmount = taxAmount;
     inv.total = total;
 
+    // Re-resolve clientUserId if email changed
+    if (req.body.clientEmail !== undefined || !inv.clientUserId) {
+      const uid = await resolveUserId(inv.clientEmail);
+      inv.clientUserId = uid || inv.clientUserId || undefined;
+    }
+
     await inv.save();
     return res.json({ ok: true, invoice: inv });
   }),
@@ -481,6 +487,31 @@ router.get(
     }
 
     doc.end();
+  }),
+);
+
+// Re-link all invoices that have a clientEmail matching a registered user but no clientUserId
+router.post(
+  "/relink-users",
+  asyncHandler(async (_req, res) => {
+    const unlinked = await Invoice.find({
+      clientEmail: { $exists: true, $ne: "" },
+      $or: [{ clientUserId: null }, { clientUserId: { $exists: false } }],
+    }).lean();
+
+    let linked = 0;
+    for (const inv of unlinked) {
+      const uid = await resolveUserId(inv.clientEmail);
+      if (uid) {
+        await Invoice.updateOne({ _id: inv._id }, { $set: { clientUserId: uid } });
+        linked++;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      message: `Checked ${unlinked.length} unlinked invoices, linked ${linked} to users.`,
+    });
   }),
 );
 
