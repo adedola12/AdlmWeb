@@ -1,6 +1,7 @@
 // server/routes/me.js
 import express from "express";
 import dayjs from "dayjs";
+import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
@@ -632,22 +633,44 @@ router.get(
 
 /* ──────────── Client Invoices ──────────── */
 
+// Helper: safely convert string to ObjectId
+function toObjectId(id) {
+  try {
+    if (!id) return null;
+    if (id instanceof mongoose.Types.ObjectId) return id;
+    if (mongoose.Types.ObjectId.isValid(id))
+      return new mongoose.Types.ObjectId(String(id));
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Helper: build the query to find invoices for the current user
 async function invoiceMatchQuery(reqUser) {
-  const userId = reqUser._id || reqUser.id;
+  const rawId = reqUser._id || reqUser.id;
   const jwtEmail = (reqUser.email || "").trim().toLowerCase();
 
-  // Also look up the DB record in case JWT email differs or userId needs ObjectId
-  let dbEmail = jwtEmail;
+  // Look up the DB record to get actual ObjectId + email
+  let dbUser = null;
   try {
-    const dbUser = await User.findById(userId).select("email").lean();
-    if (dbUser?.email) dbEmail = dbUser.email.trim().toLowerCase();
+    dbUser = await User.findById(rawId).select("_id email").lean();
   } catch { /* ignore */ }
+
+  const oid = dbUser?._id || toObjectId(rawId);
+  const dbEmail = (dbUser?.email || "").trim().toLowerCase();
 
   const emails = [...new Set([jwtEmail, dbEmail].filter(Boolean))];
 
   const orConditions = [];
-  if (userId) orConditions.push({ clientUserId: userId });
+
+  // Match by ObjectId (proper type for MongoDB comparison)
+  if (oid) orConditions.push({ clientUserId: oid });
+
+  // Also match by string version in case clientUserId was stored as string
+  if (rawId) orConditions.push({ clientUserId: String(rawId) });
+
+  // Match by email
   for (const em of emails) {
     orConditions.push({ clientEmail: em });
   }

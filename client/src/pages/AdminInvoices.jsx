@@ -1209,7 +1209,27 @@ function InvoicePreview({
           </button>
           {editId && (
             <button className="btn btn-sm"
-              onClick={() => window.open(`${API_BASE}/admin/invoices/${editId}/pdf?token=${accessToken}`, "_blank")}
+              onClick={async () => {
+                try {
+                  const resp = await fetch(
+                    `${API_BASE}/admin/invoices/${editId}/pdf`,
+                    {
+                      headers: { Authorization: `Bearer ${accessToken}` },
+                      credentials: "include",
+                    },
+                  );
+                  if (!resp.ok) throw new Error("PDF generation failed");
+                  const blob = await resp.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${form?.invoiceNumber || "invoice"}.pdf`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  alert(e.message || "Failed to download PDF");
+                }
+              }}
             >Server PDF</button>
           )}
           {form?.clientEmail && editId && (

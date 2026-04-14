@@ -30,18 +30,31 @@ const router = express.Router();
 
 // Most routes require admin auth
 router.use((req, res, next) => {
-  // Allow ?token= query param for PDF download (browser opens new tab)
-  if (req.query.token && req.path.endsWith("/pdf")) {
-    try {
-      req.user = verifyAccess(req.query.token);
-      const role = String(req.user?.role || "").toLowerCase();
-      if (role !== "admin" && role !== "mini_admin") {
-        return res.status(403).json({ error: "Forbidden" });
+  // PDF download: try multiple auth methods since browser opens a new tab
+  if (req.path.endsWith("/pdf")) {
+    // Method 1: ?token= query param
+    const qToken = req.query.token || "";
+    // Method 2: cookie (browser sends cookies on same-origin navigation)
+    const cToken =
+      req.cookies?.at || req.cookies?.accessToken || req.cookies?.token || "";
+    // Method 3: standard Authorization header
+    const auth = req.headers.authorization || "";
+    const hToken = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+    const token = qToken || cToken || hToken;
+    if (token) {
+      try {
+        req.user = verifyAccess(token);
+        const role = String(req.user?.role || "").toLowerCase();
+        if (role === "admin" || role === "mini_admin") {
+          return next();
+        }
+      } catch {
+        // token expired or invalid — fall through to standard auth
       }
-      return next();
-    } catch {
-      return res.status(401).json({ error: "Unauthorized" });
     }
+    // Fall through: try standard requireAuth chain
+    return requireAuth(req, res, () => requireAdmin(req, res, next));
   }
   // Default: standard auth
   return requireAuth(req, res, () => requireAdmin(req, res, next));
