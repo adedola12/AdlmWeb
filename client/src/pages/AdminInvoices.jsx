@@ -367,7 +367,7 @@ export default function AdminInvoices() {
   }
 
   async function deleteInvoice(id) {
-    if (!confirm("Delete this draft invoice?")) return;
+    if (!confirm("Are you sure you want to delete this invoice? This cannot be undone.")) return;
     try {
       await apiAuthed(`/admin/invoices/${id}`, {
         token: accessToken,
@@ -517,14 +517,12 @@ export default function AdminInvoices() {
                           Send
                         </button>
                       )}
-                      {inv.status === "draft" && (
-                        <button
-                          className="text-rose-600 hover:underline"
-                          onClick={() => deleteInvoice(inv._id)}
-                        >
-                          Delete
-                        </button>
-                      )}
+                      <button
+                        className="text-rose-600 hover:underline"
+                        onClick={() => deleteInvoice(inv._id)}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>

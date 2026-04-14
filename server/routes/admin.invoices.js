@@ -276,11 +276,6 @@ router.delete(
   asyncHandler(async (req, res) => {
     const inv = await Invoice.findById(req.params.id);
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
-    if (inv.status !== "draft") {
-      return res
-        .status(400)
-        .json({ error: "Only draft invoices can be deleted" });
-    }
     await inv.deleteOne();
     return res.json({ ok: true });
   }),
@@ -503,27 +498,34 @@ router.get(
   }),
 );
 
-// Re-link all invoices that have a clientEmail matching a registered user but no clientUserId
+// Re-link ALL invoices (re-resolve clientUserId from email for every invoice)
 router.post(
   "/relink-users",
   asyncHandler(async (_req, res) => {
-    const unlinked = await Invoice.find({
+    const all = await Invoice.find({
       clientEmail: { $exists: true, $ne: "" },
-      $or: [{ clientUserId: null }, { clientUserId: { $exists: false } }],
     }).lean();
 
     let linked = 0;
-    for (const inv of unlinked) {
+    let updated = 0;
+    for (const inv of all) {
       const uid = await resolveUserId(inv.clientEmail);
       if (uid) {
-        await Invoice.updateOne({ _id: inv._id }, { $set: { clientUserId: uid } });
+        const currentId = inv.clientUserId ? String(inv.clientUserId) : null;
+        if (currentId !== String(uid)) {
+          await Invoice.updateOne(
+            { _id: inv._id },
+            { $set: { clientUserId: uid } },
+          );
+          updated++;
+        }
         linked++;
       }
     }
 
     return res.json({
       ok: true,
-      message: `Checked ${unlinked.length} unlinked invoices, linked ${linked} to users.`,
+      message: `Checked ${all.length} invoices: ${linked} matched to users, ${updated} newly linked.`,
     });
   }),
 );
