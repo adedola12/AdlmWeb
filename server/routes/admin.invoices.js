@@ -54,11 +54,18 @@ router.use((req, res, next) => {
       }
     }
     // Fall through: try standard requireAuth chain
-    return requireAuth(req, res, () => requireAdmin(req, res, next));
+    return requireAuth(req, res, () => requireAdminOrMini(req, res, next));
   }
-  // Default: standard auth
-  return requireAuth(req, res, () => requireAdmin(req, res, next));
+  // Default: standard auth — allow both admin and mini_admin
+  return requireAuth(req, res, () => requireAdminOrMini(req, res, next));
 });
+
+// Allow both admin and mini_admin roles
+function requireAdminOrMini(req, res, next) {
+  const role = String(req.user?.role || "").toLowerCase();
+  if (role === "admin" || role === "mini_admin") return next();
+  return res.status(403).json({ error: "Forbidden" });
+}
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);

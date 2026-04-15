@@ -785,6 +785,155 @@ router.get(
   }),
 );
 
+// Client PDF download — proxies to admin PDF generator
+router.get(
+  "/invoices/:id/pdf",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    try {
+      const or = await buildInvoiceOrQuery(req.user);
+      if (!or.length) return res.status(404).json({ error: "Invoice not found" });
+
+      const inv = await Invoice.findOne({
+        _id: req.params.id,
+        $or: or,
+        status: { $ne: "draft" },
+      }).lean();
+
+      if (!inv) return res.status(404).json({ error: "Invoice not found" });
+
+      // Import PDF generation deps
+      const PDFDocument = (await import("pdfkit")).default;
+      let QRCode;
+      try { QRCode = (await import("qrcode")).default; } catch { /* ignore */ }
+
+      let qrDataUrl = "";
+      if (QRCode) {
+        try {
+          qrDataUrl = await QRCode.toDataURL("https://www.adlmstudio.net", { width: 80, margin: 1 });
+        } catch { /* ignore */ }
+      }
+
+      const doc = new PDFDocument({ size: "A4", margin: 40 });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${inv.invoiceNumber}.pdf"`);
+      doc.pipe(res);
+
+      const leftCol = 40;
+      const pageWidth = 595.28 - 80;
+      const curr = inv.currency === "USD" ? "$" : "N";
+      const fmtN = (n) => `${curr}${Number(n || 0).toLocaleString()}`;
+
+      // Header
+      doc.fontSize(18).font("Helvetica-Bold").fillColor("#091E39")
+        .text("ADLM Studio", leftCol, 40);
+      doc.fontSize(28).font("Helvetica-Bold").fillColor("#091E39")
+        .text("Invoice", 350, 36, { align: "right", width: pageWidth - 350 + leftCol });
+      doc.fontSize(9).font("Helvetica").fillColor("#3e3e3e")
+        .text(`NO: ${inv.invoiceNumber}`, 350, 68, { align: "right", width: pageWidth - 350 + leftCol });
+
+      // Invoice To
+      let y = 90;
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#3e3e3e").text("INVOICE TO:", leftCol, y);
+      const toX = leftCol + 75;
+      doc.fontSize(10).font("Helvetica").fillColor("#3e3e3e");
+      if (inv.clientName) { doc.text(inv.clientName, toX, y); y += 14; }
+      if (inv.clientOrganization) { doc.text(inv.clientOrganization, toX, y); y += 14; }
+      if (inv.clientAddress) { doc.text(inv.clientAddress, toX, y); y += 14; }
+
+      y += 4;
+      const dayjs = (await import("dayjs")).default;
+      if (inv.invoiceDate) doc.text(`Date: ${dayjs(inv.invoiceDate).format("MMMM D, YYYY")}`, leftCol, y);
+      if (inv.dueDate) doc.text(`Due: ${dayjs(inv.dueDate).format("MMMM D, YYYY")}`, leftCol + 200, y);
+
+      // Separator
+      y += 18;
+      doc.moveTo(leftCol, y).lineTo(leftCol + pageWidth, y).strokeColor("#091E39").lineWidth(1.5).stroke();
+      y += 10;
+
+      // Table header
+      const colSN = leftCol, colDesc = leftCol + 35, colQty = 330, colUnit = 370, colRate = 415, colAmt = 475;
+      doc.roundedRect(leftCol, y, pageWidth, 24, 4).fill("#091E39");
+      doc.fontSize(9).font("Helvetica-Bold").fillColor("#fff");
+      doc.text("S/N", colSN + 4, y + 7, { width: 30, align: "center" });
+      doc.text("DESCRIPTION", colDesc, y + 7, { width: colQty - colDesc });
+      doc.text("QTY.", colQty, y + 7, { width: 35, align: "center" });
+      doc.text("UNIT", colUnit, y + 7, { width: 40, align: "center" });
+      doc.text("RATE", colRate, y + 7, { width: 55, align: "right" });
+      doc.text("AMOUNT", colAmt, y + 7, { width: 65, align: "right" });
+      y += 24;
+
+      // Rows
+      const rowH = 28;
+      for (let i = 0; i < (inv.items || []).length; i++) {
+        const item = inv.items[i];
+        if (y + rowH > 720) { doc.addPage(); y = 40; }
+        const bg = i % 2 === 1 ? "#e5e5e5" : "#ffffff";
+        const clr = i % 2 === 1 ? "#091E39" : "#262626";
+        doc.rect(leftCol, y, pageWidth, rowH).fill(bg);
+        doc.fontSize(9).font("Helvetica").fillColor(clr);
+        doc.text(`${i + 1}.`, colSN + 4, y + 8, { width: 30, align: "center" });
+        doc.text(item.description || "—", colDesc, y + 8, { width: colQty - colDesc - 5 });
+        doc.text(String(item.qty || 1), colQty, y + 8, { width: 35, align: "center" });
+        doc.text("Nr", colUnit, y + 8, { width: 40, align: "center" });
+        doc.text(fmtN(item.unitPrice), colRate, y + 8, { width: 55, align: "right" });
+        doc.text(fmtN(item.total), colAmt, y + 8, { width: 65, align: "right" });
+        y += rowH;
+      }
+
+      // Summary bar
+      y += 6;
+      const summaryW = 220, summaryX = leftCol + pageWidth - summaryW;
+      doc.roundedRect(summaryX, y, summaryW, 24, 4).fill("#091E39");
+      doc.fontSize(9).font("Helvetica-Bold").fillColor("#fff");
+      doc.text("Summary Total:", summaryX + 12, y + 7, { width: 100 });
+      doc.text(fmtN(inv.total), summaryX + 120, y + 7, { width: 88, align: "right" });
+      y += 24;
+
+      // Discount/tax
+      const dp = Number(inv.discountPercent || 0);
+      const tp = Number(inv.taxPercent || 0);
+      if (dp > 0 || tp > 0) {
+        y += 4;
+        doc.fontSize(8).font("Helvetica").fillColor("#555");
+        doc.text(`Subtotal: ${fmtN(inv.subtotal)}`, summaryX, y, { width: summaryW, align: "right" }); y += 12;
+        if (dp > 0) { doc.text(`Discount (${dp}%): -${fmtN(inv.discountAmount)}`, summaryX, y, { width: summaryW, align: "right" }); y += 12; }
+        if (tp > 0) { doc.text(`Tax (${tp}%): +${fmtN(inv.taxAmount)}`, summaryX, y, { width: summaryW, align: "right" }); y += 12; }
+      }
+
+      // Separator
+      y += 10;
+      doc.moveTo(leftCol, y).lineTo(leftCol + pageWidth, y).strokeColor("#d0d0d0").lineWidth(0.5).stroke();
+      y += 14;
+
+      // Payment details + QR
+      if (y + 80 > 720) { doc.addPage(); y = 40; }
+      doc.fontSize(10).font("Helvetica-Bold").fillColor("#091E39").text("Payment details:", leftCol, y); y += 14;
+      doc.fontSize(9).font("Helvetica").fillColor("#091E39");
+      doc.text("Account no: 1634998770", leftCol, y); y += 12;
+      doc.text("Name: ADLM Studio", leftCol, y); y += 12;
+      doc.text("Bank: Access Bank", leftCol, y);
+      if (qrDataUrl) {
+        try { doc.image(qrDataUrl, leftCol + pageWidth - 80, y - 36, { width: 70, height: 70 }); } catch { /* ignore */ }
+      }
+      y += 24;
+
+      // Terms
+      if (inv.terms) {
+        if (y + 40 > 740) { doc.addPage(); y = 40; }
+        y += 8;
+        doc.fontSize(10).font("Helvetica-Bold").fillColor("#091E39").text("Terms:", leftCol, y); y += 14;
+        doc.fontSize(9).font("Helvetica").fillColor("#091E39").text(inv.terms, leftCol, y, { width: pageWidth * 0.6 });
+      }
+
+      doc.end();
+    } catch (e) {
+      console.error("/me/invoices/:id/pdf error:", e);
+      if (!res.headersSent) return res.status(500).json({ error: "PDF generation failed" });
+    }
+  }),
+);
+
 /* ──────────── Physical Training Date Confirmation ──────────── */
 
 // Authenticated confirmation (from dashboard)

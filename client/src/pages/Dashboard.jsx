@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { API_BASE } from "../config";
 import { useNavigate } from "react-router-dom";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import { parseBunny, bunnyIframeSrc } from "../lib/video";
@@ -467,14 +468,23 @@ export default function Dashboard() {
                 onClick={() => setActiveTab("installations")}
               />
 
-              {user?.role === "admin" && (
-                <div className="ml-auto">
+              {(user?.role === "admin" || user?.role === "mini_admin") && (
+                <div className="ml-auto flex gap-2">
                   <a
-                    href="/admin/products"
-                    className="inline-flex items-center gap-2 bg-adlm-blue-700 text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#0050c8] transition"
+                    href="/admin/invoices"
+                    className="inline-flex items-center gap-2 text-white px-3 py-1.5 rounded-md text-sm transition"
+                    style={{ backgroundColor: "#091E39" }}
                   >
-                    + Add product
+                    Create Invoice
                   </a>
+                  {user?.role === "admin" && (
+                    <a
+                      href="/admin/products"
+                      className="inline-flex items-center gap-2 bg-adlm-blue-700 text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#0050c8] transition"
+                    >
+                      + Add product
+                    </a>
+                  )}
                 </div>
               )}
             </div>
@@ -634,6 +644,43 @@ export default function Dashboard() {
                             <span className="font-medium">Terms:</span> {inv.terms}
                           </div>
                         )}
+
+                        {/* Download / Print */}
+                        <div className="mt-3 pt-2 border-t border-slate-100 flex gap-2">
+                          <button
+                            className="text-xs px-3 py-1.5 rounded-md font-medium text-white"
+                            style={{ backgroundColor: "#091E39" }}
+                            onClick={async () => {
+                              try {
+                                const resp = await fetch(
+                                  `${API_BASE}/me/invoices/${inv._id}/pdf`,
+                                  {
+                                    headers: { Authorization: `Bearer ${accessToken}` },
+                                    credentials: "include",
+                                  },
+                                );
+                                if (!resp.ok) throw new Error("Download failed");
+                                const blob = await resp.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = `${inv.invoiceNumber}.pdf`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              } catch {
+                                window.print();
+                              }
+                            }}
+                          >
+                            Download PDF
+                          </button>
+                          <button
+                            className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                            onClick={() => window.print()}
+                          >
+                            Print
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
