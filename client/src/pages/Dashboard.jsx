@@ -287,13 +287,18 @@ export default function Dashboard() {
     }
   }, [accessToken]);
 
+  const [invoicesErr, setInvoicesErr] = React.useState("");
+
   const loadInvoices = React.useCallback(async () => {
     setLoadingInvoices(true);
+    setInvoicesErr("");
     try {
       const data = await apiAuthed(`/me/invoices`, { token: accessToken });
       setInvoices(Array.isArray(data?.invoices) ? data.invoices : []);
-    } catch {
+      if (data?._error) setInvoicesErr(data._error);
+    } catch (e) {
       setInvoices([]);
+      setInvoicesErr(e?.message || "Failed to load invoices");
     } finally {
       setLoadingInvoices(false);
     }
@@ -533,7 +538,14 @@ export default function Dashboard() {
                     <div className="text-sm text-slate-500">Loading invoices…</div>
                   )}
                   {!loadingInvoices && invoices.length === 0 && (
-                    <div className="text-sm text-slate-500">No invoices found.</div>
+                    <div className="text-sm text-slate-500">
+                      No invoices found.
+                      {invoicesErr && (
+                        <span className="block text-xs text-rose-500 mt-1">
+                          {invoicesErr}
+                        </span>
+                      )}
+                    </div>
                   )}
                   {invoices.map((inv) => {
                     const curr = inv.currency === "USD" ? "$" : "\u20A6";
