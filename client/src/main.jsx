@@ -45,6 +45,7 @@ import AdminAddRate from "./pages/AdminAddRate.jsx";
 import RateGenUpdates from "./pages/RateGenUpdates.jsx";
 import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import Receipt from "./pages/Receipt.jsx";
+import UserInvoice from "./pages/UserInvoice.jsx";
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
@@ -138,6 +139,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <Receipt />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "invoice/:id",
+        element: (
+          <ProtectedRoute>
+            <UserInvoice />
           </ProtectedRoute>
         ),
       },

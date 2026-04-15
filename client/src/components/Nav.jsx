@@ -27,7 +27,8 @@ function MobileLink({ to, children, onClick }) {
     <Link
       to={to}
       onClick={onClick}
-      className="block w-full text-left px-4 py-3 text-[15px] text-slate-100/90 hover:bg-white/10"
+      className="block w-full text-left px-5 py-3.5 text-[15px] text-white/90 hover:bg-white/10 active:bg-white/15 transition-colors"
+      style={{ minHeight: 44 }}
     >
       {children}
     </Link>
@@ -69,11 +70,11 @@ export default function Nav() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-adlm-navy/95 backdrop-blur border-b border-adlm-navy-tertiary">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 h-14 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-adlm-navy/95 backdrop-blur border-b border-adlm-navy-tertiary" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <img src={adlmLogo} alt="ADLM Logo" className="w-7 h-7" />
-            <span className="hidden sm:inline text-white font-semibold">
+            <span className="text-white font-semibold text-sm sm:text-base">
               ADLM_Studio
             </span>
           </Link>
@@ -90,13 +91,13 @@ export default function Nav() {
               <>
                 <Link
                   to={`/login?next=${next}`}
-                  className="px-3 py-1 rounded border border-white/30 text-white/90 hover:bg-white/10 text-sm"
+                  className="px-3 py-1.5 rounded border border-white/30 text-white/90 hover:bg-white/10 text-sm"
                 >
                   Login
                 </Link>
                 <Link
                   to={`/signup?next=${next}`}
-                  className="px-3 py-1 rounded bg-white text-adlm-navy-mid text-sm font-medium hover:bg-blue-50"
+                  className="px-3 py-1.5 rounded bg-white text-adlm-navy-mid text-sm font-medium hover:bg-blue-50"
                 >
                   Sign up
                 </Link>
@@ -106,30 +107,26 @@ export default function Nav() {
                 <DesktopLink to="/purchase">Purchase</DesktopLink>
                 <DesktopLink to="/dashboard">Dashboard</DesktopLink>
                 <DesktopLink to="/profile">Profile</DesktopLink>
-                {user.role === "admin" && <DesktopLink to="/admin">Admin</DesktopLink>}
+                {(user.role === "admin" || user.role === "mini_admin") && <DesktopLink to="/admin">Admin</DesktopLink>}
                 <button
                   onClick={logout}
-                  className="ml-1 px-3 py-1 rounded bg-white text-adlm-navy text-sm font-medium hover:bg-blue-50"
+                  className="ml-1 px-3 py-1.5 rounded bg-white text-adlm-navy text-sm font-medium hover:bg-blue-50"
                   disabled={busy}
                 >
-                  {busy ? "Logging out..." : "Logout"}
+                  {busy ? "..." : "Logout"}
                 </button>
               </>
             )}
           </div>
 
+          {/* Mobile hamburger — 44px touch target (Apple HIG) */}
           <button
-            className="md:hidden inline-flex items-center justify-center p-2 rounded text-white/90 hover:bg-white/10"
+            className="md:hidden inline-flex items-center justify-center rounded-lg text-white/90 hover:bg-white/10 active:bg-white/20"
+            style={{ minWidth: 44, minHeight: 44 }}
             onClick={() => setOpen(true)}
             aria-label="Open menu"
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
@@ -144,71 +141,65 @@ export default function Nav() {
       />
 
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85%] bg-adlm-navy text-white shadow-lg transition-transform md:hidden ${
+        className={`fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85vw] bg-adlm-navy text-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="h-14 px-4 flex items-center justify-between border-b border-white/10">
-          <Link to="/" onClick={() => setOpen(false)} className="font-semibold">
+          <Link to="/" onClick={() => setOpen(false)} className="flex items-center gap-2 font-semibold">
+            <img src={adlmLogo} alt="" className="w-6 h-6" />
             ADLM_Studio
           </Link>
           <button
             onClick={() => setOpen(false)}
-            className="p-2 rounded hover:bg-white/10"
+            className="rounded-lg hover:bg-white/10 active:bg-white/20"
+            style={{ minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }}
             aria-label="Close menu"
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <nav className="py-2">
-          <MobileLink to="/" onClick={() => setOpen(false)}>
-            Home
-          </MobileLink>
-          <MobileLink to="/products" onClick={() => setOpen(false)}>
-            Products
-          </MobileLink>
-          <MobileLink to="/about" onClick={() => setOpen(false)}>
-            About
-          </MobileLink>
+        <nav className="py-3 flex flex-col overflow-y-auto" style={{ maxHeight: "calc(100vh - 56px - 48px)" }}>
+          <MobileLink to="/" onClick={() => setOpen(false)}>Home</MobileLink>
+          <MobileLink to="/products" onClick={() => setOpen(false)}>Products</MobileLink>
+          <MobileLink to="/about" onClick={() => setOpen(false)}>About</MobileLink>
+          <MobileLink to="/learn" onClick={() => setOpen(false)}>Learn</MobileLink>
+          <MobileLink to="/quote" onClick={() => setOpen(false)}>Get Quotation</MobileLink>
 
           {!user ? (
-            <>
-              <MobileLink to={`/login?next=${next}`} onClick={() => setOpen(false)}>
+            <div className="px-4 pt-4 space-y-2">
+              <Link
+                to={`/login?next=${next}`}
+                onClick={() => setOpen(false)}
+                className="block w-full px-4 py-3 rounded-lg border border-white/30 text-white text-center font-medium hover:bg-white/10"
+              >
                 Sign in
-              </MobileLink>
-              <MobileLink to={`/signup?next=${next}`} onClick={() => setOpen(false)}>
+              </Link>
+              <Link
+                to={`/signup?next=${next}`}
+                onClick={() => setOpen(false)}
+                className="block w-full px-4 py-3 rounded-lg bg-white text-adlm-navy text-center font-medium hover:bg-blue-50"
+              >
                 Sign up
-              </MobileLink>
-            </>
+              </Link>
+            </div>
           ) : (
             <>
-              <MobileLink to="/purchase" onClick={() => setOpen(false)}>
-                Purchase
-              </MobileLink>
-              <MobileLink to="/dashboard" onClick={() => setOpen(false)}>
-                Dashboard
-              </MobileLink>
-              <MobileLink to="/profile" onClick={() => setOpen(false)}>
-                Profile
-              </MobileLink>
-              {user.role === "admin" && (
-                <MobileLink to="/admin" onClick={() => setOpen(false)}>
-                  Admin
-                </MobileLink>
+              <div className="my-2 mx-4 border-t border-white/10" />
+              <MobileLink to="/purchase" onClick={() => setOpen(false)}>Purchase</MobileLink>
+              <MobileLink to="/dashboard" onClick={() => setOpen(false)}>Dashboard</MobileLink>
+              <MobileLink to="/profile" onClick={() => setOpen(false)}>Profile</MobileLink>
+              {(user.role === "admin" || user.role === "mini_admin") && (
+                <MobileLink to="/admin" onClick={() => setOpen(false)}>Admin</MobileLink>
               )}
-              <div className="px-4 pt-2">
+              <div className="px-4 pt-3">
                 <button
                   onClick={logout}
-                  className="w-full px-4 py-2 rounded bg-white text-adlm-navy font-medium hover:bg-blue-50"
+                  className="w-full px-4 py-3 rounded-lg bg-white text-adlm-navy font-medium hover:bg-blue-50 active:bg-blue-100"
                   disabled={busy}
                 >
                   {busy ? "Logging out..." : "Logout"}
@@ -218,8 +209,8 @@ export default function Nav() {
           )}
         </nav>
 
-        <div className="mt-auto px-4 py-3 border-t border-white/10 text-xs text-white/60">
-          (c) {new Date().getFullYear()} ADLM Studio
+        <div className="px-4 py-3 border-t border-white/10 text-xs text-white/50">
+          &copy; {new Date().getFullYear()} ADLM Studio
         </div>
       </aside>
     </>

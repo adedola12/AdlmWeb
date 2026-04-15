@@ -33,8 +33,15 @@ a.active hr{
     display: block ;
 }
 
-*{
-    font-family: 'Lexend', sans-serif;
+*, *::before, *::after {
+    font-family: 'Lexend', sans-serif !important;
+}
+input, select, textarea, button {
+    font-family: inherit !important;
+}
+/* iPhone safe area support */
+html {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 :root{

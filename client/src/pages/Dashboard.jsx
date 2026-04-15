@@ -595,61 +595,23 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {/* Line items */}
-                        <div className="mt-3 overflow-x-auto">
-                          <table className="min-w-full text-xs">
-                            <thead className="text-slate-500">
-                              <tr className="border-b">
-                                <th className="py-1 pr-2 text-left">Item</th>
-                                <th className="py-1 pr-2 text-center w-10">Qty</th>
-                                <th className="py-1 pr-2 text-right w-20">Rate</th>
-                                <th className="py-1 text-right w-24">Amount</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(inv.items || []).map((it, idx) => (
-                                <tr key={idx} className="border-b border-slate-100">
-                                  <td className="py-1 pr-2">{it.description || "—"}</td>
-                                  <td className="py-1 pr-2 text-center">{it.qty || 1}</td>
-                                  <td className="py-1 pr-2 text-right">
-                                    {curr}{Number(it.unitPrice || 0).toLocaleString()}
-                                  </td>
-                                  <td className="py-1 text-right font-medium">
-                                    {curr}{Number(it.total || 0).toLocaleString()}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        {/* Quick summary of items */}
+                        <div className="mt-2 text-xs text-slate-500">
+                          {(inv.items || []).length} item{(inv.items || []).length !== 1 ? "s" : ""}
+                          {" · "}Total: <span className="font-medium text-slate-700">{curr}{Number(inv.total || 0).toLocaleString()}</span>
                         </div>
 
-                        {/* Totals */}
-                        <div className="mt-2 text-xs text-right space-y-0.5">
-                          <div>Subtotal: {curr}{Number(inv.subtotal || 0).toLocaleString()}</div>
-                          {Number(inv.discountPercent || 0) > 0 && (
-                            <div className="text-rose-600">
-                              Discount ({inv.discountPercent}%): -{curr}{Number(inv.discountAmount || 0).toLocaleString()}
-                            </div>
-                          )}
-                          {Number(inv.taxPercent || 0) > 0 && (
-                            <div>
-                              Tax ({inv.taxPercent}%): +{curr}{Number(inv.taxAmount || 0).toLocaleString()}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Terms */}
-                        {inv.terms && (
-                          <div className="mt-2 text-xs text-slate-500">
-                            <span className="font-medium">Terms:</span> {inv.terms}
-                          </div>
-                        )}
-
-                        {/* Download / Print */}
+                        {/* View / Download */}
                         <div className="mt-3 pt-2 border-t border-slate-100 flex gap-2">
                           <button
                             className="text-xs px-3 py-1.5 rounded-md font-medium text-white"
                             style={{ backgroundColor: "#091E39" }}
+                            onClick={() => navigate(`/invoice/${inv._id}`)}
+                          >
+                            View Invoice
+                          </button>
+                          <button
+                            className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
                             onClick={async () => {
                               try {
                                 const resp = await fetch(
@@ -668,17 +630,11 @@ export default function Dashboard() {
                                 a.click();
                                 URL.revokeObjectURL(url);
                               } catch {
-                                window.print();
+                                alert("Download failed");
                               }
                             }}
                           >
                             Download PDF
-                          </button>
-                          <button
-                            className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
-                            onClick={() => window.print()}
-                          >
-                            Print
                           </button>
                         </div>
                       </div>
