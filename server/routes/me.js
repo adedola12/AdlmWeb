@@ -633,125 +633,118 @@ router.get(
 
 /* ──────────── Client Invoices ──────────── */
 
-// Gather all the user's identifiers for matching invoices
-async function getUserIdentifiers(reqUser) {
-  const rawId = String(reqUser._id || reqUser.id || "").trim();
-  const jwtEmail = (reqUser.email || "").trim().toLowerCase();
-  const jwtUsername = (reqUser.username || "").trim();
+// Build $or conditions to match invoices for the logged-in user.
+// Uses: userId, email, username, full name — every possible way to match.
+async function buildInvoiceOrQuery(reqUser) {
+  const or = [];
 
-  let dbUser = null;
-  try {
-    if (rawId) {
-      dbUser = await User.findById(rawId)
+  // 1) Extract from JWT
+  const rawId = String(reqUser?._id || reqUser?.id || "").trim();
+  const jwtEmail = String(reqUser?.email || "").trim().toLowerCase();
+  const jwtUsername = String(reqUser?.username || "").trim();
+
+  // 2) Look up user in DB for canonical data
+  let dbId = null;
+  let dbEmail = "";
+  let dbUsername = "";
+  let dbFullName = "";
+
+  if (rawId) {
+    try {
+      const u = await User.findById(rawId)
         .select("_id email username firstName lastName")
         .lean();
-    }
-  } catch { /* ignore */ }
+      if (u) {
+        dbId = u._id;
+        dbEmail = String(u.email || "").trim().toLowerCase();
+        dbUsername = String(u.username || "").trim();
+        const fn = String(u.firstName || "").trim();
+        const ln = String(u.lastName || "").trim();
+        dbFullName = [fn, ln].filter(Boolean).join(" ");
+      }
+    } catch { /* ignore - maybe rawId isn't a valid ObjectId */ }
+  }
 
-  return {
-    rawId,
-    objectId: dbUser?._id || null,
-    emails: [
-      ...(jwtEmail ? [jwtEmail] : []),
-      ...(dbUser?.email ? [dbUser.email.trim().toLowerCase()] : []),
-    ].filter((v, i, a) => v && a.indexOf(v) === i),
-    names: [
-      ...(jwtUsername ? [jwtUsername] : []),
-      ...(dbUser?.username ? [dbUser.username.trim()] : []),
-      ...([dbUser?.firstName, dbUser?.lastName].filter(Boolean).join(" ").trim()
-        ? [[dbUser?.firstName, dbUser?.lastName].filter(Boolean).join(" ").trim()]
-        : []),
-    ].filter((v, i, a) => v && a.indexOf(v) === i),
-    dbUser,
-  };
+  // 3) Match by clientUserId (try both ObjectId and string)
+  if (dbId) or.push({ clientUserId: dbId });
+  if (rawId) or.push({ clientUserId: rawId });
+
+  // 4) Match by clientEmail
+  const emails = [...new Set([jwtEmail, dbEmail].filter(Boolean))];
+  for (const em of emails) {
+    or.push({ clientEmail: em });
+  }
+
+  // 5) Match by clientName (username or full name)
+  const names = [...new Set([jwtUsername, dbUsername, dbFullName].filter(Boolean))];
+  for (const nm of names) {
+    const safe = nm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    or.push({ clientName: { $regex: safe, $options: "i" } });
+  }
+
+  return or;
 }
 
-// Debug endpoint — shows exactly why invoices match or don't
+// Debug endpoint
 router.get(
   "/invoices/debug",
   asyncHandler(async (req, res) => {
     try {
-      const ids = await getUserIdentifiers(req.user);
+      const rawId = String(req.user?._id || req.user?.id || "");
+      const jwtEmail = String(req.user?.email || "").toLowerCase();
+
+      let dbUser = null;
+      try {
+        if (rawId) dbUser = await User.findById(rawId).select("_id email username firstName lastName").lean();
+      } catch { /* ignore */ }
+
+      const or = await buildInvoiceOrQuery(req.user);
 
       const allInvoices = await Invoice.find()
         .select("clientEmail clientName clientUserId status invoiceNumber")
         .lean();
 
+      let matched = [];
+      if (or.length) {
+        matched = await Invoice.find({ $or: or, status: { $ne: "draft" } })
+          .select("invoiceNumber")
+          .lean();
+      }
+
       return res.json({
         you: {
-          rawId: ids.rawId,
-          objectId: ids.objectId ? String(ids.objectId) : null,
-          emails: ids.emails,
-          names: ids.names,
+          rawId,
+          jwtEmail,
+          dbEmail: dbUser?.email || null,
+          dbUsername: dbUser?.username || null,
+          dbName: [dbUser?.firstName, dbUser?.lastName].filter(Boolean).join(" ") || null,
+          dbId: dbUser?._id ? String(dbUser._id) : null,
         },
-        invoices: allInvoices.map((inv) => {
-          const invEmail = (inv.clientEmail || "").trim().toLowerCase();
-          const invName = (inv.clientName || "").trim();
-          const invUid = inv.clientUserId ? String(inv.clientUserId) : null;
-
-          return {
-            invoiceNumber: inv.invoiceNumber,
-            clientEmail: invEmail,
-            clientName: invName,
-            clientUserId: invUid,
-            status: inv.status,
-            wouldMatch: {
-              byObjectId:
-                ids.objectId && invUid
-                  ? String(ids.objectId) === invUid
-                  : false,
-              byStringId: ids.rawId && invUid ? ids.rawId === invUid : false,
-              byEmail: ids.emails.includes(invEmail),
-              byName: ids.names.some(
-                (n) =>
-                  n.toLowerCase() === invName.toLowerCase() ||
-                  invName.toLowerCase().includes(n.toLowerCase()),
-              ),
-              statusOk: inv.status !== "draft",
-            },
-          };
-        }),
+        orConditionsCount: or.length,
+        allInvoices: allInvoices.map((inv) => ({
+          num: inv.invoiceNumber,
+          email: inv.clientEmail || "",
+          name: inv.clientName || "",
+          uid: inv.clientUserId ? String(inv.clientUserId) : null,
+          status: inv.status,
+        })),
+        wouldReturn: matched.map((m) => m.invoiceNumber),
       });
     } catch (e) {
-      return res.status(500).json({
-        error: "Debug failed",
-        message: e.message,
-        stack: e.stack?.split("\n").slice(0, 5),
-      });
+      return res.status(500).json({ error: e.message, stack: String(e.stack).split("\n").slice(0, 5) });
     }
   }),
 );
 
-// List invoices sent to the current user
+// List invoices
 router.get(
   "/invoices",
   asyncHandler(async (req, res) => {
     try {
-      const ids = await getUserIdentifiers(req.user);
-
-      // Build $or conditions
-      const or = [];
-
-      // By userId
-      if (ids.objectId) or.push({ clientUserId: ids.objectId });
-      if (ids.rawId) or.push({ clientUserId: ids.rawId });
-
-      // By email
-      for (const em of ids.emails) or.push({ clientEmail: em });
-
-      // By name (fallback)
-      for (const nm of ids.names) {
-        or.push({
-          clientName: { $regex: nm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" },
-        });
-      }
-
+      const or = await buildInvoiceOrQuery(req.user);
       if (!or.length) return res.json({ ok: true, invoices: [] });
 
-      const invoices = await Invoice.find({
-        $or: or,
-        status: { $ne: "draft" },
-      })
+      const invoices = await Invoice.find({ $or: or, status: { $ne: "draft" } })
         .sort({ createdAt: -1 })
         .lean();
 
@@ -763,25 +756,13 @@ router.get(
   }),
 );
 
-// Get single invoice detail
+// Single invoice detail
 router.get(
   "/invoices/:id",
   asyncHandler(async (req, res) => {
     try {
-      const ids = await getUserIdentifiers(req.user);
-
-      const or = [];
-      if (ids.objectId) or.push({ clientUserId: ids.objectId });
-      if (ids.rawId) or.push({ clientUserId: ids.rawId });
-      for (const em of ids.emails) or.push({ clientEmail: em });
-      for (const nm of ids.names) {
-        or.push({
-          clientName: { $regex: nm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" },
-        });
-      }
-
-      if (!or.length)
-        return res.status(404).json({ error: "Invoice not found" });
+      const or = await buildInvoiceOrQuery(req.user);
+      if (!or.length) return res.status(404).json({ error: "Invoice not found" });
 
       const inv = await Invoice.findOne({
         _id: req.params.id,
@@ -793,7 +774,7 @@ router.get(
       return res.json({ ok: true, invoice: inv });
     } catch (e) {
       console.error("/me/invoices/:id error:", e);
-      return res.status(500).json({ error: "Server error" });
+      return res.status(500).json({ error: e.message });
     }
   }),
 );
