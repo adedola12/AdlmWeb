@@ -688,6 +688,7 @@ async function buildInvoiceOrQuery(reqUser) {
 // Debug endpoint
 router.get(
   "/invoices/debug",
+  requireAuth,
   asyncHandler(async (req, res) => {
     try {
       const rawId = String(req.user?._id || req.user?.id || "");
@@ -739,7 +740,11 @@ router.get(
 // List invoices
 router.get(
   "/invoices",
+  requireAuth,
   asyncHandler(async (req, res) => {
+    // Prevent browser from caching empty responses
+    res.set("Cache-Control", "no-store");
+
     try {
       const or = await buildInvoiceOrQuery(req.user);
       if (!or.length) return res.json({ ok: true, invoices: [] });
@@ -759,6 +764,7 @@ router.get(
 // Single invoice detail
 router.get(
   "/invoices/:id",
+  requireAuth,
   asyncHandler(async (req, res) => {
     try {
       const or = await buildInvoiceOrQuery(req.user);
