@@ -39,9 +39,10 @@ a.active hr{
 input, select, textarea, button {
     font-family: inherit !important;
 }
-/* iPhone safe area support */
+/* iPhone safe area support — only vertical, not horizontal (avoids layout shift) */
 html {
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 :root{

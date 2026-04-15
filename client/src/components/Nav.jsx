@@ -70,11 +70,11 @@ export default function Nav() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-adlm-navy/95 backdrop-blur border-b border-adlm-navy-tertiary" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <img src={adlmLogo} alt="ADLM Logo" className="w-7 h-7" />
-            <span className="text-white font-semibold text-sm sm:text-base">
+      <header className="sticky top-0 z-50 bg-adlm-navy/95 backdrop-blur border-b border-adlm-navy-tertiary">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 overflow-visible">
+          <Link to="/" className="flex items-center gap-1.5 flex-shrink-0">
+            <img src={adlmLogo} alt="ADLM Logo" className="w-6 h-6 sm:w-7 sm:h-7" />
+            <span className="text-white font-semibold text-[13px] sm:text-base">
               ADLM_Studio
             </span>
           </Link>
@@ -121,8 +121,7 @@ export default function Nav() {
 
           {/* Mobile hamburger — 44px touch target (Apple HIG) */}
           <button
-            className="md:hidden inline-flex items-center justify-center rounded-lg text-white/90 hover:bg-white/10 active:bg-white/20"
-            style={{ minWidth: 44, minHeight: 44 }}
+            className="md:hidden flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-lg text-white hover:bg-white/10 active:bg-white/20"
             onClick={() => setOpen(true)}
             aria-label="Open menu"
           >
@@ -134,17 +133,16 @@ export default function Nav() {
       </header>
 
       <div
-        className={`fixed inset-0 z-50 bg-black/50 transition-opacity md:hidden ${
+        className={`fixed inset-0 z-[55] bg-black/50 transition-opacity md:hidden ${
           open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setOpen(false)}
       />
 
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 w-80 max-w-[85vw] bg-adlm-navy text-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
+        className={`fixed top-0 left-0 bottom-0 z-[60] w-72 max-w-[80vw] bg-adlm-navy text-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
-        style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="h-14 px-4 flex items-center justify-between border-b border-white/10">
           <Link to="/" onClick={() => setOpen(false)} className="flex items-center gap-2 font-semibold">

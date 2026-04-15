@@ -115,21 +115,24 @@ export default function Home() {
                 </div>
 
                 <h1
-                  className="text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-bold leading-[1.1] tracking-tight text-white opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
+                  className="text-3xl sm:text-4xl lg:text-[3.2rem] xl:text-[3.5rem] font-bold leading-[1.12] tracking-tight text-white opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
                   style={{ animationDelay: "250ms" }}
                 >
-                  The Digital Toolkit for{" "}
-                  <span style={{ color: "#E86A27" }}>Modern</span>{" "}
-                  Quantity Surveyors
+                  Digitizing Quantity Surveying for{" "}
+                  <span style={{ color: "#E86A27" }}>Faster</span>,{" "}
+                  Defensible Cost Management
                 </h1>
 
                 <p
                   className="mt-5 text-base sm:text-lg text-white/80 max-w-xl leading-relaxed opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
                   style={{ animationDelay: "350ms" }}
                 >
-                  Measure, price, and manage construction projects with precision.
-                  From instant rate build-ups to 2D/3D take-off and professional
-                  training — everything in one platform.
+                  ADLM Studio provides a comprehensive digital toolkit that helps{" "}
+                  <b className="text-white">Quantity Surveyors</b> measure, price,
+                  and manage projects quickly and accurately. From instant rate
+                  build-ups to 2D/3D take-off and professional training, we bring
+                  everything you need into one easy-to-use platform — built for the
+                  Nigerian market.
                 </p>
 
                 {/* CTA Buttons */}
