@@ -651,16 +651,20 @@ async function invoiceMatchQuery(reqUser) {
   const rawId = reqUser._id || reqUser.id;
   const jwtEmail = (reqUser.email || "").trim().toLowerCase();
 
-  // Look up the DB record to get actual ObjectId + email
+  // Look up the DB record to get actual ObjectId + email + username
   let dbUser = null;
   try {
-    dbUser = await User.findById(rawId).select("_id email").lean();
+    dbUser = await User.findById(rawId).select("_id email username firstName lastName").lean();
   } catch { /* ignore */ }
 
   const oid = dbUser?._id || toObjectId(rawId);
   const dbEmail = (dbUser?.email || "").trim().toLowerCase();
 
   const emails = [...new Set([jwtEmail, dbEmail].filter(Boolean))];
+
+  // Also get username + full name for name-based matching
+  const username = (dbUser?.username || "").trim();
+  const fullName = [dbUser?.firstName, dbUser?.lastName].filter(Boolean).join(" ").trim();
 
   const orConditions = [];
 
@@ -675,9 +679,81 @@ async function invoiceMatchQuery(reqUser) {
     orConditions.push({ clientEmail: em });
   }
 
+  // Match by client name = username or full name (fallback for mismatched emails)
+  if (username) {
+    const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    orConditions.push({ clientName: new RegExp(escaped, "i") });
+  }
+  if (fullName) {
+    const escaped = fullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    orConditions.push({ clientName: new RegExp(escaped, "i") });
+  }
+
   if (!orConditions.length) return null;
   return { $or: orConditions, status: { $ne: "draft" } };
 }
+
+// Debug: show what the matching query resolves to (helps diagnose dashboard issues)
+router.get(
+  "/invoices/debug",
+  asyncHandler(async (req, res) => {
+    const rawId = req.user._id || req.user.id;
+    const jwtEmail = (req.user.email || "").trim().toLowerCase();
+
+    let dbUser = null;
+    try {
+      dbUser = await User.findById(rawId).select("_id email username firstName lastName").lean();
+    } catch (e) {
+      return res.json({ error: "DB lookup failed", rawId, msg: e.message });
+    }
+
+    const oid = dbUser?._id || toObjectId(rawId);
+    const username = (dbUser?.username || "").trim();
+    const fullName = [dbUser?.firstName, dbUser?.lastName].filter(Boolean).join(" ").trim();
+
+    // Check invoices
+    const allInvoices = await Invoice.find()
+      .select("clientEmail clientName clientUserId status invoiceNumber")
+      .lean();
+
+    // Also run the actual query to show what would be returned
+    const query = await invoiceMatchQuery(req.user);
+    const matched = query ? await Invoice.find(query).select("invoiceNumber status").lean() : [];
+
+    return res.json({
+      currentUser: {
+        _id: rawId,
+        oid: oid ? String(oid) : null,
+        jwtEmail,
+        dbEmail: dbUser?.email || null,
+        username,
+        fullName,
+      },
+      allInvoicesInDB: allInvoices.map((inv) => ({
+        invoiceNumber: inv.invoiceNumber,
+        clientEmail: inv.clientEmail,
+        clientName: inv.clientName,
+        clientUserId: inv.clientUserId ? String(inv.clientUserId) : null,
+        status: inv.status,
+        matches: {
+          emailMatch:
+            inv.clientEmail === jwtEmail ||
+            inv.clientEmail === (dbUser?.email || "").toLowerCase(),
+          userIdMatch: inv.clientUserId
+            ? String(inv.clientUserId) === String(oid)
+            : false,
+          nameMatchUsername: username
+            ? (inv.clientName || "").toLowerCase().includes(username.toLowerCase())
+            : false,
+          nameMatchFullName: fullName
+            ? (inv.clientName || "").toLowerCase().includes(fullName.toLowerCase())
+            : false,
+        },
+      })),
+      queryWouldReturn: matched.map((m) => m.invoiceNumber),
+    });
+  }),
+);
 
 // List invoices sent to the current user
 router.get(
