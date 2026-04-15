@@ -3,8 +3,9 @@ import multer from "multer";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
-import { isR2Configured, uploadBufferToR2, deleteFromR2 } from "../utils/r2Upload.js";
+import { isR2Configured, uploadBufferToR2, deleteFromR2, listFromR2 } from "../utils/r2Upload.js";
 import { deleteAsset } from "../utils/cloudinary.js";
+import cloudinary from "../utils/cloudinaryConfig.js";
 
 const router = express.Router();
 const upload = multer({
@@ -188,6 +189,98 @@ router.get(
       .lean();
 
     res.json({ ok: true, items });
+  }),
+);
+
+// ── Package files (list all uploaded files from cloud storage) ──
+// Must be defined BEFORE /:productKey to avoid being caught by it.
+
+router.get(
+  "/packages",
+  asyncHandler(async (_req, res) => {
+    const items = [];
+
+    // List R2 files
+    try {
+      const r2Items = await listFromR2("adlm/installers");
+      items.push(...r2Items);
+    } catch (err) {
+      // R2 not configured or error — skip silently
+    }
+
+    // List Cloudinary raw files in the installers folder
+    try {
+      const folder = process.env.CLOUDINARY_INSTALLERS_FOLDER || "adlm/installers";
+      let nextCursor;
+      do {
+        const result = await cloudinary.api.resources({
+          type: "upload",
+          resource_type: "raw",
+          prefix: folder,
+          max_results: 500,
+          ...(nextCursor ? { next_cursor: nextCursor } : {}),
+        });
+
+        for (const r of result.resources || []) {
+          items.push({
+            publicId: r.public_id,
+            originalName: (r.public_id || "").split("/").pop() || r.public_id,
+            packageUri: r.secure_url,
+            bytes: r.bytes || 0,
+            storageProvider: "cloudinary",
+            createdAt: r.created_at || null,
+          });
+        }
+
+        nextCursor = result.next_cursor;
+      } while (nextCursor);
+    } catch (err) {
+      // Cloudinary not configured or error — skip silently
+    }
+
+    // Sort newest first
+    items.sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return db - da;
+    });
+
+    return res.json({ ok: true, items });
+  }),
+);
+
+router.delete(
+  "/packages/:publicId(*)",
+  asyncHandler(async (req, res) => {
+    const publicId = decodeURIComponent(String(req.params.publicId || "").trim());
+    if (!publicId) {
+      return res.status(400).json({ error: "publicId is required" });
+    }
+
+    const errors = [];
+
+    // Try R2 deletion
+    try {
+      const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
+      if (publicBaseUrl && isR2Configured()) {
+        await deleteFromR2(publicId);
+      }
+    } catch (err) {
+      errors.push(`R2: ${err.message}`);
+    }
+
+    // Try Cloudinary deletion
+    try {
+      await deleteAsset(publicId, "raw");
+    } catch (err) {
+      errors.push(`Cloudinary: ${err.message}`);
+    }
+
+    return res.json({
+      ok: true,
+      deletedPublicId: publicId,
+      errors: errors.length > 0 ? errors : undefined,
+    });
   }),
 );
 

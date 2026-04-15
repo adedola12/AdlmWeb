@@ -67,6 +67,11 @@ const UserSchema = new mongoose.Schema(
 
     firstName: { type: String, default: "", trim: true },
     lastName: { type: String, default: "", trim: true },
+
+    // Locked certificate name — set once on first certificate download, immutable after.
+    certificateFirstName: { type: String, default: "", trim: true },
+    certificateLastName: { type: String, default: "", trim: true },
+    certificateNameLockedAt: { type: Date, default: null },
     whatsapp: { type: String, default: "", trim: true },
 
     zone: {

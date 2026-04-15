@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 
 function requiredEnv(name) {
   const value = String(process.env[name] || "").trim();
@@ -66,6 +66,49 @@ export async function deleteFromR2(objectKey) {
       Key: objectKey,
     }),
   );
+}
+
+export async function listFromR2(prefix = "adlm/installers") {
+  if (!isR2Configured()) return [];
+
+  const bucket = requiredEnv("R2_BUCKET");
+  const client = createClient();
+  const publicBaseUrl = normalizePublicBaseUrl();
+  const items = [];
+  let continuationToken;
+
+  do {
+    const command = new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      MaxKeys: 1000,
+      ...(continuationToken ? { ContinuationToken: continuationToken } : {}),
+    });
+
+    const response = await client.send(command);
+
+    for (const obj of response.Contents || []) {
+      const key = obj.Key || "";
+      const fileName = key.split("/").pop() || key;
+      const encodedKey = key
+        .split("/")
+        .map((s) => encodeURIComponent(s))
+        .join("/");
+
+      items.push({
+        publicId: key,
+        originalName: fileName,
+        packageUri: `${publicBaseUrl}/${encodedKey}`,
+        bytes: obj.Size || 0,
+        storageProvider: "r2",
+        createdAt: obj.LastModified || null,
+      });
+    }
+
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return items;
 }
 
 export async function uploadBufferToR2(

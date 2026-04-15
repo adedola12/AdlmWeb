@@ -14,6 +14,9 @@ export default function Profile() {
 
   const [username, setUsername] = React.useState(user?.username || "");
   const [avatarUrl, setAvatarUrl] = React.useState(user?.avatarUrl || "");
+  const [firstName, setFirstName] = React.useState(user?.firstName || "");
+  const [lastName, setLastName] = React.useState(user?.lastName || "");
+  const [nameLocked, setNameLocked] = React.useState(false);
   const [msg, setMsg] = React.useState("");
   const [imgErr, setImgErr] = React.useState(false);
 
@@ -38,6 +41,9 @@ export default function Profile() {
 
         setUsername(res?.username || user?.username || "");
         setAvatarUrl(res?.avatarUrl || user?.avatarUrl || "");
+        setFirstName(res?.firstName || user?.firstName || "");
+        setLastName(res?.lastName || user?.lastName || "");
+        setNameLocked(!!res?.nameLockedForCertificate);
         setZone(res?.zone || "");
         setZones(Array.isArray(res?.zones) ? res.zones : []);
       } catch (e) {
@@ -48,7 +54,7 @@ export default function Profile() {
   }, [accessToken]);
 
   async function saveProfile(next = {}) {
-    const body = { username, avatarUrl, zone, ...next };
+    const body = { username, avatarUrl, zone, firstName, lastName, ...next };
 
     const res = await apiAuthed("/me/profile", {
       token: accessToken,
@@ -276,6 +282,34 @@ export default function Profile() {
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="form-label">First Name</label>
+              <input
+                className="input disabled:bg-slate-100 disabled:cursor-not-allowed"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                disabled={nameLocked}
+              />
+            </div>
+            <div>
+              <label className="form-label">Last Name</label>
+              <input
+                className="input disabled:bg-slate-100 disabled:cursor-not-allowed"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                disabled={nameLocked}
+              />
+            </div>
+          </div>
+
+          {nameLocked && (
+            <p className="text-xs text-amber-600">
+              Your name is locked because it was used on a certificate. Contact
+              support if you need a correction.
+            </p>
+          )}
 
           <div>
             <label className="form-label">Location (Geopolitical Zone)</label>

@@ -527,6 +527,7 @@ router.get(
       firstName: firstName || "",
       lastName: lastName || "",
       whatsapp: whatsapp || "",
+      nameLockedForCertificate: !!u.certificateNameLockedAt,
     });
   }),
 );
@@ -556,8 +557,21 @@ router.post(
       u.refreshVersion = (u.refreshVersion || 0) + 1;
     }
 
-    if (firstName !== undefined) u.firstName = String(firstName || "").trim();
-    if (lastName !== undefined) u.lastName = String(lastName || "").trim();
+    // If certificate name is locked, reject firstName/lastName changes
+    if (u.certificateNameLockedAt) {
+      if (
+        (firstName !== undefined && String(firstName || "").trim() !== u.firstName) ||
+        (lastName !== undefined && String(lastName || "").trim() !== u.lastName)
+      ) {
+        return res.status(403).json({
+          error:
+            "Your name is locked because it was used on a certificate. Contact support to request a change.",
+        });
+      }
+    } else {
+      if (firstName !== undefined) u.firstName = String(firstName || "").trim();
+      if (lastName !== undefined) u.lastName = String(lastName || "").trim();
+    }
     if (whatsapp !== undefined)
       u.whatsapp = String(whatsapp || "").replace(/[^\d+]/g, "");
 
@@ -572,6 +586,78 @@ router.post(
         zone: u.zone,
         firstName: u.firstName || "",
         lastName: u.lastName || "",
+        whatsapp: u.whatsapp || "",
+      },
+    });
+  }),
+);
+
+/* ── Certificate name (locked after first set) ── */
+
+router.get(
+  "/certificate-name",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const u = await User.findById(req.user._id).lean();
+    if (!u) return res.status(404).json({ error: "User missing" });
+    return res.json({
+      certificateFirstName: u.certificateFirstName || "",
+      certificateLastName: u.certificateLastName || "",
+      locked: !!u.certificateNameLockedAt,
+      lockedAt: u.certificateNameLockedAt || null,
+    });
+  }),
+);
+
+router.post(
+  "/certificate-name",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const u = await User.findById(req.user._id);
+    if (!u) return res.status(404).json({ error: "User missing" });
+
+    // Already locked — reject changes
+    if (u.certificateNameLockedAt) {
+      return res.status(403).json({
+        error: "Certificate name is already locked and cannot be changed.",
+        certificateFirstName: u.certificateFirstName,
+        certificateLastName: u.certificateLastName,
+        locked: true,
+      });
+    }
+
+    const { firstName, lastName } = req.body || {};
+    const fn = String(firstName || "").trim();
+    const ln = String(lastName || "").trim();
+
+    if (!fn || !ln) {
+      return res.status(400).json({ error: "First name and last name are required." });
+    }
+
+    // Lock the certificate name
+    u.certificateFirstName = fn;
+    u.certificateLastName = ln;
+    u.certificateNameLockedAt = new Date();
+
+    // Also update profile firstName/lastName to match
+    u.firstName = fn;
+    u.lastName = ln;
+
+    await u.save();
+
+    return res.json({
+      certificateFirstName: u.certificateFirstName,
+      certificateLastName: u.certificateLastName,
+      locked: true,
+      lockedAt: u.certificateNameLockedAt,
+      user: {
+        email: u.email,
+        username: u.username,
+        avatarUrl: u.avatarUrl,
+        role: u.role,
+        zone: u.zone,
+        firstName: u.firstName,
+        lastName: u.lastName,
         whatsapp: u.whatsapp || "",
       },
     });
