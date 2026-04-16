@@ -19,11 +19,11 @@ export const refreshCookieOpts = {
 
 
 export function signAccessToken(user) {
-  // short-lived (15 minutes)
+  // 3-hour session so users aren't interrupted mid-work
   return jwt.sign(
     { sub: user._id.toString(), role: user.role },
     process.env.JWT_ACCESS_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: "3h" }
   );
 }
 
@@ -58,7 +58,7 @@ export function signLicenseToken(user) {
 }
 
 export function signAccess(payload) {
-  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, { expiresIn: "15m" });
+  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, { expiresIn: "3h" });
 }
 
 export function signRefresh(payload) {

@@ -304,7 +304,9 @@ function normalizeOutputBreakdown(lines) {
 }
 
 export function toUserRateDefinition(rate = {}, extra = {}) {
-  return {
+  const isCustom = (extra.source || "").includes("custom");
+
+  const result = {
     id: extra.id || rate.id || rate.rateId || rate.customRateId || "",
     rateId: extra.rateId ?? rate.rateId ?? rate.id ?? null,
     customRateId: extra.customRateId ?? rate.customRateId ?? null,
@@ -314,6 +316,7 @@ export function toUserRateDefinition(rate = {}, extra = {}) {
     sectionLabel: normalizeSectionLabel(rate.sectionKey, rate.sectionLabel),
     itemNo: normalizeMaybeNumber(rate.itemNo, null),
     code: normalizeText(rate.code),
+    title: normalizeText(rate.title),
     description: normalizeText(rate.description),
     unit: normalizeText(rate.unit),
     netCost: toNum(rate.netCost, 0),
@@ -327,6 +330,17 @@ export function toUserRateDefinition(rate = {}, extra = {}) {
     sourceUpdatedAt: normalizeDate(rate.sourceUpdatedAt, null),
     breakdown: normalizeOutputBreakdown(rate.breakdown),
   };
+
+  // Include materials/labour line items for custom rates so plugins
+  // (HERON, Arch QUIV) and multi-seat clients see full rate composition
+  if (isCustom && Array.isArray(rate.materials)) {
+    result.materials = rate.materials.map((l) => normalizeCustomRateLine(l, "material"));
+  }
+  if (isCustom && Array.isArray(rate.labour)) {
+    result.labour = rate.labour.map((l) => normalizeCustomRateLine(l, "labour"));
+  }
+
+  return result;
 }
 
 function sortRateDefinitions(a, b) {
