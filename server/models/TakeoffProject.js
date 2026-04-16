@@ -125,7 +125,6 @@ const TakeoffProjectSchema = new mongoose.Schema(
 TakeoffProjectSchema.index({ userId: 1, productKey: 1, updatedAt: -1 });
 TakeoffProjectSchema.index({ userId: 1, productKey: 1, clientProjectKey: 1 });
 TakeoffProjectSchema.index({ userId: 1, productKey: 1, slug: 1 }, { sparse: true });
-TakeoffProjectSchema.index({ publicToken: 1 }, { sparse: true });
 
 export const TakeoffProject = mongoose.model(
   "TakeoffProject",

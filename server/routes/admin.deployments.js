@@ -250,7 +250,7 @@ router.get(
 );
 
 router.delete(
-  "/packages/:publicId(*)",
+  "/packages/:publicId",
   asyncHandler(async (req, res) => {
     const publicId = decodeURIComponent(String(req.params.publicId || "").trim());
     if (!publicId) {

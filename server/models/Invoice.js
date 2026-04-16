@@ -70,7 +70,6 @@ const InvoiceSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-InvoiceSchema.index({ invoiceNumber: 1 });
 InvoiceSchema.index({ status: 1 });
 InvoiceSchema.index({ createdAt: -1 });
 InvoiceSchema.index({ clientUserId: 1 });
