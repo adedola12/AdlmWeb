@@ -16,6 +16,7 @@ import {
   REFRESH_COOKIE,
   refreshCookieOpts,
 } from "../util/jwt.js";
+import { getPrivateKey, getKid } from "../util/jwks.js";
 
 const router = express.Router();
 
@@ -272,10 +273,23 @@ function offlineLicenseExpiryFor(entitlement) {
   return new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
 }
 
+// License signing supports two algorithms during the migration window:
+//
+//   HS256 — original symmetric signer. Shared secret (JWT_LICENSE_SECRET)
+//           is burned into every plugin via HKCU\Environment, so anyone with
+//           the secret can forge tokens. Kept available so plugins that
+//           haven't picked up the new RS256-aware build yet don't break.
+//
+//   RS256 — asymmetric. Private key lives only in JWT_LICENSE_PRIVATE_KEY
+//           on the server; plugins pull the matching public key from
+//           /.well-known/jwks.json and use it to verify. Forgery requires
+//           the private key, which never leaves the server.
+//
+// ADLM_LICENSE_SIGNING_ALGO selects the default. It's a one-line deploy
+// change to flip from HS256 → RS256 once plugins have rolled out. If RS256
+// is requested but JWT_LICENSE_PRIVATE_KEY isn't configured we silently
+// fall back to HS256 so the login endpoint never crashes mid-rollout.
 function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
-  const secret = getLicenseJwtSecret();
-  if (!secret) return null;
-
   const expMs = expiresAt?.getTime?.() || 0;
   const expSec = expMs ? Math.floor(expMs / 1000) : null;
   const nowSec = Math.floor(Date.now() / 1000);
@@ -302,12 +316,39 @@ function signLicenseToken({ user, productKey, deviceFingerprint, expiresAt }) {
     }),
   };
 
-  return jwt.sign(payload, secret, {
-    algorithm: "HS256",
+  const commonOptions = {
     issuer: "adlm",
     audience: "adlm-plugin",
     expiresIn: expSec - nowSec,
-  });
+  };
+
+  const algoPref = String(process.env.ADLM_LICENSE_SIGNING_ALGO || "HS256")
+    .trim()
+    .toUpperCase();
+
+  if (algoPref === "RS256") {
+    const privateKey = getPrivateKey();
+    const kid = getKid();
+    if (privateKey && kid) {
+      // pass the PEM export so jsonwebtoken doesn't try to treat the
+      // KeyObject as a raw buffer; keyid ends up in the JWT header so
+      // plugins know which JWKS entry to match against.
+      return jwt.sign(
+        payload,
+        privateKey.export({ type: "pkcs8", format: "pem" }),
+        { ...commonOptions, algorithm: "RS256", keyid: kid },
+      );
+    }
+    // RS256 was requested but key is missing — log once and fall through.
+    console.error(
+      "[/auth/login] ADLM_LICENSE_SIGNING_ALGO=RS256 but JWT_LICENSE_PRIVATE_KEY is unusable. Falling back to HS256.",
+    );
+  }
+
+  const secret = getLicenseJwtSecret();
+  if (!secret) return null;
+
+  return jwt.sign(payload, secret, { ...commonOptions, algorithm: "HS256" });
 }
 
 router.post("/signup", async (req, res) => {

@@ -777,6 +777,25 @@ export default function AdminPTrainings() {
     }
   }
 
+async function toggleHideEvent() {
+  if (!activeId) return;
+  const willHide = draft.isPublished !== false;
+  const msg = willHide
+    ? "Hide this training? It will be removed from the homepage, Products page and public detail page. You can unhide it anytime."
+    : "Unhide this training so it shows on the homepage, Products page and public detail page?";
+  if (!window.confirm(msg)) return;
+
+  try {
+    await apiAuthed.patch(`/admin/ptrainings/events/${activeId}`, {
+      isPublished: !willHide,
+    });
+    setDraft((prev) => ({ ...prev, isPublished: !willHide }));
+    await loadEvents();
+  } catch (e) {
+    setErr(e?.message || "Failed");
+  }
+}
+
 async function deleteEvent() {
   if (!activeId) return;
   if (!window.confirm("Delete this training event?")) return;
@@ -890,10 +909,19 @@ async function deleteEvent() {
                   e._id === activeId
                     ? "bg-blue-50 border-blue-200"
                     : "hover:bg-gray-50"
-                }`}
+                } ${e.isPublished === false ? "opacity-60" : ""}`}
                 type="button"
               >
-                <div className="font-semibold">{e.title}</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold flex-1 min-w-0 break-words">
+                    {e.title}
+                  </div>
+                  {e.isPublished === false ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 shrink-0">
+                      HIDDEN
+                    </span>
+                  ) : null}
+                </div>
                 <div className="text-xs text-gray-600">{e.slug}</div>
               </button>
             ))}
@@ -913,14 +941,25 @@ async function deleteEvent() {
               </div>
               <div className="flex gap-2">
                 {activeId ? (
-                  <button
-                    className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
-                    onClick={deleteEvent}
-                    type="button"
-                    disabled={uploading}
-                  >
-                    Delete
-                  </button>
+                  <>
+                    <button
+                      className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+                      onClick={toggleHideEvent}
+                      type="button"
+                      disabled={uploading}
+                      title="Hide this training from the homepage, Products page and public detail page (keeps all data). Use this instead of delete for trainings that are not happening again."
+                    >
+                      {draft.isPublished === false ? "Unhide" : "Hide"}
+                    </button>
+                    <button
+                      className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
+                      onClick={deleteEvent}
+                      type="button"
+                      disabled={uploading}
+                    >
+                      Delete
+                    </button>
+                  </>
                 ) : null}
                 <button
                   className="px-4 py-2 rounded-xl bg-adlm-blue-700 text-white font-semibold hover:bg-[#0050c8] disabled:opacity-60"
@@ -1882,7 +1921,28 @@ async function deleteEvent() {
                 <div key={x._id} className="p-4 rounded-2xl border bg-gray-50">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
-                      <div className="font-bold">Enrollment: {x._id}</div>
+                      <div className="font-bold">
+                        {(() => {
+                          const fn = (x.user?.firstName || "").trim();
+                          const ln = (x.user?.lastName || "").trim();
+                          const full = `${fn} ${ln}`.trim();
+                          return (
+                            full ||
+                            x.user?.username ||
+                            x.user?.email ||
+                            `Enrollment: ${x._id}`
+                          );
+                        })()}
+                      </div>
+                      {x.user?.email ? (
+                        <div className="text-xs text-gray-500">
+                          {x.user.email}
+                          {x.user?.phone ? ` • ${x.user.phone}` : ""}
+                        </div>
+                      ) : null}
+                      <div className="text-[11px] text-gray-400 break-all">
+                        ID: {x._id}
+                      </div>
                       <div className="text-sm text-gray-600">
                         status:{" "}
                         <span className="font-semibold">{x.status}</span> |

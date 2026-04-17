@@ -16,6 +16,7 @@ import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLim
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
 // routes
+import wellKnownRoutes from "./routes/wellKnown.js";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
@@ -180,6 +181,11 @@ app.use(morgan("dev"));
    ========================= */
 
 app.use("/webhooks", webhooksRouter);
+
+// Public JWKS endpoint so plugins can fetch the RS256 public key for
+// license token validation. Must come BEFORE any auth middleware — it is
+// meant to be reached anonymously from end-user machines.
+app.use("/.well-known", wellKnownRoutes);
 
 // Apply rate limiting to auth and device endpoints
 app.use("/auth", authLimiter, authRoutes);
