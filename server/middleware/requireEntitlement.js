@@ -7,9 +7,6 @@ function entitlementKeyFor(productKey) {
     .toLowerCase();
   if (k === "revit-materials") return "revit";
   if (k === "planswift-materials") return "planswift";
-  // Revit MEP plugin projects live under the "revitmep" productKey in the
-  // dashboard URL and DB, but the subscription/entitlement is issued as "mep".
-  if (k === "revitmep") return "mep";
   return k;
 }
 
