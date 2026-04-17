@@ -113,6 +113,34 @@ function normalizeDeployment(body = {}, productKeyOverride = "") {
     .trim()
     .toLowerCase();
 
+  // envVars may arrive as a plain object or a Map-like { key: value }.
+  // We validate shape and coerce to a plain object whose values are
+  // strings — anything else is dropped so a bad payload can't pollute
+  // the registry with unexpected types.
+  const envVarsIn = body.envVars;
+  const envVars = {};
+  if (envVarsIn && typeof envVarsIn === "object" && !Array.isArray(envVarsIn)) {
+    for (const [k, v] of Object.entries(envVarsIn)) {
+      const name = String(k || "").trim();
+      if (!name) continue;
+      // Only accept real ADLM_* env var names so a misconfigured admin
+      // payload can't inject arbitrary vars like PATH or COMSPEC.
+      if (!/^ADLM_[A-Z0-9_]+$/.test(name)) continue;
+      envVars[name] = String(v ?? "");
+    }
+  }
+
+  const localRandomVars = Array.isArray(body.localRandomVars)
+    ? body.localRandomVars
+        .map((v) => String(v || "").trim())
+        .filter((v) => /^ADLM_[A-Z0-9_]+$/.test(v))
+    : [];
+
+  const sha256 = String(body.sha256 || "").trim().toLowerCase();
+  if (sha256 && !/^[0-9a-f]{64}$/.test(sha256)) {
+    throw new Error("sha256 must be a 64-character lowercase hex string");
+  }
+
   return {
     productKey,
     displayName: String(body.displayName || "").trim(),
@@ -126,6 +154,9 @@ function normalizeDeployment(body = {}, productKeyOverride = "") {
     operations: Array.isArray(body.operations)
       ? body.operations.map(normalizeOperation).filter(Boolean)
       : [],
+    sha256,
+    envVars: Object.keys(envVars).length ? envVars : undefined,
+    localRandomVars,
     enabled: body.enabled !== false,
     notes: String(body.notes || "").trim(),
   };

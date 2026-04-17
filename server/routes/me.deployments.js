@@ -130,6 +130,17 @@ router.get(
     const user = await User.findById(req.user._id, { entitlements: 1 });
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    // entitledKeys = productKey values for which the user has an active,
+    // unexpired entitlement. ONLY these get envVars attached below — secret
+    // configuration must never be handed to users who haven't had their
+    // entitlement activated yet.
+    const entitledKeys = new Set();
+
+    // allowedKeys = entitledKeys PLUS products the user has a pending /
+    // complete purchase for but no entitlement yet. These users can see
+    // the product and download the installer, but they get no secrets
+    // until the admin activates their entitlement — the plugin will show
+    // a "not configured" error until then, which is the correct behavior.
     const allowedKeys = new Set();
     const lockedKeys = new Set();
 
@@ -141,6 +152,7 @@ router.get(
       if (!productKey) continue;
 
       if (status === "active" && !isEntExpiredAt(ent.expiresAt)) {
+        entitledKeys.add(productKey);
         allowedKeys.add(productKey);
       }
     }
@@ -166,13 +178,25 @@ router.get(
       return res.json({ ok: true, items: [] });
     }
 
-    const items = await ProductDeployment.find({
+    const rawItems = await ProductDeployment.find({
       productKey: { $in: [...allowedKeys] },
       enabled: true,
       packageUri: { $ne: "" },
     })
       .sort({ productKey: 1 })
       .lean();
+
+    // Strip envVars unless the caller has an active entitlement for the
+    // product. localRandomVars is safe to return to anyone (the actual
+    // values are generated on the client). The sha256 integrity hash is
+    // also safe to expose.
+    const items = rawItems.map((item) => {
+      const key = String(item?.productKey || "").trim().toLowerCase();
+      if (entitledKeys.has(key)) return item;
+      // eslint-disable-next-line no-unused-vars
+      const { envVars, ...withoutSecrets } = item;
+      return { ...withoutSecrets, envVars: undefined };
+    });
 
     return res.json({ ok: true, items });
   }),
