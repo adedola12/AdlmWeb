@@ -7,6 +7,9 @@ function entitlementKeyFor(productKey) {
     .toLowerCase();
   if (k === "revit-materials") return "revit";
   if (k === "planswift-materials") return "planswift";
+  // Revit MEP plugin projects live under the "revitmep" productKey in the
+  // dashboard URL and DB, but the subscription/entitlement is issued as "mep".
+  if (k === "revitmep") return "mep";
   return k;
 }
 
@@ -42,8 +45,19 @@ export async function requireEntitlementParam(req, res, next) {
   const raw = req.params.productKey;
   if (!raw) return res.status(400).json({ error: "productKey missing" });
 
-  const productKey = entitlementKeyFor(raw);
-  req.params.productKey = productKey; // normalize for downstream middleware usage
+  // revitmep projects are stored under productKey "revitmep" in the DB so
+  // they appear at /dashboard/projects/revitmep. Only rewrite the route
+  // param for the *-materials aliases that genuinely reuse an existing
+  // storage bucket. For everything else, leave req.params.productKey alone
+  // and only normalize the key used for the entitlement lookup.
+  const rawLower = String(raw).trim().toLowerCase();
+  const isMaterialsAlias =
+    rawLower === "revit-materials" || rawLower === "planswift-materials";
 
-  return requireEntitlement(productKey)(req, res, next);
+  const entitlementKey = entitlementKeyFor(raw);
+  if (isMaterialsAlias) {
+    req.params.productKey = entitlementKey; // legacy behaviour
+  }
+
+  return requireEntitlement(entitlementKey)(req, res, next);
 }
