@@ -1,0 +1,215 @@
+# setup-deployments.ps1
+# ============================================================================
+# One-shot configuration of ADLM product deployments.
+#
+# What it does:
+#   1. Logs into the ADLM website as you (admin account)
+#   2. For each product below, fetches the existing deployment record,
+#      MERGES IN envVars + localRandomVars (keeps packageUri, operations,
+#      version, etc. untouched)
+#   3. PUTs the merged result back
+#
+# You run this ONCE. After that, every time the InstallerHub installs a
+# product on a user's machine, the hub fetches these envVars over HTTPS
+# and writes them to HKCU\Environment on that user's machine.
+#
+# BEFORE RUNNING:
+#   * Set the $ApiBaseUrl to your Render URL (the default is likely right).
+#   * Set $AdminEmail / the script will prompt for your admin password.
+#   * Fill in the real secret values in $Shared below — these are the
+#     production values your server's .env already uses.
+#
+# RE-RUN SAFETY:
+#   * Running the script again just re-applies the same values (idempotent).
+#   * Running with different values updates the deployments in-place;
+#     users will pick up the new envVars on their next InstallerHub install.
+# ============================================================================
+
+param(
+    [string] $ApiBaseUrl = "https://adlmweb.onrender.com",
+    [string] $AdminEmail = ""
+)
+
+if (-not $AdminEmail) {
+    $AdminEmail = Read-Host "Admin email / username"
+}
+$adminPwd = Read-Host "Admin password" -AsSecureString
+$adminPwdPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
+    [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($adminPwd))
+
+# ----------------------------------------------------------------------------
+# FILL IN THE SHARED SECRETS BELOW
+#
+# These are production secrets — never commit this file with real values.
+# Get them from:
+#   JWT_LICENSE_SECRET  -> server/.env  (already rotated; copy from Render)
+#   JWT signing key     -> 32+ char random; can reuse JWT_ACCESS_SECRET
+#   MongoDB URIs        -> MongoDB Atlas dashboards (after you rotated pwd)
+#   Gmail app password  -> after revoking the old one and creating a new one
+# ----------------------------------------------------------------------------
+$Shared = @{
+    # Must match the server's JWT_LICENSE_SECRET (server signs license JWTs,
+    # plugins verify them with this value).
+    LicenseSecret     = "<PASTE JWT_LICENSE_SECRET FROM server/.env>"
+
+    # JWT signing key for Planswift's local token cache (32+ chars).
+    # Can be any strong random value — does not have to match the server.
+    JwtSigningKey     = "<PASTE A 64-CHAR RANDOM HEX STRING>"
+
+    # MongoDB connection strings
+    MongoSrv          = "mongodb+srv://USER:PASSWORD@cluster-host/?retryWrites=true&w=majority"
+    MongoSignin       = "mongodb+srv://USER:PASSWORD@revitpluginusers.xxx.mongodb.net/?retryWrites=true&w=majority"
+    MongoSignup       = "mongodb+srv://USER:PASSWORD@revitcluster.xxx.mongodb.net/?retryWrites=true&w=majority"
+    MongoAdmin        = "mongodb+srv://USER:PASSWORD@cluster0.xxx.mongodb.net/PlanswiftUser?retryWrites=true&w=majority"
+    MongoPlanswift    = "mongodb+srv://USER:PASSWORD@cluster0.xxx.mongodb.net/?retryWrites=true&w=majority"
+
+    # New Gmail app password for admin@adlmstudio.net (after revoking old one)
+    SmtpPassword      = "<PASTE NEW GMAIL APP PASSWORD>"
+}
+
+# ----------------------------------------------------------------------------
+# Per-product configuration table. Edit product keys / var names here if you
+# use different keys in your existing deployment records.
+# ----------------------------------------------------------------------------
+$Products = @(
+    @{
+        Key         = "mep"
+        EnvVars     = @{
+            "ADLM_MEP_LICENSE_SECRET" = $Shared.LicenseSecret
+            "ADLM_API_BASE_URL"       = $ApiBaseUrl
+        }
+        LocalVars   = @("ADLM_MEP_ENCRYPTION_KEY")
+    },
+    @{
+        Key         = "rategen"
+        EnvVars     = @{
+            "ADLM_RATEGEN_OFFLINE_LICENSE_SECRET" = $Shared.LicenseSecret
+            "ADLM_RATEGEN_MONGO_SRV"              = $Shared.MongoSrv
+            "ADLM_RATEGEN_API_BASE_URL"           = $ApiBaseUrl
+            "ADLM_RATEGEN_PRODUCT_KEY"            = "rategen"
+        }
+        LocalVars   = @("ADLM_RATEGEN_LOCAL_JWT_SECRET", "ADLM_RATEGEN_ENCRYPTION_KEY")
+    },
+    @{
+        Key         = "revit-arch"
+        EnvVars     = @{
+            "ADLM_REVITARCH_SIGNIN_MONGO" = $Shared.MongoSignin
+            "ADLM_REVITARCH_SIGNUP_MONGO" = $Shared.MongoSignup
+            "ADLM_API_BASE_URL"           = $ApiBaseUrl
+            "ADLM_REVITARCH_PRODUCT_KEY"  = "revit-arch"
+        }
+        LocalVars   = @()
+    },
+    @{
+        Key         = "planswift"
+        EnvVars     = @{
+            "ADLM_MONGO_CONNECTION" = $Shared.MongoPlanswift
+            "ADLM_JWT_SIGNING_KEY"  = $Shared.JwtSigningKey
+            "ADLM_LICENSE_SECRET"   = $Shared.LicenseSecret
+            "ADLM_API_BASE_URL"     = $ApiBaseUrl
+        }
+        LocalVars   = @("ADLM_ENCRYPTION_KEY")
+    },
+    @{
+        Key         = "planswift-admin"
+        EnvVars     = @{
+            "ADLM_PLANSWIFT_ADMIN_MONGO" = $Shared.MongoAdmin
+            "ADLM_SMTP_PASSWORD"         = $Shared.SmtpPassword
+            "ADLM_SMTP_HOST"             = "smtp.gmail.com"
+            "ADLM_SMTP_PORT"             = "587"
+            "ADLM_SMTP_USER"             = "admin@adlmstudio.net"
+        }
+        LocalVars   = @()
+    }
+)
+
+# ============================================================================
+# LOGIN
+# ============================================================================
+Write-Host ""
+Write-Host "Signing in as $AdminEmail ..." -ForegroundColor Cyan
+$loginBody = @{ identifier = $AdminEmail; password = $adminPwdPlain } | ConvertTo-Json
+try {
+    $loginResp = Invoke-RestMethod -Method Post `
+        -Uri "$ApiBaseUrl/auth/login" `
+        -ContentType "application/json" `
+        -Body $loginBody
+} catch {
+    Write-Host "Login failed: $_" -ForegroundColor Red
+    exit 1
+}
+
+$token = $loginResp.accessToken
+if (-not $token) {
+    Write-Host "Login returned no accessToken. Check credentials." -ForegroundColor Red
+    exit 1
+}
+Write-Host "Signed in. Role: $($loginResp.user.role)" -ForegroundColor Green
+if ($loginResp.user.role -ne "admin") {
+    Write-Host "Warning: this account is not an admin. PUT /admin/deployments will 403." -ForegroundColor Yellow
+}
+
+$headers = @{ Authorization = "Bearer $token" }
+
+# ============================================================================
+# For each product: fetch current, merge envVars, PUT back
+# ============================================================================
+foreach ($p in $Products) {
+    Write-Host ""
+    Write-Host "=== $($p.Key) ===" -ForegroundColor Cyan
+
+    # 1) Fetch existing deployment (unwrap { ok, item } envelope)
+    $existing = $null
+    try {
+        $resp = Invoke-RestMethod -Method Get `
+            -Uri "$ApiBaseUrl/admin/deployments/$($p.Key)" `
+            -Headers $headers
+        if ($resp.PSObject.Properties.Name -contains "item") {
+            $existing = $resp.item
+        } else {
+            $existing = $resp
+        }
+    } catch {
+        if ($_.Exception.Response.StatusCode.value__ -eq 404) {
+            Write-Host "  No existing deployment. Will create a new one with just envVars." -ForegroundColor Yellow
+        } else {
+            Write-Host "  GET failed: $_" -ForegroundColor Red
+            continue
+        }
+    }
+
+    # 2) Build payload — start from existing (if any) so we don't overwrite
+    #    packageUri, operations, version. Then overlay envVars/localRandomVars.
+    $payload = @{
+        productKey      = $p.Key
+        envVars         = $p.EnvVars
+        localRandomVars = $p.LocalVars
+    }
+    if ($existing) {
+        foreach ($field in "displayName","packageUri","packageKind","version","installArguments","waitForExit","markInstalledAfterLaunch","requiresElevation","operations","enabled","notes","sha256") {
+            if ($existing.PSObject.Properties.Name -contains $field) {
+                $payload[$field] = $existing.$field
+            }
+        }
+    }
+
+    $payloadJson = $payload | ConvertTo-Json -Depth 8
+
+    # 3) PUT it
+    try {
+        $saved = Invoke-RestMethod -Method Put `
+            -Uri "$ApiBaseUrl/admin/deployments/$($p.Key)" `
+            -Headers $headers `
+            -ContentType "application/json" `
+            -Body $payloadJson
+        Write-Host "  OK. envVars keys: $(($p.EnvVars.Keys | Sort-Object) -join ', ')" -ForegroundColor Green
+        Write-Host "  localRandomVars: $($p.LocalVars -join ', ')" -ForegroundColor Green
+    } catch {
+        Write-Host "  PUT failed: $_" -ForegroundColor Red
+        if ($_.ErrorDetails) { Write-Host "  body: $($_.ErrorDetails.Message)" -ForegroundColor Red }
+    }
+}
+
+Write-Host ""
+Write-Host "Done. The next time any user installs a product via the InstallerHub," -ForegroundColor Cyan
+Write-Host "these env vars will be written to their HKCU\Environment automatically." -ForegroundColor Cyan
