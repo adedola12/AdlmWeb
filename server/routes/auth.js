@@ -732,10 +732,21 @@ router.post("/password/reset", async (req, res) => {
   }
 });
 
-// Public "does this account exist?" lookup for plugin sign-in UX.
-// Returns only a boolean to prevent user enumeration / PII harvesting.
-// If the client needs full profile data, it should log in first and then
-// call an authenticated endpoint (e.g. /me).
+// Public "does this account exist?" lookup for plugin sign-in UX and the
+// free Time Management app.
+//
+// This endpoint is unauthenticated, so we have to balance two concerns:
+//   1. The free Time Management app has no password flow — it keys its
+//      local tasks off user._id and shows a greeting with firstName.
+//      Returning just { exists } breaks it for every user.
+//   2. Returning full profile details for every email would let an
+//      attacker PII-harvest by iterating breach-dump emails.
+//
+// The compromise: return a MINIMAL user subset — _id (opaque), firstName
+// (greeting), avatarUrl (cosmetic). We intentionally omit email (caller
+// already typed it in), lastName, and username. Combined with the
+// auth-tier rate limiter already wrapped around /auth/*, this makes bulk
+// harvesting impractical while keeping the Time Management UX working.
 router.post("/app/lookup", async (req, res) => {
   try {
     await ensureDb();
@@ -745,7 +756,16 @@ router.post("/app/lookup", async (req, res) => {
     }
 
     const user = await findByIdentifier(String(identifier).trim());
-    return res.json({ exists: !!user });
+    if (!user) return res.json({ exists: false });
+
+    return res.json({
+      exists: true,
+      user: {
+        _id: String(user._id),
+        firstName: user.firstName || "",
+        avatarUrl: user.avatarUrl || "",
+      },
+    });
   } catch (err) {
     console.error("[/auth/app/lookup] error:", err);
     res.status(500).json({ error: "Lookup failed" });
