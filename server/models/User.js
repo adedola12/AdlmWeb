@@ -7,6 +7,11 @@ const DeviceBindingSchema = new mongoose.Schema(
     boundAt: { type: Date, default: Date.now },
     lastSeenAt: { type: Date, default: Date.now },
     revokedAt: { type: Date, default: null },
+    // Fingerprint algorithm version:
+    //   1 = legacy SHA256(MachineName + MAC + Username)
+    //   2 = hardware-bound SHA256(CPUId + BIOS SN + Motherboard SN)
+    // Used for the seamless one-time migration from v1 → v2.
+    fpVersion: { type: Number, default: 1, min: 1 },
   },
   { _id: false },
 );

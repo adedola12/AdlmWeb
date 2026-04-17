@@ -1,16 +1,6 @@
 // server/middleware/adminKey.js
-export function requireAdminKey(req, res, next) {
-  const expected = process.env.ADMIN_API_KEY || "";
-
-  if (!expected) {
-    // Don't throw (throw causes 500 without a clean message sometimes)
-    return res.status(500).json({ error: "ADMIN_KEY not configured" });
-  }
-
-  const key = req.headers["x-admin-key"];
-  if (!key || key !== expected) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  next();
-}
+// DEPRECATED shim — re-exports the timing-safe implementation from
+// requireAdminKey.js. Kept only so existing imports continue to work.
+// New code should import from "./requireAdminKey.js" or use requireAdmin
+// from "./auth.js" (JWT-based) instead.
+export { requireAdminKey } from "./requireAdminKey.js";

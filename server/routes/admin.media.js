@@ -12,13 +12,55 @@ const router = express.Router();
 // Gate the whole router once
 router.use(requireAuth, requireAdmin);
 
-// memory storage keeps file in RAM so we can stream it to Cloudinary
-const upload = multer({ storage: multer.memoryStorage() });
+// Allowed MIME types for the general media upload (images, video, PDFs).
+// Everything else is rejected before buffering — prevents arbitrary file
+// uploads (scripts, executables, etc.).
+const ALLOWED_MEDIA_MIME_PREFIXES = ["image/", "video/"];
+const ALLOWED_MEDIA_MIME_EXACT = new Set([
+  "application/pdf",
+]);
 
-// larger limit for video uploads (up to 200MB)
+function mediaFileFilter(_req, file, cb) {
+  const mime = String(file.mimetype || "").toLowerCase();
+  const ok =
+    ALLOWED_MEDIA_MIME_EXACT.has(mime) ||
+    ALLOWED_MEDIA_MIME_PREFIXES.some((p) => mime.startsWith(p));
+  if (ok) return cb(null, true);
+  cb(new Error(`Unsupported file type: ${mime || "unknown"}`));
+}
+
+function videoFileFilter(_req, file, cb) {
+  const mime = String(file.mimetype || "").toLowerCase();
+  if (mime.startsWith("video/")) return cb(null, true);
+  cb(new Error(`Unsupported file type for video upload: ${mime || "unknown"}`));
+}
+
+function pdfFileFilter(_req, file, cb) {
+  const mime = String(file.mimetype || "").toLowerCase();
+  if (mime === "application/pdf") return cb(null, true);
+  cb(new Error(`Only PDF files are allowed (got: ${mime || "unknown"})`));
+}
+
+// memory storage keeps file in RAM so we can stream it to Cloudinary
+// 10MB is plenty for images, short clips, and PDFs. Videos use uploadLarge.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: mediaFileFilter,
+});
+
+// larger limit for video uploads (up to 200MB), restricted to video MIME
 const uploadLarge = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 200 * 1024 * 1024 },
+  fileFilter: videoFileFilter,
+});
+
+// dedicated certificate/PDF uploader
+const uploadPdf = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: pdfFileFilter,
 });
 
 /**
@@ -216,7 +258,7 @@ router.post("/upload-video-r2", uploadLarge.single("file"), async (req, res) => 
  * Uploads a PDF certificate template to Cloudflare R2.
  * R2 serves files with correct Content-Type so PDFs open in-browser.
  */
-router.post("/upload-certificate", upload.single("file"), async (req, res) => {
+router.post("/upload-certificate", uploadPdf.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "file is required" });
 

@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 import { connectDB } from "./db.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
+import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 
@@ -80,24 +81,32 @@ const __dirname = path.dirname(__filename);
 
 app.set("trust proxy", 1);
 
-/* -------------------- quick debug -------------------- */
-app.get("/__debug/db", (_req, res) => {
-  const c = mongoose?.connection || {};
-  res.json({ dbName: c.name, host: c.host, ok: c.readyState === 1 });
-});
-
 /* -------- CORS (MUST be BEFORE body parsers) -------- */
-const whitelist = (process.env.CORS_ORIGINS || "")
+const IS_PROD = process.env.NODE_ENV === "production";
+
+// Base whitelist from env, plus explicit production origins
+const envWhitelist = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+// Exact, vetted production origins — no wildcards
+const PROD_ORIGINS = [
+  "https://adlmstudio.net",
+  "https://www.adlmstudio.net",
+  "https://adlm-web.vercel.app",
+];
+
+const whitelist = Array.from(new Set([...envWhitelist, ...PROD_ORIGINS]));
 
 const corsOptions = {
   origin(origin, cb) {
     if (!origin) return cb(null, true);
     if (whitelist.includes(origin)) return cb(null, true);
-    if (/^http:\/\/localhost:\d+$/.test(origin)) return cb(null, true);
-    if (/\.vercel\.app$/.test(origin)) return cb(null, true);
+    // Localhost only allowed in non-production for dev work
+    if (!IS_PROD && /^http:\/\/localhost:\d+$/.test(origin)) {
+      return cb(null, true);
+    }
     return cb(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
@@ -106,6 +115,8 @@ const corsOptions = {
     "Content-Type",
     "Authorization",
     "x-admin-key",
+    "x-adlm-client",
+    "x-adlm-fp-version",
     "X-Requested-With",
   ],
 };
@@ -170,9 +181,10 @@ app.use(morgan("dev"));
 
 app.use("/webhooks", webhooksRouter);
 
-app.use("/auth", authRoutes);
+// Apply rate limiting to auth and device endpoints
+app.use("/auth", authLimiter, authRoutes);
 app.use("/me", meRoutes);
-app.use("/me/deployments", meDeploymentsRoutes);
+app.use("/me/deployments", deviceLimiter, meDeploymentsRoutes);
 app.use("/me/courses", meCourses);
 app.use("/purchase", purchaseRoutes);
 
@@ -252,7 +264,7 @@ app.use("/admin/training-locations", adminTrainingLocations);
 app.use("/admin/invoices", adminInvoices);
 app.use("/training-locations", trainingLocationsPublic);
 app.use("/quote", quoteRoutes);
-app.use("/api/entitlements", entitlementsRouter);
+app.use("/api/entitlements", deviceLimiter, entitlementsRouter);
 
 // app.use("/projectsboq", projectsBoqRoutes);
 app.use("/projectsboq", projectsBoqRoutes);

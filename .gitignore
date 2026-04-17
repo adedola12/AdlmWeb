@@ -1,0 +1,35 @@
+# Environment files — never commit secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Credential files
+*.pem
+*.key
+*.pfx
+*.p12
+secrets.json
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Test/temp
+coverage/
+tmp/
+temp/

@@ -1,8 +1,10 @@
 // src/pages/AdminShowcase.jsx
 import React from "react";
 import { API_BASE } from "../config"; // adjust path
+import { useAuth } from "../store.jsx";
 
 function AdminShowcase() {
+  const { accessToken } = useAuth();
   const [activeTab, setActiveTab] = React.useState("testimonials");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -335,7 +337,7 @@ function AdminShowcase() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-key": import.meta.env.VITE_ADMIN_API_KEY,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify(lForm),
       });
@@ -400,7 +402,7 @@ function AdminShowcase() {
         `${API_BASE}/admin/showcase/industry-leaders/${id}`,
         {
           method: "DELETE",
-          headers: { "x-admin-key": import.meta.env.VITE_ADMIN_API_KEY },
+          headers: { Authorization: `Bearer ${accessToken}` },
         }
       );
       if (!res.ok) throw new Error("Failed to delete industry leader");

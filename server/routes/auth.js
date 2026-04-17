@@ -97,7 +97,36 @@ function activeDevices(entitlement) {
   return (entitlement?.devices || []).filter((device) => !device.revokedAt);
 }
 
-function enforceDeviceBinding(entitlement, incomingFingerprint) {
+// Password complexity policy — enforced on signup and password reset.
+// Minimum 8 chars, at least one letter and one number.
+function validatePasswordStrength(password) {
+  const pw = String(password || "");
+  if (pw.length < 8) {
+    return "Password must be at least 8 characters.";
+  }
+  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
+    return "Password must contain at least one letter and one number.";
+  }
+  return null;
+}
+
+// Fingerprint migration window: clients sending x-adlm-fp-version >= 2 that
+// don't match any existing device may transparently replace the user's
+// single legacy (v1) device for up to this many days after we ship v2.
+// Keep this stable once set so migration behavior is predictable.
+const FP_V2_LAUNCHED_AT = Date.parse("2026-04-17T00:00:00Z");
+const FP_MIGRATION_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+
+function inFingerprintMigrationWindow() {
+  return Date.now() - FP_V2_LAUNCHED_AT < FP_MIGRATION_WINDOW_MS;
+}
+
+// enforceDeviceBinding enforces seat limits and, for personal (1-seat)
+// licenses, single-device binding. The `fpVersion` (from the
+// x-adlm-fp-version header) lets us auto-migrate users seamlessly from
+// the legacy MAC-based fingerprint to the new hardware-bound one
+// without locking them out when their fingerprint changes shape.
+function enforceDeviceBinding(entitlement, incomingFingerprint, fpVersion = 1) {
   const fingerprint = String(incomingFingerprint || "").trim();
   if (!fingerprint) {
     return {
@@ -115,12 +144,33 @@ function enforceDeviceBinding(entitlement, incomingFingerprint) {
     String(entitlement.licenseType || "").toLowerCase() === "organization" ||
     seats > 1;
 
+  // Helper: try to migrate an existing v1 device to the new v2 fingerprint.
+  // Only runs within the migration window and only when there is exactly
+  // one active v1 device (prevents accidental swaps on org licenses).
+  function tryMigrate(v2Fp) {
+    if (fpVersion < 2) return false;
+    if (!inFingerprintMigrationWindow()) return false;
+
+    const active = activeDevices(entitlement);
+    const legacy = active.filter((d) => (d.fpVersion || 1) < 2);
+    if (legacy.length !== 1) return false;
+
+    const target = legacy[0];
+    target.fingerprint = v2Fp;
+    target.fpVersion = 2;
+    target.lastSeenAt = new Date();
+    // Update legacy top-level mirror so older code paths stay consistent
+    entitlement.deviceFingerprint = v2Fp;
+    return true;
+  }
+
   if (isOrg) {
     const devices = activeDevices(entitlement);
     const existing = devices.find((device) => device.fingerprint === fingerprint);
 
     if (existing) {
       existing.lastSeenAt = new Date();
+      if (fpVersion >= 2 && (existing.fpVersion || 1) < 2) existing.fpVersion = 2;
       return { ok: true, changed: true };
     }
 
@@ -131,12 +181,18 @@ function enforceDeviceBinding(entitlement, incomingFingerprint) {
         boundAt: new Date(),
         lastSeenAt: new Date(),
         revokedAt: null,
+        fpVersion: Math.max(1, Number(fpVersion) || 1),
       });
 
       if (!entitlement.deviceFingerprint) entitlement.deviceFingerprint = fingerprint;
       if (!entitlement.deviceBoundAt) entitlement.deviceBoundAt = new Date();
 
       return { ok: true, changed: true };
+    }
+
+    // At seat limit — last chance: migrate a lone legacy device in-place.
+    if (tryMigrate(fingerprint)) {
+      return { ok: true, changed: true, migrated: true };
     }
 
     return {
@@ -147,7 +203,12 @@ function enforceDeviceBinding(entitlement, incomingFingerprint) {
     };
   }
 
+  // Personal (single-seat) license
   if (entitlement.deviceFingerprint && entitlement.deviceFingerprint !== fingerprint) {
+    // Attempt seamless migration for the v1 → v2 transition.
+    if (tryMigrate(fingerprint)) {
+      return { ok: true, changed: true, migrated: true };
+    }
     return {
       ok: false,
       status: 403,
@@ -169,25 +230,38 @@ function enforceDeviceBinding(entitlement, incomingFingerprint) {
       boundAt: entitlement.deviceBoundAt || new Date(),
       lastSeenAt: new Date(),
       revokedAt: null,
+      fpVersion: Math.max(1, Number(fpVersion) || 1),
     });
   } else {
     const device = devices.find((item) => item.fingerprint === fingerprint);
-    if (device) device.lastSeenAt = new Date();
+    if (device) {
+      device.lastSeenAt = new Date();
+      if (fpVersion >= 2 && (device.fpVersion || 1) < 2) device.fpVersion = 2;
+    }
   }
 
   return { ok: true, changed: true };
 }
 
 function getLicenseJwtSecret() {
-  const configured = String(process.env.LICENSE_JWT_SECRET || "").trim();
+  // Accept either historical name (LICENSE_JWT_SECRET) or the name used in .env
+  // (JWT_LICENSE_SECRET) so we don't get a silent regression if deployment
+  // env isn't updated.
+  const configured = String(
+    process.env.JWT_LICENSE_SECRET ||
+      process.env.LICENSE_JWT_SECRET ||
+      "",
+  ).trim();
   if (configured) return configured;
 
   if (process.env.NODE_ENV !== "production") {
+    // Dev-only fallback so local testing still works without extra setup.
+    // Never used in production — production will log and return null.
     return "adlm_dev_license_secret_local_only";
   }
 
   console.error(
-    "[/auth/login] LICENSE_JWT_SECRET is missing; plugin license token signing is unavailable.",
+    "[/auth/login] JWT_LICENSE_SECRET is missing; plugin license token signing is unavailable.",
   );
   return null;
 }
@@ -250,6 +324,11 @@ router.post("/signup", async (req, res) => {
       return res
         .status(400)
         .json({ error: "firstName, lastName and whatsapp are required" });
+    }
+
+    const pwError = validatePasswordStrength(password);
+    if (pwError) {
+      return res.status(400).json({ error: pwError, code: "WEAK_PASSWORD" });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -411,7 +490,16 @@ router.post("/login", async (req, res) => {
         });
       }
 
-      const binding = enforceDeviceBinding(entitlement, chosenFingerprint);
+      // Read fingerprint version from header (defaults to 1 for legacy clients).
+      const fpVersion = Math.max(
+        1,
+        Number(req.get("x-adlm-fp-version")) || 1,
+      );
+      const binding = enforceDeviceBinding(
+        entitlement,
+        chosenFingerprint,
+        fpVersion,
+      );
       if (!binding.ok) {
         return res.status(binding.status).json({
           error: binding.error,
@@ -558,6 +646,11 @@ router.post("/password/reset", async (req, res) => {
         .json({ error: "identifier, code, newPassword required" });
     }
 
+    const pwError = validatePasswordStrength(newPassword);
+    if (pwError) {
+      return res.status(400).json({ error: pwError, code: "WEAK_PASSWORD" });
+    }
+
     const user = await findByIdentifier(identifier);
     if (!user) return res.status(400).json({ error: "Invalid code" });
 
@@ -598,6 +691,10 @@ router.post("/password/reset", async (req, res) => {
   }
 });
 
+// Public "does this account exist?" lookup for plugin sign-in UX.
+// Returns only a boolean to prevent user enumeration / PII harvesting.
+// If the client needs full profile data, it should log in first and then
+// call an authenticated endpoint (e.g. /me).
 router.post("/app/lookup", async (req, res) => {
   try {
     await ensureDb();
@@ -607,19 +704,7 @@ router.post("/app/lookup", async (req, res) => {
     }
 
     const user = await findByIdentifier(String(identifier).trim());
-    if (!user) return res.json({ exists: false });
-
-    return res.json({
-      exists: true,
-      user: {
-        _id: String(user._id),
-        email: user.email || "",
-        username: user.username || "",
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        avatarUrl: user.avatarUrl || "",
-      },
-    });
+    return res.json({ exists: !!user });
   } catch (err) {
     console.error("[/auth/app/lookup] error:", err);
     res.status(500).json({ error: "Lookup failed" });

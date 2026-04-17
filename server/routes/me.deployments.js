@@ -61,6 +61,8 @@ router.post(
 
     normalizeLegacyEntitlement(ent);
 
+    const fpVersion = Math.max(1, Number(req.get("x-adlm-fp-version")) || 1);
+
     const active = (ent.devices || []).filter((d) => !d.revokedAt);
     const maxSeats = Math.max(parseInt(ent.seats || 1, 10), 1);
 
@@ -72,8 +74,25 @@ router.post(
     if (existing) {
       existing.lastSeenAt = new Date();
       existing.name = deviceName || existing.name || "";
+      if (fpVersion >= 2 && (existing.fpVersion || 1) < 2) existing.fpVersion = 2;
       await user.save();
       return res.json({ ok: true, alreadyBound: true });
+    }
+
+    // Seamless v1→v2 fingerprint migration for single-seat licenses:
+    // if the caller has a v2 fingerprint but the user's only active device
+    // is a legacy v1, rewrite it in place instead of rejecting them.
+    if (fpVersion >= 2 && maxSeats === 1 && active.length === 1) {
+      const legacy = active[0];
+      if ((legacy.fpVersion || 1) < 2) {
+        legacy.fingerprint = fp;
+        legacy.fpVersion = 2;
+        legacy.lastSeenAt = new Date();
+        legacy.name = deviceName || legacy.name || "";
+        ent.deviceFingerprint = fp;
+        await user.save();
+        return res.json({ ok: true, migrated: true, alreadyBound: true });
+      }
     }
 
     // Check seat limit
@@ -90,6 +109,7 @@ router.post(
       boundAt: new Date(),
       lastSeenAt: new Date(),
       revokedAt: null,
+      fpVersion: Math.max(1, Number(fpVersion) || 1),
     });
 
     // Also set legacy field for backward compat
