@@ -431,6 +431,57 @@ export default function Dashboard() {
           />
         </div>
 
+        {activeSubscriptionsCount > 0 && summary?.installerHub?.downloadUrl ? (
+          <div className="bg-gradient-to-r from-adlm-blue-700 to-[#0050c8] text-white rounded-xl shadow-sm p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold opacity-90">
+                Installer Hub
+              </div>
+              <div className="text-base md:text-lg font-bold">
+                Download the Installer Hub to set up your active products
+              </div>
+              <div className="text-xs text-blue-100/90 mt-1">
+                Available because you have {activeSubscriptionsCount} active
+                subscription{activeSubscriptionsCount === 1 ? "" : "s"}.
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <a
+                href={summary.installerHub.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-white text-adlm-blue-700 text-sm font-semibold hover:bg-blue-50 transition"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+                Download Installer Hub
+              </a>
+              {summary.installerHub.videoUrl ? (
+                <a
+                  href={summary.installerHub.videoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-white/10 ring-1 ring-white/40 text-white text-sm font-semibold hover:bg-white/20 transition"
+                >
+                  Watch Setup Guide
+                </a>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm p-3 flex flex-wrap items-center gap-2">
