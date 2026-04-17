@@ -50,21 +50,21 @@ $adminPwdPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
 $Shared = @{
     # Must match the server's JWT_LICENSE_SECRET (server signs license JWTs,
     # plugins verify them with this value).
-    LicenseSecret     = "<PASTE JWT_LICENSE_SECRET FROM server/.env>"
+    LicenseSecret     = "a49db115e2ed9fc503143ea4a3fac6321c106ce90dfffa0e8568c93d6af1a0681962cb8c78eb0ff083c0db1c375da95c"
 
     # JWT signing key for Planswift's local token cache (32+ chars).
     # Can be any strong random value — does not have to match the server.
-    JwtSigningKey     = "<PASTE A 64-CHAR RANDOM HEX STRING>"
+    JwtSigningKey     = "ce915b5096142015b1469b41db577ae7bf53e4d2242b7a80b9b38224262f76ca3140aabeb97ecb4576063e2c30e0fe04"
 
     # MongoDB connection strings
-    MongoSrv          = "mongodb+srv://USER:PASSWORD@cluster-host/?retryWrites=true&w=majority"
+    MongoSrv          = "mongodb+srv://dolapo836:Hardeydol@adlmratedb.zeur8.mongodb.net/?retryWrites=true&w=majority&appName=ADLMRateDB"
     MongoSignin       = "mongodb+srv://USER:PASSWORD@revitpluginusers.xxx.mongodb.net/?retryWrites=true&w=majority"
     MongoSignup       = "mongodb+srv://USER:PASSWORD@revitcluster.xxx.mongodb.net/?retryWrites=true&w=majority"
     MongoAdmin        = "mongodb+srv://USER:PASSWORD@cluster0.xxx.mongodb.net/PlanswiftUser?retryWrites=true&w=majority"
-    MongoPlanswift    = "mongodb+srv://USER:PASSWORD@cluster0.xxx.mongodb.net/?retryWrites=true&w=majority"
+    MongoPlanswift    = "mongodb+srv://adedolapo:Hardeydol@cluster0.jb4uj.mongodb.net/PlanswiftUser?retryWrites=true&w=majority"
 
     # New Gmail app password for admin@adlmstudio.net (after revoking old one)
-    SmtpPassword      = "<PASTE NEW GMAIL APP PASSWORD>"
+    SmtpPassword      = "cdetoqfbjyrleoxf"
 }
 
 # ----------------------------------------------------------------------------
@@ -90,16 +90,18 @@ $Products = @(
         }
         LocalVars   = @("ADLM_RATEGEN_LOCAL_JWT_SECRET", "ADLM_RATEGEN_ENCRYPTION_KEY")
     },
+    # QUIV (Revit Plugin Arch). Admin product catalog uses the key "revit".
     @{
-        Key         = "revit-arch"
+        Key         = "revit"
         EnvVars     = @{
             "ADLM_REVITARCH_SIGNIN_MONGO" = $Shared.MongoSignin
             "ADLM_REVITARCH_SIGNUP_MONGO" = $Shared.MongoSignup
             "ADLM_API_BASE_URL"           = $ApiBaseUrl
-            "ADLM_REVITARCH_PRODUCT_KEY"  = "revit-arch"
+            "ADLM_REVITARCH_PRODUCT_KEY"  = "revit"
         }
         LocalVars   = @()
     },
+    # HERON (Planswift plugin)
     @{
         Key         = "planswift"
         EnvVars     = @{
@@ -109,18 +111,14 @@ $Products = @(
             "ADLM_API_BASE_URL"     = $ApiBaseUrl
         }
         LocalVars   = @("ADLM_ENCRYPTION_KEY")
-    },
-    @{
-        Key         = "planswift-admin"
-        EnvVars     = @{
-            "ADLM_PLANSWIFT_ADMIN_MONGO" = $Shared.MongoAdmin
-            "ADLM_SMTP_PASSWORD"         = $Shared.SmtpPassword
-            "ADLM_SMTP_HOST"             = "smtp.gmail.com"
-            "ADLM_SMTP_PORT"             = "587"
-            "ADLM_SMTP_USER"             = "admin@adlmstudio.net"
-        }
-        LocalVars   = @()
     }
+
+    # NOTE: planswift-admin is an internal tool, not a customer-facing
+    # product in the catalog. It was accidentally added as a deployment
+    # record by an earlier script run — delete that record (see the
+    # DELETE section at the bottom of this file). The admin tool's env
+    # vars should be configured on the admin machine directly, not via
+    # a ProductDeployment record users could see.
 )
 
 # ============================================================================
@@ -207,6 +205,28 @@ foreach ($p in $Products) {
     } catch {
         Write-Host "  PUT failed: $_" -ForegroundColor Red
         if ($_.ErrorDetails) { Write-Host "  body: $($_.ErrorDetails.Message)" -ForegroundColor Red }
+    }
+}
+
+
+# ============================================================================
+# Cleanup: remove any bogus ProductDeployment records left over from earlier
+# runs that used the wrong keys. Safe to run even if the record doesn't exist.
+# ============================================================================
+$CleanupKeys = @("revit-arch", "planswift-admin")
+foreach ($key in $CleanupKeys) {
+    try {
+        Invoke-RestMethod -Method Delete `
+            -Uri "$ApiBaseUrl/admin/deployments/$key" `
+            -Headers $headers | Out-Null
+        Write-Host "Deleted stray deployment record: $key" -ForegroundColor Yellow
+    } catch {
+        $status = $_.Exception.Response.StatusCode.value__
+        if ($status -eq 404) {
+            # Already gone — nothing to do.
+        } else {
+            Write-Host "Cleanup DELETE /$key failed: $_" -ForegroundColor DarkYellow
+        }
     }
 }
 
