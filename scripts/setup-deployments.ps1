@@ -94,10 +94,12 @@ $Products = @(
     @{
         Key         = "revit"
         EnvVars     = @{
-            "ADLM_REVITARCH_SIGNIN_MONGO" = $Shared.MongoSignin
-            "ADLM_REVITARCH_SIGNUP_MONGO" = $Shared.MongoSignup
-            "ADLM_API_BASE_URL"           = $ApiBaseUrl
-            "ADLM_REVITARCH_PRODUCT_KEY"  = "revit"
+            # Plugin no longer speaks to MongoDB directly — it signs in via
+            # the ADLM website API, exactly like the MEP / RateGen / Planswift
+            # plugins. So there are no SIGNIN/SIGNUP Mongo secrets here any
+            # more; just the API base URL and product key are needed.
+            "ADLM_API_BASE_URL"          = $ApiBaseUrl
+            "ADLM_REVITARCH_PRODUCT_KEY" = "revit"
         }
         LocalVars   = @()
     },
