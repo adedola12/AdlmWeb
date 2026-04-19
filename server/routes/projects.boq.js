@@ -157,6 +157,9 @@ router.get(
     const buildingType = String(req.query.building || "bungalow")
       .trim()
       .toLowerCase();
+    const foundationType = String(req.query.foundation || "")
+      .trim()
+      .toLowerCase();
 
     const project = await findProjectDoc({
       tool,
@@ -176,6 +179,7 @@ router.get(
       items: project.items,
       productKey: tool,
       buildingType,
+      foundationType: foundationType || undefined,
     });
 
     const buf = Buffer.isBuffer(out.buffer)

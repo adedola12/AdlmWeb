@@ -268,7 +268,7 @@ export default function ProjectOpenView({
             </button>
 
             {exportOpen ? (
-              <div className="absolute right-0 z-30 mt-2 w-64 overflow-hidden rounded-lg border bg-white shadow-lg">
+              <div className="absolute right-0 z-30 mt-2 w-72 overflow-hidden rounded-lg border bg-white shadow-lg">
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
@@ -278,7 +278,7 @@ export default function ProjectOpenView({
                 </button>
 
                 <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  Elemental BoQ
+                  Elemental BoQ — Bungalow
                 </div>
                 <button
                   type="button"
@@ -288,13 +288,33 @@ export default function ProjectOpenView({
                 >
                   Bungalow
                 </button>
+
+                <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Elemental BoQ — Multi-storey
+                </div>
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("multistorey")}
-                  title="Multi-storey building format with Frame and Staircase bills"
+                  onClick={() => onExportElementalBoQ?.("multistorey", "pad")}
+                  title="Pad foundation (auto-detect default)"
                 >
-                  Multi-storey
+                  Multi-storey — Pad foundation
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() => onExportElementalBoQ?.("multistorey", "raft")}
+                  title="Raft foundation"
+                >
+                  Multi-storey — Raft foundation
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() => onExportElementalBoQ?.("multistorey", "pile")}
+                  title="Pile foundation"
+                >
+                  Multi-storey — Pile foundation
                 </button>
               </div>
             ) : null}

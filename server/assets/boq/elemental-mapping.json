@@ -1,51 +1,22 @@
 {
   "_meta": {
-    "version": 1,
-    "notes": "Phase-1 elemental BoQ structure ported from RevitPluginArch (BungalowBoqExporter.cs / MultiStoreyBoqExporter.cs). Multi-storey substructure uses Pad/Strip default; Raft and Pile variants are a future iteration. Lookups use case-insensitive AND-of-words matching against an item's description/takeoffLine/materialName/type. To extend, add elements/items here — no code changes required."
+    "version": 2,
+    "notes": "Phase-2 elemental BoQ structure modelled on the reference .xls files (Bungalow / Pad / Raft / Pile). Preambles are descriptive context shown above an item group. `splitByLevel: true` causes the exporter to expand matching items into one row per distinct level (floor-by-floor). Rates come from each item.rate as saved in the BoQ view — there are no hard-coded rates here."
   },
 
   "domains": {
     "quiv": {
       "bungalow": {
-        "title": "Bill of Quantities — Bungalow",
+        "title": "Bills of Quantities — Bungalow",
         "bills": [
-          {
-            "name": "Preliminaries",
-            "elements": [
-              {
-                "heading": "BREAKDOWN OF PRELIMINARIES",
-                "items": [
-                  { "description": "Setting Out", "unit": "Item" },
-                  { "description": "Progress Photographs and Reports", "unit": "Item" },
-                  { "description": "Foreman / Management supervision", "unit": "Item" },
-                  { "description": "Other staff", "unit": "Item" },
-                  { "description": "Insurances", "unit": "Item" },
-                  { "description": "Site accommodation", "unit": "Item" },
-                  { "description": "Office accommodation", "unit": "Item" },
-                  { "description": "Site security", "unit": "Item" },
-                  { "description": "Temporary fences", "unit": "Item" },
-                  { "description": "Telephone", "unit": "Item" },
-                  { "description": "Administration", "unit": "Item" },
-                  { "description": "Material tests / Samples", "unit": "Item" },
-                  { "description": "Removal of debris", "unit": "Item" },
-                  { "description": "Water for the Works", "unit": "Item" },
-                  { "description": "Power for the Works", "unit": "Item" },
-                  { "description": "Notice board", "unit": "Item" },
-                  { "description": "Temporary power/ lights", "unit": "Item" },
-                  { "description": "Safety/ Health & Welfare", "unit": "Item" },
-                  { "description": "Storage", "unit": "Item" },
-                  { "description": "Small Plant/ Tools", "unit": "Item" },
-                  { "description": "Plant Equipment/ scaffolding", "unit": "Item" },
-                  { "description": "Additional Items", "unit": "Item" }
-                ]
-              }
-            ]
-          },
+          { "name": "Preliminaries", "kind": "preliminaries" },
+
           {
             "name": "Substructure",
             "elements": [
               {
                 "heading": "EXCAVATION, FILLING, ETC OTHER THAN BULK",
+                "preamble": "Excavation in compacted earth maximum depth not exceeding 2m deep inclusive of removing surplus material from site, earthwork support and keeping the works free of water.",
                 "items": [
                   { "description": "Trench Excavation", "unit": "m3", "lookups": [["strip", "footing", "excavation"]] },
                   { "description": "Surplus material from excavations and/or stock piles on site", "unit": "m3", "lookups": [["strip", "footing", "excavation"]] },
@@ -58,24 +29,28 @@
               },
               {
                 "heading": "COMPACTION",
+                "preamble": "Compaction of ground surface under floors etc including scarifying for a depth of 150mm and recompacting to 95% Mod-AASHTO density.",
                 "items": [
                   { "description": "Compaction of ground surface under floors etc including scarifying", "unit": "m2", "lookups": [["strip", "leveling", "compacting"], ["strip", "leveling"]] }
                 ]
               },
               {
                 "heading": "SOIL POISONING",
+                "preamble": "Apply soil insecticide to under floors including forming and poisoning shallow trenches around perimeter of buildings as required.",
                 "items": [
                   { "description": "Apply soil treatment to under floors", "unit": "m2", "lookups": [["strip", "surface", "treatment"]] }
                 ]
               },
               {
                 "heading": "UNREINFORCED CONCRETE CAST AGAINST EXCAVATED SURFACES",
+                "preamble": "10MPa / 19mm aggregate concrete cast against earth or unblinded sand.",
                 "items": [
                   { "description": "Surface blinding against earth and unblinded sand", "unit": "m3", "lookups": [["oversite", "blinding"], ["strip", "blinding"]], "lookupCombine": "sum" }
                 ]
               },
               {
                 "heading": "REINFORCED CONCRETE",
+                "preamble": "25MPa / 19mm concrete in foundations and ground slabs, including curing.",
                 "items": [
                   { "description": "Footing", "unit": "m3", "lookups": [["strip", "concrete", "footing"], ["strip", "concrete", "in", "footing"]] },
                   { "description": "Surface slabs and steps cast in panels on waterproofing", "unit": "m3", "lookups": [["oversite", "concrete"]] }
@@ -83,24 +58,28 @@
               },
               {
                 "heading": "FORMWORK",
+                "preamble": "Sawn plain formwork, basic finish, struck after 7 days.",
                 "items": [
                   { "description": "Edges, risers and ends not exceeding 300mm high or wide", "unit": "m", "lookups": [["oversite", "formwork", "edges"], ["oversite", "formwork", "to", "edges"]] }
                 ]
               },
               {
                 "heading": "REINFORCEMENT",
+                "preamble": "BRC fabric reinforcement to BS 4483, lapped and tied to specification.",
                 "items": [
                   { "description": "BRC Wire Mesh", "unit": "m2", "lookups": [["oversite", "brc", "mesh"], ["oversite", "brc"]] }
                 ]
               },
               {
                 "heading": "DAMP-PROOFING",
+                "preamble": "1000 gauge Visqueen DPM laid over hardcore with 150mm laps sealed with proprietary tape.",
                 "items": [
                   { "description": "DPM to under floor slab", "unit": "m2", "lookups": [["oversite", "dpm"]] }
                 ]
               },
               {
                 "heading": "BLOCKWORK IN FOUNDATION",
+                "preamble": "Sandcrete hollow blockwork bedded and jointed in cement and sand mortar (1:6) and reinforced with 25mm × 1mm hoop iron in alternate courses.",
                 "items": [
                   { "description": "Sandcrete hollow blockwork in foundation", "unit": "m2", "lookups": [["strip", "blockwork"]] },
                   { "description": "Damp proof course", "unit": "m", "lookups": [["strip", "damp", "proof"], ["strip", "dpc"]] }
@@ -108,59 +87,67 @@
               }
             ]
           },
+
           {
             "name": "Superstructure",
             "elements": [
               {
                 "heading": "WALLS — REINFORCED CONCRETE",
+                "preamble": "25MPa / 19mm concrete in lintels over openings, fully cured.",
                 "items": [
-                  { "description": "Lintels", "unit": "m3", "lookups": [["blockwork", "lintel", "concrete"]], "defaultRate": 45000 }
+                  { "description": "Lintels", "unit": "m3", "lookups": [["blockwork", "lintel", "concrete"]] }
                 ]
               },
               {
                 "heading": "WALLS — FORMWORK",
+                "preamble": "Fair-faced formwork to sides and soffits of lintels, struck after 7 days.",
                 "items": [
-                  { "description": "Lintel formwork", "unit": "m2", "lookups": [["blockwork", "lintel", "formwork"]], "defaultRate": 4850 }
+                  { "description": "Lintel formwork", "unit": "m2", "lookups": [["blockwork", "lintel", "formwork"]] }
                 ]
               },
               {
                 "heading": "WALLS — REINFORCEMENT",
+                "preamble": "Reinforcement bars; B.S. 4449, hot rolled high yield steel; bent and fixed in lintels.",
                 "items": [
-                  { "description": "10-12mm Diameter bars in lintel", "unit": "t", "lookups": [["blockwork", "lintel", "reinforcement"]], "qtyDivisor": 1000, "defaultRate": 575000 }
+                  { "description": "10-12mm Diameter bars in lintel", "unit": "t", "lookups": [["blockwork", "lintel", "reinforcement"]], "qtyDivisor": 1000 }
                 ]
               },
               {
                 "heading": "WALLS — BLOCKWORK",
+                "preamble": "Sandcrete hollow blockwork bedded and jointed in cement and sand mortar (1:6) including reinforcement and movement joints to specification.",
                 "items": [
-                  { "description": "Sandcrete hollow blockwork in wall, generally internal and external", "unit": "m2", "lookups": [["blockwork", "wall", "area"]], "defaultRate": 8350 }
+                  { "description": "Sandcrete hollow blockwork in wall, generally internal and external", "unit": "m2", "lookups": [["blockwork", "wall", "area"]] }
                 ]
               },
               {
                 "heading": "ROOF COVERING AND MEMBERS",
+                "preamble": "Pre-painted profiled steel roof sheets fixed to hardwood members with proprietary fixings as specification.",
                 "items": [
-                  { "description": "Roof covering", "unit": "m2", "lookups": [["roof", "area"]], "defaultRate": 6375 },
-                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookups": [["roof", "structs"], ["roof", "strut"]], "defaultRate": 650 },
-                  { "description": "50 x 150mm Hardwood King Post", "unit": "m", "lookups": [["roof", "king", "post"], ["roof", "kingpost"]], "defaultRate": 850 },
-                  { "description": "50 x 150mm Hardwood Wall Plate", "unit": "m", "lookups": [["roof", "wall", "plate"], ["roof", "wallplate"]], "defaultRate": 850 },
-                  { "description": "50 x 50mm Hardwood Ceiling Noggins", "unit": "m", "lookups": [["ceiling", "nogging"]], "defaultRate": 362 },
-                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookups": [["roof", "purlin"]], "defaultRate": 447 },
-                  { "description": "50 x 150mm Hardwood Rafters", "unit": "m", "lookups": [["roof", "rafter"]], "defaultRate": 850 }
+                  { "description": "Roof covering", "unit": "m2", "lookups": [["roof", "area"]] },
+                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookups": [["roof", "structs"], ["roof", "strut"]] },
+                  { "description": "50 x 150mm Hardwood King Post", "unit": "m", "lookups": [["roof", "king", "post"], ["roof", "kingpost"]] },
+                  { "description": "50 x 150mm Hardwood Wall Plate", "unit": "m", "lookups": [["roof", "wall", "plate"], ["roof", "wallplate"]] },
+                  { "description": "50 x 50mm Hardwood Ceiling Noggins", "unit": "m", "lookups": [["ceiling", "nogging"]] },
+                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookups": [["roof", "purlin"]] },
+                  { "description": "50 x 150mm Hardwood Rafters", "unit": "m", "lookups": [["roof", "rafter"]] }
                 ]
               },
               {
                 "heading": "WINDOWS AND DOORS",
+                "preamble": "Aluminium and timber units complete with all ironmongery, glazing where applicable, and hung on standard hinges per manufacturer's instructions.",
                 "items": [
-                  { "description": "Aluminium casement windows complete with fly screen", "unit": "No", "lookups": [["window"]], "defaultRate": 55000 },
-                  { "description": "Wooden panel doors complete with frame and ironmongery", "unit": "No", "lookups": [["door"]], "defaultRate": 95000 }
+                  { "description": "Aluminium casement windows complete with fly screen", "unit": "No", "lookups": [["window"]] },
+                  { "description": "Wooden panel doors complete with frame and ironmongery", "unit": "No", "lookups": [["door"]] }
                 ]
               },
               {
                 "heading": "FLOOR, WALL AND CEILING FINISHES",
+                "preamble": "Tiled / screeded floors, plastered and painted walls, P.O.P or board ceilings to architect's specification.",
                 "items": [
-                  { "description": "Floor finishes (tiles/screed)", "unit": "m2", "lookups": [["finishes", "tile"], ["finishes", "total", "tile"]], "defaultRate": 5500 },
-                  { "description": "Wall rendering / plastering", "unit": "m2", "lookups": [["blockwork", "wall", "rendering"]], "defaultRate": 2500 },
-                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookups": [["blockwork", "wall", "rendering"]], "defaultRate": 1200 },
-                  { "description": "Ceiling finishes (POP / board)", "unit": "m2", "lookups": [["ceiling", "area"]], "defaultRate": 4500 }
+                  { "description": "Floor finishes (tiles / screed)", "unit": "m2", "lookups": [["finishes", "tile"], ["finishes", "total", "tile"]] },
+                  { "description": "Wall rendering / plastering", "unit": "m2", "lookups": [["blockwork", "wall", "rendering"]] },
+                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookups": [["blockwork", "wall", "rendering"]] },
+                  { "description": "Ceiling finishes (P.O.P. / board)", "unit": "m2", "lookups": [["ceiling", "area"]] }
                 ]
               }
             ]
@@ -169,81 +156,228 @@
       },
 
       "multistorey": {
-        "title": "Bill of Quantities — Multi-Storey",
+        "title": "Bills of Quantities — Multi-Storey",
         "bills": [
-          {
-            "name": "Preliminaries",
-            "ref": "quiv.bungalow.Preliminaries"
-          },
+          { "name": "Preliminaries", "kind": "preliminaries" },
+
           {
             "name": "Substructure",
-            "elements": [
-              {
-                "heading": "EXCAVATION, FILLING, ETC OTHER THAN BULK",
-                "items": [
-                  { "description": "Excavation to column bases and trenches", "unit": "m3", "lookups": [["pad", "excavation"], ["strip", "excavation"]] },
-                  { "description": "Excavated area", "unit": "m2", "lookups": [["pad", "excavation", "area"], ["strip", "excavation", "area"]] },
-                  { "description": "Depositing on site", "unit": "m3", "lookups": [["pad", "depositing"], ["strip", "depositing"]] },
-                  { "description": "Ground Water", "unit": "Item", "fixedAmount": 850000 },
-                  { "description": "Surface Water", "unit": "Item", "fixedAmount": 350000 }
-                ]
-              },
-              {
-                "heading": "EARTH FILLING, ETC.",
-                "items": [
-                  { "description": "Laterite filling to make up levels", "unit": "m3", "lookups": [["pad", "laterite"], ["strip", "laterite"]] },
-                  { "description": "Hardcore filling from off site", "unit": "m3", "lookups": [["pad", "hardcore"], ["strip", "hardcore"]] }
-                ]
-              },
-              {
-                "heading": "COMPACTION & TREATMENT",
-                "items": [
-                  { "description": "Applying anti-termite solution", "unit": "m2", "lookups": [["pad", "surface", "treatment"], ["strip", "surface", "treatment"]] },
-                  { "description": "Compacting and levelling bottom of excavations", "unit": "m2", "lookups": [["pad", "leveling", "compacting"], ["strip", "leveling"]] }
-                ]
-              },
-              {
-                "heading": "REINFORCED CONCRETE",
-                "items": [
-                  { "description": "Column base and footing concrete", "unit": "m3", "lookups": [["pad", "concrete", "footing"], ["strip", "concrete", "footing"]] },
-                  { "description": "Slab (Oversite concrete)", "unit": "m3", "lookups": [["oversite", "concrete"]] },
-                  { "description": "Blinding to column base, footing and oversite", "unit": "m3", "lookups": [["pad", "blinding"], ["strip", "blinding"], ["oversite", "blinding"]], "lookupCombine": "sum" }
-                ]
-              },
-              {
-                "heading": "FORMWORK",
-                "items": [
-                  { "description": "Formwork to column base", "unit": "m2", "lookups": [["pad", "formwork"], ["strip", "formwork"]] },
-                  { "description": "Edges, risers and ends not exceeding 300mm high", "unit": "m", "lookups": [["pad", "formwork", "edges"], ["strip", "formwork", "edges"]] }
-                ]
-              },
-              {
-                "heading": "REINFORCEMENT",
-                "items": [
-                  { "description": "Reinforcement in column base (Pad foundation)", "unit": "t", "lookups": [["pad", "reinforcement"]], "qtyDivisor": 1000 }
-                ]
-              },
-              {
-                "heading": "OTHER REINFORCEMENT & DPM",
-                "items": [
-                  { "description": "BRC Wire Mesh", "unit": "m2", "lookups": [["oversite", "brc", "mesh"]] },
-                  { "description": "Damp Proof Membrane (DPM)", "unit": "m2", "lookups": [["oversite", "dpm"]] }
-                ]
-              },
-              {
-                "heading": "BLOCKWORK & DPC",
-                "items": [
-                  { "description": "Blockwork in foundation", "unit": "m2", "lookups": [["pad", "blockwork"], ["strip", "blockwork"]] },
-                  { "description": "Damp Proof Course (DPC)", "unit": "m", "lookups": [["pad", "dpc"], ["strip", "dpc"]] }
-                ]
-              }
-            ]
+            "variants": {
+              "pad": { "elements": [
+                {
+                  "heading": "D20: EXCAVATING AND FILLING",
+                  "preamble": "Bulk excavation in compacted earth, including disposal off site, earthwork support and keeping the works free of water.",
+                  "items": [
+                    { "description": "Bulk excavation; maximum depth 2.00m – 4m", "unit": "m3", "lookups": [["pad", "excavation"], ["strip", "excavation"]] },
+                    { "description": "Excavation to column bases; maximum depth not exceeding 2.00m", "unit": "m3", "lookups": [["pad", "excavation"]] },
+                    { "description": "Earthwork support; maximum depth not exceeding 2.00m", "unit": "m2", "lookups": [["pad", "earthwork"], ["strip", "earthwork"]] },
+                    { "description": "Allow for keeping excavation free of water — Ground water", "unit": "item", "fixedAmount": 850000 },
+                    { "description": "Allow for keeping excavation free of water — Surface water", "unit": "item", "fixedAmount": 350000 }
+                  ]
+                },
+                {
+                  "heading": "EARTH FILLING, ETC.",
+                  "preamble": "Earth filling and laterite filling to make up levels, deposited in 250mm maximum thickness layers and compacted.",
+                  "items": [
+                    { "description": "Laterite filling to make up levels", "unit": "m3", "lookups": [["pad", "laterite"], ["strip", "laterite"]] },
+                    { "description": "Hardcore filling from off site", "unit": "m3", "lookups": [["pad", "hardcore"], ["strip", "hardcore"]] }
+                  ]
+                },
+                {
+                  "heading": "COMPACTION & TREATMENT",
+                  "preamble": "Anti-termite treatment to under floors; compaction of bottom of excavations.",
+                  "items": [
+                    { "description": "Applying anti-termite solution", "unit": "m2", "lookups": [["pad", "surface", "treatment"], ["strip", "surface", "treatment"]] },
+                    { "description": "Compacting and levelling bottom of excavations", "unit": "m2", "lookups": [["pad", "leveling", "compacting"], ["strip", "leveling"]] }
+                  ]
+                },
+                {
+                  "heading": "REINFORCED CONCRETE — E10",
+                  "preamble": "25MPa / 19mm aggregate concrete in column bases, ground beams and oversite slab.",
+                  "items": [
+                    { "description": "Column base and footing concrete", "unit": "m3", "lookups": [["pad", "concrete", "footing"], ["strip", "concrete", "footing"]] },
+                    { "description": "Slab (Oversite concrete)", "unit": "m3", "lookups": [["oversite", "concrete"]] },
+                    { "description": "Blinding to column base, footing and oversite", "unit": "m3", "lookups": [["pad", "blinding"], ["strip", "blinding"], ["oversite", "blinding"]], "lookupCombine": "sum" }
+                  ]
+                },
+                {
+                  "heading": "FORMWORK — E20",
+                  "preamble": "Sawn plain formwork, basic finish.",
+                  "items": [
+                    { "description": "Formwork to column base", "unit": "m2", "lookups": [["pad", "formwork"], ["strip", "formwork"]] },
+                    { "description": "Edges, risers and ends not exceeding 300mm high", "unit": "m", "lookups": [["pad", "formwork", "edges"], ["strip", "formwork", "edges"]] }
+                  ]
+                },
+                {
+                  "heading": "REINFORCEMENT — E30",
+                  "preamble": "Reinforcement bars; B.S. 4449, hot rolled high yield steel.",
+                  "items": [
+                    { "description": "Reinforcement in column base (Pad foundation)", "unit": "t", "lookups": [["pad", "reinforcement"]], "qtyDivisor": 1000 }
+                  ]
+                },
+                {
+                  "heading": "OTHER REINFORCEMENT & DPM",
+                  "preamble": "BRC mesh and Visqueen DPM under floor slab.",
+                  "items": [
+                    { "description": "BRC Wire Mesh", "unit": "m2", "lookups": [["oversite", "brc", "mesh"]] },
+                    { "description": "Damp Proof Membrane (DPM)", "unit": "m2", "lookups": [["oversite", "dpm"]] }
+                  ]
+                },
+                {
+                  "heading": "BLOCKWORK & DPC",
+                  "preamble": "Sandcrete hollow blockwork bedded and jointed in cement / sand mortar (1:6); horizontal damp proof course over.",
+                  "items": [
+                    { "description": "Blockwork in foundation", "unit": "m2", "lookups": [["pad", "blockwork"], ["strip", "blockwork"]] },
+                    { "description": "Damp Proof Course (DPC)", "unit": "m", "lookups": [["pad", "dpc"], ["strip", "dpc"]] }
+                  ]
+                }
+              ]},
+
+              "raft": { "elements": [
+                {
+                  "heading": "EXCAVATION, FILLING, ETC. OTHER THAN BULK",
+                  "preamble": "Excavation for ground beams and raft slab, with carting away, earthwork support, and keeping the works free of water.",
+                  "items": [
+                    { "description": "Ground beams excavation", "unit": "m3", "lookups": [["raft", "excavation"], ["ground", "beam", "excavation"]] },
+                    { "description": "Extra over for carting away surplus material", "unit": "m3", "lookups": [["raft", "carting"], ["surplus", "material"]] },
+                    { "description": "Keeping excavations free of water", "unit": "item", "fixedAmount": 50000 },
+                    { "description": "Sides of trench and hole excavations exceeding 2m deep", "unit": "m2", "lookups": [["raft", "earthwork", "support"]] }
+                  ]
+                },
+                {
+                  "heading": "EARTH FILLING, ETC.",
+                  "preamble": "Filling to make up levels; depositing in layers 150mm maximum thickness and compacting.",
+                  "items": [
+                    { "description": "Filling to make up levels; 300mm; depositing in layers 150mm maximum thickness", "unit": "m3", "lookups": [["raft", "filling"], ["raft", "earth", "filling"]] }
+                  ]
+                },
+                {
+                  "heading": "UNREINFORCED CONCRETE",
+                  "preamble": "10MPa / 19mm blinding concrete to ground beams and slab; thickness not exceeding 50mm.",
+                  "items": [
+                    { "description": "Ground beams blinding; thickness not exceeding 50mm", "unit": "m3", "lookups": [["ground", "beam", "blinding"]] },
+                    { "description": "Ground floor slab blinding; thickness not exceeding 50mm", "unit": "m3", "lookups": [["raft", "blinding"], ["oversite", "blinding"]] }
+                  ]
+                },
+                {
+                  "heading": "REINFORCED CONCRETE",
+                  "preamble": "25MPa / 19mm aggregate concrete to ground beams and ground floor slab, fully cured.",
+                  "items": [
+                    { "description": "Ground beams", "unit": "m3", "lookups": [["ground", "beam", "concrete"], ["raft", "concrete"]] },
+                    { "description": "Ground floor slab", "unit": "m3", "lookups": [["raft", "slab", "concrete"], ["oversite", "concrete"]] }
+                  ]
+                },
+                {
+                  "heading": "FORMWORK",
+                  "preamble": "Sawn formwork to sides of ground beam and edges of slabs.",
+                  "items": [
+                    { "description": "Sides of ground beam: plain vertical; height not exceeding 1.00m", "unit": "m2", "lookups": [["ground", "beam", "formwork"]] },
+                    { "description": "Edges of beds and steps: height not exceeding 250mm", "unit": "m", "lookups": [["raft", "formwork", "edges"]] }
+                  ]
+                },
+                {
+                  "heading": "REINFORCEMENT",
+                  "preamble": "Reinforcement bars; B.S. 4449, hot rolled deformed high yield steel.",
+                  "items": [
+                    { "description": "10-12mm diameter in ground floor slab", "unit": "t", "lookups": [["raft", "slab", "reinforcement"]], "qtyDivisor": 1000 },
+                    { "description": "10-16mm diameter in ground beams and starters", "unit": "t", "lookups": [["ground", "beam", "reinforcement"]], "qtyDivisor": 1000 }
+                  ]
+                },
+                {
+                  "heading": "DAMP-PROOFING",
+                  "preamble": "Tanking / DPM to concrete base.",
+                  "items": [
+                    { "description": "Damp proofing; to concrete base; width exceeding 300; flat", "unit": "m2", "lookups": [["raft", "dpm"]] },
+                    { "description": "Additional works to substructure", "unit": "Sum", "fixedAmount": 500000 }
+                  ]
+                }
+              ]},
+
+              "pile": { "elements": [
+                {
+                  "heading": "EXCAVATION, FILLING, ETC.",
+                  "preamble": "Excavation in compacted earth for pile cap, ground beams and oversite slab, including carting away and earthwork support.",
+                  "items": [
+                    { "description": "Foundation Excavation", "unit": "m3", "lookups": [["pile", "excavation"], ["foundation", "excavation"]] },
+                    { "description": "Pile Cap Excavation", "unit": "m3", "lookups": [["pile", "cap", "excavation"]] },
+                    { "description": "Surplus material from excavations and/or stock piles on site", "unit": "m3", "lookups": [["pile", "surplus"], ["carting", "away"]] },
+                    { "description": "Sides of trench and hole excavations exceeding 2m deep", "unit": "m2", "lookups": [["pile", "earthwork", "support"]] },
+                    { "description": "Keeping excavations free of water", "unit": "Item", "fixedAmount": 850000 }
+                  ]
+                },
+                {
+                  "heading": "EARTH FILLING, ETC.",
+                  "preamble": "Backfilling, hardcore and laterite filling under surface beds.",
+                  "items": [
+                    { "description": "Backfilling to trenches, holes, etc", "unit": "m3", "lookups": [["pile", "backfilling"]] },
+                    { "description": "Hardcore filling under surface beds", "unit": "m3", "lookups": [["pile", "hardcore"]] },
+                    { "description": "Sand / laterite filling under surface beds", "unit": "m3", "lookups": [["pile", "laterite"]] }
+                  ]
+                },
+                {
+                  "heading": "TREATMENT & COMPACTION",
+                  "preamble": "Anti-termite treatment and compaction of ground surface under floors.",
+                  "items": [
+                    { "description": "Compaction of ground surface under floors", "unit": "m2", "lookups": [["pile", "leveling", "compacting"]] },
+                    { "description": "Apply anti-termite treatment to under floors", "unit": "m2", "lookups": [["pile", "surface", "treatment"]] }
+                  ]
+                },
+                {
+                  "heading": "UNREINFORCED CONCRETE",
+                  "preamble": "10MPa / 19mm blinding concrete cast against earth.",
+                  "items": [
+                    { "description": "Surface blinding against earth", "unit": "m3", "lookups": [["pile", "blinding"], ["oversite", "blinding"]] }
+                  ]
+                },
+                {
+                  "heading": "REINFORCED CONCRETE",
+                  "preamble": "25MPa / 19mm aggregate concrete in pile caps, ground beams, column starters and ground slab.",
+                  "items": [
+                    { "description": "Pile Cap concrete", "unit": "m3", "lookups": [["pile", "cap", "concrete"]] },
+                    { "description": "Ground Beam concrete", "unit": "m3", "lookups": [["ground", "beam", "concrete"], ["pile", "beam", "concrete"]] },
+                    { "description": "Column Starter concrete", "unit": "m3", "lookups": [["column", "starter", "concrete"]] },
+                    { "description": "Surface slabs and ramp cast in panels on waterproofing", "unit": "m3", "lookups": [["oversite", "concrete"], ["pile", "slab", "concrete"]] }
+                  ]
+                },
+                {
+                  "heading": "FORMWORK",
+                  "preamble": "Sawn plain formwork, basic finish, struck after 7 days.",
+                  "items": [
+                    { "description": "Pile Cap formwork", "unit": "m2", "lookups": [["pile", "cap", "formwork"]] },
+                    { "description": "Ground Beam formwork", "unit": "m2", "lookups": [["ground", "beam", "formwork"], ["pile", "beam", "formwork"]] },
+                    { "description": "Column Starter formwork", "unit": "m2", "lookups": [["column", "starter", "formwork"]] },
+                    { "description": "Edges, risers and ends not exceeding 300mm high or wide", "unit": "m", "lookups": [["pile", "formwork", "edges"], ["oversite", "formwork", "edges"]] }
+                  ]
+                },
+                {
+                  "heading": "REINFORCEMENT",
+                  "preamble": "Reinforcement bars; B.S. 4449, hot rolled deformed high yield steel.",
+                  "items": [
+                    { "description": "10-25mm diameter bars in pile cap", "unit": "t", "lookups": [["pile", "cap", "reinforcement"]], "qtyDivisor": 1000 },
+                    { "description": "10-25mm diameter bars in ground beam", "unit": "t", "lookups": [["ground", "beam", "reinforcement"]], "qtyDivisor": 1000 },
+                    { "description": "10-16mm diameter bars in slab", "unit": "t", "lookups": [["slab", "reinforcement"], ["oversite", "reinforcement"]], "qtyDivisor": 1000 },
+                    { "description": "10-20mm diameter bars in column starter", "unit": "t", "lookups": [["column", "starter", "reinforcement"]], "qtyDivisor": 1000 }
+                  ]
+                },
+                {
+                  "heading": "REINFORCEMENT (SECONDARY)",
+                  "preamble": "BRC fabric reinforcement laid horizontally including sealing edges to concrete.",
+                  "items": [
+                    { "description": "Plain areas, horizontal; laid loose including sealing edges to concrete", "unit": "m2", "lookups": [["rebar", "mesh"], ["brc", "mesh"]] },
+                    { "description": "Allow for additional work in foundation", "unit": "Sum", "fixedAmount": 2500000 }
+                  ]
+                }
+              ]}
+            }
           },
+
           {
             "name": "Frame",
+            "splitByLevel": true,
             "elements": [
               {
-                "heading": "REINFORCED CONCRETE — E10",
+                "heading": "E10: MIXING/CASTING/CURING IN-SITU CONCRETE",
+                "preamble": "25MPa / 19mm aggregate reinforced in-situ concrete to columns, beams and suspended slabs, fully cured.",
                 "items": [
                   { "description": "Columns", "unit": "m3", "lookups": [["column", "concrete"]] },
                   { "description": "Beams", "unit": "m3", "lookups": [["beam", "concrete"]] },
@@ -251,28 +385,32 @@
                 ]
               },
               {
-                "heading": "FORMWORK — E20",
+                "heading": "E20: FORMWORK FOR IN-SITU CONCRETE",
+                "preamble": "Formwork and fair face finish to columns, beams and slab soffits.",
                 "items": [
-                  { "description": "Column formwork", "unit": "m2", "lookups": [["column", "formwork"]] },
-                  { "description": "Beam formwork", "unit": "m2", "lookups": [["beam", "formwork"]] },
+                  { "description": "Column formwork — regular shaped; rectangular", "unit": "m2", "lookups": [["column", "formwork"]] },
+                  { "description": "Beam formwork — regular shaped; rectangular", "unit": "m2", "lookups": [["beam", "formwork"]] },
                   { "description": "Slab soffit formwork", "unit": "m2", "lookups": [["slab", "formwork"]] }
                 ]
               },
               {
-                "heading": "REINFORCEMENT — E30",
+                "heading": "E30: REINFORCEMENT FOR IN-SITU CONCRETE",
+                "preamble": "Reinforcement bars; B.S. 4449, hot rolled deformed high yield steel.",
                 "items": [
-                  { "description": "10-25mm Diameter bars in columns", "unit": "t", "lookups": [["column", "reinforcement"]], "qtyDivisor": 1000 },
-                  { "description": "10-25mm Diameter bars in beams", "unit": "t", "lookups": [["beam", "reinforcement"]], "qtyDivisor": 1000 },
-                  { "description": "10-16mm Diameter bars in slabs", "unit": "t", "lookups": [["slab", "reinforcement"]], "qtyDivisor": 1000 }
+                  { "description": "10-25mm diameter bars in columns", "unit": "t", "lookups": [["column", "reinforcement"]], "qtyDivisor": 1000 },
+                  { "description": "10-25mm diameter bars in beams", "unit": "t", "lookups": [["beam", "reinforcement"]], "qtyDivisor": 1000 },
+                  { "description": "10-16mm diameter bars in slabs", "unit": "t", "lookups": [["slab", "reinforcement"]], "qtyDivisor": 1000 }
                 ]
               }
             ]
           },
+
           {
             "name": "Staircase",
             "elements": [
               {
                 "heading": "IN-SITU CONCRETE — E10",
+                "preamble": "25MPa / 19mm aggregate concrete to staircase including formwork and reinforcement.",
                 "items": [
                   { "description": "Staircase concrete", "unit": "m3", "lookups": [["staircase", "concrete"], ["stair", "concrete"]] },
                   { "description": "Staircase formwork", "unit": "m2", "lookups": [["staircase", "formwork"], ["stair", "formwork"]] },
@@ -281,15 +419,18 @@
               }
             ]
           },
+
           {
             "name": "Superstructure",
             "ref": "quiv.bungalow.Superstructure"
           },
+
           {
             "name": "Landscaping",
             "elements": [
               {
                 "heading": "EXTERNAL WORKS / LANDSCAPING",
+                "preamble": "External works and landscaping items as scheduled in the takeoff.",
                 "items": [
                   { "description": "Landscaping items (allow)", "unit": "Item", "lookups": [["landscaping"]] }
                 ]
@@ -302,14 +443,15 @@
 
     "mep": {
       "bungalow": {
-        "title": "Bill of Quantities — MEP (Bungalow)",
+        "title": "Bills of Quantities — MEP (Bungalow)",
         "bills": [
-          { "name": "Preliminaries", "ref": "quiv.bungalow.Preliminaries" },
+          { "name": "Preliminaries", "kind": "preliminaries" },
           {
             "name": "HVAC",
             "elements": [
               {
                 "heading": "DUCTWORK & EQUIPMENT",
+                "preamble": "Supply and installation of HVAC ductwork, air handling equipment, terminal units and fans.",
                 "items": [
                   { "description": "Ductwork — supply and installation", "unit": "m", "lookups": [["duct"]] },
                   { "description": "Air handling units (AHU / FCU / VRF)", "unit": "No", "lookups": [["ahu"], ["fcu"], ["vrf"], ["air", "handling"]] },
@@ -324,6 +466,7 @@
             "elements": [
               {
                 "heading": "PIPING & FITTINGS",
+                "preamble": "Supply and installation of water supply pipes, drainage pipes and fittings.",
                 "items": [
                   { "description": "Water supply pipes and fittings", "unit": "m", "lookups": [["pipe"], ["fitting"]] },
                   { "description": "Valves and isolators", "unit": "No", "lookups": [["valve"]] },
@@ -332,6 +475,7 @@
               },
               {
                 "heading": "FIXTURES",
+                "preamble": "Sanitary fixtures, tanks and pumps complete with all accessories.",
                 "items": [
                   { "description": "Sanitary fixtures (WCs, basins, showers)", "unit": "No", "lookups": [["wc"], ["water", "closet"], ["toilet"], ["basin"], ["lavatory"], ["shower"]] },
                   { "description": "Tanks, pumps and accessories", "unit": "No", "lookups": [["tank"], ["pump"], ["cistern"]] }
@@ -344,6 +488,7 @@
             "elements": [
               {
                 "heading": "CABLING & CONTAINMENT",
+                "preamble": "Cables, wires, conduits and cable tray to specification.",
                 "items": [
                   { "description": "Cables, wires and conductors", "unit": "m", "lookups": [["cable"], ["wire"]] },
                   { "description": "Conduit and cable tray", "unit": "m", "lookups": [["conduit"], ["tray"], ["raceway"]] }
@@ -351,6 +496,7 @@
               },
               {
                 "heading": "DEVICES & EQUIPMENT",
+                "preamble": "Lighting fixtures, accessories and distribution equipment.",
                 "items": [
                   { "description": "Lighting fixtures and luminaires", "unit": "No", "lookups": [["light"], ["luminaire"], ["lamp"]] },
                   { "description": "Switches, sockets and outlets", "unit": "No", "lookups": [["switch"], ["socket"], ["outlet"], ["receptacle"]] },
@@ -362,7 +508,7 @@
         ]
       },
       "multistorey": {
-        "title": "Bill of Quantities — MEP (Multi-Storey)",
+        "title": "Bills of Quantities — MEP (Multi-Storey)",
         "ref": "mep.bungalow"
       }
     }

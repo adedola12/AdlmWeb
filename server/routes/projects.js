@@ -6,6 +6,10 @@ import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { User } from "../models/User.js";
 import { deriveItemCategory } from "../util/boqCategory.js";
+import {
+  applyLearnedCategoriesToItems,
+  recordCategoryFeedback,
+} from "../util/learnedCategory.js";
 
 const router = express.Router();
 
@@ -748,10 +752,62 @@ async function updateProject(req, res) {
     if (name !== undefined) project.name = String(name).trim();
 
     if (Array.isArray(items)) {
+      // Self-learning category model — augment items missing an explicit
+      // category with the user's learned mapping before sanitizing. This
+      // only affects items the client didn't supply a category for.
+      const itemsWithoutExplicit = new Set();
+      items.forEach((it, i) => {
+        if (!String(it?.category || "").trim()) itemsWithoutExplicit.add(i);
+      });
+      const learned = await applyLearnedCategoriesToItems({
+        userId,
+        productKey,
+        items,
+        itemsWithoutExplicitCategory: itemsWithoutExplicit,
+      });
+      const itemsWithLearned = items.map((it, i) =>
+        learned.has(i) ? { ...it, category: learned.get(i) } : it,
+      );
+
+      const sanitizedNext = sanitizeItems(itemsWithLearned, productKey);
+
+      // Detect explicit user category overrides (changed from previous DB state).
+      // Record them as feedback so future items get the same category by default.
+      const previousByKey = new Map();
+      (project.items || []).forEach((it, idx) => {
+        previousByKey.set(itemIdentity(it, idx), String(it?.category || ""));
+      });
+      const feedbackPromises = [];
+      sanitizedNext.forEach((it, idx) => {
+        const key = itemIdentity(it, idx);
+        const prev = previousByKey.get(key);
+        const next = String(it?.category || "");
+        if (
+          prev !== undefined &&
+          prev !== next &&
+          next &&
+          next !== "Uncategorized" &&
+          !learned.has(idx) // don't double-count auto-applied learning
+        ) {
+          feedbackPromises.push(
+            recordCategoryFeedback({
+              userId,
+              productKey,
+              item: it,
+              category: next,
+            }),
+          );
+        }
+      });
+      if (feedbackPromises.length) {
+        // Fire-and-forget: don't slow down the save on learning writes.
+        Promise.allSettled(feedbackPromises);
+      }
+
       const tracked = applyValuationTracking({
         productKey,
         previousItems: Array.isArray(project.items) ? project.items : [],
-        nextItems: sanitizeItems(items, productKey),
+        nextItems: sanitizedNext,
         previousEvents: Array.isArray(project.valuationEvents)
           ? project.valuationEvents
           : [],
