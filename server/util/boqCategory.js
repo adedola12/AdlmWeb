@@ -51,6 +51,10 @@ export function categoriesForProductKey(productKey) {
   return isMepProductKey(productKey) ? MEP_CATEGORIES : QUIV_CATEGORIES;
 }
 
+export function allCategoriesForProductKey(productKey) {
+  return [...categoriesForProductKey(productKey), UNCATEGORIZED];
+}
+
 export function rulesForProductKey(productKey) {
   return isMepProductKey(productKey) ? MEP_RULES : QUIV_RULES;
 }
