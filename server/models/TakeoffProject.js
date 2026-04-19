@@ -94,6 +94,7 @@ const ItemSchema = new mongoose.Schema(
     level: { type: String, default: "" },
     type: { type: String, default: "" },
     code: { type: String, default: "" },
+    category: { type: String, default: "" },
   },
   { _id: false },
 );

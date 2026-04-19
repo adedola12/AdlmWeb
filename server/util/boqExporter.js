@@ -4,6 +4,11 @@ import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  allCategoriesForProductKey,
+  deriveItemCategory,
+  UNCATEGORIZED,
+} from "./boqCategory.js";
 
 /* =========================
    Paths
@@ -999,6 +1004,7 @@ export async function exportBoqFromTemplate({
   templatePath,
   projectName = "Project",
   items = [],
+  productKey = "",
   options = {},
 }) {
   const workbook = new ExcelJS.Workbook();
@@ -1268,6 +1274,9 @@ export async function exportBoqFromTemplate({
   }
   idxWs.getRow(1).font = { bold: true };
 
+  // Grouped per-category sheets + Summary sheet (mirror of the in-app BoQ table grouping).
+  appendGroupedCategorySheets(workbook, items, productKey);
+
   const buf = await workbook.xlsx.writeBuffer();
 
   const safeName = String(projectName || "Project")
@@ -1280,4 +1289,123 @@ export async function exportBoqFromTemplate({
     buffer: Buffer.isBuffer(buf) ? buf : Buffer.from(buf),
     filename: `${safeName} - Elemental BOQ.xlsx`,
   };
+}
+
+/* =========================
+   Grouped category sheets
+   ========================= */
+function sanitizeSheetName(name, used) {
+  const base =
+    String(name || "Sheet")
+      .trim()
+      .replace(/[\[\]:*?\/\\]/g, "-")
+      .slice(0, 31) || "Sheet";
+  if (!used.has(base)) {
+    used.add(base);
+    return base;
+  }
+  // Disambiguate (rare) — append " (n)" but keep <=31 chars
+  for (let i = 2; i < 100; i++) {
+    const suffix = ` (${i})`;
+    const truncated = base.slice(0, 31 - suffix.length) + suffix;
+    if (!used.has(truncated)) {
+      used.add(truncated);
+      return truncated;
+    }
+  }
+  used.add(base);
+  return base;
+}
+
+function appendGroupedCategorySheets(workbook, items, productKey) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return;
+
+  // Group items by category — derive on the fly for any item missing the field.
+  const byCategory = new Map();
+  for (const it of list) {
+    const cat =
+      String(it?.category || "").trim() ||
+      deriveItemCategory(it, productKey) ||
+      UNCATEGORIZED;
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat).push(it);
+  }
+
+  const canonical = allCategoriesForProductKey(productKey);
+  const orderedCats = [
+    ...canonical.filter((c) => byCategory.has(c)),
+    ...[...byCategory.keys()].filter((c) => !canonical.includes(c)),
+  ];
+
+  const used = new Set(workbook.worksheets.map((w) => w.name));
+
+  const summaryRows = [];
+  let grandTotal = 0;
+
+  for (const cat of orderedCats) {
+    const rows = byCategory.get(cat) || [];
+    if (!rows.length) continue;
+
+    const ws = workbook.addWorksheet(sanitizeSheetName(cat, used));
+    ws.columns = [
+      { header: "S/N", key: "sn", width: 6 },
+      { header: "Description", key: "description", width: 60 },
+      { header: "Qty", key: "qty", width: 12 },
+      { header: "Unit", key: "unit", width: 10 },
+      { header: "Rate", key: "rate", width: 14 },
+      { header: "Amount", key: "amount", width: 16 },
+    ];
+    ws.getRow(1).font = { bold: true };
+
+    let subtotal = 0;
+    rows.forEach((it, i) => {
+      const qty = safeNum(it?.qty);
+      const rate = safeNum(it?.rate);
+      const amount = qty * rate;
+      subtotal += amount;
+      ws.addRow({
+        sn: i + 1,
+        description: String(it?.description || it?.takeoffLine || "").trim(),
+        qty: round2(qty),
+        unit: String(it?.unit || ""),
+        rate: round2(rate),
+        amount: round2(amount),
+      });
+    });
+
+    const totalRow = ws.addRow({
+      sn: "",
+      description: "",
+      qty: "",
+      unit: "",
+      rate: "SUBTOTAL",
+      amount: round2(subtotal),
+    });
+    totalRow.font = { bold: true };
+
+    summaryRows.push({ category: cat, count: rows.length, amount: subtotal });
+    grandTotal += subtotal;
+  }
+
+  const summaryWs = workbook.addWorksheet(sanitizeSheetName("Summary", used));
+  summaryWs.columns = [
+    { header: "Category", key: "category", width: 24 },
+    { header: "Items", key: "count", width: 10 },
+    { header: "Amount", key: "amount", width: 18 },
+  ];
+  summaryWs.getRow(1).font = { bold: true };
+  for (const r of summaryRows) {
+    summaryWs.addRow({
+      category: r.category,
+      count: r.count,
+      amount: round2(r.amount),
+    });
+  }
+  const totalRow = summaryWs.addRow({
+    category: "TOTAL",
+    count: summaryRows.reduce((acc, r) => acc + r.count, 0),
+    amount: round2(grandTotal),
+  });
+  totalRow.font = { bold: true };
 }

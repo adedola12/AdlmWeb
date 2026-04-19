@@ -5,6 +5,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { User } from "../models/User.js";
+import { deriveItemCategory } from "../util/boqCategory.js";
 
 const router = express.Router();
 
@@ -259,7 +260,7 @@ function normalizeChecklistKeys(keys) {
   ];
 }
 
-function sanitizeItems(items) {
+function sanitizeItems(items, productKey = "") {
   if (!Array.isArray(items)) return [];
 
   const safe = [];
@@ -287,7 +288,7 @@ function sanitizeItems(items) {
       parsedActualUpdatedAt = null;
     }
 
-    safe.push({
+    const baseItem = {
       sn: Number.isFinite(Number(item.sn)) ? Number(item.sn) : i + 1,
       qty: Number.isFinite(Number(item.qty)) ? Number(item.qty) : 0,
       unit: item.unit != null ? String(item.unit) : "",
@@ -308,7 +309,16 @@ function sanitizeItems(items) {
       level: item.level != null ? String(item.level) : "",
       type: item.type != null ? String(item.type) : "",
       code: item.code != null ? String(item.code) : "",
-    });
+      category: item.category != null ? String(item.category) : "",
+    };
+
+    // Auto-derive category if not explicitly set by the caller, so legacy items
+    // (and Revit/Plugin uploads that don't know the category) get grouped on save.
+    if (!baseItem.category) {
+      baseItem.category = deriveItemCategory(baseItem, productKey);
+    }
+
+    safe.push(baseItem);
   }
 
   return safe;
@@ -517,7 +527,7 @@ async function createProject(req, res) {
     const tracked = applyValuationTracking({
       productKey,
       previousItems: [],
-      nextItems: sanitizeItems(items),
+      nextItems: sanitizeItems(items, productKey),
       previousEvents: [],
     });
 
@@ -680,6 +690,21 @@ async function getProject(req, res) {
       await project.save();
     }
 
+    // Lazy backfill of category for legacy items so the BoQ section can group on first open.
+    let categoryDirty = false;
+    if (Array.isArray(project.items)) {
+      project.items.forEach((it) => {
+        if (!it?.category) {
+          const next = deriveItemCategory(it, productKey);
+          if (next) {
+            it.category = next;
+            categoryDirty = true;
+          }
+        }
+      });
+      if (categoryDirty) await project.save();
+    }
+
     res.json(project);
   } catch (err) {
     console.error("GET project error:", err);
@@ -726,7 +751,7 @@ async function updateProject(req, res) {
       const tracked = applyValuationTracking({
         productKey,
         previousItems: Array.isArray(project.items) ? project.items : [],
-        nextItems: sanitizeItems(items),
+        nextItems: sanitizeItems(items, productKey),
         previousEvents: Array.isArray(project.valuationEvents)
           ? project.valuationEvents
           : [],

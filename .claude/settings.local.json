@@ -31,7 +31,8 @@
       "Bash(find features/ -name \"*.jsx\" -exec sed -i -e 's/#2563eb/#005be3/g' -e 's/#1d4ed8/#005be3/g' -e 's/#3b82f6/#239cff/g' {} +)",
       "Bash(node -e \"import\\(''''./server/routes/projects.js''''\\).then\\(\\(\\) => console.log\\(''''OK''''\\)\\).catch\\(e => console.error\\(e.message\\)\\)\")",
       "Bash(npm install:*)",
-      "Bash(grep -r \"admin.rategen\\\\|/admin/rategen\\\\|/rategen\" /c/Users/ADLM/source/repos/ADLMWebsite/server/*.js)"
+      "Bash(grep -r \"admin.rategen\\\\|/admin/rategen\\\\|/rategen\" /c/Users/ADLM/source/repos/ADLMWebsite/server/*.js)",
+      "Bash(xargs grep *)"
     ]
   }
 }

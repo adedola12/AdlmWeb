@@ -188,6 +188,7 @@ router.get(
       templatePath,
       projectName: project.name || "Project",
       items: project.items,
+      productKey: tool,
       options: { matchThreshold: Number(req.query.threshold || 0.12) },
     });
 

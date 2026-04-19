@@ -15,6 +15,11 @@ import {
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
+import {
+  allCategoriesForProductKey,
+  deriveItemCategory,
+  UNCATEGORIZED,
+} from "../lib/boqCategory.js";
 
 const DASHBOARD_PATH = "/dashboard";
 
@@ -168,6 +173,16 @@ function sanitizeFilename(name) {
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, " ")
     .slice(0, 120);
+}
+
+// Excel sheet names: <=31 chars, no [ ] : * ? / \
+function sanitizeSheetName(name) {
+  return (
+    String(name || "Sheet")
+      .trim()
+      .replace(/[[\]:*?/\\]/g, "-")
+      .slice(0, 31) || "Sheet"
+  );
 }
 
 /* -------------------- BOQ TEMPLATE (Elemental) -------------------- */
@@ -367,6 +382,16 @@ function statusMapsEqual(a, b) {
   const keys = new Set([...Object.keys(A), ...Object.keys(B)]);
   for (const k of keys) {
     if (Boolean(A[k]) !== Boolean(B[k])) return false;
+  }
+  return true;
+}
+
+function categoryMapsEqual(a, b) {
+  const A = a || {};
+  const B = b || {};
+  const keys = new Set([...Object.keys(A), ...Object.keys(B)]);
+  for (const k of keys) {
+    if (String(A[k] || "") !== String(B[k] || "")) return false;
   }
   return true;
 }
@@ -857,6 +882,8 @@ export default function ProjectsGeneric() {
   const [baseActualRateMap, setBaseActualRateMap] = React.useState({});
   const [statusMap, setStatusMap] = React.useState({});
   const [baseStatusMap, setBaseStatusMap] = React.useState({});
+  const [categoryMap, setCategoryMap] = React.useState({});
+  const [baseCategoryMap, setBaseCategoryMap] = React.useState({});
   const [valuationSettings, setValuationSettings] = React.useState(
     DEFAULT_VALUATION_SETTINGS,
   );
@@ -977,6 +1004,8 @@ export default function ProjectsGeneric() {
     const uiActualRate = {};
     const baseStatuses = {};
     const uiStatuses = {};
+    const baseCategories = {};
+    const uiCategories = {};
     for (let i = 0; i < its.length; i++) {
       const k = itemKey(its[i], i);
       const r = safeNum(its[i]?.rate);
@@ -990,6 +1019,11 @@ export default function ProjectsGeneric() {
       uiActualRate[k] = actualInputValue(actualRate);
       baseStatuses[k] = Boolean(its[i]?.[statusField]);
       uiStatuses[k] = Boolean(its[i]?.[statusField]);
+      const cat =
+        String(its[i]?.category || "").trim() ||
+        deriveItemCategory(its[i], toolNorm);
+      baseCategories[k] = cat;
+      uiCategories[k] = cat;
     }
     setBaseRates(base);
     setBaseActualQtyMap(baseActualQty);
@@ -998,6 +1032,8 @@ export default function ProjectsGeneric() {
     setActualRateMap(uiActualRate);
     setBaseStatusMap(baseStatuses);
     setStatusMap(uiStatuses);
+    setBaseCategoryMap(baseCategories);
+    setCategoryMap(uiCategories);
     const normalizedSettings = normalizeValuationSettings(
       project?.valuationSettings,
     );
@@ -1073,6 +1109,8 @@ export default function ProjectsGeneric() {
     setBaseActualRateMap({});
     setStatusMap({});
     setBaseStatusMap({});
+    setCategoryMap({});
+    setBaseCategoryMap({});
     setValuationSettings(DEFAULT_VALUATION_SETTINGS);
     setBaseValuationSettings(DEFAULT_VALUATION_SETTINGS);
     setLinkedGroups({});
@@ -1405,6 +1443,17 @@ export default function ProjectsGeneric() {
     const key = itemKey(it, rowIndex);
     setActualRateMap((prev) => ({ ...(prev || {}), [key]: value }));
   }
+  function handleCategoryChange(rowIndex, category) {
+    if (!sel) return;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const it = its[rowIndex];
+    if (!it) return;
+    const key = itemKey(it, rowIndex);
+    setCategoryMap((prev) => ({
+      ...(prev || {}),
+      [key]: String(category || ""),
+    }));
+  }
   function handleStatusToggle(rowIndex, checked) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
@@ -1443,6 +1492,7 @@ export default function ProjectsGeneric() {
     !optionalNumberMapsEqual(actualQtyMap, baseActualQtyMap) ||
     !optionalNumberMapsEqual(actualRateMap, baseActualRateMap) ||
     !statusMapsEqual(statusMap, baseStatusMap) ||
+    !categoryMapsEqual(categoryMap, baseCategoryMap) ||
     !valuationSettingsEqual(valuationSettings, baseValuationSettings);
 
   async function saveRatesToCloud() {
@@ -1467,12 +1517,16 @@ export default function ProjectsGeneric() {
           String(actualRateMap?.[k] ?? "").trim() === ""
             ? parseOptionalNumber(it?.actualRate)
             : parseOptionalNumber(actualRateMap?.[k]);
+        const nextCategory =
+          String(categoryMap?.[k] ?? "").trim() ||
+          String(it?.category || "").trim();
         return {
           ...it,
           rate: use,
           actualQty: nextActualQty,
           actualRate: nextActualRate,
           [statusField]: statusValue,
+          category: nextCategory,
         };
       });
       const payload = {
@@ -2128,6 +2182,10 @@ export default function ProjectsGeneric() {
       : null;
     const isMarked = Boolean(statusMap?.[k]);
     const gid = groupIdForIndex(i);
+    const category =
+      String(categoryMap?.[k] ?? "").trim() ||
+      String(it?.category || "").trim() ||
+      deriveItemCategory(it, toolNorm);
     return {
       i,
       key: k,
@@ -2138,6 +2196,7 @@ export default function ProjectsGeneric() {
       groupId: gid,
       groupLabel: groupLabel(gid),
       groupCount: groupCount(gid),
+      category,
       rate,
       fullAmount,
       actualQty,
@@ -2253,11 +2312,19 @@ export default function ProjectsGeneric() {
           String(row.groupLabel || "")
             .toLowerCase()
             .includes(q) ||
+          String(row.category || "")
+            .toLowerCase()
+            .includes(q) ||
           String(row.sn || "")
             .toLowerCase()
             .includes(q)
         );
       });
+
+  const categoryOptions = React.useMemo(
+    () => allCategoriesForProductKey(toolNorm),
+    [toolNorm],
+  );
 
   const selectedValuation = React.useMemo(
     () =>
@@ -2271,22 +2338,7 @@ export default function ProjectsGeneric() {
     if (!sel) return;
 
     const headers = ["S/N", "Description", "Qty", "Unit", "Rate", "Amount"];
-
-    const rowsAoa = computedAll.map((row) => [
-      row.sn,
-      row.description,
-      Number(row.qty.toFixed(2)),
-      row.unit,
-      Number(row.rate.toFixed(2)),
-      Number(row.fullAmount.toFixed(2)),
-    ]);
-
-    rowsAoa.push(["", "", "", "", "TOTAL", Number(grossAmount.toFixed(2))]);
-
-    const aoa = [headers, ...rowsAoa];
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-    ws["!cols"] = [
+    const cols = [
       { wch: 6 },
       { wch: 60 },
       { wch: 12 },
@@ -2295,8 +2347,64 @@ export default function ProjectsGeneric() {
       { wch: 16 },
     ];
 
+    // Group rows by category. Preserve canonical category order, then any
+    // extra category names that appear on items but aren't in the canonical
+    // list (defensive — should be rare since the server backfills).
+    const byCategory = new Map();
+    for (const row of computedAll) {
+      const cat = String(row.category || UNCATEGORIZED).trim() || UNCATEGORIZED;
+      if (!byCategory.has(cat)) byCategory.set(cat, []);
+      byCategory.get(cat).push(row);
+    }
+    const orderedCats = [
+      ...categoryOptions.filter((c) => byCategory.has(c)),
+      ...[...byCategory.keys()].filter((c) => !categoryOptions.includes(c)),
+    ];
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "BoQ");
+
+    // One sheet per category that has items.
+    for (const cat of orderedCats) {
+      const rows = byCategory.get(cat) || [];
+      if (!rows.length) continue;
+
+      const subtotal = rows.reduce(
+        (acc, r) => acc + safeNum(r.fullAmount),
+        0,
+      );
+      const aoa = [
+        headers,
+        ...rows.map((row, i) => [
+          i + 1,
+          row.description,
+          Number(row.qty.toFixed(2)),
+          row.unit,
+          Number(row.rate.toFixed(2)),
+          Number(row.fullAmount.toFixed(2)),
+        ]),
+        ["", "", "", "", "SUBTOTAL", Number(subtotal.toFixed(2))],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = cols;
+      XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(cat));
+    }
+
+    // Summary sheet — per-category totals + grand total.
+    const summaryAoa = [
+      ["Category", "Items", "Amount"],
+      ...orderedCats.map((cat) => {
+        const rows = byCategory.get(cat) || [];
+        const subtotal = rows.reduce(
+          (acc, r) => acc + safeNum(r.fullAmount),
+          0,
+        );
+        return [cat, rows.length, Number(subtotal.toFixed(2))];
+      }),
+      ["TOTAL", computedAll.length, Number(grossAmount.toFixed(2))],
+    ];
+    const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
+    summaryWs["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
 
     const filename = `${sanitizeFilename(sel?.name || "Project")} - BoQ.xlsx`;
     XLSX.writeFile(wb, filename);
@@ -2704,6 +2812,8 @@ export default function ProjectsGeneric() {
                 onActualQtyChange={handleActualQtyChange}
                 onActualRateChange={handleActualRateChange}
                 onStatusToggle={handleStatusToggle}
+                onCategoryChange={handleCategoryChange}
+                categoryOptions={categoryOptions}
                 onToggleGroupLink={toggleGroupLink}
                 isGroupLinked={isGroupLinked}
                 getCandidatesForItem={getCandidatesForItem}

@@ -158,6 +158,8 @@ export default function ProjectOpenView({
   onSave,
   onSelectValuationDate,
   onStatusToggle,
+  onCategoryChange,
+  categoryOptions = [],
   onSyncPrices,
   onToggleAutoFill,
   onToggleAutoFillBoq,
@@ -430,6 +432,8 @@ export default function ProjectOpenView({
           onRateChange={onRateChange}
           onSearchRateGen={onSearchRateGen}
           onStatusToggle={onStatusToggle}
+          onCategoryChange={onCategoryChange}
+          categoryOptions={categoryOptions}
           onSyncPrices={onSyncPrices}
           onSyncBoqRates={onSyncBoqRates}
           onToggleAutoFill={onToggleAutoFill}

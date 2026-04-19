@@ -494,6 +494,8 @@ export default function ProjectBillTable({
   onRateChange,
   onSearchRateGen,
   onStatusToggle,
+  onCategoryChange,
+  categoryOptions = [],
   onSyncBoqRates,
   onSyncPrices,
   onToggleAutoFill,
@@ -571,6 +573,42 @@ export default function ProjectBillTable({
     });
     return sorted;
   }, [computedShown, sortCol, sortAsc]);
+
+  // Group rows by category, preserving canonical order, then any extras at the end.
+  const groupedRows = React.useMemo(() => {
+    const map = new Map();
+    for (const row of sortedShown) {
+      const cat = String(row.category || "Uncategorized").trim() || "Uncategorized";
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat).push(row);
+    }
+    const canonical = Array.isArray(categoryOptions) ? categoryOptions : [];
+    const ordered = [
+      ...canonical.filter((c) => map.has(c)).map((c) => ({ category: c, rows: map.get(c) })),
+      ...[...map.entries()]
+        .filter(([c]) => !canonical.includes(c))
+        .map(([c, rows]) => ({ category: c, rows })),
+    ];
+    return ordered;
+  }, [sortedShown, categoryOptions]);
+
+  // Per-category totals for subtotal rows + summary card.
+  const categoryTotals = React.useMemo(() => {
+    return groupedRows.map(({ category, rows }) => {
+      const fullAmount = rows.reduce((acc, r) => acc + (r.fullAmount || 0), 0);
+      const valued = rows.reduce((acc, r) => acc + (r.valuedAmount || 0), 0);
+      const balance = rows.reduce((acc, r) => acc + (r.amount || 0), 0);
+      return {
+        category,
+        count: rows.length,
+        fullAmount,
+        valuedAmount: valued,
+        balance,
+      };
+    });
+  }, [groupedRows]);
+
+  const totalCols = showActualColumns ? 14 : 10;
 
   // Helper for sortable header
   const SortHeader = ({ col, children, className = "", ...rest }) => (
@@ -803,7 +841,21 @@ export default function ProjectBillTable({
             </thead>
 
             <tbody>
-              {sortedShown.map((row, displayIndex) => {
+              {groupedRows.map(({ category, rows }, gIdx) => (
+                <React.Fragment key={`cat-${category}`}>
+                  <tr className="border-t-2 border-adlm-blue-200 bg-slate-100">
+                    <td colSpan={totalCols} className="px-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-slate-900">
+                          {category}
+                        </span>
+                        <span className="text-[11px] text-slate-600">
+                          {rows.length} {rows.length === 1 ? "item" : "items"}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {rows.map((row, displayIndex) => {
                 const item = items[row.i] || {};
                 const groupId = row.groupId;
                 const canLink = Boolean(groupId) && row.groupCount >= 2;
@@ -923,6 +975,24 @@ export default function ProjectBillTable({
                         <div className="mt-0.5 text-[10px] text-slate-500">
                           Group: <span className="text-slate-700">{row.groupLabel} ({row.groupCount})</span>
                           {linked ? <span className="font-medium text-adlm-blue-700"> | linked</span> : null}
+                        </div>
+                      ) : null}
+                      {onCategoryChange && categoryOptions?.length ? (
+                        <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-500">
+                          <span>Category:</span>
+                          <select
+                            className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-700 focus:border-adlm-blue-500 focus:outline-none"
+                            value={row.category || ""}
+                            onChange={(e) => onCategoryChange(row.i, e.target.value)}
+                            title="Re-classify this item"
+                          >
+                            {categoryOptions.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                            {row.category && !categoryOptions.includes(row.category) ? (
+                              <option value={row.category}>{row.category}</option>
+                            ) : null}
+                          </select>
                         </div>
                       ) : null}
                     </td>
@@ -1107,6 +1177,27 @@ export default function ProjectBillTable({
                   </tr>
                 );
               })}
+                  <tr className="border-t bg-slate-50 text-xs font-medium text-slate-800">
+                    <td colSpan={6} className="px-2 py-2 text-right">
+                      Subtotal — {category}
+                    </td>
+                    {showActualColumns ? <td className="px-2 py-2" /> : null}
+                    {showActualColumns ? <td className="px-2 py-2" /> : null}
+                    {showActualColumns ? <td className="px-2 py-2" /> : null}
+                    {showActualColumns ? <td className="px-2 py-2" /> : null}
+                    <td className="px-2 py-2">
+                      {money(categoryTotals[gIdx]?.fullAmount || 0)}
+                    </td>
+                    <td className="px-2 py-2 text-emerald-700">
+                      {money(categoryTotals[gIdx]?.valuedAmount || 0)}
+                    </td>
+                    <td className="px-2 py-2">
+                      {money(categoryTotals[gIdx]?.balance || 0)}
+                    </td>
+                    <td className="px-2 py-2" />
+                  </tr>
+                </React.Fragment>
+              ))}
             </tbody>
 
             <tfoot className="bg-slate-50">
@@ -1125,6 +1216,47 @@ export default function ProjectBillTable({
               </tr>
             </tfoot>
           </table>
+        </div>
+      ) : null}
+
+      {computedShown.length && categoryTotals.length > 1 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-2 text-sm font-semibold text-slate-900">Summary by category</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-left text-slate-600">
+                <tr>
+                  <th className="px-2 py-2">Category</th>
+                  <th className="px-2 py-2 text-right">Items</th>
+                  <th className="px-2 py-2 text-right">Gross</th>
+                  <th className="px-2 py-2 text-right">Deducted</th>
+                  <th className="px-2 py-2 text-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoryTotals.map((t) => (
+                  <tr key={`sum-${t.category}`} className="border-t">
+                    <td className="px-2 py-2 font-medium text-slate-800">{t.category}</td>
+                    <td className="px-2 py-2 text-right text-slate-700">{t.count}</td>
+                    <td className="px-2 py-2 text-right text-slate-900">{money(t.fullAmount)}</td>
+                    <td className="px-2 py-2 text-right text-emerald-700">{money(t.valuedAmount)}</td>
+                    <td className="px-2 py-2 text-right text-slate-900">{money(t.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-slate-50 font-semibold text-slate-900">
+                <tr className="border-t">
+                  <td className="px-2 py-2">Total</td>
+                  <td className="px-2 py-2 text-right">
+                    {categoryTotals.reduce((acc, t) => acc + t.count, 0)}
+                  </td>
+                  <td className="px-2 py-2 text-right">{money(grossAmount)}</td>
+                  <td className="px-2 py-2 text-right text-emerald-700">{money(valuedAmount)}</td>
+                  <td className="px-2 py-2 text-right">{money(remainingAmount)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       ) : null}
     </div>
