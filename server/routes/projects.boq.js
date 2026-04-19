@@ -1,24 +1,10 @@
 // server/routes/projects.boq.js
 import express from "express";
-import path from "path";
 import mongoose from "mongoose";
-import { fileURLToPath } from "url";
 import { requireAuth } from "../middleware/auth.js";
-import { exportBoqFromTemplate } from "../util/boqExporter.js";
+import { exportElementalBoQ } from "../util/elementalBoqExporter.js";
 
 const router = express.Router();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Put template here: server/assets/boq/boq-template.xlsx
-const DEFAULT_TEMPLATE_PATH = path.join(
-  __dirname,
-  "..",
-  "assets",
-  "boq",
-  "boq-template.xlsx",
-);
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -168,8 +154,9 @@ router.get(
     if (!tool || !id)
       return res.status(400).json({ error: "tool and id are required" });
 
-    const tpl = String(process.env.BOQ_TEMPLATE_PATH || "").trim();
-    const templatePath = tpl || DEFAULT_TEMPLATE_PATH;
+    const buildingType = String(req.query.building || "bungalow")
+      .trim()
+      .toLowerCase();
 
     const project = await findProjectDoc({
       tool,
@@ -184,12 +171,11 @@ router.get(
       });
     }
 
-    const out = await exportBoqFromTemplate({
-      templatePath,
+    const out = await exportElementalBoQ({
       projectName: project.name || "Project",
       items: project.items,
       productKey: tool,
-      options: { matchThreshold: Number(req.query.threshold || 0.12) },
+      buildingType,
     });
 
     const buf = Buffer.isBuffer(out.buffer)

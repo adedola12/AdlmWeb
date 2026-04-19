@@ -2424,11 +2424,12 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function exportElementalBoQFromBackend() {
+  async function exportElementalBoQFromBackend(buildingType = "bungalow") {
     if (!selectedId) return;
 
+    const normalizedBuilding = buildingType === "multistorey" ? "multistorey" : "bungalow";
     const base = API_BASE || window.location.origin;
-    const path = `/projectsboq/${toolNorm}/${selectedId}/export/boq`;
+    const path = `/projectsboq/${toolNorm}/${selectedId}/export/boq?building=${normalizedBuilding}`;
     const absUrl = new URL(path, base).toString();
 
     const res = await fetch(absUrl, {
@@ -2754,10 +2755,10 @@ export default function ProjectsGeneric() {
                   setExportOpen(false);
                   exportGenericBoQ();
                 }}
-                onExportElementalBoQ={async () => {
+                onExportElementalBoQ={async (buildingType) => {
                   setExportOpen(false);
                   try {
-                    await exportElementalBoQFromBackend();
+                    await exportElementalBoQFromBackend(buildingType);
                   } catch (e) {
                     setErr(e?.message || "Failed to export BoQ");
                   }

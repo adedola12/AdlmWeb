@@ -1,0 +1,370 @@
+{
+  "_meta": {
+    "version": 1,
+    "notes": "Phase-1 elemental BoQ structure ported from RevitPluginArch (BungalowBoqExporter.cs / MultiStoreyBoqExporter.cs). Multi-storey substructure uses Pad/Strip default; Raft and Pile variants are a future iteration. Lookups use case-insensitive AND-of-words matching against an item's description/takeoffLine/materialName/type. To extend, add elements/items here — no code changes required."
+  },
+
+  "domains": {
+    "quiv": {
+      "bungalow": {
+        "title": "Bill of Quantities — Bungalow",
+        "bills": [
+          {
+            "name": "Preliminaries",
+            "elements": [
+              {
+                "heading": "BREAKDOWN OF PRELIMINARIES",
+                "items": [
+                  { "description": "Setting Out", "unit": "Item" },
+                  { "description": "Progress Photographs and Reports", "unit": "Item" },
+                  { "description": "Foreman / Management supervision", "unit": "Item" },
+                  { "description": "Other staff", "unit": "Item" },
+                  { "description": "Insurances", "unit": "Item" },
+                  { "description": "Site accommodation", "unit": "Item" },
+                  { "description": "Office accommodation", "unit": "Item" },
+                  { "description": "Site security", "unit": "Item" },
+                  { "description": "Temporary fences", "unit": "Item" },
+                  { "description": "Telephone", "unit": "Item" },
+                  { "description": "Administration", "unit": "Item" },
+                  { "description": "Material tests / Samples", "unit": "Item" },
+                  { "description": "Removal of debris", "unit": "Item" },
+                  { "description": "Water for the Works", "unit": "Item" },
+                  { "description": "Power for the Works", "unit": "Item" },
+                  { "description": "Notice board", "unit": "Item" },
+                  { "description": "Temporary power/ lights", "unit": "Item" },
+                  { "description": "Safety/ Health & Welfare", "unit": "Item" },
+                  { "description": "Storage", "unit": "Item" },
+                  { "description": "Small Plant/ Tools", "unit": "Item" },
+                  { "description": "Plant Equipment/ scaffolding", "unit": "Item" },
+                  { "description": "Additional Items", "unit": "Item" }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Substructure",
+            "elements": [
+              {
+                "heading": "EXCAVATION, FILLING, ETC OTHER THAN BULK",
+                "items": [
+                  { "description": "Trench Excavation", "unit": "m3", "lookups": [["strip", "footing", "excavation"]] },
+                  { "description": "Surplus material from excavations and/or stock piles on site", "unit": "m3", "lookups": [["strip", "footing", "excavation"]] },
+                  { "description": "Sides of trench and hole excavations exceeding 2m deep", "unit": "m2", "lookups": [["strip", "earthwork", "support"]] },
+                  { "description": "Keeping excavations free of water", "unit": "Item", "fixedAmount": 300000 },
+                  { "description": "Backfilling to trenches, holes, etc", "unit": "m3", "lookups": [["strip", "backfilling"], ["strip", "backfill"]] },
+                  { "description": "Under surface beds", "unit": "m3", "lookups": [["oversite", "hardcore", "filling"]] },
+                  { "description": "G2 Sub base layer under surface beds average thickness exceeding 2m", "unit": "m3", "lookups": [["oversite", "laterite", "filling"]] }
+                ]
+              },
+              {
+                "heading": "COMPACTION",
+                "items": [
+                  { "description": "Compaction of ground surface under floors etc including scarifying", "unit": "m2", "lookups": [["strip", "leveling", "compacting"], ["strip", "leveling"]] }
+                ]
+              },
+              {
+                "heading": "SOIL POISONING",
+                "items": [
+                  { "description": "Apply soil treatment to under floors", "unit": "m2", "lookups": [["strip", "surface", "treatment"]] }
+                ]
+              },
+              {
+                "heading": "UNREINFORCED CONCRETE CAST AGAINST EXCAVATED SURFACES",
+                "items": [
+                  { "description": "Surface blinding against earth and unblinded sand", "unit": "m3", "lookups": [["oversite", "blinding"], ["strip", "blinding"]], "lookupCombine": "sum" }
+                ]
+              },
+              {
+                "heading": "REINFORCED CONCRETE",
+                "items": [
+                  { "description": "Footing", "unit": "m3", "lookups": [["strip", "concrete", "footing"], ["strip", "concrete", "in", "footing"]] },
+                  { "description": "Surface slabs and steps cast in panels on waterproofing", "unit": "m3", "lookups": [["oversite", "concrete"]] }
+                ]
+              },
+              {
+                "heading": "FORMWORK",
+                "items": [
+                  { "description": "Edges, risers and ends not exceeding 300mm high or wide", "unit": "m", "lookups": [["oversite", "formwork", "edges"], ["oversite", "formwork", "to", "edges"]] }
+                ]
+              },
+              {
+                "heading": "REINFORCEMENT",
+                "items": [
+                  { "description": "BRC Wire Mesh", "unit": "m2", "lookups": [["oversite", "brc", "mesh"], ["oversite", "brc"]] }
+                ]
+              },
+              {
+                "heading": "DAMP-PROOFING",
+                "items": [
+                  { "description": "DPM to under floor slab", "unit": "m2", "lookups": [["oversite", "dpm"]] }
+                ]
+              },
+              {
+                "heading": "BLOCKWORK IN FOUNDATION",
+                "items": [
+                  { "description": "Sandcrete hollow blockwork in foundation", "unit": "m2", "lookups": [["strip", "blockwork"]] },
+                  { "description": "Damp proof course", "unit": "m", "lookups": [["strip", "damp", "proof"], ["strip", "dpc"]] }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Superstructure",
+            "elements": [
+              {
+                "heading": "WALLS — REINFORCED CONCRETE",
+                "items": [
+                  { "description": "Lintels", "unit": "m3", "lookups": [["blockwork", "lintel", "concrete"]], "defaultRate": 45000 }
+                ]
+              },
+              {
+                "heading": "WALLS — FORMWORK",
+                "items": [
+                  { "description": "Lintel formwork", "unit": "m2", "lookups": [["blockwork", "lintel", "formwork"]], "defaultRate": 4850 }
+                ]
+              },
+              {
+                "heading": "WALLS — REINFORCEMENT",
+                "items": [
+                  { "description": "10-12mm Diameter bars in lintel", "unit": "t", "lookups": [["blockwork", "lintel", "reinforcement"]], "qtyDivisor": 1000, "defaultRate": 575000 }
+                ]
+              },
+              {
+                "heading": "WALLS — BLOCKWORK",
+                "items": [
+                  { "description": "Sandcrete hollow blockwork in wall, generally internal and external", "unit": "m2", "lookups": [["blockwork", "wall", "area"]], "defaultRate": 8350 }
+                ]
+              },
+              {
+                "heading": "ROOF COVERING AND MEMBERS",
+                "items": [
+                  { "description": "Roof covering", "unit": "m2", "lookups": [["roof", "area"]], "defaultRate": 6375 },
+                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookups": [["roof", "structs"], ["roof", "strut"]], "defaultRate": 650 },
+                  { "description": "50 x 150mm Hardwood King Post", "unit": "m", "lookups": [["roof", "king", "post"], ["roof", "kingpost"]], "defaultRate": 850 },
+                  { "description": "50 x 150mm Hardwood Wall Plate", "unit": "m", "lookups": [["roof", "wall", "plate"], ["roof", "wallplate"]], "defaultRate": 850 },
+                  { "description": "50 x 50mm Hardwood Ceiling Noggins", "unit": "m", "lookups": [["ceiling", "nogging"]], "defaultRate": 362 },
+                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookups": [["roof", "purlin"]], "defaultRate": 447 },
+                  { "description": "50 x 150mm Hardwood Rafters", "unit": "m", "lookups": [["roof", "rafter"]], "defaultRate": 850 }
+                ]
+              },
+              {
+                "heading": "WINDOWS AND DOORS",
+                "items": [
+                  { "description": "Aluminium casement windows complete with fly screen", "unit": "No", "lookups": [["window"]], "defaultRate": 55000 },
+                  { "description": "Wooden panel doors complete with frame and ironmongery", "unit": "No", "lookups": [["door"]], "defaultRate": 95000 }
+                ]
+              },
+              {
+                "heading": "FLOOR, WALL AND CEILING FINISHES",
+                "items": [
+                  { "description": "Floor finishes (tiles/screed)", "unit": "m2", "lookups": [["finishes", "tile"], ["finishes", "total", "tile"]], "defaultRate": 5500 },
+                  { "description": "Wall rendering / plastering", "unit": "m2", "lookups": [["blockwork", "wall", "rendering"]], "defaultRate": 2500 },
+                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookups": [["blockwork", "wall", "rendering"]], "defaultRate": 1200 },
+                  { "description": "Ceiling finishes (POP / board)", "unit": "m2", "lookups": [["ceiling", "area"]], "defaultRate": 4500 }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+
+      "multistorey": {
+        "title": "Bill of Quantities — Multi-Storey",
+        "bills": [
+          {
+            "name": "Preliminaries",
+            "ref": "quiv.bungalow.Preliminaries"
+          },
+          {
+            "name": "Substructure",
+            "elements": [
+              {
+                "heading": "EXCAVATION, FILLING, ETC OTHER THAN BULK",
+                "items": [
+                  { "description": "Excavation to column bases and trenches", "unit": "m3", "lookups": [["pad", "excavation"], ["strip", "excavation"]] },
+                  { "description": "Excavated area", "unit": "m2", "lookups": [["pad", "excavation", "area"], ["strip", "excavation", "area"]] },
+                  { "description": "Depositing on site", "unit": "m3", "lookups": [["pad", "depositing"], ["strip", "depositing"]] },
+                  { "description": "Ground Water", "unit": "Item", "fixedAmount": 850000 },
+                  { "description": "Surface Water", "unit": "Item", "fixedAmount": 350000 }
+                ]
+              },
+              {
+                "heading": "EARTH FILLING, ETC.",
+                "items": [
+                  { "description": "Laterite filling to make up levels", "unit": "m3", "lookups": [["pad", "laterite"], ["strip", "laterite"]] },
+                  { "description": "Hardcore filling from off site", "unit": "m3", "lookups": [["pad", "hardcore"], ["strip", "hardcore"]] }
+                ]
+              },
+              {
+                "heading": "COMPACTION & TREATMENT",
+                "items": [
+                  { "description": "Applying anti-termite solution", "unit": "m2", "lookups": [["pad", "surface", "treatment"], ["strip", "surface", "treatment"]] },
+                  { "description": "Compacting and levelling bottom of excavations", "unit": "m2", "lookups": [["pad", "leveling", "compacting"], ["strip", "leveling"]] }
+                ]
+              },
+              {
+                "heading": "REINFORCED CONCRETE",
+                "items": [
+                  { "description": "Column base and footing concrete", "unit": "m3", "lookups": [["pad", "concrete", "footing"], ["strip", "concrete", "footing"]] },
+                  { "description": "Slab (Oversite concrete)", "unit": "m3", "lookups": [["oversite", "concrete"]] },
+                  { "description": "Blinding to column base, footing and oversite", "unit": "m3", "lookups": [["pad", "blinding"], ["strip", "blinding"], ["oversite", "blinding"]], "lookupCombine": "sum" }
+                ]
+              },
+              {
+                "heading": "FORMWORK",
+                "items": [
+                  { "description": "Formwork to column base", "unit": "m2", "lookups": [["pad", "formwork"], ["strip", "formwork"]] },
+                  { "description": "Edges, risers and ends not exceeding 300mm high", "unit": "m", "lookups": [["pad", "formwork", "edges"], ["strip", "formwork", "edges"]] }
+                ]
+              },
+              {
+                "heading": "REINFORCEMENT",
+                "items": [
+                  { "description": "Reinforcement in column base (Pad foundation)", "unit": "t", "lookups": [["pad", "reinforcement"]], "qtyDivisor": 1000 }
+                ]
+              },
+              {
+                "heading": "OTHER REINFORCEMENT & DPM",
+                "items": [
+                  { "description": "BRC Wire Mesh", "unit": "m2", "lookups": [["oversite", "brc", "mesh"]] },
+                  { "description": "Damp Proof Membrane (DPM)", "unit": "m2", "lookups": [["oversite", "dpm"]] }
+                ]
+              },
+              {
+                "heading": "BLOCKWORK & DPC",
+                "items": [
+                  { "description": "Blockwork in foundation", "unit": "m2", "lookups": [["pad", "blockwork"], ["strip", "blockwork"]] },
+                  { "description": "Damp Proof Course (DPC)", "unit": "m", "lookups": [["pad", "dpc"], ["strip", "dpc"]] }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Frame",
+            "elements": [
+              {
+                "heading": "REINFORCED CONCRETE — E10",
+                "items": [
+                  { "description": "Columns", "unit": "m3", "lookups": [["column", "concrete"]] },
+                  { "description": "Beams", "unit": "m3", "lookups": [["beam", "concrete"]] },
+                  { "description": "Suspended slabs", "unit": "m3", "lookups": [["slab", "concrete"]] }
+                ]
+              },
+              {
+                "heading": "FORMWORK — E20",
+                "items": [
+                  { "description": "Column formwork", "unit": "m2", "lookups": [["column", "formwork"]] },
+                  { "description": "Beam formwork", "unit": "m2", "lookups": [["beam", "formwork"]] },
+                  { "description": "Slab soffit formwork", "unit": "m2", "lookups": [["slab", "formwork"]] }
+                ]
+              },
+              {
+                "heading": "REINFORCEMENT — E30",
+                "items": [
+                  { "description": "10-25mm Diameter bars in columns", "unit": "t", "lookups": [["column", "reinforcement"]], "qtyDivisor": 1000 },
+                  { "description": "10-25mm Diameter bars in beams", "unit": "t", "lookups": [["beam", "reinforcement"]], "qtyDivisor": 1000 },
+                  { "description": "10-16mm Diameter bars in slabs", "unit": "t", "lookups": [["slab", "reinforcement"]], "qtyDivisor": 1000 }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Staircase",
+            "elements": [
+              {
+                "heading": "IN-SITU CONCRETE — E10",
+                "items": [
+                  { "description": "Staircase concrete", "unit": "m3", "lookups": [["staircase", "concrete"], ["stair", "concrete"]] },
+                  { "description": "Staircase formwork", "unit": "m2", "lookups": [["staircase", "formwork"], ["stair", "formwork"]] },
+                  { "description": "Reinforcement in staircase", "unit": "t", "lookups": [["staircase", "reinforcement"], ["stair", "reinforcement"]], "qtyDivisor": 1000 }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Superstructure",
+            "ref": "quiv.bungalow.Superstructure"
+          },
+          {
+            "name": "Landscaping",
+            "elements": [
+              {
+                "heading": "EXTERNAL WORKS / LANDSCAPING",
+                "items": [
+                  { "description": "Landscaping items (allow)", "unit": "Item", "lookups": [["landscaping"]] }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+
+    "mep": {
+      "bungalow": {
+        "title": "Bill of Quantities — MEP (Bungalow)",
+        "bills": [
+          { "name": "Preliminaries", "ref": "quiv.bungalow.Preliminaries" },
+          {
+            "name": "HVAC",
+            "elements": [
+              {
+                "heading": "DUCTWORK & EQUIPMENT",
+                "items": [
+                  { "description": "Ductwork — supply and installation", "unit": "m", "lookups": [["duct"]] },
+                  { "description": "Air handling units (AHU / FCU / VRF)", "unit": "No", "lookups": [["ahu"], ["fcu"], ["vrf"], ["air", "handling"]] },
+                  { "description": "Diffusers, grilles and registers", "unit": "No", "lookups": [["diffuser"], ["grille"], ["register"]] },
+                  { "description": "Exhaust and ventilation fans", "unit": "No", "lookups": [["exhaust", "fan"], ["ventilation", "fan"], ["fan"]] }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Plumbing",
+            "elements": [
+              {
+                "heading": "PIPING & FITTINGS",
+                "items": [
+                  { "description": "Water supply pipes and fittings", "unit": "m", "lookups": [["pipe"], ["fitting"]] },
+                  { "description": "Valves and isolators", "unit": "No", "lookups": [["valve"]] },
+                  { "description": "Drainage / sewer pipes", "unit": "m", "lookups": [["drain"], ["sewer"]] }
+                ]
+              },
+              {
+                "heading": "FIXTURES",
+                "items": [
+                  { "description": "Sanitary fixtures (WCs, basins, showers)", "unit": "No", "lookups": [["wc"], ["water", "closet"], ["toilet"], ["basin"], ["lavatory"], ["shower"]] },
+                  { "description": "Tanks, pumps and accessories", "unit": "No", "lookups": [["tank"], ["pump"], ["cistern"]] }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "Electrical",
+            "elements": [
+              {
+                "heading": "CABLING & CONTAINMENT",
+                "items": [
+                  { "description": "Cables, wires and conductors", "unit": "m", "lookups": [["cable"], ["wire"]] },
+                  { "description": "Conduit and cable tray", "unit": "m", "lookups": [["conduit"], ["tray"], ["raceway"]] }
+                ]
+              },
+              {
+                "heading": "DEVICES & EQUIPMENT",
+                "items": [
+                  { "description": "Lighting fixtures and luminaires", "unit": "No", "lookups": [["light"], ["luminaire"], ["lamp"]] },
+                  { "description": "Switches, sockets and outlets", "unit": "No", "lookups": [["switch"], ["socket"], ["outlet"], ["receptacle"]] },
+                  { "description": "Distribution boards and panels", "unit": "No", "lookups": [["panel"], ["distribution"], ["breaker"], ["busbar"]] }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "multistorey": {
+        "title": "Bill of Quantities — MEP (Multi-Storey)",
+        "ref": "mep.bungalow"
+      }
+    }
+  }
+}
