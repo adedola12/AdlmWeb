@@ -72,6 +72,14 @@ const ValuationEventSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const ProvisionalSumSchema = new mongoose.Schema(
+  {
+    description: { type: String, default: "", trim: true },
+    amount: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
 const ItemSchema = new mongoose.Schema(
   {
     sn: { type: Number, default: 0 },
@@ -113,6 +121,7 @@ const TakeoffProjectSchema = new mongoose.Schema(
     publicShareEnabled: { type: Boolean, default: false },
     checklistCompositeKeys: { type: [String], default: [] },
     items: { type: [ItemSchema], default: [] },
+    provisionalSums: { type: [ProvisionalSumSchema], default: [] },
     valuationSettings: {
       type: ValuationSettingsSchema,
       default: () => ({ ...DefaultValuationSettings }),

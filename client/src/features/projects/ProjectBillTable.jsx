@@ -496,6 +496,10 @@ export default function ProjectBillTable({
   onStatusToggle,
   onCategoryChange,
   categoryOptions = [],
+  provisionalSums = [],
+  onAddProvisionalSum,
+  onUpdateProvisionalSum,
+  onRemoveProvisionalSum,
   onSyncBoqRates,
   onSyncPrices,
   onToggleAutoFill,
@@ -1257,6 +1261,103 @@ export default function ProjectBillTable({
               </tfoot>
             </table>
           </div>
+        </div>
+      ) : null}
+
+      {onAddProvisionalSum ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Provisional Sums</div>
+              <div className="text-[11px] text-slate-500">
+                Add PC sums and provisional items not derived from the takeoff (e.g. allowances, statutory fees, specialist works). Saved with the project and exported as a separate sheet.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs"
+              onClick={onAddProvisionalSum}
+              title="Add provisional sum row"
+            >
+              + Add provisional sum
+            </button>
+          </div>
+
+          {provisionalSums.length ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-left text-slate-600">
+                  <tr>
+                    <th className="px-2 py-2 w-10">#</th>
+                    <th className="px-2 py-2">Description</th>
+                    <th className="px-2 py-2 w-40 text-right">Amount</th>
+                    <th className="px-2 py-2 w-12"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {provisionalSums.map((s, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="px-2 py-2 text-slate-500">{i + 1}</td>
+                      <td className="px-2 py-2">
+                        <input
+                          className="input !h-8 w-full !px-2 text-xs"
+                          type="text"
+                          placeholder="e.g. PC sum for kitchen fittings"
+                          value={s?.description || ""}
+                          onChange={(e) =>
+                            onUpdateProvisionalSum?.(i, { description: e.target.value })
+                          }
+                        />
+                      </td>
+                      <td className="px-2 py-2">
+                        <input
+                          className="input !h-8 w-full !px-2 text-xs text-right"
+                          type="number"
+                          step="any"
+                          placeholder="0.00"
+                          value={s?.amount === 0 || s?.amount == null ? "" : s.amount}
+                          onChange={(e) =>
+                            onUpdateProvisionalSum?.(i, {
+                              amount: e.target.value === "" ? 0 : Number(e.target.value),
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="px-1 py-2 text-center">
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                          title="Remove this row"
+                          onClick={() => onRemoveProvisionalSum?.(i)}
+                        >
+                          <FaTrashAlt className="text-[10px]" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-50 font-semibold text-slate-900">
+                  <tr className="border-t">
+                    <td className="px-2 py-2"></td>
+                    <td className="px-2 py-2">Total provisional sums</td>
+                    <td className="px-2 py-2 text-right">
+                      {money(
+                        provisionalSums.reduce(
+                          (acc, s) => acc + (Number(s?.amount) || 0),
+                          0,
+                        ),
+                      )}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              No provisional sums added yet. Click "+ Add provisional sum" to start.
+            </div>
+          )}
         </div>
       ) : null}
     </div>

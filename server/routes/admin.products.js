@@ -120,6 +120,7 @@ router.post("/", async (req, res) => {
     previewUrl,
     thumbnailUrl,
     isPublished = true,
+    isComingSoon = false,
     sort = 0,
     relatedFreeVideoIds = [],
     relatedCourseSkus = [],
@@ -154,6 +155,7 @@ router.post("/", async (req, res) => {
     previewUrl,
     thumbnailUrl,
     isPublished: !!isPublished,
+    isComingSoon: !!isComingSoon,
     sort: Number(sort || 0) || 0,
     relatedFreeVideoIds: Array.isArray(relatedFreeVideoIds)
       ? relatedFreeVideoIds.filter(Boolean)

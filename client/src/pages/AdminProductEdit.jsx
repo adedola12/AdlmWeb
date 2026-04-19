@@ -424,6 +424,7 @@ export default function AdminProductEdit() {
   const [previewUrl, setPreviewUrl] = React.useState("");
   const [thumbnailUrl, setThumbnailUrl] = React.useState("");
   const [isPublished, setIsPublished] = React.useState(true);
+  const [isComingSoon, setIsComingSoon] = React.useState(false);
   const [sort, setSort] = React.useState(0);
   const [relatedFreeVideoIds, setRelatedFreeVideoIds] = React.useState([]);
 
@@ -513,6 +514,7 @@ export default function AdminProductEdit() {
         setPreviewUrl(data.previewUrl || "");
         setThumbnailUrl(data.thumbnailUrl || "");
         setIsPublished(!!data.isPublished);
+        setIsComingSoon(!!data.isComingSoon);
         setSort(data.sort ?? 0);
 
         // robust mapping whether populated or raw ids
@@ -558,6 +560,7 @@ export default function AdminProductEdit() {
         previewUrl: previewUrl || undefined,
         thumbnailUrl: thumbnailUrl || undefined,
         isPublished,
+        isComingSoon,
         sort: Number(sort || 0),
         relatedFreeVideoIds,
       };
@@ -804,7 +807,7 @@ export default function AdminProductEdit() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -812,6 +815,14 @@ export default function AdminProductEdit() {
                 onChange={(e) => setIsPublished(e.target.checked)}
               />
               Published
+            </label>
+            <label className="flex items-center gap-2" title="Shown on storefront but not purchasable. Admin can still grant manually.">
+              <input
+                type="checkbox"
+                checked={isComingSoon}
+                onChange={(e) => setIsComingSoon(e.target.checked)}
+              />
+              Coming Soon
             </label>
             <label className="text-xs">
               Sort

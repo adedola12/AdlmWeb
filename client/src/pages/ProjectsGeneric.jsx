@@ -396,6 +396,17 @@ function categoryMapsEqual(a, b) {
   return true;
 }
 
+function provisionalSumsEqual(a, b) {
+  const A = Array.isArray(a) ? a : [];
+  const B = Array.isArray(b) ? b : [];
+  if (A.length !== B.length) return false;
+  for (let i = 0; i < A.length; i++) {
+    if (String(A[i]?.description || "") !== String(B[i]?.description || "")) return false;
+    if (Number(A[i]?.amount || 0) !== Number(B[i]?.amount || 0)) return false;
+  }
+  return true;
+}
+
 const DASHBOARD_CHART_MODES = new Set(["pie", "ribbon", "line"]);
 const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   showDailyLog: true,
@@ -884,6 +895,8 @@ export default function ProjectsGeneric() {
   const [baseStatusMap, setBaseStatusMap] = React.useState({});
   const [categoryMap, setCategoryMap] = React.useState({});
   const [baseCategoryMap, setBaseCategoryMap] = React.useState({});
+  const [provisionalSums, setProvisionalSums] = React.useState([]);
+  const [baseProvisionalSums, setBaseProvisionalSums] = React.useState([]);
   const [valuationSettings, setValuationSettings] = React.useState(
     DEFAULT_VALUATION_SETTINGS,
   );
@@ -1034,6 +1047,14 @@ export default function ProjectsGeneric() {
     setStatusMap(uiStatuses);
     setBaseCategoryMap(baseCategories);
     setCategoryMap(uiCategories);
+    const sums = Array.isArray(project?.provisionalSums)
+      ? project.provisionalSums.map((s) => ({
+          description: String(s?.description || ""),
+          amount: Number(s?.amount) || 0,
+        }))
+      : [];
+    setProvisionalSums(sums);
+    setBaseProvisionalSums(sums.map((s) => ({ ...s })));
     const normalizedSettings = normalizeValuationSettings(
       project?.valuationSettings,
     );
@@ -1111,6 +1132,8 @@ export default function ProjectsGeneric() {
     setBaseStatusMap({});
     setCategoryMap({});
     setBaseCategoryMap({});
+    setProvisionalSums([]);
+    setBaseProvisionalSums([]);
     setValuationSettings(DEFAULT_VALUATION_SETTINGS);
     setBaseValuationSettings(DEFAULT_VALUATION_SETTINGS);
     setLinkedGroups({});
@@ -1443,6 +1466,28 @@ export default function ProjectsGeneric() {
     const key = itemKey(it, rowIndex);
     setActualRateMap((prev) => ({ ...(prev || {}), [key]: value }));
   }
+  function handleAddProvisionalSum() {
+    setProvisionalSums((prev) => [
+      ...(Array.isArray(prev) ? prev : []),
+      { description: "", amount: 0 },
+    ]);
+  }
+  function handleUpdateProvisionalSum(idx, patch) {
+    setProvisionalSums((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      if (idx < 0 || idx >= next.length) return prev;
+      next[idx] = { ...next[idx], ...patch };
+      return next;
+    });
+  }
+  function handleRemoveProvisionalSum(idx) {
+    setProvisionalSums((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      if (idx < 0 || idx >= next.length) return prev;
+      next.splice(idx, 1);
+      return next;
+    });
+  }
   function handleCategoryChange(rowIndex, category) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
@@ -1493,6 +1538,7 @@ export default function ProjectsGeneric() {
     !optionalNumberMapsEqual(actualRateMap, baseActualRateMap) ||
     !statusMapsEqual(statusMap, baseStatusMap) ||
     !categoryMapsEqual(categoryMap, baseCategoryMap) ||
+    !provisionalSumsEqual(provisionalSums, baseProvisionalSums) ||
     !valuationSettingsEqual(valuationSettings, baseValuationSettings);
 
   async function saveRatesToCloud() {
@@ -1533,6 +1579,12 @@ export default function ProjectsGeneric() {
         baseVersion: sel?.version,
         items: updatedItems,
         valuationSettings: normalizeValuationSettings(valuationSettings),
+        provisionalSums: provisionalSums
+          .map((s) => ({
+            description: String(s?.description || "").trim(),
+            amount: Number(s?.amount) || 0,
+          }))
+          .filter((s) => s.description || s.amount > 0),
       };
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
@@ -2817,6 +2869,10 @@ export default function ProjectsGeneric() {
                 onStatusToggle={handleStatusToggle}
                 onCategoryChange={handleCategoryChange}
                 categoryOptions={categoryOptions}
+                provisionalSums={provisionalSums}
+                onAddProvisionalSum={handleAddProvisionalSum}
+                onUpdateProvisionalSum={handleUpdateProvisionalSum}
+                onRemoveProvisionalSum={handleRemoveProvisionalSum}
                 onToggleGroupLink={toggleGroupLink}
                 isGroupLinked={isGroupLinked}
                 getCandidatesForItem={getCandidatesForItem}

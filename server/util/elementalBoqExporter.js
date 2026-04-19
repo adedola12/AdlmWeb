@@ -2,18 +2,20 @@
 //
 // Generates a Nigerian-format Bill of Quantities workbook from project items.
 //
-// Phase-2 highlights vs. phase-1:
-//   - All numeric cells use Excel formulas (Amount = Qty × Rate, To Collection = SUM,
-//     General Summary references each bill sheet).
-//   - No per-element subtotal rows. Each bill ends with a single "<Bill> to Main
-//     Building Summary" total that the General Summary links to.
+// Design notes:
+//   - All numeric cells use Excel formulas (Amount = IFERROR(Qty × Rate, 0),
+//     bill totals = SUM/+, General Summary references each bill sheet).
+//   - Items with no matched takeoff qty AND no fixed amount are skipped.
+//     Elements with no remaining items are skipped. Bills with no remaining
+//     elements are not added to the workbook (so empty sheets never appear).
 //   - Frame items are split by `level` when items carry per-floor metadata.
 //   - Rates come from each item.rate as saved in the BoQ view — no hard-coded
 //     defaults baked into the mapping.
-//   - Foundation type variants: `pad` (default) | `raft` | `pile` for multi-storey
-//     substructure. Either passed in or auto-detected from item names.
-//   - Preliminaries renders the standard 22-item breakdown table (the items live
-//     in the bungalow Preliminaries reference; multi-storey reuses it).
+//   - Foundation types (Pad / Strip / Raft / Pile) live as sub-items under
+//     shared headings — a single project that mixes foundations renders all
+//     relevant rows.
+//   - Provisional Sums (passed in by the caller) get their own sheet and a
+//     line in the General Summary.
 
 import ExcelJS from "exceljs";
 import dayjs from "dayjs";
@@ -34,7 +36,6 @@ const DEFAULT_MAPPING_PATH = path.join(
 
 const HEADER_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FF091E39" } };
 const HEADING_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5ECF5" } };
-const TO_COLLECTION_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
 const SUMMARY_TOTAL_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E7EF" } };
 
 const PRELIMINARIES_ITEMS = [
@@ -84,7 +85,6 @@ function isMepProductKey(key) {
 }
 
 function domainForProductKey(productKey) {
-  // PlanSwift and Revit Architecture both use the QUIV bills.
   return isMepProductKey(productKey) ? "mep" : "quiv";
 }
 
@@ -101,21 +101,7 @@ function normalizeFoundationType(t) {
   return "pad";
 }
 
-function detectFoundationType(items) {
-  const pad = { pile: 0, raft: 0, pad: 0 };
-  for (const it of items || []) {
-    const h = itemHaystack(it);
-    if (/\bpile\b/.test(h)) pad.pile += 1;
-    if (/\braft\b/.test(h)) pad.raft += 1;
-    if (/\b(pad|footing)\b/.test(h)) pad.pad += 1;
-  }
-  if (pad.pile && pad.pile >= pad.raft && pad.pile >= pad.pad) return "pile";
-  if (pad.raft && pad.raft >= pad.pad) return "raft";
-  return "pad";
-}
-
 // Resolve `ref: "domain.buildingType.BillName"` into the referenced bill.
-// The bill is looked up by `name` inside the target variant's `bills` array.
 function resolveBill(mapping, bill) {
   if (!bill?.ref) return bill;
   const parts = String(bill.ref).split(".");
@@ -127,7 +113,6 @@ function resolveBill(mapping, bill) {
   if (!target) return bill;
   return {
     ...target,
-    // Preserve the referencing bill's identity / overrides.
     name: bill.name || target.name,
     kind: bill.kind || target.kind,
     splitByLevel:
@@ -154,6 +139,18 @@ function resolveVariant(mapping, domain, buildingType) {
 /* =========================
    Item lookup
    ========================= */
+// Normalize en-dash, em-dash, non-breaking spaces and double whitespace so
+// keyword lookups work whether the source uses "Pad – Excavation" (em-dash)
+// or "Pad - Excavation" (hyphen-minus).
+function normalizeText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[\u2013\u2014\u2212]/g, "-")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function itemHaystack(item) {
   return [
     item?.description,
@@ -162,21 +159,20 @@ function itemHaystack(item) {
     item?.type,
     item?.code,
   ]
-    .map((v) => String(v || "").toLowerCase())
+    .map(normalizeText)
     .join(" ");
 }
 
 function itemMatchesGroup(haystack, words) {
   if (!Array.isArray(words) || !words.length) return false;
   for (const w of words) {
-    const needle = String(w || "").toLowerCase();
+    const needle = normalizeText(w);
     if (!needle) continue;
     if (!haystack.includes(needle)) return false;
   }
   return true;
 }
 
-// Returns matching project-item objects (with their original index for tracking).
 function findMatchingItems(boqItem, projectItems, matchedSet) {
   const lookups = Array.isArray(boqItem?.lookups) ? boqItem.lookups : [];
   const combineMode = String(boqItem?.lookupCombine || "first");
@@ -217,8 +213,9 @@ function aggregateMatches(boqItem, matches) {
     const r = safeNum(item?.rate);
     qty += q;
     if (r > 0) {
-      rateTotalWeighted += r * (q || 1);
-      weightTotal += q || 1;
+      const w = q || 1;
+      rateTotalWeighted += r * w;
+      weightTotal += w;
     }
   }
   if (divisor > 0) qty = qty / divisor;
@@ -226,7 +223,6 @@ function aggregateMatches(boqItem, matches) {
   return { qty: round2(qty), rate: round2(rate) };
 }
 
-// Group matches by item.level so we can render one row per floor.
 function groupMatchesByLevel(matches) {
   const map = new Map();
   for (const m of matches) {
@@ -234,7 +230,6 @@ function groupMatchesByLevel(matches) {
     if (!map.has(level)) map.set(level, []);
     map.get(level).push(m);
   }
-  // Stable order: levels with numeric prefix first, then alpha; "Generally" last.
   const ordered = [...map.entries()].sort((a, b) => {
     if (a[0] === "Generally" && b[0] !== "Generally") return 1;
     if (b[0] === "Generally" && a[0] !== "Generally") return -1;
@@ -244,12 +239,98 @@ function groupMatchesByLevel(matches) {
 }
 
 /* =========================
+   Pre-compute: which items / elements / bills will actually render
+   ========================= */
+function planItem(boqItem, projectItems, matchedSet) {
+  // Fixed-amount lines always render.
+  if (Number.isFinite(Number(boqItem?.fixedAmount))) {
+    return {
+      kind: "fixed",
+      description: boqItem.description,
+      unit: boqItem.unit || "Item",
+      amount: round2(boqItem.fixedAmount),
+    };
+  }
+
+  const matches = findMatchingItems(boqItem, projectItems, matchedSet);
+  if (!matches.length) return null;
+
+  const agg = aggregateMatches(boqItem, matches);
+  if (agg.qty <= 0) return null;
+
+  return {
+    kind: "lookup",
+    description: boqItem.description,
+    unit: boqItem.unit || "",
+    qty: agg.qty,
+    rate: agg.rate,
+    matches,
+    qtyDivisor: boqItem.qtyDivisor,
+  };
+}
+
+function planLevelSplitItem(boqItem, projectItems, matchedSet) {
+  const matches = findMatchingItems(boqItem, projectItems, matchedSet);
+  if (!matches.length) return null;
+
+  const groups = groupMatchesByLevel(matches);
+  const levelRows = groups
+    .map(({ level, matches: m }) => {
+      const agg = aggregateMatches(boqItem, m);
+      if (agg.qty <= 0) return null;
+      return {
+        level,
+        qty: agg.qty,
+        rate: agg.rate,
+      };
+    })
+    .filter(Boolean);
+
+  if (!levelRows.length) return null;
+  return {
+    kind: "leveled",
+    description: boqItem.description,
+    unit: boqItem.unit || "",
+    levelRows,
+  };
+}
+
+function planBill(bill, projectItems, matchedSet) {
+  if (bill?.kind === "preliminaries") {
+    return { kind: "preliminaries", name: bill.name };
+  }
+  const elements = Array.isArray(bill?.elements) ? bill.elements : [];
+  const splitByLevel = !!bill?.splitByLevel;
+
+  const renderedElements = [];
+  for (const element of elements) {
+    const items = Array.isArray(element?.items) ? element.items : [];
+    const renderedItems = [];
+    for (const item of items) {
+      const planned = splitByLevel
+        ? planLevelSplitItem(item, projectItems, matchedSet) ||
+          planItem(item, projectItems, matchedSet)
+        : planItem(item, projectItems, matchedSet);
+      if (planned) renderedItems.push(planned);
+    }
+    if (renderedItems.length) {
+      renderedElements.push({
+        heading: element.heading || "",
+        preamble: element.preamble || "",
+        items: renderedItems,
+      });
+    }
+  }
+  if (!renderedElements.length) return null;
+  return { kind: "standard", name: bill.name, elements: renderedElements };
+}
+
+/* =========================
    Excel writing helpers
    ========================= */
 function snLetter(i) {
-  // 0 -> A, 1 -> B, ... 25 -> Z, 26 -> AA. Skip "I" to match Nigerian BoQ
-  // convention (A B C D E F G H J K ...).
-  const letters = "ABCDEFGHJKLMNOPQRSTUVWXYZ"; // 25 chars, no I
+  // A B C D E F G H J K ... (skip "I" — Nigerian BoQ convention)
+  const letters = "ABCDEFGHJKLMNOPQRSTUVWXYZ";
   if (i < letters.length) return letters[i];
   const first = letters[Math.floor(i / letters.length) - 1];
   const second = letters[i % letters.length];
@@ -257,7 +338,7 @@ function snLetter(i) {
 }
 
 function applyMoneyFormat(cell) {
-  cell.numFmt = '#,##0.00;[Red]-#,##0.00;""';
+  cell.numFmt = '#,##0.00;[Red]-#,##0.00;-';
 }
 
 function safeSheetName(name, workbook) {
@@ -287,27 +368,27 @@ function writeBillHeader(ws, billName) {
   const titleRow = ws.addRow([null, String(billName || "").toUpperCase()]);
   titleRow.font = { bold: true, size: 12 };
   ws.mergeCells(titleRow.number, 2, titleRow.number, 6);
-  titleRow.alignment = { horizontal: "left" };
 }
 
-function writeAmountFormulaRow(ws, { item: code, description, qty, unit, rate, isFixed }) {
-  const r = ws.addRow([code, description, qty, unit, rate]);
-  const amountCell = r.getCell(6);
-  if (isFixed) {
-    // Fixed-amount line (preliminaries / contingency style): the amount is the
-    // configured value, no qty × rate formula.
-    amountCell.value = round2(rate); // we pass the fixed amount as `rate` for consistency? Use a flag.
-  } else {
-    amountCell.value = { formula: `C${r.number}*E${r.number}` };
+function writeAmountRow(ws, { code, description, qty, unit, rate, fixedAmount }) {
+  if (fixedAmount != null) {
+    // Fixed-amount line: no qty × rate formula, just the configured amount.
+    const r = ws.addRow([code, description, null, unit || "Item", null, round2(fixedAmount)]);
+    applyMoneyFormat(r.getCell(3));
+    applyMoneyFormat(r.getCell(5));
+    applyMoneyFormat(r.getCell(6));
+    return r;
   }
+
+  // Use null (truly empty) for missing qty/rate so Excel doesn't see them as
+  // text cells (empty string would make the formula return #VALUE!). Wrap in
+  // IFERROR so adding a rate later in Excel calculates without errors.
+  const qtyVal = qty > 0 ? qty : null;
+  const rateVal = rate > 0 ? rate : null;
+  const r = ws.addRow([code, description, qtyVal, unit, rateVal]);
+  r.getCell(6).value = { formula: `IFERROR(C${r.number}*E${r.number},0)` };
   applyMoneyFormat(r.getCell(3));
   applyMoneyFormat(r.getCell(5));
-  applyMoneyFormat(amountCell);
-  return r;
-}
-
-function writeFixedAmountRow(ws, { item: code, description, unit, amount }) {
-  const r = ws.addRow([code, description, "", unit, "", amount]);
   applyMoneyFormat(r.getCell(6));
   return r;
 }
@@ -337,7 +418,7 @@ function writePreliminariesSheet(workbook, projectName) {
   ws.mergeCells(sub.number, 2, sub.number, 6);
 
   PRELIMINARIES_ITEMS.forEach((desc, i) => {
-    const row = ws.addRow([i + 1, desc, "", "", "", ""]);
+    const row = ws.addRow([i + 1, desc, null, null, null, null]);
     row.getCell(6).value = {
       formula: `IFERROR(SUM(C${row.number}:E${row.number}),0)`,
     };
@@ -347,11 +428,11 @@ function writePreliminariesSheet(workbook, projectName) {
     applyMoneyFormat(row.getCell(6));
   });
 
-  const firstItemRow = 3; // header(1) + sub(2) + first item(3)
+  const firstItemRow = 3;
   const lastItemRow = firstItemRow + PRELIMINARIES_ITEMS.length - 1;
 
   ws.addRow([]);
-  const totalRow = ws.addRow([null, "PRELIMINARIES — Grand Total to Summary", "", "", "", null]);
+  const totalRow = ws.addRow([null, "PRELIMINARIES — Grand Total to Summary", null, null, null, null]);
   totalRow.getCell(6).value = { formula: `SUM(F${firstItemRow}:F${lastItemRow})` };
   totalRow.font = { bold: true };
   totalRow.fill = SUMMARY_TOTAL_FILL;
@@ -360,8 +441,8 @@ function writePreliminariesSheet(workbook, projectName) {
   return { sheet: ws, totalCellAddr: `Preliminaries!F${totalRow.number}` };
 }
 
-function writeStandardBill({ workbook, bill, projectItems, matchedSet }) {
-  const ws = workbook.addWorksheet(safeSheetName(bill.name, workbook));
+function writeStandardBill({ workbook, plannedBill }) {
+  const ws = workbook.addWorksheet(safeSheetName(plannedBill.name, workbook));
   ws.columns = [
     { header: "Item", key: "item", width: 6 },
     { header: "Description", key: "description", width: 60 },
@@ -370,23 +451,18 @@ function writeStandardBill({ workbook, bill, projectItems, matchedSet }) {
     { header: "Rate", key: "rate", width: 14 },
     { header: "Amount", key: "amount", width: 16 },
   ];
+  writeBillHeader(ws, plannedBill.name);
 
-  writeBillHeader(ws, bill.name);
-
-  const elements = Array.isArray(bill.elements) ? bill.elements : [];
-  const splitByLevel = !!bill.splitByLevel;
   const amountRowNumbers = [];
   let snIndex = 0;
 
-  for (const element of elements) {
-    // Heading row
+  for (const element of plannedBill.elements) {
     ws.addRow([]);
     const headRow = ws.addRow([null, String(element.heading || "").toUpperCase()]);
     headRow.font = { bold: true };
     headRow.fill = HEADING_FILL;
     ws.mergeCells(headRow.number, 2, headRow.number, 6);
 
-    // Preamble row (italic, descriptive context — no amount)
     if (element.preamble) {
       const preRow = ws.addRow([null, String(element.preamble)]);
       preRow.font = { italic: true, color: { argb: "FF475569" } };
@@ -394,96 +470,111 @@ function writeStandardBill({ workbook, bill, projectItems, matchedSet }) {
       ws.mergeCells(preRow.number, 2, preRow.number, 6);
     }
 
-    const items = Array.isArray(element.items) ? element.items : [];
-
-    for (const item of items) {
-      // Sub-heading row showing the item description (matches reference layout
-      // where each item has a small heading line above it).
-      // Skipped here to keep the layout compact — the item row itself shows the
-      // description.
-
-      // Fixed-amount line (e.g. "Keeping excavations free of water — Item")
-      if (Number.isFinite(Number(item?.fixedAmount))) {
-        const r = writeFixedAmountRow(ws, {
-          item: snLetter(snIndex++),
+    for (const item of element.items) {
+      if (item.kind === "fixed") {
+        const r = writeAmountRow(ws, {
+          code: snLetter(snIndex++),
           description: item.description,
-          unit: item.unit || "Item",
-          amount: round2(item.fixedAmount),
+          unit: item.unit,
+          fixedAmount: item.amount,
         });
         amountRowNumbers.push(r.number);
         continue;
       }
 
-      // Lookup-driven line
-      const matches = findMatchingItems(item, projectItems, matchedSet);
-
-      if (splitByLevel && matches.length) {
-        // Floor-by-floor expansion: one sub-heading + one row per level.
-        const groups = groupMatchesByLevel(matches);
-        // Element-level item heading
+      if (item.kind === "leveled") {
+        // Bold sub-heading row showing the item description, then one row per level.
         const head = ws.addRow([null, item.description]);
         head.font = { bold: true };
         ws.mergeCells(head.number, 2, head.number, 6);
 
-        for (const { level, matches: levelMatches } of groups) {
-          const agg = aggregateMatches(item, levelMatches);
-          const r = ws.addRow([
-            snLetter(snIndex++),
-            level,
-            agg.qty || "",
-            item.unit || "",
-            agg.rate || "",
-          ]);
-          r.getCell(6).value = { formula: `C${r.number}*E${r.number}` };
-          applyMoneyFormat(r.getCell(3));
-          applyMoneyFormat(r.getCell(5));
-          applyMoneyFormat(r.getCell(6));
+        for (const lr of item.levelRows) {
+          const r = writeAmountRow(ws, {
+            code: snLetter(snIndex++),
+            description: lr.level,
+            unit: item.unit,
+            qty: lr.qty,
+            rate: lr.rate,
+          });
           amountRowNumbers.push(r.number);
         }
         continue;
       }
 
-      // Non-split: single aggregated line
-      const agg = aggregateMatches(item, matches);
-      const r = ws.addRow([
-        snLetter(snIndex++),
-        item.description,
-        agg.qty || "",
-        item.unit || "",
-        agg.rate || "",
-      ]);
-      r.getCell(6).value = { formula: `C${r.number}*E${r.number}` };
-      applyMoneyFormat(r.getCell(3));
-      applyMoneyFormat(r.getCell(5));
-      applyMoneyFormat(r.getCell(6));
+      // kind === "lookup"
+      const r = writeAmountRow(ws, {
+        code: snLetter(snIndex++),
+        description: item.description,
+        unit: item.unit,
+        qty: item.qty,
+        rate: item.rate,
+      });
       amountRowNumbers.push(r.number);
-
-      // Soft cue when nothing matched
-      if (!matches.length) {
-        r.getCell(2).font = { italic: true, color: { argb: "FF94A3B8" } };
-      }
     }
   }
 
-  // Bill total — formula linking every amount cell on this sheet.
   ws.addRow([]);
-  const totalLabel = `${String(bill.name).toUpperCase()} — to Main Building Summary`;
-  const totalRow = ws.addRow([null, totalLabel, "", "", null, null]);
+  const totalLabel = `${String(plannedBill.name).toUpperCase()} — to Main Building Summary`;
+  const totalRow = ws.addRow([null, totalLabel, null, null, null, null]);
   totalRow.font = { bold: true };
   totalRow.fill = SUMMARY_TOTAL_FILL;
-
   if (amountRowNumbers.length) {
-    const sumExpr = amountRowNumbers.map((n) => `F${n}`).join("+");
-    totalRow.getCell(6).value = { formula: sumExpr };
+    totalRow.getCell(6).value = {
+      formula: amountRowNumbers.map((n) => `F${n}`).join("+"),
+    };
   } else {
     totalRow.getCell(6).value = 0;
   }
   applyMoneyFormat(totalRow.getCell(6));
 
-  return {
-    sheet: ws,
-    totalCellAddr: `'${ws.name}'!F${totalRow.number}`,
+  return { sheet: ws, totalCellAddr: `'${ws.name}'!F${totalRow.number}` };
+}
+
+/* =========================
+   Provisional Sums
+   ========================= */
+function writeProvisionalSumsSheet(workbook, sums) {
+  const cleaned = (Array.isArray(sums) ? sums : [])
+    .map((s) => ({
+      description: String(s?.description || "").trim(),
+      amount: safeNum(s?.amount),
+    }))
+    .filter((s) => s.description || s.amount > 0);
+
+  if (!cleaned.length) return null;
+
+  const ws = workbook.addWorksheet(safeSheetName("Provisional Sums", workbook));
+  ws.columns = [
+    { header: "Item", key: "item", width: 6 },
+    { header: "Description", key: "description", width: 60 },
+    { header: "Amount", key: "amount", width: 16 },
+  ];
+  const hdr = ws.getRow(1);
+  hdr.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  hdr.fill = HEADER_FILL;
+  hdr.alignment = { horizontal: "center" };
+
+  const titleRow = ws.addRow([null, "PROVISIONAL SUMS", null]);
+  titleRow.font = { bold: true, size: 12 };
+  ws.mergeCells(titleRow.number, 2, titleRow.number, 3);
+
+  const amountRows = [];
+  cleaned.forEach((s, i) => {
+    const r = ws.addRow([snLetter(i), s.description, round2(s.amount) || null]);
+    applyMoneyFormat(r.getCell(3));
+    amountRows.push(r.number);
+  });
+
+  ws.addRow([]);
+  const totalRow = ws.addRow([null, "PROVISIONAL SUMS — to Main Building Summary", null]);
+  totalRow.font = { bold: true };
+  totalRow.fill = SUMMARY_TOTAL_FILL;
+  totalRow.getCell(3).value = {
+    formula: amountRows.length ? amountRows.map((n) => `C${n}`).join("+") : "0",
   };
+  applyMoneyFormat(totalRow.getCell(3));
+
+  return { sheet: ws, totalCellAddr: `'${ws.name}'!C${totalRow.number}` };
 }
 
 /* =========================
@@ -499,7 +590,7 @@ function writeCoverSheet(workbook, { projectName, variantTitle, buildingType, fo
   ws.addRow([]);
   ws.addRow(["Project", projectName || "Project"]);
   ws.addRow(["Building type", buildingType === "multistorey" ? "Multi-Storey" : "Bungalow"]);
-  if (buildingType === "multistorey") {
+  if (buildingType === "multistorey" && foundationType) {
     ws.addRow(["Foundation type", foundationType[0].toUpperCase() + foundationType.slice(1)]);
   }
   ws.addRow(["Generated", dayjs().format("YYYY-MM-DD HH:mm")]);
@@ -534,30 +625,25 @@ function writeUnmappedSheet(workbook, projectItems, matchedSet) {
 
   const amountRows = [];
   unmatched.forEach(({ it }, idx) => {
-    const r = ws.addRow([
-      snLetter(idx),
-      String(it?.description || it?.takeoffLine || ""),
-      round2(safeNum(it?.qty)) || "",
-      String(it?.unit || ""),
-      round2(safeNum(it?.rate)) || "",
-    ]);
-    r.getCell(6).value = { formula: `C${r.number}*E${r.number}` };
-    applyMoneyFormat(r.getCell(3));
-    applyMoneyFormat(r.getCell(5));
-    applyMoneyFormat(r.getCell(6));
+    const r = writeAmountRow(ws, {
+      code: snLetter(idx),
+      description: String(it?.description || it?.takeoffLine || ""),
+      unit: String(it?.unit || ""),
+      qty: round2(safeNum(it?.qty)),
+      rate: round2(safeNum(it?.rate)),
+    });
     amountRows.push(r.number);
   });
 
-  if (amountRows.length) {
-    ws.addRow([]);
-    const tot = ws.addRow([null, "UNMAPPED — to Main Building Summary", "", "", null, null]);
-    tot.font = { bold: true };
-    tot.fill = SUMMARY_TOTAL_FILL;
-    tot.getCell(6).value = { formula: amountRows.map((n) => `F${n}`).join("+") };
-    applyMoneyFormat(tot.getCell(6));
-    return { sheet: ws, totalCellAddr: `'${ws.name}'!F${tot.number}` };
-  }
-  return null;
+  if (!amountRows.length) return null;
+
+  ws.addRow([]);
+  const tot = ws.addRow([null, "UNMAPPED — to Main Building Summary", null, null, null, null]);
+  tot.font = { bold: true };
+  tot.fill = SUMMARY_TOTAL_FILL;
+  tot.getCell(6).value = { formula: amountRows.map((n) => `F${n}`).join("+") };
+  applyMoneyFormat(tot.getCell(6));
+  return { sheet: ws, totalCellAddr: `'${ws.name}'!F${tot.number}` };
 }
 
 function writeSummarySheet(workbook, billRefs) {
@@ -586,7 +672,7 @@ function writeSummarySheet(workbook, billRefs) {
   ws.addRow([]);
   const sub = ws.addRow([null, "GRAND SUMMARY (Sub-total)", null]);
   sub.getCell(3).value = {
-    formula: billRowNumbers.map((n) => `C${n}`).join("+") || "0",
+    formula: billRowNumbers.length ? billRowNumbers.map((n) => `C${n}`).join("+") : "0",
   };
   sub.font = { bold: true };
   sub.fill = SUMMARY_TOTAL_FILL;
@@ -613,23 +699,6 @@ function writeSummarySheet(workbook, billRefs) {
 }
 
 /* =========================
-   Bill resolution (variants)
-   ========================= */
-function resolveBillVariant(bill, foundationType) {
-  if (!bill?.variants) return bill;
-  const chosen =
-    bill.variants[foundationType] ||
-    bill.variants.pad ||
-    bill.variants[Object.keys(bill.variants)[0]];
-  return {
-    name: bill.name,
-    kind: bill.kind,
-    splitByLevel: bill.splitByLevel,
-    elements: chosen?.elements || [],
-  };
-}
-
-/* =========================
    Public API
    ========================= */
 export async function exportElementalBoQ({
@@ -638,6 +707,7 @@ export async function exportElementalBoQ({
   productKey = "",
   buildingType = "bungalow",
   foundationType,
+  provisionalSums = [],
   mappingPath,
 } = {}) {
   const mapping = loadMapping(mappingPath);
@@ -646,10 +716,7 @@ export async function exportElementalBoQ({
   const variant = resolveVariant(mapping, domain, bt);
 
   const projectItems = Array.isArray(items) ? items : [];
-  const ft =
-    bt === "multistorey"
-      ? normalizeFoundationType(foundationType || detectFoundationType(projectItems))
-      : "pad";
+  const ft = bt === "multistorey" ? normalizeFoundationType(foundationType) : "pad";
 
   const workbook = new ExcelJS.Workbook();
   workbook.calcProperties.fullCalcOnLoad = true;
@@ -664,23 +731,27 @@ export async function exportElementalBoQ({
   const matchedSet = new Set();
   const billRefs = [];
 
+  // Plan first (so we know which bills/elements/items will actually render),
+  // then write only the ones that have content.
   for (const billRaw of variant.bills || []) {
     const billResolved = resolveBill(mapping, billRaw);
-    const bill = resolveBillVariant(billResolved, ft);
 
-    if (bill.kind === "preliminaries") {
+    if (billResolved.kind === "preliminaries") {
       const ref = writePreliminariesSheet(workbook, projectName);
-      billRefs.push({ name: bill.name, totalCellAddr: ref.totalCellAddr });
+      billRefs.push({ name: billResolved.name, totalCellAddr: ref.totalCellAddr });
       continue;
     }
 
-    const ref = writeStandardBill({
-      workbook,
-      bill,
-      projectItems,
-      matchedSet,
-    });
-    billRefs.push({ name: bill.name, totalCellAddr: ref.totalCellAddr });
+    const planned = planBill(billResolved, projectItems, matchedSet);
+    if (!planned) continue; // skip empty bills entirely
+
+    const ref = writeStandardBill({ workbook, plannedBill: planned });
+    billRefs.push({ name: planned.name, totalCellAddr: ref.totalCellAddr });
+  }
+
+  const provRef = writeProvisionalSumsSheet(workbook, provisionalSums);
+  if (provRef) {
+    billRefs.push({ name: "Provisional Sums", totalCellAddr: provRef.totalCellAddr });
   }
 
   const unmappedRef = writeUnmappedSheet(workbook, projectItems, matchedSet);
@@ -696,7 +767,10 @@ export async function exportElementalBoQ({
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
-  const variantSuffix = bt === "multistorey" ? `Multi-Storey (${ft[0].toUpperCase() + ft.slice(1)})` : "Bungalow";
+  const variantSuffix =
+    bt === "multistorey"
+      ? `Multi-Storey (${ft[0].toUpperCase() + ft.slice(1)})`
+      : "Bungalow";
 
   return {
     buffer: Buffer.isBuffer(buf) ? buf : Buffer.from(buf),

@@ -180,6 +180,7 @@ router.get(
       productKey: tool,
       buildingType,
       foundationType: foundationType || undefined,
+      provisionalSums: project.provisionalSums || [],
     });
 
     const buf = Buffer.isBuffer(out.buffer)

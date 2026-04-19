@@ -328,6 +328,19 @@ function sanitizeItems(items, productKey = "") {
   return safe;
 }
 
+function sanitizeProvisionalSums(sums) {
+  if (!Array.isArray(sums)) return [];
+  const out = [];
+  for (let i = 0; i < sums.length && out.length < 200; i += 1) {
+    const s = sums[i] || {};
+    const description = String(s.description || "").trim().slice(0, 500);
+    const amount = Number.isFinite(Number(s.amount)) ? Number(s.amount) : 0;
+    if (!description && amount === 0) continue;
+    out.push({ description, amount });
+  }
+  return out;
+}
+
 function bucketPreviousItems(items) {
   const buckets = new Map();
   (items || []).forEach((item, index) => {
@@ -735,6 +748,7 @@ async function updateProject(req, res) {
       checklistCompositeKeys,
       clientProjectKey,
       valuationSettings,
+      provisionalSums,
     } = req.body || {};
 
     const userId = getUserObjectId(req);
@@ -840,6 +854,10 @@ async function updateProject(req, res) {
         valuationSettings,
         project.valuationSettings || DEFAULT_VALUATION_SETTINGS,
       );
+    }
+
+    if (Array.isArray(provisionalSums)) {
+      project.provisionalSums = sanitizeProvisionalSums(provisionalSums);
     }
 
     project.version += 1;

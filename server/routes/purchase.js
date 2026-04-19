@@ -36,6 +36,13 @@ router.post("/", requireAuth, async (req, res) => {
   if (!productKey)
     return res.status(400).json({ error: "productKey required" });
 
+  const product = await Product.findOne({ key: productKey }).lean();
+  if (!product || !product.isPublished || product.isComingSoon) {
+    return res
+      .status(400)
+      .json({ error: "This product is not available for purchase yet." });
+  }
+
   const p = await Purchase.create({
     userId: req.user._id,
     email: req.user.email,
@@ -95,6 +102,7 @@ router.post("/cart", requireAuth, async (req, res) => {
     const products = await Product.find({
       key: { $in: keys },
       isPublished: true,
+      isComingSoon: { $ne: true },
     }).lean();
 
     const byKey = Object.fromEntries(products.map((p) => [p.key, p]));

@@ -572,6 +572,7 @@ export default function Products() {
                   saveEdit={saveEdit}
                   addToCart={addToCart}
                   coupons={activeCoupons}
+                  onComingSoon={() => setShowModal(true)}
                 />
               ))}
           </div>
@@ -614,6 +615,7 @@ function ProductCard({
   saveEdit,
   addToCart,
   coupons,
+  onComingSoon,
 }) {
   const editing = isEditing(p._id);
   const cat = getCategory(p);
@@ -625,6 +627,7 @@ function ProductCard({
       : (p.sort ?? 99) <= 1 || (rating || 0) >= 4.8;
 
   const outOfStock = false;
+  const isComingSoon = !!p.isComingSoon;
 
   const yearly = p.price?.yearlyNGN || 0;
   const monthly = p.price?.monthlyNGN || 0;
@@ -681,16 +684,18 @@ function ProductCard({
           : undefined,
       }}
     >
-      {(popular || outOfStock) && (
+      {(popular || outOfStock || isComingSoon) && (
         <div className="absolute right-3 top-3 z-10">
           <span
             className={`text-[11px] px-2 py-0.5 rounded-full backdrop-blur ring-1 ${
-              outOfStock
+              isComingSoon
+                ? "bg-amber-50 text-amber-700 ring-amber-200"
+                : outOfStock
                 ? "bg-red-50 text-red-700 ring-red-200"
                 : "bg-blue-50 text-adlm-blue-700 ring-blue-200"
             }`}
           >
-            {outOfStock ? "Out of Stock" : "Popular"}
+            {isComingSoon ? "Coming Soon" : outOfStock ? "Out of Stock" : "Popular"}
           </span>
         </div>
       )}
@@ -809,15 +814,19 @@ function ProductCard({
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             className={`rounded-md px-3 py-2 text-sm font-medium ring-1 ring-slate-200 transition active:animate-[pop_180ms_ease-out]
-              ${outOfStock ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50"}
+              ${outOfStock || isComingSoon ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50"}
             `}
             onClick={() => {
               if (outOfStock) return;
+              if (isComingSoon) {
+                onComingSoon?.();
+                return;
+              }
               addToCart(p, 1);
             }}
-            title="Add to Cart"
+            title={isComingSoon ? "Coming Soon" : "Add to Cart"}
           >
-            Add to Cart
+            {isComingSoon ? "Coming Soon" : "Add to Cart"}
           </button>
 
           <Link

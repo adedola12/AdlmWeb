@@ -3,6 +3,7 @@ import React from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
+import ComingSoonModal from "../components/ComingSoonModal.jsx";
 
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
 const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -232,7 +233,14 @@ export default function ProductDetail() {
     return () => window.removeEventListener("keydown", onKey);
   }, [hasMany, nextSlide, prevSlide]);
 
+  const isComingSoon = !!p?.isComingSoon;
+  const [showComingSoon, setShowComingSoon] = React.useState(false);
+
   function purchase() {
+    if (isComingSoon) {
+      setShowComingSoon(true);
+      return;
+    }
     const productKey = getProductKey(p) || key;
     const nextUrl = `/purchase?product=${encodeURIComponent(productKey)}&months=1`;
     if (!user) return navigate(`/login?next=${encodeURIComponent(nextUrl)}`);
@@ -400,15 +408,28 @@ export default function ProductDetail() {
           )}
         </div>
 
+        {isComingSoon && (
+          <div className="mt-3 inline-flex items-center gap-2 text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+            Coming Soon — not yet available for purchase
+          </div>
+        )}
+
         <div className="mt-4 flex gap-2">
           <button className="btn" onClick={purchase}>
-            Purchase
+            {isComingSoon ? "Coming Soon" : "Purchase"}
           </button>
           <Link className="btn" to="/products">
             Back to products
           </Link>
         </div>
       </div>
+
+      <ComingSoonModal
+        show={showComingSoon}
+        onClose={() => setShowComingSoon(false)}
+        title="Coming Soon"
+        message="This product isn't available for purchase yet. We'll announce availability here soon."
+      />
 
       {(p.features?.length || 0) > 0 && (
         <div className="card">

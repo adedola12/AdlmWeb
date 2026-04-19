@@ -193,6 +193,7 @@ export default function AdminProducts() {
       thumbnailUrl: thumbInputRef.current?.value || images[0] || undefined,
       images,
       isPublished: fd.get("isPublished") === "on",
+      isComingSoon: fd.get("isComingSoon") === "on",
       sort: Number(fd.get("sort") || 0) || 0,
       isCourse: productType === "course",
       courseSku: productType === "course" && courseSku ? courseSku : undefined,
@@ -755,6 +756,11 @@ export default function AdminProducts() {
             Published
           </label>
 
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="isComingSoon" />{" "}
+            Coming Soon (shown on storefront but not purchasable; admin can still grant manually)
+          </label>
+
           <button
             className="btn sm:col-span-2"
             disabled={uploadingPreview || uploadingThumb}
@@ -792,6 +798,11 @@ export default function AdminProducts() {
                 <div className="text-slate-600">
                   key: {p.key} · sort: {p.sort} ·{" "}
                   {p.isPublished ? "published" : "hidden"}
+                  {p.isComingSoon && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded bg-amber-100 text-amber-700 text-xs">
+                      Coming Soon
+                    </span>
+                  )}
                 </div>
                 <div className="text-slate-600">
                   Billing: <b>{p.billingInterval}</b>

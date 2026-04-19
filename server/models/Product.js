@@ -80,6 +80,7 @@ const ProductSchema = new mongoose.Schema(
     thumbnailUrl: { type: String, default: undefined },
 
     isPublished: { type: Boolean, default: true },
+    isComingSoon: { type: Boolean, default: false },
     sort: { type: Number, default: 0 },
   },
   { timestamps: true },

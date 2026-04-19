@@ -160,6 +160,10 @@ export default function ProjectOpenView({
   onStatusToggle,
   onCategoryChange,
   categoryOptions = [],
+  provisionalSums = [],
+  onAddProvisionalSum,
+  onUpdateProvisionalSum,
+  onRemoveProvisionalSum,
   onSyncPrices,
   onToggleAutoFill,
   onToggleAutoFillBoq,
@@ -278,7 +282,7 @@ export default function ProjectOpenView({
                 </button>
 
                 <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  Elemental BoQ — Bungalow
+                  Elemental BoQ
                 </div>
                 <button
                   type="button"
@@ -288,33 +292,13 @@ export default function ProjectOpenView({
                 >
                   Bungalow
                 </button>
-
-                <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  Elemental BoQ — Multi-storey
-                </div>
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("multistorey", "pad")}
-                  title="Pad foundation (auto-detect default)"
+                  onClick={() => onExportElementalBoQ?.("multistorey")}
+                  title="Multi-storey building — sub-items per foundation type render only when present in the takeoff"
                 >
-                  Multi-storey — Pad foundation
-                </button>
-                <button
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("multistorey", "raft")}
-                  title="Raft foundation"
-                >
-                  Multi-storey — Raft foundation
-                </button>
-                <button
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("multistorey", "pile")}
-                  title="Pile foundation"
-                >
-                  Multi-storey — Pile foundation
+                  Multi-storey
                 </button>
               </div>
             ) : null}
@@ -466,6 +450,10 @@ export default function ProjectOpenView({
           onStatusToggle={onStatusToggle}
           onCategoryChange={onCategoryChange}
           categoryOptions={categoryOptions}
+          provisionalSums={provisionalSums}
+          onAddProvisionalSum={onAddProvisionalSum}
+          onUpdateProvisionalSum={onUpdateProvisionalSum}
+          onRemoveProvisionalSum={onRemoveProvisionalSum}
           onSyncPrices={onSyncPrices}
           onSyncBoqRates={onSyncBoqRates}
           onToggleAutoFill={onToggleAutoFill}
