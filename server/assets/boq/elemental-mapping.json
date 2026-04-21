@@ -90,7 +90,7 @@
                 "preamble": "1000 gauge Visqueen DPM laid over hardcore with 150mm laps; horizontal damp proof course over substructure walls.",
                 "items": [
                   { "description": "DPM to under floor slab", "unit": "m2", "lookups": [["oversite", "dpm"], ["dpm"]] },
-                  { "description": "Damp proof course (DPC)", "unit": "m", "lookupCombine": "sum", "lookups": [["dpc"], ["damp", "proof", "course"], ["dpc", "length"], ["dpc", "rolls"]] }
+                  { "description": "Damp proof course (DPC)", "unit": "m", "lookupCombine": "sum", "lookups": [["dpc"], ["damp", "proof", "course"], ["damp", "proof", "core"], ["damp", "proof"], ["dpc", "length"], ["dpc", "rolls"]] }
                 ]
               },
               {
@@ -138,13 +138,13 @@
                 "heading": "ROOF COVERING AND MEMBERS",
                 "preamble": "Pre-painted profiled steel roof sheets fixed to hardwood members with proprietary fixings as specification.",
                 "items": [
-                  { "description": "Roof covering", "unit": "m2", "lookups": [["roof", "area"]] },
-                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookups": [["roof", "structs"], ["roof", "strut"]] },
+                  { "description": "Roof covering", "unit": "m2", "lookups": [["roof", "area"], ["roof", "covering"]] },
+                  { "description": "50 x 100mm Hardwood Strut and Ties", "unit": "m", "lookups": [["roof", "structs"], ["roof", "strut"], ["roof", "tie"], ["tie", "beam"], ["tiebeam"]] },
                   { "description": "50 x 150mm Hardwood King Post", "unit": "m", "lookups": [["roof", "king", "post"], ["roof", "kingpost"]] },
                   { "description": "50 x 150mm Hardwood Wall Plate", "unit": "m", "lookups": [["roof", "wall", "plate"], ["roof", "wallplate"]] },
-                  { "description": "50 x 50mm Hardwood Ceiling Noggins", "unit": "m", "lookups": [["ceiling", "nogging"]] },
-                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookups": [["roof", "purlin"]] },
-                  { "description": "50 x 150mm Hardwood Rafters", "unit": "m", "lookups": [["roof", "rafter"]] }
+                  { "description": "50 x 50mm Hardwood Ceiling Noggins", "unit": "m", "lookups": [["ceiling", "nogging"], ["ceiling", "noggin"]] },
+                  { "description": "50 x 75mm Hardwood Purlins", "unit": "m", "lookups": [["roof", "purlin"], ["purlin"]] },
+                  { "description": "50 x 150mm Hardwood Rafters", "unit": "m", "lookups": [["roof", "rafter"], ["rafter"]] }
                 ]
               },
               {
@@ -159,10 +159,10 @@
                 "heading": "FLOOR, WALL AND CEILING FINISHES",
                 "preamble": "Tiled / screeded floors, plastered and painted walls, P.O.P or board ceilings to architect's specification.",
                 "items": [
-                  { "description": "Floor finishes (tiles / screed)", "unit": "m2", "lookups": [["finishes", "tile"], ["finishes", "total", "tile"]] },
-                  { "description": "Wall rendering / plastering", "unit": "m2", "lookups": [["blockwork", "wall", "rendering"]] },
-                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookups": [["painting"]] },
-                  { "description": "Ceiling finishes (P.O.P. / board)", "unit": "m2", "lookups": [["ceiling", "area"]] }
+                  { "description": "Floor finishes (tiles / screed)", "unit": "m2", "lookupCombine": "sum", "lookups": [["finishes", "tile"], ["finishes", "total", "tile"], ["finishes", "floor"], ["finishes", "floors"], ["floor", "finish"], ["floor", "area"]] },
+                  { "description": "Wall rendering / plastering", "unit": "m2", "lookupCombine": "sum", "lookups": [["blockwork", "wall", "rendering"], ["blockwork", "rendering"], ["rendering", "other"], ["wall", "rendering"], ["rendering"], ["plaster"], ["finishes", "wall"], ["finishes", "walls"], ["finishes", "total", "finish"]] },
+                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookupCombine": "sum", "lookups": [["painting"], ["paint", "required"], ["wall", "paint"], ["finishes", "paint"], ["paint", "area"]] },
+                  { "description": "Ceiling finishes (P.O.P. / board)", "unit": "m2", "lookupCombine": "sum", "lookups": [["ceiling", "area"], ["ceiling", "finish"], ["finishes", "ceiling"]] }
                 ]
               }
             ]
@@ -292,7 +292,7 @@
                 "preamble": "1000 gauge DPM under ground floor slab; horizontal damp proof course over substructure walls.",
                 "items": [
                   { "description": "DPM to under floor slab", "unit": "m2", "lookupCombine": "sum", "lookups": [["oversite", "dpm"], ["raft", "dpm"], ["dpm"]] },
-                  { "description": "Damp proof course (DPC)", "unit": "m", "lookupCombine": "sum", "lookups": [["damp", "proof", "course"], ["dpc"], ["dpc", "length"], ["dpc", "rolls"]] }
+                  { "description": "Damp proof course (DPC)", "unit": "m", "lookupCombine": "sum", "lookups": [["damp", "proof", "course"], ["damp", "proof", "core"], ["damp", "proof"], ["dpc"], ["dpc", "length"], ["dpc", "rolls"]] }
                 ]
               },
 

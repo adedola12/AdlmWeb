@@ -771,7 +771,35 @@ function writeUnmappedSheet(workbook, projectItems, matchedSet) {
     .filter(({ i }) => !matchedSet.has(i));
   if (!unmatched.length) return null;
 
-  const ws = workbook.addWorksheet(safeSheetName("Unmapped", workbook));
+  // Some items look like bulk takeoff totals rather than individual scope
+  // lines (e.g. "Model Item: All Model Items – Area / Volume"). They double-
+  // count the measured work and don't belong in a BoQ sheet — skip them.
+  const isBulkTotalLine = (it) => {
+    const h = normalizeText(
+      [it?.description, it?.takeoffLine, it?.materialName, it?.type]
+        .map((v) => String(v || ""))
+        .join(" "),
+    );
+    return (
+      h.includes("all model items") ||
+      h.includes("model item: all") ||
+      h.includes("total finish area")
+    );
+  };
+
+  const usable = unmatched.filter(({ it }) => !isBulkTotalLine(it));
+  if (!usable.length) return null;
+
+  // Group the unmatched items by their UI category so users can see they ARE
+  // categorized — they just didn't match a specific elemental BoQ line.
+  const byCategory = new Map();
+  for (const u of usable) {
+    const cat = String(u.it?.category || "").trim() || "Uncategorized";
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat).push(u);
+  }
+
+  const ws = workbook.addWorksheet(safeSheetName("Other items", workbook));
   ws.columns = [
     { header: "Item", key: "item", width: 6 },
     { header: "Description", key: "description", width: 60 },
@@ -784,30 +812,74 @@ function writeUnmappedSheet(workbook, projectItems, matchedSet) {
   const hdr = ws.getRow(1);
   hdr.font = { bold: true, color: { argb: "FFFFFFFF" } };
   hdr.fill = HEADER_FILL;
+  hdr.alignment = { horizontal: "center" };
 
   const note = ws.addRow([
     null,
-    "Items below were not matched to any BoQ line in this template. Update the BoQ mapping (assets/boq/elemental-mapping.json) to include them.",
+    "Additional items grouped by their UI category. These are priced and added to the project total — they simply did not match a specific line in this elemental template.",
   ]);
   note.font = { italic: true, color: { argb: "FF64748B" } };
+  note.alignment = { wrapText: true, vertical: "top" };
   ws.mergeCells(note.number, 1, note.number, 6);
 
   const amountRows = [];
-  unmatched.forEach(({ it }, idx) => {
-    const r = writeAmountRow(ws, {
-      code: snLetter(idx),
-      description: String(it?.description || it?.takeoffLine || ""),
-      unit: String(it?.unit || ""),
-      qty: round2(safeNum(it?.qty)),
-      rate: round2(safeNum(it?.rate)),
-    });
-    amountRows.push(r.number);
+  const subtotalByCat = new Map();
+
+  // Stable ordering: match the canonical category order used elsewhere.
+  const orderedCats = [...byCategory.keys()].sort((a, b) => {
+    const preferred = ["Substructure", "Frames", "Frame", "Superstructure", "Staircase", "Landscaping", "HVAC", "Plumbing", "Electrical"];
+    const ai = preferred.indexOf(a);
+    const bi = preferred.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
   });
+
+  for (const cat of orderedCats) {
+    ws.addRow([]);
+    const head = ws.addRow([null, String(cat).toUpperCase()]);
+    head.font = { bold: true };
+    head.fill = HEADING_FILL;
+    ws.mergeCells(head.number, 2, head.number, 6);
+
+    const catRows = byCategory.get(cat) || [];
+    const catAmountRows = [];
+    catRows.forEach(({ it }, idx) => {
+      const r = writeAmountRow(ws, {
+        code: snLetter(idx),
+        description: String(it?.description || it?.takeoffLine || ""),
+        unit: String(it?.unit || ""),
+        qty: round2(safeNum(it?.qty)),
+        rate: round2(safeNum(it?.rate)),
+      });
+      amountRows.push(r.number);
+      catAmountRows.push(r.number);
+    });
+
+    const sub = ws.addRow([
+      null,
+      `Subtotal — ${cat}`,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    sub.font = { bold: true };
+    sub.fill = SUMMARY_TOTAL_FILL;
+    sub.getCell(6).value = {
+      formula: catAmountRows.length
+        ? catAmountRows.map((n) => `F${n}`).join("+")
+        : "0",
+    };
+    applyMoneyFormat(sub.getCell(6));
+    subtotalByCat.set(cat, sub.number);
+  }
 
   if (!amountRows.length) return null;
 
   ws.addRow([]);
-  const tot = ws.addRow([null, "UNMAPPED — to Main Building Summary", null, null, null, null]);
+  const tot = ws.addRow([null, "OTHER ITEMS — to Main Building Summary", null, null, null, null]);
   tot.font = { bold: true };
   tot.fill = SUMMARY_TOTAL_FILL;
   tot.getCell(6).value = { formula: amountRows.map((n) => `F${n}`).join("+") };
@@ -931,7 +1003,7 @@ export async function exportElementalBoQ({
 
   const unmappedRef = writeUnmappedSheet(workbook, projectItems, matchedSet);
   if (unmappedRef) {
-    billRefs.push({ name: "Unmapped", totalCellAddr: unmappedRef.totalCellAddr });
+    billRefs.push({ name: "Other items", totalCellAddr: unmappedRef.totalCellAddr });
   }
 
   writeSummarySheet(workbook, billRefs);
