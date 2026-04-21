@@ -34,6 +34,23 @@ const DEFAULT_MAPPING_PATH = path.join(
   "elemental-mapping.json",
 );
 
+const TRADE_MAPPING_PATH = path.join(
+  __dirname,
+  "..",
+  "assets",
+  "boq",
+  "trade-mapping.json",
+);
+
+function resolveMappingPath(format, explicit) {
+  if (explicit) return explicit;
+  const f = String(format || "").toLowerCase();
+  if (f === "trade" || f === "work-section" || f === "worksection") {
+    return TRADE_MAPPING_PATH;
+  }
+  return DEFAULT_MAPPING_PATH;
+}
+
 const HEADER_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FF091E39" } };
 const HEADING_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5ECF5" } };
 const SUMMARY_TOTAL_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E7EF" } };
@@ -951,8 +968,10 @@ export async function exportElementalBoQ({
   provisionalSums = [],
   variations = [],
   mappingPath,
+  format = "elemental", // "elemental" | "trade"
 } = {}) {
-  const mapping = loadMapping(mappingPath);
+  const resolvedPath = resolveMappingPath(format, mappingPath);
+  const mapping = loadMapping(resolvedPath);
   const domain = domainForProductKey(productKey);
   const bt = normalizeBuildingType(buildingType);
   const variant = resolveVariant(mapping, domain, bt);
@@ -1019,8 +1038,13 @@ export async function exportElementalBoQ({
       ? `Multi-Storey (${ft[0].toUpperCase() + ft.slice(1)})`
       : "Bungalow";
 
+  const formatLabel =
+    String(format || "elemental").toLowerCase() === "trade"
+      ? "Trade"
+      : "Elemental";
+
   return {
     buffer: Buffer.isBuffer(buf) ? buf : Buffer.from(buf),
-    filename: `${safeName} - Elemental BOQ (${variantSuffix}).xlsx`,
+    filename: `${safeName} - ${formatLabel} BOQ (${variantSuffix}).xlsx`,
   };
 }

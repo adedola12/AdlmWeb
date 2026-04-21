@@ -149,6 +149,7 @@ export default function ProjectOpenView({
   onDeleteItem,
   onExportElementalBoQ,
   onExportGenericBoQ,
+  onExportGenericTradeBoQ,
   onItemQueryChange,
   onMoveItem,
   onPickCandidate,
@@ -276,22 +277,36 @@ export default function ProjectOpenView({
             </button>
 
             {exportOpen ? (
-              <div className="absolute right-0 z-30 mt-2 w-72 overflow-hidden rounded-lg border bg-white shadow-lg">
+              <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border bg-white shadow-lg">
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
                   onClick={onExportGenericBoQ}
+                  title="Category-grouped workbook (Substructure / Superstructure / HVAC / Plumbing / Electrical)"
                 >
-                  Export generic BoQ
+                  Export generic BoQ (by category)
                 </button>
+                {onExportGenericTradeBoQ ? (
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    onClick={onExportGenericTradeBoQ}
+                    title="Group the same items by trade (Concrete, Formwork, Reinforcement, Masonry, Finishes, etc.)"
+                  >
+                    Export generic BoQ (by trade)
+                  </button>
+                ) : null}
 
                 <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   Elemental BoQ
+                  <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
+                    — grouped by building element
+                  </span>
                 </div>
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("bungalow")}
+                  onClick={() => onExportElementalBoQ?.("bungalow", undefined, "elemental")}
                   title="Single-storey building format"
                 >
                   Bungalow
@@ -299,10 +314,33 @@ export default function ProjectOpenView({
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("multistorey")}
-                  title="Multi-storey building — sub-items per foundation type render only when present in the takeoff"
+                  onClick={() => onExportElementalBoQ?.("multistorey", undefined, "elemental")}
+                  title="Multi-storey building"
                 >
                   Multi-storey
+                </button>
+
+                <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Trade BoQ
+                  <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
+                    — grouped by work section (NRM2-style)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() => onExportElementalBoQ?.("bungalow", undefined, "trade")}
+                  title="Concrete, formwork, reinforcement, masonry, finishes, painting, plumbing, electrical and HVAC each get their own bill"
+                >
+                  Bungalow (Trade format)
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() => onExportElementalBoQ?.("multistorey", undefined, "trade")}
+                  title="Multi-storey trade-format BoQ"
+                >
+                  Multi-storey (Trade format)
                 </button>
               </div>
             ) : null}

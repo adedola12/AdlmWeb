@@ -160,6 +160,9 @@ router.get(
     const foundationType = String(req.query.foundation || "")
       .trim()
       .toLowerCase();
+    const format = String(req.query.format || "elemental")
+      .trim()
+      .toLowerCase();
 
     const project = await findProjectDoc({
       tool,
@@ -182,6 +185,7 @@ router.get(
       foundationType: foundationType || undefined,
       provisionalSums: project.provisionalSums || [],
       variations: project.variations || [],
+      format,
     });
 
     const buf = Buffer.isBuffer(out.buffer)

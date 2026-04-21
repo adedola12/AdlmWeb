@@ -18,6 +18,8 @@ import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
 import {
   allCategoriesForProductKey,
   deriveItemCategory,
+  deriveItemTrade,
+  tradesForProductKey,
   UNCATEGORIZED,
 } from "../lib/boqCategory.js";
 
@@ -2459,7 +2461,7 @@ export default function ProjectsGeneric() {
     [valuations, selectedValuationDate],
   );
 
-  function exportGenericBoQ() {
+  function exportGenericBoQ(groupBy = "category") {
     if (!sel) return;
 
     const headers = ["S/N", "Description", "Qty", "Unit", "Rate", "Amount"];
@@ -2472,18 +2474,28 @@ export default function ProjectsGeneric() {
       { wch: 16 },
     ];
 
-    // Group rows by category. Preserve canonical category order, then any
-    // extra category names that appear on items but aren't in the canonical
-    // list (defensive — should be rare since the server backfills).
+    // Group rows by either category (building element) or trade (work section).
+    // Preserve canonical ordering, then append any extras at the end.
+    const useTrade = String(groupBy).toLowerCase() === "trade";
+    const canonical = useTrade
+      ? tradesForProductKey(toolNorm)
+      : categoryOptions;
+
     const byCategory = new Map();
     for (const row of computedAll) {
-      const cat = String(row.category || UNCATEGORIZED).trim() || UNCATEGORIZED;
-      if (!byCategory.has(cat)) byCategory.set(cat, []);
-      byCategory.get(cat).push(row);
+      // For trade grouping, classify by item description since trade is
+      // independent of the saved UI category.
+      const rawItem = items[row.i] || row;
+      const groupName = useTrade
+        ? deriveItemTrade(rawItem, toolNorm)
+        : String(row.category || UNCATEGORIZED).trim() || UNCATEGORIZED;
+      const key = groupName || "Other";
+      if (!byCategory.has(key)) byCategory.set(key, []);
+      byCategory.get(key).push(row);
     }
     const orderedCats = [
-      ...categoryOptions.filter((c) => byCategory.has(c)),
-      ...[...byCategory.keys()].filter((c) => !categoryOptions.includes(c)),
+      ...canonical.filter((c) => byCategory.has(c)),
+      ...[...byCategory.keys()].filter((c) => !canonical.includes(c)),
     ];
 
     const wb = XLSX.utils.book_new();
@@ -2581,9 +2593,9 @@ export default function ProjectsGeneric() {
       XLSX.utils.book_append_sheet(wb, psWs, "Provisional Sums");
     }
 
-    // Summary sheet — per-category totals + grand total.
+    // Summary sheet — per-group totals + grand total.
     const summaryAoa = [
-      ["Category", "Items", "Amount"],
+      [useTrade ? "Trade / Work section" : "Category", "Items", "Amount"],
       ...orderedCats.map((cat) => {
         const rows = byCategory.get(cat) || [];
         const subtotal = rows.reduce(
@@ -2609,7 +2621,9 @@ export default function ProjectsGeneric() {
     summaryWs["!cols"] = [{ wch: 30 }, { wch: 10 }, { wch: 18 }];
     XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
 
-    const filename = `${sanitizeFilename(sel?.name || "Project")} - BoQ.xlsx`;
+    const filename = `${sanitizeFilename(sel?.name || "Project")} - BoQ${
+      useTrade ? " (Trade)" : ""
+    }.xlsx`;
     XLSX.writeFile(wb, filename);
   }
 
@@ -2627,13 +2641,18 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function exportElementalBoQFromBackend(buildingType = "bungalow", foundationType) {
+  async function exportElementalBoQFromBackend(
+    buildingType = "bungalow",
+    foundationType,
+    format = "elemental",
+  ) {
     if (!selectedId) return;
 
     const normalizedBuilding = buildingType === "multistorey" ? "multistorey" : "bungalow";
     const base = API_BASE || window.location.origin;
     const qs = new URLSearchParams({ building: normalizedBuilding });
     if (foundationType) qs.set("foundation", String(foundationType));
+    if (format && format !== "elemental") qs.set("format", String(format));
     const path = `/projectsboq/${toolNorm}/${selectedId}/export/boq?${qs.toString()}`;
     const absUrl = new URL(path, base).toString();
 
@@ -2667,7 +2686,8 @@ export default function ProjectsGeneric() {
 
     const blob = await res.blob();
     const cd = res.headers.get("content-disposition");
-    const fallbackName = `${sanitizeFilename(sel?.name || "Project")} - Elemental BOQ.xlsx`;
+    const formatLabel = format === "trade" ? "Trade" : "Elemental";
+    const fallbackName = `${sanitizeFilename(sel?.name || "Project")} - ${formatLabel} BOQ.xlsx`;
     const filename = filenameFromDisposition(cd, fallbackName);
 
     const a = document.createElement("a");
@@ -2958,12 +2978,20 @@ export default function ProjectsGeneric() {
                 onToggleExportOpen={() => setExportOpen((value) => !value)}
                 onExportGenericBoQ={() => {
                   setExportOpen(false);
-                  exportGenericBoQ();
+                  exportGenericBoQ("category");
                 }}
-                onExportElementalBoQ={async (buildingType, foundationType) => {
+                onExportGenericTradeBoQ={() => {
+                  setExportOpen(false);
+                  exportGenericBoQ("trade");
+                }}
+                onExportElementalBoQ={async (buildingType, foundationType, format) => {
                   setExportOpen(false);
                   try {
-                    await exportElementalBoQFromBackend(buildingType, foundationType);
+                    await exportElementalBoQFromBackend(
+                      buildingType,
+                      foundationType,
+                      format || "elemental",
+                    );
                   } catch (e) {
                     setErr(e?.message || "Failed to export BoQ");
                   }
