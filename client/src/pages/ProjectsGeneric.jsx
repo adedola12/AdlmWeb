@@ -914,6 +914,10 @@ export default function ProjectsGeneric() {
   const [baseStatusMap, setBaseStatusMap] = React.useState({});
   const [categoryMap, setCategoryMap] = React.useState({});
   const [baseCategoryMap, setBaseCategoryMap] = React.useState({});
+  const [tradeMap, setTradeMap] = React.useState({});
+  const [baseTradeMap, setBaseTradeMap] = React.useState({});
+  // "category" (default) | "trade" — controls how the BoQ table groups rows
+  const [groupByMode, setGroupByMode] = React.useState("category");
   const [provisionalSums, setProvisionalSums] = React.useState([]);
   const [baseProvisionalSums, setBaseProvisionalSums] = React.useState([]);
   const [variations, setVariations] = React.useState([]);
@@ -1059,6 +1063,19 @@ export default function ProjectsGeneric() {
       baseCategories[k] = cat;
       uiCategories[k] = cat;
     }
+    // Initialize trade map: use saved item.trade when present, otherwise
+    // fall back to the rule-based classifier so existing projects get a
+    // sensible default for the new Trade grouping view.
+    const baseTrades = {};
+    const uiTrades = {};
+    for (let i = 0; i < its.length; i++) {
+      const k = itemKey(its[i], i);
+      const t =
+        String(its[i]?.trade || "").trim() ||
+        deriveItemTrade(its[i], toolNorm);
+      baseTrades[k] = t;
+      uiTrades[k] = t;
+    }
     setBaseRates(base);
     setBaseActualQtyMap(baseActualQty);
     setActualQtyMap(uiActualQty);
@@ -1068,6 +1085,8 @@ export default function ProjectsGeneric() {
     setStatusMap(uiStatuses);
     setBaseCategoryMap(baseCategories);
     setCategoryMap(uiCategories);
+    setBaseTradeMap(baseTrades);
+    setTradeMap(uiTrades);
     const sums = Array.isArray(project?.provisionalSums)
       ? project.provisionalSums.map((s) => ({
           description: String(s?.description || ""),
@@ -1563,6 +1582,17 @@ export default function ProjectsGeneric() {
       [key]: String(category || ""),
     }));
   }
+  function handleTradeChange(rowIndex, trade) {
+    if (!sel) return;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const it = its[rowIndex];
+    if (!it) return;
+    const key = itemKey(it, rowIndex);
+    setTradeMap((prev) => ({
+      ...(prev || {}),
+      [key]: String(trade || ""),
+    }));
+  }
   function handleStatusToggle(rowIndex, checked) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
@@ -1602,6 +1632,7 @@ export default function ProjectsGeneric() {
     !optionalNumberMapsEqual(actualRateMap, baseActualRateMap) ||
     !statusMapsEqual(statusMap, baseStatusMap) ||
     !categoryMapsEqual(categoryMap, baseCategoryMap) ||
+    !categoryMapsEqual(tradeMap, baseTradeMap) ||
     !provisionalSumsEqual(provisionalSums, baseProvisionalSums) ||
     !variationsEqual(variations, baseVariations) ||
     !valuationSettingsEqual(valuationSettings, baseValuationSettings);
@@ -1631,6 +1662,9 @@ export default function ProjectsGeneric() {
         const nextCategory =
           String(categoryMap?.[k] ?? "").trim() ||
           String(it?.category || "").trim();
+        const nextTrade =
+          String(tradeMap?.[k] ?? "").trim() ||
+          String(it?.trade || "").trim();
         return {
           ...it,
           rate: use,
@@ -1638,6 +1672,7 @@ export default function ProjectsGeneric() {
           actualRate: nextActualRate,
           [statusField]: statusValue,
           category: nextCategory,
+          trade: nextTrade,
         };
       });
       const payload = {
@@ -2313,6 +2348,10 @@ export default function ProjectsGeneric() {
       String(categoryMap?.[k] ?? "").trim() ||
       String(it?.category || "").trim() ||
       deriveItemCategory(it, toolNorm);
+    const trade =
+      String(tradeMap?.[k] ?? "").trim() ||
+      String(it?.trade || "").trim() ||
+      deriveItemTrade(it, toolNorm);
     return {
       i,
       key: k,
@@ -2324,6 +2363,7 @@ export default function ProjectsGeneric() {
       groupLabel: groupLabel(gid),
       groupCount: groupCount(gid),
       category,
+      trade,
       rate,
       fullAmount,
       actualQty,
@@ -3048,6 +3088,10 @@ export default function ProjectsGeneric() {
                 onStatusToggle={handleStatusToggle}
                 onCategoryChange={handleCategoryChange}
                 categoryOptions={categoryOptions}
+                tradeOptions={tradesForProductKey(toolNorm)}
+                onTradeChange={handleTradeChange}
+                groupByMode={groupByMode}
+                onGroupByModeChange={setGroupByMode}
                 provisionalSums={provisionalSums}
                 onAddProvisionalSum={handleAddProvisionalSum}
                 onUpdateProvisionalSum={handleUpdateProvisionalSum}

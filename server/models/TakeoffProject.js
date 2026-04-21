@@ -119,6 +119,7 @@ const ItemSchema = new mongoose.Schema(
     type: { type: String, default: "" },
     code: { type: String, default: "" },
     category: { type: String, default: "" },
+    trade: { type: String, default: "" },
   },
   { _id: false },
 );

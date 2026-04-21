@@ -161,6 +161,10 @@ export default function ProjectOpenView({
   onStatusToggle,
   onCategoryChange,
   categoryOptions = [],
+  tradeOptions = [],
+  onTradeChange,
+  groupByMode = "category",
+  onGroupByModeChange,
   provisionalSums = [],
   onAddProvisionalSum,
   onUpdateProvisionalSum,
@@ -492,6 +496,10 @@ export default function ProjectOpenView({
           onStatusToggle={onStatusToggle}
           onCategoryChange={onCategoryChange}
           categoryOptions={categoryOptions}
+          tradeOptions={tradeOptions}
+          onTradeChange={onTradeChange}
+          groupByMode={groupByMode}
+          onGroupByModeChange={onGroupByModeChange}
           provisionalSums={provisionalSums}
           onAddProvisionalSum={onAddProvisionalSum}
           onUpdateProvisionalSum={onUpdateProvisionalSum}

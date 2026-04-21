@@ -36,23 +36,27 @@ function itemTokens(item) {
   return Array.from(new Set(tokenize(text)));
 }
 
-// Record one user's category choice for an item. Increments per-token weights.
+// Record one user's classification choice for an item. Increments per-token
+// weights. `kind` defaults to "category" for backward compat; pass "trade"
+// when learning from trade (work-section) overrides.
 // Best-effort: never throws (a learning failure shouldn't break a save).
 export async function recordCategoryFeedback({
   userId,
   productKey,
   item,
   category,
+  kind = "category",
 }) {
   try {
     if (!userId || !category) return;
     const tokens = itemTokens(item);
     if (!tokens.length) return;
     const productKeyNorm = String(productKey || "").toLowerCase();
+    const kindNorm = String(kind || "category").toLowerCase();
     await Promise.all(
       tokens.map((token) =>
         CategoryFeedback.updateOne(
-          { userId, productKey: productKeyNorm, token, category },
+          { userId, productKey: productKeyNorm, kind: kindNorm, token, category },
           { $inc: { weight: 1 } },
           { upsert: true },
         ),
@@ -66,11 +70,14 @@ export async function recordCategoryFeedback({
 // Returns a map from itemIndex -> category for items where the learned
 // model has a clear preference. Items not in the map should fall back to
 // the rule-based default.
+// `kind` defaults to "category"; pass "trade" to look up learned trade
+// assignments instead.
 export async function applyLearnedCategoriesToItems({
   userId,
   productKey,
   items,
   itemsWithoutExplicitCategory, // Set<number> of indices to consider
+  kind = "category",
 }) {
   const result = new Map();
   if (!userId || !Array.isArray(items) || !items.length) return result;
@@ -87,12 +94,19 @@ export async function applyLearnedCategoriesToItems({
     if (!allTokens.size) return result;
 
     const productKeyNorm = String(productKey || "").toLowerCase();
+    const kindNorm = String(kind || "category").toLowerCase();
 
     // Pull this user's feedback for the relevant tokens. Prefer entries
     // for the same product, but also consider global (productKey: "") rows.
+    // For backward compat, rows missing `kind` are treated as "category".
+    const kindFilter =
+      kindNorm === "category"
+        ? { $in: ["category", null, ""] }
+        : kindNorm;
     const rows = await CategoryFeedback.find({
       userId,
       productKey: { $in: [productKeyNorm, ""] },
+      kind: kindFilter,
       token: { $in: [...allTokens] },
     }).lean();
     if (!rows.length) return result;

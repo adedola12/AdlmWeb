@@ -5,7 +5,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { User } from "../models/User.js";
-import { deriveItemCategory } from "../util/boqCategory.js";
+import { deriveItemCategory, deriveItemTrade } from "../util/boqCategory.js";
 import {
   applyLearnedCategoriesToItems,
   recordCategoryFeedback,
@@ -314,12 +314,18 @@ function sanitizeItems(items, productKey = "") {
       type: item.type != null ? String(item.type) : "",
       code: item.code != null ? String(item.code) : "",
       category: item.category != null ? String(item.category) : "",
+      trade: item.trade != null ? String(item.trade) : "",
     };
 
     // Auto-derive category if not explicitly set by the caller, so legacy items
     // (and Revit/Plugin uploads that don't know the category) get grouped on save.
     if (!baseItem.category) {
       baseItem.category = deriveItemCategory(baseItem, productKey);
+    }
+    // Same for trade — user overrides persist, otherwise fall back to the
+    // rule-based classifier so the Trade-format BoQ and grouping view work.
+    if (!baseItem.trade) {
+      baseItem.trade = deriveItemTrade(baseItem, productKey);
     }
 
     safe.push(baseItem);
@@ -800,22 +806,42 @@ async function updateProject(req, res) {
         productKey,
         items,
         itemsWithoutExplicitCategory: itemsWithoutExplicit,
+        kind: "category",
       });
       const itemsWithLearned = items.map((it, i) =>
         learned.has(i) ? { ...it, category: learned.get(i) } : it,
       );
 
-      const sanitizedNext = sanitizeItems(itemsWithLearned, productKey);
+      // Same pass for trade — apply learned trade to items without one yet.
+      const itemsWithoutExplicitTrade = new Set();
+      items.forEach((it, i) => {
+        if (!String(it?.trade || "").trim()) itemsWithoutExplicitTrade.add(i);
+      });
+      const learnedTrades = await applyLearnedCategoriesToItems({
+        userId,
+        productKey,
+        items,
+        itemsWithoutExplicitCategory: itemsWithoutExplicitTrade,
+        kind: "trade",
+      });
+      const itemsWithBothLearned = itemsWithLearned.map((it, i) =>
+        learnedTrades.has(i) ? { ...it, trade: learnedTrades.get(i) } : it,
+      );
+
+      const sanitizedNext = sanitizeItems(itemsWithBothLearned, productKey);
 
       // Detect explicit user category overrides (changed from previous DB state).
       // Record them as feedback so future items get the same category by default.
       const previousByKey = new Map();
+      const previousTradeByKey = new Map();
       (project.items || []).forEach((it, idx) => {
         previousByKey.set(itemIdentity(it, idx), String(it?.category || ""));
+        previousTradeByKey.set(itemIdentity(it, idx), String(it?.trade || ""));
       });
       const feedbackPromises = [];
       sanitizedNext.forEach((it, idx) => {
         const key = itemIdentity(it, idx);
+
         const prev = previousByKey.get(key);
         const next = String(it?.category || "");
         if (
@@ -823,7 +849,7 @@ async function updateProject(req, res) {
           prev !== next &&
           next &&
           next !== "Uncategorized" &&
-          !learned.has(idx) // don't double-count auto-applied learning
+          !learned.has(idx)
         ) {
           feedbackPromises.push(
             recordCategoryFeedback({
@@ -831,6 +857,29 @@ async function updateProject(req, res) {
               productKey,
               item: it,
               category: next,
+              kind: "category",
+            }),
+          );
+        }
+
+        // Record trade overrides the same way, using the same feedback model
+        // but tagged with kind: "trade".
+        const prevTrade = previousTradeByKey.get(key);
+        const nextTrade = String(it?.trade || "");
+        if (
+          prevTrade !== undefined &&
+          prevTrade !== nextTrade &&
+          nextTrade &&
+          nextTrade !== "Other" &&
+          !learnedTrades.has(idx)
+        ) {
+          feedbackPromises.push(
+            recordCategoryFeedback({
+              userId,
+              productKey,
+              item: it,
+              category: nextTrade,
+              kind: "trade",
             }),
           );
         }

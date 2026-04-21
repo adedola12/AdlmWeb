@@ -513,6 +513,10 @@ export default function ProjectBillTable({
   onStatusToggle,
   onCategoryChange,
   categoryOptions = [],
+  tradeOptions = [],
+  onTradeChange,
+  groupByMode = "category",
+  onGroupByModeChange,
   provisionalSums = [],
   onAddProvisionalSum,
   onUpdateProvisionalSum,
@@ -667,23 +671,36 @@ export default function ProjectBillTable({
     return sorted;
   }, [computedShown, sortCol, sortAsc]);
 
-  // Group rows by category, preserving canonical order, then any extras at the end.
+  // Group rows by either category (building element) or trade (work section)
+  // depending on groupByMode. Canonical order first, unknowns last.
+  const isTradeGrouping = String(groupByMode || "category") === "trade";
+  const activeCanonical = isTradeGrouping
+    ? Array.isArray(tradeOptions)
+      ? tradeOptions
+      : []
+    : Array.isArray(categoryOptions)
+    ? categoryOptions
+    : [];
+
   const groupedRows = React.useMemo(() => {
     const map = new Map();
     for (const row of sortedShown) {
-      const cat = String(row.category || "Uncategorized").trim() || "Uncategorized";
-      if (!map.has(cat)) map.set(cat, []);
-      map.get(cat).push(row);
+      const key = isTradeGrouping
+        ? String(row.trade || "Other").trim() || "Other"
+        : String(row.category || "Uncategorized").trim() || "Uncategorized";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(row);
     }
-    const canonical = Array.isArray(categoryOptions) ? categoryOptions : [];
     const ordered = [
-      ...canonical.filter((c) => map.has(c)).map((c) => ({ category: c, rows: map.get(c) })),
+      ...activeCanonical
+        .filter((c) => map.has(c))
+        .map((c) => ({ category: c, rows: map.get(c) })),
       ...[...map.entries()]
-        .filter(([c]) => !canonical.includes(c))
+        .filter(([c]) => !activeCanonical.includes(c))
         .map(([c, rows]) => ({ category: c, rows })),
     ];
     return ordered;
-  }, [sortedShown, categoryOptions]);
+  }, [sortedShown, activeCanonical, isTradeGrouping]);
 
   // Per-category totals for subtotal rows + summary card.
   const categoryTotals = React.useMemo(() => {
@@ -854,6 +871,46 @@ export default function ProjectBillTable({
                 </label>
               </RibbonGroup>
 
+              <RibbonGroup title="Grouping">
+                <div
+                  className="inline-flex items-center overflow-hidden rounded-md border border-slate-200 bg-white text-[11px]"
+                  role="tablist"
+                  aria-label="Group BoQ items by"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onGroupByModeChange?.("category")}
+                    className={[
+                      "px-2.5 py-1 transition",
+                      !isTradeGrouping
+                        ? "bg-adlm-blue-700 text-white"
+                        : "text-slate-700 hover:bg-slate-100",
+                    ].join(" ")}
+                    title="Group by building element (Substructure / Superstructure / HVAC / Plumbing / Electrical)"
+                  >
+                    Category
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onGroupByModeChange?.("trade")}
+                    className={[
+                      "px-2.5 py-1 transition border-l border-slate-200",
+                      isTradeGrouping
+                        ? "bg-adlm-blue-700 text-white"
+                        : "text-slate-700 hover:bg-slate-100",
+                    ].join(" ")}
+                    title="Group by trade / work section (Concrete Works, Formwork, Reinforcement, Masonry, Finishes, etc.)"
+                  >
+                    Trade
+                  </button>
+                </div>
+                <div className="text-[10px] text-slate-500 max-w-[160px] leading-tight">
+                  {isTradeGrouping
+                    ? "Items are grouped by the work being done. Overrides train the learner."
+                    : "Items are grouped by the element they belong to."}
+                </div>
+              </RibbonGroup>
+
               <RibbonGroup title="Stats">
                 <div className="text-[11px] text-slate-600">
                   Linked groups:{" "}
@@ -974,9 +1031,9 @@ export default function ProjectBillTable({
 
           {ribbonTab === "navigate" ? (
             <>
-              <RibbonGroup title="Jump to section">
-                {Array.isArray(categoryOptions) && categoryOptions.length
-                  ? categoryOptions.map((cat) => (
+              <RibbonGroup title={isTradeGrouping ? "Jump to trade" : "Jump to category"}>
+                {activeCanonical.length
+                  ? activeCanonical.map((cat) => (
                       <RibbonButton
                         key={`nav-${cat}`}
                         icon={FaListUl}
@@ -1303,22 +1360,57 @@ export default function ProjectBillTable({
                           {linked ? <span className="font-medium text-adlm-blue-700"> | linked</span> : null}
                         </div>
                       ) : null}
-                      {onCategoryChange && categoryOptions?.length ? (
-                        <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-500">
-                          <span>Category:</span>
-                          <select
-                            className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-700 focus:border-adlm-blue-500 focus:outline-none"
-                            value={row.category || ""}
-                            onChange={(e) => onCategoryChange(row.i, e.target.value)}
-                            title="Re-classify this item"
-                          >
-                            {categoryOptions.map((opt) => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                            {row.category && !categoryOptions.includes(row.category) ? (
-                              <option value={row.category}>{row.category}</option>
-                            ) : null}
-                          </select>
+                      {(onCategoryChange && categoryOptions?.length) ||
+                      (onTradeChange && tradeOptions?.length) ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                          {onCategoryChange && categoryOptions?.length ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span>Category:</span>
+                              <select
+                                className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-700 focus:border-adlm-blue-500 focus:outline-none"
+                                value={row.category || ""}
+                                onChange={(e) =>
+                                  onCategoryChange(row.i, e.target.value)
+                                }
+                                title="Re-classify this item by building element"
+                              >
+                                {categoryOptions.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                                {row.category &&
+                                !categoryOptions.includes(row.category) ? (
+                                  <option value={row.category}>
+                                    {row.category}
+                                  </option>
+                                ) : null}
+                              </select>
+                            </span>
+                          ) : null}
+                          {onTradeChange && tradeOptions?.length ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span>Trade:</span>
+                              <select
+                                className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-700 focus:border-adlm-blue-500 focus:outline-none"
+                                value={row.trade || ""}
+                                onChange={(e) =>
+                                  onTradeChange(row.i, e.target.value)
+                                }
+                                title="Re-classify this item by work section / trade. Saved overrides train the self-learning classifier."
+                              >
+                                {tradeOptions.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                                {row.trade &&
+                                !tradeOptions.includes(row.trade) ? (
+                                  <option value={row.trade}>{row.trade}</option>
+                                ) : null}
+                              </select>
+                            </span>
+                          ) : null}
                         </div>
                       ) : null}
                     </td>

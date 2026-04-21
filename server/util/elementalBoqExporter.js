@@ -904,6 +904,167 @@ function writeUnmappedSheet(workbook, projectItems, matchedSet) {
   return { sheet: ws, totalCellAddr: `'${ws.name}'!F${tot.number}` };
 }
 
+/* =========================
+   Combined Trade-Format sheet writer
+   =========================
+   Trade BoQ convention: after Cover + Preliminaries, all measured work lives
+   on a SINGLE worksheet with each trade (Concrete, Formwork, Reinforcement,
+   Masonry, Finishes, etc.) rendered as a bold section with its own subtotal.
+   The Prelim, Provisional Sums, Variations and "Other items" sheets remain
+   separate and are referenced in the General Summary. */
+function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade BoQ" }) {
+  const billsWithContent = plannedBills.filter(
+    (pb) => pb && pb.kind === "standard" && Array.isArray(pb.elements) && pb.elements.length,
+  );
+  if (!billsWithContent.length) return null;
+
+  const ws = workbook.addWorksheet(safeSheetName(sheetName, workbook));
+  ws.columns = [
+    { header: "Item", key: "item", width: 6 },
+    { header: "Description", key: "description", width: 60 },
+    { header: "Qty", key: "qty", width: 12 },
+    { header: "Unit", key: "unit", width: 10 },
+    { header: "Rate", key: "rate", width: 14 },
+    { header: "Amount", key: "amount", width: 16 },
+  ];
+  writeBillHeader(ws, sheetName);
+
+  const allAmountRows = [];
+  const billSubtotalRows = [];
+
+  for (const plannedBill of billsWithContent) {
+    // Bill (trade) banner — bold navy header row.
+    ws.addRow([]);
+    const bannerRow = ws.addRow([null, String(plannedBill.name || "").toUpperCase()]);
+    bannerRow.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
+    bannerRow.fill = HEADER_FILL;
+    bannerRow.alignment = { vertical: "middle" };
+    bannerRow.height = 20;
+    ws.mergeCells(bannerRow.number, 2, bannerRow.number, 6);
+
+    const billAmountRows = [];
+    let snIndex = 0;
+
+    for (const element of plannedBill.elements) {
+      // Element heading.
+      const headRow = ws.addRow([null, String(element.heading || "").toUpperCase()]);
+      headRow.font = { bold: true };
+      headRow.fill = HEADING_FILL;
+      ws.mergeCells(headRow.number, 2, headRow.number, 6);
+
+      if (element.preamble) {
+        const preRow = ws.addRow([null, String(element.preamble)]);
+        preRow.font = { italic: true, color: { argb: "FF475569" } };
+        preRow.alignment = { wrapText: true, vertical: "top" };
+        ws.mergeCells(preRow.number, 2, preRow.number, 6);
+      }
+
+      for (const item of element.items) {
+        if (item.kind === "fixed") {
+          const r = writeAmountRow(ws, {
+            code: snLetter(snIndex++),
+            description: item.description,
+            unit: item.unit,
+            fixedAmount: item.amount,
+          });
+          billAmountRows.push(r.number);
+          allAmountRows.push(r.number);
+          continue;
+        }
+
+        if (item.kind === "leveled") {
+          const head = ws.addRow([null, item.description]);
+          head.font = { bold: true };
+          ws.mergeCells(head.number, 2, head.number, 6);
+
+          for (const lr of item.levelRows) {
+            const r = writeAmountRow(ws, {
+              code: snLetter(snIndex++),
+              description: lr.level,
+              unit: item.unit,
+              qty: lr.qty,
+              rate: lr.rate,
+            });
+            billAmountRows.push(r.number);
+            allAmountRows.push(r.number);
+          }
+          continue;
+        }
+
+        if (item.kind === "expanded") {
+          const head = ws.addRow([null, item.description]);
+          head.font = { bold: true };
+          ws.mergeCells(head.number, 2, head.number, 6);
+
+          for (const er of item.rows) {
+            const r = writeAmountRow(ws, {
+              code: snLetter(snIndex++),
+              description: er.description,
+              unit: er.unit || item.unit,
+              qty: er.qty,
+              rate: er.rate,
+            });
+            billAmountRows.push(r.number);
+            allAmountRows.push(r.number);
+          }
+          continue;
+        }
+
+        // kind === "lookup"
+        const r = writeAmountRow(ws, {
+          code: snLetter(snIndex++),
+          description: item.description,
+          unit: item.unit,
+          qty: item.qty,
+          rate: item.rate,
+        });
+        billAmountRows.push(r.number);
+        allAmountRows.push(r.number);
+      }
+    }
+
+    ws.addRow([]);
+    const sub = ws.addRow([
+      null,
+      `${String(plannedBill.name).toUpperCase()} — Subtotal`,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    sub.font = { bold: true };
+    sub.fill = SUMMARY_TOTAL_FILL;
+    sub.getCell(6).value = {
+      formula: billAmountRows.length
+        ? billAmountRows.map((n) => `F${n}`).join("+")
+        : "0",
+    };
+    applyMoneyFormat(sub.getCell(6));
+    billSubtotalRows.push({ name: plannedBill.name, rowNumber: sub.number });
+  }
+
+  // Grand total row for the whole combined sheet.
+  ws.addRow([]);
+  const grand = ws.addRow([null, "TRADE BoQ — Grand Total to Summary", null, null, null, null]);
+  grand.font = { bold: true, size: 12 };
+  grand.fill = SUMMARY_TOTAL_FILL;
+  grand.getCell(6).value = {
+    formula: billSubtotalRows.length
+      ? billSubtotalRows.map((b) => `F${b.rowNumber}`).join("+")
+      : "0",
+  };
+  applyMoneyFormat(grand.getCell(6));
+
+  return {
+    sheet: ws,
+    totalCellAddr: `'${ws.name}'!F${grand.number}`,
+    subtotalRefs: billSubtotalRows.map((b) => ({
+      name: b.name,
+      cellAddr: `'${ws.name}'!F${b.rowNumber}`,
+    })),
+  };
+}
+
 function writeSummarySheet(workbook, billRefs) {
   const ws = workbook.addWorksheet(safeSheetName("General Summary", workbook));
   ws.columns = [
@@ -991,23 +1152,54 @@ export async function exportElementalBoQ({
 
   const matchedSet = new Set();
   const billRefs = [];
+  const isTrade =
+    String(format || "elemental").toLowerCase() === "trade";
 
-  // Plan first (so we know which bills/elements/items will actually render),
-  // then write only the ones that have content.
-  for (const billRaw of variant.bills || []) {
-    const billResolved = resolveBill(mapping, billRaw);
-
-    if (billResolved.kind === "preliminaries") {
-      const ref = writePreliminariesSheet(workbook, projectName);
-      billRefs.push({ name: billResolved.name, totalCellAddr: ref.totalCellAddr });
-      continue;
+  if (isTrade) {
+    // Trade format: Preliminaries gets its own sheet (per convention), then
+    // every other planned bill is rendered as a section on a single sheet.
+    const plannedStandardBills = [];
+    for (const billRaw of variant.bills || []) {
+      const billResolved = resolveBill(mapping, billRaw);
+      if (billResolved.kind === "preliminaries") {
+        const ref = writePreliminariesSheet(workbook, projectName);
+        billRefs.push({ name: billResolved.name, totalCellAddr: ref.totalCellAddr });
+        continue;
+      }
+      const planned = planBill(billResolved, projectItems, matchedSet);
+      if (planned) plannedStandardBills.push(planned);
     }
 
-    const planned = planBill(billResolved, projectItems, matchedSet);
-    if (!planned) continue; // skip empty bills entirely
+    const combined = writeCombinedTradeSheet({
+      workbook,
+      plannedBills: plannedStandardBills,
+      sheetName: "Trade BoQ",
+    });
+    if (combined) {
+      // In the General Summary, surface one line per trade referencing the
+      // trade's subtotal cell — keeps the same breakdown the contractor expects
+      // without cluttering the workbook with separate tabs.
+      for (const sub of combined.subtotalRefs) {
+        billRefs.push({ name: sub.name, totalCellAddr: sub.cellAddr });
+      }
+    }
+  } else {
+    // Elemental format: one sheet per bill, as before.
+    for (const billRaw of variant.bills || []) {
+      const billResolved = resolveBill(mapping, billRaw);
 
-    const ref = writeStandardBill({ workbook, plannedBill: planned });
-    billRefs.push({ name: planned.name, totalCellAddr: ref.totalCellAddr });
+      if (billResolved.kind === "preliminaries") {
+        const ref = writePreliminariesSheet(workbook, projectName);
+        billRefs.push({ name: billResolved.name, totalCellAddr: ref.totalCellAddr });
+        continue;
+      }
+
+      const planned = planBill(billResolved, projectItems, matchedSet);
+      if (!planned) continue;
+
+      const ref = writeStandardBill({ workbook, plannedBill: planned });
+      billRefs.push({ name: planned.name, totalCellAddr: ref.totalCellAddr });
+    }
   }
 
   const provRef = writeProvisionalSumsSheet(workbook, provisionalSums);
