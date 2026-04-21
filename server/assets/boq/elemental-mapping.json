@@ -97,7 +97,7 @@
                 "heading": "BLOCKWORK IN FOUNDATION",
                 "preamble": "Sandcrete hollow blockwork bedded and jointed in cement and sand mortar (1:6) with hoop iron in alternate courses.",
                 "items": [
-                  { "description": "Sandcrete hollow blockwork in foundation", "unit": "m2", "lookupCombine": "sum", "lookups": [["strip", "blockwork"], ["pad", "blockwork"]] }
+                  { "description": "Sandcrete hollow blockwork in foundation", "unit": "m2", "lookupCombine": "sum", "lookups": [["strip", "blockwork"], ["pad", "blockwork"]], "expandMatches": true }
                 ]
               }
             ]
@@ -131,7 +131,7 @@
                 "heading": "WALLS — BLOCKWORK",
                 "preamble": "Sandcrete hollow blockwork bedded and jointed in cement and sand mortar (1:6) including reinforcement and movement joints.",
                 "items": [
-                  { "description": "Sandcrete hollow blockwork in wall, generally internal and external", "unit": "m2", "lookups": [["blockwork", "wall", "area"], ["blockwork", "wall"]] }
+                  { "description": "Sandcrete hollow blockwork in wall, generally internal and external", "unit": "m2", "lookupCombine": "sum", "lookups": [["blockwork", "wall", "area"], ["blockwork", "wall"]], "expandMatches": true }
                 ]
               },
               {
@@ -300,7 +300,7 @@
                 "heading": "BLOCKWORK IN FOUNDATION",
                 "preamble": "Sandcrete hollow blockwork bedded and jointed in cement / sand mortar (1:6).",
                 "items": [
-                  { "description": "Blockwork in foundation", "unit": "m2", "lookupCombine": "sum", "lookups": [["pad", "blockwork"], ["strip", "blockwork"]] }
+                  { "description": "Blockwork in foundation", "unit": "m2", "lookupCombine": "sum", "lookups": [["pad", "blockwork"], ["strip", "blockwork"]], "expandMatches": true }
                 ]
               }
             ]

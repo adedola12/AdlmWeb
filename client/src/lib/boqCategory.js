@@ -163,7 +163,7 @@ const QUIV_TRADE_RULES = [
   },
   {
     name: "Decoration",
-    re: /\b(paint(?:ing)?|texcote|emulsion|decorat)\b/i,
+    re: /\b(paint(?:ing)?|texcote|emulsion|decorat|model\s+item)\b/i,
   },
   {
     name: "Finishes — Wall",

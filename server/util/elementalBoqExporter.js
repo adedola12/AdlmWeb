@@ -788,20 +788,17 @@ function writeUnmappedSheet(workbook, projectItems, matchedSet) {
     .filter(({ i }) => !matchedSet.has(i));
   if (!unmatched.length) return null;
 
-  // Some items look like bulk takeoff totals rather than individual scope
-  // lines (e.g. "Model Item: All Model Items – Area / Volume"). They double-
-  // count the measured work and don't belong in a BoQ sheet — skip them.
+  // "Total Finish Area" rollups are true double-counts of the individual wall
+  // finishes so we still drop them. Model-Item lines, on the other hand, now
+  // have a home in the Trade-format Decoration bill (and should be visible in
+  // the Elemental Other-items sheet as well).
   const isBulkTotalLine = (it) => {
     const h = normalizeText(
       [it?.description, it?.takeoffLine, it?.materialName, it?.type]
         .map((v) => String(v || ""))
         .join(" "),
     );
-    return (
-      h.includes("all model items") ||
-      h.includes("model item: all") ||
-      h.includes("total finish area")
-    );
+    return h.includes("total finish area");
   };
 
   const usable = unmatched.filter(({ it }) => !isBulkTotalLine(it));

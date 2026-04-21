@@ -112,8 +112,8 @@
                 "heading": "SANDCRETE HOLLOW BLOCKWORK",
                 "preamble": "Sandcrete hollow blockwork bedded and jointed in cement and sand mortar (1:6) with hoop iron in alternate courses.",
                 "items": [
-                  { "description": "Blockwork in foundation", "unit": "m2", "lookupCombine": "sum", "lookups": [["strip", "blockwork"], ["pad", "blockwork"]] },
-                  { "description": "Blockwork in wall, internal and external", "unit": "m2", "lookupCombine": "sum", "lookups": [["blockwork", "wall", "area"], ["blockwork", "wall"]] }
+                  { "description": "Blockwork in foundation", "unit": "m2", "lookupCombine": "sum", "lookups": [["strip", "blockwork"], ["pad", "blockwork"]], "expandMatches": true },
+                  { "description": "Blockwork in wall, internal and external", "unit": "m2", "lookupCombine": "sum", "lookups": [["blockwork", "wall", "area"], ["blockwork", "wall"]], "expandMatches": true }
                 ]
               }
             ]
@@ -218,7 +218,8 @@
                 "heading": "PAINTING & DECORATION",
                 "preamble": "Emulsion / texcote paint on prepared surfaces.",
                 "items": [
-                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookupCombine": "sum", "lookups": [["painting"], ["paint", "required"], ["wall", "paint"], ["finishes", "paint"], ["paint", "area"]] }
+                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookupCombine": "sum", "lookups": [["painting"], ["paint", "required"], ["wall", "paint"], ["finishes", "paint"], ["paint", "area"]] },
+                  { "description": "Model Items — decoration allowance", "unit": "m2", "lookupCombine": "sum", "lookups": [["model", "item"], ["model", "items"]], "expandMatches": true }
                 ]
               }
             ]
@@ -405,8 +406,8 @@
                 "heading": "SANDCRETE HOLLOW BLOCKWORK",
                 "preamble": "Sandcrete hollow blockwork bedded and jointed in cement / sand mortar (1:6).",
                 "items": [
-                  { "description": "Blockwork in foundation", "unit": "m2", "lookupCombine": "sum", "lookups": [["pad", "blockwork"], ["strip", "blockwork"]] },
-                  { "description": "Blockwork in wall, internal and external", "unit": "m2", "lookupCombine": "sum", "lookups": [["blockwork", "wall", "area"], ["blockwork", "wall"]] }
+                  { "description": "Blockwork in foundation", "unit": "m2", "lookupCombine": "sum", "lookups": [["pad", "blockwork"], ["strip", "blockwork"]], "expandMatches": true },
+                  { "description": "Blockwork in wall, internal and external", "unit": "m2", "lookupCombine": "sum", "lookups": [["blockwork", "wall", "area"], ["blockwork", "wall"]], "expandMatches": true }
                 ]
               }
             ]
@@ -511,7 +512,8 @@
                 "heading": "PAINTING & DECORATION",
                 "preamble": "Emulsion / texcote paint on prepared surfaces.",
                 "items": [
-                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookupCombine": "sum", "lookups": [["painting"], ["paint", "required"], ["wall", "paint"], ["finishes", "paint"], ["paint", "area"]] }
+                  { "description": "Painting (emulsion / texcote)", "unit": "m2", "lookupCombine": "sum", "lookups": [["painting"], ["paint", "required"], ["wall", "paint"], ["finishes", "paint"], ["paint", "area"]] },
+                  { "description": "Model Items — decoration allowance", "unit": "m2", "lookupCombine": "sum", "lookups": [["model", "item"], ["model", "items"]], "expandMatches": true }
                 ]
               }
             ]

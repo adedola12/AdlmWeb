@@ -126,7 +126,7 @@ const QUIV_TRADE_RULES = [
   { name: "Structural Steelwork", re: /\b(steelwork|steel[\s-]?section|steel\s+weight|structural\s+steel)\b/i },
   { name: "Finishes — Floor", re: /\b(floor[\s-]?finish|floor\s+tile|screed|floors?\s+(?:default|area)|floor\s+cover)\b/i },
   { name: "Finishes — Ceiling", re: /\b(ceiling[\s-]?finish|ceiling\s+area|p\.?o\.?p\.?|pop\s+ceiling|plaster\s+of\s+paris)\b/i },
-  { name: "Decoration", re: /\b(paint(?:ing)?|texcote|emulsion|decorat)\b/i },
+  { name: "Decoration", re: /\b(paint(?:ing)?|texcote|emulsion|decorat|model\s+item)\b/i },
   { name: "Finishes — Wall", re: /\b(rendering|plaster(?:ing)?|wall\s+finish|finishes\s+walls?|wall\s+tile)\b/i },
   { name: "External Works", re: /\b(landscap|external\s+work|paving|fencing|pavement|driveway)\b/i },
 ];
