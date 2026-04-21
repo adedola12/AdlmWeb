@@ -14,6 +14,8 @@ import {
   FaFileInvoiceDollar,
   FaClipboardList,
   FaSync,
+  FaChevronUp,
+  FaChevronDown,
 } from "react-icons/fa";
 
 /**
@@ -569,6 +571,8 @@ export default function ProjectBillTable({
   const categoryAnchorRef = useRef({});
   const provisionalSectionRef = useRef(null);
   const variationsSectionRef = useRef(null);
+  const topAnchorRef = useRef(null);
+  const bottomAnchorRef = useRef(null);
 
   const scrollToRef = useCallback((node) => {
     if (!node) return;
@@ -577,6 +581,50 @@ export default function ProjectBillTable({
     } catch {
       node.scrollIntoView();
     }
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    if (topAnchorRef.current) {
+      scrollToRef(topAnchorRef.current);
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [scrollToRef]);
+
+  const scrollToBottom = useCallback(() => {
+    if (bottomAnchorRef.current) {
+      try {
+        bottomAnchorRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      } catch {
+        bottomAnchorRef.current.scrollIntoView();
+      }
+    } else {
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, []);
+
+  // Track whether the floating nav should show (hide when content fits on
+  // screen so we don't clutter short BoQs).
+  const [showFloatNav, setShowFloatNav] = useState(false);
+  useEffect(() => {
+    function compute() {
+      setShowFloatNav(window.innerHeight < document.documentElement.scrollHeight - 200);
+    }
+    compute();
+    window.addEventListener("resize", compute);
+    window.addEventListener("scroll", compute, { passive: true });
+    const id = window.setInterval(compute, 1500); // catches DOM growth from late renders
+    return () => {
+      window.removeEventListener("resize", compute);
+      window.removeEventListener("scroll", compute);
+      window.clearInterval(id);
+    };
   }, []);
 
   const jumpToCategory = useCallback(
@@ -731,7 +779,8 @@ export default function ProjectBillTable({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      <div ref={topAnchorRef} className="scroll-mt-24" aria-hidden="true" />
       {/* Office-style ribbon: tab strip + contextual groups */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
         <div className="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-2 pt-2">
@@ -924,29 +973,46 @@ export default function ProjectBillTable({
           ) : null}
 
           {ribbonTab === "navigate" ? (
-            <RibbonGroup title="Jump to section">
-              {Array.isArray(categoryOptions) && categoryOptions.length
-                ? categoryOptions.map((cat) => (
-                    <RibbonButton
-                      key={`nav-${cat}`}
-                      icon={FaListUl}
-                      label={cat}
-                      onClick={() => jumpToCategory(cat)}
-                      title={`Scroll to ${cat}`}
-                    />
-                  ))
-                : null}
-              <RibbonButton
-                icon={FaClipboardList}
-                label="Variations"
-                onClick={() => scrollToRef(variationsSectionRef.current)}
-              />
-              <RibbonButton
-                icon={FaFileInvoiceDollar}
-                label="Provisional"
-                onClick={() => scrollToRef(provisionalSectionRef.current)}
-              />
-            </RibbonGroup>
+            <>
+              <RibbonGroup title="Jump to section">
+                {Array.isArray(categoryOptions) && categoryOptions.length
+                  ? categoryOptions.map((cat) => (
+                      <RibbonButton
+                        key={`nav-${cat}`}
+                        icon={FaListUl}
+                        label={cat}
+                        onClick={() => jumpToCategory(cat)}
+                        title={`Scroll to ${cat}`}
+                      />
+                    ))
+                  : null}
+                <RibbonButton
+                  icon={FaClipboardList}
+                  label="Variations"
+                  onClick={() => scrollToRef(variationsSectionRef.current)}
+                />
+                <RibbonButton
+                  icon={FaFileInvoiceDollar}
+                  label="Provisional"
+                  onClick={() => scrollToRef(provisionalSectionRef.current)}
+                />
+              </RibbonGroup>
+
+              <RibbonGroup title="Page">
+                <RibbonButton
+                  icon={FaChevronUp}
+                  label="Top"
+                  onClick={scrollToTop}
+                  title="Scroll to top of BoQ"
+                />
+                <RibbonButton
+                  icon={FaChevronDown}
+                  label="Bottom"
+                  onClick={scrollToBottom}
+                  title="Scroll to bottom of BoQ"
+                />
+              </RibbonGroup>
+            </>
           ) : null}
 
           {ribbonTab === "variations" ? (
@@ -1836,6 +1902,34 @@ export default function ProjectBillTable({
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      <div ref={bottomAnchorRef} className="scroll-mb-24" aria-hidden="true" />
+
+      {/* Floating go-to-top / go-to-bottom buttons — always reachable on long
+          Bill of Quantity pages. Hidden automatically when the content fits
+          on screen. */}
+      {showFloatNav ? (
+        <div className="pointer-events-none fixed bottom-6 right-6 z-40 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={scrollToTop}
+            className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg hover:bg-adlm-blue-700 hover:text-white hover:border-adlm-blue-700 transition"
+            title="Go to top of BoQ"
+            aria-label="Go to top of BoQ"
+          >
+            <FaChevronUp className="text-sm" />
+          </button>
+          <button
+            type="button"
+            onClick={scrollToBottom}
+            className="pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg hover:bg-adlm-blue-700 hover:text-white hover:border-adlm-blue-700 transition"
+            title="Go to bottom of BoQ"
+            aria-label="Go to bottom of BoQ"
+          >
+            <FaChevronDown className="text-sm" />
+          </button>
         </div>
       ) : null}
     </div>
