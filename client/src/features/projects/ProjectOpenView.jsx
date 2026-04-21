@@ -164,6 +164,10 @@ export default function ProjectOpenView({
   onAddProvisionalSum,
   onUpdateProvisionalSum,
   onRemoveProvisionalSum,
+  variations = [],
+  onAddVariation,
+  onUpdateVariation,
+  onRemoveVariation,
   onSyncPrices,
   onToggleAutoFill,
   onToggleAutoFillBoq,
@@ -454,6 +458,10 @@ export default function ProjectOpenView({
           onAddProvisionalSum={onAddProvisionalSum}
           onUpdateProvisionalSum={onUpdateProvisionalSum}
           onRemoveProvisionalSum={onRemoveProvisionalSum}
+          variations={variations}
+          onAddVariation={onAddVariation}
+          onUpdateVariation={onUpdateVariation}
+          onRemoveVariation={onRemoveVariation}
           onSyncPrices={onSyncPrices}
           onSyncBoqRates={onSyncBoqRates}
           onToggleAutoFill={onToggleAutoFill}

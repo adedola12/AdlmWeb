@@ -80,6 +80,22 @@ const ProvisionalSumSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Variations from site instructions / change orders — measured work variance
+// lives on each item's actualQty/actualRate. This log captures variations that
+// are not derived from the takeoff (architects' instructions, change requests,
+// client extras) so they can be tracked against the project total.
+const VariationSchema = new mongoose.Schema(
+  {
+    description: { type: String, default: "", trim: true },
+    qty: { type: Number, default: 0 },
+    unit: { type: String, default: "", trim: true },
+    rate: { type: Number, default: 0 },
+    reference: { type: String, default: "", trim: true },
+    issuedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const ItemSchema = new mongoose.Schema(
   {
     sn: { type: Number, default: 0 },
@@ -122,6 +138,7 @@ const TakeoffProjectSchema = new mongoose.Schema(
     checklistCompositeKeys: { type: [String], default: [] },
     items: { type: [ItemSchema], default: [] },
     provisionalSums: { type: [ProvisionalSumSchema], default: [] },
+    variations: { type: [VariationSchema], default: [] },
     valuationSettings: {
       type: ValuationSettingsSchema,
       default: () => ({ ...DefaultValuationSettings }),

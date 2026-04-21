@@ -269,6 +269,61 @@ function planItem(boqItem, projectItems, matchedSet) {
   };
 }
 
+// Group matched items by a stable key (normalized description) so each
+// distinct size/type renders as its own row. Items with the same key get
+// their qty summed and rate weighted-averaged.
+function groupMatchesByDescription(matches) {
+  const groups = new Map();
+  for (const m of matches) {
+    const rawDesc = String(
+      m.item?.description ||
+        m.item?.takeoffLine ||
+        m.item?.materialName ||
+        m.item?.type ||
+        "",
+    ).trim();
+    const unit = String(m.item?.unit || "").trim();
+    const key = normalizeText(`${rawDesc}|${unit}`);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        description: rawDesc || "(unnamed)",
+        unit,
+        matches: [],
+      });
+    }
+    groups.get(key).matches.push(m);
+  }
+  return [...groups.values()];
+}
+
+function planExpandedItem(boqItem, projectItems, matchedSet) {
+  const matches = findMatchingItems(boqItem, projectItems, matchedSet);
+  if (!matches.length) return null;
+
+  const groups = groupMatchesByDescription(matches);
+  const rows = groups
+    .map((g) => {
+      const agg = aggregateMatches(boqItem, g.matches);
+      if (agg.qty <= 0) return null;
+      return {
+        description: g.description,
+        unit: g.unit || boqItem.unit || "",
+        qty: agg.qty,
+        rate: agg.rate,
+      };
+    })
+    .filter(Boolean);
+
+  if (!rows.length) return null;
+
+  return {
+    kind: "expanded",
+    description: boqItem.description,
+    unit: boqItem.unit || "",
+    rows,
+  };
+}
+
 function planLevelSplitItem(boqItem, projectItems, matchedSet) {
   const matches = findMatchingItems(boqItem, projectItems, matchedSet);
   if (!matches.length) return null;
@@ -307,10 +362,18 @@ function planBill(bill, projectItems, matchedSet) {
     const items = Array.isArray(element?.items) ? element.items : [];
     const renderedItems = [];
     for (const item of items) {
-      const planned = splitByLevel
-        ? planLevelSplitItem(item, projectItems, matchedSet) ||
-          planItem(item, projectItems, matchedSet)
-        : planItem(item, projectItems, matchedSet);
+      let planned;
+      if (item?.expandMatches) {
+        planned =
+          planExpandedItem(item, projectItems, matchedSet) ||
+          planItem(item, projectItems, matchedSet);
+      } else if (splitByLevel) {
+        planned =
+          planLevelSplitItem(item, projectItems, matchedSet) ||
+          planItem(item, projectItems, matchedSet);
+      } else {
+        planned = planItem(item, projectItems, matchedSet);
+      }
       if (planned) renderedItems.push(planned);
     }
     if (renderedItems.length) {
@@ -501,6 +564,26 @@ function writeStandardBill({ workbook, plannedBill }) {
         continue;
       }
 
+      if (item.kind === "expanded") {
+        // Bold sub-heading for the template line, then one row per distinct
+        // matched size/type (e.g. each diffuser size, each duct size).
+        const head = ws.addRow([null, item.description]);
+        head.font = { bold: true };
+        ws.mergeCells(head.number, 2, head.number, 6);
+
+        for (const er of item.rows) {
+          const r = writeAmountRow(ws, {
+            code: snLetter(snIndex++),
+            description: er.description,
+            unit: er.unit || item.unit,
+            qty: er.qty,
+            rate: er.rate,
+          });
+          amountRowNumbers.push(r.number);
+        }
+        continue;
+      }
+
       // kind === "lookup"
       const r = writeAmountRow(ws, {
         code: snLetter(snIndex++),
@@ -575,6 +658,92 @@ function writeProvisionalSumsSheet(workbook, sums) {
   applyMoneyFormat(totalRow.getCell(3));
 
   return { sheet: ws, totalCellAddr: `'${ws.name}'!C${totalRow.number}` };
+}
+
+/* =========================
+   Variations (instruction-driven)
+   ========================= */
+function writeVariationsSheet(workbook, variations) {
+  const cleaned = (Array.isArray(variations) ? variations : [])
+    .map((v) => ({
+      description: String(v?.description || "").trim(),
+      qty: safeNum(v?.qty),
+      unit: String(v?.unit || "").trim(),
+      rate: safeNum(v?.rate),
+      reference: String(v?.reference || "").trim(),
+      issuedAt: v?.issuedAt ? new Date(v.issuedAt) : null,
+    }))
+    .filter((v) => v.description || v.qty > 0 || v.rate > 0);
+
+  if (!cleaned.length) return null;
+
+  const ws = workbook.addWorksheet(safeSheetName("Variations", workbook));
+  ws.columns = [
+    { header: "Item", key: "item", width: 6 },
+    { header: "Reference", key: "reference", width: 18 },
+    { header: "Description", key: "description", width: 50 },
+    { header: "Qty", key: "qty", width: 12 },
+    { header: "Unit", key: "unit", width: 10 },
+    { header: "Rate", key: "rate", width: 14 },
+    { header: "Amount", key: "amount", width: 16 },
+    { header: "Issued", key: "issuedAt", width: 14 },
+  ];
+  const hdr = ws.getRow(1);
+  hdr.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  hdr.fill = HEADER_FILL;
+  hdr.alignment = { horizontal: "center" };
+
+  const titleRow = ws.addRow([null, "VARIATIONS — Site Instructions / Change Orders"]);
+  titleRow.font = { bold: true, size: 12 };
+  ws.mergeCells(titleRow.number, 2, titleRow.number, 8);
+
+  const preamble = ws.addRow([
+    null,
+    "Variations logged against the project — separate from measured work variance captured on individual BoQ items.",
+  ]);
+  preamble.font = { italic: true, color: { argb: "FF475569" } };
+  ws.mergeCells(preamble.number, 2, preamble.number, 8);
+
+  const amountRows = [];
+  cleaned.forEach((v, i) => {
+    const row = ws.addRow([
+      snLetter(i),
+      v.reference || null,
+      v.description,
+      v.qty > 0 ? v.qty : null,
+      v.unit || null,
+      v.rate > 0 ? v.rate : null,
+      null,
+      v.issuedAt ? dayjs(v.issuedAt).format("YYYY-MM-DD") : null,
+    ]);
+    row.getCell(7).value = {
+      formula: `IFERROR(D${row.number}*F${row.number},0)`,
+    };
+    applyMoneyFormat(row.getCell(4));
+    applyMoneyFormat(row.getCell(6));
+    applyMoneyFormat(row.getCell(7));
+    amountRows.push(row.number);
+  });
+
+  ws.addRow([]);
+  const totalRow = ws.addRow([
+    null,
+    null,
+    "VARIATIONS — to Main Building Summary",
+    null,
+    null,
+    null,
+    null,
+    null,
+  ]);
+  totalRow.font = { bold: true };
+  totalRow.fill = SUMMARY_TOTAL_FILL;
+  totalRow.getCell(7).value = {
+    formula: amountRows.length ? amountRows.map((n) => `G${n}`).join("+") : "0",
+  };
+  applyMoneyFormat(totalRow.getCell(7));
+
+  return { sheet: ws, totalCellAddr: `'${ws.name}'!G${totalRow.number}` };
 }
 
 /* =========================
@@ -708,6 +877,7 @@ export async function exportElementalBoQ({
   buildingType = "bungalow",
   foundationType,
   provisionalSums = [],
+  variations = [],
   mappingPath,
 } = {}) {
   const mapping = loadMapping(mappingPath);
@@ -752,6 +922,11 @@ export async function exportElementalBoQ({
   const provRef = writeProvisionalSumsSheet(workbook, provisionalSums);
   if (provRef) {
     billRefs.push({ name: "Provisional Sums", totalCellAddr: provRef.totalCellAddr });
+  }
+
+  const varRef = writeVariationsSheet(workbook, variations);
+  if (varRef) {
+    billRefs.push({ name: "Variations", totalCellAddr: varRef.totalCellAddr });
   }
 
   const unmappedRef = writeUnmappedSheet(workbook, projectItems, matchedSet);

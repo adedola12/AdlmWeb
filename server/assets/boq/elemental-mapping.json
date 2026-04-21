@@ -393,10 +393,10 @@
                 "heading": "DUCTWORK & EQUIPMENT",
                 "preamble": "Supply and installation of HVAC ductwork, air handling equipment, terminal units and fans.",
                 "items": [
-                  { "description": "Ductwork — supply and installation", "unit": "m", "lookups": [["duct"]] },
-                  { "description": "Air handling units (AHU / FCU / VRF)", "unit": "No", "lookups": [["ahu"], ["fcu"], ["vrf"], ["air", "handling"]] },
-                  { "description": "Diffusers, grilles and registers", "unit": "No", "lookups": [["diffuser"], ["grille"], ["register"]] },
-                  { "description": "Exhaust and ventilation fans", "unit": "No", "lookups": [["exhaust", "fan"], ["ventilation", "fan"], ["fan"]] }
+                  { "description": "Ductwork — supply and installation", "unit": "m", "lookups": [["duct"]], "expandMatches": true },
+                  { "description": "Air handling units (AHU / FCU / VRF)", "unit": "No", "lookups": [["ahu"], ["fcu"], ["vrf"], ["air", "handling"]], "expandMatches": true },
+                  { "description": "Diffusers, grilles and registers", "unit": "No", "lookups": [["diffuser"], ["grille"], ["register"]], "expandMatches": true },
+                  { "description": "Exhaust and ventilation fans", "unit": "No", "lookups": [["exhaust", "fan"], ["ventilation", "fan"], ["fan"]], "expandMatches": true }
                 ]
               }
             ]
@@ -408,17 +408,17 @@
                 "heading": "PIPING & FITTINGS",
                 "preamble": "Supply and installation of water supply pipes, drainage pipes and fittings.",
                 "items": [
-                  { "description": "Water supply pipes and fittings", "unit": "m", "lookups": [["pipe"], ["fitting"]] },
-                  { "description": "Valves and isolators", "unit": "No", "lookups": [["valve"]] },
-                  { "description": "Drainage / sewer pipes", "unit": "m", "lookups": [["drain"], ["sewer"]] }
+                  { "description": "Water supply pipes and fittings", "unit": "m", "lookups": [["pipe"], ["fitting"]], "expandMatches": true },
+                  { "description": "Valves and isolators", "unit": "No", "lookups": [["valve"]], "expandMatches": true },
+                  { "description": "Drainage / sewer pipes", "unit": "m", "lookups": [["drain"], ["sewer"]], "expandMatches": true }
                 ]
               },
               {
                 "heading": "FIXTURES",
                 "preamble": "Sanitary fixtures, tanks and pumps complete with all accessories.",
                 "items": [
-                  { "description": "Sanitary fixtures (WCs, basins, showers)", "unit": "No", "lookups": [["wc"], ["water", "closet"], ["toilet"], ["basin"], ["lavatory"], ["shower"]] },
-                  { "description": "Tanks, pumps and accessories", "unit": "No", "lookups": [["tank"], ["pump"], ["cistern"]] }
+                  { "description": "Sanitary fixtures (WCs, basins, showers)", "unit": "No", "lookups": [["wc"], ["water", "closet"], ["toilet"], ["basin"], ["lavatory"], ["shower"]], "expandMatches": true },
+                  { "description": "Tanks, pumps and accessories", "unit": "No", "lookups": [["tank"], ["pump"], ["cistern"]], "expandMatches": true }
                 ]
               }
             ]
@@ -430,17 +430,17 @@
                 "heading": "CABLING & CONTAINMENT",
                 "preamble": "Cables, wires, conduits and cable tray to specification.",
                 "items": [
-                  { "description": "Cables, wires and conductors", "unit": "m", "lookups": [["cable"], ["wire"]] },
-                  { "description": "Conduit and cable tray", "unit": "m", "lookups": [["conduit"], ["tray"], ["raceway"]] }
+                  { "description": "Cables, wires and conductors", "unit": "m", "lookups": [["cable"], ["wire"]], "expandMatches": true },
+                  { "description": "Conduit and cable tray", "unit": "m", "lookups": [["conduit"], ["tray"], ["raceway"]], "expandMatches": true }
                 ]
               },
               {
                 "heading": "DEVICES & EQUIPMENT",
                 "preamble": "Lighting fixtures, accessories and distribution equipment.",
                 "items": [
-                  { "description": "Lighting fixtures and luminaires", "unit": "No", "lookups": [["light"], ["luminaire"], ["lamp"]] },
-                  { "description": "Switches, sockets and outlets", "unit": "No", "lookups": [["switch"], ["socket"], ["outlet"], ["receptacle"]] },
-                  { "description": "Distribution boards and panels", "unit": "No", "lookups": [["panel"], ["distribution"], ["breaker"], ["busbar"]] }
+                  { "description": "Lighting fixtures and luminaires", "unit": "No", "lookups": [["light"], ["luminaire"], ["lamp"]], "expandMatches": true },
+                  { "description": "Switches, sockets and outlets", "unit": "No", "lookups": [["switch"], ["socket"], ["outlet"], ["receptacle"]], "expandMatches": true },
+                  { "description": "Distribution boards and panels", "unit": "No", "lookups": [["panel"], ["distribution"], ["breaker"], ["busbar"]], "expandMatches": true }
                 ]
               }
             ]

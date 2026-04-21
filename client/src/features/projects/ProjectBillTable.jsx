@@ -1,5 +1,20 @@
 import React, { useRef, useCallback, useState, useEffect } from "react";
-import { FaInfoCircle, FaLink, FaSearch, FaTimes, FaTrashAlt, FaArrowUp, FaArrowDown, FaGripVertical } from "react-icons/fa";
+import {
+  FaInfoCircle,
+  FaLink,
+  FaSearch,
+  FaTimes,
+  FaTrashAlt,
+  FaArrowUp,
+  FaArrowDown,
+  FaGripVertical,
+  FaPlus,
+  FaListUl,
+  FaCogs,
+  FaFileInvoiceDollar,
+  FaClipboardList,
+  FaSync,
+} from "react-icons/fa";
 
 /**
  * Draggable column-resize handle.
@@ -500,6 +515,10 @@ export default function ProjectBillTable({
   onAddProvisionalSum,
   onUpdateProvisionalSum,
   onRemoveProvisionalSum,
+  variations = [],
+  onAddVariation,
+  onUpdateVariation,
+  onRemoveVariation,
   onSyncBoqRates,
   onSyncPrices,
   onToggleAutoFill,
@@ -542,6 +561,28 @@ export default function ProjectBillTable({
   // Drag-and-drop reorder state
   const [dragIdx, setDragIdx] = useState(null);    // items-array index being dragged
   const [dragOverIdx, setDragOverIdx] = useState(null); // items-array index being hovered
+
+  // Ribbon tab state — mirrors MS Office ribbon (Home / Rates / Navigate / Extras)
+  const [ribbonTab, setRibbonTab] = useState("home");
+
+  // Anchors for jump-to-section
+  const categoryAnchorRef = useRef({});
+  const provisionalSectionRef = useRef(null);
+  const variationsSectionRef = useRef(null);
+
+  const scrollToRef = useCallback((node) => {
+    if (!node) return;
+    try {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      node.scrollIntoView();
+    }
+  }, []);
+
+  const jumpToCategory = useCallback(
+    (cat) => scrollToRef(categoryAnchorRef.current?.[cat]),
+    [scrollToRef],
+  );
 
   const handleSort = useCallback((col) => {
     if (sortCol === col) {
@@ -614,6 +655,23 @@ export default function ProjectBillTable({
 
   const totalCols = showActualColumns ? 14 : 10;
 
+  // Variation totals — Amount = Qty × Rate per row.
+  const variationsTotal = React.useMemo(() => {
+    return (Array.isArray(variations) ? variations : []).reduce(
+      (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
+      0,
+    );
+  }, [variations]);
+
+  const provisionalTotal = React.useMemo(() => {
+    return (Array.isArray(provisionalSums) ? provisionalSums : []).reduce(
+      (acc, s) => acc + safeNum(s?.amount),
+      0,
+    );
+  }, [provisionalSums]);
+
+  const projectTotal = grossAmount + provisionalTotal + variationsTotal;
+
   // Helper for sortable header
   const SortHeader = ({ col, children, className = "", ...rest }) => (
     <th
@@ -633,141 +691,333 @@ export default function ProjectBillTable({
     </th>
   );
 
+  const RIBBON_TABS = [
+    { id: "home", label: "Home", icon: FaCogs },
+    { id: "rates", label: "Rates", icon: FaSync },
+    { id: "navigate", label: "Navigate", icon: FaListUl },
+    { id: "variations", label: "Variations", icon: FaClipboardList },
+    { id: "provisional", label: "Provisional", icon: FaFileInvoiceDollar },
+  ];
+
+  const RibbonGroup = ({ title, children }) => (
+    <div className="flex flex-col items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 min-w-[110px]">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {children}
+      </div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">
+        {title}
+      </div>
+    </div>
+  );
+
+  const RibbonButton = ({ icon: Icon, label, onClick, disabled, title, active }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title || label}
+      className={[
+        "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 text-[11px] transition",
+        disabled
+          ? "text-slate-300 cursor-not-allowed"
+          : active
+          ? "bg-adlm-blue-700 text-white"
+          : "text-slate-700 hover:bg-slate-100",
+      ].join(" ")}
+    >
+      {Icon ? <Icon className="text-sm" /> : null}
+      <span className="whitespace-nowrap">{label}</span>
+    </button>
+  );
+
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700">
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={onlyFillEmpty}
-                onChange={(e) => onToggleOnlyFillEmpty?.(e.target.checked)}
-                className={checkboxCls}
-              />
-              Only fill empty rates
-            </label>
-
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={showActualColumns}
-                onChange={(e) => onToggleShowActualColumns?.(e.target.checked)}
-                className={checkboxCls}
-              />
-              Show actual qty / rate columns
-            </label>
-
-            {showMaterials && canRateGen ? (
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={autoFillMaterialsRates}
-                  onChange={(e) => onToggleAutoFill?.(e.target.checked)}
-                  disabled={autoFillBusy}
-                  className={checkboxCls}
-                />
-                Auto-fill material rates (RateGen)
-              </label>
-            ) : null}
-
-            {showMaterials && canRateGen ? (
+      {/* Office-style ribbon: tab strip + contextual groups */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
+        <div className="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-2 pt-2">
+          {RIBBON_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const active = ribbonTab === tab.id;
+            return (
               <button
+                key={tab.id}
                 type="button"
-                className="btn btn-xs"
-                onClick={onSyncPrices}
-                disabled={autoFillBusy}
-                title="Fetch prices and auto-fill again"
+                onClick={() => setRibbonTab(tab.id)}
+                className={[
+                  "inline-flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs font-medium transition",
+                  active
+                    ? "bg-slate-50 text-adlm-blue-700 border-x border-t border-slate-200"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50",
+                ].join(" ")}
               >
-                {autoFillBusy ? "Syncing..." : "Sync prices"}
+                <Icon className="text-[11px]" />
+                {tab.label}
               </button>
-            ) : null}
-
-            {canRateGenBoq ? (
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={autoFillBoqRates}
-                  onChange={(e) => onToggleAutoFillBoq?.(e.target.checked)}
-                  disabled={autoFillBoqBusy}
-                  className={checkboxCls}
-                />
-                Auto-sync rates (RateGen)
-              </label>
-            ) : null}
-
-            {canRateGenBoq ? (
-              <button
-                type="button"
-                className="btn btn-xs"
-                onClick={onSyncBoqRates}
-                disabled={autoFillBoqBusy}
-                title="Fetch rates from RateGen library and auto-fill"
-              >
-                {autoFillBoqBusy ? "Syncing..." : "Sync rates from RateGen"}
-              </button>
-            ) : null}
-
-            {canRateGenBoq ? (
-              <label className="inline-flex items-center gap-2" title="When enabled, project rates auto-update when RateGen rates change (saved per project)">
-                <input
-                  type="checkbox"
-                  checked={rateSyncEnabled}
-                  onChange={(e) => onToggleRateSyncEnabled?.(e.target.checked)}
-                  className={checkboxCls}
-                />
-                Live rate sync
-              </label>
-            ) : null}
-
-            {rateInfoText ? (
-              <span className="inline-flex items-center gap-2 text-slate-500">
-                <InfoTip text={rateInfoText} />
-              </span>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            );
+          })}
+          <div className="ml-auto flex items-center gap-3 px-2 text-[11px] text-slate-500">
             <span>
-              Linked groups: <b className="text-slate-700">{linkedGroupsCount}</b>
+              Measured: <b className="text-slate-700">{money(grossAmount)}</b>
             </span>
-            {showActualColumns ? (
+            {provisionalTotal > 0 ? (
               <span>
-                Actual tracked value: <b className="text-slate-700">{money(actualTrackedAmount)}</b>
+                PC: <b className="text-slate-700">{money(provisionalTotal)}</b>
               </span>
             ) : null}
-            {!showMaterials && canRateGenBoq ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    rateGenPoolLoading ? "bg-amber-400 animate-pulse" :
-                    rateGenPoolLoaded ? "bg-emerald-500" :
-                    "bg-slate-300"
-                  }`}
-                />
-                {rateGenPoolLoading ? (
-                  "Loading rates..."
-                ) : rateGenPoolLoaded ? (
-                  <>
-                    <b className="text-slate-700">{rateGenPoolCount}</b> RateGen rates loaded
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="text-adlm-blue-700 hover:underline"
-                    onClick={onReloadRateGenPool}
-                  >
-                    Load RateGen rates
-                  </button>
-                )}
+            {variationsTotal !== 0 ? (
+              <span>
+                Variations:{" "}
+                <b className={variationsTotal > 0 ? "text-amber-700" : "text-red-700"}>
+                  {money(variationsTotal)}
+                </b>
               </span>
             ) : null}
+            <span className="font-semibold">
+              Project total:{" "}
+              <b className="text-adlm-blue-700">{money(projectTotal)}</b>
+            </span>
           </div>
         </div>
 
-        {showActualColumns ? (
-          <div className="mt-3 text-xs text-slate-500">
-            Actual amount uses the entered actual qty and actual rate. If only one actual field is entered, the other value falls back to the planned quantity or rate for comparison.
+        <div className="flex flex-wrap gap-2 p-3">
+          {ribbonTab === "home" ? (
+            <>
+              <RibbonGroup title="View">
+                <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={onlyFillEmpty}
+                    onChange={(e) => onToggleOnlyFillEmpty?.(e.target.checked)}
+                    className={checkboxCls}
+                  />
+                  Only fill empty rates
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={showActualColumns}
+                    onChange={(e) =>
+                      onToggleShowActualColumns?.(e.target.checked)
+                    }
+                    className={checkboxCls}
+                  />
+                  Show actual qty / rate
+                </label>
+              </RibbonGroup>
+
+              <RibbonGroup title="Stats">
+                <div className="text-[11px] text-slate-600">
+                  Linked groups:{" "}
+                  <b className="text-slate-800">{linkedGroupsCount}</b>
+                </div>
+                {showActualColumns ? (
+                  <div className="text-[11px] text-slate-600">
+                    Actual tracked:{" "}
+                    <b className="text-slate-800">{money(actualTrackedAmount)}</b>
+                  </div>
+                ) : null}
+              </RibbonGroup>
+
+              {rateInfoText ? (
+                <RibbonGroup title="Info">
+                  <div className="flex items-start gap-1.5 text-[11px] text-slate-600 max-w-[240px]">
+                    <FaInfoCircle className="mt-0.5 text-slate-400" />
+                    <span className="leading-tight">{rateInfoText}</span>
+                  </div>
+                </RibbonGroup>
+              ) : null}
+            </>
+          ) : null}
+
+          {ribbonTab === "rates" ? (
+            <>
+              {showMaterials && canRateGen ? (
+                <RibbonGroup title="Materials">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={autoFillMaterialsRates}
+                      onChange={(e) => onToggleAutoFill?.(e.target.checked)}
+                      disabled={autoFillBusy}
+                      className={checkboxCls}
+                    />
+                    Auto-fill (RateGen)
+                  </label>
+                  <RibbonButton
+                    icon={FaSync}
+                    label={autoFillBusy ? "Syncing..." : "Sync prices"}
+                    onClick={onSyncPrices}
+                    disabled={autoFillBusy}
+                    title="Fetch prices and auto-fill again"
+                  />
+                </RibbonGroup>
+              ) : null}
+
+              {canRateGenBoq ? (
+                <RibbonGroup title="RateGen">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={autoFillBoqRates}
+                      onChange={(e) => onToggleAutoFillBoq?.(e.target.checked)}
+                      disabled={autoFillBoqBusy}
+                      className={checkboxCls}
+                    />
+                    Auto-sync rates
+                  </label>
+                  <RibbonButton
+                    icon={FaSync}
+                    label={autoFillBoqBusy ? "Syncing..." : "Sync rates"}
+                    onClick={onSyncBoqRates}
+                    disabled={autoFillBoqBusy}
+                    title="Fetch rates from RateGen library and auto-fill"
+                  />
+                  <label
+                    className="inline-flex items-center gap-1.5 text-[11px] text-slate-700"
+                    title="When enabled, project rates auto-update when RateGen rates change"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={rateSyncEnabled}
+                      onChange={(e) =>
+                        onToggleRateSyncEnabled?.(e.target.checked)
+                      }
+                      className={checkboxCls}
+                    />
+                    Live rate sync
+                  </label>
+                </RibbonGroup>
+              ) : null}
+
+              {!showMaterials && canRateGenBoq ? (
+                <RibbonGroup title="Pool">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        rateGenPoolLoading
+                          ? "bg-amber-400 animate-pulse"
+                          : rateGenPoolLoaded
+                          ? "bg-emerald-500"
+                          : "bg-slate-300"
+                      }`}
+                    />
+                    {rateGenPoolLoading ? (
+                      "Loading rates..."
+                    ) : rateGenPoolLoaded ? (
+                      <>
+                        <b className="text-slate-700">{rateGenPoolCount}</b>{" "}
+                        rates loaded
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-adlm-blue-700 hover:underline"
+                        onClick={onReloadRateGenPool}
+                      >
+                        Load RateGen rates
+                      </button>
+                    )}
+                  </span>
+                </RibbonGroup>
+              ) : null}
+            </>
+          ) : null}
+
+          {ribbonTab === "navigate" ? (
+            <RibbonGroup title="Jump to section">
+              {Array.isArray(categoryOptions) && categoryOptions.length
+                ? categoryOptions.map((cat) => (
+                    <RibbonButton
+                      key={`nav-${cat}`}
+                      icon={FaListUl}
+                      label={cat}
+                      onClick={() => jumpToCategory(cat)}
+                      title={`Scroll to ${cat}`}
+                    />
+                  ))
+                : null}
+              <RibbonButton
+                icon={FaClipboardList}
+                label="Variations"
+                onClick={() => scrollToRef(variationsSectionRef.current)}
+              />
+              <RibbonButton
+                icon={FaFileInvoiceDollar}
+                label="Provisional"
+                onClick={() => scrollToRef(provisionalSectionRef.current)}
+              />
+            </RibbonGroup>
+          ) : null}
+
+          {ribbonTab === "variations" ? (
+            <RibbonGroup title="Instruction variations">
+              <RibbonButton
+                icon={FaPlus}
+                label="Add variation"
+                onClick={() => {
+                  onAddVariation?.();
+                  setTimeout(
+                    () => scrollToRef(variationsSectionRef.current),
+                    30,
+                  );
+                }}
+                title="Add a variation from a site instruction"
+              />
+              <RibbonButton
+                icon={FaListUl}
+                label="Go to list"
+                onClick={() => scrollToRef(variationsSectionRef.current)}
+              />
+              <div className="text-[11px] text-slate-600">
+                Current total:{" "}
+                <b
+                  className={
+                    variationsTotal > 0
+                      ? "text-amber-700"
+                      : variationsTotal < 0
+                      ? "text-red-700"
+                      : "text-slate-700"
+                  }
+                >
+                  {money(variationsTotal)}
+                </b>
+              </div>
+            </RibbonGroup>
+          ) : null}
+
+          {ribbonTab === "provisional" ? (
+            <RibbonGroup title="Provisional sums">
+              <RibbonButton
+                icon={FaPlus}
+                label="Add sum"
+                onClick={() => {
+                  onAddProvisionalSum?.();
+                  setTimeout(
+                    () => scrollToRef(provisionalSectionRef.current),
+                    30,
+                  );
+                }}
+                title="Add a provisional / PC sum"
+                disabled={!onAddProvisionalSum}
+              />
+              <RibbonButton
+                icon={FaListUl}
+                label="Go to list"
+                onClick={() => scrollToRef(provisionalSectionRef.current)}
+              />
+              <div className="text-[11px] text-slate-600">
+                Current total:{" "}
+                <b className="text-slate-800">{money(provisionalTotal)}</b>
+              </div>
+            </RibbonGroup>
+          ) : null}
+        </div>
+
+        {showActualColumns && ribbonTab === "home" ? (
+          <div className="border-t bg-white px-3 py-2 text-[11px] text-slate-500">
+            Actual amount uses the entered actual qty and actual rate. If only
+            one actual field is entered, the other value falls back to the
+            planned quantity or rate for comparison.
           </div>
         ) : null}
       </div>
@@ -847,7 +1097,13 @@ export default function ProjectBillTable({
             <tbody>
               {groupedRows.map(({ category, rows }, gIdx) => (
                 <React.Fragment key={`cat-${category}`}>
-                  <tr className="border-t-2 border-adlm-blue-200 bg-slate-100">
+                  <tr
+                    ref={(el) => {
+                      categoryAnchorRef.current[category] = el;
+                    }}
+                    className="border-t-2 border-adlm-blue-200 bg-slate-100 scroll-mt-24"
+                    data-section={`cat-${category}`}
+                  >
                     <td colSpan={totalCols} className="px-3 py-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold text-slate-900">
@@ -1264,8 +1520,188 @@ export default function ProjectBillTable({
         </div>
       ) : null}
 
+      {onAddVariation ? (
+        <div
+          ref={variationsSectionRef}
+          className="rounded-xl border border-slate-200 bg-white p-4 scroll-mt-24"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">
+                Variations — Site Instructions / Change Orders
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Log variations that come from architect's instructions, client
+                changes or site directives. These are tracked against the
+                project total separately from measured-work variance (which is
+                captured per item via actual qty / rate).
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs"
+              onClick={onAddVariation}
+              title="Add variation row"
+            >
+              + Add variation
+            </button>
+          </div>
+
+          {variations.length ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-left text-slate-600">
+                  <tr>
+                    <th className="px-2 py-2 w-10">#</th>
+                    <th className="px-2 py-2 w-28">Reference</th>
+                    <th className="px-2 py-2">Description</th>
+                    <th className="px-2 py-2 w-24 text-right">Qty</th>
+                    <th className="px-2 py-2 w-20">Unit</th>
+                    <th className="px-2 py-2 w-28 text-right">Rate</th>
+                    <th className="px-2 py-2 w-32 text-right">Amount</th>
+                    <th className="px-2 py-2 w-28">Issued</th>
+                    <th className="px-2 py-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {variations.map((v, i) => {
+                    const qty = safeNum(v?.qty);
+                    const rate = safeNum(v?.rate);
+                    const amount = qty * rate;
+                    return (
+                      <tr key={i} className="border-t">
+                        <td className="px-2 py-2 text-slate-500">{i + 1}</td>
+                        <td className="px-2 py-2">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs"
+                            type="text"
+                            placeholder="AI-001"
+                            value={v?.reference || ""}
+                            onChange={(e) =>
+                              onUpdateVariation?.(i, {
+                                reference: e.target.value,
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs"
+                            type="text"
+                            placeholder="e.g. Additional skirting in owner's study"
+                            value={v?.description || ""}
+                            onChange={(e) =>
+                              onUpdateVariation?.(i, {
+                                description: e.target.value,
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs text-right"
+                            type="number"
+                            step="any"
+                            placeholder="0"
+                            value={
+                              v?.qty === 0 || v?.qty == null ? "" : v.qty
+                            }
+                            onChange={(e) =>
+                              onUpdateVariation?.(i, {
+                                qty:
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value),
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs"
+                            type="text"
+                            placeholder="m, m2, No"
+                            value={v?.unit || ""}
+                            onChange={(e) =>
+                              onUpdateVariation?.(i, { unit: e.target.value })
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs text-right"
+                            type="number"
+                            step="any"
+                            placeholder="0.00"
+                            value={
+                              v?.rate === 0 || v?.rate == null ? "" : v.rate
+                            }
+                            onChange={(e) =>
+                              onUpdateVariation?.(i, {
+                                rate:
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value),
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right font-medium text-slate-900">
+                          {money(amount)}
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs"
+                            type="date"
+                            value={v?.issuedAt || ""}
+                            onChange={(e) =>
+                              onUpdateVariation?.(i, {
+                                issuedAt: e.target.value,
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="px-1 py-2 text-center">
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                            title="Remove this variation"
+                            onClick={() => onRemoveVariation?.(i)}
+                          >
+                            <FaTrashAlt className="text-[10px]" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-slate-50 font-semibold text-slate-900">
+                  <tr className="border-t">
+                    <td className="px-2 py-2" colSpan={6}>
+                      Total variations
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {money(variationsTotal)}
+                    </td>
+                    <td colSpan={2}></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              No variations logged yet. Click "+ Add variation" to record a
+              site instruction or change order.
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {onAddProvisionalSum ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div
+          ref={provisionalSectionRef}
+          className="rounded-xl border border-slate-200 bg-white p-4 scroll-mt-24"
+        >
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold text-slate-900">Provisional Sums</div>
@@ -1358,6 +1794,48 @@ export default function ProjectBillTable({
               No provisional sums added yet. Click "+ Add provisional sum" to start.
             </div>
           )}
+        </div>
+      ) : null}
+
+      {(provisionalTotal > 0 || variationsTotal !== 0 || computedShown.length) ? (
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4">
+          <div className="text-sm font-semibold text-slate-900 mb-2">
+            Project total
+          </div>
+          <div className="grid gap-2 text-xs sm:grid-cols-4">
+            <div>
+              <div className="text-slate-500">Measured work</div>
+              <div className="text-sm font-semibold text-slate-900">
+                {money(grossAmount)}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">Provisional sums</div>
+              <div className="text-sm font-semibold text-slate-900">
+                {money(provisionalTotal)}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">Variations (instructions)</div>
+              <div
+                className={`text-sm font-semibold ${
+                  variationsTotal > 0
+                    ? "text-amber-700"
+                    : variationsTotal < 0
+                    ? "text-red-700"
+                    : "text-slate-900"
+                }`}
+              >
+                {money(variationsTotal)}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">Total project cost</div>
+              <div className="text-base font-bold text-adlm-blue-700">
+                {money(projectTotal)}
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

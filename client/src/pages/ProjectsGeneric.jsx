@@ -407,6 +407,23 @@ function provisionalSumsEqual(a, b) {
   return true;
 }
 
+function variationsEqual(a, b) {
+  const A = Array.isArray(a) ? a : [];
+  const B = Array.isArray(b) ? b : [];
+  if (A.length !== B.length) return false;
+  for (let i = 0; i < A.length; i++) {
+    const X = A[i] || {};
+    const Y = B[i] || {};
+    if (String(X.description || "") !== String(Y.description || "")) return false;
+    if (Number(X.qty || 0) !== Number(Y.qty || 0)) return false;
+    if (String(X.unit || "") !== String(Y.unit || "")) return false;
+    if (Number(X.rate || 0) !== Number(Y.rate || 0)) return false;
+    if (String(X.reference || "") !== String(Y.reference || "")) return false;
+    if (String(X.issuedAt || "") !== String(Y.issuedAt || "")) return false;
+  }
+  return true;
+}
+
 const DASHBOARD_CHART_MODES = new Set(["pie", "ribbon", "line"]);
 const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   showDailyLog: true,
@@ -897,6 +914,8 @@ export default function ProjectsGeneric() {
   const [baseCategoryMap, setBaseCategoryMap] = React.useState({});
   const [provisionalSums, setProvisionalSums] = React.useState([]);
   const [baseProvisionalSums, setBaseProvisionalSums] = React.useState([]);
+  const [variations, setVariations] = React.useState([]);
+  const [baseVariations, setBaseVariations] = React.useState([]);
   const [valuationSettings, setValuationSettings] = React.useState(
     DEFAULT_VALUATION_SETTINGS,
   );
@@ -1055,6 +1074,20 @@ export default function ProjectsGeneric() {
       : [];
     setProvisionalSums(sums);
     setBaseProvisionalSums(sums.map((s) => ({ ...s })));
+    const vars = Array.isArray(project?.variations)
+      ? project.variations.map((v) => ({
+          description: String(v?.description || ""),
+          qty: Number(v?.qty) || 0,
+          unit: String(v?.unit || ""),
+          rate: Number(v?.rate) || 0,
+          reference: String(v?.reference || ""),
+          issuedAt: v?.issuedAt
+            ? new Date(v.issuedAt).toISOString().slice(0, 10)
+            : "",
+        }))
+      : [];
+    setVariations(vars);
+    setBaseVariations(vars.map((v) => ({ ...v })));
     const normalizedSettings = normalizeValuationSettings(
       project?.valuationSettings,
     );
@@ -1488,6 +1521,35 @@ export default function ProjectsGeneric() {
       return next;
     });
   }
+  function handleAddVariation() {
+    setVariations((prev) => [
+      ...(Array.isArray(prev) ? prev : []),
+      {
+        description: "",
+        qty: 0,
+        unit: "",
+        rate: 0,
+        reference: "",
+        issuedAt: "",
+      },
+    ]);
+  }
+  function handleUpdateVariation(idx, patch) {
+    setVariations((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      if (idx < 0 || idx >= next.length) return prev;
+      next[idx] = { ...next[idx], ...patch };
+      return next;
+    });
+  }
+  function handleRemoveVariation(idx) {
+    setVariations((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      if (idx < 0 || idx >= next.length) return prev;
+      next.splice(idx, 1);
+      return next;
+    });
+  }
   function handleCategoryChange(rowIndex, category) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
@@ -1539,6 +1601,7 @@ export default function ProjectsGeneric() {
     !statusMapsEqual(statusMap, baseStatusMap) ||
     !categoryMapsEqual(categoryMap, baseCategoryMap) ||
     !provisionalSumsEqual(provisionalSums, baseProvisionalSums) ||
+    !variationsEqual(variations, baseVariations) ||
     !valuationSettingsEqual(valuationSettings, baseValuationSettings);
 
   async function saveRatesToCloud() {
@@ -1585,6 +1648,16 @@ export default function ProjectsGeneric() {
             amount: Number(s?.amount) || 0,
           }))
           .filter((s) => s.description || s.amount > 0),
+        variations: variations
+          .map((v) => ({
+            description: String(v?.description || "").trim(),
+            qty: Number(v?.qty) || 0,
+            unit: String(v?.unit || "").trim(),
+            rate: Number(v?.rate) || 0,
+            reference: String(v?.reference || "").trim(),
+            issuedAt: v?.issuedAt || null,
+          }))
+          .filter((v) => v.description || v.qty > 0 || v.rate > 0),
       };
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
@@ -2441,6 +2514,73 @@ export default function ProjectsGeneric() {
       XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(cat));
     }
 
+    // Variations sheet — instruction-driven, separate from measured work.
+    const cleanedVariations = (Array.isArray(variations) ? variations : [])
+      .map((v) => ({
+        description: String(v?.description || "").trim(),
+        qty: Number(v?.qty) || 0,
+        unit: String(v?.unit || "").trim(),
+        rate: Number(v?.rate) || 0,
+        reference: String(v?.reference || "").trim(),
+        issuedAt: String(v?.issuedAt || ""),
+      }))
+      .filter((v) => v.description || v.qty > 0 || v.rate > 0);
+    const variationsTotal = cleanedVariations.reduce(
+      (acc, v) => acc + v.qty * v.rate,
+      0,
+    );
+    if (cleanedVariations.length) {
+      const varAoa = [
+        ["S/N", "Reference", "Description", "Qty", "Unit", "Rate", "Amount", "Issued"],
+        ...cleanedVariations.map((v, i) => [
+          i + 1,
+          v.reference,
+          v.description,
+          Number(v.qty.toFixed(2)),
+          v.unit,
+          Number(v.rate.toFixed(2)),
+          Number((v.qty * v.rate).toFixed(2)),
+          v.issuedAt,
+        ]),
+        ["", "", "", "", "", "TOTAL", Number(variationsTotal.toFixed(2)), ""],
+      ];
+      const varWs = XLSX.utils.aoa_to_sheet(varAoa);
+      varWs["!cols"] = [
+        { wch: 6 },
+        { wch: 16 },
+        { wch: 50 },
+        { wch: 10 },
+        { wch: 8 },
+        { wch: 14 },
+        { wch: 16 },
+        { wch: 12 },
+      ];
+      XLSX.utils.book_append_sheet(wb, varWs, "Variations");
+    }
+
+    // Provisional sums sheet
+    const cleanedProvSums = (Array.isArray(provisionalSums) ? provisionalSums : [])
+      .map((s) => ({
+        description: String(s?.description || "").trim(),
+        amount: Number(s?.amount) || 0,
+      }))
+      .filter((s) => s.description || s.amount > 0);
+    const provTotal = cleanedProvSums.reduce((acc, s) => acc + s.amount, 0);
+    if (cleanedProvSums.length) {
+      const psAoa = [
+        ["S/N", "Description", "Amount"],
+        ...cleanedProvSums.map((s, i) => [
+          i + 1,
+          s.description,
+          Number(s.amount.toFixed(2)),
+        ]),
+        ["", "TOTAL", Number(provTotal.toFixed(2))],
+      ];
+      const psWs = XLSX.utils.aoa_to_sheet(psAoa);
+      psWs["!cols"] = [{ wch: 6 }, { wch: 60 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, psWs, "Provisional Sums");
+    }
+
     // Summary sheet — per-category totals + grand total.
     const summaryAoa = [
       ["Category", "Items", "Amount"],
@@ -2452,10 +2592,21 @@ export default function ProjectsGeneric() {
         );
         return [cat, rows.length, Number(subtotal.toFixed(2))];
       }),
-      ["TOTAL", computedAll.length, Number(grossAmount.toFixed(2))],
+      ["Measured work — subtotal", computedAll.length, Number(grossAmount.toFixed(2))],
+      ...(provTotal > 0
+        ? [["Provisional sums", cleanedProvSums.length, Number(provTotal.toFixed(2))]]
+        : []),
+      ...(variationsTotal !== 0
+        ? [["Variations", cleanedVariations.length, Number(variationsTotal.toFixed(2))]]
+        : []),
+      [
+        "PROJECT TOTAL",
+        computedAll.length + cleanedProvSums.length + cleanedVariations.length,
+        Number((grossAmount + provTotal + variationsTotal).toFixed(2)),
+      ],
     ];
     const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
-    summaryWs["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 18 }];
+    summaryWs["!cols"] = [{ wch: 30 }, { wch: 10 }, { wch: 18 }];
     XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
 
     const filename = `${sanitizeFilename(sel?.name || "Project")} - BoQ.xlsx`;
@@ -2873,6 +3024,10 @@ export default function ProjectsGeneric() {
                 onAddProvisionalSum={handleAddProvisionalSum}
                 onUpdateProvisionalSum={handleUpdateProvisionalSum}
                 onRemoveProvisionalSum={handleRemoveProvisionalSum}
+                variations={variations}
+                onAddVariation={handleAddVariation}
+                onUpdateVariation={handleUpdateVariation}
+                onRemoveVariation={handleRemoveVariation}
                 onToggleGroupLink={toggleGroupLink}
                 isGroupLinked={isGroupLinked}
                 getCandidatesForItem={getCandidatesForItem}

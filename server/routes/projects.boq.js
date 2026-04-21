@@ -181,6 +181,7 @@ router.get(
       buildingType,
       foundationType: foundationType || undefined,
       provisionalSums: project.provisionalSums || [],
+      variations: project.variations || [],
     });
 
     const buf = Buffer.isBuffer(out.buffer)

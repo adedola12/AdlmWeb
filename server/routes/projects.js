@@ -341,6 +341,27 @@ function sanitizeProvisionalSums(sums) {
   return out;
 }
 
+function sanitizeVariations(variations) {
+  if (!Array.isArray(variations)) return [];
+  const out = [];
+  for (let i = 0; i < variations.length && out.length < 500; i += 1) {
+    const v = variations[i] || {};
+    const description = String(v.description || "").trim().slice(0, 500);
+    const qty = Number.isFinite(Number(v.qty)) ? Number(v.qty) : 0;
+    const unit = String(v.unit || "").trim().slice(0, 40);
+    const rate = Number.isFinite(Number(v.rate)) ? Number(v.rate) : 0;
+    const reference = String(v.reference || "").trim().slice(0, 120);
+    let issuedAt = null;
+    if (v.issuedAt) {
+      const d = new Date(v.issuedAt);
+      if (!Number.isNaN(d.getTime())) issuedAt = d;
+    }
+    if (!description && qty === 0 && rate === 0) continue;
+    out.push({ description, qty, unit, rate, reference, issuedAt });
+  }
+  return out;
+}
+
 function bucketPreviousItems(items) {
   const buckets = new Map();
   (items || []).forEach((item, index) => {
@@ -749,6 +770,7 @@ async function updateProject(req, res) {
       clientProjectKey,
       valuationSettings,
       provisionalSums,
+      variations,
     } = req.body || {};
 
     const userId = getUserObjectId(req);
@@ -858,6 +880,10 @@ async function updateProject(req, res) {
 
     if (Array.isArray(provisionalSums)) {
       project.provisionalSums = sanitizeProvisionalSums(provisionalSums);
+    }
+
+    if (Array.isArray(variations)) {
+      project.variations = sanitizeVariations(variations);
     }
 
     project.version += 1;
