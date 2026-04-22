@@ -165,6 +165,11 @@ export default function ProjectOpenView({
   onTradeChange,
   groupByMode = "category",
   onGroupByModeChange,
+  contract,
+  contractBusy = false,
+  onLockContract,
+  onUnlockContract,
+  onPreliminaryPercentChange,
   provisionalSums = [],
   onAddProvisionalSum,
   onUpdateProvisionalSum,
@@ -254,7 +259,28 @@ export default function ProjectOpenView({
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-            <div className="font-medium text-slate-900">{projectName}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="font-medium text-slate-900">{projectName}</div>
+              {contract?.locked ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
+                  title={`Contract locked${
+                    contract?.lockedAt
+                      ? " on " + new Date(contract.lockedAt).toLocaleDateString()
+                      : ""
+                  }. Qty / description edits are frozen; new items flow to Variations.`}
+                >
+                  🔒 Contract locked
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
+                  title="Contract is editable. Lock it on approval to start tracking variations."
+                >
+                  ✎ Draft (editable)
+                </span>
+              )}
+            </div>
             <div className="mt-1 text-xs text-slate-500">
               Project ID: <code>{selectedId}</code>
             </div>
@@ -500,6 +526,19 @@ export default function ProjectOpenView({
           onTradeChange={onTradeChange}
           groupByMode={groupByMode}
           onGroupByModeChange={onGroupByModeChange}
+          contractLocked={Boolean(contract?.locked)}
+          contractLockedAt={contract?.lockedAt || null}
+          contractApprovedAt={contract?.approvedAt || null}
+          contractSum={contract?.contractSum || 0}
+          preliminaryPercent={
+            Number.isFinite(Number(contract?.preliminaryPercent))
+              ? Number(contract.preliminaryPercent)
+              : 7.5
+          }
+          contractBusy={contractBusy}
+          onLockContract={onLockContract}
+          onUnlockContract={onUnlockContract}
+          onPreliminaryPercentChange={onPreliminaryPercentChange}
           provisionalSums={provisionalSums}
           onAddProvisionalSum={onAddProvisionalSum}
           onUpdateProvisionalSum={onUpdateProvisionalSum}

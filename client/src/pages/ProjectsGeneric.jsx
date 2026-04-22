@@ -114,6 +114,8 @@ function getEndpoints(tool) {
       del: (id) => "/projects/revit/materials/" + id,
       valuations: (id) => "/projects/revit/materials/" + id + "/valuations",
       share: (id) => "/projects/revit/materials/" + id + "/share",
+      lock: (id) => "/projects/revit/materials/" + id + "/contract/lock",
+      unlock: (id) => "/projects/revit/materials/" + id + "/contract/unlock",
     };
   }
 
@@ -125,6 +127,8 @@ function getEndpoints(tool) {
       del: (id) => "/projects/planswift/materials/" + id,
       valuations: (id) => "/projects/planswift/materials/" + id + "/valuations",
       share: (id) => "/projects/planswift/materials/" + id + "/share",
+      lock: (id) => "/projects/planswift/materials/" + id + "/contract/lock",
+      unlock: (id) => "/projects/planswift/materials/" + id + "/contract/unlock",
     };
   }
 
@@ -135,6 +139,8 @@ function getEndpoints(tool) {
     del: (id) => "/projects/" + t + "/" + id,
     valuations: (id) => "/projects/" + t + "/" + id + "/valuations",
     share: (id) => "/projects/" + t + "/" + id + "/share",
+    lock: (id) => "/projects/" + t + "/" + id + "/contract/lock",
+    unlock: (id) => "/projects/" + t + "/" + id + "/contract/unlock",
   };
 }
 
@@ -918,6 +924,12 @@ export default function ProjectsGeneric() {
   const [baseTradeMap, setBaseTradeMap] = React.useState({});
   // "category" (default) | "trade" — controls how the BoQ table groups rows
   const [groupByMode, setGroupByMode] = React.useState("category");
+  // Contract lock state — populated from the loaded project.
+  const [contract, setContract] = React.useState({
+    locked: false,
+    preliminaryPercent: 7.5,
+  });
+  const [contractBusy, setContractBusy] = React.useState(false);
   const [provisionalSums, setProvisionalSums] = React.useState([]);
   const [baseProvisionalSums, setBaseProvisionalSums] = React.useState([]);
   const [variations, setVariations] = React.useState([]);
@@ -1109,6 +1121,20 @@ export default function ProjectsGeneric() {
       : [];
     setVariations(vars);
     setBaseVariations(vars.map((v) => ({ ...v })));
+    const contractSrc = project?.contract || {};
+    setContract({
+      locked: Boolean(contractSrc.locked),
+      lockedAt: contractSrc.lockedAt || null,
+      approvedAt: contractSrc.approvedAt || null,
+      preliminaryPercent:
+        Number.isFinite(Number(contractSrc.preliminaryPercent))
+          ? Number(contractSrc.preliminaryPercent)
+          : 7.5,
+      contractSum: Number(contractSrc.contractSum) || 0,
+      measuredAtLock: Number(contractSrc.measuredAtLock) || 0,
+      provisionalAtLock: Number(contractSrc.provisionalAtLock) || 0,
+      preliminaryAtLock: Number(contractSrc.preliminaryAtLock) || 0,
+    });
     const normalizedSettings = normalizeValuationSettings(
       project?.valuationSettings,
     );
@@ -1695,6 +1721,7 @@ export default function ProjectsGeneric() {
             issuedAt: v?.issuedAt || null,
           }))
           .filter((v) => v.description || v.qty > 0 || v.rate > 0),
+        preliminaryPercent: Number(contract?.preliminaryPercent) || 0,
       };
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
@@ -2295,6 +2322,86 @@ export default function ProjectsGeneric() {
       .slice(0, 10);
 
     return matches;
+  }
+
+  // ── Contract lock / unlock ──
+  async function handleLockContract({ preliminaryPercent, approvedAt, notes } = {}) {
+    if (!selectedId || !accessToken) return null;
+    if (contract.locked) return contract;
+    setContractBusy(true);
+    try {
+      const result = await apiAuthed(endpoints.lock(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: {
+          preliminaryPercent: Number(preliminaryPercent ?? contract.preliminaryPercent),
+          approvedAt: approvedAt || new Date().toISOString(),
+          notes: notes || "",
+        },
+      });
+      if (result?.contract) {
+        const c = result.contract;
+        setContract({
+          locked: Boolean(c.locked),
+          lockedAt: c.lockedAt || null,
+          approvedAt: c.approvedAt || null,
+          preliminaryPercent:
+            Number.isFinite(Number(c.preliminaryPercent)) ? Number(c.preliminaryPercent) : 7.5,
+          contractSum: Number(c.contractSum) || 0,
+          measuredAtLock: Number(c.measuredAtLock) || 0,
+          provisionalAtLock: Number(c.provisionalAtLock) || 0,
+          preliminaryAtLock: Number(c.preliminaryAtLock) || 0,
+        });
+        // Refresh sel version so subsequent PUTs don't 409.
+        setSel((prev) =>
+          prev ? { ...prev, contract: c, version: result.version ?? prev.version } : prev,
+        );
+        setNotice("Contract locked. New items now flow to Variations; re-measured qty goes to Actual qty.");
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to lock contract");
+      return null;
+    } finally {
+      setContractBusy(false);
+    }
+  }
+
+  async function handleUnlockContract() {
+    if (!selectedId || !accessToken) return null;
+    if (!contract.locked) return contract;
+    if (!window.confirm(
+      "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely — variations will no longer be auto-tracked until you lock again.",
+    )) return null;
+    setContractBusy(true);
+    try {
+      const result = await apiAuthed(endpoints.unlock(selectedId), {
+        token: accessToken,
+        method: "POST",
+      });
+      if (result?.contract) {
+        setContract((prev) => ({
+          ...prev,
+          locked: false,
+          lockedAt: null,
+        }));
+        setSel((prev) =>
+          prev ? { ...prev, contract: result.contract, version: result.version ?? prev.version } : prev,
+        );
+        setNotice("Contract unlocked. Structural edits are now enabled.");
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to unlock contract");
+      return null;
+    } finally {
+      setContractBusy(false);
+    }
+  }
+
+  function handlePreliminaryPercentChange(value) {
+    const n = Math.max(0, Math.min(100, Number(value) || 0));
+    setContract((prev) => ({ ...(prev || {}), preliminaryPercent: n }));
   }
 
   // ── Share project dashboard ──
@@ -3092,6 +3199,11 @@ export default function ProjectsGeneric() {
                 onTradeChange={handleTradeChange}
                 groupByMode={groupByMode}
                 onGroupByModeChange={setGroupByMode}
+                contract={contract}
+                contractBusy={contractBusy}
+                onLockContract={handleLockContract}
+                onUnlockContract={handleUnlockContract}
+                onPreliminaryPercentChange={handlePreliminaryPercentChange}
                 provisionalSums={provisionalSums}
                 onAddProvisionalSum={handleAddProvisionalSum}
                 onUpdateProvisionalSum={handleUpdateProvisionalSum}

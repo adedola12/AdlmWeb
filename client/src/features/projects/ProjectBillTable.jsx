@@ -517,6 +517,15 @@ export default function ProjectBillTable({
   onTradeChange,
   groupByMode = "category",
   onGroupByModeChange,
+  contractLocked = false,
+  contractLockedAt = null,
+  contractApprovedAt = null,
+  contractSum = 0,
+  preliminaryPercent = 7.5,
+  contractBusy = false,
+  onLockContract,
+  onUnlockContract,
+  onPreliminaryPercentChange,
   provisionalSums = [],
   onAddProvisionalSum,
   onUpdateProvisionalSum,
@@ -735,7 +744,13 @@ export default function ProjectBillTable({
     );
   }, [provisionalSums]);
 
-  const projectTotal = grossAmount + provisionalTotal + variationsTotal;
+  // Preliminaries are a % of (measured + provisional). Variations are tracked
+  // separately and added to the planned contract sum so the client sees the
+  // true project cost.
+  const preliminaryAmount =
+    ((grossAmount + provisionalTotal) * safeNum(preliminaryPercent)) / 100;
+  const projectTotal =
+    grossAmount + provisionalTotal + preliminaryAmount + variationsTotal;
 
   // Helper for sortable header
   const SortHeader = ({ col, children, className = "", ...rest }) => (
@@ -760,6 +775,7 @@ export default function ProjectBillTable({
     { id: "home", label: "Home", icon: FaCogs },
     { id: "rates", label: "Rates", icon: FaSync },
     { id: "navigate", label: "Navigate", icon: FaListUl },
+    { id: "contract", label: "Contract", icon: FaFileInvoiceDollar },
     { id: "variations", label: "Variations", icon: FaClipboardList },
     { id: "provisional", label: "Provisional", icon: FaFileInvoiceDollar },
   ];
@@ -1106,6 +1122,92 @@ export default function ProjectBillTable({
                 </b>
               </div>
             </RibbonGroup>
+          ) : null}
+
+          {ribbonTab === "contract" ? (
+            <>
+              <RibbonGroup title="Approval">
+                {contractLocked ? (
+                  <>
+                    <div className="text-[11px] text-emerald-700 font-semibold">
+                      🔒 Locked
+                      {contractLockedAt
+                        ? ` on ${new Date(contractLockedAt).toLocaleDateString()}`
+                        : ""}
+                    </div>
+                    <RibbonButton
+                      icon={FaTimes}
+                      label={contractBusy ? "..." : "Unlock"}
+                      onClick={onUnlockContract}
+                      disabled={contractBusy || !onUnlockContract}
+                      title="Unlock the contract — only do this if you really need to edit the priced scope again."
+                    />
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[11px] text-amber-700">
+                      ✎ Draft — editable
+                    </div>
+                    <RibbonButton
+                      icon={FaFileInvoiceDollar}
+                      label={contractBusy ? "Locking..." : "Lock contract"}
+                      onClick={() =>
+                        onLockContract?.({
+                          preliminaryPercent: preliminaryPercent,
+                        })
+                      }
+                      disabled={contractBusy || !onLockContract}
+                      title="Freeze the priced scope. Post-lock: new items auto-flow to Variations, re-measured qty fills Actual qty."
+                    />
+                  </>
+                )}
+              </RibbonGroup>
+
+              <RibbonGroup title="Preliminaries %">
+                <label
+                  className="inline-flex items-center gap-2 text-[11px] text-slate-700"
+                  title="Preliminaries as a percentage of measured + provisional. Typical range 5 – 10%."
+                >
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={preliminaryPercent ?? 7.5}
+                    onChange={(e) =>
+                      onPreliminaryPercentChange?.(e.target.value)
+                    }
+                    disabled={contractLocked}
+                    className="input !h-7 !w-20 !px-2 text-[11px] text-right"
+                  />
+                  <span>%</span>
+                </label>
+                <div className="text-[11px] text-slate-600">
+                  ≈{" "}
+                  <b className="text-slate-800">{money(preliminaryAmount)}</b>
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup title="Contract sum">
+                <div className="text-[11px] text-slate-600 leading-tight">
+                  Measured: <b>{money(grossAmount)}</b>
+                </div>
+                <div className="text-[11px] text-slate-600 leading-tight">
+                  PC Sums: <b>{money(provisionalTotal)}</b>
+                </div>
+                <div className="text-[11px] text-slate-600 leading-tight">
+                  Preliminaries: <b>{money(preliminaryAmount)}</b>
+                </div>
+                <div className="text-[12px] font-semibold text-adlm-blue-700">
+                  Total: {money(projectTotal - variationsTotal)}
+                </div>
+                {variationsTotal !== 0 ? (
+                  <div className="text-[10px] text-amber-700">
+                    + Variations: {money(variationsTotal)}
+                  </div>
+                ) : null}
+              </RibbonGroup>
+            </>
           ) : null}
 
           {ribbonTab === "provisional" ? (
@@ -1957,10 +2059,17 @@ export default function ProjectBillTable({
 
       {(provisionalTotal > 0 || variationsTotal !== 0 || computedShown.length) ? (
         <div className="rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4">
-          <div className="text-sm font-semibold text-slate-900 mb-2">
-            Project total
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-slate-900">
+              Project total
+            </div>
+            <div className="text-[11px] text-slate-500">
+              {contractLocked
+                ? `Contract locked · baseline ${money(contractSum)}`
+                : "Draft — lock contract to freeze the baseline."}
+            </div>
           </div>
-          <div className="grid gap-2 text-xs sm:grid-cols-4">
+          <div className="grid gap-2 text-xs sm:grid-cols-5">
             <div>
               <div className="text-slate-500">Measured work</div>
               <div className="text-sm font-semibold text-slate-900">
@@ -1971,6 +2080,14 @@ export default function ProjectBillTable({
               <div className="text-slate-500">Provisional sums</div>
               <div className="text-sm font-semibold text-slate-900">
                 {money(provisionalTotal)}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">
+                Preliminaries ({safeNum(preliminaryPercent).toFixed(1)}%)
+              </div>
+              <div className="text-sm font-semibold text-slate-900">
+                {money(preliminaryAmount)}
               </div>
             </div>
             <div>

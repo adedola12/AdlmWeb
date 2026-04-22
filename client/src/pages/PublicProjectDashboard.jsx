@@ -7,6 +7,11 @@ function money(value) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function pct(value) {
+  const n = Number(value || 0);
+  return `${n.toFixed(1)}%`;
+}
+
 function SummaryCard({ label, value, detail, color = "text-slate-900" }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -20,7 +25,8 @@ function SummaryCard({ label, value, detail, color = "text-slate-900" }) {
 function ProgressRing({ percent = 0, count = 0, total = 0 }) {
   const r = 60;
   const c = 2 * Math.PI * r;
-  const offset = c - (percent / 100) * c;
+  const p = Math.max(0, Math.min(100, Number(percent) || 0));
+  const offset = c - (p / 100) * c;
 
   return (
     <div className="flex flex-col items-center">
@@ -34,12 +40,107 @@ function ProgressRing({ percent = 0, count = 0, total = 0 }) {
           transform="rotate(-90 80 80)"
         />
         <text x="80" y="72" textAnchor="middle" className="text-2xl font-bold fill-slate-900">
-          {percent.toFixed(1)}%
+          {p.toFixed(1)}%
         </text>
         <text x="80" y="92" textAnchor="middle" className="text-xs fill-slate-500">
           {count} of {total} lines
         </text>
       </svg>
+    </div>
+  );
+}
+
+// Side-by-side progress bars — physical (lines completed) vs cost (committed spend).
+// A dashed red line on each bar marks where the counterpart sits, so divergence is obvious.
+function DualProgressBars({ progressPercent = 0, costPercent = 0 }) {
+  const clamp = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+  const phys = clamp(progressPercent);
+  const cost = clamp(costPercent);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="mb-1 flex justify-between text-xs">
+          <span className="font-medium text-slate-700">Physical progress</span>
+          <span className="text-slate-500">{phys.toFixed(1)}% of lines complete</span>
+        </div>
+        <div className="relative h-3 rounded bg-slate-100 overflow-hidden">
+          <div
+            className="h-3 rounded bg-adlm-blue-700 transition-all duration-500"
+            style={{ width: `${phys}%` }}
+          />
+          {cost > 0 && Math.abs(cost - phys) > 1 ? (
+            <div
+              className="absolute top-0 h-3 w-0.5 bg-red-500"
+              style={{ left: `${cost}%` }}
+              title={`Cost position: ${cost.toFixed(1)}%`}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1 flex justify-between text-xs">
+          <span className="font-medium text-slate-700">Cost progress</span>
+          <span className="text-slate-500">{cost.toFixed(1)}% of contract committed</span>
+        </div>
+        <div className="relative h-3 rounded bg-slate-100 overflow-hidden">
+          <div
+            className="h-3 rounded bg-emerald-500 transition-all duration-500"
+            style={{ width: `${cost}%` }}
+          />
+          {phys > 0 && Math.abs(cost - phys) > 1 ? (
+            <div
+              className="absolute top-0 h-3 w-0.5 bg-red-500"
+              style={{ left: `${phys}%` }}
+              title={`Physical position: ${phys.toFixed(1)}%`}
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBanner({ status, delta = 0 }) {
+  const map = {
+    "starting": {
+      bg: "bg-slate-50 border-slate-200",
+      dot: "bg-slate-400",
+      text: "text-slate-700",
+      label: "Project just starting",
+      detail: "Not enough progress yet to read the trend.",
+    },
+    "on-track": {
+      bg: "bg-emerald-50 border-emerald-200",
+      dot: "bg-emerald-500",
+      text: "text-emerald-900",
+      label: "On track",
+      detail: "Cost progress is in line with physical progress.",
+    },
+    "watch": {
+      bg: "bg-amber-50 border-amber-200",
+      dot: "bg-amber-500",
+      text: "text-amber-900",
+      label: "Watch",
+      detail: `Cost is ${delta > 0 ? "running ahead" : "behind"} physical progress by ${Math.abs(delta).toFixed(1)}%.`,
+    },
+    "over-budget": {
+      bg: "bg-red-50 border-red-200",
+      dot: "bg-red-500",
+      text: "text-red-900",
+      label: "Over budget",
+      detail: `Spend is ${Math.abs(delta).toFixed(1)}% ahead of completed work. Review valuation.`,
+    },
+  };
+  const c = map[status] || map["starting"];
+  return (
+    <div className={`rounded-xl border p-4 ${c.bg}`}>
+      <div className="flex items-center gap-2">
+        <span className={`inline-block h-2.5 w-2.5 rounded-full ${c.dot}`} />
+        <div className={`text-sm font-semibold ${c.text}`}>{c.label}</div>
+      </div>
+      <div className={`mt-1 text-xs ${c.text} opacity-80`}>{c.detail}</div>
     </div>
   );
 }
@@ -75,6 +176,39 @@ function ComparisonChart({ rows = [] }) {
               </div>
               <div className="w-20 text-right font-medium">{money(row.actualAmount)}</div>
             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UpcomingSpend({ rows = [], total = 0 }) {
+  if (!rows.length) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">Planned next spend</div>
+          <div className="text-xs text-slate-500">
+            Highest-value items remaining — likely upcoming disbursements.
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs text-slate-500">Subtotal</div>
+          <div className="text-base font-semibold text-adlm-blue-700">{money(total)}</div>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center justify-between py-2 text-xs">
+            <div className="min-w-0 pr-3">
+              <div className="truncate font-medium text-slate-800">{r.description || "—"}</div>
+              <div className="text-[10px] text-slate-500">
+                {Number(r.qty || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {r.unit} × {money(r.rate)}
+              </div>
+            </div>
+            <div className="text-sm font-semibold text-slate-900">{money(r.amount)}</div>
           </div>
         ))}
       </div>
@@ -133,7 +267,18 @@ export default function PublicProjectDashboard() {
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
             <div className="text-xs text-slate-400 uppercase tracking-wider">Project Dashboard</div>
-            <div className="text-lg font-semibold">{data.name}</div>
+            <div className="flex items-center gap-2">
+              <div className="text-lg font-semibold">{data.name}</div>
+              {data.contractLocked ? (
+                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                  🔒 Contract locked
+                </span>
+              ) : (
+                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                  Draft
+                </span>
+              )}
+            </div>
             {data.sharedBy ? (
               <div className="text-xs text-slate-400 mt-0.5">Shared by {data.sharedBy}</div>
             ) : null}
@@ -146,13 +291,16 @@ export default function PublicProjectDashboard() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+        {/* Status banner */}
+        <StatusBanner status={data.status} delta={data.costVsProgressDelta} />
+
         {/* Progress Overview */}
         <div className="rounded-xl border border-slate-200 bg-white p-6">
           <div className="flex flex-col md:flex-row items-center gap-6">
             <div className="flex-1">
               <div className="text-lg font-semibold text-slate-900">Progress Overview</div>
               <div className="text-sm text-slate-500 mt-1">
-                Project delivery progress based on items marked {data.statusLabel?.toLowerCase() || "completed"}.
+                Physical delivery vs financial progress — see where cost is sitting relative to actual completion.
               </div>
             </div>
             <ProgressRing
@@ -160,18 +308,56 @@ export default function PublicProjectDashboard() {
               count={data.progressCount}
               total={data.progressTotal}
             />
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-xl font-bold text-slate-900">{data.progressCount}</div>
-                <div className="text-xs text-slate-500">Marked</div>
+            <div className="flex-1">
+              <DualProgressBars
+                progressPercent={data.progressPercent}
+                costPercent={data.costPercent}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Contract sum breakdown */}
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Contract sum</div>
+              <div className="text-xs text-slate-500">
+                {data.contractLocked
+                  ? `Locked${data.contractLockedAt ? " on " + new Date(data.contractLockedAt).toLocaleDateString() : ""}`
+                  : "Draft — contract not yet locked"}
               </div>
-              <div>
-                <div className="text-xl font-bold text-slate-900">{data.progressTotal - data.progressCount}</div>
-                <div className="text-xs text-slate-500">Remaining</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-slate-900">{data.progressTotal}</div>
-                <div className="text-xs text-slate-500">Total</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-slate-500">Planned contract sum</div>
+              <div className="text-xl font-bold text-adlm-blue-700">{money(data.contractSum)}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
+            <div>
+              <div className="text-slate-500">Measured</div>
+              <div className="font-semibold text-slate-900">{money(data.grossAmount)}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Provisional</div>
+              <div className="font-semibold text-slate-900">{money(data.provisionalTotal)}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Preliminaries ({pct(data.preliminaryPercent)})</div>
+              <div className="font-semibold text-slate-900">{money(data.preliminaryAmount)}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Variations</div>
+              <div
+                className={`font-semibold ${
+                  data.variationsTotal > 0
+                    ? "text-amber-700"
+                    : data.variationsTotal < 0
+                    ? "text-red-700"
+                    : "text-slate-900"
+                }`}
+              >
+                {money(data.variationsTotal)}
               </div>
             </div>
           </div>
@@ -180,21 +366,32 @@ export default function PublicProjectDashboard() {
         {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-3">
           <SummaryCard
-            label="Planned Total"
-            value={money(data.grossAmount)}
-            detail="Total project value"
-          />
-          <SummaryCard
-            label={data.statusLabel + " to Date"}
+            label={data.statusLabel + " to date"}
             value={money(data.valuedAmount)}
-            detail="Items already deducted"
+            detail={`${data.progressCount} / ${data.progressTotal} items`}
             color="text-emerald-700"
           />
           <SummaryCard
-            label="Outstanding Balance"
+            label="Outstanding balance"
             value={money(data.remainingAmount)}
-            detail="Remaining project amount"
+            detail="Measured work remaining"
             color="text-adlm-blue-700"
+          />
+          <SummaryCard
+            label="Actual project cost"
+            value={money(data.actualProjectCost)}
+            detail={
+              data.contractLocked
+                ? data.actualProjectCost > data.contractSum
+                  ? `${money(data.actualProjectCost - data.contractSum)} over contract`
+                  : `${money(data.contractSum - data.actualProjectCost)} under contract`
+                : "Including variations + provisional"
+            }
+            color={
+              data.contractLocked && data.actualProjectCost > data.contractSum
+                ? "text-red-600"
+                : "text-slate-900"
+            }
           />
         </div>
 
@@ -202,23 +399,26 @@ export default function PublicProjectDashboard() {
         {data.actualTrackedCount > 0 ? (
           <div className="grid gap-4 md:grid-cols-3">
             <SummaryCard
-              label="Actual Tracked Value"
+              label="Actual tracked value"
               value={money(data.actualTrackedAmount)}
               detail={`${data.actualTrackedCount} items with actual data`}
             />
             <SummaryCard
-              label="Actual Variance"
+              label="Actual variance"
               value={money(data.actualVarianceAmount)}
               detail={`${data.actualVariancePercent}% against planned`}
               color={varianceColor}
             />
             <SummaryCard
               label="Progress"
-              value={`${data.progressPercent}%`}
+              value={pct(data.progressPercent)}
               detail={`${data.progressCount} of ${data.progressTotal} items`}
             />
           </div>
         ) : null}
+
+        {/* Upcoming spend forecast */}
+        <UpcomingSpend rows={data.upcoming || []} total={data.upcomingTotal} />
 
         {/* Comparison Chart */}
         {data.comparisonRows?.length > 0 ? (

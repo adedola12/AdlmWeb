@@ -362,8 +362,10 @@ function sanitizeVariations(variations) {
       const d = new Date(v.issuedAt);
       if (!Number.isNaN(d.getTime())) issuedAt = d;
     }
+    const source =
+      v.source === "post-lock-new-item" ? "post-lock-new-item" : "manual";
     if (!description && qty === 0 && rate === 0) continue;
-    out.push({ description, qty, unit, rate, reference, issuedAt });
+    out.push({ description, qty, unit, rate, reference, issuedAt, source });
   }
   return out;
 }
@@ -777,6 +779,7 @@ async function updateProject(req, res) {
       valuationSettings,
       provisionalSums,
       variations,
+      preliminaryPercent,
     } = req.body || {};
 
     const userId = getUserObjectId(req);
@@ -889,16 +892,86 @@ async function updateProject(req, res) {
         Promise.allSettled(feedbackPromises);
       }
 
+      // ── Contract-lock enforcement ────────────────────────────────
+      // Once a contract is locked we don't let users edit the structural
+      // fields that define the priced scope. We do allow:
+      //   • rate (so unit rates can still be negotiated / sync'd)
+      //   • actualQty / actualRate (to track on-site progress)
+      //   • category / trade (classification-only)
+      //   • completed / purchased toggles
+      //   • auto-populated actualQty for items whose qty changed since lock
+      //
+      // If a line's qty has changed since lock we don't overwrite the
+      // contract qty — instead we put the NEW qty into actualQty so the
+      // variation surfaces as a re-measurement without losing the baseline.
+      // Brand-new items that didn't exist at lock are rejected from the
+      // measured work list and pushed onto the variations array so the
+      // contract sum stays stable.
+      const contract = project.contract || {};
+      const extraVariations = [];
+      let lockedItems = sanitizedNext;
+      if (contract?.locked) {
+        const baseByIdentity = new Map(
+          (contract.baseItems || []).map((b) => [String(b.identity || ""), b]),
+        );
+        const previousByIdent = new Map();
+        (project.items || []).forEach((it, idx) => {
+          previousByIdent.set(itemIdentity(it, idx), it);
+        });
+        lockedItems = sanitizedNext.filter((it, idx) => {
+          const ident = itemIdentity(it, idx);
+          const base = baseByIdentity.get(ident);
+          if (!base) {
+            // Item didn't exist at lock — push to variations and drop from
+            // measured work.
+            if (safeNum(it?.qty) > 0 || safeNum(it?.rate) > 0) {
+              extraVariations.push({
+                description: String(it?.description || it?.takeoffLine || "New scope (post-lock)"),
+                qty: safeNum(it?.qty),
+                unit: String(it?.unit || ""),
+                rate: safeNum(it?.rate),
+                reference: "AUTO",
+                issuedAt: new Date(),
+                source: "post-lock-new-item",
+              });
+            }
+            return false;
+          }
+          // Re-measurement: qty changed since lock → push new qty into
+          // actualQty unless the user has already set one. Keep contract qty.
+          const newQty = safeNum(it?.qty);
+          const baseQty = safeNum(base.qty);
+          if (newQty !== baseQty) {
+            const userActualQty = parseOptionalNumber(it?.actualQty);
+            if (userActualQty == null) {
+              it.actualQty = newQty;
+              it.actualUpdatedAt = new Date();
+              if (!it.actualRecordedAt) it.actualRecordedAt = new Date();
+            }
+            // Revert qty to contract baseline so contract sum stays locked.
+            it.qty = baseQty;
+            it.description = base.description || it.description;
+            it.unit = base.unit || it.unit;
+          }
+          return true;
+        });
+      }
+
       const tracked = applyValuationTracking({
         productKey,
         previousItems: Array.isArray(project.items) ? project.items : [],
-        nextItems: sanitizedNext,
+        nextItems: lockedItems,
         previousEvents: Array.isArray(project.valuationEvents)
           ? project.valuationEvents
           : [],
       });
       project.items = tracked.items;
       project.valuationEvents = tracked.valuationEvents;
+
+      if (extraVariations.length) {
+        const merged = [...(project.variations || []), ...extraVariations];
+        project.variations = sanitizeVariations(merged);
+      }
     }
 
     if (fingerprint !== undefined) project.fingerprint = fingerprint || "";
@@ -933,6 +1006,17 @@ async function updateProject(req, res) {
 
     if (Array.isArray(variations)) {
       project.variations = sanitizeVariations(variations);
+    }
+
+    if (preliminaryPercent !== undefined) {
+      const n = Number(preliminaryPercent);
+      if (Number.isFinite(n)) {
+        if (!project.contract) project.contract = {};
+        project.contract.preliminaryPercent = clampPercentage(
+          n,
+          safeNum(project.contract?.preliminaryPercent) || 7.5,
+        );
+      }
     }
 
     project.version += 1;
@@ -1055,6 +1139,106 @@ async function toggleShare(req, res) {
   }
 }
 
+// ── Contract lock / unlock ──
+// Locking freezes the priced scope: items, qty, descriptions. Post-lock
+// edits flow through the PUT handler which auto-routes new items to
+// variations and re-measured items to actualQty.
+async function lockContract(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const approvedAt = req.body?.approvedAt
+      ? new Date(req.body.approvedAt)
+      : new Date();
+    const preliminaryPercent = Number.isFinite(Number(req.body?.preliminaryPercent))
+      ? clampPercentage(
+          Number(req.body.preliminaryPercent),
+          safeNum(project.contract?.preliminaryPercent) || 7.5,
+        )
+      : safeNum(project.contract?.preliminaryPercent) || 7.5;
+    const notes = String(req.body?.notes || "").trim().slice(0, 1000);
+
+    // Snapshot current scope. Use itemIdentity as the stable key so later
+    // edits can be matched back to the baseline.
+    const baseItems = (project.items || []).map((it, idx) => ({
+      identity: itemIdentity(it, idx),
+      description: String(it.description || ""),
+      qty: safeNum(it.qty),
+      unit: String(it.unit || ""),
+      rate: safeNum(it.rate),
+    }));
+
+    const measured = baseItems.reduce(
+      (acc, b) => acc + safeNum(b.qty) * safeNum(b.rate),
+      0,
+    );
+    const provisional = (project.provisionalSums || []).reduce(
+      (acc, p) => acc + safeNum(p.amount),
+      0,
+    );
+    const prelim = ((measured + provisional) * preliminaryPercent) / 100;
+    const contractSum = measured + provisional + prelim;
+
+    project.contract = {
+      ...(project.contract?.toObject ? project.contract.toObject() : project.contract || {}),
+      locked: true,
+      lockedAt: new Date(),
+      lockedBy: userId,
+      approvedAt,
+      preliminaryPercent,
+      notes,
+      baseItems,
+      measuredAtLock: measured,
+      provisionalAtLock: provisional,
+      preliminaryAtLock: prelim,
+      contractSum,
+    };
+    project.version += 1;
+    await project.save();
+
+    res.json({ ok: true, contract: project.contract, version: project.version });
+  } catch (err) {
+    console.error("POST lock error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function unlockContract(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    if (!project.contract) project.contract = {};
+    project.contract.locked = false;
+    project.contract.lockedAt = null;
+    project.contract.lockedBy = null;
+    // Keep baseItems and contractSum so history is preserved; re-locking
+    // overwrites them cleanly.
+    project.version += 1;
+    await project.save();
+
+    res.json({ ok: true, contract: project.contract, version: project.version });
+  } catch (err) {
+    console.error("POST unlock error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── Public dashboard (NO AUTH) ──
 async function getPublicDashboard(req, res) {
   try {
@@ -1088,6 +1272,10 @@ async function getPublicDashboard(req, res) {
     let actualTrackedAmount = 0;
     let actualTrackedCount = 0;
 
+    // Forecast-next-spend: top N unfinished priced items (biggest tickets
+    // first). Gives the client a realistic view of what's coming up.
+    const upcomingCandidates = [];
+
     const comparisonRows = [];
 
     for (const it of items) {
@@ -1096,9 +1284,18 @@ async function getPublicDashboard(req, res) {
       const amount = qty * rate;
       grossAmount += amount;
 
-      if (it[statusField]) {
+      const marked = Boolean(it[statusField]);
+      if (marked) {
         progressCount++;
         valuedAmount += amount;
+      } else if (amount > 0) {
+        upcomingCandidates.push({
+          description: it.description || "",
+          unit: it.unit || "",
+          qty,
+          rate,
+          amount,
+        });
       }
 
       const aQty = it.actualQty != null ? Number(it.actualQty) : null;
@@ -1123,11 +1320,65 @@ async function getPublicDashboard(req, res) {
     }
 
     const progressPercent = progressTotal > 0 ? (progressCount / progressTotal) * 100 : 0;
+
+    // Contract, provisional, variations, preliminary — these together form
+    // the total planned contract sum the client is working against.
+    const contract = project.contract?.toObject
+      ? project.contract.toObject()
+      : project.contract || {};
+    const provisionalTotal = (project.provisionalSums || []).reduce(
+      (acc, p) => acc + (Number(p?.amount) || 0),
+      0,
+    );
+    const variationsTotal = (project.variations || []).reduce(
+      (acc, v) =>
+        acc + (Number(v?.qty) || 0) * (Number(v?.rate) || 0),
+      0,
+    );
+    const preliminaryPercent = Number(contract?.preliminaryPercent || 0);
+    // If we have a locked contract we use the baked-in figures so the
+    // contract sum the client sees matches what was signed, not whatever
+    // the live totals say today. Otherwise compute on the fly.
+    const measuredForContract = contract?.locked
+      ? Number(contract.measuredAtLock || 0)
+      : grossAmount;
+    const provisionalForContract = contract?.locked
+      ? Number(contract.provisionalAtLock || 0)
+      : provisionalTotal;
+    const preliminaryForContract = contract?.locked
+      ? Number(contract.preliminaryAtLock || 0)
+      : ((measuredForContract + provisionalForContract) * preliminaryPercent) / 100;
+    const contractSum = contract?.locked
+      ? Number(contract.contractSum || 0)
+      : measuredForContract + provisionalForContract + preliminaryForContract;
+
     const remainingAmount = grossAmount - valuedAmount;
+
+    // Actual project cost = completed work + actual variance on tracked items + variations + provisional
+    // For the purposes of the public dashboard we keep the simpler: valued + variations + provisional.
+    const actualProjectCost = valuedAmount + variationsTotal + provisionalTotal;
     const actualVarianceAmount = actualTrackedAmount - grossAmount;
     const actualVariancePercent = grossAmount > 0
       ? ((actualTrackedAmount - grossAmount) / grossAmount) * 100
       : 0;
+
+    // On-track status — compares cost progress (% of contract committed) to
+    // physical progress (% of lines completed). If cost is running ahead of
+    // physical work, the project is overspending.
+    const costPercent = contractSum > 0
+      ? ((valuedAmount + variationsTotal) / contractSum) * 100
+      : 0;
+    const delta = costPercent - progressPercent;
+    let status;
+    if (progressPercent < 1) status = "starting";
+    else if (delta <= 5) status = "on-track";
+    else if (delta <= 15) status = "watch";
+    else status = "over-budget";
+
+    // Top upcoming items (biggest value first) — represents likely next spend.
+    upcomingCandidates.sort((a, b) => b.amount - a.amount);
+    const upcoming = upcomingCandidates.slice(0, 5);
+    const upcomingTotal = upcoming.reduce((acc, r) => acc + r.amount, 0);
 
     res.json({
       ok: true,
@@ -1143,9 +1394,24 @@ async function getPublicDashboard(req, res) {
       remainingAmount,
       actualTrackedAmount,
       actualTrackedCount,
+      actualProjectCost,
       actualVarianceAmount,
       actualVariancePercent: Math.round(actualVariancePercent * 10) / 10,
       comparisonRows,
+      // Contract view
+      contractLocked: Boolean(contract?.locked),
+      contractLockedAt: contract?.lockedAt || null,
+      contractApprovedAt: contract?.approvedAt || null,
+      contractSum,
+      preliminaryPercent,
+      preliminaryAmount: preliminaryForContract,
+      provisionalTotal,
+      variationsTotal,
+      costPercent: Math.round(costPercent * 10) / 10,
+      costVsProgressDelta: Math.round(delta * 10) / 10,
+      status, // "starting" | "on-track" | "watch" | "over-budget"
+      upcoming,
+      upcomingTotal,
       updatedAt: project.updatedAt,
     });
   } catch (err) {
@@ -1276,6 +1542,20 @@ router.post(
   mapEntitlementParam,
   requireEntitlementParam,
   toggleShare,
+);
+
+router.post(
+  "/:productKey/:id/contract/lock",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  lockContract,
+);
+
+router.post(
+  "/:productKey/:id/contract/unlock",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  unlockContract,
 );
 
 router.get(

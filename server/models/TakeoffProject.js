@@ -92,6 +92,50 @@ const VariationSchema = new mongoose.Schema(
     rate: { type: Number, default: 0 },
     reference: { type: String, default: "", trim: true },
     issuedAt: { type: Date, default: null },
+    // Provenance — helps the UI colour-code variations that came from the
+    // auto-add-on-lock flow versus ones the user keyed in manually.
+    source: {
+      type: String,
+      enum: ["manual", "post-lock-new-item"],
+      default: "manual",
+    },
+  },
+  { _id: false },
+);
+
+// Snapshot of an item taken at contract lock time. Used post-lock to detect
+// re-measurement: if the live item's qty differs from snapshotQty and the
+// user hasn't set actualQty, we auto-populate actualQty with the new qty so
+// the design-change variation is tracked without losing the original contract
+// quantity.
+const ContractBaseItemSchema = new mongoose.Schema(
+  {
+    identity: { type: String, default: "" }, // matches itemIdentity()
+    description: { type: String, default: "" },
+    qty: { type: Number, default: 0 },
+    unit: { type: String, default: "" },
+    rate: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+const ContractSchema = new mongoose.Schema(
+  {
+    locked: { type: Boolean, default: false },
+    lockedAt: { type: Date, default: null },
+    lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    approvedAt: { type: Date, default: null },
+    // Preliminaries as a percentage of (measured work + provisional sums).
+    // Typical range in Nigerian practice is 5 – 10%. Stored as whole number.
+    preliminaryPercent: { type: Number, default: 7.5 },
+    // Frozen totals at lock time so the client can compare live actuals
+    // against the contract baseline even after edits.
+    contractSum: { type: Number, default: 0 },
+    measuredAtLock: { type: Number, default: 0 },
+    provisionalAtLock: { type: Number, default: 0 },
+    preliminaryAtLock: { type: Number, default: 0 },
+    baseItems: { type: [ContractBaseItemSchema], default: [] },
+    notes: { type: String, default: "" },
   },
   { _id: false },
 );
@@ -140,6 +184,7 @@ const TakeoffProjectSchema = new mongoose.Schema(
     items: { type: [ItemSchema], default: [] },
     provisionalSums: { type: [ProvisionalSumSchema], default: [] },
     variations: { type: [VariationSchema], default: [] },
+    contract: { type: ContractSchema, default: () => ({}) },
     valuationSettings: {
       type: ValuationSettingsSchema,
       default: () => ({ ...DefaultValuationSettings }),
