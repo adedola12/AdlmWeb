@@ -269,7 +269,11 @@ export default function PublicProjectDashboard() {
             <div className="text-xs text-slate-400 uppercase tracking-wider">Project Dashboard</div>
             <div className="flex items-center gap-2">
               <div className="text-lg font-semibold">{data.name}</div>
-              {data.contractLocked ? (
+              {data.finalAccount?.finalized ? (
+                <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-200">
+                  ✓ Final account closed
+                </span>
+              ) : data.contractLocked ? (
                 <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
                   🔒 Contract locked
                 </span>
@@ -414,6 +418,164 @@ export default function PublicProjectDashboard() {
               value={pct(data.progressPercent)}
               detail={`${data.progressCount} of ${data.progressTotal} items`}
             />
+          </div>
+        ) : null}
+
+        {/* EVM — Earned Value Management */}
+        {data.evm ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <div className="mb-3">
+              <div className="text-sm font-semibold text-slate-900">
+                Earned Value (EVM)
+              </div>
+              <div className="text-xs text-slate-500">
+                BCWP / ACWP / EAC metrics — forecast cost at completion based
+                on current performance.
+              </div>
+            </div>
+            <div className="grid gap-3 text-xs sm:grid-cols-3 md:grid-cols-6">
+              <div>
+                <div className="text-slate-500">BAC</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {money(data.evm.BAC)}
+                </div>
+                <div className="text-[10px] text-slate-400">Budget at completion</div>
+              </div>
+              <div>
+                <div className="text-slate-500">BCWP</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {money(data.evm.BCWP)}
+                </div>
+                <div className="text-[10px] text-slate-400">Earned value</div>
+              </div>
+              <div>
+                <div className="text-slate-500">ACWP</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {money(data.evm.ACWP)}
+                </div>
+                <div className="text-[10px] text-slate-400">Actual cost</div>
+              </div>
+              <div>
+                <div className="text-slate-500">CPI</div>
+                <div
+                  className={`text-sm font-semibold ${
+                    data.evm.CPI >= 1 ? "text-emerald-700" : "text-red-700"
+                  }`}
+                >
+                  {Number(data.evm.CPI || 0).toFixed(2)}
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {data.evm.CPI >= 1 ? "Under budget" : "Over budget"}
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">EAC</div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {money(data.evm.EAC)}
+                </div>
+                <div className="text-[10px] text-slate-400">Forecast final cost</div>
+              </div>
+              <div>
+                <div className="text-slate-500">VAC</div>
+                <div
+                  className={`text-sm font-semibold ${
+                    data.evm.VAC >= 0 ? "text-emerald-700" : "text-red-700"
+                  }`}
+                >
+                  {money(data.evm.VAC)}
+                </div>
+                <div className="text-[10px] text-slate-400">Variance at completion</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Certificate rollup */}
+        {data.certificates && data.certificates.total > 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">
+                  Interim certificates
+                </div>
+                <div className="text-xs text-slate-500">
+                  Latest: IPC{" "}
+                  {String(data.certificates.latestNumber || 0).padStart(2, "0")}
+                  {data.certificates.latestDate
+                    ? ` · ${new Date(data.certificates.latestDate).toLocaleDateString()}`
+                    : ""}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-slate-500">Total certified</div>
+                <div className="text-base font-semibold text-adlm-blue-700">
+                  {money(data.certificates.totalCertified)}
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+              <div>
+                <div className="text-slate-500">Certificates issued</div>
+                <div className="font-semibold text-slate-900">
+                  {data.certificates.total}
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Retention held</div>
+                <div className="font-semibold text-slate-900">
+                  {money(data.certificates.totalRetained)}
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Final account</div>
+                <div
+                  className={`font-semibold ${
+                    data.finalAccount?.finalized
+                      ? "text-emerald-700"
+                      : "text-amber-700"
+                  }`}
+                >
+                  {data.finalAccount?.finalized ? "Closed" : "Open"}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* BIM models attached (viewer coming soon) */}
+        {data.models &&
+        (data.models.architectural || data.models.structural || data.models.mep) ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <div className="mb-3">
+              <div className="text-sm font-semibold text-slate-900">
+                Attached BIM models
+              </div>
+              <div className="text-xs text-slate-500">
+                IFC files used to produce this BoQ — a web 3D viewer is coming
+                soon.
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {["architectural", "structural", "mep"].map((d) => {
+                const m = data.models?.[d];
+                if (!m) return null;
+                const label = d === "mep" ? "MEP" : d.charAt(0).toUpperCase() + d.slice(1);
+                return (
+                  <div
+                    key={d}
+                    className="rounded border border-slate-200 bg-slate-50 p-3 text-xs"
+                  >
+                    <div className="font-semibold text-slate-800">{label}</div>
+                    <div className="mt-1 truncate text-slate-600" title={m.sourceFile}>
+                      {m.sourceFile}
+                    </div>
+                    <div className="mt-1 text-[11px] text-slate-500">
+                      {(Number(m.sizeBytes || 0) / 1024 / 1024).toFixed(1)} MB
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : null}
 

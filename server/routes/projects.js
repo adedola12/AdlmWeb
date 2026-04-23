@@ -1,6 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import crypto from "crypto";
+import multer from "multer";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
@@ -10,6 +11,28 @@ import {
   applyLearnedCategoriesToItems,
   recordCategoryFeedback,
 } from "../util/learnedCategory.js";
+import {
+  isR2Configured,
+  uploadBufferToR2,
+  deleteFromR2,
+} from "../utils/r2Upload.js";
+
+// Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
+// IFC files; we can raise this per-tier later via an entitlement flag.
+const IFC_MAX_BYTES = 100 * 1024 * 1024;
+const DISCIPLINES = new Set(["architectural", "structural", "mep"]);
+
+const uploadModelFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: IFC_MAX_BYTES },
+  fileFilter: (req, file, cb) => {
+    const name = String(file.originalname || "").toLowerCase();
+    if (name.endsWith(".ifc") || name.endsWith(".ifczip") || name.endsWith(".frag")) {
+      return cb(null, true);
+    }
+    cb(new Error("Only .ifc, .ifczip or .frag files are accepted."));
+  },
+});
 
 const router = express.Router();
 
@@ -794,6 +817,13 @@ async function updateProject(req, res) {
       return res.status(409).json({ error: "Version conflict" });
     }
 
+    if (project.finalAccount?.finalized) {
+      return res.status(423).json({
+        error:
+          "Final account is finalized. Reopen it from the Contract tab before editing.",
+      });
+    }
+
     if (name !== undefined) project.name = String(name).trim();
 
     if (Array.isArray(items)) {
@@ -1239,6 +1269,520 @@ async function unlockContract(req, res) {
   }
 }
 
+// ── Interim Certificate helpers ──
+// Roll up the current "value of work done to date" for a project:
+//   • completed measured items at their valued amount
+//   • approved variations at their qty × rate
+//   • provisional sums at their declared amount (client-agreed releases
+//     still have to be claimed explicitly via a variation if released partial)
+// This is what cumulativeValue on each new cert should snap to at issue time.
+function computeValueToDate(project) {
+  const items = Array.isArray(project.items) ? project.items : [];
+  const isMaterials = isMaterialsProductKey(project.productKey);
+  const statusField = isMaterials ? "purchased" : "completed";
+
+  let measured = 0;
+  for (const it of items) {
+    const marked = Boolean(it?.[statusField]);
+    if (!marked) continue;
+    const q = safeNum(it?.actualQty != null ? it.actualQty : it.qty);
+    const r = safeNum(it?.actualRate != null ? it.actualRate : it.rate);
+    measured += q * r;
+  }
+
+  const variationsAmount = (project.variations || []).reduce(
+    (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
+    0,
+  );
+  const provisionalAmount = (project.provisionalSums || []).reduce(
+    (acc, s) => acc + safeNum(s?.amount),
+    0,
+  );
+
+  const totalItems = items.length;
+  const markedItems = items.filter((it) => Boolean(it?.[statusField])).length;
+
+  return {
+    cumulativeValue: measured + variationsAmount + provisionalAmount,
+    measured,
+    variationsAmount,
+    provisionalAmount,
+    totalItems,
+    markedItems,
+  };
+}
+
+async function issueCertificate(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    if (project.finalAccount?.finalized) {
+      return res.status(400).json({
+        error: "Final account is finalized. Reopen it before issuing new certificates.",
+      });
+    }
+
+    const rollup = computeValueToDate(project);
+
+    const previousCerts = (project.certificates || []).filter(
+      (c) => c.status !== "draft" || Number.isFinite(Number(c.thisCertificate)),
+    );
+    const lessPrevious = previousCerts.reduce(
+      (acc, c) => acc + safeNum(c.thisCertificate),
+      0,
+    );
+
+    const cumulativeValue = safeNum(req.body?.cumulativeValue ?? rollup.cumulativeValue);
+    const thisCertificate = Math.max(0, cumulativeValue - lessPrevious);
+
+    // Rates default to the project's valuation settings.
+    const valSettings = project.valuationSettings || {};
+    const retentionPct = Number.isFinite(Number(req.body?.retentionPct))
+      ? clampPercentage(Number(req.body.retentionPct), safeNum(valSettings.retentionPct) || 5)
+      : safeNum(valSettings.retentionPct) || 5;
+    const vatPct = Number.isFinite(Number(req.body?.vatPct))
+      ? clampPercentage(Number(req.body.vatPct), safeNum(valSettings.vatPct) || 7.5)
+      : safeNum(valSettings.vatPct) || 7.5;
+    const whtPct = Number.isFinite(Number(req.body?.whtPct))
+      ? clampPercentage(Number(req.body.whtPct), safeNum(valSettings.withholdingPct) || 2.5)
+      : safeNum(valSettings.withholdingPct) || 2.5;
+    const retentionReleased = safeNum(req.body?.retentionReleased);
+
+    const retentionAmount = (thisCertificate * retentionPct) / 100;
+    const netBeforeTax = thisCertificate - retentionAmount + retentionReleased;
+    const vatAmount = (netBeforeTax * vatPct) / 100;
+    const whtAmount = (netBeforeTax * whtPct) / 100;
+    const netPayable = netBeforeTax + vatAmount - whtAmount;
+
+    const number =
+      (project.certificates || []).reduce((acc, c) => Math.max(acc, Number(c.number) || 0), 0) + 1;
+
+    const notes = String(req.body?.notes || "").trim().slice(0, 2000);
+    const certDate = req.body?.date ? new Date(req.body.date) : new Date();
+    const periodStart = req.body?.periodStart ? new Date(req.body.periodStart) : null;
+    const periodEnd = req.body?.periodEnd ? new Date(req.body.periodEnd) : null;
+    const status =
+      req.body?.status === "approved" || req.body?.status === "paid"
+        ? req.body.status
+        : "draft";
+
+    const cert = {
+      number,
+      date: certDate,
+      periodStart,
+      periodEnd,
+      cumulativeValue,
+      lessPrevious,
+      thisCertificate,
+      retentionPct,
+      retentionAmount,
+      retentionReleased,
+      vatPct,
+      vatAmount,
+      whtPct,
+      whtAmount,
+      netPayable,
+      status,
+      notes,
+      snapshotCompletedCount: rollup.markedItems,
+      snapshotTotalCount: rollup.totalItems,
+    };
+
+    project.certificates = [...(project.certificates || []), cert];
+    project.version += 1;
+    await project.save();
+
+    res.json({ ok: true, certificate: cert, version: project.version });
+  } catch (err) {
+    console.error("POST certificate error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function updateCertificate(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const number = Number(req.params.number);
+    if (!isValidObjectId(id) || !Number.isFinite(number)) {
+      return res.status(400).json({ error: "Invalid id or cert number" });
+    }
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const idx = (project.certificates || []).findIndex(
+      (c) => Number(c.number) === number,
+    );
+    if (idx < 0) return res.status(404).json({ error: "Certificate not found" });
+
+    const cert = project.certificates[idx];
+    const allowed = ["status", "notes", "date", "periodStart", "periodEnd"];
+    for (const k of allowed) {
+      if (req.body?.[k] !== undefined) {
+        if (k === "date" || k === "periodStart" || k === "periodEnd") {
+          const d = req.body[k] ? new Date(req.body[k]) : null;
+          if (d == null || !Number.isNaN(d?.getTime())) cert[k] = d;
+        } else if (k === "status") {
+          if (["draft", "approved", "paid"].includes(req.body.status)) {
+            cert.status = req.body.status;
+          }
+        } else {
+          cert[k] = String(req.body[k]);
+        }
+      }
+    }
+    project.certificates[idx] = cert;
+    project.version += 1;
+    await project.save();
+
+    res.json({ ok: true, certificate: cert, version: project.version });
+  } catch (err) {
+    console.error("PUT certificate error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function deleteCertificate(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const number = Number(req.params.number);
+    if (!isValidObjectId(id) || !Number.isFinite(number)) {
+      return res.status(400).json({ error: "Invalid id or cert number" });
+    }
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const certs = project.certificates || [];
+    const idx = certs.findIndex((c) => Number(c.number) === number);
+    if (idx < 0) return res.status(404).json({ error: "Certificate not found" });
+
+    // Only the latest cert can be deleted — otherwise less-previous math breaks.
+    const maxNumber = certs.reduce((acc, c) => Math.max(acc, Number(c.number) || 0), 0);
+    if (number !== maxNumber) {
+      return res.status(400).json({
+        error: "Only the most recent certificate can be deleted to preserve cumulative math.",
+      });
+    }
+
+    project.certificates = certs.filter((c) => Number(c.number) !== number);
+    project.version += 1;
+    await project.save();
+
+    res.json({ ok: true, version: project.version });
+  } catch (err) {
+    console.error("DELETE certificate error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── Final Account ──
+// Finalizing snapshots the actual project settlement and freezes edits.
+async function finalizeAccount(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const rollup = computeValueToDate(project);
+    const provisionalFinal = (project.provisionalSums || []).reduce(
+      (acc, s) => acc + safeNum(s?.amount),
+      0,
+    );
+    const variationsFinal = (project.variations || []).reduce(
+      (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
+      0,
+    );
+    const measuredWorkFinal = rollup.measured;
+    const preliminaryPercent = safeNum(project.contract?.preliminaryPercent);
+    const preliminaryFinal =
+      ((measuredWorkFinal + provisionalFinal) * preliminaryPercent) / 100;
+    const retentionReleased = (project.certificates || []).reduce(
+      (acc, c) => acc + safeNum(c.retentionReleased),
+      0,
+    );
+    const totalCertifiedToDate = (project.certificates || []).reduce(
+      (acc, c) => acc + safeNum(c.thisCertificate),
+      0,
+    );
+
+    const finalContractValue =
+      measuredWorkFinal + provisionalFinal + preliminaryFinal + variationsFinal;
+    const agreedContractSum = safeNum(project.contract?.contractSum);
+    const savings = agreedContractSum - finalContractValue;
+
+    project.finalAccount = {
+      finalized: true,
+      finalizedAt: new Date(),
+      finalizedBy: userId,
+      measuredWorkFinal,
+      provisionalFinal,
+      preliminaryFinal,
+      variationsFinal,
+      retentionReleased,
+      totalCertifiedToDate,
+      agreedContractSum,
+      finalContractValue,
+      savings,
+      notes: String(req.body?.notes || "").trim().slice(0, 2000),
+    };
+    project.version += 1;
+    await project.save();
+
+    res.json({ ok: true, finalAccount: project.finalAccount, version: project.version });
+  } catch (err) {
+    console.error("POST finalize error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// Streaming helper for xlsx downloads.
+function sendXlsx(res, { buffer, filename }) {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.status(200).end(buffer);
+}
+
+async function exportCertificateXlsx(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const number = Number(req.params.number);
+    if (!isValidObjectId(id) || !Number.isFinite(number)) {
+      return res.status(400).json({ error: "Invalid id or cert number" });
+    }
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const certs = project.certificates || [];
+    const cert = certs.find((c) => Number(c.number) === number);
+    if (!cert) return res.status(404).json({ error: "Certificate not found" });
+
+    const previous = certs.filter((c) => Number(c.number) < number);
+    const { exportCertificate } = await import("../util/certificateExporter.js");
+    const out = await exportCertificate({
+      projectName: project.name || "Project",
+      certificate: cert.toObject ? cert.toObject() : cert,
+      previousCerts: previous.map((c) => (c.toObject ? c.toObject() : c)),
+    });
+    return sendXlsx(res, out);
+  } catch (err) {
+    console.error("GET certificate xlsx error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function exportFinalAccountXlsx(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    if (!project.finalAccount?.finalized) {
+      return res
+        .status(400)
+        .json({ error: "Finalize the account first before exporting." });
+    }
+
+    const { exportFinalAccount } = await import("../util/certificateExporter.js");
+    const out = await exportFinalAccount({
+      projectName: project.name || "Project",
+      finalAccount: project.finalAccount.toObject
+        ? project.finalAccount.toObject()
+        : project.finalAccount,
+      certificates: (project.certificates || []).map((c) =>
+        c.toObject ? c.toObject() : c,
+      ),
+    });
+    return sendXlsx(res, out);
+  } catch (err) {
+    console.error("GET final account xlsx error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── IFC / BIM model upload (Cloudflare R2) ──
+async function uploadProjectModel(req, res) {
+  try {
+    if (!isR2Configured()) {
+      return res.status(503).json({ error: "R2 storage is not configured on this server." });
+    }
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const discipline = String(req.params.discipline || "").toLowerCase();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    if (!DISCIPLINES.has(discipline)) {
+      return res.status(400).json({
+        error: "discipline must be one of: architectural, structural, mep",
+      });
+    }
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const file = req.file;
+    if (!file || !file.buffer || file.buffer.length === 0) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // Delete any existing model in this discipline — one per slot.
+    const existing = project.models?.[discipline];
+    if (existing?.key) {
+      try {
+        await deleteFromR2(existing.key);
+      } catch (e) {
+        console.warn("R2 delete failed (continuing):", e?.message || e);
+      }
+    }
+
+    const safeOriginal = String(file.originalname || "model.ifc").replace(/[^\w.\-]/g, "_");
+    const key = `projects/${id}/models/${discipline}/${Date.now()}-${safeOriginal}`;
+    const lowerName = safeOriginal.toLowerCase();
+    const format = lowerName.endsWith(".frag") ? "fragments" : "ifc";
+
+    const uploaded = await uploadBufferToR2(file.buffer, {
+      key,
+      contentType:
+        format === "fragments"
+          ? "application/octet-stream"
+          : "application/x-step", // IFC is STEP-format plain text
+      cacheControl: "public, max-age=86400",
+    });
+
+    const modelEntry = {
+      sourceFile: safeOriginal,
+      key: uploaded.public_id,
+      url: uploaded.secure_url,
+      sizeBytes: file.buffer.length,
+      format,
+      uploadedAt: new Date(),
+      uploadedBy: userId,
+    };
+
+    if (!project.models) project.models = {};
+    project.models[discipline] = modelEntry;
+    project.markModified(`models.${discipline}`);
+    project.version += 1;
+    await project.save();
+
+    res.json({
+      ok: true,
+      discipline,
+      model: modelEntry,
+      version: project.version,
+    });
+  } catch (err) {
+    if (err?.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        error: `File too large. Maximum upload is ${Math.round(IFC_MAX_BYTES / 1024 / 1024)} MB.`,
+      });
+    }
+    console.error("POST model upload error:", err);
+    res.status(500).json({ error: err?.message || "Server error" });
+  }
+}
+
+async function deleteProjectModel(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const discipline = String(req.params.discipline || "").toLowerCase();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    if (!DISCIPLINES.has(discipline)) {
+      return res.status(400).json({ error: "Invalid discipline" });
+    }
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const existing = project.models?.[discipline];
+    if (existing?.key) {
+      try {
+        await deleteFromR2(existing.key);
+      } catch (e) {
+        console.warn("R2 delete failed:", e?.message || e);
+      }
+    }
+
+    if (!project.models) project.models = {};
+    project.models[discipline] = {};
+    project.markModified(`models.${discipline}`);
+    project.version += 1;
+    await project.save();
+
+    res.json({ ok: true, version: project.version });
+  } catch (err) {
+    console.error("DELETE model error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function reopenFinalAccount(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    if (!project.finalAccount) project.finalAccount = {};
+    project.finalAccount.finalized = false;
+    project.finalAccount.finalizedAt = null;
+    project.version += 1;
+    await project.save();
+
+    res.json({ ok: true, finalAccount: project.finalAccount, version: project.version });
+  } catch (err) {
+    console.error("POST reopen error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── Public dashboard (NO AUTH) ──
 async function getPublicDashboard(req, res) {
   try {
@@ -1380,6 +1924,84 @@ async function getPublicDashboard(req, res) {
     const upcoming = upcomingCandidates.slice(0, 5);
     const upcomingTotal = upcoming.reduce((acc, r) => acc + r.amount, 0);
 
+    // ── EVM (Earned Value Management) metrics ─────────────────────
+    // BAC = Budget at Completion (locked contract sum; falls back to live
+    // total when unlocked)
+    // BCWP / EV = earned value = what completed work is worth at plan rates
+    //   → we use valuedAmount (completed × plan rate)
+    // ACWP / AC = actual cost of work performed
+    //   → valuedAmount adjusted by the actual-variance on tracked items
+    // CPI = BCWP / ACWP; EAC = BAC / CPI; VAC = BAC - EAC
+    const BAC =
+      contractSum > 0
+        ? contractSum
+        : grossAmount + provisionalTotal + preliminaryForContract + variationsTotal;
+    const BCWP = valuedAmount;
+    // Portion of actual cost on the items we *have* progress on. If no actual
+    // data is tracked, assume ACWP == BCWP (no known variance).
+    const ACWP =
+      actualTrackedCount > 0
+        ? BCWP + actualVarianceAmount
+        : BCWP;
+    const CPI = ACWP > 0 ? BCWP / ACWP : 1;
+    const EAC = CPI > 0 ? BAC / CPI : BAC;
+    const VAC = BAC - EAC;
+
+    // Certificate summary
+    const certs = Array.isArray(project.certificates) ? project.certificates : [];
+    const totalCertified = certs.reduce(
+      (acc, c) => acc + Number(c?.thisCertificate || 0),
+      0,
+    );
+    const totalRetained = certs.reduce(
+      (acc, c) => acc + Number(c?.retentionAmount || 0) - Number(c?.retentionReleased || 0),
+      0,
+    );
+    const lastCert = certs.length
+      ? certs.reduce((a, b) =>
+          Number(a.number || 0) > Number(b.number || 0) ? a : b,
+        )
+      : null;
+
+    // Public summary of attached models (URLs are already public-read)
+    const models = project.models || {};
+    const publicModels = {
+      architectural: models.architectural?.url
+        ? {
+            url: models.architectural.url,
+            sourceFile: models.architectural.sourceFile,
+            sizeBytes: models.architectural.sizeBytes,
+            format: models.architectural.format,
+          }
+        : null,
+      structural: models.structural?.url
+        ? {
+            url: models.structural.url,
+            sourceFile: models.structural.sourceFile,
+            sizeBytes: models.structural.sizeBytes,
+            format: models.structural.format,
+          }
+        : null,
+      mep: models.mep?.url
+        ? {
+            url: models.mep.url,
+            sourceFile: models.mep.sourceFile,
+            sizeBytes: models.mep.sizeBytes,
+            format: models.mep.format,
+          }
+        : null,
+    };
+
+    // Final account state — just enough for the client to show the "Closed" badge.
+    const finalAccount = project.finalAccount?.finalized
+      ? {
+          finalized: true,
+          finalizedAt: project.finalAccount.finalizedAt,
+          finalContractValue: project.finalAccount.finalContractValue,
+          savings: project.finalAccount.savings,
+        }
+      : { finalized: false };
+
     res.json({
       ok: true,
       name: project.name,
@@ -1412,6 +2034,25 @@ async function getPublicDashboard(req, res) {
       status, // "starting" | "on-track" | "watch" | "over-budget"
       upcoming,
       upcomingTotal,
+      // EVM
+      evm: {
+        BAC: Math.round(BAC * 100) / 100,
+        BCWP: Math.round(BCWP * 100) / 100,
+        ACWP: Math.round(ACWP * 100) / 100,
+        CPI: Math.round(CPI * 1000) / 1000,
+        EAC: Math.round(EAC * 100) / 100,
+        VAC: Math.round(VAC * 100) / 100,
+      },
+      // Certificate rollup
+      certificates: {
+        total: certs.length,
+        totalCertified,
+        totalRetained,
+        latestNumber: lastCert ? Number(lastCert.number) : 0,
+        latestDate: lastCert?.date || null,
+      },
+      finalAccount,
+      models: publicModels,
       updatedAt: project.updatedAt,
     });
   } catch (err) {
@@ -1556,6 +2197,70 @@ router.post(
   mapEntitlementParam,
   requireEntitlementParam,
   unlockContract,
+);
+
+router.post(
+  "/:productKey/:id/certificates",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  issueCertificate,
+);
+
+router.put(
+  "/:productKey/:id/certificates/:number",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  updateCertificate,
+);
+
+router.delete(
+  "/:productKey/:id/certificates/:number",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  deleteCertificate,
+);
+
+router.post(
+  "/:productKey/:id/final-account/finalize",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  finalizeAccount,
+);
+
+router.post(
+  "/:productKey/:id/final-account/reopen",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  reopenFinalAccount,
+);
+
+router.get(
+  "/:productKey/:id/certificates/:number/export",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  exportCertificateXlsx,
+);
+
+router.get(
+  "/:productKey/:id/final-account/export",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  exportFinalAccountXlsx,
+);
+
+router.post(
+  "/:productKey/:id/models/:discipline",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  uploadModelFile.single("file"),
+  uploadProjectModel,
+);
+
+router.delete(
+  "/:productKey/:id/models/:discipline",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  deleteProjectModel,
 );
 
 router.get(

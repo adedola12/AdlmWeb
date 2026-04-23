@@ -141,6 +141,19 @@ function getEndpoints(tool) {
     share: (id) => "/projects/" + t + "/" + id + "/share",
     lock: (id) => "/projects/" + t + "/" + id + "/contract/lock",
     unlock: (id) => "/projects/" + t + "/" + id + "/contract/unlock",
+    certificates: (id) => "/projects/" + t + "/" + id + "/certificates",
+    certificate: (id, n) =>
+      "/projects/" + t + "/" + id + "/certificates/" + n,
+    certificateExport: (id, n) =>
+      "/projects/" + t + "/" + id + "/certificates/" + n + "/export",
+    finalAccountFinalize: (id) =>
+      "/projects/" + t + "/" + id + "/final-account/finalize",
+    finalAccountReopen: (id) =>
+      "/projects/" + t + "/" + id + "/final-account/reopen",
+    finalAccountExport: (id) =>
+      "/projects/" + t + "/" + id + "/final-account/export",
+    modelUpload: (id, disc) =>
+      "/projects/" + t + "/" + id + "/models/" + disc,
   };
 }
 
@@ -930,6 +943,15 @@ export default function ProjectsGeneric() {
     preliminaryPercent: 7.5,
   });
   const [contractBusy, setContractBusy] = React.useState(false);
+  const [certificates, setCertificates] = React.useState([]);
+  const [finalAccount, setFinalAccount] = React.useState({ finalized: false });
+  const [projectModels, setProjectModels] = React.useState({
+    architectural: null,
+    structural: null,
+    mep: null,
+  });
+  const [certBusy, setCertBusy] = React.useState(false);
+  const [modelUploadBusy, setModelUploadBusy] = React.useState({});
   const [provisionalSums, setProvisionalSums] = React.useState([]);
   const [baseProvisionalSums, setBaseProvisionalSums] = React.useState([]);
   const [variations, setVariations] = React.useState([]);
@@ -1134,6 +1156,32 @@ export default function ProjectsGeneric() {
       measuredAtLock: Number(contractSrc.measuredAtLock) || 0,
       provisionalAtLock: Number(contractSrc.provisionalAtLock) || 0,
       preliminaryAtLock: Number(contractSrc.preliminaryAtLock) || 0,
+    });
+    setCertificates(
+      Array.isArray(project?.certificates)
+        ? project.certificates.map((c) => ({ ...c }))
+        : [],
+    );
+    setFinalAccount({
+      finalized: Boolean(project?.finalAccount?.finalized),
+      finalizedAt: project?.finalAccount?.finalizedAt || null,
+      measuredWorkFinal: Number(project?.finalAccount?.measuredWorkFinal) || 0,
+      provisionalFinal: Number(project?.finalAccount?.provisionalFinal) || 0,
+      preliminaryFinal: Number(project?.finalAccount?.preliminaryFinal) || 0,
+      variationsFinal: Number(project?.finalAccount?.variationsFinal) || 0,
+      retentionReleased: Number(project?.finalAccount?.retentionReleased) || 0,
+      totalCertifiedToDate:
+        Number(project?.finalAccount?.totalCertifiedToDate) || 0,
+      agreedContractSum: Number(project?.finalAccount?.agreedContractSum) || 0,
+      finalContractValue: Number(project?.finalAccount?.finalContractValue) || 0,
+      savings: Number(project?.finalAccount?.savings) || 0,
+      notes: String(project?.finalAccount?.notes || ""),
+    });
+    const mo = project?.models || {};
+    setProjectModels({
+      architectural: mo.architectural?.url ? mo.architectural : null,
+      structural: mo.structural?.url ? mo.structural : null,
+      mep: mo.mep?.url ? mo.mep : null,
     });
     const normalizedSettings = normalizeValuationSettings(
       project?.valuationSettings,
@@ -2404,6 +2452,249 @@ export default function ProjectsGeneric() {
     setContract((prev) => ({ ...(prev || {}), preliminaryPercent: n }));
   }
 
+  // ── Interim certificates ──
+  async function handleIssueCertificate(overrides = {}) {
+    if (!selectedId || !accessToken) return null;
+    setCertBusy(true);
+    try {
+      const result = await apiAuthed(endpoints.certificates(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: overrides || {},
+      });
+      if (result?.certificate) {
+        setCertificates((prev) => [...(prev || []), result.certificate]);
+        setSel((prev) =>
+          prev
+            ? {
+                ...prev,
+                certificates: [...(prev.certificates || []), result.certificate],
+                version: result.version ?? prev.version,
+              }
+            : prev,
+        );
+        setNotice(
+          `Certificate #${String(result.certificate.number).padStart(2, "0")} issued.`,
+        );
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to issue certificate");
+      return null;
+    } finally {
+      setCertBusy(false);
+    }
+  }
+
+  async function handleUpdateCertificate(number, patch) {
+    if (!selectedId || !accessToken) return null;
+    try {
+      const result = await apiAuthed(
+        endpoints.certificate(selectedId, number),
+        {
+          token: accessToken,
+          method: "PUT",
+          body: patch,
+        },
+      );
+      if (result?.certificate) {
+        setCertificates((prev) =>
+          (prev || []).map((c) =>
+            Number(c.number) === Number(number) ? result.certificate : c,
+          ),
+        );
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to update certificate");
+      return null;
+    }
+  }
+
+  async function handleDeleteCertificate(number) {
+    if (!selectedId || !accessToken) return;
+    if (!window.confirm(
+      `Delete certificate #${String(number).padStart(2, "0")}? Only the latest cert can be deleted.`,
+    )) return;
+    try {
+      await apiAuthed(endpoints.certificate(selectedId, number), {
+        token: accessToken,
+        method: "DELETE",
+      });
+      setCertificates((prev) =>
+        (prev || []).filter((c) => Number(c.number) !== Number(number)),
+      );
+      setNotice(`Certificate #${String(number).padStart(2, "0")} deleted.`);
+    } catch (e) {
+      setErr(e?.message || "Failed to delete certificate");
+    }
+  }
+
+  async function handleDownloadCertificate(number) {
+    if (!selectedId || !accessToken) return;
+    const base = API_BASE || window.location.origin;
+    const absUrl = new URL(
+      endpoints.certificateExport(selectedId, number),
+      base,
+    ).toString();
+    try {
+      const res = await fetch(absUrl, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${sanitizeFilename(sel?.name || "Project")} - IPC ${String(number).padStart(2, "0")}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setErr(e?.message || "Failed to download certificate");
+    }
+  }
+
+  // ── Final account ──
+  async function handleFinalizeAccount(notes) {
+    if (!selectedId || !accessToken) return null;
+    if (!window.confirm(
+      "Finalize the account? This freezes all items, variations and certificates. You can reopen it if you need to adjust.",
+    )) return null;
+    try {
+      const result = await apiAuthed(endpoints.finalAccountFinalize(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: { notes: notes || "" },
+      });
+      if (result?.finalAccount) {
+        setFinalAccount({ ...result.finalAccount });
+        setSel((prev) =>
+          prev
+            ? { ...prev, finalAccount: result.finalAccount, version: result.version ?? prev.version }
+            : prev,
+        );
+        setNotice("Final account finalized.");
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to finalize account");
+      return null;
+    }
+  }
+
+  async function handleReopenFinalAccount() {
+    if (!selectedId || !accessToken) return null;
+    if (!window.confirm(
+      "Reopen the final account? Items / variations / certificates become editable again.",
+    )) return null;
+    try {
+      const result = await apiAuthed(endpoints.finalAccountReopen(selectedId), {
+        token: accessToken,
+        method: "POST",
+      });
+      if (result?.finalAccount) {
+        setFinalAccount({ ...result.finalAccount });
+        setSel((prev) =>
+          prev
+            ? { ...prev, finalAccount: result.finalAccount, version: result.version ?? prev.version }
+            : prev,
+        );
+        setNotice("Final account reopened.");
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Failed to reopen final account");
+      return null;
+    }
+  }
+
+  async function handleDownloadFinalAccount() {
+    if (!selectedId || !accessToken) return;
+    const base = API_BASE || window.location.origin;
+    const absUrl = new URL(
+      endpoints.finalAccountExport(selectedId),
+      base,
+    ).toString();
+    try {
+      const res = await fetch(absUrl, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${sanitizeFilename(sel?.name || "Project")} - Final Account.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setErr(e?.message || "Failed to download final account");
+    }
+  }
+
+  // ── IFC model upload (100 MB limit on the server) ──
+  async function handleUploadModel(discipline, file) {
+    if (!selectedId || !accessToken || !file) return null;
+    if (!["architectural", "structural", "mep"].includes(discipline)) return null;
+    const MAX = 100 * 1024 * 1024;
+    if (file.size > MAX) {
+      setErr(`File is ${(file.size / 1024 / 1024).toFixed(1)} MB — limit is 100 MB.`);
+      return null;
+    }
+    setModelUploadBusy((prev) => ({ ...prev, [discipline]: true }));
+    try {
+      const base = API_BASE || window.location.origin;
+      const absUrl = new URL(
+        endpoints.modelUpload(selectedId, discipline),
+        base,
+      ).toString();
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(absUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: form,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `Upload failed (${res.status})`);
+      }
+      const result = await res.json();
+      if (result?.model) {
+        setProjectModels((prev) => ({ ...prev, [discipline]: result.model }));
+        setNotice(`${discipline} model uploaded.`);
+      }
+      return result;
+    } catch (e) {
+      setErr(e?.message || "Model upload failed");
+      return null;
+    } finally {
+      setModelUploadBusy((prev) => ({ ...prev, [discipline]: false }));
+    }
+  }
+
+  async function handleDeleteModel(discipline) {
+    if (!selectedId || !accessToken) return;
+    if (!window.confirm(`Delete the ${discipline} model?`)) return;
+    try {
+      await apiAuthed(endpoints.modelUpload(selectedId, discipline), {
+        token: accessToken,
+        method: "DELETE",
+      });
+      setProjectModels((prev) => ({ ...prev, [discipline]: null }));
+      setNotice(`${discipline} model deleted.`);
+    } catch (e) {
+      setErr(e?.message || "Delete failed");
+    }
+  }
+
   // ── Share project dashboard ──
   async function handleToggleShare(enable) {
     if (!selectedId || !accessToken) return null;
@@ -3204,6 +3495,20 @@ export default function ProjectsGeneric() {
                 onLockContract={handleLockContract}
                 onUnlockContract={handleUnlockContract}
                 onPreliminaryPercentChange={handlePreliminaryPercentChange}
+                certificates={certificates}
+                certBusy={certBusy}
+                onIssueCertificate={handleIssueCertificate}
+                onUpdateCertificate={handleUpdateCertificate}
+                onDeleteCertificate={handleDeleteCertificate}
+                onDownloadCertificate={handleDownloadCertificate}
+                finalAccount={finalAccount}
+                onFinalizeAccount={handleFinalizeAccount}
+                onReopenFinalAccount={handleReopenFinalAccount}
+                onDownloadFinalAccount={handleDownloadFinalAccount}
+                projectModels={projectModels}
+                modelUploadBusy={modelUploadBusy}
+                onUploadModel={handleUploadModel}
+                onDeleteModel={handleDeleteModel}
                 provisionalSums={provisionalSums}
                 onAddProvisionalSum={handleAddProvisionalSum}
                 onUpdateProvisionalSum={handleUpdateProvisionalSum}

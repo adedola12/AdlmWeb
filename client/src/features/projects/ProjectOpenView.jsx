@@ -1,6 +1,7 @@
 import React from "react";
 import { FaArrowLeft, FaTrash, FaShareAlt, FaCopy, FaCheck } from "react-icons/fa";
 import ProjectBillTable from "./ProjectBillTable.jsx";
+import ProjectContractPanel from "./ProjectContractPanel.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 
@@ -170,6 +171,20 @@ export default function ProjectOpenView({
   onLockContract,
   onUnlockContract,
   onPreliminaryPercentChange,
+  certificates = [],
+  certBusy = false,
+  onIssueCertificate,
+  onUpdateCertificate,
+  onDeleteCertificate,
+  onDownloadCertificate,
+  finalAccount,
+  onFinalizeAccount,
+  onReopenFinalAccount,
+  onDownloadFinalAccount,
+  projectModels,
+  modelUploadBusy,
+  onUploadModel,
+  onDeleteModel,
   provisionalSums = [],
   onAddProvisionalSum,
   onUpdateProvisionalSum,
@@ -491,6 +506,45 @@ export default function ProjectOpenView({
             progressTotal={progressTotal}
           />
         </div>
+      ) : null}
+
+      {activeTab === "bill" ? (
+        <ProjectContractPanel
+          certificates={certificates}
+          certBusy={certBusy}
+          onIssueCertificate={onIssueCertificate}
+          onUpdateCertificate={onUpdateCertificate}
+          onDeleteCertificate={onDeleteCertificate}
+          onDownloadCertificate={onDownloadCertificate}
+          finalAccount={finalAccount}
+          onFinalizeAccount={onFinalizeAccount}
+          onReopenFinalAccount={onReopenFinalAccount}
+          onDownloadFinalAccount={onDownloadFinalAccount}
+          projectModels={projectModels}
+          modelUploadBusy={modelUploadBusy}
+          onUploadModel={onUploadModel}
+          onDeleteModel={onDeleteModel}
+          contractLocked={Boolean(contract?.locked)}
+          contractSum={Number(contract?.contractSum) || 0}
+          measured={grossAmount}
+          provisional={(provisionalSums || []).reduce(
+            (acc, s) => acc + (Number(s?.amount) || 0),
+            0,
+          )}
+          preliminary={
+            (grossAmount +
+              (provisionalSums || []).reduce(
+                (acc, s) => acc + (Number(s?.amount) || 0),
+                0,
+              )) *
+            (Number(contract?.preliminaryPercent) || 0) /
+            100
+          }
+          variations={(variations || []).reduce(
+            (acc, v) => acc + Number(v?.qty || 0) * Number(v?.rate || 0),
+            0,
+          )}
+        />
       ) : null}
 
       {activeTab === "bill" ? (

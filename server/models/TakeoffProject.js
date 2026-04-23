@@ -119,6 +119,89 @@ const ContractBaseItemSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// One numbered interim certificate. Cumulative-less-previous arithmetic:
+// each certificate carries its own cumulative value-to-date; the amount due
+// this period is derived as cumulativeValue minus the sum of all previous
+// certificates' `thisCertificate` totals. Retention / VAT / WHT are captured
+// at the moment of issue so historical certs remain reproducible even if
+// the project settings change later.
+const CertificateSchema = new mongoose.Schema(
+  {
+    number: { type: Number, required: true },
+    date: { type: Date, default: () => new Date() },
+    periodStart: { type: Date, default: null },
+    periodEnd: { type: Date, default: null },
+    cumulativeValue: { type: Number, default: 0 },
+    lessPrevious: { type: Number, default: 0 },
+    thisCertificate: { type: Number, default: 0 },
+    retentionPct: { type: Number, default: 5 },
+    retentionAmount: { type: Number, default: 0 },
+    retentionReleased: { type: Number, default: 0 },
+    vatPct: { type: Number, default: 7.5 },
+    vatAmount: { type: Number, default: 0 },
+    whtPct: { type: Number, default: 2.5 },
+    whtAmount: { type: Number, default: 0 },
+    netPayable: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ["draft", "approved", "paid"],
+      default: "draft",
+    },
+    notes: { type: String, default: "" },
+    // Snapshot of which items were counted toward this cert, for audit:
+    snapshotCompletedCount: { type: Number, default: 0 },
+    snapshotTotalCount: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+// Final Account — closure document reconciling measured work actuals,
+// approved variations, retention release and overall project settlement.
+// Once finalized, all project data is frozen (items, variations, certs).
+const FinalAccountSchema = new mongoose.Schema(
+  {
+    finalized: { type: Boolean, default: false },
+    finalizedAt: { type: Date, default: null },
+    finalizedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    measuredWorkFinal: { type: Number, default: 0 },
+    provisionalFinal: { type: Number, default: 0 },
+    preliminaryFinal: { type: Number, default: 0 },
+    variationsFinal: { type: Number, default: 0 },
+    retentionReleased: { type: Number, default: 0 },
+    totalCertifiedToDate: { type: Number, default: 0 },
+    agreedContractSum: { type: Number, default: 0 },
+    finalContractValue: { type: Number, default: 0 },
+    savings: { type: Number, default: 0 }, // positive = under-run, negative = over-run
+    notes: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+// IFC / BIM model attached to the project — one per discipline. Files are
+// stored in Cloudflare R2 (S3-compatible); `key` is the R2 object key used
+// for deletion and signed-URL regeneration, `url` is the public-read URL.
+const ProjectModelSchema = new mongoose.Schema(
+  {
+    sourceFile: { type: String, default: "" },
+    key: { type: String, default: "" },
+    url: { type: String, default: "" },
+    sizeBytes: { type: Number, default: 0 },
+    format: { type: String, default: "ifc" }, // "ifc" | "fragments"
+    uploadedAt: { type: Date, default: null },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  },
+  { _id: false },
+);
+
+const ProjectModelsSchema = new mongoose.Schema(
+  {
+    architectural: { type: ProjectModelSchema, default: () => ({}) },
+    structural: { type: ProjectModelSchema, default: () => ({}) },
+    mep: { type: ProjectModelSchema, default: () => ({}) },
+  },
+  { _id: false },
+);
+
 const ContractSchema = new mongoose.Schema(
   {
     locked: { type: Boolean, default: false },
@@ -185,6 +268,9 @@ const TakeoffProjectSchema = new mongoose.Schema(
     provisionalSums: { type: [ProvisionalSumSchema], default: [] },
     variations: { type: [VariationSchema], default: [] },
     contract: { type: ContractSchema, default: () => ({}) },
+    certificates: { type: [CertificateSchema], default: [] },
+    finalAccount: { type: FinalAccountSchema, default: () => ({}) },
+    models: { type: ProjectModelsSchema, default: () => ({}) },
     valuationSettings: {
       type: ValuationSettingsSchema,
       default: () => ({ ...DefaultValuationSettings }),
