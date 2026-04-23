@@ -534,6 +534,11 @@ export default function ProjectBillTable({
   onAddVariation,
   onUpdateVariation,
   onRemoveVariation,
+  preliminaryItems = [],
+  onUpdatePreliminaryItem,
+  onAddPreliminaryItem,
+  onRemovePreliminaryItem,
+  onNormalizePreliminaryAllocations,
   onSyncBoqRates,
   onSyncPrices,
   onToggleAutoFill,
@@ -584,6 +589,7 @@ export default function ProjectBillTable({
   const categoryAnchorRef = useRef({});
   const provisionalSectionRef = useRef(null);
   const variationsSectionRef = useRef(null);
+  const preliminarySectionRef = useRef(null);
   const topAnchorRef = useRef(null);
   const bottomAnchorRef = useRef(null);
 
@@ -749,6 +755,27 @@ export default function ProjectBillTable({
   // true project cost.
   const preliminaryAmount =
     ((grossAmount + provisionalTotal) * safeNum(preliminaryPercent)) / 100;
+
+  // Preliminary done: share of the preliminary pool "earned" by completed
+  // preliminary line items (weighted by allocation %).
+  const preliminaryAllocTotal = React.useMemo(() => {
+    return (Array.isArray(preliminaryItems) ? preliminaryItems : []).reduce(
+      (acc, p) => acc + safeNum(p?.allocation),
+      0,
+    );
+  }, [preliminaryItems]);
+  const preliminaryAllocCompleted = React.useMemo(() => {
+    return (Array.isArray(preliminaryItems) ? preliminaryItems : []).reduce(
+      (acc, p) => (p?.completed ? acc + safeNum(p?.allocation) : acc),
+      0,
+    );
+  }, [preliminaryItems]);
+  const preliminaryAllocBase =
+    preliminaryAllocTotal > 0 ? preliminaryAllocTotal : 100;
+  const preliminaryDone =
+    (preliminaryAmount * preliminaryAllocCompleted) / preliminaryAllocBase;
+  const preliminaryOutstanding = Math.max(0, preliminaryAmount - preliminaryDone);
+
   const projectTotal =
     grossAmount + provisionalTotal + preliminaryAmount + variationsTotal;
 
@@ -1063,6 +1090,11 @@ export default function ProjectBillTable({
                   icon={FaClipboardList}
                   label="Variations"
                   onClick={() => scrollToRef(variationsSectionRef.current)}
+                />
+                <RibbonButton
+                  icon={FaClipboardList}
+                  label="Preliminaries"
+                  onClick={() => scrollToRef(preliminarySectionRef.current)}
                 />
                 <RibbonButton
                   icon={FaFileInvoiceDollar}
@@ -1957,6 +1989,222 @@ export default function ProjectBillTable({
         </div>
       ) : null}
 
+      {onUpdatePreliminaryItem && Array.isArray(preliminaryItems) ? (
+        <div
+          ref={preliminarySectionRef}
+          className="rounded-xl border border-slate-200 bg-white p-4 scroll-mt-24"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">
+                Preliminary items done
+              </div>
+              <div className="text-[11px] text-slate-500">
+                BESMM4 preliminary checklist. Allocate a percentage of the
+                preliminary pool to each item, tick off as executed — done
+                portion is deducted from the outstanding preliminary cost and
+                feeds into certificates and EVM.
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {onNormalizePreliminaryAllocations ? (
+                <button
+                  type="button"
+                  className="btn btn-xs"
+                  onClick={onNormalizePreliminaryAllocations}
+                  title="Reset to an even allocation across all listed items"
+                >
+                  Even split
+                </button>
+              ) : null}
+              {onAddPreliminaryItem ? (
+                <button
+                  type="button"
+                  className="btn btn-xs"
+                  onClick={onAddPreliminaryItem}
+                >
+                  + Add item
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 text-xs sm:grid-cols-4">
+            <div>
+              <div className="text-slate-500">Preliminary pool</div>
+              <div className="text-sm font-semibold text-slate-900">
+                {money(preliminaryAmount)}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {safeNum(preliminaryPercent).toFixed(1)}% of measured + PC
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">Allocated</div>
+              <div
+                className={`text-sm font-semibold ${
+                  Math.abs(preliminaryAllocTotal - 100) <= 0.5
+                    ? "text-slate-900"
+                    : "text-amber-700"
+                }`}
+              >
+                {preliminaryAllocTotal.toFixed(1)}%
+              </div>
+              <div className="text-[10px] text-slate-400">
+                Should sum to 100%
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">Done</div>
+              <div className="text-sm font-semibold text-emerald-700">
+                {money(preliminaryDone)}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {preliminaryAllocCompleted.toFixed(1)}% of pool
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">Outstanding</div>
+              <div className="text-sm font-semibold text-adlm-blue-700">
+                {money(preliminaryOutstanding)}
+              </div>
+            </div>
+          </div>
+
+          {preliminaryItems.length ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-left text-slate-600">
+                  <tr>
+                    <th className="px-2 py-2 w-10">#</th>
+                    <th className="px-2 py-2 w-10 text-center">Done</th>
+                    <th className="px-2 py-2">Preliminary item</th>
+                    <th className="px-2 py-2 w-24 text-right">Alloc %</th>
+                    <th className="px-2 py-2 w-32 text-right">Amount</th>
+                    <th className="px-2 py-2 w-24">Done date</th>
+                    <th className="px-2 py-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preliminaryItems.map((p, i) => {
+                    const alloc = safeNum(p?.allocation);
+                    const amount =
+                      (preliminaryAmount * alloc) / preliminaryAllocBase;
+                    return (
+                      <tr key={i} className="border-t">
+                        <td className="px-2 py-2 text-slate-500">{i + 1}</td>
+                        <td className="px-2 py-2 text-center">
+                          <input
+                            type="checkbox"
+                            className={checkboxCls}
+                            checked={Boolean(p?.completed)}
+                            onChange={(e) =>
+                              onUpdatePreliminaryItem?.(i, {
+                                completed: e.target.checked,
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs"
+                            type="text"
+                            placeholder="Preliminary item"
+                            value={p?.name || ""}
+                            onChange={(e) =>
+                              onUpdatePreliminaryItem?.(i, {
+                                name: e.target.value,
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs text-right"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={
+                              p?.allocation === 0 || p?.allocation == null
+                                ? ""
+                                : p.allocation
+                            }
+                            onChange={(e) =>
+                              onUpdatePreliminaryItem?.(i, {
+                                allocation:
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value),
+                              })
+                            }
+                          />
+                        </td>
+                        <td
+                          className={`px-2 py-2 text-right ${
+                            p?.completed ? "font-semibold text-emerald-700" : "text-slate-900"
+                          }`}
+                        >
+                          {money(amount)}
+                        </td>
+                        <td className="px-2 py-2 text-[10px] text-slate-500">
+                          {p?.completedAt
+                            ? new Date(p.completedAt).toLocaleDateString()
+                            : "—"}
+                        </td>
+                        <td className="px-1 py-2 text-center">
+                          {onRemovePreliminaryItem ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              onClick={() => onRemovePreliminaryItem(i)}
+                              title="Remove this row"
+                            >
+                              <FaTrashAlt className="text-[10px]" />
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-slate-50 font-semibold text-slate-900">
+                  <tr className="border-t">
+                    <td colSpan={3} className="px-2 py-2 text-right">
+                      Done
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {preliminaryAllocCompleted.toFixed(1)}%
+                    </td>
+                    <td className="px-2 py-2 text-right text-emerald-700">
+                      {money(preliminaryDone)}
+                    </td>
+                    <td colSpan={2}></td>
+                  </tr>
+                  <tr>
+                    <td colSpan={3} className="px-2 py-2 text-right">
+                      Outstanding
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {(100 - preliminaryAllocCompleted).toFixed(1)}%
+                    </td>
+                    <td className="px-2 py-2 text-right text-adlm-blue-700">
+                      {money(preliminaryOutstanding)}
+                    </td>
+                    <td colSpan={2}></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              No preliminary items yet. Open the project once to seed the
+              BESMM4 defaults, or click "+ Add item".
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {onAddProvisionalSum ? (
         <div
           ref={provisionalSectionRef}
@@ -2089,6 +2337,16 @@ export default function ProjectBillTable({
               <div className="text-sm font-semibold text-slate-900">
                 {money(preliminaryAmount)}
               </div>
+              {preliminaryDone > 0 ? (
+                <div className="mt-0.5 text-[10px] text-emerald-700">
+                  Done: {money(preliminaryDone)}
+                </div>
+              ) : null}
+              {preliminaryOutstanding > 0 && preliminaryDone > 0 ? (
+                <div className="text-[10px] text-slate-500">
+                  Outstanding: {money(preliminaryOutstanding)}
+                </div>
+              ) : null}
             </div>
             <div>
               <div className="text-slate-500">Variations (instructions)</div>

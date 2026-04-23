@@ -428,6 +428,21 @@ function provisionalSumsEqual(a, b) {
   return true;
 }
 
+function preliminaryItemsEqual(a, b) {
+  const A = Array.isArray(a) ? a : [];
+  const B = Array.isArray(b) ? b : [];
+  if (A.length !== B.length) return false;
+  for (let i = 0; i < A.length; i++) {
+    const X = A[i] || {};
+    const Y = B[i] || {};
+    if (String(X.name || "") !== String(Y.name || "")) return false;
+    if (Number(X.allocation || 0) !== Number(Y.allocation || 0)) return false;
+    if (Boolean(X.completed) !== Boolean(Y.completed)) return false;
+    if (String(X.notes || "") !== String(Y.notes || "")) return false;
+  }
+  return true;
+}
+
 function variationsEqual(a, b) {
   const A = Array.isArray(a) ? a : [];
   const B = Array.isArray(b) ? b : [];
@@ -956,6 +971,8 @@ export default function ProjectsGeneric() {
   const [baseProvisionalSums, setBaseProvisionalSums] = React.useState([]);
   const [variations, setVariations] = React.useState([]);
   const [baseVariations, setBaseVariations] = React.useState([]);
+  const [preliminaryItems, setPreliminaryItems] = React.useState([]);
+  const [basePreliminaryItems, setBasePreliminaryItems] = React.useState([]);
   const [valuationSettings, setValuationSettings] = React.useState(
     DEFAULT_VALUATION_SETTINGS,
   );
@@ -1143,6 +1160,17 @@ export default function ProjectsGeneric() {
       : [];
     setVariations(vars);
     setBaseVariations(vars.map((v) => ({ ...v })));
+    const prelimItems = Array.isArray(project?.preliminaryItems)
+      ? project.preliminaryItems.map((p) => ({
+          name: String(p?.name || ""),
+          allocation: Number(p?.allocation) || 0,
+          completed: Boolean(p?.completed),
+          completedAt: p?.completedAt || null,
+          notes: String(p?.notes || ""),
+        }))
+      : [];
+    setPreliminaryItems(prelimItems);
+    setBasePreliminaryItems(prelimItems.map((p) => ({ ...p })));
     const contractSrc = project?.contract || {};
     setContract({
       locked: Boolean(contractSrc.locked),
@@ -1645,6 +1673,51 @@ export default function ProjectsGeneric() {
       return next;
     });
   }
+
+  // ── Preliminary items ──
+  function handleUpdatePreliminaryItem(idx, patch) {
+    setPreliminaryItems((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      if (idx < 0 || idx >= next.length) return prev;
+      const updated = { ...next[idx], ...patch };
+      // If flipping to completed, stamp completedAt (user-editable on server).
+      if (patch.completed === true && !updated.completedAt) {
+        updated.completedAt = new Date().toISOString();
+      }
+      if (patch.completed === false) {
+        updated.completedAt = null;
+      }
+      next[idx] = updated;
+      return next;
+    });
+  }
+  function handleAddPreliminaryItem() {
+    setPreliminaryItems((prev) => [
+      ...(Array.isArray(prev) ? prev : []),
+      { name: "", allocation: 0, completed: false, completedAt: null, notes: "" },
+    ]);
+  }
+  function handleRemovePreliminaryItem(idx) {
+    setPreliminaryItems((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      if (idx < 0 || idx >= next.length) return prev;
+      next.splice(idx, 1);
+      return next;
+    });
+  }
+  function handleNormalizePreliminaryAllocations() {
+    setPreliminaryItems((prev) => {
+      const arr = Array.isArray(prev) ? prev : [];
+      if (!arr.length) return prev;
+      const even = Number((100 / arr.length).toFixed(2));
+      // Leftover cents go to the first row so the total sums to 100.0 exactly.
+      const diff = Number((100 - even * arr.length).toFixed(2));
+      return arr.map((p, i) => ({
+        ...p,
+        allocation: i === 0 ? Number((even + diff).toFixed(2)) : even,
+      }));
+    });
+  }
   function handleCategoryChange(rowIndex, category) {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? sel.items : [];
@@ -1709,6 +1782,7 @@ export default function ProjectsGeneric() {
     !categoryMapsEqual(tradeMap, baseTradeMap) ||
     !provisionalSumsEqual(provisionalSums, baseProvisionalSums) ||
     !variationsEqual(variations, baseVariations) ||
+    !preliminaryItemsEqual(preliminaryItems, basePreliminaryItems) ||
     !valuationSettingsEqual(valuationSettings, baseValuationSettings);
 
   async function saveRatesToCloud() {
@@ -1770,6 +1844,13 @@ export default function ProjectsGeneric() {
           }))
           .filter((v) => v.description || v.qty > 0 || v.rate > 0),
         preliminaryPercent: Number(contract?.preliminaryPercent) || 0,
+        preliminaryItems: preliminaryItems.map((p) => ({
+          name: String(p?.name || "").trim(),
+          allocation: Number(p?.allocation) || 0,
+          completed: Boolean(p?.completed),
+          completedAt: p?.completedAt || null,
+          notes: String(p?.notes || "").trim(),
+        })),
       };
       const updated = await apiAuthed(endpoints.one(selectedId), {
         token: accessToken,
@@ -3031,6 +3112,89 @@ export default function ProjectsGeneric() {
       XLSX.utils.book_append_sheet(wb, psWs, "Provisional Sums");
     }
 
+    // Preliminaries sheet (pool, allocations, done status)
+    const preliminaryPct = Number(contract?.preliminaryPercent) || 0;
+    const preliminaryPool = ((grossAmount + provTotal) * preliminaryPct) / 100;
+    const cleanedPrelim = (Array.isArray(preliminaryItems) ? preliminaryItems : [])
+      .map((p) => ({
+        name: String(p?.name || "").trim(),
+        allocation: Number(p?.allocation) || 0,
+        completed: Boolean(p?.completed),
+        completedAt: p?.completedAt || null,
+      }))
+      .filter((p) => p.name || p.allocation > 0);
+    const allocTotalForExport = cleanedPrelim.reduce(
+      (acc, p) => acc + p.allocation,
+      0,
+    );
+    const allocBase = allocTotalForExport > 0 ? allocTotalForExport : 100;
+    const prelimDoneAmount = cleanedPrelim.reduce(
+      (acc, p) =>
+        p.completed ? acc + (preliminaryPool * p.allocation) / allocBase : acc,
+      0,
+    );
+    if (cleanedPrelim.length) {
+      const header = [
+        "S/N",
+        "Preliminary item",
+        "Alloc %",
+        "Amount",
+        "Done",
+        "Done amount",
+        "Done date",
+      ];
+      const rows = cleanedPrelim.map((p, i) => {
+        const amt = (preliminaryPool * p.allocation) / allocBase;
+        return [
+          i + 1,
+          p.name,
+          Number(p.allocation.toFixed(2)),
+          Number(amt.toFixed(2)),
+          p.completed ? "Yes" : "",
+          p.completed ? Number(amt.toFixed(2)) : 0,
+          p.completedAt ? new Date(p.completedAt).toISOString().slice(0, 10) : "",
+        ];
+      });
+      const prelimAoa = [
+        [
+          `Preliminaries pool: ${preliminaryPct.toFixed(1)}% of measured + PC = ${preliminaryPool.toFixed(2)}`,
+        ],
+        [],
+        header,
+        ...rows,
+        [
+          "",
+          "POOL TOTAL",
+          Number(allocTotalForExport.toFixed(2)),
+          Number(preliminaryPool.toFixed(2)),
+          "",
+          "",
+          "",
+        ],
+        ["", "DONE", "", "", "", Number(prelimDoneAmount.toFixed(2)), ""],
+        [
+          "",
+          "OUTSTANDING",
+          "",
+          "",
+          "",
+          Number((preliminaryPool - prelimDoneAmount).toFixed(2)),
+          "",
+        ],
+      ];
+      const prelimWs = XLSX.utils.aoa_to_sheet(prelimAoa);
+      prelimWs["!cols"] = [
+        { wch: 6 },
+        { wch: 44 },
+        { wch: 10 },
+        { wch: 14 },
+        { wch: 8 },
+        { wch: 16 },
+        { wch: 14 },
+      ];
+      XLSX.utils.book_append_sheet(wb, prelimWs, "Preliminaries");
+    }
+
     // Summary sheet — per-group totals + grand total.
     const summaryAoa = [
       [useTrade ? "Trade / Work section" : "Category", "Items", "Amount"],
@@ -3046,13 +3210,41 @@ export default function ProjectsGeneric() {
       ...(provTotal > 0
         ? [["Provisional sums", cleanedProvSums.length, Number(provTotal.toFixed(2))]]
         : []),
+      ...(preliminaryPool > 0
+        ? [
+            [
+              `Preliminaries (${preliminaryPct.toFixed(1)}%)`,
+              cleanedPrelim.length,
+              Number(preliminaryPool.toFixed(2)),
+            ],
+            ...(prelimDoneAmount > 0
+              ? [
+                  [
+                    "  of which: done",
+                    cleanedPrelim.filter((p) => p.completed).length,
+                    Number(prelimDoneAmount.toFixed(2)),
+                  ],
+                  [
+                    "  of which: outstanding",
+                    cleanedPrelim.filter((p) => !p.completed).length,
+                    Number((preliminaryPool - prelimDoneAmount).toFixed(2)),
+                  ],
+                ]
+              : []),
+          ]
+        : []),
       ...(variationsTotal !== 0
         ? [["Variations", cleanedVariations.length, Number(variationsTotal.toFixed(2))]]
         : []),
       [
         "PROJECT TOTAL",
-        computedAll.length + cleanedProvSums.length + cleanedVariations.length,
-        Number((grossAmount + provTotal + variationsTotal).toFixed(2)),
+        computedAll.length +
+          cleanedProvSums.length +
+          cleanedVariations.length +
+          cleanedPrelim.filter((p) => p.completed || p.allocation > 0).length,
+        Number(
+          (grossAmount + provTotal + preliminaryPool + variationsTotal).toFixed(2),
+        ),
       ],
     ];
     const summaryWs = XLSX.utils.aoa_to_sheet(summaryAoa);
@@ -3517,6 +3709,11 @@ export default function ProjectsGeneric() {
                 onAddVariation={handleAddVariation}
                 onUpdateVariation={handleUpdateVariation}
                 onRemoveVariation={handleRemoveVariation}
+                preliminaryItems={preliminaryItems}
+                onUpdatePreliminaryItem={handleUpdatePreliminaryItem}
+                onAddPreliminaryItem={handleAddPreliminaryItem}
+                onRemovePreliminaryItem={handleRemovePreliminaryItem}
+                onNormalizePreliminaryAllocations={handleNormalizePreliminaryAllocations}
                 onToggleGroupLink={toggleGroupLink}
                 isGroupLinked={isGroupLinked}
                 getCandidatesForItem={getCandidatesForItem}

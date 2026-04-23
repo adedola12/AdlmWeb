@@ -80,6 +80,22 @@ const ProvisionalSumSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Preliminary items — one entry per BESMM4 preliminary line (setting out,
+// insurances, site accommodation, etc). allocation = percentage of total
+// preliminary amount assigned to this line (sum should be 100). completed
+// flag drives the preliminary-done deduction from the outstanding prelim
+// pool, mirroring how measured items drive valuation.
+const PreliminaryItemSchema = new mongoose.Schema(
+  {
+    name: { type: String, default: "", trim: true },
+    allocation: { type: Number, default: 0 }, // 0-100
+    completed: { type: Boolean, default: false },
+    completedAt: { type: Date, default: null },
+    notes: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
 // Variations from site instructions / change orders — measured work variance
 // lives on each item's actualQty/actualRate. This log captures variations that
 // are not derived from the takeoff (architects' instructions, change requests,
@@ -267,6 +283,7 @@ const TakeoffProjectSchema = new mongoose.Schema(
     items: { type: [ItemSchema], default: [] },
     provisionalSums: { type: [ProvisionalSumSchema], default: [] },
     variations: { type: [VariationSchema], default: [] },
+    preliminaryItems: { type: [PreliminaryItemSchema], default: [] },
     contract: { type: ContractSchema, default: () => ({}) },
     certificates: { type: [CertificateSchema], default: [] },
     finalAccount: { type: FinalAccountSchema, default: () => ({}) },

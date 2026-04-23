@@ -193,6 +193,11 @@ export default function ProjectOpenView({
   onAddVariation,
   onUpdateVariation,
   onRemoveVariation,
+  preliminaryItems = [],
+  onUpdatePreliminaryItem,
+  onAddPreliminaryItem,
+  onRemovePreliminaryItem,
+  onNormalizePreliminaryAllocations,
   onSyncPrices,
   onToggleAutoFill,
   onToggleAutoFillBoq,
@@ -601,6 +606,11 @@ export default function ProjectOpenView({
           onAddVariation={onAddVariation}
           onUpdateVariation={onUpdateVariation}
           onRemoveVariation={onRemoveVariation}
+          preliminaryItems={preliminaryItems}
+          onUpdatePreliminaryItem={onUpdatePreliminaryItem}
+          onAddPreliminaryItem={onAddPreliminaryItem}
+          onRemovePreliminaryItem={onRemovePreliminaryItem}
+          onNormalizePreliminaryAllocations={onNormalizePreliminaryAllocations}
           onSyncPrices={onSyncPrices}
           onSyncBoqRates={onSyncBoqRates}
           onToggleAutoFill={onToggleAutoFill}

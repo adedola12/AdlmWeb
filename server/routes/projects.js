@@ -370,6 +370,59 @@ function sanitizeProvisionalSums(sums) {
   return out;
 }
 
+// BESMM4-aligned default preliminary items. Surfaced to the client so new
+// projects start with a sensible checklist instead of a blank slate.
+const DEFAULT_PRELIMINARY_ITEMS = Object.freeze([
+  "Setting Out",
+  "Progress Photographs and Reports",
+  "Foreman / Management supervision",
+  "Other staff",
+  "Insurances",
+  "Site accommodation",
+  "Office accommodation",
+  "Site security",
+  "Temporary fences",
+  "Telephone",
+  "Administration",
+  "Material tests / Samples",
+  "Removal of debris",
+  "Water for the Works",
+  "Power for the Works",
+  "Notice board",
+  "Temporary power/ lights",
+  "Safety/ Health & Welfare",
+  "Storage",
+  "Small Plant/ Tools",
+  "Plant Equipment/ scaffolding",
+  "Additional Items (to be listed)",
+]);
+
+function sanitizePreliminaryItems(items) {
+  if (!Array.isArray(items)) return [];
+  const out = [];
+  for (let i = 0; i < items.length && out.length < 100; i += 1) {
+    const it = items[i] || {};
+    const name = String(it.name || "").trim().slice(0, 200);
+    if (!name) continue;
+    const allocation = clampPercentage(
+      Number.isFinite(Number(it.allocation)) ? Number(it.allocation) : 0,
+      0,
+    );
+    const completed = Boolean(it.completed);
+    let completedAt = null;
+    if (completed) {
+      if (it.completedAt) {
+        const d = new Date(it.completedAt);
+        if (!Number.isNaN(d.getTime())) completedAt = d;
+      }
+      if (!completedAt) completedAt = new Date();
+    }
+    const notes = String(it.notes || "").trim().slice(0, 500);
+    out.push({ name, allocation, completed, completedAt, notes });
+  }
+  return out;
+}
+
 function sanitizeVariations(variations) {
   if (!Array.isArray(variations)) return [];
   const out = [];
@@ -759,6 +812,24 @@ async function getProject(req, res) {
       await project.save();
     }
 
+    // Lazy seed: preliminary items default to the BESMM4 checklist with an
+    // even allocation so new projects have something to tick off right away.
+    if (
+      !Array.isArray(project.preliminaryItems) ||
+      project.preliminaryItems.length === 0
+    ) {
+      const n = DEFAULT_PRELIMINARY_ITEMS.length;
+      const even = Number((100 / n).toFixed(2));
+      project.preliminaryItems = DEFAULT_PRELIMINARY_ITEMS.map((name) => ({
+        name,
+        allocation: even,
+        completed: false,
+        completedAt: null,
+        notes: "",
+      }));
+      await project.save();
+    }
+
     // Lazy backfill of category for legacy items so the BoQ section can group on first open.
     let categoryDirty = false;
     if (Array.isArray(project.items)) {
@@ -803,6 +874,7 @@ async function updateProject(req, res) {
       provisionalSums,
       variations,
       preliminaryPercent,
+      preliminaryItems,
     } = req.body || {};
 
     const userId = getUserObjectId(req);
@@ -1036,6 +1108,10 @@ async function updateProject(req, res) {
 
     if (Array.isArray(variations)) {
       project.variations = sanitizeVariations(variations);
+    }
+
+    if (Array.isArray(preliminaryItems)) {
+      project.preliminaryItems = sanitizePreliminaryItems(preliminaryItems);
     }
 
     if (preliminaryPercent !== undefined) {
@@ -1299,14 +1375,45 @@ function computeValueToDate(project) {
     0,
   );
 
+  // Preliminary pool: total preliminary amount (derived from contract
+  // percent on measured+provisional) and the portion already "earned" by
+  // completed preliminary items.
+  const preliminaryPercent = safeNum(project.contract?.preliminaryPercent);
+  const measuredTotal = items.reduce(
+    (acc, it) => acc + safeNum(it?.qty) * safeNum(it?.rate),
+    0,
+  );
+  const preliminaryTotal =
+    ((measuredTotal + provisionalAmount) * preliminaryPercent) / 100;
+  const preliminaryItems = Array.isArray(project.preliminaryItems)
+    ? project.preliminaryItems
+    : [];
+  const completedAllocation = preliminaryItems.reduce(
+    (acc, p) => (p?.completed ? acc + safeNum(p?.allocation) : acc),
+    0,
+  );
+  const totalAllocation = preliminaryItems.reduce(
+    (acc, p) => acc + safeNum(p?.allocation),
+    0,
+  );
+  // If allocations don't sum to 100, scale so a completed share still means
+  // "its allocation as % of the allocations-in-use" times the total pool.
+  const allocationBase = totalAllocation > 0 ? totalAllocation : 100;
+  const preliminaryDone =
+    (preliminaryTotal * completedAllocation) / allocationBase;
+
   const totalItems = items.length;
   const markedItems = items.filter((it) => Boolean(it?.[statusField])).length;
 
   return {
-    cumulativeValue: measured + variationsAmount + provisionalAmount,
+    cumulativeValue:
+      measured + variationsAmount + provisionalAmount + preliminaryDone,
     measured,
     variationsAmount,
     provisionalAmount,
+    preliminaryTotal,
+    preliminaryDone,
+    preliminaryOutstanding: Math.max(0, preliminaryTotal - preliminaryDone),
     totalItems,
     markedItems,
   };
@@ -1516,9 +1623,9 @@ async function finalizeAccount(req, res) {
       0,
     );
     const measuredWorkFinal = rollup.measured;
-    const preliminaryPercent = safeNum(project.contract?.preliminaryPercent);
-    const preliminaryFinal =
-      ((measuredWorkFinal + provisionalFinal) * preliminaryPercent) / 100;
+    // Preliminary final = the full preliminary pool (done portion already
+    // certified; outstanding portion still due at closeout).
+    const preliminaryFinal = rollup.preliminaryTotal;
     const retentionReleased = (project.certificates || []).reduce(
       (acc, c) => acc + safeNum(c.retentionReleased),
       0,
@@ -1590,10 +1697,20 @@ async function exportCertificateXlsx(req, res) {
 
     const previous = certs.filter((c) => Number(c.number) < number);
     const { exportCertificate } = await import("../util/certificateExporter.js");
+
+    // Rebuild the value-to-date breakdown so the cert workbook can show it.
+    const rollup = computeValueToDate(project);
+
     const out = await exportCertificate({
       projectName: project.name || "Project",
       certificate: cert.toObject ? cert.toObject() : cert,
       previousCerts: previous.map((c) => (c.toObject ? c.toObject() : c)),
+      breakdown: {
+        measured: rollup.measured,
+        variations: rollup.variationsAmount,
+        provisional: rollup.provisionalAmount,
+        preliminaryDone: rollup.preliminaryDone,
+      },
     });
     return sendXlsx(res, out);
   } catch (err) {
@@ -1896,6 +2013,29 @@ async function getPublicDashboard(req, res) {
       ? Number(contract.contractSum || 0)
       : measuredForContract + provisionalForContract + preliminaryForContract;
 
+    // Preliminary progress — how much of the preliminary pool has been earned.
+    const preliminaryItems = Array.isArray(project.preliminaryItems)
+      ? project.preliminaryItems
+      : [];
+    const prelimTotalAlloc = preliminaryItems.reduce(
+      (acc, p) => acc + Number(p?.allocation || 0),
+      0,
+    );
+    const prelimCompletedAlloc = preliminaryItems.reduce(
+      (acc, p) => (p?.completed ? acc + Number(p?.allocation || 0) : acc),
+      0,
+    );
+    const prelimBase = prelimTotalAlloc > 0 ? prelimTotalAlloc : 100;
+    const preliminaryDone =
+      (preliminaryForContract * prelimCompletedAlloc) / prelimBase;
+    const preliminaryOutstanding = Math.max(
+      0,
+      preliminaryForContract - preliminaryDone,
+    );
+    const preliminaryCompletedCount = preliminaryItems.filter(
+      (p) => p?.completed,
+    ).length;
+
     const remainingAmount = grossAmount - valuedAmount;
 
     // Actual project cost = completed work + actual variance on tracked items + variations + provisional
@@ -1936,7 +2076,10 @@ async function getPublicDashboard(req, res) {
       contractSum > 0
         ? contractSum
         : grossAmount + provisionalTotal + preliminaryForContract + variationsTotal;
-    const BCWP = valuedAmount;
+    // Earned value = completed measured work + preliminary portion earned by
+    // ticking off prelim items. Variations and provisional release are
+    // additive but treated separately (variations flow into claims directly).
+    const BCWP = valuedAmount + preliminaryDone;
     // Portion of actual cost on the items we *have* progress on. If no actual
     // data is tracked, assume ACWP == BCWP (no known variance).
     const ACWP =
@@ -2027,6 +2170,10 @@ async function getPublicDashboard(req, res) {
       contractSum,
       preliminaryPercent,
       preliminaryAmount: preliminaryForContract,
+      preliminaryDone,
+      preliminaryOutstanding,
+      preliminaryCompletedCount,
+      preliminaryItemsCount: preliminaryItems.length,
       provisionalTotal,
       variationsTotal,
       costPercent: Math.round(costPercent * 10) / 10,

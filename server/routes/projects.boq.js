@@ -185,6 +185,8 @@ router.get(
       foundationType: foundationType || undefined,
       provisionalSums: project.provisionalSums || [],
       variations: project.variations || [],
+      preliminaryItems: project.preliminaryItems || [],
+      preliminaryPercent: Number(project.contract?.preliminaryPercent) || 0,
       format,
     });
 

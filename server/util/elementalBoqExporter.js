@@ -476,49 +476,138 @@ function writeAmountRow(ws, { code, description, qty, unit, rate, fixedAmount })
 /* =========================
    Bill writers
    ========================= */
-function writePreliminariesSheet(workbook, projectName) {
+function writePreliminariesSheet(workbook, projectName, opts = {}) {
+  const {
+    preliminaryItems = [],
+    preliminaryPool = 0, // total preliminary amount (pool)
+    preliminaryPercent = 0,
+  } = opts;
+
   const ws = workbook.addWorksheet(safeSheetName("Preliminaries", workbook));
   ws.columns = [
     { header: "S/N", key: "sn", width: 6 },
-    { header: "ELEMENT BREAKDOWN", key: "description", width: 50 },
-    { header: "INITIAL", key: "initial", width: 14 },
-    { header: "RUNNING", key: "running", width: 14 },
-    { header: "COMPLETION", key: "completion", width: 14 },
-    { header: "TOTAL SUM", key: "total", width: 16 },
+    { header: "PRELIMINARY ITEM", key: "description", width: 48 },
+    { header: "ALLOC %", key: "alloc", width: 10 },
+    { header: "AMOUNT", key: "amount", width: 14 },
+    { header: "DONE", key: "done", width: 8 },
+    { header: "DONE AMOUNT", key: "doneAmount", width: 16 },
   ];
 
   const titleRow = ws.getRow(1);
-  titleRow.values = ["S/N", "ELEMENT BREAKDOWN", "INITIAL", "RUNNING", "COMPLETION", "TOTAL SUM"];
+  titleRow.values = ["S/N", "PRELIMINARY ITEM", "ALLOC %", "AMOUNT", "DONE", "DONE AMOUNT"];
   titleRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
   titleRow.fill = HEADER_FILL;
   titleRow.alignment = { horizontal: "center" };
 
-  const sub = ws.addRow([null, `BREAKDOWN OF PRELIMINARIES — ${projectName || "Project"}`]);
+  const sub = ws.addRow([
+    null,
+    `BREAKDOWN OF PRELIMINARIES — ${projectName || "Project"}` +
+      (preliminaryPercent ? ` · ${safeNum(preliminaryPercent).toFixed(1)}% of measured + PC` : ""),
+  ]);
   sub.font = { bold: true };
   ws.mergeCells(sub.number, 2, sub.number, 6);
 
-  PRELIMINARIES_ITEMS.forEach((desc, i) => {
-    const row = ws.addRow([i + 1, desc, null, null, null, null]);
-    row.getCell(6).value = {
-      formula: `IFERROR(SUM(C${row.number}:E${row.number}),0)`,
-    };
-    applyMoneyFormat(row.getCell(3));
+  // Use the project's actual items if present, otherwise fall back to the
+  // BESMM4 checklist with an even allocation so the sheet still has content.
+  const rowsToRender = Array.isArray(preliminaryItems) && preliminaryItems.length
+    ? preliminaryItems
+    : PRELIMINARIES_ITEMS.map((name) => ({
+        name,
+        allocation: Number((100 / PRELIMINARIES_ITEMS.length).toFixed(2)),
+        completed: false,
+      }));
+
+  const totalAlloc = rowsToRender.reduce(
+    (acc, p) => acc + safeNum(p?.allocation),
+    0,
+  );
+  const allocBase = totalAlloc > 0 ? totalAlloc : 100;
+  const pool = safeNum(preliminaryPool);
+
+  const amountRowNumbers = [];
+  const doneAmountRowNumbers = [];
+  rowsToRender.forEach((p, i) => {
+    const alloc = safeNum(p?.allocation);
+    const amount = pool > 0 ? (pool * alloc) / allocBase : 0;
+    const done = Boolean(p?.completed);
+    const row = ws.addRow([
+      i + 1,
+      String(p?.name || ""),
+      alloc,
+      round2(amount),
+      done ? "✓" : "",
+      done ? round2(amount) : 0,
+    ]);
     applyMoneyFormat(row.getCell(4));
-    applyMoneyFormat(row.getCell(5));
     applyMoneyFormat(row.getCell(6));
+    if (done) {
+      row.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFD1FAE5" },
+      };
+    }
+    amountRowNumbers.push(row.number);
+    doneAmountRowNumbers.push(row.number);
   });
 
-  const firstItemRow = 3;
-  const lastItemRow = firstItemRow + PRELIMINARIES_ITEMS.length - 1;
-
   ws.addRow([]);
-  const totalRow = ws.addRow([null, "PRELIMINARIES — Grand Total to Summary", null, null, null, null]);
-  totalRow.getCell(6).value = { formula: `SUM(F${firstItemRow}:F${lastItemRow})` };
-  totalRow.font = { bold: true };
-  totalRow.fill = SUMMARY_TOTAL_FILL;
-  applyMoneyFormat(totalRow.getCell(6));
+  // Pool total
+  const poolRow = ws.addRow([
+    null,
+    "PRELIMINARIES — Pool (to Main Building Summary)",
+    null,
+    null,
+    null,
+    null,
+  ]);
+  poolRow.font = { bold: true };
+  poolRow.fill = SUMMARY_TOTAL_FILL;
+  poolRow.getCell(4).value = {
+    formula: amountRowNumbers.length
+      ? `SUM(D${amountRowNumbers[0]}:D${amountRowNumbers[amountRowNumbers.length - 1]})`
+      : "0",
+  };
+  applyMoneyFormat(poolRow.getCell(4));
 
-  return { sheet: ws, totalCellAddr: `Preliminaries!F${totalRow.number}` };
+  // Done total
+  const doneRow = ws.addRow([
+    null,
+    "Preliminaries — Done to date",
+    null,
+    null,
+    null,
+    null,
+  ]);
+  doneRow.font = { bold: true, color: { argb: "FF065F46" } };
+  doneRow.getCell(6).value = {
+    formula: doneAmountRowNumbers.length
+      ? `SUM(F${doneAmountRowNumbers[0]}:F${doneAmountRowNumbers[doneAmountRowNumbers.length - 1]})`
+      : "0",
+  };
+  applyMoneyFormat(doneRow.getCell(6));
+
+  // Outstanding total
+  const outRow = ws.addRow([
+    null,
+    "Preliminaries — Outstanding",
+    null,
+    null,
+    null,
+    null,
+  ]);
+  outRow.font = { bold: true, color: { argb: "FF1E40AF" } };
+  outRow.getCell(6).value = {
+    formula: `D${poolRow.number}-F${doneRow.number}`,
+  };
+  applyMoneyFormat(outRow.getCell(6));
+
+  return {
+    sheet: ws,
+    totalCellAddr: `Preliminaries!D${poolRow.number}`,
+    doneCellAddr: `Preliminaries!F${doneRow.number}`,
+    outstandingCellAddr: `Preliminaries!F${outRow.number}`,
+  };
 }
 
 function writeStandardBill({ workbook, plannedBill }) {
@@ -1125,6 +1214,8 @@ export async function exportElementalBoQ({
   foundationType,
   provisionalSums = [],
   variations = [],
+  preliminaryItems = [],
+  preliminaryPercent = 0,
   mappingPath,
   format = "elemental", // "elemental" | "trade"
 } = {}) {
@@ -1152,6 +1243,20 @@ export async function exportElementalBoQ({
   const isTrade =
     String(format || "elemental").toLowerCase() === "trade";
 
+  // Pre-compute the preliminary pool (measured total + provisional) × %
+  // so the Preliminaries sheet can render allocations with real numbers.
+  const measuredTotal = projectItems.reduce(
+    (acc, it) => acc + safeNum(it?.qty) * safeNum(it?.rate),
+    0,
+  );
+  const provisionalTotal = (provisionalSums || []).reduce(
+    (acc, s) => acc + safeNum(s?.amount),
+    0,
+  );
+  const preliminaryPool =
+    ((measuredTotal + provisionalTotal) * safeNum(preliminaryPercent)) / 100;
+  const prelimOpts = { preliminaryItems, preliminaryPool, preliminaryPercent };
+
   if (isTrade) {
     // Trade format: Preliminaries gets its own sheet (per convention), then
     // every other planned bill is rendered as a section on a single sheet.
@@ -1159,7 +1264,7 @@ export async function exportElementalBoQ({
     for (const billRaw of variant.bills || []) {
       const billResolved = resolveBill(mapping, billRaw);
       if (billResolved.kind === "preliminaries") {
-        const ref = writePreliminariesSheet(workbook, projectName);
+        const ref = writePreliminariesSheet(workbook, projectName, prelimOpts);
         billRefs.push({ name: billResolved.name, totalCellAddr: ref.totalCellAddr });
         continue;
       }
@@ -1186,7 +1291,7 @@ export async function exportElementalBoQ({
       const billResolved = resolveBill(mapping, billRaw);
 
       if (billResolved.kind === "preliminaries") {
-        const ref = writePreliminariesSheet(workbook, projectName);
+        const ref = writePreliminariesSheet(workbook, projectName, prelimOpts);
         billRefs.push({ name: billResolved.name, totalCellAddr: ref.totalCellAddr });
         continue;
       }

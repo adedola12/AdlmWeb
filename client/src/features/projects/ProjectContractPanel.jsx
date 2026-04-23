@@ -351,7 +351,7 @@ function FinalAccountSection({
   );
 }
 
-function ModelUpload({ discipline, model, busy, onUpload, onDelete, disabled }) {
+function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, allowManualUpload }) {
   const inputRef = React.useRef(null);
   const label =
     discipline === "architectural"
@@ -359,70 +359,171 @@ function ModelUpload({ discipline, model, busy, onUpload, onDelete, disabled }) 
       : discipline === "structural"
       ? "Structural"
       : "MEP";
+  const attached = Boolean(model?.url);
 
   return (
-    <div className="rounded border border-slate-200 bg-white p-3">
+    <div
+      className={[
+        "rounded border p-3 transition",
+        attached
+          ? "border-emerald-200 bg-emerald-50/30"
+          : "border-slate-200 bg-slate-50",
+      ].join(" ")}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-          <FaCube className="text-slate-500" />
+          <FaCube className={attached ? "text-emerald-600" : "text-slate-400"} />
           {label}
         </div>
-        {model ? (
-          <button
-            type="button"
-            onClick={() => onDelete?.(discipline)}
-            disabled={disabled}
-            className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600"
-            title={`Delete ${label} model`}
-          >
-            <FaTrashAlt className="text-[10px]" />
-          </button>
-        ) : null}
+        <span
+          className={[
+            "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+            attached
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-slate-200 text-slate-600",
+          ].join(" ")}
+        >
+          {attached ? "Attached" : "Not attached"}
+        </span>
       </div>
-      {model ? (
+
+      {attached ? (
         <div className="mt-2 text-[11px] text-slate-600">
           <div className="truncate font-medium text-slate-800" title={model.sourceFile}>
             {model.sourceFile}
           </div>
           <div className="text-slate-500">
-            {bytes(model.sizeBytes)} · {model.format?.toUpperCase() || "IFC"} ·
-            uploaded {formatDate(model.uploadedAt)}
+            {bytes(model.sizeBytes)} · {model.format?.toUpperCase() || "IFC"}
+            {model.uploadedAt ? ` · ${formatDate(model.uploadedAt)}` : ""}
           </div>
-          <a
-            href={model.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 inline-block text-adlm-blue-700 hover:underline"
-          >
-            Open file →
-          </a>
+          <div className="mt-1 flex items-center gap-2">
+            <a
+              href={model.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-adlm-blue-700 hover:underline"
+            >
+              Open file →
+            </a>
+            {!disabled ? (
+              <button
+                type="button"
+                onClick={() => onDelete?.(discipline)}
+                className="text-red-600 hover:underline"
+                title={`Detach ${label} model`}
+              >
+                Detach
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="mt-2 text-[11px] text-slate-500">
-          No model attached. Upload an .ifc / .ifczip / .frag file (max 100 MB).
+          Pushed automatically from the Revit plugin during save.
         </div>
       )}
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".ifc,.ifczip,.frag"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onUpload?.(discipline, f);
-          e.target.value = "";
-        }}
-      />
-      <button
-        type="button"
-        className="btn btn-xs mt-2 inline-flex items-center gap-1"
-        onClick={() => inputRef.current?.click()}
-        disabled={busy || disabled}
-      >
-        <FaUpload className="text-[9px]" />
-        {busy ? "Uploading..." : model ? "Replace" : "Upload"}
-      </button>
+      {allowManualUpload ? (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".ifc,.ifczip,.frag"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUpload?.(discipline, f);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className="mt-2 inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-700 hover:underline"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy || disabled}
+            title="Fallback: upload manually if the plugin wasn't used"
+          >
+            <FaUpload className="text-[8px]" />
+            {busy ? "Uploading..." : attached ? "Replace manually" : "Upload manually"}
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ModelsPanel({
+  projectModels,
+  modelUploadBusy,
+  onUploadModel,
+  onDeleteModel,
+  disabled,
+}) {
+  const [showManual, setShowManual] = React.useState(false);
+  const attached = Object.entries(projectModels || {}).filter(
+    ([, m]) => m?.url,
+  );
+  return (
+    <div className="space-y-3">
+      <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+        <b>Auto-attached from Revit.</b> When you save a project from the
+        Revit plugin, the model is exported to IFC (compressed to stay under
+        100 MB) and pushed here automatically. For large models the plugin
+        asks first since saving takes longer. No manual upload needed.
+      </div>
+
+      {attached.length ? (
+        <div className="grid gap-3 md:grid-cols-3">
+          {["architectural", "structural", "mep"].map((d) => (
+            <ModelStatus
+              key={d}
+              discipline={d}
+              model={projectModels?.[d]}
+              busy={modelUploadBusy?.[d]}
+              onUpload={onUploadModel}
+              onDelete={onDeleteModel}
+              disabled={disabled}
+              allowManualUpload={showManual}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+          No BIM models attached yet. Save the project from the Revit plugin
+          to push the models automatically.
+        </div>
+      )}
+
+      <div className="flex items-center justify-between text-[11px]">
+        <button
+          type="button"
+          onClick={() => setShowManual((v) => !v)}
+          className="text-slate-500 hover:text-slate-700 hover:underline"
+          title="Rarely needed — the plugin auto-pushes. Use if you have an IFC from elsewhere."
+        >
+          {showManual ? "Hide manual upload" : "Advanced: manual upload"}
+        </button>
+        <span className="text-slate-400">
+          3D viewer coming in the next release.
+        </span>
+      </div>
+
+      {showManual ? (
+        <div className="grid gap-3 md:grid-cols-3">
+          {["architectural", "structural", "mep"].map((d) => (
+            <ModelStatus
+              key={`manual-${d}`}
+              discipline={d}
+              model={projectModels?.[d]}
+              busy={modelUploadBusy?.[d]}
+              onUpload={onUploadModel}
+              onDelete={onDeleteModel}
+              disabled={disabled}
+              allowManualUpload
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -526,43 +627,13 @@ export default function ProjectContractPanel({
       ) : null}
 
       {tab === "models" ? (
-        <div className="space-y-2">
-          <div className="text-[11px] text-slate-500">
-            Attach the BIM models used to generate this BoQ. Files are stored
-            on Cloudflare R2, up to 100 MB per discipline (upgrades soon).
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <ModelUpload
-              discipline="architectural"
-              model={projectModels?.architectural}
-              busy={modelUploadBusy?.architectural}
-              onUpload={onUploadModel}
-              onDelete={onDeleteModel}
-              disabled={Boolean(finalAccount?.finalized)}
-            />
-            <ModelUpload
-              discipline="structural"
-              model={projectModels?.structural}
-              busy={modelUploadBusy?.structural}
-              onUpload={onUploadModel}
-              onDelete={onDeleteModel}
-              disabled={Boolean(finalAccount?.finalized)}
-            />
-            <ModelUpload
-              discipline="mep"
-              model={projectModels?.mep}
-              busy={modelUploadBusy?.mep}
-              onUpload={onUploadModel}
-              onDelete={onDeleteModel}
-              disabled={Boolean(finalAccount?.finalized)}
-            />
-          </div>
-          <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-            Next up: an embedded 3D viewer tied to the BoQ rows so you can
-            click a line item and spot it in the model (and clients can see
-            progress colour-coded in 3D).
-          </div>
-        </div>
+        <ModelsPanel
+          projectModels={projectModels}
+          modelUploadBusy={modelUploadBusy}
+          onUploadModel={onUploadModel}
+          onDeleteModel={onDeleteModel}
+          disabled={Boolean(finalAccount?.finalized)}
+        />
       ) : null}
     </div>
   );

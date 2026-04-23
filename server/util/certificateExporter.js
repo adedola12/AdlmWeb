@@ -86,6 +86,7 @@ export async function exportCertificate({
   clientName = "",
   certificate,
   previousCerts = [],
+  breakdown = null, // optional: { measured, variations, provisional, preliminaryDone }
 }) {
   if (!certificate) throw new Error("certificate is required");
   const workbook = new ExcelJS.Workbook();
@@ -132,6 +133,27 @@ export async function exportCertificate({
   }
 
   ws.addRow([]);
+
+  // Optional value-to-date breakdown — expose how cumulative value was derived.
+  if (breakdown) {
+    const bhdr = ws.addRow(["Cumulative value breakdown"]);
+    bhdr.font = { bold: true };
+    bhdr.fill = ACCENT_FILL;
+    ws.mergeCells(bhdr.number, 1, bhdr.number, 4);
+
+    const bRows = [
+      ["Measured work (completed)", safeNum(breakdown.measured)],
+      ["Approved variations", safeNum(breakdown.variations)],
+      ["Provisional sums released", safeNum(breakdown.provisional)],
+      ["Preliminaries done", safeNum(breakdown.preliminaryDone)],
+    ];
+    for (const [label, amt] of bRows) {
+      const r = ws.addRow([null, label, amt, null]);
+      applyMoneyFormat(r.getCell(3));
+      ws.mergeCells(r.number, 3, r.number, 4);
+    }
+    ws.addRow([]);
+  }
 
   // Main certificate calculation table
   const tableHead = ws.addRow(["Item", "Description", "Amount (NGN)", ""]);
