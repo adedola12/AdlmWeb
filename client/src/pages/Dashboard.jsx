@@ -360,6 +360,7 @@ export default function Dashboard() {
     if (key === "revit") return navigate("/projects/revit");
     if (key === "mep") return navigate("/projects/mep");
     if (key === "planswift") return navigate("/projects/planswift");
+    if (key === "civil3d") return navigate("/projects/civil3d");
     if (key === "rategen") return navigate("/rategen");
     navigate(`/product/${e.productKey}`);
   }

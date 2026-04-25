@@ -29,6 +29,7 @@ const TITLES = {
   revit: "Revit Takeoffs",
   revitmep: "Revit MEP Projects",
   planswift: "PlanSwift Projects",
+  civil3d: "Civil 3D Takeoffs",
   "revit-materials": "Revit Materials",
   "revit-material": "Revit Materials",
   "planswift-materials": "PlanSwift Materials",
@@ -73,6 +74,15 @@ function getSidebarMeta(tool) {
       app: "Revit Plugin",
       section: "Takeoffs",
       hint: "Browse projects like a file explorer",
+      Icon: FaFolder,
+    };
+  }
+
+  if (t === "civil3d") {
+    return {
+      app: "Civil 3D Plugin",
+      section: "Takeoffs",
+      hint: "Browse Civil 3D takeoffs saved from the plugin",
       Icon: FaFolder,
     };
   }
