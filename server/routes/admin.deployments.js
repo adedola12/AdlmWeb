@@ -88,11 +88,22 @@ function normalizeOperation(raw) {
 
   if (!target) return null;
 
+  // cleanTargetOnUpdate + preservePatterns are persisted in the schema and
+  // consumed by InstallerHub on update installs. Earlier this function
+  // dropped them, so every admin save silently wiped the "preserve user
+  // data files when updating" behavior — meaning re-saving a manifest
+  // through the admin UI quietly downgraded its update semantics.
+  const preservePatterns = Array.isArray(raw.preservePatterns)
+    ? raw.preservePatterns.map((v) => String(v || "").trim()).filter(Boolean)
+    : [];
+
   return {
     type,
     source,
     target,
     overwrite: raw.overwrite !== false,
+    cleanTargetOnUpdate: !!raw.cleanTargetOnUpdate,
+    preservePatterns,
     notes: String(raw.notes || "").trim(),
   };
 }
