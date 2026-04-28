@@ -4,7 +4,6 @@ import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
-import ForceReinstallBanner from "./components/ForceReinstallBanner.jsx";
 import HelpBot from "./components/HelpBot.jsx";
 
 import { API_BASE } from "./config";
@@ -15,7 +14,6 @@ export default function App() {
 
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
-  const [reinstall, setReinstall] = React.useState(null);
 
   const VIDEO_ID = "m3smR7ebia4";
   const MAX_SECONDS = 300;
@@ -36,33 +34,12 @@ export default function App() {
     })();
   }, []);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    async function fetchReinstall() {
-      try {
-        const res = await fetch(`${API_BASE}/settings/force-reinstall`);
-        const json = await res.json();
-        if (!cancelled) setReinstall(json || null);
-      } catch {
-        // ignore
-      }
-    }
-    fetchReinstall();
-    const id = setInterval(fetchReinstall, 5 * 60 * 1000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, []);
-
   function closeVideo() {
     setShowVideo(false);
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <ForceReinstallBanner data={reinstall} />
-
       {!bannerDismissed && (
         <CouponBanner
           banner={banner}

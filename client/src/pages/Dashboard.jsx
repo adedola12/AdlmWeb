@@ -181,6 +181,7 @@ function mapsUrlForTraining(training) {
 export default function Dashboard() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
+  const [reinstall, setReinstall] = React.useState(null);
   const [courses, setCourses] = React.useState(null);
   const [coursesErr, setCoursesErr] = React.useState("");
   const [loadingCourses, setLoadingCourses] = React.useState(false);
@@ -313,6 +314,25 @@ export default function Dashboard() {
   }, [loadSummary, loadCourses, loadPTrainings, loadInvoices]);
 
   React.useEffect(() => {
+    let cancelled = false;
+    async function fetchReinstall() {
+      try {
+        const res = await fetch(`${API_BASE}/settings/force-reinstall`);
+        const json = await res.json();
+        if (!cancelled) setReinstall(json || null);
+      } catch {
+        // ignore
+      }
+    }
+    fetchReinstall();
+    const id = setInterval(fetchReinstall, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  React.useEffect(() => {
     if (activeTab !== "orders") return;
     loadOrders(ordersPage);
   }, [activeTab, ordersPage, loadOrders]);
@@ -431,6 +451,49 @@ export default function Dashboard() {
             delay={240}
           />
         </div>
+
+        {reinstall?.active && activeSubscriptionsCount > 0 ? (
+          <div className="bg-red-50 border border-red-200 text-red-900 rounded-xl shadow-sm p-4 md:p-5">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 mt-0.5">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold uppercase tracking-wide text-red-700">
+                  Action required: reinstall
+                </div>
+                <div className="text-sm mt-1 leading-relaxed">
+                  {reinstall.message?.trim() ||
+                    "Please redownload the Installer Hub, watch the setup video, reinstall the Hub, and redownload all software updates. Your installed apps must be re-activated."}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {reinstall.installerHubUrl ? (
+                    <a
+                      href={reinstall.installerHubUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-700 text-white text-xs font-semibold hover:bg-red-800 transition"
+                    >
+                      Download Installer Hub
+                    </a>
+                  ) : null}
+                  {reinstall.installerHubVideoUrl ? (
+                    <a
+                      href={reinstall.installerHubVideoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition"
+                    >
+                      Watch setup video
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {activeSubscriptionsCount > 0 && summary?.installerHub?.downloadUrl ? (
           <div className="bg-gradient-to-r from-adlm-blue-700 to-[#0050c8] text-white rounded-xl shadow-sm p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
