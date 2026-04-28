@@ -11,21 +11,121 @@ const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
 
 const round2 = (x) => Math.round((Number(x || 0) + Number.EPSILON) * 100) / 100;
 
-function pickBundleDiscount(p, periods) {
-  const d = p?.discounts || null;
-  if (!d) return null;
-
-  if (p.billingInterval === "yearly") {
-    return periods === 1 ? d.oneYear || null : null;
-  }
-
-  if (periods === 6) return d.sixMonths || null;
-  if (periods === 12) return d.oneYear || null;
-  return null;
-}
-
 function toMoney(x, currency) {
   return currency === "USD" ? round2(x) : Math.round(Number(x || 0));
+}
+
+// Mirror of client/src/pages/Purchase.jsx getPrices() + resolve().
+// For USD, prefers the explicit USD field; otherwise converts NGN via fx.
+// Discounted variant wins when set and strictly less than actual.
+function getEffectivePrices(p, currency, fx) {
+  const isUSD = currency === "USD";
+  const pr = p?.price || {};
+
+  const inCur = (usd, ngn) => {
+    if (!isUSD) return Math.round(Number(ngn || 0));
+    const n = usd != null ? Number(usd || 0) : Number(ngn || 0) * fx;
+    return round2(n);
+  };
+
+  const monthlyActual = inCur(pr.monthlyUSD, pr.monthlyNGN);
+  const sixActual = inCur(pr.sixMonthUSD, pr.sixMonthNGN);
+  const yearlyActual = inCur(pr.yearlyUSD, pr.yearlyNGN);
+  const installFee = inCur(pr.installUSD, pr.installNGN);
+
+  const monthlyDisc = inCur(pr.discountedMonthlyUSD, pr.discountedMonthlyNGN);
+  const sixDisc = inCur(pr.discountedSixMonthUSD, pr.discountedSixMonthNGN);
+  const yearlyDisc = inCur(pr.discountedYearlyUSD, pr.discountedYearlyNGN);
+
+  const pick = (actual, discounted) =>
+    discounted > 0 && discounted < actual ? discounted : actual;
+
+  return {
+    monthly: pick(monthlyActual, monthlyDisc),
+    sixMonth: pick(sixActual, sixDisc),
+    yearly: pick(yearlyActual, yearlyDisc),
+    install: installFee,
+  };
+}
+
+// Legacy product.discounts.{sixMonths,oneYear} — applied only as a fallback
+// when the corresponding new tier price (sixMonthNGN/yearlyNGN) is unset,
+// to preserve behavior for older products that haven't migrated.
+function applyLegacyBundleDiscount(baseRecurring, disc, seats, currency, fx) {
+  if (!disc) return baseRecurring;
+
+  if (disc.type === "percent") {
+    const pct = Number(disc.valueNGN || 0);
+    const factor = Math.max(0, 1 - pct / 100);
+    return toMoney(baseRecurring * factor, currency);
+  }
+
+  if (disc.type === "fixed") {
+    let fixedPerSeat = 0;
+    if (currency === "USD") {
+      fixedPerSeat =
+        disc.valueUSD != null
+          ? Number(disc.valueUSD || 0)
+          : Number(disc.valueNGN || 0) * fx;
+      fixedPerSeat = round2(fixedPerSeat);
+    } else {
+      fixedPerSeat = Math.round(Number(disc.valueNGN || 0));
+    }
+    if (fixedPerSeat > 0) return toMoney(fixedPerSeat * seats, currency);
+  }
+
+  return baseRecurring;
+}
+
+// Tier logic mirroring client/src/pages/Purchase.jsx lineCalc().
+// 1-5 mo  → monthly × periods × seats
+// 6 mo    → sixMonth (or fallback monthly × 6 + legacy sixMonths discount) × seats
+// 7-11 mo → sixMonth + monthly × (periods - 6), all × seats
+// 12 mo   → yearly  (or fallback monthly × 12 + legacy oneYear discount) × seats
+// 13+ mo  → yearly + monthly × (periods - 12), all × seats
+// Yearly-billed products skip tier logic and use yearly × periods × seats.
+function computeRecurring({ p, eff, periods, seats, currency, fx }) {
+  const m = (n) => toMoney(n, currency);
+
+  if (p.billingInterval === "yearly") {
+    return m(eff.yearly * periods * seats);
+  }
+
+  if (periods < 6) {
+    return m(eff.monthly * periods * seats);
+  }
+
+  if (periods === 6) {
+    if (eff.sixMonth > 0) return m(eff.sixMonth * seats);
+    return applyLegacyBundleDiscount(
+      m(eff.monthly * 6 * seats),
+      p?.discounts?.sixMonths,
+      seats,
+      currency,
+      fx,
+    );
+  }
+
+  if (periods > 6 && periods < 12) {
+    const sixBase = eff.sixMonth > 0 ? eff.sixMonth : eff.monthly * 6;
+    const extra = eff.monthly * (periods - 6);
+    return m((sixBase + extra) * seats);
+  }
+
+  if (periods === 12) {
+    if (eff.yearly > 0) return m(eff.yearly * seats);
+    return applyLegacyBundleDiscount(
+      m(eff.monthly * 12 * seats),
+      p?.discounts?.oneYear,
+      seats,
+      currency,
+      fx,
+    );
+  }
+
+  const yearBase = eff.yearly > 0 ? eff.yearly : eff.monthly * 12;
+  const extra = eff.monthly * (periods - 12);
+  return m((yearBase + extra) * seats);
 }
 
 // If you are on Node < 18, uncomment:
@@ -122,69 +222,12 @@ router.post("/cart", requireAuth, async (req, res) => {
       const periods = Math.max(parseInt(i.periods ?? 1, 10) || 1, 1);
       const firstTime = !!i.firstTime;
 
-      const unitNGN =
-        p.billingInterval === "yearly"
-          ? Number(p.price?.yearlyNGN || 0)
-          : Number(p.price?.monthlyNGN || 0);
+      const eff = getEffectivePrices(p, currency, fx);
+      const unit = p.billingInterval === "yearly" ? eff.yearly : eff.monthly;
+      const installPerSeat = firstTime ? eff.install : 0;
+      const totalInstall = installPerSeat * seats;
 
-      const installNGN = firstTime ? Number(p.price?.installNGN || 0) : 0;
-
-      let unit = unitNGN;
-      let install = installNGN;
-
-      if (currency === "USD") {
-        const ovUnit =
-          p.billingInterval === "yearly"
-            ? p.price?.yearlyUSD
-            : p.price?.monthlyUSD;
-
-        const ovInstall = p.price?.installUSD;
-
-        unit = ovUnit != null ? Number(ovUnit) : unitNGN * fx;
-
-        // ✅ FIX: only apply install override if firstTime is true
-        install = firstTime
-          ? ovInstall != null
-            ? Number(ovInstall)
-            : installNGN * fx
-          : 0;
-
-        unit = round2(unit);
-        install = round2(install);
-      } else {
-        unit = Math.round(unit);
-        install = Math.round(install);
-      }
-
-      // base recurring
-      let recurring = unit * seats * periods;
-
-      // bundle discount (recurring only)
-      const disc = pickBundleDiscount(p, periods);
-
-      if (disc?.type === "percent") {
-        const pct = Number(disc.valueNGN || 0);
-        const factor = Math.max(0, 1 - pct / 100);
-        recurring = toMoney(recurring * factor, currency);
-      }
-
-      if (disc?.type === "fixed") {
-        let fixedPerSeat = 0;
-
-        if (currency === "USD") {
-          if (disc.valueUSD != null) fixedPerSeat = Number(disc.valueUSD || 0);
-          else fixedPerSeat = Number(disc.valueNGN || 0) * fx;
-          fixedPerSeat = round2(fixedPerSeat);
-        } else {
-          fixedPerSeat = Math.round(Number(disc.valueNGN || 0));
-        }
-
-        if (fixedPerSeat > 0)
-          recurring = toMoney(fixedPerSeat * seats, currency);
-      }
-
-      // install fee is per-seat
-      const totalInstall = install * seats;
+      const recurring = computeRecurring({ p, eff, periods, seats, currency, fx });
       const lineTotal = recurring + totalInstall;
 
       lines.push({
