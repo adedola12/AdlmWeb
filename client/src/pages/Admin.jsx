@@ -553,11 +553,23 @@ export default function Admin() {
   const [ihMsg, setIhMsg] = React.useState("");
   const [ihUploadProg, setIhUploadProg] = React.useState(0);
 
+  // ── Force-reinstall broadcast state ──
+  const [frActive, setFrActive] = React.useState(false);
+  const [frMessage, setFrMessage] = React.useState("");
+  const [frTriggeredAt, setFrTriggeredAt] = React.useState(null);
+  const [frConfirmOpen, setFrConfirmOpen] = React.useState(false);
+  const [frConfirmText, setFrConfirmText] = React.useState("");
+  const [frCustomMessage, setFrCustomMessage] = React.useState("");
+  const [frBusy, setFrBusy] = React.useState(false);
+  const [frMsg, setFrMsg] = React.useState("");
+  const [frResult, setFrResult] = React.useState(null);
+
   const loadSettings = React.useCallback(async () => {
     try {
-      const [mobileData, ihData] = await Promise.all([
+      const [mobileData, ihData, frData] = await Promise.all([
         apiAuthed("/admin/settings/mobile-app-url", { token: accessToken }),
         apiAuthed("/admin/settings/installer-hub", { token: accessToken }),
+        apiAuthed("/admin/settings/force-reinstall", { token: accessToken }),
       ]);
       const url = mobileData?.mobileAppUrl || "";
       setSettingsMobileAppUrl(url);
@@ -567,6 +579,10 @@ export default function Admin() {
       setIhUrlDraft(ihData?.installerHubUrl || "");
       setIhVideoUrl(ihData?.installerHubVideoUrl || "");
       setIhVideoDraft(ihData?.installerHubVideoUrl || "");
+
+      setFrActive(!!frData?.active);
+      setFrMessage(frData?.message || "");
+      setFrTriggeredAt(frData?.triggeredAt || null);
     } catch { /* ignore */ }
   }, [accessToken]);
 
@@ -701,6 +717,51 @@ export default function Admin() {
       setIhMsg(e?.message || "Failed to save");
     } finally {
       setIhBusy(false);
+    }
+  };
+
+  const triggerForceReinstall = async () => {
+    setFrBusy(true);
+    setFrMsg("");
+    setFrResult(null);
+    try {
+      const data = await apiAuthed("/admin/settings/force-reinstall", {
+        token: accessToken,
+        method: "POST",
+        body: { message: frCustomMessage.trim() || undefined },
+      });
+      setFrActive(true);
+      setFrMessage(data?.message || "");
+      setFrTriggeredAt(data?.triggeredAt || new Date().toISOString());
+      setFrResult({
+        usersTouched: data?.usersTouched ?? 0,
+        devicesRevoked: data?.devicesRevoked ?? 0,
+      });
+      setFrMsg("Global reinstall triggered.");
+      setFrConfirmOpen(false);
+      setFrConfirmText("");
+    } catch (e) {
+      setFrMsg(e?.message || "Failed to trigger");
+    } finally {
+      setFrBusy(false);
+    }
+  };
+
+  const clearForceReinstall = async () => {
+    if (!confirm("Clear the global reinstall banner? Devices already revoked stay revoked.")) return;
+    setFrBusy(true);
+    setFrMsg("");
+    try {
+      await apiAuthed("/admin/settings/force-reinstall/clear", {
+        token: accessToken,
+        method: "POST",
+      });
+      setFrActive(false);
+      setFrMsg("Banner cleared.");
+    } catch (e) {
+      setFrMsg(e?.message || "Failed to clear");
+    } finally {
+      setFrBusy(false);
     }
   };
 
@@ -3300,6 +3361,130 @@ export default function Admin() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Force Global Reinstall — DANGER ZONE */}
+            <div className="border-t pt-6">
+              <h3 className="font-semibold text-base mb-1 text-red-700">
+                Force Global Reinstall (Danger Zone)
+              </h3>
+              <p className="text-xs text-slate-600 mb-4">
+                Revokes <b>every active device</b> across all users and shows a site-wide banner
+                instructing everyone to redownload the Installer Hub, watch the setup video,
+                reinstall the Hub, and redownload all software updates.
+                Make sure the Installer Hub URL and video URL above are current before clicking.
+              </p>
+
+              {frActive ? (
+                <div className="rounded border border-red-200 bg-red-50 p-3 mb-4">
+                  <div className="text-sm text-red-800">
+                    <b>Banner is currently active</b>
+                    {frTriggeredAt && (
+                      <span className="ml-2 text-xs text-red-700">
+                        (triggered {dayjs(frTriggeredAt).format("MMM D, YYYY HH:mm")})
+                      </span>
+                    )}
+                  </div>
+                  {frMessage && (
+                    <div className="text-xs text-red-700 mt-1 italic">"{frMessage}"</div>
+                  )}
+                  <button
+                    onClick={clearForceReinstall}
+                    disabled={frBusy}
+                    className="mt-3 px-3 py-1.5 rounded bg-white border border-red-300 text-red-700 text-xs font-medium hover:bg-red-100 disabled:opacity-50"
+                  >
+                    {frBusy ? "Clearing..." : "Clear banner (devices stay revoked)"}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500 mb-3">
+                  Banner is not active. Default message will tell users to redownload the
+                  Installer Hub, watch the video, reinstall, and redownload all updates.
+                </div>
+              )}
+
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Optional custom message (leave blank for default)
+                </label>
+                <textarea
+                  rows={2}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  placeholder="Leave blank to use the standard reinstall instructions..."
+                  value={frCustomMessage}
+                  onChange={(e) => setFrCustomMessage(e.target.value)}
+                />
+              </div>
+
+              <button
+                onClick={() => {
+                  setFrConfirmText("");
+                  setFrMsg("");
+                  setFrConfirmOpen(true);
+                }}
+                disabled={frBusy}
+                className="px-4 py-2 rounded bg-red-700 text-white text-sm font-semibold hover:bg-red-800 disabled:opacity-50"
+              >
+                Reset all devices &amp; broadcast reinstall message
+              </button>
+
+              {frMsg && (
+                <span className={`ml-3 text-sm ${frMsg.includes("Failed") ? "text-red-600" : "text-green-700"}`}>
+                  {frMsg}
+                </span>
+              )}
+
+              {frResult && (
+                <div className="mt-3 text-xs text-slate-600">
+                  Revoked <b>{frResult.devicesRevoked}</b> device(s) across <b>{frResult.usersTouched}</b> user(s).
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force-reinstall confirm modal */}
+      {frConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-red-700 mb-2">
+              Confirm: Force Global Reinstall
+            </h3>
+            <p className="text-sm text-slate-700 mb-3">
+              This will <b>revoke every active device</b> for every user and broadcast a
+              banner asking everyone to reinstall the Installer Hub. Users will be signed
+              out of installed software and must re-activate.
+            </p>
+            <p className="text-sm text-slate-700 mb-2">
+              Type <b className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">RESET</b> to confirm:
+            </p>
+            <input
+              type="text"
+              autoFocus
+              className="w-full border rounded px-3 py-2 text-sm font-mono mb-4"
+              value={frConfirmText}
+              onChange={(e) => setFrConfirmText(e.target.value)}
+              placeholder="RESET"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setFrConfirmOpen(false);
+                  setFrConfirmText("");
+                }}
+                disabled={frBusy}
+                className="px-4 py-2 rounded border border-slate-300 text-sm hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={triggerForceReinstall}
+                disabled={frBusy || frConfirmText !== "RESET"}
+                className="px-4 py-2 rounded bg-red-700 text-white text-sm font-semibold hover:bg-red-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {frBusy ? "Working..." : "Confirm reset"}
+              </button>
             </div>
           </div>
         </div>

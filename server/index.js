@@ -227,6 +227,24 @@ app.get("/settings/mobile-app-url", async (_req, res) => {
   }
 });
 
+// Public force-reinstall broadcast — read by the site-wide banner.
+// Returns active=false (and no other fields) when nothing is broadcasting.
+app.get("/settings/force-reinstall", async (_req, res) => {
+  try {
+    const s = await Setting.findOne({ key: "global" }).lean();
+    if (!s?.forceReinstallActive) return res.json({ active: false });
+    res.json({
+      active: true,
+      message: s.forceReinstallMessage || "",
+      triggeredAt: s.forceReinstallAt || null,
+      installerHubUrl: s.installerHubUrl || "",
+      installerHubVideoUrl: s.installerHubVideoUrl || "",
+    });
+  } catch {
+    res.json({ active: false });
+  }
+});
+
 /* =========================
    ✅ ADMIN ROUTES
    ========================= */
