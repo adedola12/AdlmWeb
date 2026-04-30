@@ -56,6 +56,20 @@ function sanitizeCourseBody(body = {}, { partial = false } = {}) {
         : [],
   );
 
+  // softwareIds: validate/limit to 6, drop anything that doesn't look like
+  // a Mongo ObjectId hex string. Storing the array even when empty lets
+  // an admin clear all softwares from a course.
+  if (hasOwn(body, "softwareIds")) {
+    const arr = Array.isArray(body.softwareIds) ? body.softwareIds : [];
+    const cleaned = arr
+      .map((v) => String(v || "").trim())
+      .filter((v) => /^[0-9a-fA-F]{24}$/.test(v))
+      .slice(0, 6);
+    out.softwareIds = cleaned;
+  } else if (!partial) {
+    out.softwareIds = [];
+  }
+
   return out;
 }
 

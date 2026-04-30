@@ -231,6 +231,12 @@ export default function Receipt() {
               <div className="mt-1 text-sm text-slate-700">
                 Status: <b className="text-slate-900">Approved</b>
               </div>
+              {Number(order?.vatAmount || 0) > 0 && (
+                <div className="mt-1 text-xs text-slate-500">
+                  Includes {order?.vatLabel || `VAT ${order?.vatPercent || 0}%`}: {currency}{" "}
+                  {Number(order.vatAmount).toLocaleString()}
+                </div>
+              )}
               <div className="mt-1 text-sm text-slate-700">
                 Total:{" "}
                 <b className="text-slate-900">

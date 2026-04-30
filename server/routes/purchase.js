@@ -2,6 +2,7 @@ import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { Purchase } from "../models/Purchase.js";
 import { Product } from "../models/Product.js";
+import { Setting } from "../models/Setting.js";
 import { getFxRate } from "../util/fx.js";
 import { validateAndComputeDiscount } from "../util/coupons.js";
 import { TrainingLocation } from "../models/TrainingLocation.js";
@@ -309,10 +310,27 @@ router.post("/cart", requireAuth, async (req, res) => {
         currency === "USD" ? round2(total) : Math.max(Math.round(total), 0);
     }
 
-    const totalAfterDiscount =
+    const subtotalAfterDiscount =
       currency === "USD"
         ? Math.max(round2(total - discount), 0)
         : Math.max(Math.round(total - discount), 0);
+
+    // ── VAT (applied after discount, before final total) ──
+    const settings = await Setting.findOne({ key: "global" }).lean();
+    const vatEnabled = !!settings?.vatEnabled && !!settings?.vatApplyToPurchases;
+    const vatPercent = vatEnabled
+      ? Math.min(Math.max(Number(settings?.vatPercent || 0), 0), 100)
+      : 0;
+    const vatAmount = vatPercent > 0
+      ? toMoney((subtotalAfterDiscount * vatPercent) / 100, currency)
+      : 0;
+    const vatLabel = vatPercent > 0
+      ? `${settings?.vatLabel || "VAT"} ${vatPercent}%`
+      : "";
+
+    const totalWithVat = currency === "USD"
+      ? round2(subtotalAfterDiscount + vatAmount)
+      : Math.round(subtotalAfterDiscount + vatAmount);
 
     const purchase = await Purchase.create({
       userId: req.user._id,
@@ -320,7 +338,10 @@ router.post("/cart", requireAuth, async (req, res) => {
 
       currency,
       totalBeforeDiscount: total,
-      totalAmount: totalAfterDiscount,
+      vatPercent,
+      vatAmount,
+      vatLabel,
+      totalAmount: totalWithVat,
 
       licenseType: purchaseLicenseType,
       organization,
@@ -348,7 +369,10 @@ router.post("/cart", requireAuth, async (req, res) => {
       lines,
       totalBeforeDiscount,
       discount,
-      total: totalAfterDiscount,
+      vatPercent,
+      vatAmount,
+      vatLabel,
+      total: totalWithVat,
       currency,
       coupon: purchase.coupon?.code ? { code: purchase.coupon.code } : null,
       paystack: null,

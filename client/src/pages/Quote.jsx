@@ -27,6 +27,25 @@ export default function Quote() {
   const [sending, setSending] = React.useState(false);
   const [sentMsg, setSentMsg] = React.useState("");
 
+  // VAT (loaded from public settings; only shown if applyToQuotes enabled)
+  const [vatCfg, setVatCfg] = React.useState({ enabled: false, percent: 0, label: "VAT" });
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/settings/vat`, { credentials: "include" });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (j?.applyToQuotes !== false) {
+          setVatCfg({
+            enabled: !!j?.enabled,
+            percent: Number(j?.percent || 0),
+            label: j?.label || "VAT",
+          });
+        }
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   // Load products + training locations
   React.useEffect(() => {
     (async () => {
@@ -141,6 +160,14 @@ export default function Quote() {
 
   const subtotal = lineItems.reduce((s, it) => s + it.total, 0);
   const curr = currency === "USD" ? "$" : "N";
+
+  const vatAmount =
+    vatCfg.enabled && vatCfg.percent > 0
+      ? currency === "USD"
+        ? Math.round((subtotal * vatCfg.percent) / 100 * 100) / 100
+        : Math.round((subtotal * vatCfg.percent) / 100)
+      : 0;
+  const grandTotal = subtotal + vatAmount;
 
   // Print
   function handlePrint() {
@@ -458,7 +485,19 @@ export default function Quote() {
               </table>
 
               {/* Total bar */}
-              <div className="flex justify-end px-4 py-3">
+              <div className="flex flex-col items-end gap-1 px-4 py-3">
+                {vatCfg.enabled && vatCfg.percent > 0 && (
+                  <div className="text-xs text-slate-600 space-y-0.5 text-right">
+                    <div>
+                      Subtotal: {curr}
+                      {subtotal.toLocaleString()}
+                    </div>
+                    <div>
+                      {vatCfg.label} ({vatCfg.percent}%): +{curr}
+                      {vatAmount.toLocaleString()}
+                    </div>
+                  </div>
+                )}
                 <div
                   className="inline-flex items-center gap-6 px-5 py-2 rounded"
                   style={{
@@ -471,7 +510,7 @@ export default function Quote() {
                   <span>Estimated Total:</span>
                   <span>
                     {curr}
-                    {subtotal.toLocaleString()}
+                    {grandTotal.toLocaleString()}
                   </span>
                 </div>
               </div>

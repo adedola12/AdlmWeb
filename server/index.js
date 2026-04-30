@@ -24,6 +24,9 @@ import meCourses from "./routes/meCourses.js";
 import adminRoutes from "./routes/admin.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
 import adminCourses from "./routes/adminCourses.js";
+import adminSoftwares from "./routes/admin.softwares.js";
+import adminClassrooms from "./routes/admin.classrooms.js";
+import meClassrooms from "./routes/me.classrooms.js";
 import adminCourseGrading from "./routes/adminCourseGrading.js";
 import purchaseRoutes from "./routes/purchase.js";
 import learnPublic from "./routes/Learn.js";
@@ -74,6 +77,7 @@ import trainingLocationsPublic from "./routes/training-locations.js";
 import adminTrainingLocations from "./routes/admin.training-locations.js";
 import adminInvoices from "./routes/admin.invoices.js";
 import quoteRoutes from "./routes/quote.js";
+import settingsPublicRoutes from "./routes/settings.public.js";
 
 const app = express();
 
@@ -258,6 +262,9 @@ app.use("/admin/coupons", adminCoupons);
 app.use("/admin/products", adminProducts);
 app.use("/admin/deployments", adminDeploymentsRoutes);
 app.use("/admin/courses", adminCourses);
+app.use("/admin/softwares", adminSoftwares);
+app.use("/admin/classrooms", adminClassrooms);
+app.use("/me/classrooms", meClassrooms);
 app.use("/admin/course-grading", adminCourseGrading);
 app.use("/admin/settings", adminSettings);
 
@@ -288,6 +295,7 @@ app.use("/admin/training-locations", adminTrainingLocations);
 app.use("/admin/invoices", adminInvoices);
 app.use("/training-locations", trainingLocationsPublic);
 app.use("/quote", quoteRoutes);
+app.use("/settings", settingsPublicRoutes);
 app.use("/api/entitlements", deviceLimiter, entitlementsRouter);
 
 // app.use("/projectsboq", projectsBoqRoutes);

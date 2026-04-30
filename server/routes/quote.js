@@ -1,6 +1,7 @@
 import express from "express";
 import dayjs from "dayjs";
 import { sendMail } from "../util/mailer.js";
+import { Setting } from "../models/Setting.js";
 
 const router = express.Router();
 
@@ -19,7 +20,27 @@ router.post("/send", async (req, res) => {
 
     const curr = currency === "USD" ? "$" : "N";
     const name = (clientName || "").trim() || "Client";
-    const total = Number(subtotal || 0);
+    const subtotalNum = Number(subtotal || 0);
+
+    // ── VAT (applied to quote totals when enabled) ──
+    const settings = await Setting.findOne({ key: "global" }).lean();
+    const vatEnabled = !!settings?.vatEnabled && !!settings?.vatApplyToQuotes;
+    const vatPercent = vatEnabled
+      ? Math.min(Math.max(Number(settings?.vatPercent || 0), 0), 100)
+      : 0;
+    const round2 = (x) => Math.round((Number(x || 0) + Number.EPSILON) * 100) / 100;
+    const vatAmount = vatPercent > 0
+      ? (currency === "USD" ? round2((subtotalNum * vatPercent) / 100) : Math.round((subtotalNum * vatPercent) / 100))
+      : 0;
+    const total = currency === "USD"
+      ? round2(subtotalNum + vatAmount)
+      : Math.round(subtotalNum + vatAmount);
+    const vatRowHtml = vatPercent > 0
+      ? `<div style="margin-top:6px;font-size:12px;color:#555">
+           Subtotal: ${curr}${subtotalNum.toLocaleString()}<br/>
+           ${settings?.vatLabel || "VAT"} (${vatPercent}%): +${curr}${vatAmount.toLocaleString()}
+         </div>`
+      : "";
 
     const itemsHtml = lineItems
       .map(
@@ -62,7 +83,8 @@ router.post("/send", async (req, res) => {
               ${itemsHtml}
             </table>
             <div style="text-align:right;margin-top:8px">
-              <div style="display:inline-block;background:#091E39;color:#fff;padding:8px 20px;border-radius:4px;font-size:16px;font-weight:700">
+              ${vatRowHtml}
+              <div style="display:inline-block;background:#091E39;color:#fff;padding:8px 20px;border-radius:4px;font-size:16px;font-weight:700;margin-top:6px">
                 Estimated Total: ${curr}${total.toLocaleString()}
               </div>
             </div>

@@ -14,6 +14,17 @@ const SettingSchema = new mongoose.Schema(
     forceReinstallActive: { type: Boolean, default: false },
     forceReinstallMessage: { type: String, default: "" },
     forceReinstallAt: { type: Date, default: null },
+
+    // ── VAT / Tax ──
+    // When vatEnabled is true and the matching apply* flag is set, the server
+    // adds VAT to the total of that document type. The label (e.g. "VAT 7.5%")
+    // is what shows in checkout summaries, receipts, quotes, and invoice PDFs.
+    vatEnabled: { type: Boolean, default: false },
+    vatPercent: { type: Number, default: 0, min: 0, max: 100 },
+    vatLabel: { type: String, default: "VAT", trim: true },
+    vatApplyToPurchases: { type: Boolean, default: true },
+    vatApplyToQuotes: { type: Boolean, default: true },
+    vatApplyToInvoices: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

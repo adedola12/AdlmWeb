@@ -192,6 +192,7 @@ export default function AdminCourses() {
       isPublished: true,
       sort: 0,
       modules: [],
+      softwareIds: [],
     };
   }
 
@@ -211,6 +212,9 @@ export default function AdminCourses() {
       isPublished: course.isPublished !== false,
       sort: course.sort ?? 0,
       modules: Array.isArray(course.modules) ? course.modules : [],
+      softwareIds: Array.isArray(course.softwareIds)
+        ? course.softwareIds.map((x) => String(x))
+        : [],
     };
   }
 
@@ -219,6 +223,175 @@ export default function AdminCourses() {
   const [draft, setDraft] = React.useState(blankDraft);
   const [onboardingProg, setOnboardingProg] = React.useState(0);
   const [onboardingBusy, setOnboardingBusy] = React.useState(false);
+
+  // ── Software library (reusable installers + install videos) ──
+  const [softwares, setSoftwares] = React.useState([]);
+  const [swPickerId, setSwPickerId] = React.useState("");
+  const [swCreatorOpen, setSwCreatorOpen] = React.useState(false);
+  const [swDraft, setSwDraft] = React.useState({
+    name: "",
+    description: "",
+    version: "",
+    kind: "installer",
+    fileUrl: "",
+    fileSha256: "",
+    fileSize: 0,
+    fileOriginalName: "",
+    storageProvider: "",
+    installVideoUrl: "",
+  });
+  const [swBusy, setSwBusy] = React.useState(false);
+  const [swMsg, setSwMsg] = React.useState("");
+
+  const loadSoftwares = React.useCallback(async () => {
+    try {
+      const res = await apiAuthed("/admin/softwares", { token: accessToken });
+      setSoftwares(Array.isArray(res?.items) ? res.items : []);
+    } catch (e) {
+      // silent — picker just shows empty
+    }
+  }, [accessToken]);
+
+  React.useEffect(() => {
+    loadSoftwares();
+  }, [loadSoftwares]);
+
+  const softwareById = React.useMemo(
+    () => Object.fromEntries(softwares.map((s) => [String(s._id), s])),
+    [softwares],
+  );
+
+  function attachSoftware(id) {
+    const sid = String(id || "").trim();
+    if (!sid) return;
+    setDraft((prev) => {
+      if (prev.softwareIds.includes(sid)) return prev;
+      if (prev.softwareIds.length >= 6) {
+        setSwMsg("Max 6 softwares per course.");
+        return prev;
+      }
+      return { ...prev, softwareIds: [...prev.softwareIds, sid] };
+    });
+    setSwPickerId("");
+  }
+
+  function detachSoftware(id) {
+    const sid = String(id);
+    setDraft((prev) => ({
+      ...prev,
+      softwareIds: prev.softwareIds.filter((x) => x !== sid),
+    }));
+  }
+
+  async function uploadSoftwareFile(file) {
+    // Pick endpoint by kind. APK always goes to R2; installers are auto-routed.
+    const endpoint =
+      swDraft.kind === "apk"
+        ? "/admin/media/upload-apk"
+        : "/admin/media/upload-installer";
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiAuthed(endpoint, {
+      token: accessToken,
+      method: "POST",
+      body: fd,
+    });
+  }
+
+  async function handleSoftwareFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setSwBusy(true);
+    setSwMsg("Uploading file…");
+    try {
+      const res = await uploadSoftwareFile(file);
+      setSwDraft((prev) => ({
+        ...prev,
+        fileUrl: res?.secure_url || "",
+        fileSha256: res?.sha256 || "",
+        fileSize: res?.bytes || 0,
+        fileOriginalName: res?.originalName || file.name || "",
+        storageProvider: res?.storageProvider || "",
+      }));
+      setSwMsg("File uploaded.");
+    } catch (err) {
+      setSwMsg(err?.message || "Upload failed");
+    } finally {
+      setSwBusy(false);
+    }
+  }
+
+  async function handleSoftwareInstallVideoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setSwBusy(true);
+    setSwMsg("Uploading install video…");
+    try {
+      const TEN_MB = 10 * 1024 * 1024;
+      const isLarge = file.size > TEN_MB;
+      const fd = new FormData();
+      fd.append("file", file);
+      if (!isLarge) fd.append("resourceType", "video");
+      const endpoint = isLarge ? "/admin/media/upload-video-r2" : "/admin/media/upload-file";
+      const res = await apiAuthed(endpoint, {
+        token: accessToken,
+        method: "POST",
+        body: fd,
+      });
+      if (res?.secure_url) {
+        setSwDraft((prev) => ({ ...prev, installVideoUrl: res.secure_url }));
+        setSwMsg("Install video uploaded.");
+      } else {
+        setSwMsg("Upload failed — no URL returned");
+      }
+    } catch (err) {
+      setSwMsg(err?.message || "Video upload failed");
+    } finally {
+      setSwBusy(false);
+    }
+  }
+
+  async function createSoftwareAndAttach() {
+    if (!swDraft.name.trim()) {
+      setSwMsg("Name is required.");
+      return;
+    }
+    setSwBusy(true);
+    setSwMsg("");
+    try {
+      const res = await apiAuthed("/admin/softwares", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(swDraft),
+      });
+      const created = res?.item;
+      if (created?._id) {
+        setSoftwares((prev) => [...prev, created]);
+        attachSoftware(created._id);
+        setSwCreatorOpen(false);
+        setSwDraft({
+          name: "",
+          description: "",
+          version: "",
+          kind: "installer",
+          fileUrl: "",
+          fileSha256: "",
+          fileSize: 0,
+          fileOriginalName: "",
+          storageProvider: "",
+          installVideoUrl: "",
+        });
+        setSwMsg("Software added to library and attached.");
+      }
+    } catch (err) {
+      setSwMsg(err?.message || "Failed to create software");
+    } finally {
+      setSwBusy(false);
+    }
+  }
 
   async function handleOnboardingUpload(e) {
     const file = e.target.files?.[0];
@@ -672,6 +845,250 @@ export default function AdminCourses() {
                 View uploaded certificate
               </a>
             ) : null}
+          </div>
+
+          <div className="space-y-2 sm:col-span-2 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <div className="font-medium">
+                Course Softwares{" "}
+                <span className="text-xs font-normal text-slate-500">
+                  ({draft.softwareIds.length}/6)
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={draft.softwareIds.length >= 6}
+                onClick={() => setSwCreatorOpen((v) => !v)}
+              >
+                {swCreatorOpen ? "Close creator" : "+ New software"}
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Attach up to 6 softwares (installer/APK + optional install video). Reuse
+              entries across courses to avoid re-uploading the same file.
+            </p>
+
+            {/* Currently attached softwares */}
+            <div className="space-y-2">
+              {draft.softwareIds.length === 0 && (
+                <div className="text-xs text-slate-500 italic">
+                  No softwares attached yet.
+                </div>
+              )}
+              {draft.softwareIds.map((id) => {
+                const s = softwareById[id];
+                if (!s) {
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center justify-between rounded border border-amber-300 bg-amber-50 p-2 text-xs"
+                    >
+                      <span>Unknown software ({id.slice(-6)})</span>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => detachSoftware(id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    key={id}
+                    className="flex items-center justify-between rounded border bg-white p-2 text-sm gap-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">
+                        {s.name}{" "}
+                        <span className="text-xs font-normal text-slate-500">
+                          ({s.kind}
+                          {s.version ? ` ${s.version}` : ""})
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {s.fileUrl ? (
+                          <a
+                            href={s.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline"
+                          >
+                            File
+                          </a>
+                        ) : (
+                          <span className="text-amber-600">No file uploaded</span>
+                        )}
+                        {s.installVideoUrl && (
+                          <>
+                            {" · "}
+                            <a
+                              href={s.installVideoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline"
+                            >
+                              Install video
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm shrink-0"
+                      onClick={() => detachSoftware(id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Add from library */}
+            {draft.softwareIds.length < 6 && (
+              <div className="flex gap-2 items-center pt-1">
+                <select
+                  className="input flex-1"
+                  value={swPickerId}
+                  onChange={(e) => setSwPickerId(e.target.value)}
+                >
+                  <option value="">— Add from software library —</option>
+                  {softwares
+                    .filter((s) => !draft.softwareIds.includes(String(s._id)))
+                    .map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.name} ({s.kind}
+                        {s.version ? ` ${s.version}` : ""})
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={!swPickerId}
+                  onClick={() => attachSoftware(swPickerId)}
+                >
+                  Attach
+                </button>
+              </div>
+            )}
+
+            {/* Inline creator */}
+            {swCreatorOpen && (
+              <div className="rounded border bg-slate-50 p-3 space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    className="input"
+                    placeholder="Name (e.g. PlanSwift 10.3)"
+                    value={swDraft.name}
+                    onChange={(e) =>
+                      setSwDraft((p) => ({ ...p, name: e.target.value }))
+                    }
+                  />
+                  <select
+                    className="input"
+                    value={swDraft.kind}
+                    onChange={(e) =>
+                      setSwDraft((p) => ({ ...p, kind: e.target.value }))
+                    }
+                  >
+                    <option value="installer">Installer (Windows)</option>
+                    <option value="apk">APK (Android)</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <input
+                    className="input"
+                    placeholder="Version (optional)"
+                    value={swDraft.version}
+                    onChange={(e) =>
+                      setSwDraft((p) => ({ ...p, version: e.target.value }))
+                    }
+                  />
+                  <input
+                    className="input"
+                    placeholder="Description (optional)"
+                    value={swDraft.description}
+                    onChange={(e) =>
+                      setSwDraft((p) => ({ ...p, description: e.target.value }))
+                    }
+                  />
+                </div>
+
+                {/* File */}
+                <div className="flex gap-2 flex-wrap">
+                  <input
+                    className="input flex-1 min-w-[220px]"
+                    placeholder="File URL (or upload →)"
+                    value={swDraft.fileUrl}
+                    onChange={(e) =>
+                      setSwDraft((p) => ({ ...p, fileUrl: e.target.value }))
+                    }
+                  />
+                  <label className="btn btn-sm shrink-0 cursor-pointer">
+                    {swBusy ? "Uploading…" : "Upload file"}
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept={
+                        swDraft.kind === "apk"
+                          ? ".apk,.aab"
+                          : ".exe,.msi,.zip,.7z,.appx,.appxbundle,.msix,.msixbundle"
+                      }
+                      onChange={handleSoftwareFileChange}
+                      disabled={swBusy}
+                    />
+                  </label>
+                </div>
+
+                {/* Install video */}
+                <div className="flex gap-2 flex-wrap">
+                  <input
+                    className="input flex-1 min-w-[220px]"
+                    placeholder="Install video URL (or upload →)"
+                    value={swDraft.installVideoUrl}
+                    onChange={(e) =>
+                      setSwDraft((p) => ({ ...p, installVideoUrl: e.target.value }))
+                    }
+                  />
+                  <label className="btn btn-sm shrink-0 cursor-pointer">
+                    {swBusy ? "Uploading…" : "Upload video"}
+                    <input
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={handleSoftwareInstallVideoUpload}
+                      disabled={swBusy}
+                    />
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={swBusy || !swDraft.name.trim()}
+                    onClick={createSoftwareAndAttach}
+                  >
+                    {swBusy ? "Saving…" : "Save & attach"}
+                  </button>
+                  {swMsg && (
+                    <span
+                      className={`text-xs ${
+                        swMsg.toLowerCase().includes("fail") || swMsg.toLowerCase().includes("required")
+                          ? "text-red-600"
+                          : "text-green-600"
+                      }`}
+                    >
+                      {swMsg}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 sm:col-span-2">

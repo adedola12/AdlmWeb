@@ -239,6 +239,74 @@ export default function CourseDetail() {
             ) : null}
           </div>
         )}
+
+        {Array.isArray(course?.softwares) && course.softwares.length > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="font-semibold text-slate-900 mb-1">Course softwares</div>
+            <p className="text-xs text-slate-500 mb-3">
+              Download the tools you need for this course. Each software has an
+              optional install walkthrough video.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {course.softwares.map((s) => {
+                const sizeMb = s.fileSize ? (s.fileSize / (1024 * 1024)).toFixed(1) : null;
+                return (
+                  <div
+                    key={s._id}
+                    className="rounded-lg border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2"
+                  >
+                    <div>
+                      <div className="font-medium text-slate-900">
+                        {s.name}
+                        {s.version ? (
+                          <span className="ml-2 text-xs font-normal text-slate-500">
+                            {s.version}
+                          </span>
+                        ) : null}
+                      </div>
+                      {s.description ? (
+                        <div className="text-xs text-slate-600 mt-0.5">
+                          {s.description}
+                        </div>
+                      ) : null}
+                      <div className="mt-1 text-xs text-slate-500">
+                        <span className="capitalize">{s.kind}</span>
+                        {sizeMb ? ` · ${sizeMb} MB` : ""}
+                      </div>
+                    </div>
+                    <div className="mt-auto flex flex-wrap gap-2">
+                      {s.fileUrl ? (
+                        <a
+                          className="btn btn-sm"
+                          href={s.fileUrl}
+                          download
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Download
+                        </a>
+                      ) : (
+                        <span className="text-xs text-amber-700">
+                          File not yet available
+                        </span>
+                      )}
+                      {s.installVideoUrl ? (
+                        <a
+                          className="btn btn-sm bg-slate-800 text-white hover:bg-slate-700"
+                          href={s.installVideoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Install video
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

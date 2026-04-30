@@ -553,6 +553,145 @@ export default function Admin() {
   const [ihMsg, setIhMsg] = React.useState("");
   const [ihUploadProg, setIhUploadProg] = React.useState(0);
 
+  // ── VAT state ──
+  const [vatEnabled, setVatEnabled] = React.useState(false);
+  const [vatPercent, setVatPercent] = React.useState(0);
+  const [vatLabel, setVatLabel] = React.useState("VAT");
+  const [vatApplyPurchases, setVatApplyPurchases] = React.useState(true);
+  const [vatApplyQuotes, setVatApplyQuotes] = React.useState(true);
+  const [vatApplyInvoices, setVatApplyInvoices] = React.useState(true);
+  const [vatBusy, setVatBusy] = React.useState(false);
+  const [vatMsg, setVatMsg] = React.useState("");
+
+  // ── Classrooms state ──
+  const [classrooms, setClassrooms] = React.useState([]);
+  const [classroomBusy, setClassroomBusy] = React.useState(false);
+  const [classroomMsg, setClassroomMsg] = React.useState("");
+  const [classroomModalOpen, setClassroomModalOpen] = React.useState(false);
+  const [classroomDraft, setClassroomDraft] = React.useState({
+    userId: "",
+    userLabel: "",
+    title: "",
+    description: "",
+    classroomCode: "",
+    classroomUrl: "",
+    companyName: "",
+  });
+  const [classroomQuery, setClassroomQuery] = React.useState("");
+  const [classroomSuggestions, setClassroomSuggestions] = React.useState([]);
+  const [classroomSearching, setClassroomSearching] = React.useState(false);
+
+  const loadClassrooms = React.useCallback(async () => {
+    try {
+      const res = await apiAuthed("/admin/classrooms?includeInactive=true", {
+        token: accessToken,
+      });
+      setClassrooms(Array.isArray(res?.items) ? res.items : []);
+    } catch (e) {
+      setClassroomMsg(e?.message || "Failed to load classrooms");
+    }
+  }, [accessToken]);
+
+  React.useEffect(() => {
+    if (tab === "classrooms" && accessToken) loadClassrooms();
+  }, [tab, accessToken, loadClassrooms]);
+
+  // Debounced user autocomplete for the "create classroom" modal.
+  React.useEffect(() => {
+    if (!classroomModalOpen) return;
+    const q = classroomQuery.trim();
+    if (q.length < 2) {
+      setClassroomSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    setClassroomSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await apiAuthed(
+          `/admin/classrooms/users-suggest?q=${encodeURIComponent(q)}`,
+          { token: accessToken },
+        );
+        if (!cancelled) setClassroomSuggestions(Array.isArray(res?.users) ? res.users : []);
+      } catch {
+        if (!cancelled) setClassroomSuggestions([]);
+      } finally {
+        if (!cancelled) setClassroomSearching(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [classroomQuery, classroomModalOpen, accessToken]);
+
+  function pickClassroomUser(u) {
+    setClassroomDraft((p) => ({
+      ...p,
+      userId: u._id,
+      userLabel: `${u.name || u.email}${u.email && u.name ? ` <${u.email}>` : ""}`,
+    }));
+    setClassroomQuery("");
+    setClassroomSuggestions([]);
+  }
+
+  async function createClassroom() {
+    if (!classroomDraft.userId) {
+      setClassroomMsg("Pick a user first.");
+      return;
+    }
+    if (!classroomDraft.title.trim()) {
+      setClassroomMsg("Title is required.");
+      return;
+    }
+    setClassroomBusy(true);
+    setClassroomMsg("");
+    try {
+      await apiAuthed("/admin/classrooms", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: classroomDraft.userId,
+          title: classroomDraft.title.trim(),
+          description: classroomDraft.description.trim(),
+          classroomCode: classroomDraft.classroomCode.trim(),
+          classroomUrl: classroomDraft.classroomUrl.trim(),
+          companyName: classroomDraft.companyName.trim(),
+        }),
+      });
+      setClassroomModalOpen(false);
+      setClassroomDraft({
+        userId: "",
+        userLabel: "",
+        title: "",
+        description: "",
+        classroomCode: "",
+        classroomUrl: "",
+        companyName: "",
+      });
+      setClassroomMsg("Classroom created and granted to user.");
+      await loadClassrooms();
+    } catch (e) {
+      setClassroomMsg(e?.message || "Failed to create classroom");
+    } finally {
+      setClassroomBusy(false);
+    }
+  }
+
+  async function revokeClassroom(id) {
+    if (!confirm("Revoke this classroom from the user? This cannot be undone.")) return;
+    try {
+      await apiAuthed(`/admin/classrooms/${id}`, {
+        token: accessToken,
+        method: "DELETE",
+      });
+      await loadClassrooms();
+    } catch (e) {
+      setClassroomMsg(e?.message || "Failed to revoke");
+    }
+  }
+
   // ── Force-reinstall broadcast state ──
   const [frActive, setFrActive] = React.useState(false);
   const [frMessage, setFrMessage] = React.useState("");
@@ -566,10 +705,11 @@ export default function Admin() {
 
   const loadSettings = React.useCallback(async () => {
     try {
-      const [mobileData, ihData, frData] = await Promise.all([
+      const [mobileData, ihData, frData, vatData] = await Promise.all([
         apiAuthed("/admin/settings/mobile-app-url", { token: accessToken }),
         apiAuthed("/admin/settings/installer-hub", { token: accessToken }),
         apiAuthed("/admin/settings/force-reinstall", { token: accessToken }),
+        apiAuthed("/admin/settings/vat", { token: accessToken }),
       ]);
       const url = mobileData?.mobileAppUrl || "";
       setSettingsMobileAppUrl(url);
@@ -583,8 +723,40 @@ export default function Admin() {
       setFrActive(!!frData?.active);
       setFrMessage(frData?.message || "");
       setFrTriggeredAt(frData?.triggeredAt || null);
+
+      setVatEnabled(!!vatData?.vatEnabled);
+      setVatPercent(Number(vatData?.vatPercent || 0));
+      setVatLabel(vatData?.vatLabel || "VAT");
+      setVatApplyPurchases(vatData?.vatApplyToPurchases !== false);
+      setVatApplyQuotes(vatData?.vatApplyToQuotes !== false);
+      setVatApplyInvoices(vatData?.vatApplyToInvoices !== false);
     } catch { /* ignore */ }
   }, [accessToken]);
+
+  const saveVat = async () => {
+    setVatBusy(true);
+    setVatMsg("");
+    try {
+      await apiAuthed("/admin/settings/vat", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vatEnabled,
+          vatPercent,
+          vatLabel,
+          vatApplyToPurchases: vatApplyPurchases,
+          vatApplyToQuotes: vatApplyQuotes,
+          vatApplyToInvoices: vatApplyInvoices,
+        }),
+      });
+      setVatMsg("VAT settings saved.");
+    } catch (e) {
+      setVatMsg(e?.message || "Failed to save VAT settings.");
+    } finally {
+      setVatBusy(false);
+    }
+  };
 
   // load settings when switching to settings tab
   React.useEffect(() => {
@@ -800,6 +972,69 @@ export default function Admin() {
       }
     };
     doUpload();
+  }
+
+  function handleIhInstallerUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setIhUploadProg(1);
+
+    (async () => {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await apiAuthed("/admin/media/upload-installer", {
+          token: accessToken,
+          method: "POST",
+          body: fd,
+        });
+        if (res?.secure_url) {
+          setIhUrlDraft(res.secure_url);
+          setIhMsg(
+            `Installer uploaded (${res.storageProvider || "cloud"}, SHA-256 ${(res.sha256 || "").slice(0, 12)}…). Click Save to apply.`,
+          );
+        } else {
+          setIhMsg("Upload failed — no URL returned");
+        }
+      } catch (err) {
+        setIhMsg(err?.message || "Installer upload failed");
+      } finally {
+        setIhUploadProg(0);
+      }
+    })();
+  }
+
+  function handleApkUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setSettingsBusy(true);
+    setSettingsMsg("Uploading APK…");
+
+    (async () => {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await apiAuthed("/admin/media/upload-apk", {
+          token: accessToken,
+          method: "POST",
+          body: fd,
+        });
+        if (res?.secure_url) {
+          setSettingsMobileAppDraft(res.secure_url);
+          setSettingsMsg(
+            `APK uploaded (SHA-256 ${(res.sha256 || "").slice(0, 12)}…). Click Save to apply.`,
+          );
+        } else {
+          setSettingsMsg("Upload failed — no URL returned");
+        }
+      } catch (err) {
+        setSettingsMsg(err?.message || "APK upload failed");
+      } finally {
+        setSettingsBusy(false);
+      }
+    })();
   }
 
   async function load() {
@@ -1770,6 +2005,17 @@ export default function Admin() {
             </button>
 
             <button
+              onClick={() => setTab("classrooms")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "classrooms"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Classrooms
+            </button>
+
+            <button
               onClick={() => setTab("settings")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "settings"
@@ -2257,9 +2503,17 @@ export default function Admin() {
 
                     {isCart && (
                       <div className="rounded border bg-slate-50">
-                        <div className="px-3 py-2 text-sm font-medium">
-                          Cart · {p.currency}{" "}
-                          {p.totalAmount?.toLocaleString?.() ?? p.totalAmount}
+                        <div className="px-3 py-2 text-sm font-medium flex items-center justify-between gap-2">
+                          <span>
+                            Cart · {p.currency}{" "}
+                            {p.totalAmount?.toLocaleString?.() ?? p.totalAmount}
+                          </span>
+                          {Number(p.vatAmount || 0) > 0 && (
+                            <span className="text-xs text-slate-600 font-normal">
+                              incl. {p.vatLabel || `VAT ${p.vatPercent || 0}%`} {p.currency}{" "}
+                              {Number(p.vatAmount).toLocaleString()}
+                            </span>
+                          )}
                         </div>
 
                         <div className="divide-y">
@@ -3228,6 +3482,260 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ------------------ classrooms tab ------------------ */}
+      {tab === "classrooms" && (
+        <div className="card">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 className="font-semibold">Classrooms</h2>
+              <div className="text-xs text-slate-500 mt-1">
+                Grant a Google Classroom (or other LMS) to a specific user. The classroom appears in their "My Courses" section on the dashboard.
+              </div>
+            </div>
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                setClassroomMsg("");
+                setClassroomDraft({
+                  userId: "",
+                  userLabel: "",
+                  title: "",
+                  description: "",
+                  classroomCode: "",
+                  classroomUrl: "",
+                  companyName: "",
+                });
+                setClassroomModalOpen(true);
+              }}
+            >
+              + Create classroom
+            </button>
+          </div>
+
+          {classroomMsg && (
+            <div
+              className={`mb-3 text-sm ${
+                classroomMsg.toLowerCase().includes("fail") ||
+                classroomMsg.toLowerCase().includes("required") ||
+                classroomMsg.toLowerCase().includes("first")
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}
+            >
+              {classroomMsg}
+            </div>
+          )}
+
+          {classrooms.length === 0 ? (
+            <div className="text-sm text-slate-600">No classrooms yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {classrooms.map((c) => (
+                <div
+                  key={c._id}
+                  className="rounded border bg-white p-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{c.title}</div>
+                    <div className="text-xs text-slate-600 mt-0.5">
+                      {c.userName || c.userEmail || c.userId}
+                      {c.companyName ? ` · ${c.companyName}` : ""}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {c.classroomCode ? `Code: ${c.classroomCode}` : ""}
+                      {c.classroomCode && c.classroomUrl ? " · " : ""}
+                      {c.classroomUrl ? (
+                        <a
+                          href={c.classroomUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          {c.classroomUrl.length > 60
+                            ? c.classroomUrl.slice(0, 60) + "…"
+                            : c.classroomUrl}
+                        </a>
+                      ) : null}
+                    </div>
+                    {c.description && (
+                      <div className="text-xs text-slate-500 mt-1">{c.description}</div>
+                    )}
+                    {!c.isActive && (
+                      <span className="inline-block mt-1 px-1.5 py-0.5 text-xs rounded bg-slate-100 text-slate-600 border">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => revokeClassroom(c._id)}
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ------------------ create-classroom modal ------------------ */}
+      {classroomModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => !classroomBusy && setClassroomModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl w-full max-w-md p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="font-semibold">Create classroom</h3>
+              <button
+                className="text-slate-400 hover:text-slate-600"
+                onClick={() => !classroomBusy && setClassroomModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* User picker with autocomplete */}
+            <label className="block text-sm font-medium mb-1">User</label>
+            {classroomDraft.userId ? (
+              <div className="flex items-center justify-between gap-2 rounded border bg-slate-50 px-3 py-2 text-sm mb-3">
+                <span className="truncate">{classroomDraft.userLabel}</span>
+                <button
+                  className="text-xs text-slate-500 hover:text-slate-700 underline"
+                  onClick={() =>
+                    setClassroomDraft((p) => ({ ...p, userId: "", userLabel: "" }))
+                  }
+                >
+                  change
+                </button>
+              </div>
+            ) : (
+              <div className="relative mb-3">
+                <input
+                  className="input w-full"
+                  placeholder="Search by name or email…"
+                  value={classroomQuery}
+                  onChange={(e) => setClassroomQuery(e.target.value)}
+                  autoFocus
+                />
+                {(classroomSuggestions.length > 0 || classroomSearching) && (
+                  <div className="absolute z-10 mt-1 w-full rounded border bg-white shadow-lg max-h-56 overflow-auto">
+                    {classroomSearching && (
+                      <div className="px-3 py-2 text-xs text-slate-500">
+                        Searching…
+                      </div>
+                    )}
+                    {classroomSuggestions.map((u) => (
+                      <button
+                        key={u._id}
+                        type="button"
+                        className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
+                        onClick={() => pickClassroomUser(u)}
+                      >
+                        <div className="font-medium">{u.name || u.email}</div>
+                        {u.name && u.email && (
+                          <div className="text-xs text-slate-500">{u.email}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <label className="block text-sm font-medium mb-1">Title</label>
+            <input
+              className="input w-full mb-3"
+              placeholder="e.g. Revit Architecture Training"
+              value={classroomDraft.title}
+              onChange={(e) =>
+                setClassroomDraft((p) => ({ ...p, title: e.target.value }))
+              }
+            />
+
+            <label className="block text-sm font-medium mb-1">
+              Classroom code{" "}
+              <span className="text-xs font-normal text-slate-500">
+                (Google Classroom join code)
+              </span>
+            </label>
+            <input
+              className="input w-full mb-3"
+              placeholder="e.g. abc123def"
+              value={classroomDraft.classroomCode}
+              onChange={(e) =>
+                setClassroomDraft((p) => ({ ...p, classroomCode: e.target.value }))
+              }
+            />
+
+            <label className="block text-sm font-medium mb-1">
+              Classroom URL{" "}
+              <span className="text-xs font-normal text-slate-500">
+                (optional — overrides code if set)
+              </span>
+            </label>
+            <input
+              className="input w-full mb-3"
+              placeholder="https://classroom.google.com/c/..."
+              value={classroomDraft.classroomUrl}
+              onChange={(e) =>
+                setClassroomDraft((p) => ({ ...p, classroomUrl: e.target.value }))
+              }
+            />
+
+            <label className="block text-sm font-medium mb-1">
+              Company{" "}
+              <span className="text-xs font-normal text-slate-500">(optional)</span>
+            </label>
+            <input
+              className="input w-full mb-3"
+              placeholder="Company name for reference"
+              value={classroomDraft.companyName}
+              onChange={(e) =>
+                setClassroomDraft((p) => ({ ...p, companyName: e.target.value }))
+              }
+            />
+
+            <label className="block text-sm font-medium mb-1">
+              Description{" "}
+              <span className="text-xs font-normal text-slate-500">(optional)</span>
+            </label>
+            <textarea
+              className="input w-full mb-4"
+              rows={2}
+              placeholder="Notes shown on the user's card"
+              value={classroomDraft.description}
+              onChange={(e) =>
+                setClassroomDraft((p) => ({ ...p, description: e.target.value }))
+              }
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                className="btn btn-sm"
+                onClick={() => setClassroomModalOpen(false)}
+                disabled={classroomBusy}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-sm bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
+                onClick={createClassroom}
+                disabled={classroomBusy || !classroomDraft.userId || !classroomDraft.title.trim()}
+              >
+                {classroomBusy ? "Creating…" : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ------------------ settings tab ------------------ */}
       {tab === "settings" && (
         <div className="card">
@@ -3240,17 +3748,25 @@ export default function Admin() {
                 Mobile App Download URL (APK)
               </label>
               <p className="text-xs text-slate-500 mb-2">
-                This link is used on the home page and footer for the "Download Mobile App" button.
-                Paste a Google Drive link, direct APK URL, or Play Store link.
+                Upload an APK directly (stored on Cloudflare R2) or paste a Google Drive / Play Store link. This is what the home page and footer "Download Mobile App" button uses.
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <input
                   type="url"
-                  className="flex-1 border rounded px-3 py-2 text-sm"
-                  placeholder="https://drive.google.com/file/d/..."
+                  className="flex-1 min-w-[220px] border rounded px-3 py-2 text-sm"
+                  placeholder="https://drive.google.com/file/d/... or upload an APK →"
                   value={settingsMobileAppDraft}
                   onChange={(e) => setSettingsMobileAppDraft(e.target.value)}
                 />
+                <label className="px-3 py-2 rounded bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 cursor-pointer transition shrink-0">
+                  Upload APK
+                  <input
+                    type="file"
+                    accept=".apk,.aab,application/vnd.android.package-archive"
+                    className="hidden"
+                    onChange={handleApkUpload}
+                  />
+                </label>
                 <button
                   onClick={saveMobileAppUrl}
                   disabled={settingsBusy || settingsMobileAppDraft === settingsMobileAppUrl}
@@ -3274,6 +3790,105 @@ export default function Admin() {
               )}
             </div>
 
+            {/* VAT / Tax */}
+            <div className="border-t pt-6">
+              <h3 className="font-semibold text-base mb-1">VAT / Tax</h3>
+              <p className="text-xs text-slate-500 mb-4">
+                When enabled, VAT is added on top of the post-discount subtotal for Purchase summaries, Quotes, and Invoices (per the toggles below). The label and percent are shown on receipts and PDFs (e.g. "VAT 7.5%").
+              </p>
+
+              <div className="space-y-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={vatEnabled}
+                    onChange={(e) => setVatEnabled(e.target.checked)}
+                  />
+                  <span className="text-sm font-medium text-slate-700">Enable VAT</span>
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      VAT percent
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      className="w-full border rounded px-3 py-2 text-sm"
+                      placeholder="e.g. 7.5"
+                      value={vatPercent}
+                      onChange={(e) => setVatPercent(Number(e.target.value || 0))}
+                      disabled={!vatEnabled}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Label
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border rounded px-3 py-2 text-sm"
+                      placeholder="VAT"
+                      value={vatLabel}
+                      onChange={(e) => setVatLabel(e.target.value)}
+                      disabled={!vatEnabled}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm font-medium text-slate-700 mb-2">Apply to:</div>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={vatApplyPurchases}
+                        onChange={(e) => setVatApplyPurchases(e.target.checked)}
+                        disabled={!vatEnabled}
+                      />
+                      <span className="text-sm">Purchase summary</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={vatApplyQuotes}
+                        onChange={(e) => setVatApplyQuotes(e.target.checked)}
+                        disabled={!vatEnabled}
+                      />
+                      <span className="text-sm">Quotes</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={vatApplyInvoices}
+                        onChange={(e) => setVatApplyInvoices(e.target.checked)}
+                        disabled={!vatEnabled}
+                      />
+                      <span className="text-sm">Invoices</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={saveVat}
+                    disabled={vatBusy}
+                    className="px-4 py-2 rounded bg-adlm-blue-700 text-white text-sm font-medium hover:bg-[#0050c8] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {vatBusy ? "Saving..." : "Save VAT Settings"}
+                  </button>
+                  {vatMsg && (
+                    <span className={`text-sm ${vatMsg.toLowerCase().includes("fail") ? "text-red-600" : "text-green-600"}`}>
+                      {vatMsg}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Installer Hub */}
             <div className="border-t pt-6">
               <h3 className="font-semibold text-base mb-1">Installer Hub</h3>
@@ -3287,15 +3902,26 @@ export default function Admin() {
                     Installer Hub Download URL
                   </label>
                   <p className="text-xs text-slate-500 mb-2">
-                    Paste a Google Drive link or direct download URL for the Installer Hub setup file.
+                    Upload the Hub setup file (.exe / .msi / .zip / .msix) directly — small files go to Cloudinary, larger ones to Cloudflare R2 — or paste a hosted URL.
                   </p>
-                  <input
-                    type="url"
-                    className="w-full border rounded px-3 py-2 text-sm"
-                    placeholder="https://drive.google.com/file/d/..."
-                    value={ihUrlDraft}
-                    onChange={(e) => setIhUrlDraft(e.target.value)}
-                  />
+                  <div className="flex gap-2 flex-wrap">
+                    <input
+                      type="url"
+                      className="flex-1 min-w-[220px] border rounded px-3 py-2 text-sm"
+                      placeholder="https://... or upload an installer →"
+                      value={ihUrlDraft}
+                      onChange={(e) => setIhUrlDraft(e.target.value)}
+                    />
+                    <label className="px-3 py-2 rounded bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 cursor-pointer transition shrink-0">
+                      Upload installer
+                      <input
+                        type="file"
+                        accept=".exe,.msi,.zip,.7z,.appx,.appxbundle,.msix,.msixbundle"
+                        className="hidden"
+                        onChange={handleIhInstallerUpload}
+                      />
+                    </label>
+                  </div>
                   {ihUrl && (
                     <p className="mt-1 text-xs text-slate-500">
                       Current:{" "}

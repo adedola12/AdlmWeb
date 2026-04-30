@@ -71,6 +71,29 @@ export default function Purchase() {
   const [selectedLocationId, setSelectedLocationId] = React.useState("");
   const [wantsBimInstall, setWantsBimInstall] = React.useState(false);
 
+  // ── VAT (loaded from public settings) ──
+  const [vatCfg, setVatCfg] = React.useState({
+    enabled: false,
+    percent: 0,
+    label: "VAT",
+  });
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/settings/vat`, { credentials: "include" });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (j?.applyToPurchases !== false) {
+          setVatCfg({
+            enabled: !!j?.enabled,
+            percent: Number(j?.percent || 0),
+            label: j?.label || "VAT",
+          });
+        }
+      } catch { /* ignore — checkout still works without VAT preview */ }
+    })();
+  }, []);
+
   // ---------- money helpers ----------
   const round2 = (x) =>
     Math.round((Number(x || 0) + Number.EPSILON) * 100) / 100;
@@ -292,7 +315,12 @@ export default function Purchase() {
   );
   const total = money(productsTotal + trainingCost + bimInstallCost);
 
-  const grandTotal = money(Math.max(total - Number(discount || 0), 0));
+  const subtotalAfterDiscount = money(Math.max(total - Number(discount || 0), 0));
+  const vatAmount =
+    vatCfg.enabled && vatCfg.percent > 0
+      ? money((subtotalAfterDiscount * vatCfg.percent) / 100)
+      : 0;
+  const grandTotal = money(subtotalAfterDiscount + vatAmount);
   const productKeys = chosen.map((p) => getProductKey(p));
 
   async function applyCoupon() {
@@ -924,6 +952,15 @@ export default function Purchase() {
                 <div>Discount</div>
                 <div className="font-medium">- {fmt(discount, currency)}</div>
               </div>
+
+              {vatCfg.enabled && vatCfg.percent > 0 && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    {vatCfg.label} ({vatCfg.percent}%)
+                  </div>
+                  <div className="font-medium">+ {fmt(vatAmount, currency)}</div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between text-lg">
                 <div>Total</div>

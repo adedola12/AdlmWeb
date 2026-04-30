@@ -30,6 +30,19 @@ const PaidCourseSchema = new mongoose.Schema(
     classroomCourseId: { type: String, default: "" },
     classroomNotes: { type: String, default: "" },
     modules: { type: [ModuleSchema], default: [] },
+
+    // Reusable software library entries attached to this course (max 6).
+    // The Software collection holds the actual installer URL + install
+    // video; this array just records which entries appear on the course.
+    softwareIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Software" }],
+      default: [],
+      validate: {
+        validator: (v) => !Array.isArray(v) || v.length <= 6,
+        message: "A course may have at most 6 softwares attached.",
+      },
+    },
+
     certificateTemplateUrl: { type: String },
     isPublished: { type: Boolean, default: true },
     sort: { type: Number, default: 0 },

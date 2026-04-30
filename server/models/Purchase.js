@@ -97,7 +97,12 @@ const PurchaseSchema = new mongoose.Schema(
     },
 
     totalBeforeDiscount: { type: Number, default: 0 },
-    totalAmount: { type: Number, default: 0 },
+    // Tax/VAT applied to (subtotal − discount). Stored on the purchase so
+    // the rate at time of order is preserved even if global VAT changes later.
+    vatPercent: { type: Number, default: 0, min: 0, max: 100 },
+    vatAmount: { type: Number, default: 0, min: 0 },
+    vatLabel: { type: String, default: "", trim: true }, // e.g. "VAT 7.5%"
+    totalAmount: { type: Number, default: 0 }, // = subtotal − discount + vatAmount
 
     coupon: {
       code: { type: String, trim: true, uppercase: true },

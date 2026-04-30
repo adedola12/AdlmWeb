@@ -165,6 +165,56 @@ router.post("/force-reinstall", requireAdminOnly, async (req, res) => {
   });
 });
 
+// ── VAT settings ──
+router.get("/vat", async (_req, res) => {
+  const s = await Setting.findOne({ key: "global" }).lean();
+  res.json({
+    vatEnabled: !!s?.vatEnabled,
+    vatPercent: Number(s?.vatPercent || 0),
+    vatLabel: s?.vatLabel || "VAT",
+    vatApplyToPurchases: s?.vatApplyToPurchases !== false,
+    vatApplyToQuotes: s?.vatApplyToQuotes !== false,
+    vatApplyToInvoices: s?.vatApplyToInvoices !== false,
+  });
+});
+
+router.post("/vat", async (req, res) => {
+  const update = {};
+  const b = req.body || {};
+
+  if (b.vatEnabled !== undefined) update.vatEnabled = !!b.vatEnabled;
+  if (b.vatPercent !== undefined) {
+    const pct = Math.min(Math.max(Number(b.vatPercent || 0), 0), 100);
+    update.vatPercent = pct;
+  }
+  if (b.vatLabel !== undefined) {
+    update.vatLabel = String(b.vatLabel || "").trim() || "VAT";
+  }
+  if (b.vatApplyToPurchases !== undefined) update.vatApplyToPurchases = !!b.vatApplyToPurchases;
+  if (b.vatApplyToQuotes !== undefined) update.vatApplyToQuotes = !!b.vatApplyToQuotes;
+  if (b.vatApplyToInvoices !== undefined) update.vatApplyToInvoices = !!b.vatApplyToInvoices;
+
+  if (!Object.keys(update).length) {
+    return res.status(400).json({ error: "No VAT fields provided" });
+  }
+
+  const s = await Setting.findOneAndUpdate(
+    { key: "global" },
+    update,
+    { upsert: true, new: true },
+  );
+
+  res.json({
+    ok: true,
+    vatEnabled: !!s.vatEnabled,
+    vatPercent: Number(s.vatPercent || 0),
+    vatLabel: s.vatLabel || "VAT",
+    vatApplyToPurchases: s.vatApplyToPurchases !== false,
+    vatApplyToQuotes: s.vatApplyToQuotes !== false,
+    vatApplyToInvoices: s.vatApplyToInvoices !== false,
+  });
+});
+
 // POST clear the active reinstall broadcast (admin only). Does not re-bind any devices.
 router.post("/force-reinstall/clear", requireAdminOnly, async (_req, res) => {
   const s = await Setting.findOneAndUpdate(

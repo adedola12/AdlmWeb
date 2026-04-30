@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import { requireAuth, requireAdmin, verifyAccess } from "../middleware/auth.js";
 import { Invoice } from "../models/Invoice.js";
 import { User } from "../models/User.js";
+import { Setting } from "../models/Setting.js";
 import { sendMail } from "../util/mailer.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -185,7 +186,18 @@ router.post(
     }));
 
     const discPct = Math.min(Math.max(Number(req.body.discountPercent || 0), 0), 100);
-    const taxPct = Math.min(Math.max(Number(req.body.taxPercent || 0), 0), 100);
+
+    // Default taxPercent from global VAT setting when caller didn't specify.
+    // An explicit 0 from the admin form still wins (tax can be opted out per invoice).
+    let taxPct;
+    if (req.body.taxPercent === undefined || req.body.taxPercent === null || req.body.taxPercent === "") {
+      const settings = await Setting.findOne({ key: "global" }).lean();
+      const vatActive = !!settings?.vatEnabled && !!settings?.vatApplyToInvoices;
+      taxPct = vatActive ? Math.min(Math.max(Number(settings?.vatPercent || 0), 0), 100) : 0;
+    } else {
+      taxPct = Math.min(Math.max(Number(req.body.taxPercent || 0), 0), 100);
+    }
+
     const { subtotal, discountAmount, taxAmount, total } = computeTotals(
       items, discPct, taxPct,
     );

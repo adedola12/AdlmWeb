@@ -1,6 +1,7 @@
 // server/routes/admin.media.js
 import express from "express";
 import multer from "multer";
+import crypto from "crypto";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import cloudinary from "../cloudinary.js"; // configured v2 client
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
@@ -250,6 +251,133 @@ router.post("/upload-video-r2", uploadLarge.single("file"), async (req, res) => 
     return res.json(out);
   } catch (e) {
     return res.status(400).json({ error: e.message || "Video upload failed" });
+  }
+});
+
+/**
+ * POST /admin/media/upload-installer
+ * Uploads the Installer Hub setup file (.exe/.msi/.zip) to R2 if large,
+ * Cloudinary otherwise. Returns secure_url + sha256 (for integrity display).
+ *
+ * Used by Site Settings → Installer Hub section to replace the manual paste.
+ */
+const uploadInstaller = multer({
+  storage: multer.memoryStorage(),
+  // 500MB cap — installers are usually much smaller, but headroom for combined
+  // bundles. Cloudinary path will reject anything > its own limit; R2 won't.
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    const name = String(file.originalname || "").toLowerCase();
+    const ok = /\.(exe|msi|zip|7z|appx|appxbundle|msix|msixbundle)$/.test(name);
+    if (ok) return cb(null, true);
+    cb(new Error("Only installer files (.exe, .msi, .zip, .7z, .appx, .msix) are allowed"));
+  },
+});
+
+router.post("/upload-installer", uploadInstaller.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "file is required" });
+
+    const original = req.file.originalname || "installer.bin";
+    const safeName = original.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const sha256 = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+
+    // Route by size: anything over the deployments threshold (default 8MB)
+    // goes to R2 since Cloudinary's free tier rejects large raw files.
+    const R2_THRESHOLD = Number(process.env.INSTALLER_R2_THRESHOLD_BYTES || 8 * 1024 * 1024);
+    const useR2 = req.file.size > R2_THRESHOLD;
+
+    if (useR2 && !isR2Configured()) {
+      return res.status(503).json({
+        error: "File is larger than the Cloudinary threshold and Cloudflare R2 is not configured.",
+      });
+    }
+
+    let out;
+    let storageProvider;
+    if (useR2) {
+      const key = `adlm/installer-hub/${Date.now()}-${safeName}`;
+      out = await uploadBufferToR2(req.file.buffer, {
+        key,
+        contentType: req.file.mimetype || "application/octet-stream",
+      });
+      storageProvider = "r2";
+    } else {
+      out = await uploadBufferToCloudinary(req.file.buffer, {
+        folder: "adlm/installer-hub",
+        publicId: safeName.replace(/\.[^.]+$/, ""),
+        resourceType: "raw",
+      });
+      storageProvider = "cloudinary";
+    }
+
+    return res.json({
+      ok: true,
+      secure_url: out.secure_url,
+      public_id: out.public_id,
+      storageProvider,
+      bytes: req.file.size,
+      sha256,
+      originalName: original,
+    });
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Installer upload failed" });
+  }
+});
+
+/**
+ * POST /admin/media/upload-apk
+ * Uploads an Android APK to R2. APKs are typically large (30–150MB) and
+ * Cloudinary's raw uploads are unreliable above ~10MB on the free tier,
+ * so this endpoint always uses R2.
+ *
+ * Used by Site Settings → Mobile App URL field to replace the manual paste.
+ */
+const uploadApk = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    const name = String(file.originalname || "").toLowerCase();
+    if (name.endsWith(".apk") || name.endsWith(".aab")) return cb(null, true);
+    cb(new Error("Only .apk or .aab files are allowed"));
+  },
+});
+
+router.post("/upload-apk", uploadApk.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "file is required" });
+
+    if (!isR2Configured()) {
+      return res.status(503).json({
+        error: "Cloudflare R2 is not configured. APK uploads require R2 (Cloudinary cannot serve large APKs reliably).",
+      });
+    }
+
+    const original = req.file.originalname || "app.apk";
+    const safeName = original.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const sha256 = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+
+    const key = `adlm/mobile-app/${Date.now()}-${safeName}`;
+    const out = await uploadBufferToR2(req.file.buffer, {
+      key,
+      // android-package-archive plays nicest with browsers offering
+      // "open with" / "download" rather than displaying inline.
+      contentType: original.endsWith(".aab")
+        ? "application/octet-stream"
+        : "application/vnd.android.package-archive",
+    });
+
+    return res.json({
+      ok: true,
+      secure_url: out.secure_url,
+      public_id: out.public_id,
+      storageProvider: "r2",
+      bytes: req.file.size,
+      sha256,
+      originalName: original,
+    });
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "APK upload failed" });
   }
 });
 

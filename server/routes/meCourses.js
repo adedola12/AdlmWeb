@@ -5,6 +5,7 @@ import { Product } from "../models/Product.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
+import { Software } from "../models/Software.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -136,7 +137,18 @@ async function loadCourseContext(userId, skus) {
     return acc;
   }, {});
 
-  return { coursesBySku, productBySku, entitlementsByKey, submissionsByKey };
+  // Hydrate softwares attached to these courses. We do one batched query
+  // for all software ids referenced by the user's enrolled courses.
+  const allSoftwareIds = new Set();
+  for (const c of courses) {
+    for (const id of c.softwareIds || []) allSoftwareIds.add(String(id));
+  }
+  const softwares = allSoftwareIds.size
+    ? await Software.find({ _id: { $in: [...allSoftwareIds] }, isActive: true }).lean()
+    : [];
+  const softwareById = Object.fromEntries(softwares.map((s) => [String(s._id), s]));
+
+  return { coursesBySku, productBySku, entitlementsByKey, submissionsByKey, softwareById };
 }
 
 function buildCourseResponse(enrollment, context) {
@@ -153,7 +165,11 @@ function buildCourseResponse(enrollment, context) {
     modules: [],
   };
 
-  const course = context.coursesBySku[enrollment.courseSku] || fallbackCourse;
+  const courseRaw = context.coursesBySku[enrollment.courseSku] || fallbackCourse;
+  const softwares = (courseRaw.softwareIds || [])
+    .map((id) => context.softwareById?.[String(id)])
+    .filter(Boolean);
+  const course = { ...courseRaw, softwares };
   const product = context.productBySku[enrollment.courseSku] || null;
   const entitlement = product
     ? context.entitlementsByKey[String(product.key || "").toLowerCase()] || null
