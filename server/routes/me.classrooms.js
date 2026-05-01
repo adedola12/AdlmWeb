@@ -8,21 +8,33 @@ router.use(requireAuth);
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
-// Return active classrooms granted to the current user. The dashboard
-// merges these into its My Courses view, alongside paid course enrollments.
+// Return active classrooms granted to the current user. Matches on
+// members.userId (cohort schema) and legacy top-level userId (pre-cohort
+// rows). The dashboard merges these into its My Courses view.
 router.get(
   "/",
   asyncHandler(async (req, res) => {
     const items = await Classroom.find({
-      userId: req.user._id,
       isActive: true,
+      $or: [
+        { "members.userId": req.user._id },
+        { userId: req.user._id },
+      ],
     })
       .sort({ createdAt: -1 })
       .lean();
 
-    // Synthesize a "go to classroom" URL when only the code is set.
+    // Synthesize a "go to classroom" URL when only the code is set, and
+    // strip the full member roster — the user only needs their own info.
     const out = items.map((c) => ({
-      ...c,
+      _id: c._id,
+      title: c.title,
+      description: c.description,
+      classroomCode: c.classroomCode,
+      classroomUrl: c.classroomUrl,
+      companyName: c.companyName,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
       effectiveJoinUrl:
         c.classroomUrl ||
         (c.classroomCode

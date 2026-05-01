@@ -564,19 +564,24 @@ export default function Admin() {
   const [vatMsg, setVatMsg] = React.useState("");
 
   // ── Classrooms state ──
+  // The modal is reused for both Create (editingClassroomId === null) and
+  // Edit (editingClassroomId === <_id>). pendingMembers tracks the current
+  // roster being staged in the form; in edit mode it's preloaded from the
+  // classroom and diffed against the original on save.
   const [classrooms, setClassrooms] = React.useState([]);
   const [classroomBusy, setClassroomBusy] = React.useState(false);
   const [classroomMsg, setClassroomMsg] = React.useState("");
   const [classroomModalOpen, setClassroomModalOpen] = React.useState(false);
+  const [editingClassroomId, setEditingClassroomId] = React.useState(null);
   const [classroomDraft, setClassroomDraft] = React.useState({
-    userId: "",
-    userLabel: "",
     title: "",
     description: "",
     classroomCode: "",
     classroomUrl: "",
     companyName: "",
   });
+  const [pendingMembers, setPendingMembers] = React.useState([]); // [{userId, userEmail, userName}]
+  const [originalMemberIds, setOriginalMemberIds] = React.useState([]); // for edit-mode diff
   const [classroomQuery, setClassroomQuery] = React.useState("");
   const [classroomSuggestions, setClassroomSuggestions] = React.useState([]);
   const [classroomSearching, setClassroomSearching] = React.useState(false);
@@ -625,62 +630,127 @@ export default function Admin() {
     };
   }, [classroomQuery, classroomModalOpen, accessToken]);
 
+  // Add a user from the autocomplete to the staged-members list. Skips
+  // duplicates (matched by userId) so picking the same user twice is a no-op.
   function pickClassroomUser(u) {
-    setClassroomDraft((p) => ({
-      ...p,
-      userId: u._id,
-      userLabel: `${u.name || u.email}${u.email && u.name ? ` <${u.email}>` : ""}`,
-    }));
+    setPendingMembers((prev) => {
+      if (prev.some((m) => String(m.userId) === String(u._id))) return prev;
+      return [
+        ...prev,
+        {
+          userId: String(u._id),
+          userEmail: u.email || "",
+          userName: u.name || u.email || "",
+        },
+      ];
+    });
     setClassroomQuery("");
     setClassroomSuggestions([]);
   }
 
-  async function createClassroom() {
-    if (!classroomDraft.userId) {
-      setClassroomMsg("Pick a user first.");
-      return;
-    }
+  function removeStagedMember(userId) {
+    setPendingMembers((prev) => prev.filter((m) => String(m.userId) !== String(userId)));
+  }
+
+  function openCreateClassroomModal() {
+    setEditingClassroomId(null);
+    setClassroomMsg("");
+    setClassroomDraft({
+      title: "",
+      description: "",
+      classroomCode: "",
+      classroomUrl: "",
+      companyName: "",
+    });
+    setPendingMembers([]);
+    setOriginalMemberIds([]);
+    setClassroomQuery("");
+    setClassroomSuggestions([]);
+    setClassroomModalOpen(true);
+  }
+
+  function openEditClassroomModal(c) {
+    setEditingClassroomId(c._id);
+    setClassroomMsg("");
+    setClassroomDraft({
+      title: c.title || "",
+      description: c.description || "",
+      classroomCode: c.classroomCode || "",
+      classroomUrl: c.classroomUrl || "",
+      companyName: c.companyName || "",
+    });
+    const members = (c.members || []).map((m) => ({
+      userId: String(m.userId),
+      userEmail: m.userEmail || "",
+      userName: m.userName || "",
+    }));
+    setPendingMembers(members);
+    setOriginalMemberIds(members.map((m) => m.userId));
+    setClassroomQuery("");
+    setClassroomSuggestions([]);
+    setClassroomModalOpen(true);
+  }
+
+  async function saveClassroom() {
     if (!classroomDraft.title.trim()) {
       setClassroomMsg("Title is required.");
+      return;
+    }
+    if (pendingMembers.length === 0) {
+      setClassroomMsg("Add at least one user.");
       return;
     }
     setClassroomBusy(true);
     setClassroomMsg("");
     try {
-      await apiAuthed("/admin/classrooms", {
-        token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: classroomDraft.userId,
-          title: classroomDraft.title.trim(),
-          description: classroomDraft.description.trim(),
-          classroomCode: classroomDraft.classroomCode.trim(),
-          classroomUrl: classroomDraft.classroomUrl.trim(),
-          companyName: classroomDraft.companyName.trim(),
-        }),
-      });
+      if (editingClassroomId) {
+        // Diff staged roster against original to send minimal add/remove arrays.
+        const stagedIds = pendingMembers.map((m) => m.userId);
+        const addUserIds = stagedIds.filter((id) => !originalMemberIds.includes(id));
+        const removeUserIds = originalMemberIds.filter((id) => !stagedIds.includes(id));
+
+        await apiAuthed(`/admin/classrooms/${editingClassroomId}`, {
+          token: accessToken,
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: classroomDraft.title.trim(),
+            description: classroomDraft.description.trim(),
+            classroomCode: classroomDraft.classroomCode.trim(),
+            classroomUrl: classroomDraft.classroomUrl.trim(),
+            companyName: classroomDraft.companyName.trim(),
+            ...(addUserIds.length ? { addUserIds } : {}),
+            ...(removeUserIds.length ? { removeUserIds } : {}),
+          }),
+        });
+        setClassroomMsg("Classroom updated.");
+      } else {
+        await apiAuthed("/admin/classrooms", {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userIds: pendingMembers.map((m) => m.userId),
+            title: classroomDraft.title.trim(),
+            description: classroomDraft.description.trim(),
+            classroomCode: classroomDraft.classroomCode.trim(),
+            classroomUrl: classroomDraft.classroomUrl.trim(),
+            companyName: classroomDraft.companyName.trim(),
+          }),
+        });
+        setClassroomMsg(`Classroom created with ${pendingMembers.length} member(s).`);
+      }
       setClassroomModalOpen(false);
-      setClassroomDraft({
-        userId: "",
-        userLabel: "",
-        title: "",
-        description: "",
-        classroomCode: "",
-        classroomUrl: "",
-        companyName: "",
-      });
-      setClassroomMsg("Classroom created and granted to user.");
       await loadClassrooms();
     } catch (e) {
-      setClassroomMsg(e?.message || "Failed to create classroom");
+      setClassroomMsg(e?.message || "Failed to save classroom");
     } finally {
       setClassroomBusy(false);
     }
   }
 
   async function revokeClassroom(id) {
-    if (!confirm("Revoke this classroom from the user? This cannot be undone.")) return;
+    if (!confirm("Revoke this classroom from all members? This cannot be undone.")) return;
     try {
       await apiAuthed(`/admin/classrooms/${id}`, {
         token: accessToken,
@@ -3494,19 +3564,7 @@ export default function Admin() {
             </div>
             <button
               className="btn btn-sm"
-              onClick={() => {
-                setClassroomMsg("");
-                setClassroomDraft({
-                  userId: "",
-                  userLabel: "",
-                  title: "",
-                  description: "",
-                  classroomCode: "",
-                  classroomUrl: "",
-                  companyName: "",
-                });
-                setClassroomModalOpen(true);
-              }}
+              onClick={openCreateClassroomModal}
             >
               + Create classroom
             </button>
@@ -3530,69 +3588,95 @@ export default function Admin() {
             <div className="text-sm text-slate-600">No classrooms yet.</div>
           ) : (
             <div className="space-y-2">
-              {classrooms.map((c) => (
-                <div
-                  key={c._id}
-                  className="rounded border bg-white p-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{c.title}</div>
-                    <div className="text-xs text-slate-600 mt-0.5">
-                      {c.userName || c.userEmail || c.userId}
-                      {c.companyName ? ` · ${c.companyName}` : ""}
+              {classrooms.map((c) => {
+                const members = Array.isArray(c.members) ? c.members : [];
+                const previewNames = members
+                  .slice(0, 3)
+                  .map((m) => m.userName || m.userEmail || "Unknown")
+                  .join(", ");
+                const extra = Math.max(0, members.length - 3);
+                return (
+                  <div
+                    key={c._id}
+                    className="rounded border bg-white p-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{c.title}</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-700 border">
+                          {members.length} member{members.length === 1 ? "" : "s"}
+                        </span>
+                        {!c.isActive && (
+                          <span className="inline-block px-1.5 py-0.5 text-xs rounded bg-slate-100 text-slate-600 border">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                      {c.companyName && (
+                        <div className="text-xs text-slate-600 mt-0.5">
+                          {c.companyName}
+                        </div>
+                      )}
+                      <div className="text-xs text-slate-600 mt-0.5 truncate">
+                        {previewNames}
+                        {extra > 0 ? ` +${extra} more` : ""}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        {c.classroomCode ? `Code: ${c.classroomCode}` : ""}
+                        {c.classroomCode && c.classroomUrl ? " · " : ""}
+                        {c.classroomUrl ? (
+                          <a
+                            href={c.classroomUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline"
+                          >
+                            {c.classroomUrl.length > 60
+                              ? c.classroomUrl.slice(0, 60) + "…"
+                              : c.classroomUrl}
+                          </a>
+                        ) : null}
+                      </div>
+                      {c.description && (
+                        <div className="text-xs text-slate-500 mt-1">{c.description}</div>
+                      )}
                     </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      {c.classroomCode ? `Code: ${c.classroomCode}` : ""}
-                      {c.classroomCode && c.classroomUrl ? " · " : ""}
-                      {c.classroomUrl ? (
-                        <a
-                          href={c.classroomUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline"
-                        >
-                          {c.classroomUrl.length > 60
-                            ? c.classroomUrl.slice(0, 60) + "…"
-                            : c.classroomUrl}
-                        </a>
-                      ) : null}
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => openEditClassroomModal(c)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => revokeClassroom(c._id)}
+                      >
+                        Revoke
+                      </button>
                     </div>
-                    {c.description && (
-                      <div className="text-xs text-slate-500 mt-1">{c.description}</div>
-                    )}
-                    {!c.isActive && (
-                      <span className="inline-block mt-1 px-1.5 py-0.5 text-xs rounded bg-slate-100 text-slate-600 border">
-                        Inactive
-                      </span>
-                    )}
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      className="btn btn-sm"
-                      onClick={() => revokeClassroom(c._id)}
-                    >
-                      Revoke
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* ------------------ create-classroom modal ------------------ */}
+      {/* ------------------ create / edit classroom modal ------------------ */}
       {classroomModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
           onClick={() => !classroomBusy && setClassroomModalOpen(false)}
         >
           <div
-            className="bg-white rounded-lg shadow-xl w-full max-w-md p-5"
+            className="bg-white rounded-lg shadow-xl w-full max-w-lg p-5 max-h-[90vh] overflow-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-3">
-              <h3 className="font-semibold">Create classroom</h3>
+              <h3 className="font-semibold">
+                {editingClassroomId ? "Edit classroom" : "Create classroom"}
+              </h3>
               <button
                 className="text-slate-400 hover:text-slate-600"
                 onClick={() => !classroomBusy && setClassroomModalOpen(false)}
@@ -3601,37 +3685,63 @@ export default function Admin() {
               </button>
             </div>
 
-            {/* User picker with autocomplete */}
-            <label className="block text-sm font-medium mb-1">User</label>
-            {classroomDraft.userId ? (
-              <div className="flex items-center justify-between gap-2 rounded border bg-slate-50 px-3 py-2 text-sm mb-3">
-                <span className="truncate">{classroomDraft.userLabel}</span>
-                <button
-                  className="text-xs text-slate-500 hover:text-slate-700 underline"
-                  onClick={() =>
-                    setClassroomDraft((p) => ({ ...p, userId: "", userLabel: "" }))
-                  }
-                >
-                  change
-                </button>
-              </div>
-            ) : (
-              <div className="relative mb-3">
-                <input
-                  className="input w-full"
-                  placeholder="Search by name or email…"
-                  value={classroomQuery}
-                  onChange={(e) => setClassroomQuery(e.target.value)}
-                  autoFocus
-                />
-                {(classroomSuggestions.length > 0 || classroomSearching) && (
-                  <div className="absolute z-10 mt-1 w-full rounded border bg-white shadow-lg max-h-56 overflow-auto">
-                    {classroomSearching && (
-                      <div className="px-3 py-2 text-xs text-slate-500">
-                        Searching…
-                      </div>
+            {/* Members (multi-select) */}
+            <label className="block text-sm font-medium mb-1">
+              Members{" "}
+              <span className="text-xs font-normal text-slate-500">
+                ({pendingMembers.length})
+              </span>
+            </label>
+
+            {pendingMembers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {pendingMembers.map((m) => (
+                  <span
+                    key={m.userId}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs"
+                  >
+                    <span className="font-medium">
+                      {m.userName || m.userEmail || m.userId}
+                    </span>
+                    {m.userName && m.userEmail && (
+                      <span className="text-slate-500">{m.userEmail}</span>
                     )}
-                    {classroomSuggestions.map((u) => (
+                    <button
+                      type="button"
+                      className="text-slate-500 hover:text-red-600 ml-0.5"
+                      onClick={() => removeStagedMember(m.userId)}
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="relative mb-3">
+              <input
+                className="input w-full"
+                placeholder="Add user — search by name or email…"
+                value={classroomQuery}
+                onChange={(e) => setClassroomQuery(e.target.value)}
+                autoFocus={pendingMembers.length === 0}
+              />
+              {(classroomSuggestions.length > 0 || classroomSearching) && (
+                <div className="absolute z-10 mt-1 w-full rounded border bg-white shadow-lg max-h-56 overflow-auto">
+                  {classroomSearching && (
+                    <div className="px-3 py-2 text-xs text-slate-500">
+                      Searching…
+                    </div>
+                  )}
+                  {classroomSuggestions
+                    .filter(
+                      (u) =>
+                        !pendingMembers.some(
+                          (m) => String(m.userId) === String(u._id),
+                        ),
+                    )
+                    .map((u) => (
                       <button
                         key={u._id}
                         type="button"
@@ -3644,10 +3754,9 @@ export default function Admin() {
                         )}
                       </button>
                     ))}
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
 
             <label className="block text-sm font-medium mb-1">Title</label>
             <input
@@ -3690,12 +3799,12 @@ export default function Admin() {
             />
 
             <label className="block text-sm font-medium mb-1">
-              Company{" "}
+              Company / organisation{" "}
               <span className="text-xs font-normal text-slate-500">(optional)</span>
             </label>
             <input
               className="input w-full mb-3"
-              placeholder="Company name for reference"
+              placeholder="Acme Corp"
               value={classroomDraft.companyName}
               onChange={(e) =>
                 setClassroomDraft((p) => ({ ...p, companyName: e.target.value }))
@@ -3709,12 +3818,26 @@ export default function Admin() {
             <textarea
               className="input w-full mb-4"
               rows={2}
-              placeholder="Notes shown on the user's card"
+              placeholder="Notes shown on each member's card"
               value={classroomDraft.description}
               onChange={(e) =>
                 setClassroomDraft((p) => ({ ...p, description: e.target.value }))
               }
             />
+
+            {classroomMsg && (
+              <div
+                className={`mb-3 text-xs ${
+                  classroomMsg.toLowerCase().includes("fail") ||
+                  classroomMsg.toLowerCase().includes("required") ||
+                  classroomMsg.toLowerCase().includes("at least")
+                    ? "text-red-600"
+                    : "text-green-600"
+                }`}
+              >
+                {classroomMsg}
+              </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <button
@@ -3726,10 +3849,20 @@ export default function Admin() {
               </button>
               <button
                 className="btn btn-sm bg-adlm-blue-700 text-white hover:bg-[#0050c8]"
-                onClick={createClassroom}
-                disabled={classroomBusy || !classroomDraft.userId || !classroomDraft.title.trim()}
+                onClick={saveClassroom}
+                disabled={
+                  classroomBusy ||
+                  !classroomDraft.title.trim() ||
+                  pendingMembers.length === 0
+                }
               >
-                {classroomBusy ? "Creating…" : "Create"}
+                {classroomBusy
+                  ? editingClassroomId
+                    ? "Saving…"
+                    : "Creating…"
+                  : editingClassroomId
+                    ? "Save changes"
+                    : `Create (${pendingMembers.length})`}
               </button>
             </div>
           </div>
