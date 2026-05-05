@@ -287,12 +287,18 @@ app.use("/api/rates", ratesCompute);
 
 app.use("/admin/users-lite", adminUsersLite);
 
-app.use("/admin", adminRoutes);
-
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
 app.use("/admin/training-locations", adminTrainingLocations);
 app.use("/admin/invoices", adminInvoices);
+
+// IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
+// "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin
+// as router-level middleware, which rejects mini_admin with 403. If it
+// matched first, mini_admin requests to /admin/invoices, /admin/freebies,
+// and /admin/training-locations would be blocked before reaching the
+// staff-aware routers above.
+app.use("/admin", adminRoutes);
 app.use("/training-locations", trainingLocationsPublic);
 app.use("/quote", quoteRoutes);
 app.use("/settings", settingsPublicRoutes);
