@@ -43,7 +43,8 @@ function emptyInvoice() {
 }
 
 export default function AdminInvoices() {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
+  const isFullAdmin = user?.role === "admin";
 
   const [invoices, setInvoices] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
@@ -427,23 +428,25 @@ export default function AdminInvoices() {
               <option value="overdue">Overdue</option>
               <option value="cancelled">Cancelled</option>
             </select>
-            <button
-              className="btn btn-sm btn-ghost text-xs"
-              onClick={async () => {
-                try {
-                  const r = await apiAuthed("/admin/invoices/relink-users", {
-                    token: accessToken,
-                    method: "POST",
-                  });
-                  setMsg(r?.message || "Relinked");
-                } catch (e) {
-                  setMsg(e.message || "Relink failed");
-                }
-              }}
-              title="Link existing invoices to registered user accounts by matching email"
-            >
-              Relink Users
-            </button>
+            {isFullAdmin && (
+              <button
+                className="btn btn-sm btn-ghost text-xs"
+                onClick={async () => {
+                  try {
+                    const r = await apiAuthed("/admin/invoices/relink-users", {
+                      token: accessToken,
+                      method: "POST",
+                    });
+                    setMsg(r?.message || "Relinked");
+                  } catch (e) {
+                    setMsg(e.message || "Relink failed");
+                  }
+                }}
+                title="Link existing invoices to registered user accounts by matching email"
+              >
+                Relink Users
+              </button>
+            )}
             <button className="btn btn-sm" onClick={startNew}>
               + New Invoice
             </button>

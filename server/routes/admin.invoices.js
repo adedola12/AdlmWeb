@@ -68,6 +68,17 @@ function requireAdminOrMini(req, res, next) {
   return res.status(403).json({ error: "Forbidden" });
 }
 
+// True only for the full "admin" role; mini_admin returns false.
+function isFullAdmin(req) {
+  return String(req.user?.role || "").toLowerCase() === "admin";
+}
+
+// Mini admins are scoped to invoices they created; full admins see everything.
+// Returns a filter fragment to merge into Invoice queries.
+function ownershipFilter(req) {
+  return isFullAdmin(req) ? {} : { createdBy: req.user?._id };
+}
+
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -145,11 +156,11 @@ router.get(
   }),
 );
 
-// List invoices
+// List invoices — full admin sees all, mini_admin sees only their own
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const filter = {};
+    const filter = { ...ownershipFilter(req) };
     if (req.query.status) filter.status = req.query.status;
 
     const invoices = await Invoice.find(filter)
@@ -161,11 +172,14 @@ router.get(
   }),
 );
 
-// Get single
+// Get single — mini_admin can only fetch their own
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
-    const inv = await Invoice.findById(req.params.id).lean();
+    const inv = await Invoice.findOne({
+      _id: req.params.id,
+      ...ownershipFilter(req),
+    }).lean();
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
     return res.json({ ok: true, invoice: inv });
   }),
@@ -237,11 +251,14 @@ router.post(
   }),
 );
 
-// Update
+// Update — mini_admin can only update their own
 router.put(
   "/:id",
   asyncHandler(async (req, res) => {
-    const inv = await Invoice.findById(req.params.id);
+    const inv = await Invoice.findOne({
+      _id: req.params.id,
+      ...ownershipFilter(req),
+    });
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
     const fields = [
@@ -289,11 +306,14 @@ router.put(
   }),
 );
 
-// Delete (draft only)
+// Delete (draft only) — mini_admin can only delete their own
 router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    const inv = await Invoice.findById(req.params.id);
+    const inv = await Invoice.findOne({
+      _id: req.params.id,
+      ...ownershipFilter(req),
+    });
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
     await inv.deleteOne();
     return res.json({ ok: true });
@@ -301,10 +321,14 @@ router.delete(
 );
 
 // Generate PDF — Figma-matched ADLM invoice design
+// Mini_admin can only download their own.
 router.get(
   "/:id/pdf",
   asyncHandler(async (req, res) => {
-    const inv = await Invoice.findById(req.params.id).lean();
+    const inv = await Invoice.findOne({
+      _id: req.params.id,
+      ...ownershipFilter(req),
+    }).lean();
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
     // Generate QR code as data URL
@@ -517,10 +541,14 @@ router.get(
   }),
 );
 
-// Re-link ALL invoices (re-resolve clientUserId from email for every invoice)
+// Re-link ALL invoices (re-resolve clientUserId from email for every invoice).
+// Full-admin only — this is a global maintenance operation.
 router.post(
   "/relink-users",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    if (!isFullAdmin(req)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     const all = await Invoice.find({
       clientEmail: { $exists: true, $ne: "" },
     }).lean();
@@ -557,7 +585,10 @@ const WEB_URL =
 router.post(
   "/:id/send",
   asyncHandler(async (req, res) => {
-    const inv = await Invoice.findById(req.params.id);
+    const inv = await Invoice.findOne({
+      _id: req.params.id,
+      ...ownershipFilter(req),
+    });
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
     if (!inv.clientEmail) {
