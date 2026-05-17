@@ -1,5 +1,7 @@
 import express from "express";
+import crypto from "crypto";
 import PDFDocument from "pdfkit";
+import QRCode from "qrcode";
 import dayjs from "dayjs";
 import { requireAuth, verifyAccess } from "../middleware/auth.js";
 import { Proposal } from "../models/Proposal.js";
@@ -192,6 +194,57 @@ const normalizeTrainingRange = (r) => ({
   locationsCount: Number(r?.locationsCount || 0),
 });
 
+// The founder / main-account counter-sign seal — a stable unique code stored
+// once in the global Setting. Auto-generated on first use.
+async function getFounderCounterSign() {
+  let s = await Setting.findOne({ key: "global" });
+  if (!s) {
+    s = await Setting.findOneAndUpdate(
+      { key: "global" },
+      { $setOnInsert: { key: "global" } },
+      { upsert: true, new: true },
+    );
+  }
+  const updates = {};
+  if (!s.founderSignatureCode) {
+    updates.founderSignatureCode =
+      "ADLM-CS-" + crypto.randomBytes(6).toString("hex").toUpperCase();
+  }
+  if (!s.founderSignatureName) {
+    updates.founderSignatureName = "Adedolapo Quasim · Founder, ADLM Studio";
+  }
+  if (Object.keys(updates).length) {
+    await Setting.updateOne({ key: "global" }, { $set: updates });
+    Object.assign(s, updates);
+  }
+  return { code: s.founderSignatureCode, name: s.founderSignatureName };
+}
+
+// Identity of the signed-in admin preparing the proposal.
+async function getPreparerIdentity(req) {
+  let name = "";
+  let email = String(req.user?.email || "");
+  try {
+    const u = await User.findById(req.user?._id, {
+      firstName: 1,
+      lastName: 1,
+      username: 1,
+      email: 1,
+    }).lean();
+    if (u) {
+      name =
+        [u.firstName, u.lastName].filter(Boolean).join(" ") ||
+        u.username ||
+        u.email ||
+        "";
+      email = u.email || email;
+    }
+  } catch {
+    /* fall back to token fields */
+  }
+  return { name: name || email || "ADLM Admin", email };
+}
+
 /* -------------------- routes -------------------- */
 
 // Live catalog for the proposal builder — products + training price range.
@@ -308,6 +361,8 @@ router.post(
     );
     const clientEmail = (req.body.clientEmail || "").trim().toLowerCase();
     const clientUserId = await resolveUserId(clientEmail);
+    const preparer = await getPreparerIdentity(req);
+    const counterSign = await getFounderCounterSign();
 
     const proposal = await Proposal.create({
       proposalNumber,
@@ -341,6 +396,8 @@ router.post(
       notes: (req.body.notes || "").trim(),
       status: req.body.status || "draft",
       createdBy: req.user._id,
+      preparer,
+      counterSign,
     });
 
     // Auto-sync to the Notion CRM (best-effort; never blocks the save).
@@ -420,6 +477,16 @@ router.put(
     if (req.body.clientEmail !== undefined || !proposal.clientUserId) {
       const uid = await resolveUserId(proposal.clientEmail);
       proposal.clientUserId = uid || proposal.clientUserId || undefined;
+    }
+
+    // Backfill signing identity on proposals created before this existed.
+    if (!proposal.preparer || !proposal.preparer.name) {
+      proposal.preparer = await getPreparerIdentity(req);
+      proposal.markModified("preparer");
+    }
+    if (!proposal.counterSign || !proposal.counterSign.code) {
+      proposal.counterSign = await getFounderCounterSign();
+      proposal.markModified("counterSign");
     }
 
     const notion = await syncProposalToNotion(proposal);
@@ -577,7 +644,29 @@ const money = (n, currency) =>
     { maximumFractionDigits: 2 },
   )}`;
 
-function buildProposalPdfBuffer(proposal) {
+async function buildProposalPdfBuffer(proposal) {
+  const p = proposal || {};
+
+  // Pre-render the two authentication QR codes (PDFKit drawing is sync).
+  const verifyUrl = p.shareToken
+    ? `${WEB_URL}/proposal/${p.shareToken}`
+    : WEB_URL;
+  const csCode = p?.counterSign?.code || "";
+  const qrs = {};
+  try {
+    qrs.preparer = await QRCode.toDataURL(verifyUrl, { width: 150, margin: 1 });
+  } catch {
+    /* QR optional */
+  }
+  try {
+    qrs.counterSign = await QRCode.toDataURL(
+      csCode ? `${verifyUrl}?cs=${encodeURIComponent(csCode)}` : verifyUrl,
+      { width: 150, margin: 1 },
+    );
+  } catch {
+    /* QR optional */
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: "A4", margin: 0 });
@@ -585,7 +674,7 @@ function buildProposalPdfBuffer(proposal) {
       doc.on("data", (c) => chunks.push(c));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
-      renderProposalPdf(doc, proposal || {});
+      renderProposalPdf(doc, p, qrs);
       doc.end();
     } catch (e) {
       reject(e);
@@ -610,7 +699,7 @@ function sectionTitle(doc, text, y) {
     .text(pdfSafe(text), M + 14, y + 1, { width: CW - 14 });
 }
 
-function renderProposalPdf(doc, p) {
+function renderProposalPdf(doc, p, qrs = {}) {
   const currency = p.currency === "USD" ? "USD" : "NGN";
   const firm = p.clientFirm || "Your Firm";
 
@@ -1145,32 +1234,85 @@ function renderProposalPdf(doc, p) {
     );
   y += payH + 22;
 
-  // acceptance signatures
-  if (y < PAGE_H - 110) {
-    const halfW = (CW - 40) / 2;
-    [
-      [`Authorised for ${firm} — name, signature & date`, M],
-      [
-        p.preparedBy || "Adedolapo Quasim — Founder, ADLM Studio",
-        M + halfW + 40,
-      ],
-    ].forEach(([label, sx]) => {
-      doc
-        .save()
-        .moveTo(sx, y + 30)
-        .lineTo(sx + halfW, y + 30)
-        .lineWidth(1.5)
-        .strokeColor(NAVY)
-        .stroke()
-        .restore();
-      doc
-        .fillColor(MUTED)
-        .font("Helvetica")
-        .fontSize(8.5)
-        .text(pdfSafe(label), sx, y + 36, { width: halfW });
-    });
-    y += 64;
+  // acceptance — client signature + ADLM authentication QR codes
+  if (y > PAGE_H - 175) {
+    doc.addPage();
+    y = 60;
   }
+  const halfW = (CW - 40) / 2;
+  const rightX = M + halfW + 40;
+
+  // left — client signature line
+  doc
+    .save()
+    .moveTo(M, y + 50)
+    .lineTo(M + halfW, y + 50)
+    .lineWidth(1.5)
+    .strokeColor(NAVY)
+    .stroke()
+    .restore();
+  doc
+    .fillColor(MUTED)
+    .font("Helvetica")
+    .fontSize(8.5)
+    .text(
+      pdfSafe(`Authorised for ${firm} — name, signature & date`),
+      M,
+      y + 56,
+      { width: halfW },
+    );
+
+  // right — ADLM authentication: preparer + founder counter-sign QR codes
+  doc
+    .fillColor(NAVY)
+    .font("Helvetica-Bold")
+    .fontSize(9)
+    .text("AUTHORISED — ADLM STUDIO", rightX, y, { characterSpacing: 0.5 });
+  const qrSize = 52;
+  const qrGap = 22;
+  const qrY = y + 14;
+  if (qrs?.preparer) {
+    try {
+      doc.image(qrs.preparer, rightX, qrY, { width: qrSize, height: qrSize });
+    } catch {
+      /* QR optional */
+    }
+  }
+  if (qrs?.counterSign) {
+    try {
+      doc.image(qrs.counterSign, rightX + qrSize + qrGap, qrY, {
+        width: qrSize,
+        height: qrSize,
+      });
+    } catch {
+      /* QR optional */
+    }
+  }
+  doc.fillColor(BLUE).font("Helvetica-Bold").fontSize(6.5);
+  doc.text("PREPARED & SENT BY", rightX, qrY + qrSize + 5, {
+    width: qrSize + qrGap,
+  });
+  doc.text("FOUNDER COUNTER-SIGN", rightX + qrSize + qrGap, qrY + qrSize + 5, {
+    width: qrSize + 40,
+  });
+  doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(7.5);
+  doc.text(pdfSafe(p.preparer?.name || "ADLM Admin"), rightX, qrY + qrSize + 14, {
+    width: qrSize + qrGap,
+  });
+  doc.text(
+    pdfSafe(p.counterSign?.name || "ADLM Studio"),
+    rightX + qrSize + qrGap,
+    qrY + qrSize + 14,
+    { width: qrSize + 40 },
+  );
+  doc
+    .fillColor(MUTED)
+    .font("Helvetica-Oblique")
+    .fontSize(6.5)
+    .text("Scan either code to verify this proposal online.", rightX, qrY + qrSize + 34, {
+      width: halfW,
+    });
+  y = qrY + qrSize + 48;
 
   // terms footer
   if (p.terms && p.terms.trim() && y < PAGE_H - 80) {

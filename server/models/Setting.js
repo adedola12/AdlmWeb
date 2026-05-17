@@ -25,6 +25,15 @@ const SettingSchema = new mongoose.Schema(
     vatApplyToPurchases: { type: Boolean, default: true },
     vatApplyToQuotes: { type: Boolean, default: true },
     vatApplyToInvoices: { type: Boolean, default: true },
+
+    // ── Proposal counter-sign ──
+    // Stable, unique code for the ADLM founder / main account. Embedded in the
+    // counter-sign QR on every proposal. Auto-generated once on first use.
+    founderSignatureCode: { type: String, default: "" },
+    founderSignatureName: {
+      type: String,
+      default: "Adedolapo Quasim · Founder, ADLM Studio",
+    },
   },
   { timestamps: true }
 );

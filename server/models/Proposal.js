@@ -113,6 +113,16 @@ const ProposalSchema = new mongoose.Schema(
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
+    // Signing — the admin who prepared/sent it, plus the founder counter-sign.
+    preparer: {
+      name: { type: String, default: "" },
+      email: { type: String, default: "" },
+    },
+    counterSign: {
+      name: { type: String, default: "" },
+      code: { type: String, default: "" },
+    },
+
     // Notion CRM sync bookkeeping
     notion: {
       contactPageId: { type: String, default: "" },

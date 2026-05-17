@@ -3,6 +3,7 @@
 // driven by live proposal data. Shared by AdminProposals and PublicProposal.
 import React from "react";
 import dayjs from "dayjs";
+import { QRCodeSVG } from "qrcode.react";
 
 /* The proposal template's CSS, scoped under .adlm-proposal so it cannot leak
    into the rest of the app. Print rules hide the app chrome so only the
@@ -114,6 +115,14 @@ const PROPOSAL_CSS = `
 
 .adlm-proposal .accept{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:18px}
 .adlm-proposal .sign{border-top:1.5px solid var(--navy);padding-top:8px;font-size:11px;color:var(--muted);margin-top:46px}
+.adlm-proposal .adlm-auth{text-align:left}
+.adlm-proposal .auth-h{font-size:10px;font-weight:700;color:var(--navy);letter-spacing:.4px;text-transform:uppercase;margin-bottom:9px}
+.adlm-proposal .auth-qrs{display:flex;gap:20px}
+.adlm-proposal .qr-box{text-align:center}
+.adlm-proposal .qr-box svg{display:block;border:1px solid var(--line);border-radius:7px;padding:5px;background:#fff}
+.adlm-proposal .qr-lbl{font-size:7.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--blue);margin-top:6px}
+.adlm-proposal .qr-name{font-size:9px;font-weight:700;color:var(--navy);margin-top:1px}
+.adlm-proposal .auth-note{font-size:8.5px;color:var(--muted);margin-top:9px;font-style:italic}
 
 .adlm-proposal footer{background:var(--navy);color:#9fb3d0;padding:18px 20mm;font-size:11px;
   display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
@@ -194,6 +203,21 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
     trainingLine =
       "Hands-on training and BIM software installation are delivered at ADLM regional centres; per-location pricing is confirmed on scheduling.";
   }
+
+  // Verification QR targets — the live, authoritative proposal page.
+  const origin =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "https://adlmstudio.net";
+  const verifyUrl = proposal.shareToken
+    ? `${origin}/proposal/${proposal.shareToken}`
+    : "";
+  const csCode = proposal.counterSign?.code || "";
+  const counterUrl = verifyUrl
+    ? csCode
+      ? `${verifyUrl}?cs=${encodeURIComponent(csCode)}`
+      : verifyUrl
+    : "";
 
   return (
     <div className="adlm-proposal" ref={previewRef}>
@@ -594,10 +618,45 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
                 </div>
               </div>
               <div>
-                <div className="sign">
-                  {proposal.preparedBy ||
-                    "Adedolapo Quasim — Founder, ADLM Studio"}
-                </div>
+                {verifyUrl ? (
+                  <div className="adlm-auth">
+                    <div className="auth-h">Authorised — ADLM Studio</div>
+                    <div className="auth-qrs">
+                      <div className="qr-box">
+                        <QRCodeSVG
+                          value={verifyUrl}
+                          size={66}
+                          level="M"
+                          fgColor="#0D2240"
+                        />
+                        <div className="qr-lbl">Prepared &amp; sent by</div>
+                        <div className="qr-name">
+                          {proposal.preparer?.name || "ADLM Admin"}
+                        </div>
+                      </div>
+                      <div className="qr-box">
+                        <QRCodeSVG
+                          value={counterUrl}
+                          size={66}
+                          level="M"
+                          fgColor="#F07020"
+                        />
+                        <div className="qr-lbl">Founder counter-sign</div>
+                        <div className="qr-name">
+                          {proposal.counterSign?.name || "ADLM Studio"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="auth-note">
+                      Scan either code to verify this proposal online.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="sign">
+                    {proposal.preparedBy ||
+                      "Adedolapo Quasim — Founder, ADLM Studio"}
+                  </div>
+                )}
               </div>
             </div>
 
