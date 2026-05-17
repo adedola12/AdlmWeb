@@ -1986,6 +1986,14 @@ export default function Admin() {
             >
               Invoices
             </button>
+
+            <button
+              className="btn btn-sm"
+              onClick={() => navigate("/admin/proposals")}
+              title="Build, send, and track client transformation proposals"
+            >
+              Proposals
+            </button>
           </div>
         </div>
 

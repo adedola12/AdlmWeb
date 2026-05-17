@@ -76,6 +76,8 @@ import modelCheckRoutes from "./routes/model-checks.js";
 import trainingLocationsPublic from "./routes/training-locations.js";
 import adminTrainingLocations from "./routes/admin.training-locations.js";
 import adminInvoices from "./routes/admin.invoices.js";
+import adminProposals from "./routes/admin.proposals.js";
+import proposalsPublic from "./routes/proposals.public.js";
 import quoteRoutes from "./routes/quote.js";
 import settingsPublicRoutes from "./routes/settings.public.js";
 
@@ -291,6 +293,7 @@ app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
 app.use("/admin/training-locations", adminTrainingLocations);
 app.use("/admin/invoices", adminInvoices);
+app.use("/admin/proposals", adminProposals);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin
@@ -301,6 +304,7 @@ app.use("/admin/invoices", adminInvoices);
 app.use("/admin", adminRoutes);
 app.use("/training-locations", trainingLocationsPublic);
 app.use("/quote", quoteRoutes);
+app.use("/proposals", proposalsPublic);
 app.use("/settings", settingsPublicRoutes);
 app.use("/api/entitlements", deviceLimiter, entitlementsRouter);
 

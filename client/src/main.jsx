@@ -36,6 +36,8 @@ import AdminShowcase from "./pages/AdminShowcase.jsx";
 import TrainingDetail from "./pages/TrainingDetail.jsx";
 import AdminCoupons from "./pages/AdminCoupons.jsx";
 import AdminInvoices from "./pages/AdminInvoices.jsx";
+import AdminProposals from "./pages/AdminProposals.jsx";
+import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
@@ -72,6 +74,9 @@ const router = createBrowserRouter([
       { path: "products", element: <Products /> },
       { path: "quote", element: <Quote /> },
       { path: "product/:key", element: <ProductDetail /> },
+
+      // Public client-facing proposal view
+      { path: "proposal/:token", element: <PublicProposal /> },
 
       { path: "login", element: <Login /> },
       { path: "signup", element: <Signup /> },
@@ -263,6 +268,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin", "mini_admin"]}>
             <AdminInvoices />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/proposals",
+        element: (
+          <AdminRoute roles={["admin", "mini_admin"]}>
+            <AdminProposals />
           </AdminRoute>
         ),
       },

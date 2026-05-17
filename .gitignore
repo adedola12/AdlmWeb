@@ -33,3 +33,6 @@ Thumbs.db
 coverage/
 tmp/
 temp/
+
+# Claude Code (local agent state & worktrees)
+.claude/

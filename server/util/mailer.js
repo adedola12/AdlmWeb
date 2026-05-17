@@ -33,7 +33,9 @@ const transports = [
   makeTransport({ host, port: 587, secure: false }),
 ];
 
-export async function sendMail({ to, subject, html, text }) {
+// attachments: optional array of { filename, content } where `content` is a
+// base64-encoded string. Passed through to both Resend and SMTP transports.
+export async function sendMail({ to, subject, html, text, attachments }) {
   const primaryFrom =
     process.env.EMAIL_FROM ||
     `ADLM Services <${process.env.SMTP_USER || "noreply@adlmstudio.net"}>`;
@@ -46,12 +48,20 @@ export async function sendMail({ to, subject, html, text }) {
     to: Array.isArray(to) ? to : [to],
   };
 
+  const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+
   const apiKey = process.env.RESEND_API_KEY;
 
   // 1) Resend first
   if (apiKey) {
     for (const from of [primaryFrom, fallbackFrom]) {
       const payload = { from, ...body };
+      if (hasAttachments) {
+        payload.attachments = attachments.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+        }));
+      }
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -87,6 +97,12 @@ export async function sendMail({ to, subject, html, text }) {
 
   // 2) SMTP fallback
   const message = { from: primaryFrom, ...body };
+  if (hasAttachments) {
+    message.attachments = attachments.map((a) => ({
+      filename: a.filename,
+      content: Buffer.from(a.content, "base64"),
+    }));
+  }
   let lastErr;
   for (const t of transports) {
     try {
