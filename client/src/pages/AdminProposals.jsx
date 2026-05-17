@@ -95,7 +95,43 @@ function parseTierPrice(s) {
   return digits ? Math.round(parseFloat(digits)) : 0;
 }
 
+const DEFAULT_EXEC_SUMMARY =
+  "Across the Nigerian built environment, an estimated 95% of QS and construction practice is still carried out manually. The firms that move first to a structured digital workflow win on tender speed, pricing accuracy, and client confidence.\n\n" +
+  "ADLM Studio proposes a single annual partnership that takes your firm's entire quantity surveying function digital and keeps it there — combining purpose-built QS software, structured team training, a firm-wide standardisation layer, and continuous support and market-rate updates. This is a managed transformation programme designed to compound in value every year.";
+
+const DEFAULT_TERMS =
+  "This proposal is valid until the date stated above. Programmes may be invoiced annually or quarterly by agreement. Final tier and seat count are confirmed after the workflow audit. Payment by bank transfer to ADLM Studio · Access Bank · 1634998770.";
+
+// Min/max physical-training investment, computed from active training locations.
+function computeTrainingRange(locations) {
+  const ngn = (locations || [])
+    .map((l) => Number(l.trainingCostNGN || 0))
+    .filter((n) => n > 0);
+  const usd = (locations || [])
+    .map((l) => Number(l.trainingCostUSD || 0))
+    .filter((n) => n > 0);
+  return {
+    minNGN: ngn.length ? Math.min(...ngn) : 0,
+    maxNGN: ngn.length ? Math.max(...ngn) : 0,
+    minUSD: usd.length ? Math.min(...usd) : 0,
+    maxUSD: usd.length ? Math.max(...usd) : 0,
+    locationsCount: (locations || []).length,
+  };
+}
+
+// Build a software-suite row from a live product (auto-fills description + price).
+function suiteRowFromProduct(p, currency = "NGN") {
+  return {
+    productKey: p.key || p._id || "",
+    name: p.name || "",
+    whatItDoes: p.blurb || p.description || "",
+    platform: guessPlatform(p.name),
+    listPrice: formatYearly(p, currency),
+  };
+}
+
 function emptyProposal(catalog) {
+  const currency = "NGN";
   return {
     proposalDate: dayjs().format("YYYY-MM-DD"),
     validUntil: dayjs().add(30, "day").format("YYYY-MM-DD"),
@@ -106,12 +142,13 @@ function emptyProposal(catalog) {
     clientPhone: "",
     clientAddress: "",
     clientCategory: "Lead",
-    currency: "NGN",
+    currency,
     preparedBy: "Adedolapo Quasim · Founder, ADLM Studio",
-    suite: [],
-    tiers: JSON.parse(
-      JSON.stringify(catalog?.tiers?.length ? catalog.tiers : FALLBACK_TIERS),
+    // pre-populated live from the website's published products
+    suite: (catalog?.products || []).map((p) =>
+      suiteRowFromProduct(p, currency),
     ),
+    tiers: JSON.parse(JSON.stringify(FALLBACK_TIERS)),
     trainingRange: catalog?.trainingRange
       ? { ...catalog.trainingRange }
       : { minNGN: 0, maxNGN: 0, minUSD: 0, maxUSD: 0, locationsCount: 0 },
@@ -119,9 +156,9 @@ function emptyProposal(catalog) {
       { source: "", description: "", term: "", qty: 1, unitPrice: 0, total: 0 },
     ],
     discountPercent: 0,
-    taxPercent: catalog?.defaultTaxPercent || 0,
-    execSummary: catalog?.narrative?.execSummary || "",
-    terms: catalog?.narrative?.terms || "",
+    taxPercent: 7.5,
+    execSummary: DEFAULT_EXEC_SUMMARY,
+    terms: DEFAULT_TERMS,
     notes: "",
     status: "draft",
   };
@@ -141,26 +178,75 @@ export default function AdminProposals() {
   const [busy, setBusy] = React.useState(false);
 
   const [catalog, setCatalog] = React.useState(null);
+  const [catalogError, setCatalogError] = React.useState("");
 
   // client autocomplete
   const [userSuggestions, setUserSuggestions] = React.useState([]);
   const [showSuggestions, setShowSuggestions] = React.useState(false);
   const suggestTimer = React.useRef(null);
 
-  /* -------- data loading -------- */
+  /* -------- catalog: products + training locations (public endpoints) --------
+     These are the same endpoints the storefront and invoice builder use, so
+     they work without admin auth and stay reliable. */
   React.useEffect(() => {
-    if (!accessToken) return;
     (async () => {
       try {
-        const data = await apiAuthed("/admin/proposals/catalog", {
-          token: accessToken,
+        const [pRes, tRes] = await Promise.all([
+          fetch(`${API_BASE}/products?page=1&pageSize=200`, {
+            credentials: "include",
+          }).then((r) => r.json()),
+          fetch(`${API_BASE}/training-locations`, {
+            credentials: "include",
+          }).then((r) => r.json()),
+        ]);
+        const products = Array.isArray(pRes?.items) ? pRes.items : [];
+        const locations = Array.isArray(tRes?.locations) ? tRes.locations : [];
+        setCatalog({
+          products,
+          locations,
+          trainingRange: computeTrainingRange(locations),
         });
-        setCatalog(data || null);
+        setCatalogError(
+          products.length
+            ? ""
+            : "No published products were returned by the website.",
+        );
       } catch {
-        /* form falls back to defaults */
+        setCatalogError(
+          "Could not load products / training locations from the website.",
+        );
       }
     })();
-  }, [accessToken]);
+  }, []);
+
+  // If the catalog arrives after a new-proposal form is already open,
+  // back-fill the suite + training range that were empty at that point.
+  React.useEffect(() => {
+    if (!catalog) return;
+    setForm((f) => {
+      if (!f || editId) return f;
+      let next = f;
+      const tr = f.trainingRange || {};
+      if (
+        !tr.minNGN &&
+        !tr.maxNGN &&
+        !tr.minUSD &&
+        !tr.maxUSD &&
+        catalog.trainingRange
+      ) {
+        next = { ...next, trainingRange: { ...catalog.trainingRange } };
+      }
+      if ((!f.suite || f.suite.length === 0) && catalog.products?.length) {
+        next = {
+          ...next,
+          suite: catalog.products.map((p) =>
+            suiteRowFromProduct(p, f.currency),
+          ),
+        };
+      }
+      return next;
+    });
+  }, [catalog, editId]);
 
   async function load() {
     setLoading(true);
@@ -339,26 +425,17 @@ export default function AdminProposals() {
   }
 
   /* ---- software suite ---- */
-  function toggleProduct(p) {
-    const key = p.key || p._id;
-    setForm((f) => {
-      const exists = f.suite.some((s) => s.productKey === key);
-      if (exists)
-        return { ...f, suite: f.suite.filter((s) => s.productKey !== key) };
-      return {
-        ...f,
-        suite: [
-          ...f.suite,
-          {
-            productKey: key,
-            name: p.name || "",
-            whatItDoes: p.blurb || p.description || "",
-            platform: guessPlatform(p.name),
-            listPrice: formatYearly(p, f.currency),
-          },
-        ],
-      };
-    });
+  // Pick a live product for a suite row — auto-fills name, description & price.
+  function selectSuiteProduct(idx, productKey) {
+    if (!productKey) {
+      updateSuiteRow(idx, { productKey: "" });
+      return;
+    }
+    const p = (catalog?.products || []).find(
+      (x) => (x.key || x._id) === productKey,
+    );
+    if (!p) return;
+    updateSuiteRow(idx, suiteRowFromProduct(p, form?.currency || "NGN"));
   }
   function addCustomSuiteRow() {
     setForm((f) => ({
@@ -944,87 +1021,89 @@ export default function AdminProposals() {
               — pulled live from website products
             </span>
           </div>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {(catalog?.products || []).map((p) => {
-              const key = p.key || p._id;
-              const on = form.suite.some((s) => s.productKey === key);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleProduct(p)}
-                  className={`text-xs px-3 py-1.5 rounded-full border ${
-                    on
-                      ? "bg-adlm-navy-mid text-white border-adlm-navy-mid"
-                      : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  {on ? "✓ " : "+ "}
-                  {p.name}
-                </button>
-              );
-            })}
-            {!catalog?.products?.length && (
-              <span className="text-xs text-slate-400">
-                No published products found.
-              </span>
-            )}
+          {catalogError && (
+            <div className="text-xs text-amber-600 mb-2">{catalogError}</div>
+          )}
+          <div className="text-xs text-slate-500 mb-2">
+            Pick a product to auto-fill its description and price, or edit any
+            field. Use “Add suite row” for a custom entry.
           </div>
 
           <div className="space-y-2">
             {form.suite.map((row, idx) => (
               <div
                 key={idx}
-                className="grid grid-cols-12 gap-2 text-sm items-start bg-slate-50 ring-1 ring-slate-200 rounded-lg p-2"
+                className="bg-slate-50 ring-1 ring-slate-200 rounded-lg p-3 space-y-2"
               >
-                <input
-                  className="input col-span-3"
-                  placeholder="Product"
-                  value={row.name || ""}
-                  onChange={(e) =>
-                    updateSuiteRow(idx, { name: e.target.value })
-                  }
-                />
-                <input
-                  className="input col-span-4"
-                  placeholder="What it does"
-                  value={row.whatItDoes || ""}
-                  onChange={(e) =>
-                    updateSuiteRow(idx, { whatItDoes: e.target.value })
-                  }
-                />
-                <input
-                  className="input col-span-2"
-                  placeholder="Platform"
-                  value={row.platform || ""}
-                  onChange={(e) =>
-                    updateSuiteRow(idx, { platform: e.target.value })
-                  }
-                />
-                <input
-                  className="input col-span-2"
-                  placeholder="List price"
-                  value={row.listPrice || ""}
-                  onChange={(e) =>
-                    updateSuiteRow(idx, { listPrice: e.target.value })
-                  }
-                />
-                <button
-                  type="button"
-                  className="col-span-1 text-rose-500 text-xs hover:underline"
-                  onClick={() => removeSuiteRow(idx)}
-                >
-                  Remove
-                </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="input text-sm flex-1"
+                    value={row.productKey || ""}
+                    onChange={(e) => selectSuiteProduct(idx, e.target.value)}
+                  >
+                    <option value="">— Custom row —</option>
+                    {(catalog?.products || []).map((p) => (
+                      <option key={p.key || p._id} value={p.key || p._id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="text-rose-500 text-xs hover:underline shrink-0"
+                    onClick={() => removeSuiteRow(idx)}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="grid grid-cols-12 gap-2 text-sm">
+                  <input
+                    className="input col-span-3"
+                    placeholder="Product"
+                    value={row.name || ""}
+                    onChange={(e) =>
+                      updateSuiteRow(idx, { name: e.target.value })
+                    }
+                  />
+                  <input
+                    className="input col-span-4"
+                    placeholder="What it does"
+                    value={row.whatItDoes || ""}
+                    onChange={(e) =>
+                      updateSuiteRow(idx, { whatItDoes: e.target.value })
+                    }
+                  />
+                  <input
+                    className="input col-span-2"
+                    placeholder="Platform"
+                    value={row.platform || ""}
+                    onChange={(e) =>
+                      updateSuiteRow(idx, { platform: e.target.value })
+                    }
+                  />
+                  <input
+                    className="input col-span-3"
+                    placeholder="List price"
+                    value={row.listPrice || ""}
+                    onChange={(e) =>
+                      updateSuiteRow(idx, { listPrice: e.target.value })
+                    }
+                  />
+                </div>
               </div>
             ))}
+            {form.suite.length === 0 && (
+              <div className="text-xs text-slate-400">
+                No suite rows yet — add one below.
+              </div>
+            )}
           </div>
           <button
             type="button"
             className="text-sm text-adlm-blue-700 hover:underline mt-2"
             onClick={addCustomSuiteRow}
           >
-            + Add custom suite row
+            + Add suite row
           </button>
         </div>
 
