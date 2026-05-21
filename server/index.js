@@ -36,6 +36,7 @@ import productsPublic from "./routes/products.js";
 import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
+import projectsPmRoutes from "./routes/projects.pm.js";
 
 import meMediaRoutes from "./routes/me-media.js";
 import webhooksRouter from "./routes/webhooks.js";
@@ -209,6 +210,9 @@ app.get("/api/projects/public/:token", getPublicDashboard);
 
 app.use("/projects", projectRoutes);
 app.use("/api/projects", projectRoutes);
+
+app.use("/projects", projectsPmRoutes);
+app.use("/api/projects", projectsPmRoutes);
 
 app.use("/me/media", meMediaRoutes);
 app.use("/me/orders", meOrdersRoutes);

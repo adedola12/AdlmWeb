@@ -3,6 +3,7 @@ import { FaArrowLeft, FaTrash, FaShareAlt, FaCopy, FaCheck } from "react-icons/f
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
+import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 
 function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }) {
@@ -99,6 +100,11 @@ const TAB_OPTIONS = [
     id: "dashboard",
     label: "Dashboard",
     helper: "Overview and progress",
+  },
+  {
+    id: "pm",
+    label: "PM Dashboard",
+    helper: "Schedule, EVM, risks, issues",
   },
   {
     id: "valuation",
@@ -249,6 +255,16 @@ export default function ProjectOpenView({
   valuationSettings,
   valuations = [],
   valuedAmount = 0,
+  pmDashboard = null,
+  pmSaving = false,
+  pmImporting = false,
+  pmGenerating = false,
+  pmImportError = "",
+  onPmSave,
+  onPmGenerateFromBoq,
+  onPmImportFile,
+  onPmReset,
+  onPmSetHeader,
 }) {
   const [activeTab, setActiveTab] = React.useState("dashboard");
 
@@ -457,6 +473,21 @@ export default function ProjectOpenView({
           valuedAmount={valuedAmount}
         />
         </>
+      ) : null}
+
+      {activeTab === "pm" ? (
+        <ProjectManagementTab
+          dashboard={pmDashboard}
+          saving={pmSaving}
+          importing={pmImporting}
+          generating={pmGenerating}
+          importError={pmImportError}
+          onSave={onPmSave}
+          onGenerateFromBoq={onPmGenerateFromBoq}
+          onImportFile={onPmImportFile}
+          onReset={onPmReset}
+          onSetHeader={onPmSetHeader}
+        />
       ) : null}
 
       {activeTab === "valuation" ? (

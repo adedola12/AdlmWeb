@@ -3,7 +3,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import dolapo from "../assets/team/Dola.jpeg";
 import richard from "../assets/team/Richard.jpg";
-import gladys from "../assets/team/Gladys.JPG";
+// import gladys from "../assets/team/Gladys.JPG";
 
 /* -------------------- tiny animation helpers -------------------- */
 function useInView(threshold = 0.12) {
@@ -210,7 +210,8 @@ export default function AboutADLM() {
     site: "https://images.unsplash.com/photo-1504306663385-cd3fee2e5af1?q=80&w=1600&auto=format&fit=crop",
     team1: dolapo,
     team2: richard,
-    team3: gladys,
+    team3:
+      "https://images.unsplash.com/photo-1529070538774-1843cb3265df?q=80&w=1200&auto=format&fit=crop",
     team4:
       "https://images.unsplash.com/photo-1529070538774-1843cb3265df?q=80&w=1200&auto=format&fit=crop",
   };
@@ -301,10 +302,10 @@ export default function AboutADLM() {
       linkedin: "https://www.linkedin.com/in/richardenoch/",
     },
     {
-      name: "Gladys Terungwa",
+      name: "Ebunoluwa Fadeyibii",
       role: "Product Manager",
       img: ph.team3,
-      linkedin: "https://www.linkedin.com/in/gladys-terungwa-9697b6313/",
+      linkedin: "https://www.linkedin.com/in/ebunoluwa-fadeyibii/",
     },
     {
       name: "Etti Taiwo",

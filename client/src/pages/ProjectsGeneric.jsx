@@ -116,6 +116,19 @@ function getSidebarMeta(tool) {
 function getEndpoints(tool) {
   const t = normTool(tool);
 
+  // PM routes use the same /:productKey/:id pattern as projects.js. We keep
+  // the full tool name (incl. "-materials") in the URL so the server's
+  // requestedProductKey() reads it back as the project's stored productKey
+  // — otherwise materials projects wouldn't be found.
+  const pmEndpoints = {
+    pmDashboard: (id) => "/projects/" + t + "/" + id + "/pm/dashboard",
+    pmUpdate: (id) => "/projects/" + t + "/" + id + "/pm",
+    pmGenerateFromBoq: (id) =>
+      "/projects/" + t + "/" + id + "/pm/generate-from-boq",
+    pmImport: (id) => "/projects/" + t + "/" + id + "/pm/import",
+    pmReset: (id) => "/projects/" + t + "/" + id + "/pm",
+  };
+
   if (t === "revit-materials" || t === "revit-material") {
     return {
       list: "/projects/revit/materials",
@@ -126,6 +139,7 @@ function getEndpoints(tool) {
       share: (id) => "/projects/revit/materials/" + id + "/share",
       lock: (id) => "/projects/revit/materials/" + id + "/contract/lock",
       unlock: (id) => "/projects/revit/materials/" + id + "/contract/unlock",
+      ...pmEndpoints,
     };
   }
 
@@ -139,6 +153,7 @@ function getEndpoints(tool) {
       share: (id) => "/projects/planswift/materials/" + id + "/share",
       lock: (id) => "/projects/planswift/materials/" + id + "/contract/lock",
       unlock: (id) => "/projects/planswift/materials/" + id + "/contract/unlock",
+      ...pmEndpoints,
     };
   }
 
@@ -164,6 +179,7 @@ function getEndpoints(tool) {
       "/projects/" + t + "/" + id + "/final-account/export",
     modelUpload: (id, disc) =>
       "/projects/" + t + "/" + id + "/models/" + disc,
+    ...pmEndpoints,
   };
 }
 
@@ -1002,6 +1018,15 @@ export default function ProjectsGeneric() {
   const [loadingValuations, setLoadingValuations] = React.useState(false);
   const [selectedValuationDate, setSelectedValuationDate] = React.useState("");
 
+  // Project Management (PM) tab state — separately loaded from the BoQ so
+  // the heavy compute lives server-side and the PM tab can refresh without
+  // re-fetching the whole project document.
+  const [pmDashboard, setPmDashboard] = React.useState(null);
+  const [pmSaving, setPmSaving] = React.useState(false);
+  const [pmImporting, setPmImporting] = React.useState(false);
+  const [pmGenerating, setPmGenerating] = React.useState(false);
+  const [pmImportError, setPmImportError] = React.useState("");
+
   // search (items)
   const [itemQuery, setItemQuery] = React.useState("");
 
@@ -1309,11 +1334,117 @@ export default function ProjectsGeneric() {
     setItemQuery("");
     setNotice("");
     setErr("");
+    setPmDashboard(null);
+    setPmImportError("");
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("project");
       return next;
     });
+  }
+
+  async function loadPmDashboard(projectId = selectedId) {
+    if (!projectId) {
+      setPmDashboard(null);
+      return;
+    }
+    try {
+      const data = await apiAuthed(endpoints.pmDashboard(projectId), {
+        token: accessToken,
+      });
+      if (data?.ok && data?.dashboard) {
+        setPmDashboard(data.dashboard);
+      }
+    } catch (e) {
+      // Non-fatal — the PM tab simply shows an empty state.
+      console.warn("loadPmDashboard failed:", e?.message || e);
+    }
+  }
+
+  async function handlePmSave(payload) {
+    if (!selectedId) return;
+    setPmSaving(true);
+    setPmImportError("");
+    try {
+      const data = await apiAuthed(endpoints.pmUpdate(selectedId), {
+        token: accessToken,
+        method: "PATCH",
+        body: payload,
+      });
+      if (data?.dashboard) setPmDashboard(data.dashboard);
+      setNotice("PM plan saved.");
+    } catch (e) {
+      setPmImportError(e?.message || "Failed to save PM plan.");
+    } finally {
+      setPmSaving(false);
+    }
+  }
+
+  async function handlePmGenerateFromBoq({ projectStart, projectFinish } = {}) {
+    if (!selectedId) return;
+    setPmGenerating(true);
+    setPmImportError("");
+    try {
+      const body = {};
+      if (projectStart) body.projectStart = projectStart;
+      if (projectFinish) body.projectFinish = projectFinish;
+      const data = await apiAuthed(endpoints.pmGenerateFromBoq(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body,
+      });
+      if (data?.dashboard) setPmDashboard(data.dashboard);
+      setNotice(`Generated ${data?.generated || 0} task(s) from BoQ.`);
+    } catch (e) {
+      setPmImportError(e?.message || "Failed to generate tasks from BoQ.");
+    } finally {
+      setPmGenerating(false);
+    }
+  }
+
+  async function handlePmImportFile(file) {
+    if (!selectedId || !file) return;
+    setPmImporting(true);
+    setPmImportError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(
+        `${API_BASE}${endpoints.pmImport(selectedId)}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: form,
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Import failed (${res.status})`);
+      }
+      if (data?.dashboard) setPmDashboard(data.dashboard);
+      setNotice(
+        `Imported ${data?.imported || 0} task(s) from ${data?.format || "file"}.`,
+      );
+    } catch (e) {
+      setPmImportError(e?.message || "Import failed.");
+    } finally {
+      setPmImporting(false);
+    }
+  }
+
+  async function handlePmReset() {
+    if (!selectedId) return;
+    if (!window.confirm("Reset all PM data (tasks, risks, issues)? This cannot be undone.")) return;
+    try {
+      const data = await apiAuthed(endpoints.pmReset(selectedId), {
+        token: accessToken,
+        method: "DELETE",
+      });
+      if (data?.dashboard) setPmDashboard(data.dashboard);
+      setNotice("PM data cleared.");
+    } catch (e) {
+      setPmImportError(e?.message || "Failed to reset PM data.");
+    }
   }
 
   async function loadValuations(projectId = selectedId) {
@@ -1424,7 +1555,11 @@ export default function ProjectsGeneric() {
       });
 
       initRatesFromProject(p);
-      await loadValuations(p?._id || p?.id || id);
+      const openedId = p?._id || p?.id || id;
+      await loadValuations(openedId);
+      // PM dashboard load is best-effort and runs in the background so the
+      // BoQ tab doesn't have to wait on it.
+      loadPmDashboard(openedId);
     } catch (e) {
       setErr(e.message || "Failed to open project");
       closeProject();
@@ -1886,6 +2021,9 @@ export default function ProjectsGeneric() {
           : prev,
       );
       await loadValuations(updated?._id || updated?.id || selectedId);
+      // PM tasks linked to BoQ items inherit cost from qty × rate — refresh
+      // the dashboard so the tiles reflect the new totals.
+      loadPmDashboard(updated?._id || updated?.id || selectedId);
       setNotice("Saved. Rates, actuals, valuation settings, and progress were updated.");
     } catch (e) {
       const msg = e?.message || "Failed to save";
@@ -3730,6 +3868,15 @@ export default function ProjectsGeneric() {
                 publicShareEnabled={Boolean(sel?.publicShareEnabled)}
                 publicToken={sel?.publicToken || null}
                 onToggleShare={handleToggleShare}
+                pmDashboard={pmDashboard}
+                pmSaving={pmSaving}
+                pmImporting={pmImporting}
+                pmGenerating={pmGenerating}
+                pmImportError={pmImportError}
+                onPmSave={handlePmSave}
+                onPmGenerateFromBoq={handlePmGenerateFromBoq}
+                onPmImportFile={handlePmImportFile}
+                onPmReset={handlePmReset}
                 onBack={closeProject}
                 onDelete={() => delProject(selectedId, sel?.name)}
               />
