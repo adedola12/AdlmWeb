@@ -273,6 +273,7 @@ export default function ProjectOpenView({
   onPmGenerateFromBoq,
   onPmImportFile,
   onPmReset,
+  onPmClearImports,
 }) {
   const [activeTab, setActiveTab] = React.useState("dashboard");
 
@@ -494,6 +495,7 @@ export default function ProjectOpenView({
           onGenerateFromBoq={onPmGenerateFromBoq}
           onImportFile={onPmImportFile}
           onReset={onPmReset}
+          onClearImports={onPmClearImports}
         />
       ) : null}
 

@@ -134,6 +134,41 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
             const overdue = task?.computed?.isOverdue;
             const linked = (task.linkedBoqIdentities || []).length > 0;
             const isSection = isSectionRow(task);
+            // Summary rows: use rolled-up values (which include all leaf
+            // descendants) instead of the task's own — usually empty — fields.
+            const isSummary = Boolean(task?.isSummary || task?.rollup);
+            const rollup = task?.rollup || null;
+            const depth = Math.max(0, safeNum(task?.wbsDepth));
+
+            // Choose display values: summary rows show rollup values, leaves
+            // show their own.
+            const displayPercent = isSummary && rollup
+              ? safeNum(rollup.percentComplete)
+              : safeNum(task.percentComplete);
+            const displayBaseline = isSummary && rollup
+              ? rollup.baselineCost
+              : (task.computed?.baselineCost ?? task.baselineCost);
+            const displayActual = isSummary && rollup
+              ? rollup.actualCost
+              : (task.computed?.actualCost ?? task.actualCost);
+            const displayStart = isSummary && rollup
+              ? rollup.startDate
+              : task.startDate;
+            const displayEnd = isSummary && rollup
+              ? rollup.endDate
+              : task.endDate;
+            const displayStatus = isSummary && rollup
+              ? rollup.status
+              : (task.status || "not-started");
+
+            // Visual treatment for summary rows — distinct background,
+            // bold name, no input controls (they're read-only rollups).
+            const rowBgCls = isSummary
+              ? "bg-slate-100/80 hover:bg-slate-100 border-y border-slate-200"
+              : overdue
+                ? "bg-rose-50/60 hover:bg-rose-50"
+                : "hover:bg-slate-50";
+
             return (
               <tr
                 key={task.taskId}
@@ -145,22 +180,45 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                       }
                     : undefined
                 }
-                className={[
-                  overdue ? "bg-rose-50/60 hover:bg-rose-50" : "hover:bg-slate-50",
-                  isSection ? "ring-1 ring-inset ring-blue-100" : "",
-                ].join(" ")}
+                className={rowBgCls}
               >
-                <td className="px-3 py-2 align-top text-xs font-mono text-slate-500">
+                <td className={`px-3 py-2 align-top text-xs font-mono ${isSummary ? "font-bold text-slate-900" : "text-slate-500"}`}>
                   {task.wbs || "—"}
                 </td>
                 <td className="px-3 py-2 align-top">
-                  {/* Name wraps naturally — no truncation, full visibility */}
-                  <div className="flex items-start gap-2">
+                  {/* Indent based on WBS depth so the hierarchy is visible.
+                      Summary rows render in bold with a triangle marker. */}
+                  <div
+                    className="flex items-start gap-2"
+                    style={{ paddingLeft: Math.min(depth, 5) * 16 }}
+                  >
+                    {isSummary ? (
+                      <span className="mt-1 text-[10px] text-adlm-blue-700">▼</span>
+                    ) : depth > 0 ? (
+                      <span className="mt-1 text-[10px] text-slate-300">└</span>
+                    ) : null}
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 whitespace-normal break-words">
+                      <div
+                        className={[
+                          "whitespace-normal break-words",
+                          isSummary
+                            ? "font-bold text-slate-900 text-sm"
+                            : "font-medium text-slate-800",
+                        ].join(" ")}
+                      >
                         {task.name || <span className="italic text-slate-400">(no name)</span>}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-500">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-slate-500">
+                        {isSummary && rollup ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-adlm-blue-700 px-1.5 py-0.5 text-white font-semibold">
+                            Σ {rollup.leafCount} leaf{rollup.leafCount === 1 ? "" : "s"}
+                          </span>
+                        ) : null}
+                        {isSummary && rollup?.durationDays ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-slate-700">
+                            {rollup.durationDays}d
+                          </span>
+                        ) : null}
                         {linked ? (
                           <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-adlm-blue-700">
                             <FaLink className="text-[8px]" />
@@ -172,12 +230,12 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                             ◆ Milestone
                           </span>
                         ) : null}
-                        {task.source && task.source !== "manual" ? (
+                        {!isSummary && task.source && task.source !== "manual" ? (
                           <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">
                             {task.source}
                           </span>
                         ) : null}
-                        {overdue ? (
+                        {overdue && !isSummary ? (
                           <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 font-semibold text-rose-700">
                             Overdue
                           </span>
@@ -186,53 +244,81 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                     </div>
                   </div>
                 </td>
-                <td className="px-3 py-2 align-top text-xs whitespace-nowrap text-slate-700">
-                  {fmtDateDisplay(task.startDate)}
+                <td className={`px-3 py-2 align-top text-xs whitespace-nowrap ${isSummary ? "font-semibold text-slate-900" : "text-slate-700"}`}>
+                  {fmtDateDisplay(displayStart)}
                 </td>
-                <td className="px-3 py-2 align-top text-xs whitespace-nowrap text-slate-700">
-                  {fmtDateDisplay(task.endDate)}
+                <td className={`px-3 py-2 align-top text-xs whitespace-nowrap ${isSummary ? "font-semibold text-slate-900" : "text-slate-700"}`}>
+                  {fmtDateDisplay(displayEnd)}
                 </td>
                 <td className="px-3 py-2 align-top text-right">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={safeNum(task.percentComplete)}
-                    onChange={(e) =>
-                      onPercentChange?.(task.taskId, Math.max(0, Math.min(100, Number(e.target.value) || 0)))
-                    }
-                    className="w-14 rounded border-slate-200 px-1 py-0.5 text-xs text-right"
-                  />
-                </td>
-                <td className="px-3 py-2 align-top text-right text-xs whitespace-nowrap">
-                  {linked ? (
-                    <span title="Derived from linked BoQ items">
-                      ₦{fmtMoney(task.computed?.baselineCost ?? task.baselineCost)}
-                    </span>
+                  {isSummary ? (
+                    // Read-only weighted-average percent. A small bar visualises
+                    // it so the summary row scans like a progress header.
+                    <div className="inline-flex flex-col items-end">
+                      <span className="font-bold text-slate-900 text-sm">
+                        {displayPercent.toFixed(0)}%
+                      </span>
+                      <div className="mt-0.5 h-1 w-12 overflow-hidden rounded bg-slate-300">
+                        <div
+                          className="h-full bg-adlm-blue-700"
+                          style={{ width: `${Math.max(0, Math.min(100, displayPercent))}%` }}
+                        />
+                      </div>
+                    </div>
                   ) : (
-                    `₦${fmtMoney(task.baselineCost)}`
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={safeNum(task.percentComplete)}
+                      onChange={(e) =>
+                        onPercentChange?.(task.taskId, Math.max(0, Math.min(100, Number(e.target.value) || 0)))
+                      }
+                      className="w-14 rounded border-slate-200 px-1 py-0.5 text-xs text-right"
+                    />
                   )}
                 </td>
-                <td className="px-3 py-2 align-top text-right text-xs whitespace-nowrap">
-                  ₦{fmtMoney(task.computed?.actualCost ?? task.actualCost)}
+                <td className={`px-3 py-2 align-top text-right text-xs whitespace-nowrap ${isSummary ? "font-bold text-slate-900" : ""}`}>
+                  {linked && !isSummary ? (
+                    <span title="Derived from linked BoQ items">
+                      ₦{fmtMoney(displayBaseline)}
+                    </span>
+                  ) : (
+                    `₦${fmtMoney(displayBaseline)}`
+                  )}
+                </td>
+                <td className={`px-3 py-2 align-top text-right text-xs whitespace-nowrap ${isSummary ? "font-bold text-slate-900" : ""}`}>
+                  ₦{fmtMoney(displayActual)}
                 </td>
                 <td className="px-3 py-2 align-top">
-                  <PriorityBadge priority={task.priority} />
+                  {isSummary ? (
+                    <span className="text-[10px] text-slate-400">—</span>
+                  ) : (
+                    <PriorityBadge priority={task.priority} />
+                  )}
                 </td>
                 <td className="px-3 py-2 align-top">
-                  <select
-                    value={task.status || "not-started"}
-                    onChange={(e) => onStatusChange?.(task.taskId, e.target.value)}
-                    className="rounded border-slate-200 px-1.5 py-0.5 text-[11px] bg-white"
-                  >
-                    <option value="not-started">Not started</option>
-                    <option value="in-progress">In progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="blocked">Blocked</option>
-                  </select>
+                  {isSummary ? (
+                    <StatusBadge status={displayStatus} />
+                  ) : (
+                    <select
+                      value={task.status || "not-started"}
+                      onChange={(e) => onStatusChange?.(task.taskId, e.target.value)}
+                      className="rounded border-slate-200 px-1.5 py-0.5 text-[11px] bg-white"
+                    >
+                      <option value="not-started">Not started</option>
+                      <option value="in-progress">In progress</option>
+                      <option value="completed">Completed</option>
+                      <option value="blocked">Blocked</option>
+                    </select>
+                  )}
                 </td>
                 <td className="px-3 py-2 align-top text-xs text-slate-700">
-                  {task.assignedTo || <span className="italic text-slate-400">—</span>}
+                  {isSummary ? (
+                    <span className="text-[10px] text-slate-400">—</span>
+                  ) : (
+                    task.assignedTo || <span className="italic text-slate-400">—</span>
+                  )}
                 </td>
                 <td className="px-3 py-2 align-top text-right">
                   <div className="inline-flex items-center gap-1">
@@ -240,7 +326,7 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                       type="button"
                       onClick={() => onEditTask?.(task)}
                       className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-adlm-blue-700"
-                      title="Edit"
+                      title={isSummary ? "Edit summary task" : "Edit"}
                     >
                       <FaPencilAlt className="text-xs" />
                     </button>

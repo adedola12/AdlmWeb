@@ -287,6 +287,189 @@ function buildBurndown(tasks, totalBaseline, projectStart, projectFinish, now) {
   return points;
 }
 
+// ── WBS hierarchy & summary roll-ups ────────────────────────────────────
+//
+// MS Project, Primavera and every other PM tool render a "summary task" as
+// a bold row whose duration / start / finish / cost / % complete are NOT
+// authored — they are *rolled up* from the leaves underneath. We mirror
+// that here so the WBS table doesn't show "₦0 / 0%" against rows like
+// "Pre contract stage" or "Substructure".
+//
+// Parent resolution: pure WBS-code prefix matching. For each task with WBS
+// "A.21.1", we walk the segments ["A.21", "A"] and pick the longest one
+// that also exists in the project. Top-level tasks (e.g. "A") fall back to
+// "0" if a row with that WBS exists (MS Project's project-root convention).
+// The result is an explicit parent→children map that drives the roll-up.
+//
+// Roll-up math (per summary):
+//   baseline  = Σ leafDescendants.baselineCost
+//   actual    = Σ leafDescendants.actualCost
+//   percent   = Σ(leaf.pct × leaf.baseline) / Σ leaf.baseline  (weighted)
+//               fallback to simple average when no costs are present
+//   start/end = min(starts) / max(ends) across all leaf descendants
+//   duration  = (end - start) in calendar days
+//
+// "Leaves only" matters: if a parent's own baselineCost were summed in
+// alongside its children we'd double-count.
+
+function isSummaryEligible(task, childrenByWbs) {
+  if (!task) return false;
+  if (task.isSummary) return true;
+  const wbs = String(task.wbs || "").trim();
+  if (!wbs) return false;
+  const children = childrenByWbs.get(wbs);
+  return Boolean(children && children.length > 0);
+}
+
+function buildWbsHierarchy(tasks) {
+  const taskByWbs = new Map();
+  const wbsSet = new Set();
+  for (const t of tasks) {
+    const w = String(t?.wbs || "").trim();
+    if (!w) continue;
+    taskByWbs.set(w, t);
+    wbsSet.add(w);
+  }
+
+  function findParentWbs(wbs) {
+    const segs = String(wbs).split(".").filter(Boolean);
+    if (segs.length <= 1) {
+      // Top-level task — fall back to "0" project root if present.
+      if (wbs !== "0" && wbsSet.has("0")) return "0";
+      return null;
+    }
+    // Walk up the segments and return the first existing ancestor.
+    for (let i = segs.length - 1; i > 0; i--) {
+      const candidate = segs.slice(0, i).join(".");
+      if (wbsSet.has(candidate)) return candidate;
+    }
+    if (wbs !== "0" && wbsSet.has("0")) return "0";
+    return null;
+  }
+
+  const childrenByWbs = new Map();
+  const parentOf = new Map();
+  for (const w of wbsSet) {
+    const parent = findParentWbs(w);
+    parentOf.set(w, parent);
+    if (parent) {
+      const arr = childrenByWbs.get(parent) || [];
+      arr.push(taskByWbs.get(w));
+      childrenByWbs.set(parent, arr);
+    }
+  }
+
+  return { taskByWbs, childrenByWbs, parentOf };
+}
+
+function collectLeafDescendants(wbs, childrenByWbs, out = []) {
+  const kids = childrenByWbs.get(wbs);
+  if (!kids || !kids.length) return out;
+  for (const kid of kids) {
+    const kidWbs = String(kid?.wbs || "").trim();
+    const grandkids = childrenByWbs.get(kidWbs);
+    if (!grandkids || !grandkids.length) {
+      out.push(kid);
+    } else {
+      collectLeafDescendants(kidWbs, childrenByWbs, out);
+    }
+  }
+  return out;
+}
+
+function rollupSummary(task, childrenByWbs) {
+  const wbs = String(task?.wbs || "").trim();
+  const leaves = collectLeafDescendants(wbs, childrenByWbs);
+  let baseline = 0;
+  let actual = 0;
+  let earned = 0;
+  let weightedPct = 0;
+  let totalWeight = 0;
+  let pctSum = 0;
+  let pctCount = 0;
+  let start = null;
+  let end = null;
+
+  for (const leaf of leaves) {
+    if (!leaf) continue;
+    const cost = safeNum(leaf?._computed?.baselineCost ?? leaf?.baselineCost);
+    const aCost = safeNum(leaf?._computed?.actualCost ?? leaf?.actualCost);
+    const pct = clamp(safeNum(leaf?.percentComplete), 0, 100);
+    baseline += cost;
+    actual += aCost;
+    earned += (cost * pct) / 100;
+    weightedPct += pct * cost;
+    totalWeight += cost;
+    pctSum += pct;
+    pctCount += 1;
+    const s = asDate(leaf?.startDate) || asDate(leaf?.baselineStart);
+    const e = asDate(leaf?.endDate) || asDate(leaf?.baselineEnd);
+    if (isFiniteDate(s) && (!start || s < start)) start = s;
+    if (isFiniteDate(e) && (!end || e > end)) end = e;
+  }
+
+  const rolledPct = totalWeight > 0
+    ? weightedPct / totalWeight
+    : pctCount > 0
+      ? pctSum / pctCount
+      : 0;
+
+  const directChildren = childrenByWbs.get(wbs) || [];
+  const durationDays = isFiniteDate(start) && isFiniteDate(end)
+    ? Math.max(0, Math.round((end.getTime() - start.getTime()) / MS_DAY))
+    : 0;
+
+  return {
+    baselineCost: baseline,
+    actualCost: actual,
+    earnedValue: earned,
+    percentComplete: rolledPct,
+    startDate: start ? start.toISOString() : null,
+    endDate: end ? end.toISOString() : null,
+    durationDays,
+    childCount: directChildren.length,
+    leafCount: leaves.length,
+    status:
+      rolledPct >= 99.9
+        ? "completed"
+        : rolledPct > 0
+          ? "in-progress"
+          : "not-started",
+  };
+}
+
+// Attach `rollup` to every summary-eligible task. The client reads rollup
+// values for display when present and falls back to the task's own fields
+// otherwise.
+function computeWbsRollups(enrichedTasks) {
+  const { childrenByWbs, parentOf } = buildWbsHierarchy(enrichedTasks);
+  const wbsToTask = new Map();
+  for (const t of enrichedTasks) {
+    const w = String(t?.wbs || "").trim();
+    if (w) wbsToTask.set(w, t);
+  }
+
+  for (const task of enrichedTasks) {
+    const isSummary = isSummaryEligible(task, childrenByWbs);
+    if (!isSummary) continue;
+    const rollup = rollupSummary(task, childrenByWbs);
+    task._rollup = rollup;
+    task._isSummary = true;
+  }
+
+  // Also stamp parent / depth on every task so the client can indent rows.
+  for (const t of enrichedTasks) {
+    const w = String(t?.wbs || "").trim();
+    const depth = w
+      ? Math.max(0, w.split(".").filter(Boolean).length - 1)
+      : 0;
+    t._wbsDepth = depth;
+    t._parentWbs = w ? parentOf.get(w) || null : null;
+  }
+
+  return enrichedTasks;
+}
+
 export function computeProjectStartFinish(tasks) {
   let start = null;
   let finish = null;
@@ -319,6 +502,10 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     linkedBaseline,
     manualBaseline,
   } = summariseTasks(tasks, itemIndex, now);
+
+  // Roll summary tasks up from their leaf descendants (MS-Project style).
+  // Mutates the enriched tasks in place to attach `_rollup` and `_isSummary`.
+  computeWbsRollups(enriched);
 
   // Budget: prefer explicit override, then contract sum, then total baseline.
   const contractSum = safeNum(project?.contract?.contractSum);
@@ -417,9 +604,18 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     burndown,
     tasks: enriched.map((t) => ({
       ...t,
-      // Strip internal-only field but keep the computed envelope handy.
+      // Strip internal-only fields but expose them under public names so
+      // the client can render summary rows, indent by depth, etc.
       _computed: undefined,
+      _rollup: undefined,
+      _isSummary: undefined,
+      _wbsDepth: undefined,
+      _parentWbs: undefined,
       computed: t._computed,
+      rollup: t._rollup || null,
+      isSummary: Boolean(t._isSummary),
+      wbsDepth: safeNum(t._wbsDepth),
+      parentWbs: t._parentWbs || null,
     })),
     risks,
     issues,

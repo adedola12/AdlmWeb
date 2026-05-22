@@ -126,6 +126,7 @@ function getEndpoints(tool) {
     pmGenerateFromBoq: (id) =>
       "/projects/" + t + "/" + id + "/pm/generate-from-boq",
     pmImport: (id) => "/projects/" + t + "/" + id + "/pm/import",
+    pmClearImports: (id) => "/projects/" + t + "/" + id + "/pm/clear-imports",
     pmReset: (id) => "/projects/" + t + "/" + id + "/pm",
   };
 
@@ -1473,6 +1474,29 @@ export default function ProjectsGeneric() {
       setNotice("PM data cleared.");
     } catch (e) {
       setPmImportError(e?.message || "Failed to reset PM data.");
+    }
+  }
+
+  async function handlePmClearImports() {
+    if (!selectedId) return;
+    const imports = pmDashboard?.tasks?.filter((t) => String(t?.source || "").startsWith("msproject")).length || 0;
+    const msg = imports > 0
+      ? `Delete ${imports} imported MS Project task(s) and clear the import history? Manual and BoQ-linked tasks will be preserved. This cannot be undone.`
+      : "Clear the import history? No imported tasks remain.";
+    if (!window.confirm(msg)) return;
+    try {
+      const data = await apiAuthed(endpoints.pmClearImports(selectedId), {
+        token: accessToken,
+        method: "POST",
+      });
+      if (data?.dashboard) setPmDashboard(data.dashboard);
+      setNotice(
+        data?.removed
+          ? `Removed ${data.removed} imported task(s).`
+          : "Import history cleared.",
+      );
+    } catch (e) {
+      setPmImportError(e?.message || "Failed to clear imports.");
     }
   }
 
@@ -3975,6 +3999,7 @@ export default function ProjectsGeneric() {
                 onPmGenerateFromBoq={handlePmGenerateFromBoq}
                 onPmImportFile={handlePmImportFile}
                 onPmReset={handlePmReset}
+                onPmClearImports={handlePmClearImports}
                 onBack={closeProject}
                 onDelete={() => delProject(selectedId, sel?.name)}
               />

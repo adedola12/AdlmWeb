@@ -16,6 +16,7 @@ import {
   FaClock,
   FaChartLine,
   FaTasks,
+  FaTimes,
 } from "react-icons/fa";
 import PmBoqHeatmap from "./PmBoqHeatmap.jsx";
 
@@ -393,11 +394,20 @@ export default function PmDashboardView({
   onAddIssue,
   onGenerateFromBoq,
   onImportFile,
+  onClearImports,
   onViewDetails,
   onOpenHeaderSettings,
   onSave,
   dirty,
 }) {
+  // Count how many tasks came from an MS Project import — drives the
+  // visibility of the "Clear imports" button + the count badge.
+  const importedTaskCount = React.useMemo(() => {
+    if (!Array.isArray(dashboard?.tasks)) return 0;
+    return dashboard.tasks.filter((t) =>
+      String(t?.source || "").startsWith("msproject"),
+    ).length;
+  }, [dashboard?.tasks]);
   const headline = dashboard?.headline || {};
   const totals = dashboard?.totals || {};
   const buckets = dashboard?.buckets || {};
@@ -489,6 +499,29 @@ export default function PmDashboardView({
         />
         <input ref={fileRef} type="file" accept=".xml,.mpp" className="hidden" onChange={onFile} />
       </div>
+
+      {/* Clear-imports row — only visible when imported tasks exist, so the
+          control doesn't add noise to a fresh project. */}
+      {importedTaskCount > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <FaFileImport className="text-slate-400" />
+            <span>
+              <strong className="text-slate-900">{importedTaskCount}</strong>{" "}
+              task{importedTaskCount === 1 ? "" : "s"} came from MS Project import.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClearImports}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition"
+            title="Remove all MS Project imported tasks. Manual & BoQ-linked tasks are preserved."
+          >
+            <FaTimes className="text-[10px]" />
+            Delete imported tasks
+          </button>
+        </div>
+      ) : null}
 
       {importError ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">

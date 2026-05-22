@@ -96,6 +96,7 @@ export default function ProjectManagementTab({
   onGenerateFromBoq,
   onImportFile,
   onReset,
+  onClearImports,
 }) {
   const initialTasks = dashboard?.tasks || [];
   const initialRisks = dashboard?.risks || [];
@@ -298,6 +299,7 @@ export default function ProjectManagementTab({
             })
           }
           onImportFile={onImportFile}
+          onClearImports={onClearImports}
           onViewDetails={() => setViewMode("details")}
           onOpenHeaderSettings={() => setHeaderModal(true)}
           onSave={handleSave}

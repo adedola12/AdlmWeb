@@ -578,6 +578,45 @@ async function importPm(req, res) {
   }
 }
 
+// ── DELETE only imported (MS Project) tasks ──────────────────────────────
+// Removes every task whose `source` starts with "msproject" (xml or mpp)
+// and clears the imports[] history. Manually-authored and BoQ-generated
+// tasks are preserved. Optional ?keepHistory=true preserves imports[].
+async function clearImports(req, res) {
+  try {
+    const project = await loadProject(req, res);
+    if (!project) return;
+
+    const pm = project.projectManagement || {};
+    const before = (pm.tasks || []).length;
+    const kept = (pm.tasks || []).filter(
+      (t) => !String(t?.source || "").startsWith("msproject"),
+    );
+    pm.tasks = kept;
+    const removed = before - kept.length;
+
+    if (req.query?.keepHistory !== "true" && req.query?.keepHistory !== true) {
+      pm.imports = [];
+    }
+
+    project.projectManagement = pm;
+    touchPm(project);
+    project.version += 1;
+    await project.save();
+
+    res.json({
+      ok: true,
+      removed,
+      remaining: kept.length,
+      dashboard: computePmDashboard(project),
+      version: project.version,
+    });
+  } catch (err) {
+    console.error("POST PM clear-imports error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── DELETE all PM data (reset) ───────────────────────────────────────────
 async function resetPm(req, res) {
   try {
@@ -632,6 +671,13 @@ router.post(
   requireEntitlementParam,
   importUpload.single("file"),
   importPm,
+);
+
+router.post(
+  "/:productKey/:id/pm/clear-imports",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  clearImports,
 );
 
 router.delete(
