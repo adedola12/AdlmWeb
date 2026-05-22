@@ -1,0 +1,239 @@
+import React from "react";
+import { FaSearch, FaCheckSquare, FaRegSquare, FaTimes } from "react-icons/fa";
+
+function safeNum(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fmtMoney(value) {
+  return safeNum(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+// Searchable multi-select picker for BoQ items.
+//
+// Behaviour:
+//   • User types in the search box → list of items filters live by
+//     description / takeoffLine / code / category / trade.
+//   • Each suggestion is rendered with a checkbox so the user can select
+//     more than one. Clicking the row or the checkbox both toggle.
+//   • Selected items show as chips above the search box with a quick × to
+//     unselect. The live sum (sum of qty × rate over selections) is shown
+//     at the bottom so the user can see the implied baseline cost in
+//     real-time.
+//
+// items prop comes from dashboard.boqItems — each item has
+// { identity, sn, description, unit, qty, rate, amount, category, trade, completed }.
+//
+// value is an array of selected identity strings.
+//
+// onChange(nextIdentities, derivedAmount) fires whenever the selection
+// changes — derivedAmount is the summed qty × rate, useful for
+// auto-populating baselineCost on the parent task.
+export default function PmBoqItemPicker({
+  items = [],
+  value = [],
+  onChange,
+  placeholder = "Search BoQ items by name, code, category…",
+  showSelectAll = true,
+  emptyHint = "No BoQ items found. Upload a takeoff in the Bill of Quantity tab first.",
+}) {
+  const [query, setQuery] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+  const containerRef = React.useRef(null);
+
+  const selectedSet = React.useMemo(() => new Set(value || []), [value]);
+
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items.slice(0, 100); // cap to keep render cheap
+    return items
+      .filter((item) => {
+        const hay = [
+          item.description,
+          item.takeoffLine,
+          item.code,
+          item.category,
+          item.trade,
+          item.unit,
+        ]
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      })
+      .slice(0, 100);
+  }, [items, query]);
+
+  const selectedItems = React.useMemo(
+    () => items.filter((item) => selectedSet.has(item.identity)),
+    [items, selectedSet],
+  );
+
+  const derivedAmount = React.useMemo(
+    () => selectedItems.reduce((acc, item) => acc + safeNum(item.amount), 0),
+    [selectedItems],
+  );
+
+  // Close the suggestion dropdown when the user clicks outside.
+  React.useEffect(() => {
+    function onClick(e) {
+      if (!containerRef.current?.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  function toggleItem(identity) {
+    const next = new Set(selectedSet);
+    if (next.has(identity)) next.delete(identity);
+    else next.add(identity);
+    const nextArr = Array.from(next);
+    const nextAmount = items
+      .filter((it) => next.has(it.identity))
+      .reduce((acc, it) => acc + safeNum(it.amount), 0);
+    onChange?.(nextArr, nextAmount);
+  }
+
+  function clearAll() {
+    onChange?.([], 0);
+  }
+
+  function selectAllVisible() {
+    const next = new Set(selectedSet);
+    for (const item of filtered) next.add(item.identity);
+    const nextArr = Array.from(next);
+    const nextAmount = items
+      .filter((it) => next.has(it.identity))
+      .reduce((acc, it) => acc + safeNum(it.amount), 0);
+    onChange?.(nextArr, nextAmount);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Selected chips */}
+      {selectedItems.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {selectedItems.map((item) => (
+            <span
+              key={item.identity}
+              className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-adlm-blue-700 border border-blue-200"
+            >
+              <span className="max-w-[180px] truncate" title={item.description}>
+                {item.description || `Item ${item.sn}`}
+              </span>
+              <span className="text-[10px] opacity-80">₦{fmtMoney(item.amount)}</span>
+              <button
+                type="button"
+                onClick={() => toggleItem(item.identity)}
+                className="rounded-full hover:bg-blue-100 p-0.5"
+                title="Unlink"
+              >
+                <FaTimes className="text-[9px]" />
+              </button>
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={clearAll}
+            className="text-[11px] text-slate-500 hover:text-rose-600 underline self-center"
+          >
+            Clear all
+          </button>
+        </div>
+      ) : null}
+
+      {/* Search input */}
+      <div className="relative">
+        <FaSearch className="absolute left-3 top-2.5 text-slate-400 text-xs" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/40 focus:border-adlm-blue-700"
+        />
+      </div>
+
+      {/* Suggestions dropdown */}
+      {open ? (
+        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+          {items.length === 0 ? (
+            <div className="px-3 py-4 text-center text-xs text-slate-400">{emptyHint}</div>
+          ) : filtered.length === 0 ? (
+            <div className="px-3 py-4 text-center text-xs text-slate-400">No matches.</div>
+          ) : (
+            <>
+              {showSelectAll ? (
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px]">
+                  <span className="text-slate-500">
+                    {filtered.length} item{filtered.length === 1 ? "" : "s"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={selectAllVisible}
+                    className="font-medium text-adlm-blue-700 hover:underline"
+                  >
+                    Select all visible
+                  </button>
+                </div>
+              ) : null}
+              {filtered.map((item) => {
+                const checked = selectedSet.has(item.identity);
+                return (
+                  <button
+                    key={item.identity}
+                    type="button"
+                    onClick={() => toggleItem(item.identity)}
+                    className={`flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover:bg-blue-50 transition ${
+                      checked ? "bg-blue-50/60" : ""
+                    }`}
+                  >
+                    <span className="mt-0.5 text-adlm-blue-700">
+                      {checked ? <FaCheckSquare /> : <FaRegSquare className="text-slate-300" />}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-900 truncate">
+                          {item.description || `Item ${item.sn}`}
+                        </span>
+                        {item.category ? (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-500">
+                            {item.category}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-3 text-[10px] text-slate-500">
+                        <span>#{item.sn}</span>
+                        <span>
+                          {fmtMoney(item.qty)} {item.unit}
+                        </span>
+                        <span>@ ₦{fmtMoney(item.rate)}</span>
+                        <span className="font-semibold text-slate-700">
+                          = ₦{fmtMoney(item.amount)}
+                        </span>
+                      </div>
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {/* Live sum hint */}
+      {selectedItems.length > 0 ? (
+        <div className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-[11px] text-emerald-800">
+          <b>Linked baseline:</b> ₦{fmtMoney(derivedAmount)} from {selectedItems.length} BoQ item
+          {selectedItems.length === 1 ? "" : "s"}
+        </div>
+      ) : null}
+    </div>
+  );
+}

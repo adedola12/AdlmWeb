@@ -147,10 +147,15 @@ function buildPrintHtml({
 }) {
   const itemRows = (items || [])
     .map((item, index) => {
+      const isPartial = item?.eventType === "partial";
+      const progressCell = isPartial
+        ? `${Number(item?.previousPercent) || 0}% &rarr; ${Number(item?.nextPercent) || 0}%`
+        : escapeHtml(statusLabel || "Ratified");
       return [
         "<tr>",
         `<td>${escapeHtml(alphaIndex(index))}</td>`,
         `<td>${escapeHtml(item.description)}</td>`,
+        `<td>${progressCell}</td>`,
         `<td>${escapeHtml(Number(item.qty || 0).toFixed(2))}</td>`,
         `<td>${escapeHtml(item.unit)}</td>`,
         `<td>${escapeHtml(money(item.rate))}</td>`,
@@ -198,7 +203,7 @@ function buildPrintHtml({
     `<tr><td>Progress</td><td>${escapeHtml(`${certificate.progressPercentToDate.toFixed(1)}% (${certificate.progressCountToDate} of ${certificate.progressTotal} lines marked ${String(statusLabel || "Completed").toLowerCase()})`)}</td></tr>`,
     "</table>",
     "<table>",
-    '<thead><tr><th>Ref</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th></tr></thead>',
+    '<thead><tr><th>Ref</th><th>Description</th><th>Progress</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th></tr></thead>',
     `<tbody>${itemRows}</tbody>`,
     "</table>",
     '<table class="summary">',
@@ -291,13 +296,18 @@ function buildWorkbookValuationSheet({
     ["Valuation Date", dateLabel],
     ["Progress", `${certificate.progressPercentToDate.toFixed(1)}% (${certificate.progressCountToDate} of ${certificate.progressTotal} lines)`],
     [],
-    ["Ref", "Description", "Qty", "Unit", "Rate", "Amount"],
+    ["Ref", "Description", "Progress", "Qty", "Unit", "Rate", "Amount"],
   ];
 
   (entry?.items || []).forEach((item, index) => {
+    const isPartial = item?.eventType === "partial";
+    const progressCell = isPartial
+      ? `${safeNum(item?.previousPercent)}% → ${safeNum(item?.nextPercent)}%`
+      : statusLabel || "Ratified";
     aoa.push([
       alphaIndex(index),
       item?.description || "",
+      progressCell,
       safeNum(item?.qty),
       item?.unit || "",
       safeNum(item?.rate),
@@ -541,11 +551,23 @@ export default function ProjectValuationSummary({
                   <option value="">
                     {loadingValuations ? "Loading valuations..." : "Select valuation day"}
                   </option>
-                  {sortedValuations.map((log, index) => (
-                    <option key={log.date} value={log.date}>
-                      Valuation {index + 1} - {formatDate(log.date)} ({log.itemCount} item{log.itemCount === 1 ? "" : "s"})
-                    </option>
-                  ))}
+                  {sortedValuations.map((log, index) => {
+                    const partial = Number(log?.partialCount) || 0;
+                    const binary = Number(log?.binaryCount) || 0;
+                    const suffix =
+                      partial > 0 && binary > 0
+                        ? ` — ${binary} ratified, ${partial} partial`
+                        : partial > 0
+                          ? ` — ${partial} partial`
+                          : binary > 0
+                            ? ` — ${binary} ratified`
+                            : "";
+                    return (
+                      <option key={log.date} value={log.date}>
+                        Valuation {index + 1} - {formatDate(log.date)} ({log.itemCount} item{log.itemCount === 1 ? "" : "s"}){suffix}
+                      </option>
+                    );
+                  })}
                 </select>
               </label>
 
@@ -591,6 +613,16 @@ export default function ProjectValuationSummary({
                   <span>
                     {selectedValuation.itemCount} item{selectedValuation.itemCount === 1 ? "" : "s"} in this certificate
                   </span>
+                  {Number(selectedValuation.partialCount) > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+                      {selectedValuation.partialCount} partial
+                    </span>
+                  ) : null}
+                  {Number(selectedValuation.binaryCount) > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                      {selectedValuation.binaryCount} ratified
+                    </span>
+                  ) : null}
                   <span>Amount due {money(certificate.amountDue)}</span>
                   <span>Progress {certificate.progressPercentToDate.toFixed(1)}%</span>
                 </div>
@@ -602,6 +634,7 @@ export default function ProjectValuationSummary({
                     <tr>
                       <th className="px-3 py-2">Ref</th>
                       <th className="px-3 py-2">Description</th>
+                      <th className="px-3 py-2">Progress</th>
                       <th className="px-3 py-2">Qty</th>
                       <th className="px-3 py-2">Unit</th>
                       <th className="px-3 py-2">Rate</th>
@@ -609,16 +642,40 @@ export default function ProjectValuationSummary({
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedValuation.items || []).map((item, index) => (
-                      <tr key={item.itemKey || `${item.sn}-${item.description}`} className="border-t">
-                        <td className="px-3 py-2">{alphaIndex(index)}</td>
-                        <td className="px-3 py-2">{item.description}</td>
-                        <td className="px-3 py-2">{Number(item.qty || 0).toFixed(2)}</td>
-                        <td className="px-3 py-2">{item.unit}</td>
-                        <td className="px-3 py-2">{money(item.rate)}</td>
-                        <td className="px-3 py-2 font-medium">{money(item.amount)}</td>
-                      </tr>
-                    ))}
+                    {(selectedValuation.items || []).map((item, index) => {
+                      const isPartial = item?.eventType === "partial";
+                      const prevPct = Number(item?.previousPercent) || 0;
+                      const nextPct = Number(item?.nextPercent) || 0;
+                      return (
+                        <tr key={item.itemKey || `${item.sn}-${item.description}`} className="border-t">
+                          <td className="px-3 py-2">{alphaIndex(index)}</td>
+                          <td className="px-3 py-2">
+                            {item.description}
+                          </td>
+                          <td className="px-3 py-2">
+                            {isPartial ? (
+                              <span
+                                className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800"
+                                title={`Partial progress from ${prevPct}% to ${nextPct}%`}
+                              >
+                                {prevPct}% → {nextPct}%
+                              </span>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800"
+                                title="Line ratified at 100%"
+                              >
+                                {statusLabel}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">{Number(item.qty || 0).toFixed(2)}</td>
+                          <td className="px-3 py-2">{item.unit}</td>
+                          <td className="px-3 py-2">{money(item.rate)}</td>
+                          <td className="px-3 py-2 font-medium">{money(item.amount)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

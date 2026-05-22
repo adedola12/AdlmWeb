@@ -166,6 +166,8 @@ export default function ProjectOpenView({
   onSave,
   onSelectValuationDate,
   onStatusToggle,
+  percentMap = {},
+  onPercentChange,
   onCategoryChange,
   categoryOptions = [],
   tradeOptions = [],
@@ -264,7 +266,6 @@ export default function ProjectOpenView({
   onPmGenerateFromBoq,
   onPmImportFile,
   onPmReset,
-  onPmSetHeader,
 }) {
   const [activeTab, setActiveTab] = React.useState("dashboard");
 
@@ -486,7 +487,6 @@ export default function ProjectOpenView({
           onGenerateFromBoq={onPmGenerateFromBoq}
           onImportFile={onPmImportFile}
           onReset={onPmReset}
-          onSetHeader={onPmSetHeader}
         />
       ) : null}
 
@@ -610,6 +610,8 @@ export default function ProjectOpenView({
           onRateChange={onRateChange}
           onSearchRateGen={onSearchRateGen}
           onStatusToggle={onStatusToggle}
+          percentMap={percentMap}
+          onPercentChange={onPercentChange}
           onCategoryChange={onCategoryChange}
           categoryOptions={categoryOptions}
           tradeOptions={tradeOptions}

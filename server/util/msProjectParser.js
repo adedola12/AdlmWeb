@@ -163,9 +163,15 @@ export function parseMsProjectXml(buffer) {
       parseMsProjectDate(pickTag(block, "BaselineFinish")) || endDate;
     const durationDays = parseMsProjectDuration(pickTag(block, "Duration"));
     const percentComplete = parseMsProjectPercent(pickTag(block, "PercentComplete"));
-    const baselineCost = safeNum(
-      pickTag(block, "BaselineCost") || pickTag(block, "Cost"),
-    );
+    // IMPORTANT: MS Project's <Cost> field is the computed cost from
+    // resource rates × work hours. Even when the user doesn't see a Cost
+    // column in Project, Project still writes a value here (often a large
+    // resource-derived total). We deliberately do NOT fall back to <Cost> —
+    // only an explicit <BaselineCost> (which requires the user to save a
+    // baseline) is treated as an imported cost. Tasks without a baseline
+    // come in with cost 0 and the user links them to BoQ items.
+    const baselineCostRaw = pickTag(block, "BaselineCost");
+    const baselineCost = baselineCostRaw ? safeNum(baselineCostRaw) : 0;
     const actualCost = safeNum(pickTag(block, "ActualCost"));
     const priority = mapMsProjectPriority(pickTag(block, "Priority"));
     const isMilestone = pickTag(block, "Milestone") === "1";

@@ -59,6 +59,10 @@ const ValuationEventSchema = new mongoose.Schema(
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },
     rate: { type: Number, default: 0 },
+    // For 'binary' events (legacy semantic) amount = qty × rate when ratified,
+    // 0 when unratified. For 'partial' events amount = the value delta moved
+    // by this transition, i.e. qty × rate × (nextPercent − previousPercent) / 100.
+    // Summing positive amounts gives "value of work done in this period".
     amount: { type: Number, default: 0 },
     statusField: {
       type: String,
@@ -66,6 +70,15 @@ const ValuationEventSchema = new mongoose.Schema(
       default: "completed",
     },
     markedValue: { type: Boolean, default: true },
+    // Percent context for partial events. Defaults to 0/0 so legacy events
+    // (pre-partial-valuation) still deserialize cleanly.
+    previousPercent: { type: Number, default: 0 },
+    nextPercent: { type: Number, default: 0 },
+    eventType: {
+      type: String,
+      enum: ["binary", "partial"],
+      default: "binary",
+    },
     markedAt: { type: Date, default: Date.now },
     markedDay: { type: String, default: "" },
   },
@@ -388,6 +401,14 @@ const ItemSchema = new mongoose.Schema(
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null },
     statusUpdatedAt: { type: Date, default: null },
+    // Partial-completion percentage (0-100). Used for partial valuation —
+    // the value-of-work-done for this line is qty × rate × (completed
+    // ? 1 : percentComplete / 100). The binary completed/purchased flag
+    // still represents "ratified / paid in full"; the percentage tracks
+    // progress before that final sign-off. PM tasks linked to this item
+    // propagate their own percentComplete down to this field.
+    percentComplete: { type: Number, default: 0 },
+    percentCompleteUpdatedAt: { type: Date, default: null },
     description: { type: String, default: "" },
     takeoffLine: { type: String, default: "" },
     materialName: { type: String, default: "" },

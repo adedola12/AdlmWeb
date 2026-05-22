@@ -61,8 +61,11 @@ function itemIdentity(item, index) {
   ].join("::");
 }
 
-// Build a map of identity → { plannedAmount, actualAmount, completed } so the
-// task layer can pull cost data from the BoQ when linkedBoqIdentities is set.
+// Build a map of identity → { plannedAmount, actualAmount, completed,
+// percentComplete } so the task layer can pull cost data from the BoQ
+// when linkedBoqIdentities is set. The actualAmount uses the partial
+// factor (binary ratified → 1, else percentComplete / 100) so the PM
+// dashboard reflects partial progress, not just fully-signed-off lines.
 function buildItemIndex(project) {
   const items = Array.isArray(project?.items) ? project.items : [];
   const isMaterials = String(project?.productKey || "").includes("materials");
@@ -75,11 +78,15 @@ function buildItemIndex(project) {
     const planned = qty * rate;
     const aQty = item?.actualQty != null ? safeNum(item?.actualQty) : qty;
     const aRate = item?.actualRate != null ? safeNum(item?.actualRate) : rate;
-    const actual = Boolean(item?.[statusField]) ? aQty * aRate : 0;
+    const ratified = Boolean(item?.[statusField]);
+    const pct = clamp(safeNum(item?.percentComplete), 0, 100);
+    const factor = ratified ? 1 : pct / 100;
     map.set(key, {
       plannedAmount: planned,
-      actualAmount: actual,
-      completed: Boolean(item?.[statusField]),
+      actualAmount: aQty * aRate * factor,
+      completed: ratified,
+      percentComplete: ratified ? 100 : pct,
+      valuationFactor: factor,
     });
   });
   return map;
@@ -126,6 +133,11 @@ function summariseTasks(tasks, itemIndex, now) {
   let totalEarned = 0;
   let totalPlannedValueToDate = 0;
   let percentSum = 0;
+  // Split baseline by source so the dashboard can compare "linked-to-BoQ"
+  // value against the contract sum (i.e. is the plan balanced against the
+  // priced scope?). Tasks without links are 'manual' baseline.
+  let linkedBaseline = 0;
+  let manualBaseline = 0;
 
   const enriched = tasks.map((task) => {
     const baselineEnd = asDate(task?.baselineEnd) || asDate(task?.endDate);
@@ -171,6 +183,11 @@ function summariseTasks(tasks, itemIndex, now) {
     totalEarned += earned;
     totalPlannedValueToDate += plannedValueToDate;
     percentSum += pct;
+    if ((task?.linkedBoqIdentities || []).length > 0) {
+      linkedBaseline += baselineCost;
+    } else {
+      manualBaseline += baselineCost;
+    }
 
     const status = task?.status || (pct >= 100 ? "completed" : pct > 0 ? "in-progress" : "not-started");
     if (status === "completed" || pct >= 100) buckets.completed += 1;
@@ -204,6 +221,8 @@ function summariseTasks(tasks, itemIndex, now) {
     totalActual,
     totalEarned,
     totalPlannedValueToDate,
+    linkedBaseline,
+    manualBaseline,
   };
 }
 
@@ -297,6 +316,8 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     totalActual,
     totalEarned,
     totalPlannedValueToDate,
+    linkedBaseline,
+    manualBaseline,
   } = summariseTasks(tasks, itemIndex, now);
 
   // Budget: prefer explicit override, then contract sum, then total baseline.
@@ -306,6 +327,22 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     0,
   );
   const BAC = safeNum(pm.budgetOverride) || contractSum || totalBaseline || grossFromItems;
+
+  // Budget reference: locked contract sum when available, else live BoQ total.
+  // Used by the dashboard's "Plan balanced against contract?" indicator.
+  const budgetReference = contractSum || grossFromItems;
+  const contractLocked = Boolean(project?.contract?.locked);
+  const variance = totalBaseline - budgetReference;
+  let balanceStatus = "no-data";
+  if (budgetReference > 0 && totalBaseline > 0) {
+    const tolerancePct = 0.5; // ±0.5% is considered balanced
+    const absVarPct = Math.abs(variance) / budgetReference * 100;
+    if (absVarPct <= tolerancePct) balanceStatus = "balanced";
+    else if (variance > 0) balanceStatus = "over";
+    else balanceStatus = "under";
+  } else if (totalBaseline === 0 && budgetReference > 0) {
+    balanceStatus = "empty";
+  }
 
   const CPI = totalActual > 0 ? totalEarned / totalActual : totalEarned > 0 ? 1 : 0;
   const SPI = totalPlannedValueToDate > 0 ? totalEarned / totalPlannedValueToDate : totalEarned > 0 ? 1 : 0;
@@ -348,6 +385,12 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       VAC: Math.round((BAC - (CPI > 0 ? BAC / CPI : BAC)) * 100) / 100,
       EAC: Math.round((CPI > 0 ? BAC / CPI : BAC) * 100) / 100,
       totalBaseline: Math.round(totalBaseline * 100) / 100,
+      linkedBaseline: Math.round(linkedBaseline * 100) / 100,
+      manualBaseline: Math.round(manualBaseline * 100) / 100,
+      contractSum: Math.round(contractSum * 100) / 100,
+      grossFromItems: Math.round(grossFromItems * 100) / 100,
+      budgetReference: Math.round(budgetReference * 100) / 100,
+      varianceVsBudget: Math.round(variance * 100) / 100,
       totalTasks,
       completedTasks: buckets.completed,
       inProgressTasks: buckets.inProgress,
@@ -355,6 +398,19 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       blockedTasks: buckets.blocked,
       openRisks,
       openIssues,
+    },
+    balance: {
+      status: balanceStatus, // 'balanced' | 'over' | 'under' | 'empty' | 'no-data'
+      contractLocked,
+      linkedBaseline: Math.round(linkedBaseline * 100) / 100,
+      manualBaseline: Math.round(manualBaseline * 100) / 100,
+      totalBaseline: Math.round(totalBaseline * 100) / 100,
+      budgetReference: Math.round(budgetReference * 100) / 100,
+      varianceAmount: Math.round(variance * 100) / 100,
+      variancePercent:
+        budgetReference > 0
+          ? Math.round((variance / budgetReference) * 1000) / 10
+          : 0,
     },
     buckets,
     overdueByPriority,
@@ -367,6 +423,23 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     })),
     risks,
     issues,
+    // Lightweight BoQ catalogue so the client's task modal can render the
+    // autocomplete picker without re-fetching the project. Each entry
+    // includes the identity hash used for linkedBoqIdentities.
+    boqItems: (Array.isArray(project?.items) ? project.items : []).map((item, idx) => ({
+      identity: itemIdentity(item, idx),
+      sn: safeNum(item?.sn) || idx + 1,
+      description: String(item?.description || item?.materialName || item?.takeoffLine || "").trim(),
+      unit: String(item?.unit || ""),
+      qty: safeNum(item?.qty),
+      rate: safeNum(item?.rate),
+      amount: safeNum(item?.qty) * safeNum(item?.rate),
+      category: String(item?.category || ""),
+      trade: String(item?.trade || ""),
+      completed: Boolean(item?.completed),
+      purchased: Boolean(item?.purchased),
+      percentComplete: clamp(safeNum(item?.percentComplete), 0, 100),
+    })),
   };
 }
 

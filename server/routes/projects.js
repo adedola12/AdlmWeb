@@ -315,6 +315,15 @@ function sanitizeItems(items, productKey = "") {
       parsedActualUpdatedAt = null;
     }
 
+    // Partial-completion percentage: clamp 0-100 and back-fill from the
+    // legacy completed/purchased flag so existing projects open at 100%
+    // for items already ticked off.
+    let parsedPercent = Number.isFinite(Number(item.percentComplete))
+      ? Math.max(0, Math.min(100, Number(item.percentComplete)))
+      : 0;
+    const wasBinaryDone = Boolean(item.completed) || Boolean(item.purchased);
+    if (wasBinaryDone && parsedPercent < 100) parsedPercent = 100;
+
     const baseItem = {
       sn: Number.isFinite(Number(item.sn)) ? Number(item.sn) : i + 1,
       qty: Number.isFinite(Number(item.qty)) ? Number(item.qty) : 0,
@@ -329,6 +338,8 @@ function sanitizeItems(items, productKey = "") {
       completed: Boolean(item.completed),
       completedAt: parseOptionalDate(item.completedAt),
       statusUpdatedAt: parseOptionalDate(item.statusUpdatedAt),
+      percentComplete: parsedPercent,
+      percentCompleteUpdatedAt: parseOptionalDate(item.percentCompleteUpdatedAt),
       description: item.description != null ? String(item.description) : "",
       takeoffLine: item.takeoffLine != null ? String(item.takeoffLine) : "",
       materialName: item.materialName != null ? String(item.materialName) : "",
@@ -491,6 +502,26 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
       !optionalNumberEquals(previousActualQty, nextActualQty) ||
       !optionalNumberEquals(previousActualRate, nextActualRate);
 
+    // Partial-completion: keep the percentage from the incoming payload but
+    // enforce the invariant "binary status === 100%". When the user flips
+    // the checkbox on, lift percentComplete to 100. When they flip it off,
+    // drop percentComplete to 0 unless the payload explicitly overrides.
+    const previousPct = Math.max(
+      0,
+      Math.min(100, Number(previousItem?.percentComplete) || 0),
+    );
+    const rawNextPct = Math.max(
+      0,
+      Math.min(100, Number(item?.percentComplete) || 0),
+    );
+    let nextPct = rawNextPct;
+    if (nextStatus) nextPct = 100;
+    else if (previousStatus && !nextStatus && rawNextPct === previousPct) {
+      // Status toggled off without an explicit percent override → reset.
+      nextPct = 0;
+    }
+    const previousPctAt = parseOptionalDate(previousItem?.percentCompleteUpdatedAt);
+
     const nextItem = {
       ...item,
       actualQty: nextActualQty,
@@ -507,6 +538,9 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
         : null,
       purchased: Boolean(item?.purchased),
       completed: Boolean(item?.completed),
+      percentComplete: nextPct,
+      percentCompleteUpdatedAt:
+        nextPct !== previousPct ? now : previousPctAt,
       [otherStatusField]: Boolean(item?.[otherStatusField]),
       [otherStatusDateField]: previousOtherAt,
       [statusDateField]: nextStatus
@@ -517,7 +551,29 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
       statusUpdatedAt: previousStatus !== nextStatus ? now : previousUpdatedAt,
     };
 
-    if (previousStatus !== nextStatus) {
+    // Emit a valuation event whenever the line's "earned" position changes
+    // — either a binary status flip OR a percent-complete movement. The
+    // event captures the SIGNED value delta so summing positive amounts
+    // gives a daily "value of work done" rollup.
+    const previousFactor = previousStatus ? 1 : previousPct / 100;
+    const nextFactor = nextStatus ? 1 : nextPct / 100;
+    const factorDelta = nextFactor - previousFactor;
+    // Guard against floating-point noise where pct didn't actually change.
+    const PCT_EPSILON = 0.001;
+    const pctChanged = Math.abs(nextPct - previousPct) > PCT_EPSILON;
+    const statusChanged = previousStatus !== nextStatus;
+
+    if (pctChanged || statusChanged) {
+      const lineAmount = safeNum(item?.qty) * safeNum(item?.rate);
+      // For pure binary flips with no percent change recorded, fall back to
+      // the historical behaviour (amount = full line value when ratified,
+      // signed negative when un-ratified) so old reports stay readable.
+      const isPureBinary =
+        statusChanged && !pctChanged && previousPct === 0 && nextPct === 0;
+      const deltaAmount = isPureBinary
+        ? lineAmount * (nextStatus ? 1 : -1)
+        : lineAmount * factorDelta;
+
       valuationEvents.push({
         itemKey: key,
         itemSn: safeNum(item?.sn) || index + 1,
@@ -527,9 +583,12 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
         qty: safeNum(item?.qty),
         unit: String(item?.unit || ""),
         rate: safeNum(item?.rate),
-        amount: safeNum(item?.qty) * safeNum(item?.rate),
+        amount: deltaAmount,
         statusField,
-        markedValue: nextStatus,
+        markedValue: nextStatus || nextFactor > previousFactor,
+        previousPercent: previousPct,
+        nextPercent: nextPct,
+        eventType: pctChanged && !isPureBinary ? "partial" : "binary",
         markedAt: now,
         markedDay: isoDay(now),
       });
@@ -546,14 +605,20 @@ function buildValuationLogs(project, productKey) {
   const logsByDay = new Map();
   const events = Array.isArray(project?.valuationEvents) ? [...project.valuationEvents] : [];
 
-  // Build a Set of itemKeys that are CURRENTLY marked, so the valuation
-  // only reflects the current state — not stale historical events.
+  // Build maps of CURRENT item state so we can filter out stale events for
+  // lines that have since been reverted. Binary events show only if the
+  // item is still ratified; partial events show if the item has any
+  // progress (percentComplete > 0 OR ratified). This avoids old "30 → 50%"
+  // entries lingering after the user has zeroed the line.
   const currentlyMarked = new Set();
+  const currentlyInProgress = new Set();
   const projectItems = Array.isArray(project?.items) ? project.items : [];
   for (let i = 0; i < projectItems.length; i++) {
-    if (Boolean(projectItems[i]?.[statusField])) {
-      currentlyMarked.add(itemIdentity(projectItems[i], i));
-    }
+    const ident = itemIdentity(projectItems[i], i);
+    const ratified = Boolean(projectItems[i]?.[statusField]);
+    const pct = safeNum(projectItems[i]?.percentComplete);
+    if (ratified) currentlyMarked.add(ident);
+    if (ratified || pct > 0) currentlyInProgress.add(ident);
   }
 
   events.sort((a, b) => {
@@ -568,36 +633,86 @@ function buildValuationLogs(project, productKey) {
     if (!day) continue;
 
     const eventKey = String(event?.itemKey || "");
+    const eventType = event?.eventType === "partial" ? "partial" : "binary";
 
-    // Skip events for items that are NOT currently marked
-    if (eventKey && !currentlyMarked.has(eventKey)) continue;
+    // Staleness filter — different rule per event type:
+    //   • binary: drop unless the item is still ratified
+    //   • partial: drop unless the item still has progress (any %)
+    if (eventKey) {
+      if (eventType === "binary" && !currentlyMarked.has(eventKey)) continue;
+      if (eventType === "partial" && !currentlyInProgress.has(eventKey)) continue;
+    }
 
     const byItem = logsByDay.get(day) || new Map();
     const fallbackKey = `${event?.itemSn || 0}::${event?.description || ""}::${event?.materialName || ""}`;
-    byItem.set(eventKey || fallbackKey, {
-      itemKey: eventKey || fallbackKey,
-      sn: safeNum(event?.itemSn),
-      description: displayItemDescription(event, productKey),
-      qty: safeNum(event?.qty),
-      unit: String(event?.unit || ""),
-      rate: safeNum(event?.rate),
-      amount: safeNum(event?.amount),
-      markedValue: Boolean(event?.markedValue),
-      markedAt: parseOptionalDate(event?.markedAt)?.toISOString() || null,
-    });
+    const key = eventKey || fallbackKey;
+    const eventAmount = safeNum(event?.amount);
+    const eventPrevPct = safeNum(event?.previousPercent);
+    const eventNextPct = safeNum(event?.nextPercent);
+    const eventMarked = Boolean(event?.markedValue);
+    const eventMarkedAtIso =
+      parseOptionalDate(event?.markedAt)?.toISOString() || null;
+
+    const existing = byItem.get(key);
+    if (existing) {
+      // Multiple updates to the same line in one day: aggregate the value
+      // delta and span the full % range across the day.
+      existing.amount += eventAmount;
+      existing.previousPercent = Math.min(existing.previousPercent, eventPrevPct);
+      existing.nextPercent = Math.max(existing.nextPercent, eventNextPct);
+      // Latest-event-wins for the markedAt timestamp; if any event in the
+      // day ratified the item, the row's eventType escalates to 'binary'
+      // so the UI shows the ratified badge.
+      existing.markedAt = eventMarkedAtIso;
+      existing.markedValue = existing.markedValue || eventMarked;
+      if (eventType === "binary" || eventMarked || eventNextPct >= 100) {
+        existing.eventType = "binary";
+      }
+    } else {
+      // First time this item appears in this day's log. Escalate the
+      // display type to "binary" when the move lands at 100% (ratified)
+      // so the UI shows a single 'Completed' badge instead of "0 → 100%".
+      const displayType =
+        eventType === "binary" || eventMarked || eventNextPct >= 100
+          ? "binary"
+          : "partial";
+      byItem.set(key, {
+        itemKey: key,
+        sn: safeNum(event?.itemSn),
+        description: displayItemDescription(event, productKey),
+        qty: safeNum(event?.qty),
+        unit: String(event?.unit || ""),
+        rate: safeNum(event?.rate),
+        amount: eventAmount,
+        previousPercent: eventPrevPct,
+        nextPercent: eventNextPct,
+        eventType: displayType,
+        markedValue: eventMarked,
+        markedAt: eventMarkedAtIso,
+      });
+    }
     logsByDay.set(day, byItem);
   }
 
   return [...logsByDay.entries()]
     .map(([date, byItem]) => {
+      // Only show entries where net value was earned that day (positive
+      // delta). Reversals (negative deltas) still appear in the raw event
+      // log but don't clutter the per-day rollup.
       const items = [...byItem.values()]
-        .filter((item) => item.markedValue)
+        .filter((item) => safeNum(item.amount) > 0)
         .sort((a, b) => safeNum(a.sn) - safeNum(b.sn));
       const totalAmount = items.reduce((sum, item) => sum + safeNum(item.amount), 0);
+      const partialCount = items.filter(
+        (item) => item.eventType === "partial",
+      ).length;
+      const binaryCount = items.length - partialCount;
       return {
         date,
         title: `Valuation for ${date}`,
         itemCount: items.length,
+        partialCount,
+        binaryCount,
         totalAmount,
         items,
       };
@@ -714,6 +829,40 @@ async function listProjects(req, res) {
         },
       ],
     };
+    // Valuation factor: 1 when item is ratified (completed/purchased),
+    // else percentComplete / 100. Matches the JS valuationFactor() helper.
+    const valuationFactorExpression = {
+      $cond: [
+        { $eq: [{ $ifNull: [markedPath, false] }, true] },
+        1,
+        {
+          $divide: [
+            {
+              $max: [
+                0,
+                {
+                  $min: [
+                    100,
+                    {
+                      $convert: {
+                        input: "$$item.percentComplete",
+                        to: "double",
+                        onError: 0,
+                        onNull: 0,
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+            100,
+          ],
+        },
+      ],
+    };
+    const valuedLineExpression = {
+      $multiply: [lineAmountExpression, valuationFactorExpression],
+    };
 
     const list = await TakeoffProject.aggregate([
       { $match: { userId, productKey } },
@@ -755,11 +904,43 @@ async function listProjects(req, res) {
               $map: {
                 input: "$safeItems",
                 as: "item",
-                in: {
-                  $cond: [
-                    { $eq: [{ $ifNull: [markedPath, false] }, true] },
-                    lineAmountExpression,
-                    0,
+                in: valuedLineExpression,
+              },
+            },
+          },
+          // Total progress share = sum of valuationFactor across items.
+          // Lets the explorer-grid card show a smooth progress % when
+          // partial completion is tracked.
+          progressShare: {
+            $sum: {
+              $map: {
+                input: "$safeItems",
+                as: "item",
+                in: valuationFactorExpression,
+              },
+            },
+          },
+          partialCount: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $eq: [{ $ifNull: [markedPath, false] }, false] },
+                    {
+                      $gt: [
+                        {
+                          $convert: {
+                            input: "$$item.percentComplete",
+                            to: "double",
+                            onError: 0,
+                            onNull: 0,
+                          },
+                        },
+                        0,
+                      ],
+                    },
                   ],
                 },
               },
@@ -773,7 +954,7 @@ async function listProjects(req, res) {
           progressPercent: {
             $cond: [
               { $gt: ["$itemCount", 0] },
-              { $multiply: [{ $divide: ["$markedCount", "$itemCount"] }, 100] },
+              { $multiply: [{ $divide: ["$progressShare", "$itemCount"] }, 100] },
               0,
             ],
           },
@@ -1352,6 +1533,17 @@ async function unlockContract(req, res) {
 //   • provisional sums at their declared amount (client-agreed releases
 //     still have to be claimed explicitly via a variation if released partial)
 // This is what cumulativeValue on each new cert should snap to at issue time.
+// Returns 1.0 when the item is fully signed off (completed/purchased=true),
+// otherwise percentComplete / 100. This is the multiplier applied to
+// qty × rate to derive value-of-work-done for valuation. Lets partial
+// progress flow into certificates without flipping the binary flag.
+function valuationFactor(item, statusField) {
+  if (Boolean(item?.[statusField])) return 1;
+  const pct = Number(item?.percentComplete);
+  if (!Number.isFinite(pct)) return 0;
+  return Math.max(0, Math.min(100, pct)) / 100;
+}
+
 function computeValueToDate(project) {
   const items = Array.isArray(project.items) ? project.items : [];
   const isMaterials = isMaterialsProductKey(project.productKey);
@@ -1359,11 +1551,11 @@ function computeValueToDate(project) {
 
   let measured = 0;
   for (const it of items) {
-    const marked = Boolean(it?.[statusField]);
-    if (!marked) continue;
+    const factor = valuationFactor(it, statusField);
+    if (factor <= 0) continue;
     const q = safeNum(it?.actualQty != null ? it.actualQty : it.qty);
     const r = safeNum(it?.actualRate != null ? it.actualRate : it.rate);
-    measured += q * r;
+    measured += q * r * factor;
   }
 
   const variationsAmount = (project.variations || []).reduce(
@@ -1928,6 +2120,7 @@ async function getPublicDashboard(req, res) {
 
     const progressTotal = items.length;
     let progressCount = 0;
+    let partialCount = 0;
     let grossAmount = 0;
     let valuedAmount = 0;
     let actualTrackedAmount = 0;
@@ -1946,10 +2139,14 @@ async function getPublicDashboard(req, res) {
       grossAmount += amount;
 
       const marked = Boolean(it[statusField]);
-      if (marked) {
-        progressCount++;
-        valuedAmount += amount;
-      } else if (amount > 0) {
+      const pct = Math.max(0, Math.min(100, Number(it.percentComplete) || 0));
+      const factor = marked ? 1 : pct / 100;
+      // Earn the proportional value: full when ratified, scaled otherwise.
+      valuedAmount += amount * factor;
+      if (marked) progressCount++;
+      else if (factor > 0) partialCount++;
+
+      if (!marked && factor < 1 && amount > 0) {
         upcomingCandidates.push({
           description: it.description || "",
           unit: it.unit || "",
@@ -1980,7 +2177,15 @@ async function getPublicDashboard(req, res) {
       }
     }
 
-    const progressPercent = progressTotal > 0 ? (progressCount / progressTotal) * 100 : 0;
+    // Physical progress counts items at 100% as "done"; partials add a
+    // proportional share so the public dashboard reflects both.
+    const partialProgressShare = items.reduce((acc, it) => {
+      const marked = Boolean(it[statusField]);
+      if (marked) return acc + 1;
+      const pct = Math.max(0, Math.min(100, Number(it.percentComplete) || 0));
+      return acc + pct / 100;
+    }, 0);
+    const progressPercent = progressTotal > 0 ? (partialProgressShare / progressTotal) * 100 : 0;
 
     // Contract, provisional, variations, preliminary — these together form
     // the total planned contract sum the client is working against.
@@ -2153,6 +2358,7 @@ async function getPublicDashboard(req, res) {
       statusLabel: isMaterials ? "Purchased" : "Completed",
       progressTotal,
       progressCount,
+      partialCount,
       progressPercent: Math.round(progressPercent * 10) / 10,
       grossAmount,
       valuedAmount,

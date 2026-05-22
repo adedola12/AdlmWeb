@@ -89,6 +89,51 @@ function InfoTip({ text }) {
   );
 }
 
+// Compact percent-complete input for the BoQ row's status column. When the
+// item is already ratified the input is locked to 100 — the user toggles
+// the checkbox to free it back up. Any partial value flows through to
+// valuation immediately because the BoQ summary derives valuedAmount
+// from the same valuationFactor (see computedAll in ProjectsGeneric).
+function PercentInline({ row, percentMap, onPercentChange, showLabel = false }) {
+  const isRatified = Boolean(row?.isMarked);
+  const value =
+    percentMap?.[row.key] != null
+      ? Math.max(0, Math.min(100, Number(percentMap[row.key]) || 0))
+      : Math.max(0, Math.min(100, Number(row?.percentComplete) || 0));
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-1 py-0.5 text-[10px] ${
+        isRatified
+          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+          : value > 0
+            ? "border-amber-300 bg-amber-50 text-amber-700"
+            : "border-slate-200 bg-white text-slate-500"
+      }`}
+      title={
+        isRatified
+          ? "Fully ratified (100%)"
+          : "Enter the percentage of this line that's been done. Partial values are paid pro-rata at valuation."
+      }
+    >
+      {showLabel ? <span className="font-medium">Done</span> : null}
+      <input
+        type="number"
+        min="0"
+        max="100"
+        step="5"
+        value={isRatified ? 100 : value}
+        disabled={isRatified}
+        onChange={(e) => {
+          const v = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+          onPercentChange?.(row.i, v);
+        }}
+        className="w-10 bg-transparent text-right tabular-nums focus:outline-none disabled:opacity-70"
+      />
+      <span>%</span>
+    </span>
+  );
+}
+
 /**
  * Format a number with thousands separator and 2 decimal places.
  * e.g. 138625.24 → "138,625.24", 2138 → "2,138.00"
@@ -511,6 +556,8 @@ export default function ProjectBillTable({
   onRateChange,
   onSearchRateGen,
   onStatusToggle,
+  percentMap = {},
+  onPercentChange,
   onCategoryChange,
   categoryOptions = [],
   tradeOptions = [],
@@ -1451,8 +1498,8 @@ export default function ProjectBillTable({
 
                     <td className="px-2 py-2">
                       {showActualColumns ? (
-                        /* Compact: checkbox only when actual columns are visible */
-                        <div className="flex items-center justify-center">
+                        /* Compact: checkbox + small % when actual cols are visible */
+                        <div className="flex flex-col items-center gap-1">
                           <input
                             type="checkbox"
                             className={checkboxCls}
@@ -1461,9 +1508,14 @@ export default function ProjectBillTable({
                             aria-label={statusActionText}
                             title={row.isMarked ? statusLabel : statusOffText}
                           />
+                          <PercentInline
+                            row={row}
+                            percentMap={percentMap}
+                            onPercentChange={onPercentChange}
+                          />
                         </div>
                       ) : (
-                        /* Full: checkbox + label + info text when space is available */
+                        /* Full: checkbox + % input + info text */
                         <>
                           <label className="inline-flex items-center gap-1.5 font-medium text-slate-800">
                             <input
@@ -1475,12 +1527,22 @@ export default function ProjectBillTable({
                             />
                             <span className="text-xs">{row.isMarked ? statusLabel : statusOffText}</span>
                           </label>
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <PercentInline
+                              row={row}
+                              percentMap={percentMap}
+                              onPercentChange={onPercentChange}
+                              showLabel
+                            />
+                          </div>
                           <div className="mt-0.5 text-[10px] leading-tight text-slate-500">
                             {row.isMarked
                               ? row.markedAt
                                 ? `Logged ${formatDateTime(row.markedAt)}`
                                 : statusPendingText
-                              : `Unchecked items stay in the outstanding balance until marked ${statusLabelLower}.`}
+                              : row.isPartial
+                                ? `${row.percentComplete}% earned · ${row.valuedAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })} valued`
+                                : `Unchecked items stay in the outstanding balance until marked ${statusLabelLower}.`}
                           </div>
                         </>
                       )}

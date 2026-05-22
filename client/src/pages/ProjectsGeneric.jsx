@@ -559,25 +559,33 @@ function summarizeProjectItems(items, statusField) {
   const safeItems = Array.isArray(items) ? items : [];
   const itemCount = safeItems.length;
   let markedCount = 0;
+  let partialCount = 0;
   let totalCost = 0;
   let valuedAmount = 0;
+  // Partial-aware progress share: full count for ratified items, fractional
+  // for in-progress ones. Mirrors the server-side aggregation.
+  let progressShare = 0;
 
   safeItems.forEach((item) => {
     const lineAmount = safeNum(item?.qty) * safeNum(item?.rate);
     totalCost += lineAmount;
-    if (item?.[statusField]) {
-      markedCount += 1;
-      valuedAmount += lineAmount;
-    }
+    const ratified = Boolean(item?.[statusField]);
+    const pct = Math.max(0, Math.min(100, safeNum(item?.percentComplete)));
+    const factor = ratified ? 1 : pct / 100;
+    valuedAmount += lineAmount * factor;
+    progressShare += factor;
+    if (ratified) markedCount += 1;
+    else if (factor > 0) partialCount += 1;
   });
 
   return {
     itemCount,
     markedCount,
+    partialCount,
     totalCost,
     valuedAmount,
     remainingAmount: totalCost - valuedAmount,
-    progressPercent: itemCount ? (markedCount / itemCount) * 100 : 0,
+    progressPercent: itemCount ? (progressShare / itemCount) * 100 : 0,
   };
 }
 
@@ -972,6 +980,11 @@ export default function ProjectsGeneric() {
   const [baseActualRateMap, setBaseActualRateMap] = React.useState({});
   const [statusMap, setStatusMap] = React.useState({});
   const [baseStatusMap, setBaseStatusMap] = React.useState({});
+  // Partial completion percentage per item (0-100). Mirrors statusMap so
+  // the user can set "50% done" directly from the BoQ row without going
+  // through the PM tab.
+  const [percentMap, setPercentMap] = React.useState({});
+  const [basePercentMap, setBasePercentMap] = React.useState({});
   const [categoryMap, setCategoryMap] = React.useState({});
   const [baseCategoryMap, setBaseCategoryMap] = React.useState({});
   const [tradeMap, setTradeMap] = React.useState({});
@@ -1128,6 +1141,8 @@ export default function ProjectsGeneric() {
     const uiActualRate = {};
     const baseStatuses = {};
     const uiStatuses = {};
+    const basePercents = {};
+    const uiPercents = {};
     const baseCategories = {};
     const uiCategories = {};
     for (let i = 0; i < its.length; i++) {
@@ -1141,8 +1156,18 @@ export default function ProjectsGeneric() {
       uiActualQty[k] = actualInputValue(actualQty);
       baseActualRate[k] = actualRate;
       uiActualRate[k] = actualInputValue(actualRate);
-      baseStatuses[k] = Boolean(its[i]?.[statusField]);
-      uiStatuses[k] = Boolean(its[i]?.[statusField]);
+      const ratified = Boolean(its[i]?.[statusField]);
+      baseStatuses[k] = ratified;
+      uiStatuses[k] = ratified;
+      // Lazy migration: a ratified item is treated as 100% even if the
+      // stored percentComplete is still 0 (legacy data).
+      const storedPct = Math.max(
+        0,
+        Math.min(100, Number(its[i]?.percentComplete) || 0),
+      );
+      const pct = ratified && storedPct < 100 ? 100 : storedPct;
+      basePercents[k] = pct;
+      uiPercents[k] = pct;
       const cat =
         String(its[i]?.category || "").trim() ||
         deriveItemCategory(its[i], toolNorm);
@@ -1169,6 +1194,8 @@ export default function ProjectsGeneric() {
     setActualRateMap(uiActualRate);
     setBaseStatusMap(baseStatuses);
     setStatusMap(uiStatuses);
+    setBasePercentMap(basePercents);
+    setPercentMap(uiPercents);
     setBaseCategoryMap(baseCategories);
     setCategoryMap(uiCategories);
     setBaseTradeMap(baseTrades);
@@ -1321,6 +1348,8 @@ export default function ProjectsGeneric() {
     setBaseActualRateMap({});
     setStatusMap({});
     setBaseStatusMap({});
+    setPercentMap({});
+    setBasePercentMap({});
     setCategoryMap({});
     setBaseCategoryMap({});
     setProvisionalSums([]);
@@ -1892,6 +1921,24 @@ export default function ProjectsGeneric() {
     if (!it) return;
     const key = itemKey(it, rowIndex);
     setStatusMap((prev) => ({ ...(prev || {}), [key]: Boolean(checked) }));
+    // Toggling status also pulls / pushes percentComplete to the threshold
+    // — checking → 100%, unchecking → 0% — so the two stay consistent.
+    setPercentMap((prev) => ({
+      ...(prev || {}),
+      [key]: checked ? 100 : 0,
+    }));
+  }
+
+  function handlePercentChange(rowIndex, value) {
+    if (!sel) return;
+    const its = Array.isArray(sel?.items) ? sel.items : [];
+    const it = its[rowIndex];
+    if (!it) return;
+    const key = itemKey(it, rowIndex);
+    const pct = Math.max(0, Math.min(100, Number(value) || 0));
+    setPercentMap((prev) => ({ ...(prev || {}), [key]: pct }));
+    // Mirror to the binary status: 100% = ratified, anything less = not yet.
+    setStatusMap((prev) => ({ ...(prev || {}), [key]: pct >= 100 }));
   }
 
   function handleValuationSettingChange(field, value) {
@@ -1918,11 +1965,25 @@ export default function ProjectsGeneric() {
     });
   }
 
+  // Compare percentComplete maps numerically — small JS rounding noise can
+  // happen when the server echoes back floats, so we treat anything within
+  // 0.01 % as equal.
+  function percentMapsEqual(a, b) {
+    const A = a || {};
+    const B = b || {};
+    const keys = new Set([...Object.keys(A), ...Object.keys(B)]);
+    for (const k of keys) {
+      if (Math.abs(safeNum(A[k]) - safeNum(B[k])) > 0.01) return false;
+    }
+    return true;
+  }
+
   const isDirty =
     !ratesEqual(rates, baseRates) ||
     !optionalNumberMapsEqual(actualQtyMap, baseActualQtyMap) ||
     !optionalNumberMapsEqual(actualRateMap, baseActualRateMap) ||
     !statusMapsEqual(statusMap, baseStatusMap) ||
+    !percentMapsEqual(percentMap, basePercentMap) ||
     !categoryMapsEqual(categoryMap, baseCategoryMap) ||
     !categoryMapsEqual(tradeMap, baseTradeMap) ||
     !provisionalSumsEqual(provisionalSums, baseProvisionalSums) ||
@@ -1944,6 +2005,17 @@ export default function ProjectsGeneric() {
         const use =
           String(raw ?? "").trim() === "" ? safeNum(it?.rate) : safeNum(raw);
         const statusValue = Boolean(statusMap?.[k]);
+        // percentComplete falls back to the stored value when no UI input
+        // has touched it; statusValue = true forces 100%.
+        const storedPct = Math.max(
+          0,
+          Math.min(100, safeNum(it?.percentComplete)),
+        );
+        const uiPct =
+          percentMap?.[k] != null
+            ? Math.max(0, Math.min(100, safeNum(percentMap[k])))
+            : storedPct;
+        const nextPercent = statusValue ? 100 : uiPct;
         const nextActualQty =
           String(actualQtyMap?.[k] ?? "").trim() === ""
             ? parseOptionalNumber(it?.actualQty)
@@ -1964,6 +2036,7 @@ export default function ProjectsGeneric() {
           actualQty: nextActualQty,
           actualRate: nextActualRate,
           [statusField]: statusValue,
+          percentComplete: nextPercent,
           category: nextCategory,
           trade: nextTrade,
         };
@@ -2970,6 +3043,18 @@ export default function ProjectsGeneric() {
       ? resolvedActualQty * resolvedActualRate
       : null;
     const isMarked = Boolean(statusMap?.[k]);
+    // Partial completion: prefer the UI map (live edits), fall back to the
+    // stored value. When the binary status is ticked, treat as 100%.
+    const storedPct = Math.max(
+      0,
+      Math.min(100, safeNum(it?.percentComplete)),
+    );
+    const uiPct =
+      percentMap?.[k] != null
+        ? Math.max(0, Math.min(100, safeNum(percentMap[k])))
+        : storedPct;
+    const percentComplete = isMarked ? 100 : uiPct;
+    const valuationFactor = isMarked ? 1 : percentComplete / 100;
     const gid = groupIdForIndex(i);
     const category =
       String(categoryMap?.[k] ?? "").trim() ||
@@ -3001,9 +3086,13 @@ export default function ProjectsGeneric() {
         actualAmount == null ? null : actualAmount - fullAmount,
       actualRecordedAt: it?.actualRecordedAt || null,
       actualUpdatedAt: it?.actualUpdatedAt || null,
-      amount: isMarked ? 0 : fullAmount,
-      valuedAmount: isMarked ? fullAmount : 0,
+      // Outstanding amount = full minus what's been valued so far.
+      amount: fullAmount * (1 - valuationFactor),
+      valuedAmount: fullAmount * valuationFactor,
       isMarked,
+      percentComplete,
+      valuationFactor,
+      isPartial: !isMarked && percentComplete > 0,
       markedAt:
         statusField === "purchased" ? it?.purchasedAt || null : it?.completedAt || null,
     };
@@ -3021,8 +3110,15 @@ export default function ProjectsGeneric() {
     0,
   );
   const progressCount = computedAll.filter((row) => row.isMarked).length;
+  const partialCount = computedAll.filter((row) => row.isPartial).length;
+  // Partial-aware progress: full point for ratified items, fractional for
+  // in-progress ones. Matches the server math so PM + BoQ tiles agree.
+  const progressShare = computedAll.reduce(
+    (acc, row) => acc + safeNum(row.valuationFactor),
+    0,
+  );
   const progressPercent = computedAll.length
-    ? (progressCount / computedAll.length) * 100
+    ? (progressShare / computedAll.length) * 100
     : 0;
   const actualRows = computedAll.filter((row) => row.actualHasData);
   const actualCoverageCount = actualRows.length;
@@ -3824,6 +3920,8 @@ export default function ProjectsGeneric() {
                 onActualQtyChange={handleActualQtyChange}
                 onActualRateChange={handleActualRateChange}
                 onStatusToggle={handleStatusToggle}
+                percentMap={percentMap}
+                onPercentChange={handlePercentChange}
                 onCategoryChange={handleCategoryChange}
                 categoryOptions={categoryOptions}
                 tradeOptions={tradesForProductKey(toolNorm)}

@@ -297,13 +297,13 @@ export default function AboutADLM() {
     },
     {
       name: "Richard Enoch",
-      role: "Product Designer",
+      role: "Lead Designer",
       img: ph.team2,
       linkedin: "https://www.linkedin.com/in/richardenoch/",
     },
     {
       name: "Ebunoluwa Fadeyibii",
-      role: "Product Manager",
+      role: "Executive Assistant & Operations",
       img: ph.team3,
       linkedin: "https://www.linkedin.com/in/ebunoluwa-fadeyibii/",
     },

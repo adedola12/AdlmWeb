@@ -260,6 +260,67 @@ async function updatePm(req, res) {
         if (next.length >= 5000) break;
       }
       project.projectManagement.tasks = next;
+
+      // Bi-directional sync: a task's percentComplete propagates to its
+      // linked BoQ items so partial progress flows into the valuation
+      // pipeline. Rules:
+      //   • For each linked item, item.percentComplete = max of
+      //     percentComplete across ALL tasks linking to it. Taking the
+      //     max means completing one task that includes an item is
+      //     enough to credit that item — multiple linking tasks don't
+      //     double-count.
+      //   • When the resulting max is ≥100, also flip the binary status
+      //     (completed / purchased) so existing certificates and reports
+      //     treat the item as fully signed off.
+      //   • Items not linked to any task are left untouched — users still
+      //     control them from the BoQ tab.
+      const productKey = requestedProductKey(req);
+      const isMaterials = productKey.includes("materials");
+      const statusField = isMaterials ? "purchased" : "completed";
+      const statusDateField = isMaterials ? "purchasedAt" : "completedAt";
+      const itemsArr = Array.isArray(project.items) ? project.items : [];
+      const itemByIdentity = new Map();
+      itemsArr.forEach((item, idx) => {
+        itemByIdentity.set(_itemIdentity(item, idx), item);
+      });
+
+      // Build reverse map: identity → max(taskPercentComplete) across all
+      // tasks linking to that identity.
+      const maxPctByItem = new Map();
+      for (const t of next) {
+        const taskPct = Math.max(0, Math.min(100, safeNum(t.percentComplete)));
+        for (const identity of t.linkedBoqIdentities || []) {
+          const prev = maxPctByItem.has(identity)
+            ? maxPctByItem.get(identity)
+            : -Infinity;
+          if (taskPct > prev) maxPctByItem.set(identity, taskPct);
+        }
+      }
+
+      let itemsDirty = false;
+      for (const [identity, pct] of maxPctByItem) {
+        const item = itemByIdentity.get(identity);
+        if (!item) continue;
+        const currentPct = Math.max(
+          0,
+          Math.min(100, safeNum(item.percentComplete)),
+        );
+        if (pct !== currentPct) {
+          item.percentComplete = pct;
+          item.percentCompleteUpdatedAt = new Date();
+          itemsDirty = true;
+        }
+        // Threshold crossing → flip the binary flag too.
+        if (pct >= 100 && !item[statusField]) {
+          item[statusField] = true;
+          item[statusDateField] = new Date();
+          item.statusUpdatedAt = new Date();
+          itemsDirty = true;
+        }
+      }
+      if (itemsDirty) {
+        project.markModified("items");
+      }
     }
 
     if (Array.isArray(risks)) {
