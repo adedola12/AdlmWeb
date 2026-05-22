@@ -10,6 +10,21 @@ import {
   FaLink,
   FaCheckCircle,
 } from "react-icons/fa";
+import PmWbsScrollNav from "./PmWbsScrollNav.jsx";
+
+// A row is treated as a section anchor in the scroll-nav drawer if it's
+// flagged as a summary (set during MS Project import) OR its WBS code is
+// shallow enough to act as a heading. Tweak SHALLOW_DEPTH to make sections
+// coarser/finer (depth = number of dot-separated levels).
+const SHALLOW_DEPTH = 2;
+function isSectionRow(task) {
+  if (!task) return false;
+  if (task.isSummary) return true;
+  const wbs = String(task.wbs || "").trim();
+  if (!wbs) return false;
+  const depth = wbs.split(".").filter(Boolean).length;
+  return depth <= SHALLOW_DEPTH;
+}
 
 function safeNum(v) {
   const n = Number(v);
@@ -69,6 +84,21 @@ function StatusBadge({ status }) {
 // WBS / Task Table
 // ─────────────────────────────────────────────────────────────────────
 function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange, onStatusChange }) {
+  // Persist DOM refs for summary / section rows so the floating scroll nav
+  // can jump to them. Stored in a ref-map keyed by taskId because tasks can
+  // re-render on every keystroke (percent edit, status change, etc.).
+  const sectionRefs = React.useRef({});
+
+  const sections = React.useMemo(() => {
+    if (!tasks?.length) return [];
+    return tasks.filter(isSectionRow).map((t) => ({
+      id: t.taskId,
+      wbs: t.wbs || "",
+      name: t.name || "",
+      refGetter: () => sectionRefs.current[t.taskId] || null,
+    }));
+  }, [tasks]);
+
   if (!tasks?.length) {
     return (
       <EmptyState
@@ -103,10 +133,22 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
           {tasks.map((task) => {
             const overdue = task?.computed?.isOverdue;
             const linked = (task.linkedBoqIdentities || []).length > 0;
+            const isSection = isSectionRow(task);
             return (
               <tr
                 key={task.taskId}
-                className={overdue ? "bg-rose-50/60 hover:bg-rose-50" : "hover:bg-slate-50"}
+                ref={
+                  isSection
+                    ? (el) => {
+                        if (el) sectionRefs.current[task.taskId] = el;
+                        else delete sectionRefs.current[task.taskId];
+                      }
+                    : undefined
+                }
+                className={[
+                  overdue ? "bg-rose-50/60 hover:bg-rose-50" : "hover:bg-slate-50",
+                  isSection ? "ring-1 ring-inset ring-blue-100" : "",
+                ].join(" ")}
               >
                 <td className="px-3 py-2 align-top text-xs font-mono text-slate-500">
                   {task.wbs || "—"}
@@ -217,6 +259,9 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
           })}
         </tbody>
       </table>
+      {/* Floating jump nav — fixed to the viewport so it stays visible while
+          the user scrolls the long task list. */}
+      <PmWbsScrollNav sections={sections} />
     </div>
   );
 }

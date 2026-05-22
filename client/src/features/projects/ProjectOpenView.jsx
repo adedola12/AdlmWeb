@@ -95,11 +95,23 @@ function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }
   );
 }
 
+// Tab order requested by the user:
+//   1. Dashboard            — high-level financial / progress overview
+//   2. Bill of Quantity     — rates, items, contract panel (work surface)
+//   3. PM Dashboard         — schedule / EVM / risks / issues
+//   4. Variation            — interim certificates & valuation settings
+//                              (kept the existing `valuation` id so the
+//                               render branches below don't have to change)
 const TAB_OPTIONS = [
   {
     id: "dashboard",
     label: "Dashboard",
     helper: "Overview and progress",
+  },
+  {
+    id: "bill",
+    label: "Bill of Quantity",
+    helper: "Rates and line items",
   },
   {
     id: "pm",
@@ -108,13 +120,8 @@ const TAB_OPTIONS = [
   },
   {
     id: "valuation",
-    label: "Valuation",
+    label: "Variation",
     helper: "Certificates and settings",
-  },
-  {
-    id: "bill",
-    label: "Bill of Quantity",
-    helper: "Rates and line items",
   },
 ];
 

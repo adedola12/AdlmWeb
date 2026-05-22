@@ -291,7 +291,7 @@ export default function AboutADLM() {
   const leaders = [
     {
       name: "Adedolapo Quasim",
-      role: "Founder & Team Lead",
+      role: "Chief Executive Officer",
       img: ph.team1,
       linkedin: "https://www.linkedin.com/in/quasim-adedolapo-446367127/",
     },
