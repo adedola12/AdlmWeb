@@ -254,9 +254,62 @@ export async function parseMsProjectMpp(buffer, { filename = "" } = {}) {
     };
   }
 
-  // If the operator has wired up an mpxj-based CLI, shell out to it.
-  // The CLI is expected to accept (input_mpp_path output_xml_path) and
-  // write MS Project XML; we then reuse parseMsProjectXml.
+  // ── Path 1: HTTP service (MPXJ_API_URL) ───────────────────────────────
+  // Preferred for cloud deployments (Vercel, Render Node, etc.) where you
+  // can't co-locate Java. POST the .mpp body to the service and read MS
+  // Project XML from the response. Auth header is optional (MPXJ_API_KEY).
+  const apiUrl = process.env.MPXJ_API_URL;
+  if (apiUrl) {
+    try {
+      const headers = {
+        "Content-Type": "application/octet-stream",
+        "X-Filename": String(filename || "input.mpp").replace(/[^\w.\-]/g, "_"),
+      };
+      if (process.env.MPXJ_API_KEY) {
+        headers["X-API-Key"] = process.env.MPXJ_API_KEY;
+      }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60_000);
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers,
+        body: buffer,
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        return {
+          ok: false,
+          format: "msproject-mpp",
+          tasks: [],
+          skipped: 0,
+          errorCode: "MPP_SERVICE_FAILED",
+          error: `MPXJ converter service returned ${res.status}: ${
+            text.slice(0, 200) || "no body"
+          }. Check MPXJ_API_URL / MPXJ_API_KEY, or fall back to MS Project XML export.`,
+        };
+      }
+      const xmlBuf = Buffer.from(await res.arrayBuffer());
+      const parsed = parseMsProjectXml(xmlBuf);
+      return { ...parsed, format: "msproject-mpp" };
+    } catch (e) {
+      return {
+        ok: false,
+        format: "msproject-mpp",
+        tasks: [],
+        skipped: 0,
+        errorCode: "MPP_SERVICE_UNREACHABLE",
+        error: `Could not reach MPXJ converter service: ${
+          e?.message || e
+        }. The service may be down or the URL is wrong. Fall back to MS Project XML export.`,
+      };
+    }
+  }
+
+  // ── Path 2: Local CLI (MPXJ_CLI_PATH) ─────────────────────────────────
+  // Self-hosted servers can run Java + MPXJ on the same box and point at a
+  // wrapper script that takes (input_mpp_path output_xml_path).
   const cli = process.env.MPXJ_CLI_PATH;
   if (cli) {
     let tmpDir;
@@ -303,14 +356,16 @@ export async function parseMsProjectMpp(buffer, { filename = "" } = {}) {
     }
   }
 
-  // No CLI configured — return a friendly, actionable error.
+  // No conversion path configured — return a friendly, actionable error
+  // with a stable code so the client can show the XML helper modal.
   return {
     ok: false,
     format: "msproject-mpp",
     tasks: [],
     skipped: 0,
+    errorCode: "MPP_NOT_ENABLED",
     error:
-      "Direct .mpp parsing is not enabled on this server. Workaround: open the file in MS Project, choose File → Save As → XML, then upload the .xml. (Admins: set MPXJ_CLI_PATH to enable native .mpp import.)",
+      "Direct .mpp parsing is not enabled on this server. Open the file in MS Project, choose File → Save As → XML, then upload the .xml. (Admins: set MPXJ_API_URL or MPXJ_CLI_PATH to enable native .mpp import.)",
   };
 }
 

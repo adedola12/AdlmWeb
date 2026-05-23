@@ -1040,6 +1040,10 @@ export default function ProjectsGeneric() {
   const [pmImporting, setPmImporting] = React.useState(false);
   const [pmGenerating, setPmGenerating] = React.useState(false);
   const [pmImportError, setPmImportError] = React.useState("");
+  // The parser returns a stable errorCode (e.g. MPP_NOT_ENABLED) when
+  // .mpp import isn't possible — we track it separately so the client can
+  // show the XML-export helper modal instead of a plain error toast.
+  const [pmImportErrorCode, setPmImportErrorCode] = React.useState("");
 
   // search (items)
   const [itemQuery, setItemQuery] = React.useState("");
@@ -1436,6 +1440,7 @@ export default function ProjectsGeneric() {
     if (!selectedId || !file) return;
     setPmImporting(true);
     setPmImportError("");
+    setPmImportErrorCode("");
     try {
       const form = new FormData();
       form.append("file", file);
@@ -1449,6 +1454,10 @@ export default function ProjectsGeneric() {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // Capture the errorCode so the import UI can branch — e.g. show
+        // an XML-export helper modal on MPP_NOT_ENABLED instead of just
+        // a red toast.
+        if (data?.errorCode) setPmImportErrorCode(String(data.errorCode));
         throw new Error(data?.error || `Import failed (${res.status})`);
       }
       if (data?.dashboard) setPmDashboard(data.dashboard);
@@ -1460,6 +1469,11 @@ export default function ProjectsGeneric() {
     } finally {
       setPmImporting(false);
     }
+  }
+
+  function handlePmDismissImportError() {
+    setPmImportError("");
+    setPmImportErrorCode("");
   }
 
   async function handlePmReset() {
@@ -3995,6 +4009,8 @@ export default function ProjectsGeneric() {
                 pmImporting={pmImporting}
                 pmGenerating={pmGenerating}
                 pmImportError={pmImportError}
+                pmImportErrorCode={pmImportErrorCode}
+                onPmDismissImportError={handlePmDismissImportError}
                 onPmSave={handlePmSave}
                 onPmGenerateFromBoq={handlePmGenerateFromBoq}
                 onPmImportFile={handlePmImportFile}

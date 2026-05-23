@@ -2,6 +2,7 @@ import React from "react";
 import PmDashboardView from "./pm/PmDashboardView.jsx";
 import PmDetailsView from "./pm/PmDetailsView.jsx";
 import { PmTaskModal, PmRiskModal, PmIssueModal, PmModalShell } from "./pm/PmModals.jsx";
+import PmMppHelperModal from "./pm/PmMppHelperModal.jsx";
 import { FaCog, FaTimes } from "react-icons/fa";
 
 function safeNum(v) {
@@ -92,6 +93,8 @@ export default function ProjectManagementTab({
   importing = false,
   generating = false,
   importError = "",
+  importErrorCode = "",
+  onDismissImportError,
   onSave,
   onGenerateFromBoq,
   onImportFile,
@@ -359,6 +362,19 @@ export default function ProjectManagementTab({
         }}
         onSave={handleHeaderSettings}
         onClose={() => setHeaderModal(false)}
+      />
+
+      {/* Auto-open the XML helper when the server says .mpp parsing is
+          disabled. The modal handles its own dismissal + lets the user
+          retry the import directly with the .xml file. */}
+      <PmMppHelperModal
+        open={importErrorCode === "MPP_NOT_ENABLED"}
+        errorMessage={importError}
+        onClose={onDismissImportError}
+        onPickXml={(file) => {
+          onDismissImportError?.();
+          onImportFile?.(file);
+        }}
       />
 
       {/* Reset link — kept tiny since it's destructive */}

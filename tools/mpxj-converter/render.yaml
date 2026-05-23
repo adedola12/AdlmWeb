@@ -1,0 +1,28 @@
+# Render Blueprint for the MPXJ Converter service.
+#
+# How to use:
+#   1. Push this directory to a public/private Git repo (or commit it
+#      inside ADLMWebsite and point Render at the subdirectory).
+#   2. On Render: New → Blueprint → connect the repo.
+#   3. Render auto-detects this file and creates the web service.
+#   4. After first deploy, copy the URL (https://<name>.onrender.com)
+#      into the main API's MPXJ_API_URL env var.
+#
+# Free instance type sleeps after 15 min of inactivity — first request
+# after sleep takes ~15 s. For production use the starter tier (~$7/mo).
+
+services:
+  - type: web
+    name: adlm-mpxj-converter
+    runtime: docker
+    plan: free               # bump to "starter" for always-on
+    region: oregon           # closest to most ADLM users; change if you prefer
+    rootDir: tools/mpxj-converter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: MPXJ_API_KEY
+        generateValue: true  # Render generates a random secret on first deploy
+      - key: JAVA_OPTS
+        value: "-Xms64m -Xmx384m"

@@ -513,8 +513,12 @@ async function importPm(req, res) {
 
     const parsed = await parseMsProjectFile(file.buffer, { filename: file.originalname });
     if (!parsed.ok) {
+      // Propagate the parser's errorCode (e.g. MPP_NOT_ENABLED) so the
+      // client can react with an XML-export helper modal instead of a
+      // generic toast.
       return res.status(400).json({
         error: parsed.error || "Could not parse the file.",
+        errorCode: parsed.errorCode || null,
         format: parsed.format,
       });
     }

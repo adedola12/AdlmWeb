@@ -269,6 +269,8 @@ export default function ProjectOpenView({
   pmImporting = false,
   pmGenerating = false,
   pmImportError = "",
+  pmImportErrorCode = "",
+  onPmDismissImportError,
   onPmSave,
   onPmGenerateFromBoq,
   onPmImportFile,
@@ -491,6 +493,8 @@ export default function ProjectOpenView({
           importing={pmImporting}
           generating={pmGenerating}
           importError={pmImportError}
+          importErrorCode={pmImportErrorCode}
+          onDismissImportError={onPmDismissImportError}
           onSave={onPmSave}
           onGenerateFromBoq={onPmGenerateFromBoq}
           onImportFile={onPmImportFile}

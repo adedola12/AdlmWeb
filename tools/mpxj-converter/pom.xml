@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ADLM Studio · MPXJ Converter Service
+
+  Tiny Java microservice that exposes MPXJ over HTTP so the Node.js
+  PM importer can convert .mpp → MS Project XML without bundling Java
+  into the main application server.
+
+  Build:    mvn -B clean package
+  Run:      java -jar target/mpxj-converter.jar
+  Docker:   see Dockerfile in this directory.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>net.adlmstudio</groupId>
+  <artifactId>mpxj-converter</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>ADLM MPXJ Converter</name>
+
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <mpxj.version>13.4.0</mpxj.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>net.sf.mpxj</groupId>
+      <artifactId>mpxj</artifactId>
+      <version>${mpxj.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>mpxj-converter</finalName>
+    <plugins>
+      <!-- Shade the MPXJ jar + transitive dependencies into a single
+           runnable uberjar so `java -jar` works without a classpath. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.1</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>net.adlmstudio.mpxj.Main</mainClass>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
