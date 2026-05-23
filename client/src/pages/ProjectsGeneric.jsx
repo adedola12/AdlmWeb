@@ -127,6 +127,7 @@ function getEndpoints(tool) {
       "/projects/" + t + "/" + id + "/pm/generate-from-boq",
     pmImport: (id) => "/projects/" + t + "/" + id + "/pm/import",
     pmClearImports: (id) => "/projects/" + t + "/" + id + "/pm/clear-imports",
+    pmReschedule: (id) => "/projects/" + t + "/" + id + "/pm/reschedule",
     pmReset: (id) => "/projects/" + t + "/" + id + "/pm",
   };
 
@@ -1511,6 +1512,47 @@ export default function ProjectsGeneric() {
       );
     } catch (e) {
       setPmImportError(e?.message || "Failed to clear imports.");
+    }
+  }
+
+  // Re-cascade task dates through the predecessor graph. Uses the project's
+  // current projectStart as the anchor; tasks with no predecessors snap to
+  // that date, tasks with predecessors slide to start = max(pred end).
+  async function handlePmReschedule(opts = {}) {
+    if (!selectedId) return;
+    const anchor = pmDashboard?.projectStart
+      ? new Date(pmDashboard.projectStart).toLocaleDateString()
+      : null;
+    if (!anchor && !opts.projectStart) {
+      setPmImportError(
+        "Set a project start date in the Project header first.",
+      );
+      return;
+    }
+    if (
+      opts.confirm !== false &&
+      !window.confirm(
+        `Reschedule all tasks from ${opts.projectStart ? new Date(opts.projectStart).toLocaleDateString() : anchor}? ` +
+          `Tasks with no predecessors will move to that date; everything else flows from their predecessor end dates.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const data = await apiAuthed(endpoints.pmReschedule(selectedId), {
+        token: accessToken,
+        method: "POST",
+        body: opts.projectStart ? { projectStart: opts.projectStart } : {},
+      });
+      if (data?.dashboard) setPmDashboard(data.dashboard);
+      const r = data?.reschedule || {};
+      const parts = [];
+      if (r.changed) parts.push(`${r.changed} task${r.changed === 1 ? "" : "s"} moved`);
+      if (r.anchored) parts.push(`${r.anchored} anchored at start`);
+      if (r.cycles) parts.push(`${r.cycles} cycle(s) detected`);
+      setNotice(parts.length ? `Rescheduled — ${parts.join(", ")}.` : "Rescheduled.");
+    } catch (e) {
+      setPmImportError(e?.message || "Failed to reschedule tasks.");
     }
   }
 
@@ -4016,6 +4058,7 @@ export default function ProjectsGeneric() {
                 onPmImportFile={handlePmImportFile}
                 onPmReset={handlePmReset}
                 onPmClearImports={handlePmClearImports}
+                onPmReschedule={handlePmReschedule}
                 onBack={closeProject}
                 onDelete={() => delProject(selectedId, sel?.name)}
               />

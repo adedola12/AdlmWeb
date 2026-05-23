@@ -26,13 +26,21 @@ function HeaderSettingsModal({ open, initial, onSave, onClose }) {
   const [start, setStart] = React.useState("");
   const [finish, setFinish] = React.useState("");
   const [budget, setBudget] = React.useState(0);
+  // Cascade defaults ON — most users who change projectStart want the
+  // dates to ripple through the predecessor graph. Unchecking preserves
+  // current task dates and only updates the header value.
+  const [cascade, setCascade] = React.useState(true);
+  const initialStart = fmtDateInput(initial?.projectStart);
 
   React.useEffect(() => {
     if (!open) return;
     setStart(fmtDateInput(initial?.projectStart));
     setFinish(fmtDateInput(initial?.projectFinish));
     setBudget(safeNum(initial?.budgetOverride));
+    setCascade(true);
   }, [open, initial]);
+
+  const startChanged = start && start !== initialStart;
 
   return (
     <PmModalShell open={open} title="Project header" icon={FaCog} onClose={onClose} widthClass="max-w-md">
@@ -66,6 +74,35 @@ function HeaderSettingsModal({ open, initial, onSave, onClose }) {
             className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-right"
           />
         </label>
+        {/* Cascade toggle — only relevant when the start date has actually
+            changed. Visible at all times so the option is discoverable, but
+            disabled (and ignored) when start is unchanged. */}
+        <label
+          className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] ${
+            startChanged
+              ? "border-blue-200 bg-blue-50/60 text-slate-700"
+              : "border-slate-200 bg-slate-50 text-slate-400"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={cascade}
+            disabled={!startChanged}
+            onChange={(e) => setCascade(e.target.checked)}
+            className="mt-0.5 rounded"
+          />
+          <span>
+            <strong className={startChanged ? "text-adlm-blue-700" : ""}>
+              Reschedule all tasks from new start date
+            </strong>
+            <br />
+            Uses predecessor relationships imported from MS Project. Tasks with
+            no predecessors snap to the new start; everything else flows from
+            its predecessor's finish date.
+            {!startChanged ? " (Change the start date above to enable.)" : ""}
+          </span>
+        </label>
+
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
@@ -76,10 +113,17 @@ function HeaderSettingsModal({ open, initial, onSave, onClose }) {
           </button>
           <button
             type="button"
-            onClick={() => onSave?.({ projectStart: start || null, projectFinish: finish || null, budgetOverride: budget })}
+            onClick={() =>
+              onSave?.({
+                projectStart: start || null,
+                projectFinish: finish || null,
+                budgetOverride: budget,
+                cascadeReschedule: cascade,
+              })
+            }
             className="rounded-lg bg-adlm-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800"
           >
-            Apply
+            Apply{startChanged && cascade ? " & reschedule" : ""}
           </button>
         </div>
       </div>
@@ -100,6 +144,7 @@ export default function ProjectManagementTab({
   onImportFile,
   onReset,
   onClearImports,
+  onReschedule,
 }) {
   const initialTasks = dashboard?.tasks || [];
   const initialRisks = dashboard?.risks || [];
@@ -260,12 +305,35 @@ export default function ProjectManagementTab({
     });
   }
 
-  function handleHeaderSettings({ projectStart: s, projectFinish: f, budgetOverride: b }) {
-    setProjectStart(s || "");
-    setProjectFinish(f || "");
-    setBudgetOverride(safeNum(b));
-    markDirty();
+  function handleHeaderSettings({
+    projectStart: s,
+    projectFinish: f,
+    budgetOverride: b,
+    cascadeReschedule = true,
+  }) {
+    const nextStart = s || "";
+    const nextFinish = f || "";
+    const nextBudget = safeNum(b);
+    const startChanged = nextStart !== projectStart;
+
+    setProjectStart(nextStart);
+    setProjectFinish(nextFinish);
+    setBudgetOverride(nextBudget);
     setHeaderModal(false);
+
+    // Save immediately so the server-side cascade runs in the same round-trip
+    // — matches the user expectation of "change date → tasks shift". Cascade
+    // only fires server-side when projectStart actually moved AND the user
+    // didn't uncheck the modal's "Reschedule tasks" toggle.
+    onSave?.({
+      tasks,
+      risks,
+      issues,
+      projectStart: nextStart || null,
+      projectFinish: nextFinish || null,
+      budgetOverride: nextBudget,
+      cascadeReschedule: startChanged && cascadeReschedule,
+    });
   }
 
   // Build a derived dashboard that reflects optimistic local state
@@ -326,6 +394,8 @@ export default function ProjectManagementTab({
           onAddIssue={openAddIssue}
           onEditIssue={openEditIssue}
           onDeleteIssue={deleteIssue}
+          onClearImports={onClearImports}
+          onReschedule={onReschedule}
           onSave={handleSave}
         />
       )}

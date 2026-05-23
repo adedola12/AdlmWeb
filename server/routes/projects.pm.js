@@ -12,7 +12,7 @@ import multer from "multer";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
-import { computePmDashboard, _itemIdentity } from "../services/pmCompute.js";
+import { computePmDashboard, rescheduleTasks, _itemIdentity } from "../services/pmCompute.js";
 import { parseMsProjectFile } from "../util/msProjectParser.js";
 
 const PM_IMPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -246,7 +246,24 @@ async function updatePm(req, res) {
     const project = await loadProject(req, res);
     if (!project) return;
 
-    const { tasks, risks, issues, projectStart, projectFinish, baselineDate, budgetOverride } = req.body || {};
+    const {
+      tasks,
+      risks,
+      issues,
+      projectStart,
+      projectFinish,
+      baselineDate,
+      budgetOverride,
+      // When true (default true), changing projectStart cascades through
+      // every task's predecessor chain. Pass false to update only the
+      // header value while leaving task dates untouched.
+      cascadeReschedule = true,
+    } = req.body || {};
+
+    // Snapshot the old start so we can tell if the header value moved.
+    const previousProjectStart = project.projectManagement?.projectStart
+      ? new Date(project.projectManagement.projectStart)
+      : null;
 
     if (Array.isArray(tasks)) {
       const previousById = new Map(
@@ -364,13 +381,94 @@ async function updatePm(req, res) {
       project.projectManagement.budgetOverride = Math.max(0, safeNum(budgetOverride));
     }
 
+    // ── Cascade rescheduling ────────────────────────────────────────
+    // If projectStart was provided in this request AND it moved, AND the
+    // caller didn't opt out (cascadeReschedule: false), recompute every
+    // task's start/end through the predecessor graph. Manual updates to
+    // individual task dates in this same request are honoured first —
+    // the cascade then re-runs over the resulting set.
+    let rescheduleResult = null;
+    if (projectStart !== undefined && cascadeReschedule) {
+      const newStart = project.projectManagement.projectStart;
+      const changed =
+        (previousProjectStart?.getTime() || 0) !== (newStart?.getTime() || 0);
+      if (newStart && changed && Array.isArray(project.projectManagement.tasks)) {
+        const result = rescheduleTasks(
+          project.projectManagement.tasks,
+          newStart,
+        );
+        project.projectManagement.tasks = result.tasks;
+        project.markModified("projectManagement.tasks");
+        rescheduleResult = {
+          changed: result.changed,
+          cycles: result.cycles,
+          anchored: result.anchored,
+        };
+      }
+    }
+
     touchPm(project);
     project.version += 1;
     await project.save();
 
-    res.json({ ok: true, dashboard: computePmDashboard(project), version: project.version });
+    res.json({
+      ok: true,
+      dashboard: computePmDashboard(project),
+      version: project.version,
+      reschedule: rescheduleResult,
+    });
   } catch (err) {
     console.error("PATCH PM error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── POST /pm/reschedule ─────────────────────────────────────────────────
+// Explicit re-cascade trigger. Used by the "Reschedule from project start"
+// button in the UI. Accepts optional { projectStart } in body to anchor at
+// a specific date; otherwise uses the project's stored projectStart.
+async function reschedulePm(req, res) {
+  try {
+    const project = await loadProject(req, res);
+    if (!project) return;
+
+    const requested = parseOptionalDate(req.body?.projectStart);
+    const anchor =
+      requested || project.projectManagement?.projectStart || null;
+    if (!anchor) {
+      return res.status(400).json({
+        error:
+          "No project start date set. Set one in the Project header first, or include projectStart in the request body.",
+      });
+    }
+
+    const tasks = project.projectManagement?.tasks || [];
+    if (!tasks.length) {
+      return res.status(400).json({ error: "Project has no tasks to reschedule." });
+    }
+
+    if (requested) {
+      project.projectManagement.projectStart = requested;
+    }
+    const result = rescheduleTasks(tasks, anchor);
+    project.projectManagement.tasks = result.tasks;
+    project.markModified("projectManagement.tasks");
+    touchPm(project);
+    project.version += 1;
+    await project.save();
+
+    res.json({
+      ok: true,
+      reschedule: {
+        changed: result.changed,
+        cycles: result.cycles,
+        anchored: result.anchored,
+      },
+      dashboard: computePmDashboard(project),
+      version: project.version,
+    });
+  } catch (err) {
+    console.error("POST PM reschedule error:", err);
     res.status(500).json({ error: "Server error" });
   }
 }
@@ -682,6 +780,13 @@ router.post(
   mapEntitlementParam,
   requireEntitlementParam,
   clearImports,
+);
+
+router.post(
+  "/:productKey/:id/pm/reschedule",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  reschedulePm,
 );
 
 router.delete(

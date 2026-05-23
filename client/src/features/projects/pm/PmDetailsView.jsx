@@ -9,6 +9,8 @@ import {
   FaPlus,
   FaLink,
   FaCheckCircle,
+  FaFileImport,
+  FaSyncAlt,
 } from "react-icons/fa";
 import PmWbsScrollNav from "./PmWbsScrollNav.jsx";
 
@@ -567,6 +569,8 @@ export default function PmDetailsView({
   onAddIssue,
   onEditIssue,
   onDeleteIssue,
+  onClearImports,
+  onReschedule,
   onSave,
   saving,
   dirty,
@@ -578,6 +582,12 @@ export default function PmDetailsView({
     risks: risks.length,
     issues: issues.length,
   };
+
+  // How many tasks came from an MS Project import — drives the visibility
+  // of the "Delete imports" button in the details header.
+  const importedTaskCount = React.useMemo(() => {
+    return tasks.filter((t) => String(t?.source || "").startsWith("msproject")).length;
+  }, [tasks]);
 
   return (
     <div className="space-y-3">
@@ -598,6 +608,36 @@ export default function PmDetailsView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Reschedule — explicit re-cascade. Useful after manually editing
+              durations or adding predecessor links, without having to bump
+              the project start to trigger the auto-cascade. */}
+          {onReschedule ? (
+            <button
+              type="button"
+              onClick={onReschedule}
+              title="Recompute every task's start/finish from the project start date, flowing through predecessor relationships."
+              className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-white/20 transition"
+            >
+              <FaSyncAlt className="text-[11px]" />
+              Reschedule
+            </button>
+          ) : null}
+          {/* Delete-imports — only visible when MS Project tasks exist, so
+              the destructive control doesn't appear on a clean slate. */}
+          {importedTaskCount > 0 && onClearImports ? (
+            <button
+              type="button"
+              onClick={onClearImports}
+              title={`Delete all ${importedTaskCount} imported MS Project task(s). Manual & BoQ-linked tasks are preserved.`}
+              className="inline-flex items-center gap-2 rounded-lg bg-rose-500/90 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-rose-600 transition"
+            >
+              <FaFileImport />
+              Delete imports
+              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold">
+                {importedTaskCount}
+              </span>
+            </button>
+          ) : null}
           {dirty ? (
             <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
               Unsaved

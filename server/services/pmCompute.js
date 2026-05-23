@@ -470,6 +470,149 @@ function computeWbsRollups(enrichedTasks) {
   return enrichedTasks;
 }
 
+// ── Task rescheduling (predecessor-driven cascade) ──────────────────────
+//
+// When the user moves `projectStart` (e.g. project slips by 2 months), the
+// task dates need to flow through the predecessor graph imported from MS
+// Project. We assume the most common relationship — Finish-to-Start with
+// zero lag — for every link. That covers ~95% of construction schedules
+// authored in Project. Lag / SS / SF / FF relationships can be added
+// later by extending the parser to capture `<Type>` and `<LinkLag>`.
+//
+// Algorithm:
+//   1. Build a task-id → task map (we mutate clones, not the originals)
+//   2. Topological sort by predecessor edges (cycle-safe: cycles are
+//      logged and the offending edge is dropped)
+//   3. Walk in topo order:
+//        - No predecessors → start = projectStart
+//        - Has predecessors → start = max(predecessor.endDate)
+//        - end = start + durationDays
+//   4. Summary tasks are skipped — their dates are derived from leaves
+//      by the rollup pass and shouldn't be authored directly.
+//
+// Returns { tasks: <rescheduled>, changed: <int>, cycles: <int>, anchored: <int> }
+export function rescheduleTasks(tasks, projectStart, opts = {}) {
+  const { minDuration = 1 } = opts;
+  const start = asDate(projectStart);
+  if (!start) {
+    return {
+      tasks: Array.isArray(tasks) ? tasks.slice() : [],
+      changed: 0,
+      cycles: 0,
+      anchored: 0,
+    };
+  }
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    return { tasks: [], changed: 0, cycles: 0, anchored: 0 };
+  }
+
+  // Clone each task so we never mutate the caller's array. Use plain
+  // objects so subdocument toObject() output is stable.
+  const taskById = new Map();
+  const ordered = [];
+  for (const t of tasks) {
+    const plain = t?.toObject ? t.toObject() : { ...t };
+    const taskId = String(plain?.taskId || "");
+    ordered.push({ taskId, plain });
+    if (taskId) {
+      taskById.set(taskId, {
+        ...plain,
+        _origStart: asDate(plain?.startDate),
+        _origEnd: asDate(plain?.endDate),
+      });
+    }
+  }
+
+  // Cycle-safe DFS topological sort.
+  const visited = new Set();
+  const inProgress = new Set();
+  const sorted = [];
+  let cycles = 0;
+
+  function visit(taskId) {
+    if (visited.has(taskId)) return;
+    if (inProgress.has(taskId)) {
+      // Back-edge — record and bail. The cycle's tail edge is effectively
+      // ignored (won't act as a predecessor in scheduling below).
+      cycles += 1;
+      return;
+    }
+    inProgress.add(taskId);
+    const t = taskById.get(taskId);
+    if (t) {
+      const preds = Array.isArray(t.predecessors) ? t.predecessors : [];
+      for (const predId of preds) {
+        const sid = String(predId || "");
+        if (sid && taskById.has(sid)) visit(sid);
+      }
+    }
+    inProgress.delete(taskId);
+    visited.add(taskId);
+    sorted.push(taskId);
+  }
+
+  for (const taskId of taskById.keys()) {
+    visit(taskId);
+  }
+
+  // Walk sorted: predecessors are guaranteed scheduled by the time we
+  // reach a dependent. Use the freshly-computed endDate on the clone,
+  // not the original.
+  let changed = 0;
+  let anchored = 0;
+
+  for (const taskId of sorted) {
+    const task = taskById.get(taskId);
+    if (!task) continue;
+    if (task.isSummary) continue; // summaries roll up from leaves
+
+    const preds = (Array.isArray(task.predecessors) ? task.predecessors : [])
+      .map((pid) => taskById.get(String(pid || "")))
+      .filter(Boolean);
+
+    let newStart;
+    if (preds.length === 0) {
+      newStart = new Date(start.getTime());
+      anchored += 1;
+    } else {
+      let maxEnd = null;
+      for (const pred of preds) {
+        const pEnd = asDate(pred.endDate);
+        if (pEnd && (!maxEnd || pEnd > maxEnd)) maxEnd = pEnd;
+      }
+      newStart = maxEnd ? new Date(maxEnd.getTime()) : new Date(start.getTime());
+    }
+
+    const duration = Math.max(0, safeNum(task.durationDays) || minDuration);
+    const newEnd = new Date(newStart.getTime() + duration * MS_DAY);
+
+    const oldStart = task._origStart;
+    const oldEnd = task._origEnd;
+    if (
+      !oldStart || !oldEnd ||
+      oldStart.getTime() !== newStart.getTime() ||
+      oldEnd.getTime() !== newEnd.getTime()
+    ) {
+      changed += 1;
+    }
+
+    task.startDate = newStart;
+    task.endDate = newEnd;
+    // Strip internal markers before the task gets persisted.
+    delete task._origStart;
+    delete task._origEnd;
+  }
+
+  // Reassemble in the original order so the array's index identity is
+  // preserved for downstream callers (mongoose doc indices, UI keys).
+  const result = ordered.map(({ taskId, plain }) => {
+    if (taskId && taskById.has(taskId)) return taskById.get(taskId);
+    return plain;
+  });
+
+  return { tasks: result, changed, cycles, anchored };
+}
+
 export function computeProjectStartFinish(tasks) {
   let start = null;
   let finish = null;
