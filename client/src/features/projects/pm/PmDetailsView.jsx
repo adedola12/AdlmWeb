@@ -11,6 +11,7 @@ import {
   FaCheckCircle,
   FaFileImport,
   FaSyncAlt,
+  FaCalendarAlt,
 } from "react-icons/fa";
 import PmWbsScrollNav from "./PmWbsScrollNav.jsx";
 
@@ -571,6 +572,7 @@ export default function PmDetailsView({
   onDeleteIssue,
   onClearImports,
   onReschedule,
+  onExportCalendar,
   onSave,
   saving,
   dirty,
@@ -608,6 +610,20 @@ export default function PmDetailsView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Export to calendar — downloads the schedule as a .ics file.
+              Drop into Google Calendar / Outlook / Apple Calendar via the
+              app's "Import calendar" flow. Filename = project name. */}
+          {onExportCalendar ? (
+            <button
+              type="button"
+              onClick={onExportCalendar}
+              title="Download the schedule as a calendar (.ics) file. Import into Google Calendar, Outlook, or Apple Calendar."
+              className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-white/20 transition"
+            >
+              <FaCalendarAlt className="text-[11px]" />
+              Export calendar
+            </button>
+          ) : null}
           {/* Reschedule — explicit re-cascade. Useful after manually editing
               durations or adding predecessor links, without having to bump
               the project start to trigger the auto-cascade. */}

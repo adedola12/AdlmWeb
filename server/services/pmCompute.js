@@ -709,6 +709,12 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     },
     totals: {
       BAC: Math.round(BAC * 100) / 100,
+      // budgetOverride is the user-set value from the Project Header modal.
+      // BAC above is the *resolved* number (override OR contract OR baseline
+      // OR gross). Exposing override separately lets the header modal show
+      // the actual saved override (0 = "auto-derive") instead of accidentally
+      // round-tripping the computed BAC as the override.
+      budgetOverride: Math.round(safeNum(pm.budgetOverride) * 100) / 100,
       PV: Math.round(totalPlannedValueToDate * 100) / 100,
       EV: Math.round(totalEarned * 100) / 100,
       AC: Math.round(totalActual * 100) / 100,

@@ -14,6 +14,7 @@ import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { computePmDashboard, rescheduleTasks, _itemIdentity } from "../services/pmCompute.js";
 import { parseMsProjectFile } from "../util/msProjectParser.js";
+import { generateIcs, suggestedIcsFilename } from "../util/icsExporter.js";
 
 const PM_IMPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 const importUpload = multer({
@@ -719,6 +720,63 @@ async function clearImports(req, res) {
   }
 }
 
+// ── GET /pm/calendar.ics ────────────────────────────────────────────────
+// Streams an RFC 5545 iCalendar file for the project schedule. One event
+// per leaf task; summary tasks are skipped by default to avoid duplicate
+// ranges in the user's calendar. Filename = project name + .ics.
+async function exportPmCalendar(req, res) {
+  try {
+    const project = await loadProject(req, res);
+    if (!project) return;
+
+    const tasks = project.projectManagement?.tasks || [];
+    if (!tasks.length) {
+      return res.status(400).json({
+        error:
+          "Project has no tasks to export. Add tasks or import an MS Project schedule first.",
+      });
+    }
+
+    // Optional ?includeSummary=true keeps parent/summary rows in the file —
+    // useful for the calendar to show major phases as background blocks.
+    const includeSummaryRows =
+      req.query?.includeSummary === "true" || req.query?.includeSummary === true;
+
+    const { body, filename, included, skipped } = generateIcs({
+      project: project.toObject ? project.toObject() : project,
+      tasks,
+      includeSummaryRows,
+    });
+
+    if (included === 0) {
+      return res.status(400).json({
+        error:
+          "No tasks had valid start/end dates. Reschedule from the project start, or set task dates manually before exporting.",
+        skipped,
+      });
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader(
+      "Access-Control-Expose-Headers",
+      "Content-Disposition, X-Calendar-Filename",
+    );
+    // Quote the filename to handle spaces / special chars cleanly across
+    // Chrome / Safari / Firefox. We also expose it as a custom header so
+    // the JS client can read it without parsing Content-Disposition.
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename.replace(/"/g, '\\"')}"`,
+    );
+    res.setHeader("X-Calendar-Filename", encodeURIComponent(filename));
+    res.status(200).send(body);
+  } catch (err) {
+    console.error("GET PM calendar export error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── DELETE all PM data (reset) ───────────────────────────────────────────
 async function resetPm(req, res) {
   try {
@@ -787,6 +845,13 @@ router.post(
   mapEntitlementParam,
   requireEntitlementParam,
   reschedulePm,
+);
+
+router.get(
+  "/:productKey/:id/pm/calendar.ics",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  exportPmCalendar,
 );
 
 router.delete(

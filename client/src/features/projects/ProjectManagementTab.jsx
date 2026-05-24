@@ -3,7 +3,31 @@ import PmDashboardView from "./pm/PmDashboardView.jsx";
 import PmDetailsView from "./pm/PmDetailsView.jsx";
 import { PmTaskModal, PmRiskModal, PmIssueModal, PmModalShell } from "./pm/PmModals.jsx";
 import PmMppHelperModal from "./pm/PmMppHelperModal.jsx";
-import { FaCog, FaTimes } from "react-icons/fa";
+import { FaCog, FaTimes, FaSpinner } from "react-icons/fa";
+
+// First-load skeleton — shown when the parent hasn't fetched the dashboard
+// yet. Without this users briefly see "0%" on every tile which looks broken.
+function PmLoadingSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-20 rounded-2xl bg-gradient-to-r from-adlm-blue-700/80 to-blue-800/80 animate-pulse" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-20 rounded-xl bg-slate-100 animate-pulse" />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-24 rounded-2xl bg-slate-100 animate-pulse" />
+        ))}
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 inline-flex items-center justify-center gap-2 w-full">
+        <FaSpinner className="animate-spin" />
+        Loading PM dashboard…
+      </div>
+    </div>
+  );
+}
 
 function safeNum(v) {
   const n = Number(v);
@@ -22,7 +46,10 @@ function genId(prefix) {
 }
 
 // Small modal for project header settings (dates + budget override).
-function HeaderSettingsModal({ open, initial, onSave, onClose }) {
+// `saving` toggles a loading state on the Apply button so the user sees
+// feedback after clicking — important because the modal stays open while
+// the network call runs (closes only on success).
+function HeaderSettingsModal({ open, initial, saving = false, onSave, onClose }) {
   const [start, setStart] = React.useState("");
   const [finish, setFinish] = React.useState("");
   const [budget, setBudget] = React.useState(0);
@@ -31,16 +58,21 @@ function HeaderSettingsModal({ open, initial, onSave, onClose }) {
   // current task dates and only updates the header value.
   const [cascade, setCascade] = React.useState(true);
   const initialStart = fmtDateInput(initial?.projectStart);
+  const initialFinish = fmtDateInput(initial?.projectFinish);
+  const initialBudget = safeNum(initial?.budgetOverride);
 
   React.useEffect(() => {
     if (!open) return;
-    setStart(fmtDateInput(initial?.projectStart));
-    setFinish(fmtDateInput(initial?.projectFinish));
-    setBudget(safeNum(initial?.budgetOverride));
+    setStart(initialStart);
+    setFinish(initialFinish);
+    setBudget(initialBudget);
     setCascade(true);
-  }, [open, initial]);
+  }, [open, initialStart, initialFinish, initialBudget]);
 
-  const startChanged = start && start !== initialStart;
+  const startChanged = start !== initialStart;
+  const finishChanged = finish !== initialFinish;
+  const budgetChanged = safeNum(budget) !== initialBudget;
+  const anyChanged = startChanged || finishChanged || budgetChanged;
 
   return (
     <PmModalShell open={open} title="Project header" icon={FaCog} onClose={onClose} widthClass="max-w-md">
@@ -103,27 +135,41 @@ function HeaderSettingsModal({ open, initial, onSave, onClose }) {
           </span>
         </label>
 
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="flex items-center justify-end gap-2 pt-2">
+          {!anyChanged && !saving ? (
+            <div className="mr-auto text-[10px] italic text-slate-400">
+              No changes to apply.
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50"
+            disabled={saving}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="button"
+            disabled={!anyChanged || saving}
             onClick={() =>
               onSave?.({
                 projectStart: start || null,
                 projectFinish: finish || null,
-                budgetOverride: budget,
+                budgetOverride: safeNum(budget),
                 cascadeReschedule: cascade,
               })
             }
-            className="rounded-lg bg-adlm-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Apply{startChanged && cascade ? " & reschedule" : ""}
+            {saving ? (
+              <>
+                <span className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                Saving…
+              </>
+            ) : (
+              <>Apply{startChanged && cascade ? " & reschedule" : ""}</>
+            )}
           </button>
         </div>
       </div>
@@ -145,6 +191,7 @@ export default function ProjectManagementTab({
   onReset,
   onClearImports,
   onReschedule,
+  onExportCalendar,
 }) {
   const initialTasks = dashboard?.tasks || [];
   const initialRisks = dashboard?.risks || [];
@@ -160,7 +207,10 @@ export default function ProjectManagementTab({
   const [issues, setIssues] = React.useState(initialIssues);
   const [projectStart, setProjectStart] = React.useState(fmtDateInput(dashboard?.projectStart));
   const [projectFinish, setProjectFinish] = React.useState(fmtDateInput(dashboard?.projectFinish));
-  const [budgetOverride, setBudgetOverride] = React.useState(safeNum(dashboard?.totals?.BAC));
+  // Read budgetOverride (user-set value, 0 = auto-derive) from its own field,
+  // not totals.BAC (which is the resolved/computed number). Pre-fix this
+  // accidentally round-tripped the computed BAC back as the override.
+  const [budgetOverride, setBudgetOverride] = React.useState(safeNum(dashboard?.totals?.budgetOverride));
   const [dirty, setDirty] = React.useState(false);
 
   // Re-sync from server payload (after save, import, generate).
@@ -170,8 +220,14 @@ export default function ProjectManagementTab({
     setIssues(dashboard?.issues || []);
     setProjectStart(fmtDateInput(dashboard?.projectStart));
     setProjectFinish(fmtDateInput(dashboard?.projectFinish));
-    setBudgetOverride(safeNum(dashboard?.totals?.BAC));
+    setBudgetOverride(safeNum(dashboard?.totals?.budgetOverride));
     setDirty(false);
+    // If the header modal triggered the save, close it now that the
+    // server has acknowledged. We only flip the flag back after closing.
+    if (pendingHeaderCloseRef.current) {
+      setHeaderModal(false);
+      pendingHeaderCloseRef.current = false;
+    }
   }, [dashboard?.asOf]);
 
   // ── Modal state ────────────────────────────────────────────────────
@@ -179,6 +235,10 @@ export default function ProjectManagementTab({
   const [riskModal, setRiskModal] = React.useState({ open: false, mode: "add", risk: null });
   const [issueModal, setIssueModal] = React.useState({ open: false, mode: "add", issue: null });
   const [headerModal, setHeaderModal] = React.useState(false);
+  // Set true when the header modal triggered a save — the dashboard
+  // re-sync effect uses this to auto-close the modal once the new payload
+  // arrives, giving the Apply button time to show its "Saving…" state.
+  const pendingHeaderCloseRef = React.useRef(false);
 
   function markDirty() {
     setDirty(true);
@@ -319,12 +379,17 @@ export default function ProjectManagementTab({
     setProjectStart(nextStart);
     setProjectFinish(nextFinish);
     setBudgetOverride(nextBudget);
-    setHeaderModal(false);
 
     // Save immediately so the server-side cascade runs in the same round-trip
     // — matches the user expectation of "change date → tasks shift". Cascade
     // only fires server-side when projectStart actually moved AND the user
     // didn't uncheck the modal's "Reschedule tasks" toggle.
+    //
+    // The modal stays open while the save is in flight so the user gets
+    // feedback (spinner on the Apply button). We close it after the next
+    // dashboard payload arrives — useEffect on `dashboard.asOf` re-syncs
+    // and we close from there.
+    pendingHeaderCloseRef.current = true;
     onSave?.({
       tasks,
       risks,
@@ -349,6 +414,13 @@ export default function ProjectManagementTab({
       issues,
     };
   }, [dashboard, tasks, risks, issues]);
+
+  // First-load guard. Once we've received any dashboard payload (asOf set),
+  // we render the real views even if they're empty — the empty-state UX
+  // inside lives in PmDashboardView.
+  if (!dashboard && !importError) {
+    return <PmLoadingSkeleton />;
+  }
 
   return (
     <div className="space-y-3">
@@ -396,6 +468,7 @@ export default function ProjectManagementTab({
           onDeleteIssue={deleteIssue}
           onClearImports={onClearImports}
           onReschedule={onReschedule}
+          onExportCalendar={onExportCalendar}
           onSave={handleSave}
         />
       )}
@@ -425,13 +498,21 @@ export default function ProjectManagementTab({
       />
       <HeaderSettingsModal
         open={headerModal}
+        saving={saving}
         initial={{
           projectStart,
           projectFinish,
           budgetOverride,
         }}
         onSave={handleHeaderSettings}
-        onClose={() => setHeaderModal(false)}
+        onClose={() => {
+          // Don't allow closing mid-save (button is disabled but ESC + outside
+          // click would still fire onClose) — protects the pendingHeaderClose
+          // ref from getting out of sync.
+          if (saving) return;
+          pendingHeaderCloseRef.current = false;
+          setHeaderModal(false);
+        }}
       />
 
       {/* Auto-open the XML helper when the server says .mpp parsing is

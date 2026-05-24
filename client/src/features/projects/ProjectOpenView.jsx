@@ -277,6 +277,7 @@ export default function ProjectOpenView({
   onPmReset,
   onPmClearImports,
   onPmReschedule,
+  onPmExportCalendar,
 }) {
   const [activeTab, setActiveTab] = React.useState("dashboard");
 
@@ -502,6 +503,7 @@ export default function ProjectOpenView({
           onReset={onPmReset}
           onClearImports={onPmClearImports}
           onReschedule={onPmReschedule}
+          onExportCalendar={onPmExportCalendar}
         />
       ) : null}
 

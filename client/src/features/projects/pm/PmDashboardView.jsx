@@ -428,6 +428,13 @@ export default function PmDashboardView({
   const cpi = safeNum(headline.CPI);
   const spi = safeNum(headline.SPI);
 
+  // Onboarding signals — drive the empty-state banner and the "project
+  // start not set" callout. Both are non-blocking — the user can still see
+  // every chart underneath.
+  const totalTasks = safeNum(totals.totalTasks);
+  const hasNoTasks = totalTasks === 0;
+  const hasNoProjectStart = !dashboard?.projectStart;
+
   return (
     <div className="space-y-4">
       {/* Header banner */}
@@ -461,7 +468,7 @@ export default function PmDashboardView({
               className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-bold text-adlm-blue-700 shadow hover:bg-blue-50 transition disabled:opacity-50"
             >
               <FaSyncAlt className={saving ? "animate-spin" : ""} />
-              {saving ? "Saving…" : "Save PM Plan"}
+              {saving ? "Saving…" : "Save changes"}
             </button>
             <button
               type="button"
@@ -475,6 +482,75 @@ export default function PmDashboardView({
           </div>
         </div>
       </div>
+
+      {/* Empty-state onboarding banner — shown when there are no tasks at
+          all. Replaces the silent "0 / 0 / ₦0" tiles below with an actual
+          first-time-user prompt. Dismissed implicitly by adding any task. */}
+      {hasNoTasks ? (
+        <div className="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/50 px-5 py-6 text-center">
+          <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-adlm-blue-700 text-white shadow">
+            <FaTasks className="text-xl" />
+          </div>
+          <div className="mt-3 text-base font-bold text-slate-900">
+            Your PM dashboard is empty
+          </div>
+          <div className="mt-1 text-xs text-slate-600 max-w-md mx-auto">
+            Add tasks manually, generate one task per item from your BoQ, or
+            import an MS Project file. The dashboard tiles, charts, and
+            burndown will populate automatically.
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={onAddTask}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-blue-700 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-blue-800"
+            >
+              <FaPlus className="text-[10px]" />
+              Add first task
+            </button>
+            <button
+              type="button"
+              onClick={onGenerateFromBoq}
+              disabled={generating}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-purple-700 disabled:opacity-50"
+            >
+              <FaMagic className="text-[10px]" />
+              {generating ? "Generating…" : "Generate from BoQ"}
+            </button>
+            <button
+              type="button"
+              onClick={pickFile}
+              disabled={importing}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-slate-800 disabled:opacity-50"
+            >
+              <FaFileImport className="text-[10px]" />
+              {importing ? "Importing…" : "Import MS Project"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Project-start banner — non-blocking nudge when tasks exist but the
+          project's start date hasn't been set. Without a start the Burndown
+          can't render and the Reschedule action errors out. */}
+      {!hasNoTasks && hasNoProjectStart ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <div className="flex items-center gap-2">
+            <FaClock className="text-amber-600" />
+            <span>
+              <strong>Set a project start date</strong> to enable the burndown
+              chart and the task-reschedule cascade.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenHeaderSettings}
+            className="rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700"
+          >
+            Set start date
+          </button>
+        </div>
+      ) : null}
 
       {/* Action strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">

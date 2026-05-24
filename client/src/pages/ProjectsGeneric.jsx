@@ -128,6 +128,7 @@ function getEndpoints(tool) {
     pmImport: (id) => "/projects/" + t + "/" + id + "/pm/import",
     pmClearImports: (id) => "/projects/" + t + "/" + id + "/pm/clear-imports",
     pmReschedule: (id) => "/projects/" + t + "/" + id + "/pm/reschedule",
+    pmCalendar: (id) => "/projects/" + t + "/" + id + "/pm/calendar.ics",
     pmReset: (id) => "/projects/" + t + "/" + id + "/pm",
   };
 
@@ -1553,6 +1554,52 @@ export default function ProjectsGeneric() {
       setNotice(parts.length ? `Rescheduled — ${parts.join(", ")}.` : "Rescheduled.");
     } catch (e) {
       setPmImportError(e?.message || "Failed to reschedule tasks.");
+    }
+  }
+
+  // Download the project schedule as a .ics file. Fetched via auth'd fetch
+  // so the Bearer token can travel; we then turn the response into a Blob
+  // and trigger a browser download. Calendar name = project name.
+  async function handlePmExportCalendar() {
+    if (!selectedId) return;
+    try {
+      const res = await fetch(`${API_BASE}${endpoints.pmCalendar(selectedId)}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errPayload = await res.json().catch(() => ({}));
+        throw new Error(errPayload?.error || `Export failed (${res.status})`);
+      }
+      // Prefer the server-supplied filename if exposed; fall back to a
+      // sanitized project name.
+      let filename = "";
+      const hdr = res.headers.get("X-Calendar-Filename");
+      if (hdr) {
+        try { filename = decodeURIComponent(hdr); } catch { /* ignore */ }
+      }
+      if (!filename) {
+        const safe = (sel?.name || "project")
+          .replace(/[\\/:*?"<>|]+/g, "-")
+          .replace(/\s+/g, " ")
+          .trim();
+        filename = `${safe || "project"}.ics`;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Defer revoke so older browsers don't cancel the download.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setNotice(`Calendar exported: ${filename}`);
+    } catch (e) {
+      setPmImportError(e?.message || "Failed to export calendar.");
     }
   }
 
@@ -4059,6 +4106,7 @@ export default function ProjectsGeneric() {
                 onPmReset={handlePmReset}
                 onPmClearImports={handlePmClearImports}
                 onPmReschedule={handlePmReschedule}
+                onPmExportCalendar={handlePmExportCalendar}
                 onBack={closeProject}
                 onDelete={() => delProject(selectedId, sel?.name)}
               />
