@@ -260,6 +260,15 @@ export async function parseMsProjectMpp(buffer, { filename = "" } = {}) {
   // Project XML from the response. Auth header is optional (MPXJ_API_KEY).
   const apiUrl = process.env.MPXJ_API_URL;
   if (apiUrl) {
+    // Normalize: ensure the URL ends in /convert. Render shows the bare
+    // service hostname in its dashboard ("https://x.onrender.com"), so
+    // operators routinely paste that without the path — the Java service
+    // then 404s with "POST /convert with .mpp body". Auto-appending here
+    // makes the env var forgiving while still letting power users point
+    // at a custom path.
+    const targetUrl = /\/convert(?:\?|$)/.test(apiUrl)
+      ? apiUrl
+      : apiUrl.replace(/\/+$/, "") + "/convert";
     try {
       const headers = {
         "Content-Type": "application/octet-stream",
@@ -270,7 +279,7 @@ export async function parseMsProjectMpp(buffer, { filename = "" } = {}) {
       }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60_000);
-      const res = await fetch(apiUrl, {
+      const res = await fetch(targetUrl, {
         method: "POST",
         headers,
         body: buffer,

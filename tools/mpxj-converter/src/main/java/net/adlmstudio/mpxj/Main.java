@@ -64,9 +64,15 @@ public class Main {
         String method = exchange.getRequestMethod();
         String path = exchange.getRequestURI().getPath();
 
-        if (!"POST".equalsIgnoreCase(method) || !path.endsWith("/convert")) {
-          // Single-purpose service — anything else gets a usage hint.
-          sendText(exchange, 404, "POST /convert with .mpp body, or GET /health");
+        // Accept POST to either /convert (canonical) or / (root). Forgiving
+        // here saves operators from a confusing 404 when they paste the
+        // bare service hostname into MPXJ_API_URL on the Node side. Any
+        // other (non-empty, non-root, non-/convert) path still 404s so
+        // we don't silently swallow typos like /converrt.
+        boolean isConvertPath =
+            path.endsWith("/convert") || path.equals("/") || path.isEmpty();
+        if (!"POST".equalsIgnoreCase(method) || !isConvertPath) {
+          sendText(exchange, 404, "POST /convert (or /) with .mpp body, or GET /health");
           return;
         }
 
