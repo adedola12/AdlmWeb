@@ -17,6 +17,9 @@ import {
   FaChartLine,
   FaTasks,
   FaTimes,
+  FaUnlink,
+  FaCopy,
+  FaLayerGroup,
 } from "react-icons/fa";
 import PmBoqHeatmap from "./PmBoqHeatmap.jsx";
 
@@ -714,6 +717,14 @@ export default function PmDashboardView({
       {/* BoQ progress heatmap — full-width to give it room */}
       <PmBoqHeatmap boqItems={dashboard?.boqItems || []} />
 
+      {/* BoQ ↔ WBS coverage reconciliation — surfaces unlinked /
+          under-allocated / double-counted BoQ entries so the user knows
+          immediately whether the WBS faithfully executes the BoQ. */}
+      <BoqCoveragePanel
+        coverage={dashboard?.boqCoverage}
+        onViewDetails={onViewDetails}
+      />
+
       {/* EVM summary footer */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between mb-2">
@@ -913,6 +924,400 @@ function MovementStat({ label, value, hint, tone = "text-slate-900" }) {
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
       <div className={`mt-0.5 font-bold text-sm ${tone}`}>{value}</div>
       {hint ? <div className="text-[10px] text-slate-500 mt-0.5">{hint}</div> : null}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// BoQ ↔ WBS coverage panel.
+//
+// Answers the single question users ask after building a WBS:
+// "Does my schedule actually execute the priced scope, or have I left
+//  bits unallocated / accidentally counted lines twice?"
+//
+// Surfaces four categories from the server's boqCoverage payload:
+//   1. Fully allocated → green tile, count only (the healthy bucket).
+//   2. Unlinked        → grey tile, ₦ value at risk + top offenders.
+//   3. Under-allocated → amber tile, shortfall amount + top rows.
+//   4. Over-allocated  → rose tile, double-count amount + top rows.
+//
+// Each problem category has a collapsible list of the top 8 offending
+// BoQ rows so the user can jump from "your books don't balance" to the
+// specific row they need to fix. The full visual is a single-stack
+// segmented bar showing the same proportions in one glance.
+// ────────────────────────────────────────────────────────────────────
+function BoqCoveragePanel({ coverage, onViewDetails }) {
+  if (!coverage || !coverage.totalCount) {
+    return null;
+  }
+
+  const total = safeNum(coverage.totalAmount);
+  const linked = safeNum(coverage.linkedAmount);
+  const unlinked = safeNum(coverage.unlinkedAmount);
+  const under = safeNum(coverage.underAllocatedAmount);
+  const over = safeNum(coverage.overAllocatedAmount);
+  const coveragePct = safeNum(coverage.coveragePercent);
+
+  // Header tone reflects worst issue. Over-allocation outweighs under-
+  // allocation because over-counts directly inflate EV (CPI/SPI lie),
+  // whereas under-counts only depress them (a milder distortion).
+  let headerTone = "from-emerald-600 to-emerald-700";
+  let headerLabel = "BoQ fully covered";
+  let headerMsg = `${coverage.fullyAllocatedCount} BoQ entries are tracked end-to-end by the WBS.`;
+  if (over > 0) {
+    headerTone = "from-rose-600 to-rose-700";
+    headerLabel = `Possible double-count: ₦${fmtMoney(over)}`;
+    headerMsg = `${coverage.overAllocatedCount} BoQ entries have task weights summing to > 100%. EV and CPI/SPI may be over-stated.`;
+  } else if (unlinked > 0 || under > 0) {
+    headerTone = "from-amber-500 to-amber-600";
+    const gap = unlinked + under;
+    headerLabel = `Coverage gap: ₦${fmtMoney(gap)}`;
+    const parts = [];
+    if (coverage.unlinkedCount > 0) {
+      parts.push(`${coverage.unlinkedCount} unlinked`);
+    }
+    if (coverage.underAllocatedCount > 0) {
+      parts.push(`${coverage.underAllocatedCount} under-allocated`);
+    }
+    headerMsg = `${parts.join(" + ")}. WBS does not yet execute the full BoQ — EV and SPI will under-state.`;
+  }
+
+  // Single-stack segmented coverage bar widths (% of total amount).
+  const linkedPct = total > 0 ? (Math.min(linked, total) / total) * 100 : 0;
+  const underPct = total > 0 ? (under / total) * 100 : 0;
+  const unlinkedPct = total > 0 ? (unlinked / total) * 100 : 0;
+  // Over-allocation isn't part of the 100% bar — it's an overflow
+  // marker rendered to the right of the bar instead.
+  const overPct = total > 0 ? Math.min(40, (over / total) * 100) : 0;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className={`bg-gradient-to-r ${headerTone} px-4 py-3 text-white`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest opacity-80">
+              BoQ ↔ WBS Coverage
+            </div>
+            <div className="text-base font-bold">{headerLabel}</div>
+          </div>
+          <div className="text-[11px] text-white/85 max-w-md text-right">
+            {headerMsg}
+          </div>
+        </div>
+      </div>
+
+      {/* Stat tiles — one per coverage bucket */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
+        <CoverageStat
+          icon={FaCheckCircle}
+          label="Fully covered"
+          value={`${coverage.fullyAllocatedCount}`}
+          hint="entries balanced at 100%"
+          tone="text-emerald-700"
+          iconBg="bg-emerald-100"
+        />
+        <CoverageStat
+          icon={FaUnlink}
+          label="Unlinked"
+          value={`${coverage.unlinkedCount}`}
+          hint={`₦${fmtMoney(unlinked)} unallocated`}
+          tone={unlinked > 0 ? "text-slate-700" : "text-slate-400"}
+          iconBg="bg-slate-100"
+        />
+        <CoverageStat
+          icon={FaExclamationTriangle}
+          label="Under-allocated"
+          value={`${coverage.underAllocatedCount}`}
+          hint={`₦${fmtMoney(under)} short`}
+          tone={under > 0 ? "text-amber-700" : "text-slate-400"}
+          iconBg="bg-amber-100"
+        />
+        <CoverageStat
+          icon={FaCopy}
+          label="Over-allocated"
+          value={`${coverage.overAllocatedCount}`}
+          hint={`₦${fmtMoney(over)} excess`}
+          tone={over > 0 ? "text-rose-700" : "text-slate-400"}
+          iconBg="bg-rose-100"
+        />
+      </div>
+
+      {/* Single-stack segmented coverage bar */}
+      <div className="px-4 pb-4">
+        <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+          <span>
+            <strong className="text-slate-900">{coveragePct.toFixed(1)}%</strong> of
+            ₦{fmtMoney(total)} BoQ value is linked to the WBS
+          </span>
+          {over > 0 ? (
+            <span className="text-rose-700 font-semibold">
+              + ₦{fmtMoney(over)} double-counted
+            </span>
+          ) : null}
+        </div>
+        <div className="relative h-3.5 w-full rounded-full bg-slate-100 overflow-hidden flex">
+          <div
+            className="h-full bg-emerald-500 transition-all"
+            style={{ width: `${linkedPct}%` }}
+            title={`Linked: ₦${fmtMoney(linked)}`}
+          />
+          <div
+            className="h-full bg-amber-400 transition-all"
+            style={{ width: `${underPct}%` }}
+            title={`Under-allocated shortfall: ₦${fmtMoney(under)}`}
+          />
+          <div
+            className="h-full bg-slate-300 transition-all"
+            style={{ width: `${unlinkedPct}%` }}
+            title={`Unlinked: ₦${fmtMoney(unlinked)}`}
+          />
+        </div>
+        {over > 0 ? (
+          <div className="mt-2 relative h-2 w-full">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-rose-500"
+              style={{ width: `${overPct}%` }}
+            />
+            <div className="absolute inset-y-0 left-0 h-full flex items-center text-[9px] font-semibold text-rose-700 ml-1">
+              double-counted →
+            </div>
+          </div>
+        ) : null}
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-600">
+          <Legend color="#10b981" label="Linked" count={`₦${fmtMoney(linked)}`} />
+          {under > 0 ? (
+            <Legend color="#fbbf24" label="Shortfall" count={`₦${fmtMoney(under)}`} />
+          ) : null}
+          {unlinked > 0 ? (
+            <Legend color="#cbd5e1" label="Unlinked" count={`₦${fmtMoney(unlinked)}`} />
+          ) : null}
+          {over > 0 ? (
+            <Legend color="#f43f5e" label="Excess" count={`₦${fmtMoney(over)}`} />
+          ) : null}
+        </div>
+      </div>
+
+      {/* Offender lists — only render the sections with actual issues so
+          a healthy project shows just the green stat tiles + bar. */}
+      {(coverage.topOver?.length > 0 ||
+        coverage.topUnlinked?.length > 0 ||
+        coverage.topUnder?.length > 0 ||
+        coverage.staleLinkTasks?.length > 0) ? (
+        <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+          {/* Stale links — highest priority because the task's baseline
+              silently drops to ₦0 until the user re-links. */}
+          {coverage.staleLinkTasks?.length > 0 ? (
+            <StaleLinksPanel tasks={coverage.staleLinkTasks} />
+          ) : null}
+          {coverage.topOver?.length > 0 ? (
+            <CoverageOffenders
+              title="Over-allocated (double-count risk)"
+              icon={FaCopy}
+              tone="rose"
+              rows={coverage.topOver}
+              measureLabel="excess"
+              measureKey="excess"
+              note="Lower the weight on one of the tasks below so weights sum to 100%."
+            />
+          ) : null}
+          {coverage.topUnder?.length > 0 ? (
+            <CoverageOffenders
+              title="Under-allocated (WBS gap)"
+              icon={FaExclamationTriangle}
+              tone="amber"
+              rows={coverage.topUnder}
+              measureLabel="shortfall"
+              measureKey="shortfall"
+              note="Add another task to cover the rest, or raise an existing task's weight."
+            />
+          ) : null}
+          {coverage.topUnlinked?.length > 0 ? (
+            <CoverageOffenders
+              title="Unlinked BoQ entries"
+              icon={FaUnlink}
+              tone="slate"
+              rows={coverage.topUnlinked}
+              measureLabel="value"
+              measureKey="amount"
+              note="Add a task for each, or link it to an existing one."
+            />
+          ) : null}
+          {onViewDetails ? (
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={onViewDetails}
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-adlm-blue-700 hover:underline"
+              >
+                <FaLayerGroup className="text-[10px]" />
+                Open WBS to fix
+                <FaArrowRight className="text-[9px]" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Tasks whose linkedBoqIdentities point at BoQ rows that no longer
+// exist in the current scope. This is the silent cause of "Task shows
+// ₦0 baseline even though I linked 5 items" — the items were renamed
+// or re-ordered, breaking the identity hash.
+function StaleLinksPanel({ tasks }) {
+  const [open, setOpen] = React.useState(true);
+  return (
+    <div className="rounded-lg border border-rose-300 bg-rose-50 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-rose-800"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <FaTimesCircle className="text-rose-500" />
+          Tasks with stale BoQ links
+          <span className="rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold">
+            {tasks.length}
+          </span>
+        </span>
+        <span className="text-[10px] font-medium opacity-70">
+          {open ? "Hide ▾" : "Show ▸"}
+        </span>
+      </button>
+      {open ? (
+        <div className="bg-white px-3 pb-3 pt-1">
+          <div className="text-[10px] text-slate-600 italic mb-2">
+            These tasks are linked to BoQ rows that no longer exist (renamed,
+            deleted, or re-ordered). Their baseline cost has silently dropped
+            to ₦0. Open the task and re-link to the current BoQ rows to fix.
+          </div>
+          <ul className="space-y-1.5">
+            {tasks.map((t) => (
+              <li
+                key={t.taskId || t.wbs || t.name}
+                className="rounded-md border border-rose-100 bg-rose-50/40 px-2.5 py-1.5 text-[11px] flex items-center gap-2"
+              >
+                {t.wbs ? (
+                  <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-mono text-slate-600">
+                    {t.wbs}
+                  </span>
+                ) : null}
+                <span className="flex-1 min-w-0 font-medium text-slate-900 truncate" title={t.name}>
+                  {t.name}
+                </span>
+                <span className="shrink-0 text-[10px] text-rose-700 font-semibold">
+                  {t.staleCount} of {t.totalLinks} link{t.totalLinks === 1 ? "" : "s"} broken
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CoverageStat({ icon: Icon, label, value, hint, tone = "text-slate-900", iconBg = "bg-slate-100" }) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-white px-3 py-2.5 flex items-start gap-2.5">
+      <div className={`shrink-0 rounded-md ${iconBg} p-2 ${tone}`}>
+        {Icon ? <Icon className="text-sm" /> : null}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+        <div className={`mt-0.5 font-bold text-base ${tone} leading-tight`}>{value}</div>
+        {hint ? <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={hint}>{hint}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+const COVERAGE_KIND_BADGE = {
+  measured: { label: "BoQ", cls: "bg-slate-100 text-slate-700" },
+  preliminary: { label: "Prelim", cls: "bg-purple-100 text-purple-700" },
+  provisional: { label: "PC sum", cls: "bg-amber-100 text-amber-800" },
+  variation: { label: "Variation", cls: "bg-rose-100 text-rose-700" },
+};
+
+function CoverageOffenders({ title, icon: Icon, tone, rows, measureLabel, measureKey, note }) {
+  const toneCls = {
+    rose: { border: "border-rose-200", bg: "bg-rose-50/60", title: "text-rose-800", icon: "text-rose-500" },
+    amber: { border: "border-amber-200", bg: "bg-amber-50/60", title: "text-amber-800", icon: "text-amber-500" },
+    slate: { border: "border-slate-200", bg: "bg-slate-50/60", title: "text-slate-800", icon: "text-slate-500" },
+  }[tone] || { border: "border-slate-200", bg: "bg-slate-50/60", title: "text-slate-800", icon: "text-slate-500" };
+
+  const [open, setOpen] = React.useState(true);
+
+  return (
+    <div className={`rounded-lg border ${toneCls.border} ${toneCls.bg} overflow-hidden`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold ${toneCls.title}`}
+      >
+        <span className="inline-flex items-center gap-1.5">
+          {Icon ? <Icon className={toneCls.icon} /> : null}
+          {title}
+          <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-bold">
+            {rows.length}
+          </span>
+        </span>
+        <span className="text-[10px] font-medium opacity-70">
+          {open ? "Hide ▾" : "Show ▸"}
+        </span>
+      </button>
+      {open ? (
+        <div className="bg-white/70 px-3 pb-3 pt-1">
+          {note ? (
+            <div className="text-[10px] text-slate-600 italic mb-2">{note}</div>
+          ) : null}
+          <ul className="space-y-1.5">
+            {rows.map((row) => {
+              const badge = COVERAGE_KIND_BADGE[row.kind] || COVERAGE_KIND_BADGE.measured;
+              const measure = safeNum(row[measureKey]);
+              const linkedTasks = Array.isArray(row.taskNames) ? row.taskNames : [];
+              return (
+                <li
+                  key={row.identity}
+                  className="rounded-md border border-slate-100 bg-white px-2.5 py-1.5 text-[11px] flex flex-wrap items-start gap-2"
+                >
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold ${badge.cls}`}>
+                    {badge.label}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="font-medium text-slate-900 break-words">
+                      {row.description || `Item #${row.identity}`}
+                    </span>
+                    {linkedTasks.length > 0 ? (
+                      <span className="block text-[10px] text-slate-500 mt-0.5">
+                        Linked from: {linkedTasks.slice(0, 3).join(", ")}
+                        {linkedTasks.length > 3 ? ` +${linkedTasks.length - 3} more` : ""}
+                        {row.totalWeight != null ? (
+                          <span className="ml-1 text-slate-600">
+                            (total weight {Math.round(safeNum(row.totalWeight))}%)
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-[9px] uppercase tracking-wide text-slate-500">
+                      {measureLabel}
+                    </span>
+                    <span className="font-bold text-slate-900">
+                      ₦{fmtMoney(measure)}
+                    </span>
+                    <span className="block text-[9px] text-slate-500">
+                      of ₦{fmtMoney(row.amount)}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

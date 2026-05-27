@@ -147,6 +147,49 @@ function formatRate(value) {
   });
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Excel-style formula evaluator for the BoQ Rate cell.
+//
+// Users often paste expressions like `=1.2*1.5*95000` (width × height ×
+// unit rate) or `=(45+12)*250` (multiple components × rate). The cell
+// detects the leading `=`, validates the expression with a strict
+// regex (digits, decimals, +-*/(), %, whitespace only), and evaluates
+// via Function() so we don't fall into eval()'s global scope.
+//
+// Returns { ok, value, error }:
+//   • ok=true  → value is the evaluated number
+//   • ok=false → error describes why (invalid chars, parse fail, etc.)
+//
+// This is exposed at module scope (not just RateCell) so the formula
+// tool can be reused in any numeric cell later (qty, etc.).
+// ────────────────────────────────────────────────────────────────────
+function evaluateFormula(raw) {
+  if (typeof raw !== "string") return { ok: false, error: "Not a string" };
+  const stripped = raw.replace(/^=/, "").trim();
+  if (!stripped) return { ok: false, error: "Empty formula" };
+  // Whitelist: digits, dot, basic operators, parentheses, whitespace.
+  // % is allowed so `=1500*5%` works (we translate % → /100 below).
+  if (!/^[\d.+\-*/()\s%]+$/.test(stripped)) {
+    return { ok: false, error: "Only +, -, *, /, (, ), %, digits allowed" };
+  }
+  // Translate trailing-% notation: e.g. `25%` → `(25/100)`.
+  const translated = stripped.replace(/(\d+(?:\.\d+)?)\s*%/g, "($1/100)");
+  try {
+    // eslint-disable-next-line no-new-func
+    const value = Function("\"use strict\"; return (" + translated + ");")();
+    if (!Number.isFinite(value)) {
+      return { ok: false, error: "Result is not finite" };
+    }
+    return { ok: true, value };
+  } catch (err) {
+    return { ok: false, error: err?.message || "Parse error" };
+  }
+}
+
+function isFormulaInput(s) {
+  return typeof s === "string" && s.trim().startsWith("=");
+}
+
 /**
  * Normalize a unit string for comparison.
  */
@@ -322,8 +365,41 @@ function RateCell({
     setSearchResults(boqCandidates.length ? boqCandidates : []);
   };
 
+  // Track the in-progress formula text. While the user is typing
+  // `=1.2*1.5*95000` we keep the raw expression in state and only
+  // commit the evaluated number to the parent on Enter / blur.
+  const [formulaDraft, setFormulaDraft] = useState("");
+  const formulaResult = isFormulaInput(formulaDraft)
+    ? evaluateFormula(formulaDraft)
+    : null;
+
+  const commitFormula = () => {
+    if (!formulaResult) return false;
+    if (formulaResult.ok) {
+      const rounded = Math.round(formulaResult.value * 100) / 100;
+      onChange?.(String(rounded));
+      setFormulaDraft("");
+      setSearchQuery("");
+      setSearchResults([]);
+      setFocused(false);
+      return true;
+    }
+    return false;
+  };
+
   const handleInputChange = (e) => {
     const v = e.target.value;
+    // Formula mode — starts with `=`. Store the raw text and show a
+    // live preview underneath the input; commit on Enter / blur via
+    // commitFormula.
+    if (isFormulaInput(v)) {
+      setFormulaDraft(v);
+      setSearchQuery("");
+      setSearchResults([]);
+      return;
+    }
+    // Clear any previous formula draft when the user leaves formula mode.
+    if (formulaDraft) setFormulaDraft("");
     // If it's a number, treat as direct rate input
     if (/^[\d.,]*$/.test(v)) {
       onChange?.(v.replace(/,/g, ""));
@@ -376,21 +452,72 @@ function RateCell({
             <input
               ref={inputRef}
               autoFocus
-              className="input !h-9 w-full !px-2 !py-1 text-sm"
+              className={`input !h-9 w-full !px-2 !py-1 text-sm ${
+                formulaResult && !formulaResult.ok ? "!border-rose-400" : ""
+              } ${
+                formulaResult && formulaResult.ok ? "!border-emerald-400" : ""
+              }`}
               type="text"
-              value={searchQuery || (value != null && value !== "" ? String(value) : "")}
-              placeholder={canRateGenBoq ? "Enter rate or type name to search..." : "Enter rate..."}
+              value={
+                formulaDraft ||
+                searchQuery ||
+                (value != null && value !== "" ? String(value) : "")
+              }
+              placeholder={canRateGenBoq ? "Enter rate, =formula, or type a name…" : "Enter rate or =formula…"}
               onChange={handleInputChange}
+              onBlur={() => {
+                // Commit formula on blur if we have a valid result —
+                // mirrors Excel's behaviour. Invalid formulas stay in
+                // the draft so the user can fix them without losing
+                // their work.
+                if (formulaResult && formulaResult.ok) commitFormula();
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   setFocused(false);
                   setSearchQuery("");
+                  setFormulaDraft("");
+                  return;
+                }
+                if (e.key === "Enter") {
+                  // Enter while in formula mode commits the result
+                  // (and closes the popup). Default behaviour for
+                  // other inputs handled elsewhere.
+                  if (formulaResult) {
+                    e.preventDefault();
+                    commitFormula();
+                  }
                 }
               }}
             />
-            {canRateGenBoq && (
+            {/* Live formula preview / hint strip */}
+            {formulaResult ? (
+              <div
+                className={`mt-1 rounded-md border px-2 py-1 text-[11px] ${
+                  formulaResult.ok
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-rose-200 bg-rose-50 text-rose-800"
+                }`}
+              >
+                {formulaResult.ok ? (
+                  <span>
+                    <span className="opacity-70">= </span>
+                    <strong>{formatRate(formulaResult.value) || formulaResult.value}</strong>
+                    <span className="ml-2 text-[10px] opacity-70">
+                      Press Enter or click away to apply
+                    </span>
+                  </span>
+                ) : (
+                  <span>
+                    <strong>Formula error:</strong> {formulaResult.error}
+                  </span>
+                )}
+              </div>
+            ) : (
               <div className="mt-1 text-[10px] text-slate-400">
-                Type a number for direct rate, or a name to search RateGen
+                Tip: start with <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-mono">=</code> for a formula
+                — e.g. <code className="font-mono">=1.2*1.5*95000</code>
+                {canRateGenBoq ? " · or type a name to search RateGen" : ""}
               </div>
             )}
           </div>
@@ -590,6 +717,14 @@ export default function ProjectBillTable({
   onAddPreliminaryItem,
   onRemovePreliminaryItem,
   onNormalizePreliminaryAllocations,
+  // ── Undo stack for accidental deletes ─────────────────────────────
+  // boqUndoStack: array of { id, kind, item, index, label, ts } —
+  //   most recent first, capped at 5 entries by the parent.
+  // onBoqUndo(id): restore the entry with that id.
+  // onBoqUndoClear: dismiss the entire stack (used when user is sure).
+  boqUndoStack = [],
+  onBoqUndo,
+  onBoqUndoClear,
   onSyncBoqRates,
   onSyncPrices,
   onToggleAutoFill,
@@ -953,6 +1088,17 @@ export default function ProjectBillTable({
   return (
     <div className="relative space-y-4">
       <div ref={topAnchorRef} className="scroll-mt-24" aria-hidden="true" />
+
+      {/* Floating Undo bar — sticky at top while any delete is in the
+          stack. Lets users recover from accidental trash clicks. */}
+      {Array.isArray(boqUndoStack) && boqUndoStack.length > 0 ? (
+        <BoqUndoBar
+          stack={boqUndoStack}
+          onUndo={onBoqUndo}
+          onClear={onBoqUndoClear}
+        />
+      ) : null}
+
       {/* Office-style ribbon: tab strip + contextual groups */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
         <div className="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-2 pt-2">
@@ -1878,12 +2024,8 @@ export default function ProjectBillTable({
                         <button
                           type="button"
                           className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition"
-                          title="Delete row"
-                          onClick={() => {
-                            if (window.confirm(`Delete "${row.description}"?`)) {
-                              onDeleteItem?.(row.i);
-                            }
-                          }}
+                          title="Delete row (you'll be able to undo)"
+                          onClick={() => onDeleteItem?.(row.i)}
                         >
                           <FaTrashAlt className="text-[10px]" />
                         </button>
@@ -2828,6 +2970,77 @@ function WbsLinkChip({ stats }) {
         {n} link{n === 1 ? "" : "s"} · {total}%
         {!isBalanced ? <span className="font-bold ml-0.5">· {stateText}</span> : null}
       </span>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// BoqUndoBar — sticky banner that surfaces the last N deletes so users
+// can recover from accidental trash clicks. Visible only while the
+// stack is non-empty.
+//
+// Layout:
+//   • Most-recent entry on the left, oldest on the right
+//   • Each entry shows the kind badge + label + "Undo" button
+//   • "Dismiss all" on the right clears the stack
+//
+// Why a banner instead of a toast: deletes happen quickly in QS work
+// (cleaning up imported BoQs), so users often want to see *several*
+// recent deletes simultaneously rather than one-at-a-time toasts that
+// dismiss themselves.
+// ────────────────────────────────────────────────────────────────────
+const BOQ_UNDO_KIND_LABEL = {
+  measured: { label: "BoQ row", cls: "bg-slate-100 text-slate-700" },
+  preliminary: { label: "Prelim", cls: "bg-purple-100 text-purple-700" },
+  provisional: { label: "PC sum", cls: "bg-amber-100 text-amber-800" },
+  variation: { label: "Variation", cls: "bg-rose-100 text-rose-700" },
+};
+
+function BoqUndoBar({ stack, onUndo, onClear }) {
+  if (!Array.isArray(stack) || stack.length === 0) return null;
+  return (
+    <div className="sticky top-16 z-30 -mx-1 rounded-xl border border-amber-300 bg-amber-50/95 px-3 py-2 shadow-sm backdrop-blur dark:border-amber-700 dark:bg-amber-900/30">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+          <FaTrashAlt className="text-[10px]" />
+          Recently deleted
+          <span className="rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:bg-amber-800 dark:text-amber-100">
+            {stack.length}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+          {stack.map((entry) => {
+            const badge = BOQ_UNDO_KIND_LABEL[entry.kind] || BOQ_UNDO_KIND_LABEL.measured;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => onUndo?.(entry.id)}
+                title={`Restore "${entry.label}" to position #${(entry.index || 0) + 1}`}
+                className="group inline-flex max-w-[260px] items-center gap-1.5 rounded-full border border-amber-300 bg-white px-2 py-1 text-[11px] hover:border-emerald-400 hover:bg-emerald-50 transition dark:bg-slate-800 dark:border-amber-600 dark:hover:bg-emerald-900/30"
+              >
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold ${badge.cls}`}>
+                  {badge.label}
+                </span>
+                <span className="truncate font-medium text-slate-800 dark:text-slate-100">
+                  {entry.label}
+                </span>
+                <span className="ml-1 shrink-0 text-[10px] font-semibold text-emerald-700 group-hover:text-emerald-800 dark:text-emerald-300">
+                  ↶ Undo
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={onClear}
+          className="ml-auto shrink-0 rounded-md border border-transparent px-2 py-1 text-[10px] font-medium text-slate-500 hover:bg-white hover:text-slate-700 transition dark:hover:bg-slate-700"
+          title="Dismiss undo history"
+        >
+          Dismiss all
+        </button>
+      </div>
     </div>
   );
 }

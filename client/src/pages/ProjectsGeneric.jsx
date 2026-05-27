@@ -1015,6 +1015,30 @@ export default function ProjectsGeneric() {
   const [baseVariations, setBaseVariations] = React.useState([]);
   const [preliminaryItems, setPreliminaryItems] = React.useState([]);
   const [basePreliminaryItems, setBasePreliminaryItems] = React.useState([]);
+  // ── Undo stack for BoQ deletes ──────────────────────────────────────
+  // Stores the last N deleted entries (measured items, preliminaries,
+  // PC sums, variations) so the user can recover from an accidental
+  // click on the trash icon. We keep snapshots of the full entity AND
+  // its insertion-position so Undo restores order, not just contents.
+  //
+  // Each entry: { id, kind, item, index, label, ts }
+  //   kind ∈ 'measured' | 'preliminary' | 'provisional' | 'variation'
+  //   item is the JSON snapshot of the deleted entity
+  //   index is where to splice it back in on Undo
+  //
+  // 5-deep on the visible stack but Undo button shows top 3 — gives a
+  // small safety net beyond the user-visible window.
+  const [boqUndoStack, setBoqUndoStack] = React.useState([]);
+  const BOQ_UNDO_MAX = 5;
+  // Helper: push a deletion snapshot. Truncates the stack to the cap so
+  // older entries silently age out (the user only ever undoes recent
+  // accidental clicks; deeper history would just clutter the UI).
+  const pushBoqUndo = React.useCallback((entry) => {
+    setBoqUndoStack((prev) => {
+      const next = [{ ...entry, id: `${entry.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ts: Date.now() }, ...prev];
+      return next.slice(0, BOQ_UNDO_MAX);
+    });
+  }, []);
   const [valuationSettings, setValuationSettings] = React.useState(
     DEFAULT_VALUATION_SETTINGS,
   );
@@ -1952,6 +1976,14 @@ export default function ProjectsGeneric() {
     setProvisionalSums((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
       if (idx < 0 || idx >= next.length) return prev;
+      const removed = next[idx];
+      // Snapshot for undo BEFORE we mutate the array.
+      pushBoqUndo({
+        kind: "provisional",
+        item: JSON.parse(JSON.stringify(removed)),
+        index: idx,
+        label: removed?.description || `PC sum #${idx + 1}`,
+      });
       next.splice(idx, 1);
       return next;
     });
@@ -1981,6 +2013,13 @@ export default function ProjectsGeneric() {
     setVariations((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
       if (idx < 0 || idx >= next.length) return prev;
+      const removed = next[idx];
+      pushBoqUndo({
+        kind: "variation",
+        item: JSON.parse(JSON.stringify(removed)),
+        index: idx,
+        label: removed?.description || `Variation #${idx + 1}`,
+      });
       next.splice(idx, 1);
       return next;
     });
@@ -2013,6 +2052,13 @@ export default function ProjectsGeneric() {
     setPreliminaryItems((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
       if (idx < 0 || idx >= next.length) return prev;
+      const removed = next[idx];
+      pushBoqUndo({
+        kind: "preliminary",
+        item: JSON.parse(JSON.stringify(removed)),
+        index: idx,
+        label: removed?.name || `Preliminary #${idx + 1}`,
+      });
       next.splice(idx, 1);
       return next;
     });
@@ -2255,6 +2301,19 @@ export default function ProjectsGeneric() {
     if (!sel) return;
     const its = Array.isArray(sel?.items) ? [...sel.items] : [];
     if (rowIndex < 0 || rowIndex >= its.length) return;
+    const removed = its[rowIndex];
+    // Snapshot for undo BEFORE the splice. We also stash the rate
+    // cache value for this row so undo restores it intact (otherwise
+    // the row reappears with a blank rate field).
+    const rateKey = itemKey(removed, rowIndex);
+    const cachedRate = rates?.[rateKey];
+    pushBoqUndo({
+      kind: "measured",
+      item: JSON.parse(JSON.stringify(removed)),
+      index: rowIndex,
+      label: removed?.description || removed?.materialName || `Row ${rowIndex + 1}`,
+      cachedRate,
+    });
     its.splice(rowIndex, 1);
     setSel((prev) => (prev ? { ...prev, items: its } : prev));
     // clear rate/status caches for the removed index
@@ -2264,6 +2323,58 @@ export default function ProjectsGeneric() {
       return next;
     });
   }
+
+  // Restore a deleted BoQ entry from the undo stack. Splices the item
+  // back into its array at the original index (or at the end if the
+  // array has shrunk below that). Pops the entry off the stack so
+  // repeated Undo clicks walk back through history.
+  const handleBoqUndo = React.useCallback((entryId) => {
+    setBoqUndoStack((prev) => {
+      const entry = prev.find((e) => e.id === entryId);
+      if (!entry) return prev;
+      const { kind, item, index, cachedRate } = entry;
+      if (kind === "measured") {
+        setSel((cur) => {
+          if (!cur) return cur;
+          const its = Array.isArray(cur.items) ? [...cur.items] : [];
+          const at = Math.min(Math.max(0, index), its.length);
+          its.splice(at, 0, item);
+          return { ...cur, items: its };
+        });
+        if (cachedRate != null) {
+          // Re-seed the rate cache at the new index's key so the row
+          // shows its original rate immediately, not a blank cell.
+          setRates((prevRates) => ({ ...(prevRates || {}), [itemKey(item, index)]: cachedRate }));
+        }
+      } else if (kind === "provisional") {
+        setProvisionalSums((cur) => {
+          const next = Array.isArray(cur) ? [...cur] : [];
+          const at = Math.min(Math.max(0, index), next.length);
+          next.splice(at, 0, item);
+          return next;
+        });
+      } else if (kind === "variation") {
+        setVariations((cur) => {
+          const next = Array.isArray(cur) ? [...cur] : [];
+          const at = Math.min(Math.max(0, index), next.length);
+          next.splice(at, 0, item);
+          return next;
+        });
+      } else if (kind === "preliminary") {
+        setPreliminaryItems((cur) => {
+          const next = Array.isArray(cur) ? [...cur] : [];
+          const at = Math.min(Math.max(0, index), next.length);
+          next.splice(at, 0, item);
+          return next;
+        });
+      }
+      return prev.filter((e) => e.id !== entryId);
+    });
+  }, [setSel, setRates, setProvisionalSums, setVariations, setPreliminaryItems]);
+
+  const handleBoqUndoClear = React.useCallback(() => {
+    setBoqUndoStack([]);
+  }, []);
 
   function moveItem(fromIndex, toIndex) {
     if (!sel) return;
@@ -4075,6 +4186,9 @@ export default function ProjectsGeneric() {
                 items={items}
                 onDeleteItem={deleteItem}
                 onMoveItem={moveItem}
+                boqUndoStack={boqUndoStack}
+                onBoqUndo={handleBoqUndo}
+                onBoqUndoClear={handleBoqUndoClear}
                 rates={rates}
                 openPickKey={openPickKey}
                 onToggleOpenPickKey={(key) =>

@@ -63,32 +63,37 @@ function itemIdentity(item, index) {
 
 // Build a map of identity → { plannedAmount, actualAmount, completed,
 // percentComplete } so the task layer can pull cost data from the BoQ
-// when linkedBoqIdentities is set. The actualAmount uses the partial
-// factor (binary ratified → 1, else percentComplete / 100) so the PM
-// dashboard reflects partial progress, not just fully-signed-off lines.
-function buildItemIndex(project) {
-  const items = Array.isArray(project?.items) ? project.items : [];
-  const isMaterials = String(project?.productKey || "").includes("materials");
-  const statusField = isMaterials ? "purchased" : "completed";
+// when linkedBoqIdentities is set.
+//
+// Critical: we index BOTH measured items AND the virtual entries for
+// preliminaries / provisional sums / variations. A task linked to a
+// `prelim::N` / `pc::N` / `var::N` identity would otherwise resolve to
+// "not found" and the task's baseline cost would silently drop to ₦0
+// (the bug the user hit on the Final-fix task).
+//
+// The actualAmount on measured items uses the partial factor
+// (binary ratified → 1, else percentComplete / 100) so the PM dashboard
+// reflects partial progress, not just fully-signed-off lines.
+function buildItemIndex(project, scope) {
   const map = new Map();
-  items.forEach((item, idx) => {
-    const key = itemIdentity(item, idx);
-    const qty = safeNum(item?.qty);
-    const rate = safeNum(item?.rate);
-    const planned = qty * rate;
-    const aQty = item?.actualQty != null ? safeNum(item?.actualQty) : qty;
-    const aRate = item?.actualRate != null ? safeNum(item?.actualRate) : rate;
-    const ratified = Boolean(item?.[statusField]);
-    const pct = clamp(safeNum(item?.percentComplete), 0, 100);
-    const factor = ratified ? 1 : pct / 100;
-    map.set(key, {
-      plannedAmount: planned,
-      actualAmount: aQty * aRate * factor,
-      completed: ratified,
-      percentComplete: ratified ? 100 : pct,
-      valuationFactor: factor,
+
+  // Pull every virtual item (measured + prelim + PC + variations) from
+  // the scope computation — single source of truth for identities and
+  // amounts. virtualItems.actualAmount is pre-computed correctly per
+  // kind, so we don't reinvent the math here.
+  const virtuals = Array.isArray(scope?.virtualItems) ? scope.virtualItems : [];
+  for (const v of virtuals) {
+    if (!v || !v.identity) continue;
+    map.set(v.identity, {
+      plannedAmount: safeNum(v.amount),
+      actualAmount: safeNum(v.actualAmount),
+      completed: Boolean(v.completed),
+      percentComplete: safeNum(v.percentComplete),
+      valuationFactor: safeNum(v.percentComplete) / 100,
+      kind: v.kind,
     });
-  });
+  }
+
   return map;
 }
 
@@ -147,6 +152,11 @@ export function computeProjectScope(project) {
       qty,
       rate,
       amount: planned,
+      // actualAmount preserves the aQty×aRate×factor calculation so the
+      // task-cost hydrator (hydrateTaskCost) can read it through the
+      // virtualItems-based itemIndex instead of recomputing from raw
+      // item fields.
+      actualAmount: actual,
       category: String(item?.category || ""),
       trade: String(item?.trade || ""),
       completed: ratified,
@@ -177,6 +187,7 @@ export function computeProjectScope(project) {
       qty: 1,
       rate: amount,
       amount,
+      actualAmount: isDone ? amount : 0,
       category: "Provisional Sums",
       trade: "",
       completed: isDone,
@@ -207,6 +218,7 @@ export function computeProjectScope(project) {
       qty,
       rate,
       amount,
+      actualAmount: isDone ? amount : 0,
       category: "Variations",
       trade: "",
       completed: isDone,
@@ -238,6 +250,7 @@ export function computeProjectScope(project) {
       qty: allocation,
       rate: amount > 0 && allocation > 0 ? amount / allocation : 0,
       amount,
+      actualAmount: completed ? amount : 0,
       category: "Preliminaries",
       trade: "",
       completed,
@@ -850,7 +863,12 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   const tasks = Array.isArray(pm.tasks) ? pm.tasks : [];
   const risks = Array.isArray(pm.risks) ? pm.risks : [];
   const issues = Array.isArray(pm.issues) ? pm.issues : [];
-  const itemIndex = buildItemIndex(project);
+  // Compute scope FIRST so the itemIndex can resolve identities for
+  // every BoQ stream (measured + prelim + PC + variations). Without
+  // this, tasks linked to a `prelim::N` / `pc::N` / `var::N` identity
+  // would silently lose their baseline cost in hydrateTaskCost.
+  const scope = computeProjectScope(project);
+  const itemIndex = buildItemIndex(project, scope);
   const {
     enriched,
     buckets,
@@ -904,27 +922,26 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   }
 
   // ── Project-scope breakdown ────────────────────────────────────────────
-  // Pull the *full* contract picture from the BoQ side: measured items,
-  // provisional sums, preliminaries, variations. This is the same math the
-  // Interim Payment Certificate flow uses, so the PM dashboard and the
-  // valuation pipeline stay numerically aligned.
-  const scope = computeProjectScope(project);
+  // (scope was already computed above so itemIndex could see prelim/PC/
+  // variation identities — same single source of truth for both layers.)
   const grossFromItems = scope.measured.planned;
   const contractSum = safeNum(project?.contract?.contractSum);
   const contractLocked = scope.contractLocked;
 
   // BAC priority:
-  //   1. User-set budgetOverride from the Project Header modal
-  //   2. Full project total (measured + PC + prelim + variations) — matches
-  //      what the BoQ contract panel displays
-  //   3. Fall-back chain to legacy values for projects without scope set up
+  //   • Contract LOCKED → always projectTotal (frozen BoQ value + any
+  //     post-lock variations). The override is ignored so the books
+  //     can't drift away from the locked contract.
+  //   • Contract UNLOCKED → user-set budgetOverride wins, then projectTotal,
+  //     then legacy fallbacks for projects without scope set up.
   const projectTotal = scope.projectTotal;
-  const BAC =
-    safeNum(pm.budgetOverride) ||
-    projectTotal ||
-    contractSum ||
-    totalBaseline ||
-    grossFromItems;
+  const BAC = contractLocked
+    ? (projectTotal || contractSum || totalBaseline || grossFromItems)
+    : (safeNum(pm.budgetOverride) ||
+       projectTotal ||
+       contractSum ||
+       totalBaseline ||
+       grossFromItems);
 
   // BoQ-derived EV / AC — replaces the task-only numbers for the dashboard's
   // cost-side metrics so prelim, PC and variation work all flow through.
@@ -984,6 +1001,149 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   const openRisks = risks.filter((r) => r?.status !== "closed").length;
   const openIssues = issues.filter((i) => i?.status !== "resolved" && i?.status !== "closed").length;
 
+  // ── BoQ ↔ WBS coverage reconciliation ───────────────────────────────
+  // Walk every BoQ entry (measured + prelim + PC + variation) and
+  // classify by how the WBS covers it:
+  //   • unlinked      → no task touches this line
+  //   • under         → some task(s) link to it but total weight < 100
+  //                      (gap in WBS — part of the BoQ value is missing
+  //                      from the plan, so SPI/CPI will under-state)
+  //   • fully         → total weight == 100 (single task at 100% OR
+  //                      multiple tasks summing to 100%)
+  //   • over          → total weight > 100 (same BoQ value counted
+  //                      multiple times in EV — inflated CPI/SPI)
+  //
+  // The "amount at risk" for over-allocation is the EXCESS portion,
+  // not the full line. So a ₦1M line with 160% allocation contributes
+  // ₦600K to overAllocatedAmount, not ₦1.6M.
+  //
+  // Returned to the client so the dashboard can render a single panel
+  // that answers: "is the WBS a faithful execution plan for the BoQ?"
+  const boqCoverage = {
+    totalAmount: 0,
+    linkedAmount: 0,         // weighted (totalWeight/100 × amount), capped at amount
+    unlinkedAmount: 0,
+    underAllocatedAmount: 0, // shortfall = (100 - totalWeight)/100 × amount
+    overAllocatedAmount: 0,  // excess = (totalWeight - 100)/100 × amount
+    unlinkedCount: 0,
+    fullyAllocatedCount: 0,
+    underAllocatedCount: 0,
+    overAllocatedCount: 0,
+    totalCount: 0,
+    // Tasks pointing at BoQ identities that no longer exist (renamed,
+    // deleted, or re-keyed by sn change). These silently drop to ₦0
+    // baseline so we surface them as "needs re-link" rather than
+    // letting the numbers quietly mis-state.
+    staleLinkTasks: [],
+    // List of the worst offenders so the panel can guide the user
+    // straight to the BoQ rows that need rebalancing. Top 8 each.
+    topUnlinked: [],
+    topOver: [],
+    topUnder: [],
+  };
+
+  // Build a fast lookup of every valid scope identity for stale-link
+  // detection below.
+  const validIdentities = new Set(scope.virtualItems.map((v) => v.identity));
+  for (const t of enriched) {
+    if (t._isSummary) continue;
+    const links = Array.isArray(t.linkedBoqIdentities) ? t.linkedBoqIdentities : [];
+    if (!links.length) continue;
+    const stale = links.filter((id) => id && !validIdentities.has(String(id)));
+    if (stale.length > 0) {
+      boqCoverage.staleLinkTasks.push({
+        taskId: t.taskId || null,
+        wbs: t.wbs || "",
+        name: t.name || `Task ${t.taskId || ""}`,
+        staleCount: stale.length,
+        totalLinks: links.length,
+      });
+    }
+  }
+  boqCoverage.staleLinkTasks = boqCoverage.staleLinkTasks.slice(0, 12);
+
+  for (const v of scope.virtualItems) {
+    if (!v || !v.identity) continue;
+    boqCoverage.totalCount += 1;
+    const amount = safeNum(v.amount);
+    boqCoverage.totalAmount += amount;
+    const totalWeight = safeNum(totalWeightByIdentity.get(v.identity));
+
+    if (totalWeight <= 0) {
+      // No task links here — full BoQ value is unallocated.
+      boqCoverage.unlinkedCount += 1;
+      boqCoverage.unlinkedAmount += amount;
+      if (amount > 0) {
+        boqCoverage.topUnlinked.push({
+          identity: v.identity,
+          kind: v.kind,
+          description: v.description,
+          amount,
+          totalWeight: 0,
+        });
+      }
+    } else if (Math.abs(totalWeight - 100) < 0.5) {
+      // Effectively balanced (allow 0.5% tolerance for float drift).
+      boqCoverage.fullyAllocatedCount += 1;
+      boqCoverage.linkedAmount += amount;
+    } else if (totalWeight < 100) {
+      // Some coverage but short — partial WBS gap.
+      boqCoverage.underAllocatedCount += 1;
+      const linkedShare = (totalWeight / 100) * amount;
+      const shortfall = amount - linkedShare;
+      boqCoverage.linkedAmount += linkedShare;
+      boqCoverage.underAllocatedAmount += shortfall;
+      if (shortfall > 0) {
+        boqCoverage.topUnder.push({
+          identity: v.identity,
+          kind: v.kind,
+          description: v.description,
+          amount,
+          totalWeight,
+          shortfall,
+          taskNames: linkedTaskNamesByIdentity.get(v.identity) || [],
+        });
+      }
+    } else {
+      // Over-allocated: the EXCESS portion is the double-count risk.
+      // Linked amount is capped at the line's value (we never count
+      // more than 100% of the BoQ line into "linked").
+      boqCoverage.overAllocatedCount += 1;
+      const excess = ((totalWeight - 100) / 100) * amount;
+      boqCoverage.linkedAmount += amount; // capped at amount
+      boqCoverage.overAllocatedAmount += excess;
+      boqCoverage.topOver.push({
+        identity: v.identity,
+        kind: v.kind,
+        description: v.description,
+        amount,
+        totalWeight,
+        excess,
+        taskNames: linkedTaskNamesByIdentity.get(v.identity) || [],
+      });
+    }
+  }
+
+  // Sort + trim the offender lists. Highest-impact entries surface
+  // first so the user fixes biggest gaps first.
+  boqCoverage.topUnlinked.sort((a, b) => b.amount - a.amount);
+  boqCoverage.topUnlinked = boqCoverage.topUnlinked.slice(0, 8);
+  boqCoverage.topOver.sort((a, b) => b.excess - a.excess);
+  boqCoverage.topOver = boqCoverage.topOver.slice(0, 8);
+  boqCoverage.topUnder.sort((a, b) => b.shortfall - a.shortfall);
+  boqCoverage.topUnder = boqCoverage.topUnder.slice(0, 8);
+
+  boqCoverage.coveragePercent =
+    boqCoverage.totalAmount > 0
+      ? Math.round((boqCoverage.linkedAmount / boqCoverage.totalAmount) * 1000) / 10
+      : 0;
+  // Round monetary fields for client display.
+  boqCoverage.totalAmount = Math.round(boqCoverage.totalAmount * 100) / 100;
+  boqCoverage.linkedAmount = Math.round(boqCoverage.linkedAmount * 100) / 100;
+  boqCoverage.unlinkedAmount = Math.round(boqCoverage.unlinkedAmount * 100) / 100;
+  boqCoverage.underAllocatedAmount = Math.round(boqCoverage.underAllocatedAmount * 100) / 100;
+  boqCoverage.overAllocatedAmount = Math.round(boqCoverage.overAllocatedAmount * 100) / 100;
+
   return {
     asOf: now.toISOString(),
     projectName: project?.name || "Project",
@@ -1006,6 +1166,9 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       // the actual saved override (0 = "auto-derive") instead of accidentally
       // round-tripping the computed BAC as the override.
       budgetOverride: Math.round(safeNum(pm.budgetOverride) * 100) / 100,
+      // Contract-lock flag duplicated on totals so the header modal can
+      // disable the BAC override input without having to dig into scope.
+      contractLocked,
       PV: Math.round(totalPlannedValueToDate * 100) / 100,
       // EV / AC now reflect the BoQ-side reality (measured + PC + prelim +
       // variations), not just the task baselines. The task-only equivalents
@@ -1104,6 +1267,11 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       projectTotal: scope.projectTotal,
       contractLocked: scope.contractLocked,
     },
+    // BoQ ↔ WBS coverage reconciliation. Lets the dashboard answer
+    // "does the WBS faithfully execute the BoQ?" — surfaces gaps
+    // (unlinked / under-allocated) AND over-counts (>100% weight)
+    // that would otherwise quietly distort EV / CPI / SPI.
+    boqCoverage,
   };
 }
 

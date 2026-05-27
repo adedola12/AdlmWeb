@@ -49,7 +49,25 @@ function genId(prefix) {
 // `saving` toggles a loading state on the Apply button so the user sees
 // feedback after clicking — important because the modal stays open while
 // the network call runs (closes only on success).
-function HeaderSettingsModal({ open, initial, saving = false, onSave, onClose }) {
+//
+// Extra props:
+//   • contractLocked → disables the BAC override input (BAC is forced
+//     to equal the BoQ total when the contract is locked, otherwise the
+//     books drift away from the signed contract value)
+//   • lockedBac      → current resolved BAC, shown in the disabled input
+//   • wbsFinish      → latest task endDate across the WBS; used to
+//     auto-prefill the finish input when the user changes start so the
+//     user doesn't have to compute it manually
+function HeaderSettingsModal({
+  open,
+  initial,
+  saving = false,
+  onSave,
+  onClose,
+  contractLocked = false,
+  lockedBac = 0,
+  wbsFinish = null,
+}) {
   const [start, setStart] = React.useState("");
   const [finish, setFinish] = React.useState("");
   const [budget, setBudget] = React.useState(0);
@@ -57,9 +75,14 @@ function HeaderSettingsModal({ open, initial, saving = false, onSave, onClose })
   // dates to ripple through the predecessor graph. Unchecking preserves
   // current task dates and only updates the header value.
   const [cascade, setCascade] = React.useState(true);
+  // True when the finish field was auto-filled from the WBS — drives the
+  // small "from WBS" hint shown beneath the input. Cleared as soon as
+  // the user manually types a different date.
+  const [finishAuto, setFinishAuto] = React.useState(false);
   const initialStart = fmtDateInput(initial?.projectStart);
   const initialFinish = fmtDateInput(initial?.projectFinish);
   const initialBudget = safeNum(initial?.budgetOverride);
+  const wbsFinishStr = fmtDateInput(wbsFinish);
 
   React.useEffect(() => {
     if (!open) return;
@@ -67,7 +90,29 @@ function HeaderSettingsModal({ open, initial, saving = false, onSave, onClose })
     setFinish(initialFinish);
     setBudget(initialBudget);
     setCascade(true);
+    setFinishAuto(false);
   }, [open, initialStart, initialFinish, initialBudget]);
+
+  // Auto-pick finish from WBS whenever the user changes start (and we
+  // have a WBS finish date). Doesn't fire if the user has already
+  // touched the finish field manually since the modal opened.
+  const handleStartChange = (next) => {
+    setStart(next);
+    if (next && wbsFinishStr && (finish === initialFinish || finishAuto || !finish)) {
+      // Only auto-fill if WBS finish is at or after the new start;
+      // otherwise the WBS doesn't extend far enough and we keep
+      // whatever the user already had.
+      if (wbsFinishStr >= next) {
+        setFinish(wbsFinishStr);
+        setFinishAuto(true);
+      }
+    }
+  };
+
+  const handleFinishChange = (next) => {
+    setFinish(next);
+    setFinishAuto(false); // user touched it manually
+  };
 
   const startChanged = start !== initialStart;
   const finishChanged = finish !== initialFinish;
@@ -82,29 +127,55 @@ function HeaderSettingsModal({ open, initial, saving = false, onSave, onClose })
           <input
             type="date"
             value={start}
-            onChange={(e) => setStart(e.target.value)}
+            onChange={(e) => handleStartChange(e.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm"
           />
+          {wbsFinishStr ? (
+            <span className="mt-1 block text-[10px] text-slate-400">
+              WBS extends to <strong className="text-slate-600">{wbsFinishStr}</strong> — finish auto-fills from this when you change start.
+            </span>
+          ) : null}
         </label>
         <label className="block">
           <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Project finish</span>
           <input
             type="date"
             value={finish}
-            onChange={(e) => setFinish(e.target.value)}
+            onChange={(e) => handleFinishChange(e.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm"
           />
+          {finishAuto ? (
+            <span className="mt-1 block text-[10px] text-emerald-600">
+              Auto-picked from latest WBS task. Edit if needed.
+            </span>
+          ) : null}
         </label>
         <label className="block">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Total budget (BAC) override</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            Total budget (BAC){contractLocked ? "" : " override"}
+          </span>
           <input
             type="number"
             min="0"
-            value={budget}
+            value={contractLocked ? Math.round(safeNum(lockedBac) * 100) / 100 : budget}
             onChange={(e) => setBudget(Math.max(0, Number(e.target.value) || 0))}
-            placeholder="Leave 0 to auto-derive from BoQ / contract"
-            className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-right"
+            disabled={contractLocked}
+            placeholder={contractLocked ? "" : "Leave 0 to auto-derive from BoQ / contract"}
+            className={`mt-1 w-full rounded-lg border px-2.5 py-1.5 text-sm text-right ${
+              contractLocked
+                ? "border-slate-200 bg-slate-100 text-slate-600 cursor-not-allowed"
+                : "border-slate-200"
+            }`}
           />
+          {contractLocked ? (
+            <span className="mt-1 block text-[10px] text-amber-700">
+              <strong>Contract locked.</strong> Total Budget = BoQ total. Unlock the contract in the BoQ tab to adjust manually.
+            </span>
+          ) : (
+            <span className="mt-1 block text-[10px] text-slate-400">
+              Leave 0 to keep BAC equal to the BoQ total (recommended).
+            </span>
+          )}
         </label>
         {/* Cascade toggle — only relevant when the start date has actually
             changed. Visible at all times so the option is discoverable, but
@@ -504,6 +575,27 @@ export default function ProjectManagementTab({
           projectFinish,
           budgetOverride,
         }}
+        // Contract-lock state forces BAC = BoQ total and disables the
+        // override input. Without this prop the user could quietly drift
+        // the project budget away from the signed contract.
+        contractLocked={Boolean(dashboard?.totals?.contractLocked)}
+        lockedBac={safeNum(dashboard?.totals?.BAC)}
+        // Latest task end across the WBS — fed into the modal so it can
+        // auto-prefill the finish field whenever the user changes the
+        // start date.
+        wbsFinish={(() => {
+          // Compute on the fly from the most recent task list so users
+          // see the freshest WBS finish even before saving.
+          const allTasks = Array.isArray(tasks) ? tasks : [];
+          let latest = null;
+          for (const t of allTasks) {
+            const end = t?.endDate ? new Date(t.endDate) : null;
+            if (end && !Number.isNaN(end.getTime())) {
+              if (!latest || end > latest) latest = end;
+            }
+          }
+          return latest;
+        })()}
         onSave={handleHeaderSettings}
         onClose={() => {
           // Don't allow closing mid-save (button is disabled but ESC + outside
