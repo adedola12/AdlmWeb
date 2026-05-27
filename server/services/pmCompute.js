@@ -382,6 +382,12 @@ function summariseTasks(tasks, itemIndex, now) {
     blocked: 0,
     completed: 0,
   };
+  // Critical-path counters — populated from the criticalPath flag set
+  // by the MS Project importer. Lets the dashboard show how many
+  // tasks have zero slack (an instant schedule-risk read independent
+  // of the cost-side CPI).
+  let criticalPathTotal = 0;
+  let criticalPathPending = 0; // critical-path tasks not yet completed
   let totalBaseline = 0;
   let totalActual = 0;
   let totalEarned = 0;
@@ -469,6 +475,13 @@ function summariseTasks(tasks, itemIndex, now) {
         : "not-started";
     tasksByStatus[canonicalStatus] += 1;
 
+    // Critical-path counters — driven by the criticalPath flag set
+    // during import. Pending = critical AND not yet 100% complete.
+    if (task?.criticalPath) {
+      criticalPathTotal += 1;
+      if (canonicalStatus !== "completed") criticalPathPending += 1;
+    }
+
     return {
       ...(task?.toObject ? task.toObject() : task),
       _computed: {
@@ -491,6 +504,8 @@ function summariseTasks(tasks, itemIndex, now) {
     overdueByPriority,
     tasksByPriority,
     tasksByStatus,
+    criticalPathTotal,
+    criticalPathPending,
     totalTasks,
     avgPercent,
     totalBaseline,
@@ -921,6 +936,8 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     overdueByPriority,
     tasksByPriority,
     tasksByStatus,
+    criticalPathTotal,
+    criticalPathPending,
     totalTasks,
     avgPercent,
     totalBaseline,
@@ -951,10 +968,21 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   // BoQ tab whether a line is balanced (100), under-allocated (<100, gap
   // in WBS coverage) or over-allocated (>100, double-count in EV).
   const totalWeightByIdentity = new Map();
+  // Reverse-propagate task progress onto BoQ items. For each BoQ
+  // identity we collect Σ(taskPct × weight/100) and Σ(weight/100). The
+  // effective progress for that identity is then the weighted average
+  // of its linked tasks' percentComplete. Surfaces in the heatmap so
+  // prelim / PC / variation cells colour by the work actually being
+  // done on tasks that execute them — not just the binary "completed"
+  // flag (which the previous code used and gave a white/blue-only
+  // heatmap for non-measured streams).
+  const progressNumByIdentity = new Map();
+  const progressDenByIdentity = new Map();
   for (const t of enriched) {
     if (t._isSummary) continue;
     const links = Array.isArray(t.linkedBoqIdentities) ? t.linkedBoqIdentities : [];
     const weights = Array.isArray(t.linkedBoqWeights) ? t.linkedBoqWeights : [];
+    const taskPct = clamp(safeNum(t.percentComplete), 0, 100);
     for (let i = 0; i < links.length; i += 1) {
       const id = String(links[i] || "");
       if (!id) continue;
@@ -965,6 +993,16 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       const rawW = Number(weights[i]);
       const w = Number.isFinite(rawW) ? clamp(rawW, 0, 100) : 100;
       totalWeightByIdentity.set(id, (totalWeightByIdentity.get(id) || 0) + w);
+      // Progress accumulator — same weight basis as the cost rollup.
+      const wFrac = w / 100;
+      progressNumByIdentity.set(
+        id,
+        (progressNumByIdentity.get(id) || 0) + taskPct * wFrac,
+      );
+      progressDenByIdentity.set(
+        id,
+        (progressDenByIdentity.get(id) || 0) + wFrac,
+      );
     }
   }
 
@@ -1016,8 +1054,27 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   const CPI = totalScopeActual > 0
     ? totalScopeEarned / totalScopeActual
     : totalScopeEarned > 0 ? 1 : 0;
-  const SPI = totalPlannedValueToDate > 0
-    ? totalScopeEarned / totalPlannedValueToDate
+
+  // Effective PV for display.
+  //
+  // The raw calculation returns 0 when "today" is before every task's
+  // baselineStart (common case: project planned for the future but user
+  // has already started recording progress on tasks). Mathematically PV
+  // = 0 is correct per EVM — "nothing should have been earned per the
+  // baseline by today" — but the dashboard then shows "PV ₦0 / EV ₦2.8M"
+  // which looks broken to users.
+  //
+  // When EV > 0 but PV = 0, anchor PV to EV. This represents
+  // "you're running ahead of schedule, so by today the plan should have
+  // earned at least what you have" → SPI = 1.00 (on track).
+  //
+  // When PV > 0 normally, leave it alone.
+  const displayPV = totalPlannedValueToDate > 0
+    ? totalPlannedValueToDate
+    : (totalScopeEarned > 0 ? totalScopeEarned : 0);
+
+  const SPI = displayPV > 0
+    ? totalScopeEarned / displayPV
     : totalScopeEarned > 0 ? 1 : 0;
   const budgetUsedPercent = BAC > 0 ? (totalScopeActual / BAC) * 100 : 0;
   const tasksDonePercent = totalTasks > 0 ? (buckets.completed / totalTasks) * 100 : 0;
@@ -1120,15 +1177,17 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       // No task links here — full BoQ value is unallocated.
       boqCoverage.unlinkedCount += 1;
       boqCoverage.unlinkedAmount += amount;
-      if (amount > 0) {
-        boqCoverage.topUnlinked.push({
-          identity: v.identity,
-          kind: v.kind,
-          description: v.description,
-          amount,
-          totalWeight: 0,
-        });
-      }
+      // Capture every unlinked entry — including ₦0 rows like
+      // unprovisioned PC sums. Users explicitly asked to see which
+      // items aren't covered, even when the financial impact is 0.
+      // The client tile becomes hover-able to reveal this list.
+      boqCoverage.topUnlinked.push({
+        identity: v.identity,
+        kind: v.kind,
+        description: v.description,
+        amount,
+        totalWeight: 0,
+      });
     } else if (Math.abs(totalWeight - 100) < 0.5) {
       // Effectively balanced (allow 0.5% tolerance for float drift).
       boqCoverage.fullyAllocatedCount += 1;
@@ -1174,7 +1233,9 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   // Sort + trim the offender lists. Highest-impact entries surface
   // first so the user fixes biggest gaps first.
   boqCoverage.topUnlinked.sort((a, b) => b.amount - a.amount);
-  boqCoverage.topUnlinked = boqCoverage.topUnlinked.slice(0, 8);
+  // Unlinked list capped at 20 (was 8) so users with a few-dozen
+  // misses can still see the full set when hovering the tile.
+  boqCoverage.topUnlinked = boqCoverage.topUnlinked.slice(0, 20);
   boqCoverage.topOver.sort((a, b) => b.excess - a.excess);
   boqCoverage.topOver = boqCoverage.topOver.slice(0, 8);
   boqCoverage.topUnder.sort((a, b) => b.shortfall - a.shortfall);
@@ -1216,7 +1277,7 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       // Contract-lock flag duplicated on totals so the header modal can
       // disable the BAC override input without having to dig into scope.
       contractLocked,
-      PV: Math.round(totalPlannedValueToDate * 100) / 100,
+      PV: Math.round(displayPV * 100) / 100,
       // EV / AC now reflect the BoQ-side reality (measured + PC + prelim +
       // variations), not just the task baselines. The task-only equivalents
       // are still exposed below under taskEarned / taskActual for callers
@@ -1272,6 +1333,12 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     // overdueByPriority showed all zeros until tasks slipped).
     tasksByPriority,
     tasksByStatus,
+    // Critical-path totals from MS Project import. `criticalPathTotal`
+    // counts every task with criticalPath=true; `criticalPathPending`
+    // narrows to those not yet completed (the actual exposure to
+    // schedule risk today).
+    criticalPathTotal,
+    criticalPathPending,
     burndown,
     burndownStatus,
     tasks: enriched.map((t) => ({
@@ -1300,17 +1367,39 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     // linkCount / linkedTaskNames let the BoQ table show users a "this
     // line is linked to N task(s)" chip, with a warning style when N>1
     // (potential double-count in EV).
-    boqItems: scope.virtualItems.map((item) => ({
-      ...item,
-      linkCount: linkCountByIdentity.get(item.identity) || 0,
-      linkedTaskNames: linkedTaskNamesByIdentity.get(item.identity) || [],
-      // Sum of weights across all linking tasks. 100 = balanced;
-      // <100 = WBS doesn't cover the full BoQ value; >100 = double-count
-      // in EV. Surfaced as the WbsLinkChip's primary signal.
-      totalLinkWeight: Math.round(
-        (totalWeightByIdentity.get(item.identity) || 0) * 100,
-      ) / 100,
-    })),
+    boqItems: scope.virtualItems.map((item) => {
+      // Effective percent for the heatmap. Measured items keep their
+      // own value (the partial-aware percent from buildItemIndex).
+      // Prelim / PC / variation items get the weighted-average of
+      // linked task percentComplete — so a half-done task linked to a
+      // PC sum colours that PC cell yellow, not blank. If a non-
+      // measured item is explicitly `completed`, that wins (100).
+      let effectivePercent = safeNum(item.percentComplete);
+      if (
+        (item.kind === "preliminary" ||
+          item.kind === "provisional" ||
+          item.kind === "variation") &&
+        !item.completed
+      ) {
+        const num = progressNumByIdentity.get(item.identity);
+        const den = progressDenByIdentity.get(item.identity);
+        if (num != null && den != null && den > 0) {
+          effectivePercent = clamp(num / den, 0, 100);
+        }
+      }
+      return {
+        ...item,
+        percentComplete: Math.round(effectivePercent * 100) / 100,
+        linkCount: linkCountByIdentity.get(item.identity) || 0,
+        linkedTaskNames: linkedTaskNamesByIdentity.get(item.identity) || [],
+        // Sum of weights across all linking tasks. 100 = balanced;
+        // <100 = WBS doesn't cover the full BoQ value; >100 = double-count
+        // in EV. Surfaced as the WbsLinkChip's primary signal.
+        totalLinkWeight: Math.round(
+          (totalWeightByIdentity.get(item.identity) || 0) * 100,
+        ) / 100,
+      };
+    }),
     // Roll-up totals per stream — exposed separately for callers that
     // want to display a contract-breakdown summary without re-computing.
     scope: {

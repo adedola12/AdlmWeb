@@ -168,6 +168,11 @@ function sanitizeTask(input, fallback = {}) {
     linkedBoqWeights,
     isMilestone: Boolean(input.isMilestone),
     isSummary: Boolean(input.isSummary),
+    // Critical-path fields imported from MS Project — pass-through with
+    // safe coercion. Defaults preserve behaviour for tasks created
+    // outside the importer (manual / BoQ-generated).
+    criticalPath: Boolean(input.criticalPath),
+    totalSlackDays: Math.max(0, safeNum(input.totalSlackDays)),
     parentTaskId: String(input.parentTaskId || "").trim().slice(0, 64),
     source,
     notes: String(input.notes || "").slice(0, 2000),
@@ -887,13 +892,133 @@ async function importPm(req, res) {
       .map((t) => sanitizeTask(t))
       .filter(Boolean);
 
+    // Track merge stats so the import toast can tell the user exactly
+    // what happened ("8 new, 45 updated, 0 untouched"). Helpful after
+    // re-imports when the user wants to confirm their progress was
+    // preserved.
+    let mergeStats = { added: 0, updated: 0, preservedFields: 0 };
+
     if (replaceExisting) {
+      // Hard replace — wipes user progress / links / actuals. Only used
+      // when the user explicitly opts in (e.g. starting over after a
+      // major MSP restructure). Default flow uses smart merge below.
       project.projectManagement.tasks = sanitized;
+      mergeStats.added = sanitized.length;
     } else {
-      // Merge by taskId; new ones append.
+      // Smart merge — by taskId.
+      //
+      // SCHEDULE fields are REFRESHED from MS Project (the importer is
+      // the source of truth for "when does this task happen"):
+      //   • startDate, endDate, baselineStart, baselineEnd
+      //   • durationDays
+      //   • predecessors
+      //   • criticalPath, totalSlackDays
+      //   • isMilestone, isSummary
+      //   • wbs (hierarchy code)
+      //
+      // PROGRESS fields are PRESERVED from the existing task in ADLM
+      // (the QS owns "how much is done"):
+      //   • percentComplete
+      //   • status
+      //   • actualCost
+      //   • actualUpdatedAt timestamps
+      //
+      // MANUAL fields are PRESERVED when the user has set them:
+      //   • linkedBoqIdentities / linkedBoqWeights (only auto-link
+      //     when existing has no manual links yet)
+      //   • priority (existing wins if user explicitly changed it
+      //     from the MSP-derived default; new MSP value wins if
+      //     existing is still at default "medium")
+      //   • baselineCost (only refresh from MSP if existing is 0)
+      //   • notes / description (existing wins when populated)
       const byId = new Map(existing.map((t) => [String(t.taskId), t]));
-      for (const t of sanitized) byId.set(String(t.taskId), t);
-      project.projectManagement.tasks = Array.from(byId.values());
+      const mergedById = new Map();
+      for (const incoming of sanitized) {
+        const id = String(incoming.taskId);
+        const prev = byId.get(id);
+        if (!prev) {
+          // Brand-new task → take MS Project values as-is, including
+          // the auto-link the parser ran above.
+          mergedById.set(id, incoming);
+          mergeStats.added += 1;
+          continue;
+        }
+        const prevObj = prev?.toObject ? prev.toObject() : { ...prev };
+        // Start with all incoming fields (refreshes the schedule)
+        // then selectively restore user-owned values from prevObj.
+        const merged = { ...incoming };
+
+        // Progress fields — always keep what's in ADLM.
+        merged.percentComplete = safeNum(prevObj.percentComplete);
+        merged.status = prevObj.status || incoming.status;
+        merged.actualCost = safeNum(prevObj.actualCost);
+        if (prevObj.actualUpdatedAt) merged.actualUpdatedAt = prevObj.actualUpdatedAt;
+
+        // BoQ links — preserve when user has manually linked anything.
+        // Empty arrays from MSP shouldn't blow away curated links.
+        const prevLinks = Array.isArray(prevObj.linkedBoqIdentities) ? prevObj.linkedBoqIdentities : [];
+        if (prevLinks.length > 0) {
+          merged.linkedBoqIdentities = prevLinks;
+          merged.linkedBoqWeights = Array.isArray(prevObj.linkedBoqWeights)
+            ? prevObj.linkedBoqWeights
+            : [];
+          mergeStats.preservedFields += 1;
+        }
+
+        // Baseline cost — only update from MSP if user hasn't set
+        // anything (existing baselineCost is 0). User-set value wins.
+        if (safeNum(prevObj.baselineCost) > 0) {
+          merged.baselineCost = safeNum(prevObj.baselineCost);
+        }
+
+        // Priority — if user changed it (existing is not the MSP-
+        // derived value), keep theirs. We can't know for certain
+        // without storing the original MSP priority, but a heuristic:
+        // if existing is "critical" and incoming is "high" (the
+        // smart-priority bump on critical-path tasks), keep existing.
+        // Otherwise refresh from MSP so critical-path promotions
+        // flow through on re-import.
+        if (
+          prevObj.priority &&
+          prevObj.priority !== "medium" &&
+          prevObj.priority !== incoming.priority
+        ) {
+          merged.priority = prevObj.priority;
+        }
+
+        // Notes — keep user-written notes; only refresh if previous
+        // was empty.
+        if (prevObj.notes) merged.notes = prevObj.notes;
+        if (prevObj.description && !incoming.description) {
+          merged.description = prevObj.description;
+        }
+
+        // Carry the original createdAt timestamp so the audit trail
+        // reflects when the task first appeared in ADLM.
+        if (prevObj.createdAt) merged.createdAt = prevObj.createdAt;
+        merged.updatedAt = new Date();
+
+        mergedById.set(id, merged);
+        mergeStats.updated += 1;
+      }
+
+      // Tasks that exist in ADLM but are absent from this MS Project
+      // file are KEPT as-is. The user may have added manual rows in
+      // ADLM after the original import; we don't want re-imports to
+      // delete those. They can be removed explicitly via the trash
+      // icon if no longer needed.
+      const untouched = [];
+      for (const t of existing) {
+        const id = String(t.taskId || "");
+        if (!id || !mergedById.has(id)) {
+          untouched.push(t?.toObject ? t.toObject() : t);
+        }
+      }
+
+      project.projectManagement.tasks = [
+        ...Array.from(mergedById.values()),
+        ...untouched,
+      ];
     }
 
     if (parsed.projectStart && !project.projectManagement.projectStart) {
@@ -931,6 +1056,13 @@ async function importPm(req, res) {
       //   learnedCount = subset that re-used a prior user-confirmed mapping
       //   fuzzyCount   = subset matched via similarity score
       autoLink: linkStats,
+      // Merge breakdown — surfaces what actually changed so the user
+      // can verify their progress wasn't wiped on re-import.
+      //   added            = brand-new tasks
+      //   updated          = existing tasks with schedule refreshed
+      //   preservedFields  = existing tasks whose BoQ links were kept
+      merge: mergeStats,
+      replaceExisting: Boolean(replaceExisting),
       dashboard: computePmDashboard(project),
       version: project.version,
     });

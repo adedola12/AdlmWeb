@@ -106,6 +106,42 @@ function mapMsProjectPriority(n) {
   return "low";
 }
 
+// MS Project <TotalSlack> is in MINUTES. Convert to days (8h working
+// day, same as parseMsProjectDuration). Returns 0 for missing/invalid
+// values; 0 also doubles as the natural "on critical path" signal.
+function parseMsProjectSlackDays(raw) {
+  const n = safeNum(raw);
+  if (n <= 0) return 0;
+  // minutes → hours → days
+  return Math.max(0, Math.round((n / 60 / 8) * 100) / 100);
+}
+
+// Smart priority resolver — most schedulers leave Priority at the
+// default 500 (Normal), so importing them all as "medium" loses the
+// critical-path signal entirely. This combines the two MS Project
+// signals:
+//   • If a task is on the critical path AND the user-set priority is
+//     below "high", promote it to "high" (or keep "critical" if MS
+//     Project already said so).
+//   • Tasks with very tight slack (≤ 1 day) but not flagged Critical
+//     are also lifted to "high" — they're effectively near-critical.
+// The original MS-Project-priority value is preserved on the
+// `mspPriority` field so users can revert it from the edit modal.
+function resolveTaskPriority({ mspPriority, isCritical, slackDays }) {
+  const base = mapMsProjectPriority(mspPriority);
+  // Already escalated by the user — leave as-is.
+  if (base === "critical") return base;
+  if (isCritical) {
+    // On the critical path AND not already critical → promote.
+    return base === "high" ? "high" : "high";
+  }
+  if (slackDays > 0 && slackDays <= 1 && base === "low") {
+    // Near-critical with low priority looks like a bug. Lift to medium.
+    return "medium";
+  }
+  return base;
+}
+
 export function parseMsProjectXml(buffer) {
   const xml = Buffer.isBuffer(buffer) ? buffer.toString("utf8") : String(buffer || "");
   if (!xml.includes("<Project")) {
@@ -173,7 +209,22 @@ export function parseMsProjectXml(buffer) {
     const baselineCostRaw = pickTag(block, "BaselineCost");
     const baselineCost = baselineCostRaw ? safeNum(baselineCostRaw) : 0;
     const actualCost = safeNum(pickTag(block, "ActualCost"));
-    const priority = mapMsProjectPriority(pickTag(block, "Priority"));
+    const mspPriorityRaw = pickTag(block, "Priority");
+    // Critical path + slack — MSPDI emits <Critical>1</Critical> for
+    // every task that has zero total slack. We trust the flag when
+    // present, fall back to TotalSlack == 0 otherwise.
+    const isCritical =
+      pickTag(block, "Critical") === "1" ||
+      safeNum(pickTag(block, "TotalSlack")) === 0;
+    const totalSlackDays = parseMsProjectSlackDays(pickTag(block, "TotalSlack"));
+    // Resolve the effective priority: combines MSPDI Priority (0-1000)
+    // with the critical-path flag so default-Normal tasks on the
+    // critical path don't all import as "medium". See resolver above.
+    const priority = resolveTaskPriority({
+      mspPriority: mspPriorityRaw,
+      isCritical,
+      slackDays: totalSlackDays,
+    });
     const isMilestone = pickTag(block, "Milestone") === "1";
     const isSummary = pickTag(block, "Summary") === "1";
     const wbs = pickTag(block, "WBS") || pickTag(block, "OutlineNumber");
@@ -209,6 +260,11 @@ export function parseMsProjectXml(buffer) {
       actualCost,
       status,
       priority,
+      // Critical-path metadata from MS Project. Surfaced in the WBS
+      // table as a 🔥/badge and used by the dashboard to highlight
+      // schedule risk independently of the cost-side EVM metrics.
+      criticalPath: isCritical,
+      totalSlackDays,
       isMilestone,
       isSummary,
       notes,

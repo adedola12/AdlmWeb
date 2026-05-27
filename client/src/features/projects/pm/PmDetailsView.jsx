@@ -416,6 +416,38 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                             ◆ Milestone
                           </span>
                         ) : null}
+                        {/* Critical path badge — set by the MS Project
+                            importer when MSPDI reports Critical=1 (zero
+                            slack). Surfaces in rose so users can see at
+                            a glance which tasks have no scheduling
+                            buffer. Hidden on summary rows since
+                            criticality is a leaf property. */}
+                        {!isSummary && task.criticalPath ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 font-semibold text-rose-700"
+                            title={
+                              safeNum(task.totalSlackDays) > 0
+                                ? `On critical path · ${safeNum(task.totalSlackDays)}d total slack`
+                                : "On critical path · zero slack — any delay slips the project finish"
+                            }
+                          >
+                            🔥 Critical path
+                          </span>
+                        ) : null}
+                        {/* Near-critical hint — non-critical tasks with
+                            very tight slack get a low-key amber chip so
+                            users know they should watch them too. */}
+                        {!isSummary &&
+                        !task.criticalPath &&
+                        safeNum(task.totalSlackDays) > 0 &&
+                        safeNum(task.totalSlackDays) <= 1 ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-amber-700"
+                            title={`Only ${safeNum(task.totalSlackDays).toFixed(1)}d of slack — near critical`}
+                          >
+                            ⚠ Tight slack
+                          </span>
+                        ) : null}
                         {!isSummary && task.source && task.source !== "manual" ? (
                           <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">
                             {task.source}

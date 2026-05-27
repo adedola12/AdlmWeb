@@ -746,6 +746,11 @@ export default function PmDashboardView({
         tasksByPriority={tasksByPriority}
         overdueByPriority={overdueByPriority}
         totalTasks={safeNum(totals.totalTasks)}
+        // Critical-path counts from the MS Project importer. Falls
+        // through to 0 for projects that haven't been re-imported
+        // since the feature shipped.
+        criticalPathTotal={safeNum(dashboard?.criticalPathTotal)}
+        criticalPathPending={safeNum(dashboard?.criticalPathPending)}
       />
 
       {/* Contract movement — variations + provisional flow, with
@@ -1085,6 +1090,12 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
           hint={`₦${fmtMoney(unlinked)} unallocated`}
           tone={unlinked > 0 ? "text-slate-700" : "text-slate-400"}
           iconBg="bg-slate-100"
+          // Hover reveals every unlinked BoQ row — including the
+          // zero-cost ones. Answers the user's "show me what I missed"
+          // question without forcing them to scroll into the offender
+          // panel below.
+          details={coverage.topUnlinked}
+          detailsLabel="Unlinked BoQ items"
         />
         <CoverageStat
           icon={FaExclamationTriangle}
@@ -1093,6 +1104,8 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
           hint={`₦${fmtMoney(under)} short`}
           tone={under > 0 ? "text-amber-700" : "text-slate-400"}
           iconBg="bg-amber-100"
+          details={coverage.topUnder}
+          detailsLabel="Under-allocated BoQ items"
         />
         <CoverageStat
           icon={FaCopy}
@@ -1101,6 +1114,8 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
           hint={`₦${fmtMoney(over)} excess`}
           tone={over > 0 ? "text-rose-700" : "text-slate-400"}
           iconBg="bg-rose-100"
+          details={coverage.topOver}
+          detailsLabel="Over-allocated BoQ items"
         />
       </div>
 
@@ -1280,9 +1295,48 @@ function StaleLinksPanel({ tasks }) {
   );
 }
 
-function CoverageStat({ icon: Icon, label, value, hint, tone = "text-slate-900", iconBg = "bg-slate-100" }) {
+// CoverageStat — one of the four tiles inside the BoQ↔WBS coverage
+// panel. When `details` is provided AND non-empty, the tile becomes
+// hover-popover-able: hovering the value reveals the full list of
+// offending BoQ rows under that bucket. Useful for the Unlinked tile
+// where users explicitly asked "show me which items aren't covered".
+function CoverageStat({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tone = "text-slate-900",
+  iconBg = "bg-slate-100",
+  details = null, // optional array of { description, kind, amount }
+  detailsLabel = "Items",
+}) {
+  const [open, setOpen] = React.useState(false);
+  const hasDetails = Array.isArray(details) && details.length > 0;
+  // Hover state is debounced so the popover doesn't flicker when the
+  // user crosses the gap between the tile and the floating panel.
+  const hideTimer = React.useRef(null);
+  const cancelHide = () => {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  };
+  const scheduleHide = () => {
+    cancelHide();
+    hideTimer.current = setTimeout(() => setOpen(false), 250);
+  };
+
   return (
-    <div className="rounded-lg border border-slate-100 bg-white px-3 py-2.5 flex items-start gap-2.5">
+    <div
+      className={`relative rounded-lg border border-slate-100 bg-white px-3 py-2.5 flex items-start gap-2.5 ${
+        hasDetails ? "cursor-help" : ""
+      }`}
+      onMouseEnter={hasDetails ? () => { cancelHide(); setOpen(true); } : undefined}
+      onMouseLeave={hasDetails ? scheduleHide : undefined}
+      onFocus={hasDetails ? () => setOpen(true) : undefined}
+      onBlur={hasDetails ? scheduleHide : undefined}
+      tabIndex={hasDetails ? 0 : -1}
+    >
       <div className={`shrink-0 rounded-md ${iconBg} p-2 ${tone}`}>
         {Icon ? <Icon className="text-sm" /> : null}
       </div>
@@ -1290,7 +1344,49 @@ function CoverageStat({ icon: Icon, label, value, hint, tone = "text-slate-900",
         <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
         <div className={`mt-0.5 font-bold text-base ${tone} leading-tight`}>{value}</div>
         {hint ? <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={hint}>{hint}</div> : null}
+        {hasDetails ? (
+          <div className="mt-1 text-[9px] uppercase tracking-wider text-adlm-blue-700 font-semibold">
+            Hover for list ▾
+          </div>
+        ) : null}
       </div>
+
+      {/* Floating popover with the offender rows. Positioned below the
+          tile so it doesn't get clipped on narrow viewports. */}
+      {hasDetails && open ? (
+        <div
+          className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-slate-200 bg-white shadow-xl dark:bg-slate-800 dark:border-slate-700"
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
+        >
+          <div className="px-3 py-2 border-b border-slate-100 bg-slate-50 dark:bg-slate-700/40 dark:border-slate-700 flex items-center justify-between">
+            <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-100">
+              {detailsLabel} · {details.length}
+            </div>
+            <div className="text-[9px] text-slate-400">
+              {details.length >= 20 ? "showing top 20" : ""}
+            </div>
+          </div>
+          <ul className="max-h-72 overflow-auto divide-y divide-slate-100 dark:divide-slate-700">
+            {details.map((d, idx) => {
+              const badge = COVERAGE_KIND_BADGE[d.kind] || COVERAGE_KIND_BADGE.measured;
+              return (
+                <li key={d.identity || idx} className="px-3 py-1.5 text-[11px] flex items-start gap-2">
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold ${badge.cls}`}>
+                    {badge.label}
+                  </span>
+                  <span className="flex-1 min-w-0 font-medium text-slate-800 dark:text-slate-200 truncate" title={d.description}>
+                    {d.description || `Item ${d.identity}`}
+                  </span>
+                  <span className="shrink-0 text-slate-500 text-[10px]">
+                    {safeNum(d.amount) > 0 ? `₦${fmtMoney(d.amount)}` : "₦0"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1396,7 +1492,18 @@ function CoverageOffenders({ title, icon: Icon, tone, rows, measureLabel, measur
 // that — every category renders with count + colour tile, plus an
 // overdue overlay where relevant.
 // ────────────────────────────────────────────────────────────────────
-function WbsHealthStrip({ tasksByStatus, tasksByPriority, overdueByPriority, totalTasks }) {
+function WbsHealthStrip({
+  tasksByStatus,
+  tasksByPriority,
+  overdueByPriority,
+  totalTasks,
+  // Critical-path counters from the MS Project import. `total` is the
+  // whole count; `pending` is total minus already-completed (the live
+  // exposure to schedule slip). Falls back to undefined for older
+  // projects that haven't been re-imported since the feature shipped.
+  criticalPathTotal = 0,
+  criticalPathPending = 0,
+}) {
   if (!totalTasks) return null;
 
   const statusItems = [
@@ -1416,6 +1523,33 @@ function WbsHealthStrip({ tasksByStatus, tasksByPriority, overdueByPriority, tot
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+      {/* Critical-path banner — only shown when MS Project import
+          flagged at least one task. Surfaces the schedule risk
+          up-front: "8 critical-path tasks · 6 still pending" gives the
+          user a fast read on the bottleneck size before they scroll
+          into the WBS detail. */}
+      {safeNum(criticalPathTotal) > 0 ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2 dark:border-rose-700/50 dark:bg-rose-900/20">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-base" aria-hidden="true">🔥</span>
+            <div className="leading-tight">
+              <div className="font-semibold text-rose-800 dark:text-rose-200">
+                Critical path · {criticalPathTotal} task
+                {criticalPathTotal === 1 ? "" : "s"}
+              </div>
+              <div className="text-[10px] text-rose-700/80 dark:text-rose-300/80">
+                {criticalPathPending > 0
+                  ? `${criticalPathPending} still pending — any delay slips the project finish date`
+                  : "All critical-path tasks complete — schedule risk has cleared"}
+              </div>
+            </div>
+          </div>
+          <div className="text-[10px] text-rose-700/70 dark:text-rose-300/70">
+            Imported from MS Project
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Status column */}
         <div>

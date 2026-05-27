@@ -299,6 +299,17 @@ const PmTaskSchema = new mongoose.Schema(
     linkedBoqWeights: { type: [Number], default: [] },
     isMilestone: { type: Boolean, default: false },
     isSummary: { type: Boolean, default: false }, // collapse / roll-up parent
+    // True when MS Project flagged this task as being on the critical
+    // path (Critical=1 in MSPDI, or TotalSlack=0). Drives the "critical
+    // path" badge in the WBS table and the priority-bump applied at
+    // import time. Manual tasks default to false; users can flip it on
+    // a per-task basis via the edit modal.
+    criticalPath: { type: Boolean, default: false },
+    // Total slack in days as reported by MS Project. 0 = critical;
+    // higher values = scheduling buffer. Surfaces in tooltips so users
+    // can see how much room each task has before it eats into the
+    // finish date.
+    totalSlackDays: { type: Number, default: 0 },
     parentTaskId: { type: String, default: "" }, // for hierarchical WBS
     source: {
       type: String,

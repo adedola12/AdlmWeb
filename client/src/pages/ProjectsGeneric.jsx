@@ -1487,18 +1487,33 @@ export default function ProjectsGeneric() {
         throw new Error(data?.error || `Import failed (${res.status})`);
       }
       if (data?.dashboard) setPmDashboard(data.dashboard);
-      // Build a richer notice that explains auto-linking. Mentioning the
-      // numbers explicitly tells the user what to expect in the WBS view
-      // — they'll see existing tasks already linked to BoQ rows.
+      // Build a richer notice that explains auto-linking + merge
+      // behaviour. On re-imports the user wants to know their progress
+      // wasn't wiped — the merge counts answer that directly.
       const a = data?.autoLink || {};
-      const parts = [
-        `Imported ${data?.imported || 0} task${data?.imported === 1 ? "" : "s"} from ${data?.format || "file"}.`,
-      ];
+      const m = data?.merge || {};
+      const parts = [];
+      // First-time vs re-import wording. data.merge.added > 0 with
+      // updated = 0 is the first-import path; updated > 0 means this
+      // is a re-import.
+      if (data?.replaceExisting) {
+        parts.push(
+          `Imported ${data?.imported || 0} task${data?.imported === 1 ? "" : "s"} from ${data?.format || "file"} (replaced existing).`,
+        );
+      } else if (m.updated > 0) {
+        parts.push(
+          `Re-imported from ${data?.format || "file"}: ${m.updated} task${m.updated === 1 ? "" : "s"} refreshed (schedule + critical path), progress + BoQ links preserved.${m.added > 0 ? ` ${m.added} new task${m.added === 1 ? "" : "s"} added.` : ""}`,
+        );
+      } else {
+        parts.push(
+          `Imported ${data?.imported || 0} task${data?.imported === 1 ? "" : "s"} from ${data?.format || "file"}.`,
+        );
+      }
       if (a.linkedCount) {
         const learned = a.learnedCount
           ? ` (${a.learnedCount} re-used from past mappings)`
           : "";
-        parts.push(`Auto-linked ${a.linkedCount} to BoQ items${learned}.`);
+        parts.push(`Auto-linked ${a.linkedCount} new task${a.linkedCount === 1 ? "" : "s"} to BoQ items${learned}.`);
       }
       setNotice(parts.join(" "));
     } catch (e) {

@@ -157,6 +157,11 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
       linkedBoqIdentities: [],
       linkedBoqWeights: [],
       isMilestone: false,
+      // Critical-path defaults — false for manually-added tasks; the
+      // MS Project importer sets it to true (and writes totalSlackDays)
+      // on tasks Project flagged as Critical.
+      criticalPath: false,
+      totalSlackDays: 0,
       notes: "",
       source: "manual",
     }),
@@ -421,6 +426,26 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
           />
           This is a milestone (zero duration marker)
         </label>
+
+        {/* Critical-path toggle — auto-set by MS Project import, but
+            users can flip it on manual tasks to mark sequencing
+            bottlenecks the importer didn't see (subcontractor lead
+            time, weather windows, etc.). */}
+        <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+          <input
+            type="checkbox"
+            checked={Boolean(form.criticalPath)}
+            onChange={(e) => set("criticalPath", e.target.checked)}
+            className="rounded"
+          />
+          On critical path (zero slack — any delay slips finish date)
+        </label>
+        {form.criticalPath ? (
+          <div className="ml-6 text-[10px] text-slate-500">
+            Will display a 🔥 badge on the WBS row and count toward the
+            dashboard's Critical-path total.
+          </div>
+        ) : null}
       </div>
     </Modal>
   );

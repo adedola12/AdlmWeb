@@ -2550,6 +2550,26 @@ async function getPublicDashboard(req, res) {
       preliminaryItemsCount: preliminaryItems.length,
       provisionalTotal,
       variationsTotal,
+      // Contract breakdown — the four numbers that add up to the
+      // Planned Contract Sum the user sees on the public dashboard.
+      // When locked these are the SIGNED values (frozen at lock
+      // time); when unlocked they're the live BoQ values. Either way
+      // the invariant holds:
+      //   measured + provisional + preliminaries = contractSum
+      //   contractSum + variations = current contract value
+      contractBreakdown: {
+        measured: measuredForContract,
+        provisional: provisionalForContract,
+        preliminaries: preliminaryForContract,
+        variations: variationsTotal,
+        // Pre-summed for the client so it doesn't have to recompute.
+        // Equals contractSum when locked (or grossAmount+prov+prelim
+        // when unlocked) — these are the same number by construction.
+        plannedSum:
+          measuredForContract + provisionalForContract + preliminaryForContract,
+        currentValue:
+          measuredForContract + provisionalForContract + preliminaryForContract + variationsTotal,
+      },
       costPercent: Math.round(costPercent * 10) / 10,
       costVsProgressDelta: Math.round(delta * 10) / 10,
       status, // "starting" | "on-track" | "watch" | "over-budget"
