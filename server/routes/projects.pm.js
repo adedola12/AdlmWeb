@@ -316,29 +316,86 @@ async function updatePm(req, res) {
       }
 
       let itemsDirty = false;
+      let prelimsDirty = false;
+      let provisionalsDirty = false;
+      let variationsDirty = false;
+
       for (const [identity, pct] of maxPctByItem) {
+        // ── Measured items (long identity hash) ───────────────────────
         const item = itemByIdentity.get(identity);
-        if (!item) continue;
-        const currentPct = Math.max(
-          0,
-          Math.min(100, safeNum(item.percentComplete)),
-        );
-        if (pct !== currentPct) {
-          item.percentComplete = pct;
-          item.percentCompleteUpdatedAt = new Date();
-          itemsDirty = true;
+        if (item) {
+          const currentPct = Math.max(
+            0,
+            Math.min(100, safeNum(item.percentComplete)),
+          );
+          if (pct !== currentPct) {
+            item.percentComplete = pct;
+            item.percentCompleteUpdatedAt = new Date();
+            itemsDirty = true;
+          }
+          if (pct >= 100 && !item[statusField]) {
+            item[statusField] = true;
+            item[statusDateField] = new Date();
+            item.statusUpdatedAt = new Date();
+            itemsDirty = true;
+          }
+          continue;
         }
-        // Threshold crossing → flip the binary flag too.
-        if (pct >= 100 && !item[statusField]) {
-          item[statusField] = true;
-          item[statusDateField] = new Date();
-          item.statusUpdatedAt = new Date();
-          itemsDirty = true;
+
+        // ── Preliminary items (identity = "prelim::<idx>") ────────────
+        // Threshold: when ANY linked task reaches 100% the prelim is
+        // ticked as done. Going back below 100% does NOT un-tick (the
+        // user can clear it manually from the BoQ tab) — same defensive
+        // semantics as measured items above.
+        const prelimMatch = /^prelim::(\d+)$/.exec(identity);
+        if (prelimMatch) {
+          const idx = Number(prelimMatch[1]);
+          const arr = project.preliminaryItems || [];
+          const entry = arr[idx];
+          if (entry && pct >= 100 && !entry.completed) {
+            entry.completed = true;
+            entry.completedAt = new Date();
+            prelimsDirty = true;
+          }
+          continue;
         }
+
+        // ── Provisional sums (identity = "pc::<idx>") ─────────────────
+        const pcMatch = /^pc::(\d+)$/.exec(identity);
+        if (pcMatch) {
+          const idx = Number(pcMatch[1]);
+          const arr = project.provisionalSums || [];
+          const entry = arr[idx];
+          if (entry && pct >= 100 && !entry.completed) {
+            entry.completed = true;
+            entry.completedAt = new Date();
+            provisionalsDirty = true;
+          }
+          continue;
+        }
+
+        // ── Variations (identity = "var::<idx>") ──────────────────────
+        const varMatch = /^var::(\d+)$/.exec(identity);
+        if (varMatch) {
+          const idx = Number(varMatch[1]);
+          const arr = project.variations || [];
+          const entry = arr[idx];
+          if (entry && pct >= 100 && !entry.completed) {
+            entry.completed = true;
+            entry.completedAt = new Date();
+            variationsDirty = true;
+          }
+          continue;
+        }
+
+        // Unknown identity → silently skip (could be stale, could be a
+        // future kind we don't handle yet).
       }
-      if (itemsDirty) {
-        project.markModified("items");
-      }
+
+      if (itemsDirty) project.markModified("items");
+      if (prelimsDirty) project.markModified("preliminaryItems");
+      if (provisionalsDirty) project.markModified("provisionalSums");
+      if (variationsDirty) project.markModified("variations");
     }
 
     if (Array.isArray(risks)) {

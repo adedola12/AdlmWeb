@@ -10,6 +10,23 @@ function fmtMoney(value) {
   return safeNum(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+// Visual label + colour for the picker suggestion badge so users see at a
+// glance which BoQ stream they're linking to. Measured items use the
+// row's category chip instead (their nature is obvious), so they return
+// null here.
+function kindBadgeFor(kind) {
+  switch (kind) {
+    case "preliminary":
+      return { label: "Prelim", cls: "bg-purple-100 text-purple-700" };
+    case "provisional":
+      return { label: "PC sum", cls: "bg-amber-100 text-amber-800" };
+    case "variation":
+      return { label: "Variation", cls: "bg-rose-100 text-rose-700" };
+    default:
+      return null; // measured items get their category chip downstream
+  }
+}
+
 // Searchable multi-select picker for BoQ items.
 //
 // Behaviour:
@@ -44,20 +61,16 @@ export default function PmBoqItemPicker({
 
   const selectedSet = React.useMemo(() => new Set(value || []), [value]);
 
-  // Restrict picker to *measured* BoQ lines. The dashboard's boqItems now
-  // also carries virtual rows for preliminaries, provisional sums and
-  // variations (so the heatmap can render them) — but a task linking to
-  // those would double-count their amount in the BAC. Measured-only keeps
-  // the link semantics meaningful: a task's cost = qty × rate of the work.
-  const measuredItems = React.useMemo(
-    () => items.filter((it) => !it.kind || it.kind === "measured"),
-    [items],
-  );
-
+  // Picker shows *all* BoQ-side scope: measured items, preliminaries,
+  // provisional sums and variations. Linking a task to a prelim or PC
+  // sum is the natural way to say "this task is the execution of that
+  // allowance" — when the task hits 100%, the server propagates the
+  // done flag back to that source row (see updatePm). No double-counting
+  // because BAC is computed independently from the BoQ side.
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return measuredItems.slice(0, 100); // cap to keep render cheap
-    return measuredItems
+    if (!q) return items.slice(0, 100); // cap to keep render cheap
+    return items
       .filter((item) => {
         const hay = [
           item.description,
@@ -66,20 +79,21 @@ export default function PmBoqItemPicker({
           item.category,
           item.trade,
           item.unit,
+          item.kind,
         ]
           .join(" ")
           .toLowerCase();
         return hay.includes(q);
       })
       .slice(0, 100);
-  }, [measuredItems, query]);
+  }, [items, query]);
 
-  // Only measured-kind links are valid for selection. If a task's
-  // linkedBoqIdentities contains a stale identity (e.g. an item that was
-  // deleted from the BoQ), it's silently dropped here.
+  // Stale identities (e.g. a BoQ row that was deleted after the task was
+  // linked) silently drop out — the filter below ignores them. That keeps
+  // legacy data from rendering broken chips.
   const selectedItems = React.useMemo(
-    () => measuredItems.filter((item) => selectedSet.has(item.identity)),
-    [measuredItems, selectedSet],
+    () => items.filter((item) => selectedSet.has(item.identity)),
+    [items, selectedSet],
   );
 
   const derivedAmount = React.useMemo(
@@ -103,7 +117,7 @@ export default function PmBoqItemPicker({
     if (next.has(identity)) next.delete(identity);
     else next.add(identity);
     const nextArr = Array.from(next);
-    const nextAmount = measuredItems
+    const nextAmount = items
       .filter((it) => next.has(it.identity))
       .reduce((acc, it) => acc + safeNum(it.amount), 0);
     onChange?.(nextArr, nextAmount);
@@ -117,7 +131,7 @@ export default function PmBoqItemPicker({
     const next = new Set(selectedSet);
     for (const item of filtered) next.add(item.identity);
     const nextArr = Array.from(next);
-    const nextAmount = measuredItems
+    const nextAmount = items
       .filter((it) => next.has(it.identity))
       .reduce((acc, it) => acc + safeNum(it.amount), 0);
     onChange?.(nextArr, nextAmount);
@@ -198,6 +212,7 @@ export default function PmBoqItemPicker({
               ) : null}
               {filtered.map((item) => {
                 const checked = selectedSet.has(item.identity);
+                const kindBadge = kindBadgeFor(item.kind);
                 return (
                   <button
                     key={item.identity}
@@ -212,10 +227,15 @@ export default function PmBoqItemPicker({
                     </span>
                     <span className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
+                        {kindBadge ? (
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold ${kindBadge.cls}`}>
+                            {kindBadge.label}
+                          </span>
+                        ) : null}
                         <span className="font-medium text-slate-900 truncate">
                           {item.description || `Item ${item.sn}`}
                         </span>
-                        {item.category ? (
+                        {item.category && item.kind === "measured" ? (
                           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-500">
                             {item.category}
                           </span>
