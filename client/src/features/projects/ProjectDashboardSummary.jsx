@@ -69,60 +69,68 @@ function ProgressOverviewCard({
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="font-medium text-slate-900">Progress overview</div>
-          <div className="mt-1 text-sm text-slate-600">
-            Quick view of project delivery progress based on the lines marked {statusLabel.toLowerCase()}.
+      {/* Header description sits above the chart at all widths now —
+          previously it was inline at lg+ which ate horizontal space and
+          made the 3 stat cards crammed under the donut. */}
+      <div className="mb-4">
+        <div className="font-medium text-slate-900">Progress overview</div>
+        <div className="mt-1 text-sm text-slate-600">
+          Quick view of project delivery progress based on the lines marked {statusLabel.toLowerCase()}.
+        </div>
+      </div>
+
+      {/* Side-by-side donut + cards only at xl+ (≥1280px). Below that the
+          donut sits above the stat cards so each card has the full width
+          to render its label and helper without crushing the text. */}
+      <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)] xl:items-center">
+        <div className="mx-auto w-full max-w-[220px]">
+          <div className="relative mx-auto h-48 w-48 rounded-full" style={chartStyle}>
+            <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white px-4 text-center shadow-inner">
+              <div className="text-xs uppercase tracking-wide text-slate-400">Progress</div>
+              <div className="mt-1 text-3xl font-semibold text-slate-900">
+                {normalizedProgress.toFixed(1)}%
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">
+                {progressCount} of {progressTotal} lines marked
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-adlm-blue-700" />
+              {statusLabel}
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-slate-300" />
+              Remaining
+            </span>
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
-          <div className="mx-auto w-full max-w-[220px]">
-            <div className="relative mx-auto h-48 w-48 rounded-full" style={chartStyle}>
-              <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white px-4 text-center shadow-inner">
-                <div className="text-xs uppercase tracking-wide text-slate-400">Progress</div>
-                <div className="mt-1 text-3xl font-semibold text-slate-900">
-                  {normalizedProgress.toFixed(1)}%
-                </div>
-                <div className="mt-1 text-[11px] text-slate-500">
-                  {progressCount} of {progressTotal} lines marked
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-600">
-              <span className="inline-flex items-center gap-2">
-                <span className="h-3 w-3 rounded-full bg-adlm-blue-700" />
-                {statusLabel}
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <span className="h-3 w-3 rounded-full bg-slate-300" />
-                Remaining
-              </span>
+        {/* Stat-card grid:
+             • mobile  → 1 column (stacked)
+             • sm-lg   → 3 columns (plenty of width)
+             • xl+     → 3 columns next to donut */}
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 min-w-0">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Marked lines</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{progressCount}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              Items already marked {statusLabel.toLowerCase()}
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Marked lines</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-900">{progressCount}</div>
-              <div className="mt-1 text-xs text-slate-500">
-                Items already marked {statusLabel.toLowerCase()}
-              </div>
-            </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 min-w-0">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Remaining lines</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{remainingCount}</div>
+            <div className="mt-1 text-xs text-slate-500">Items still left to mark</div>
+          </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Remaining lines</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-900">{remainingCount}</div>
-              <div className="mt-1 text-xs text-slate-500">Items still left to mark</div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Total lines</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-900">{progressTotal}</div>
-              <div className="mt-1 text-xs text-slate-500">Full project line count</div>
-            </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 min-w-0">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Total lines</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{progressTotal}</div>
+            <div className="mt-1 text-xs text-slate-500">Full project line count</div>
           </div>
         </div>
       </div>

@@ -70,12 +70,16 @@ export default function Nav() {
 
   return (
     <>
-      {/* Sticky header — must stay fully opaque (no /alpha, no backdrop-blur)
-          so it never lets BoQ rows / sticky table threads bleed through. The
-          shadow + high z-index let it sit cleanly above every page-level
-          sticky element. Bumped from z-50 to z-[100] because some modals
-          and table threads inside pages were ending up at z-50 too. */}
-      <header className="sticky top-0 z-[100] bg-adlm-navy border-b border-adlm-navy-tertiary shadow-sm">
+      {/* Fixed (not sticky) so the navbar always covers the FULL viewport
+          width — sticky only locks vertically, which meant wide BoQ tables
+          that cause horizontal page scroll would expose the navbar's right
+          edge and let table cells bleed through to its right. Fixed +
+          inset-x-0 keeps the navbar pinned to both viewport edges no matter
+          what the page width is.
+
+          Because fixed removes the navbar from flow, a spacer div below
+          (h-14) reserves the 56px so page content doesn't slide up under it. */}
+      <header className="fixed inset-x-0 top-0 z-[100] bg-adlm-navy border-b border-adlm-navy-tertiary shadow-sm">
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 overflow-visible">
           <Link to="/" className="flex items-center gap-1.5 flex-shrink-0">
             <img src={adlmLogo} alt="ADLM Logo" className="w-6 h-6 sm:w-7 sm:h-7" />
@@ -136,6 +140,12 @@ export default function Nav() {
           </button>
         </div>
       </header>
+
+      {/* Spacer reserves the same 56px the navbar would have taken when it
+          was in flow. Without this, page content (banners, main, etc.)
+          would slide up under the now-fixed navbar. Marked aria-hidden so
+          screen readers skip it. */}
+      <div aria-hidden="true" className="h-14 flex-shrink-0" />
 
       <div
         className={`fixed inset-0 z-[110] bg-black/50 transition-opacity md:hidden ${
