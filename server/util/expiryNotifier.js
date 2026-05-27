@@ -36,20 +36,25 @@ function getDaysLeft(expiresAt) {
   return expDay.diff(today, "day"); // can be negative
 }
 
+// Reminder policy:
+//   - Open the window 5 days before expiry.
+//   - Keep reminding (at most weekly) up to 30 days past expiry.
+//   - After 30 days past expiry, stop nagging.
+const REMINDER_WINDOW_PRE_DAYS = 5;
+const REMINDER_WINDOW_POST_DAYS = 30;
+const REMINDER_COOLDOWN_DAYS = 7;
+
 function shouldSendForDays(daysLeft) {
   if (daysLeft == null) return { send: false };
 
-  // Every 5 days BEFORE expiry: 5, 10, 15, ...
-  if (daysLeft > 0 && daysLeft % 5 === 0) {
+  // Out of window: too far before expiry, or beyond the post-expiry cap.
+  if (daysLeft > REMINDER_WINDOW_PRE_DAYS) return { send: false };
+  if (daysLeft < -REMINDER_WINDOW_POST_DAYS) return { send: false };
+
+  if (daysLeft > 0) {
     return { send: true, kind: "pre", days: daysLeft };
   }
-
-  // Every 5 days AFTER expiry: -5, -10, -15, ...
-  if (daysLeft < 0 && Math.abs(daysLeft) % 5 === 0) {
-    return { send: true, kind: "post", days: Math.abs(daysLeft) };
-  }
-
-  return { send: false };
+  return { send: true, kind: "post", days: Math.abs(daysLeft) };
 }
 
 function buildExpiryEmailHtml({
@@ -63,15 +68,21 @@ function buildExpiryEmailHtml({
   const name = String(firstName || "").trim() || "there";
   const expiryDate = expiresAt ? dayjs(expiresAt).format("YYYY-MM-DD") : "—";
 
+  const dayWord = (n) => `${n} day${n === 1 ? "" : "s"}`;
+
   const headline =
     kind === "pre"
-      ? `Your access to <b>${productName}</b> will expire in <b>${days} days</b>.`
-      : `Your access to <b>${productName}</b> expired <b>${days} days ago</b>.`;
+      ? `Your access to <b>${productName}</b> will expire in <b>${dayWord(days)}</b>.`
+      : days === 0
+        ? `Your access to <b>${productName}</b> expires <b>today</b>.`
+        : `Your access to <b>${productName}</b> expired <b>${dayWord(days)} ago</b>.`;
 
   const sub =
     kind === "pre"
       ? `Expiry date: <b>${expiryDate}</b>`
-      : `Expired on: <b>${expiryDate}</b>`;
+      : days === 0
+        ? `Expires on: <b>${expiryDate}</b>`
+        : `Expired on: <b>${expiryDate}</b>`;
 
   // ✅ match your actual frontend routes
 const renewLink = joinUrl(
@@ -202,13 +213,14 @@ export async function runExpiryNotifier({ dryRun = false, limit = 0 } = {}) {
         const kind = decision.kind; // pre | post
         const days = decision.days; // positive integer
 
-        // Prevent duplicates for the same day bucket
-        const lastKind = ent?.notify?.lastSentKind || null;
-        const lastDays = Number.isFinite(ent?.notify?.lastSentDays)
-          ? ent.notify.lastSentDays
-          : null;
-
-        if (lastKind === kind && lastDays === days) continue;
+        // At most one email per entitlement per cooldown period (weekly).
+        const lastSentAt = ent?.notify?.lastSentAt;
+        if (lastSentAt) {
+          const daysSinceLast = dayjs()
+            .startOf("day")
+            .diff(dayjs(lastSentAt).startOf("day"), "day");
+          if (daysSinceLast < REMINDER_COOLDOWN_DAYS) continue;
+        }
 
         const productKeyRaw = String(ent?.productKey || "").trim();
         if (!productKeyRaw) continue;
@@ -219,7 +231,9 @@ export async function runExpiryNotifier({ dryRun = false, limit = 0 } = {}) {
         const subject =
           kind === "pre"
             ? `ADLM: ${productName} access expires in ${days} day${days === 1 ? "" : "s"}`
-            : `ADLM: ${productName} access expired ${days} day${days === 1 ? "" : "s"} ago`;
+            : days === 0
+              ? `ADLM: ${productName} access expires today`
+              : `ADLM: ${productName} access expired ${days} day${days === 1 ? "" : "s"} ago`;
 
         const html = buildExpiryEmailHtml({
           firstName: user.firstName || user.username || "",
@@ -242,11 +256,14 @@ export async function runExpiryNotifier({ dryRun = false, limit = 0 } = {}) {
             continue; // don’t update notify if email failed
           }
 
-          // Persist notify marker
-          ent.notify = ent.notify || {};
+          // Persist notify marker. Force markModified because older entitlements
+          // may have no `notify` sub-object yet, in which case plain property
+          // assignment does not get tracked by Mongoose and the marker is lost.
+          if (!ent.notify) ent.notify = {};
           ent.notify.lastSentAt = new Date();
           ent.notify.lastSentKind = kind;
           ent.notify.lastSentDays = days;
+          ent.markModified("notify");
 
           touched = true;
           sent += 1;
