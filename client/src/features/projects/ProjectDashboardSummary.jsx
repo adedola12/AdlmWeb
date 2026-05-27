@@ -182,17 +182,17 @@ export default function ProjectDashboardSummary({
         <MetricCard
           label="Planned total"
           value={grossAmount}
-          helper="Saved project value"
+          helper="Full project value (measured + PC + prelim + variations)"
         />
         <MetricCard
           label={statusPastLabel}
           value={valuedAmount}
-          helper={`${statusLabel} items already deducted`}
+          helper={`${statusLabel} items + executed PC sums, prelims & variations`}
         />
         <MetricCard
           label="Outstanding balance"
           value={remainingAmount}
-          helper="Current project amount remaining"
+          helper="Project value still to earn or claim"
         />
         <MetricCard
           label="Actual tracked value"

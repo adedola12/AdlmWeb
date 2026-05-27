@@ -3387,6 +3387,60 @@ export default function ProjectsGeneric() {
     (acc, row) => acc + safeNum(row.amount),
     0,
   );
+
+  // ── Full-scope project totals (measured + PC + prelim + variations) ──
+  // The Overview dashboard previously showed `grossAmount` (measured
+  // only) as the "Planned total", which silently undercounted users who
+  // had PC sums, preliminaries, or variations — they saw 84.8M while
+  // the BoQ tab and PM dashboard agreed on 93.4M.
+  //
+  // Mirrors the server's computeProjectScope so all three views (BoQ
+  // tab, Overview dashboard, PM dashboard) reconcile on the same number.
+  const provTotalForOverview = (Array.isArray(provisionalSums) ? provisionalSums : [])
+    .reduce((acc, p) => acc + safeNum(p?.amount), 0);
+  const provDoneAmount = (Array.isArray(provisionalSums) ? provisionalSums : [])
+    .reduce((acc, p) => acc + (p?.completed ? safeNum(p?.amount) : 0), 0);
+
+  const variationsTotalForOverview = (Array.isArray(variations) ? variations : [])
+    .reduce((acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate), 0);
+  const variationsDoneAmount = (Array.isArray(variations) ? variations : [])
+    .reduce(
+      (acc, v) =>
+        v?.completed ? acc + safeNum(v?.qty) * safeNum(v?.rate) : acc,
+      0,
+    );
+
+  const preliminaryPctForOverview = safeNum(contract?.preliminaryPercent) || 7.5;
+  const preliminaryPoolForOverview =
+    ((grossAmount + provTotalForOverview) * preliminaryPctForOverview) / 100;
+  // Pro-rate the preliminary pool by the allocation of each completed item.
+  // Mirrors the server: each item gets (allocation / totalAllocation) of
+  // the pool when ticked complete.
+  const prelimItemsArr = Array.isArray(preliminaryItems) ? preliminaryItems : [];
+  const prelimAllocTotal = prelimItemsArr.reduce(
+    (acc, p) => acc + safeNum(p?.allocation),
+    0,
+  );
+  const prelimAllocBase = prelimAllocTotal > 0 ? prelimAllocTotal : 100;
+  const prelimDoneAmountForOverview = prelimItemsArr.reduce(
+    (acc, p) =>
+      p?.completed
+        ? acc + (preliminaryPoolForOverview * safeNum(p?.allocation)) / prelimAllocBase
+        : acc,
+    0,
+  );
+
+  // Full project total — what the user sees on the BoQ tab as "Project
+  // total" and on the PM Dashboard as "BAC". Same formula across all
+  // three views.
+  const fullProjectTotal =
+    grossAmount + provTotalForOverview + preliminaryPoolForOverview + variationsTotalForOverview;
+  // Full earned-to-date — measured items × completion + executed PC +
+  // executed variations + completed prelim items.
+  const fullValuedAmount =
+    valuedAmount + provDoneAmount + prelimDoneAmountForOverview + variationsDoneAmount;
+  // Full outstanding — what's still left to earn / claim.
+  const fullRemainingAmount = Math.max(0, fullProjectTotal - fullValuedAmount);
   const progressCount = computedAll.filter((row) => row.isMarked).length;
   const partialCount = computedAll.filter((row) => row.isPartial).length;
   // Partial-aware progress: full point for ratified items, fractional for
@@ -3431,9 +3485,13 @@ export default function ProjectsGeneric() {
     () => ({
       itemCount: computedAll.length,
       markedCount: progressCount,
-      totalCost: grossAmount,
-      valuedAmount,
-      remainingAmount: totalAmount,
+      // Persist the FULL project total (measured + PC + prelim + variations)
+      // so the projects list shows the same total users see on the BoQ tab
+      // and Overview dashboard. Pre-fix this stored only `grossAmount`
+      // (measured only), causing the list card to silently undercount.
+      totalCost: fullProjectTotal,
+      valuedAmount: fullValuedAmount,
+      remainingAmount: fullRemainingAmount,
       progressPercent,
       actualCoverageCount,
       actualTrackedAmount,
@@ -3442,9 +3500,9 @@ export default function ProjectsGeneric() {
     [
       computedAll.length,
       progressCount,
-      grossAmount,
-      valuedAmount,
-      totalAmount,
+      fullProjectTotal,
+      fullValuedAmount,
+      fullRemainingAmount,
       progressPercent,
       actualCoverageCount,
       actualTrackedAmount,
@@ -4151,9 +4209,14 @@ export default function ProjectsGeneric() {
                 itemQuery={itemQuery}
                 onItemQueryChange={setItemQuery}
                 onClearItemQuery={() => setItemQuery("")}
-                grossAmount={grossAmount}
-                valuedAmount={valuedAmount}
-                remainingAmount={totalAmount}
+                // Pass the FULL project scope (measured + PC + prelim +
+                // variations) so the Overview's "Planned total" matches the
+                // BoQ tab's "Project total" and the PM Dashboard's BAC.
+                // Previously these passed `grossAmount` (measured only) which
+                // silently undercounted users with PC sums / prelims set up.
+                grossAmount={fullProjectTotal}
+                valuedAmount={fullValuedAmount}
+                remainingAmount={fullRemainingAmount}
                 dashboardChartMode={valuationSettings?.dashboardChartMode || "pie"}
                 onDashboardChartModeChange={(mode) =>
                   handleValuationSettingChange("dashboardChartMode", mode)

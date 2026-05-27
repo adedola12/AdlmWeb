@@ -260,16 +260,21 @@ export function computeProjectScope(project) {
   });
 
   // ── Roll-up totals ────────────────────────────────────────────────────
-  // BAC: prefer the locked contract sum (frozen at lock time) + post-lock
-  // variations. If not locked, use the live total. budgetOverride from PM
-  // settings wins at the dashboard layer (handled in computePmDashboard).
+  // projectTotal ALWAYS reflects the LIVE BoQ value (measured + prelim
+  // + PC + variations). The previous behaviour froze it to the
+  // contractSum + variations when locked, which silently desynced from
+  // the BoQ tab whenever the user edited prelims/PC after lock — users
+  // saw "BAC = 85.3M" while the BoQ tab shows "Project total = 93.4M".
+  //
+  // The locked contract sum stays available as `contractSumFrozen` on
+  // this return so the Contract Movement / Variance panels can still
+  // anchor variance tracking to the signed value. The "lock" affects
+  // EDITABILITY (you can't manually override BAC when locked), not
+  // the formula behind it.
   const contractLocked = Boolean(contract?.locked);
   const contractSumLocked = safeNum(contract?.contractSum);
-  const liveTotal =
+  const projectTotal =
     measuredPlanned + provisionalTotal + preliminaryPool + variationsTotal;
-  const projectTotal = contractLocked && contractSumLocked > 0
-    ? contractSumLocked + variationsTotal
-    : liveTotal;
 
   return {
     measured: {
@@ -299,6 +304,11 @@ export function computeProjectScope(project) {
     },
     projectTotal,
     contractLocked,
+    // Frozen contract sum captured at lock time. Distinct from
+    // projectTotal (which is always live). Variance panels compare
+    // projectTotal vs contractSumFrozen to show how the project has
+    // drifted since signing.
+    contractSumFrozen: contractLocked ? contractSumLocked : 0,
     // Aggregate earned/actual across every category — the dashboard's true
     // EV / AC. PC sums and variations now only contribute when their
     // `completed` flag is ticked (matches preliminary-item semantics).
@@ -359,6 +369,19 @@ function summariseTasks(tasks, itemIndex, now) {
   };
   let overdue = 0;
   let overdueByPriority = { low: 0, medium: 0, high: 0, critical: 0 };
+  // ALL tasks bucketed by priority — independent of overdue status.
+  // Lets the dashboard show "you have 12 critical tasks" even when
+  // none are overdue yet. "none" catches tasks with no priority set.
+  let tasksByPriority = { critical: 0, high: 0, medium: 0, low: 0, none: 0 };
+  // Status counts at a glance — same source of truth as buckets but
+  // indexed by the canonical status string, easier to render as a
+  // simple "5 in-progress / 3 blocked / 12 not-started" strip.
+  let tasksByStatus = {
+    "not-started": 0,
+    "in-progress": 0,
+    blocked: 0,
+    completed: 0,
+  };
   let totalBaseline = 0;
   let totalActual = 0;
   let totalEarned = 0;
@@ -426,6 +449,26 @@ function summariseTasks(tasks, itemIndex, now) {
     else if (pct > 0 || status === "in-progress") buckets.inProgress += 1;
     else buckets.notStarted += 1;
 
+    // Total-by-priority — counts EVERY task, regardless of overdue.
+    // Falls back to "none" when no priority is set so the user can
+    // see how many tasks lack a priority assignment.
+    const rawPriority = String(task?.priority || "").toLowerCase();
+    const priorityKey =
+      rawPriority === "critical" || rawPriority === "high" ||
+      rawPriority === "medium" || rawPriority === "low"
+        ? rawPriority
+        : "none";
+    tasksByPriority[priorityKey] += 1;
+
+    // Total-by-status mirror — same content as buckets but keyed by
+    // canonical string so consumers can index without translation.
+    const canonicalStatus =
+      status === "completed" || status === "in-progress" ||
+      status === "blocked" || status === "not-started"
+        ? status
+        : "not-started";
+    tasksByStatus[canonicalStatus] += 1;
+
     return {
       ...(task?.toObject ? task.toObject() : task),
       _computed: {
@@ -446,6 +489,8 @@ function summariseTasks(tasks, itemIndex, now) {
     buckets,
     overdue,
     overdueByPriority,
+    tasksByPriority,
+    tasksByStatus,
     totalTasks,
     avgPercent,
     totalBaseline,
@@ -874,6 +919,8 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     buckets,
     overdue,
     overdueByPriority,
+    tasksByPriority,
+    tasksByStatus,
     totalTasks,
     avgPercent,
     totalBaseline,
@@ -1218,6 +1265,13 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     },
     buckets,
     overdueByPriority,
+    // Total-task breakdowns — independent of overdue status. Surfaces
+    // priority + status distribution across the whole WBS so the
+    // dashboard can show "12 critical / 3 high / 18 medium" even
+    // when nothing is overdue yet (which was the previous gap —
+    // overdueByPriority showed all zeros until tasks slipped).
+    tasksByPriority,
+    tasksByStatus,
     burndown,
     burndownStatus,
     tasks: enriched.map((t) => ({

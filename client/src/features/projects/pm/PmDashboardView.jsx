@@ -162,34 +162,79 @@ function BudgetBars({ BAC, EV, AC }) {
   );
 }
 
-function OverdueBars({ overdueByPriority }) {
+// Priority breakdown — shows TOTAL count per priority (filled bar) with
+// the overdue count overlaid (deeper colour). Lets the user see "I have
+// 18 medium-priority tasks total, 3 of which are overdue" in one row,
+// rather than the old single-purpose overdue-only chart that read 0
+// across the board until tasks slipped.
+function OverdueBars({ overdueByPriority, tasksByPriority }) {
   const labels = ["critical", "high", "medium", "low"];
-  const gradients = {
-    critical: "from-rose-500 to-rose-700",
-    high: "from-rose-400 to-rose-500",
-    medium: "from-amber-400 to-amber-500",
-    low: "from-slate-300 to-slate-400",
+  const totalShades = {
+    critical: "bg-rose-200",
+    high: "bg-amber-200",
+    medium: "bg-sky-200",
+    low: "bg-slate-200",
   };
-  const max = Math.max(1, ...labels.map((k) => safeNum(overdueByPriority?.[k])));
+  const overdueShades = {
+    critical: "bg-rose-600",
+    high: "bg-rose-500",
+    medium: "bg-amber-500",
+    low: "bg-slate-500",
+  };
+  const max = Math.max(
+    1,
+    ...labels.map((k) => safeNum(tasksByPriority?.[k])),
+    ...labels.map((k) => safeNum(overdueByPriority?.[k])),
+  );
+  const hasAnyTask = labels.some((k) => safeNum(tasksByPriority?.[k]) > 0)
+    || safeNum(tasksByPriority?.none) > 0;
+  const noneCount = safeNum(tasksByPriority?.none);
   return (
     <div className="space-y-2.5">
       {labels.map((k) => {
-        const v = safeNum(overdueByPriority?.[k]);
+        const total = safeNum(tasksByPriority?.[k]);
+        const overdue = safeNum(overdueByPriority?.[k]);
         return (
           <div key={k}>
             <div className="flex items-center justify-between text-[11px] text-slate-600 mb-1">
               <span className="capitalize">{k}</span>
-              <span className="font-semibold text-slate-900">{v}</span>
+              <span className="font-semibold text-slate-900">
+                {total}
+                {overdue > 0 ? (
+                  <span className="ml-1 text-rose-600 font-medium">
+                    ({overdue} overdue)
+                  </span>
+                ) : null}
+              </span>
             </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+              {/* Total tasks bar — lighter shade */}
               <div
-                className={`h-full bg-gradient-to-r ${gradients[k]} rounded-full`}
-                style={{ width: `${(v / max) * 100}%` }}
+                className={`absolute inset-y-0 left-0 ${totalShades[k]} rounded-full transition-all`}
+                style={{ width: `${(total / max) * 100}%` }}
               />
+              {/* Overdue overlay — darker shade, drawn on top */}
+              {overdue > 0 ? (
+                <div
+                  className={`absolute inset-y-0 left-0 ${overdueShades[k]} rounded-full transition-all`}
+                  style={{ width: `${(overdue / max) * 100}%` }}
+                />
+              ) : null}
             </div>
           </div>
         );
       })}
+      {noneCount > 0 ? (
+        <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+          + <strong className="text-slate-600">{noneCount}</strong> task
+          {noneCount === 1 ? "" : "s"} with no priority assigned
+        </div>
+      ) : null}
+      {!hasAnyTask ? (
+        <div className="text-[10px] text-slate-400 italic text-center py-2">
+          No tasks yet — add one to populate priority breakdown.
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -447,6 +492,8 @@ export default function PmDashboardView({
   const totals = dashboard?.totals || {};
   const buckets = dashboard?.buckets || {};
   const overdueByPriority = dashboard?.overdueByPriority || {};
+  const tasksByPriority = dashboard?.tasksByPriority || {};
+  const tasksByStatus = dashboard?.tasksByStatus || {};
   const burndown = dashboard?.burndown || [];
   const balance = dashboard?.balance || { status: "no-data" };
 
@@ -689,6 +736,18 @@ export default function PmDashboardView({
       {/* Balance indicator */}
       <BalanceIndicator balance={balance} />
 
+      {/* WBS status & priority strip — compact at-a-glance row showing
+          how the work is distributed across status + priority buckets.
+          Surfaces the priority breakdown that was previously hidden
+          behind "Overdue by priority" (which read 0 until tasks
+          slipped). */}
+      <WbsHealthStrip
+        tasksByStatus={tasksByStatus}
+        tasksByPriority={tasksByPriority}
+        overdueByPriority={overdueByPriority}
+        totalTasks={safeNum(totals.totalTasks)}
+      />
+
       {/* Contract movement — variations + provisional flow, with
           execution status and forecast impact. Drives the user's awareness
           of whether the project is going as scheduled AND as budgeted. */}
@@ -702,8 +761,11 @@ export default function PmDashboardView({
         <ChartCard title="Budget">
           <BudgetBars BAC={totals.BAC} EV={totals.EV} AC={totals.AC} />
         </ChartCard>
-        <ChartCard title="Overdue by priority">
-          <OverdueBars overdueByPriority={overdueByPriority} />
+        <ChartCard title="Tasks by priority">
+          <OverdueBars
+            overdueByPriority={overdueByPriority}
+            tasksByPriority={tasksByPriority}
+          />
         </ChartCard>
         <ChartCard title="Burndown">
           <BurndownChart
@@ -1318,6 +1380,159 @@ function CoverageOffenders({ title, icon: Icon, tone, rows, measureLabel, measur
           </ul>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// WbsHealthStrip — single-row dashboard panel summarising the WBS by
+// STATUS (not-started / in-progress / blocked / completed) and
+// PRIORITY (critical / high / medium / low / none).
+//
+// Why this exists: the Tasks donut shows status %, but priority was
+// only surfaced through "Overdue by priority" which reads zero on
+// healthy projects. Users couldn't see "how many critical tasks do
+// I have" without drilling into the WBS itself. This strip fixes
+// that — every category renders with count + colour tile, plus an
+// overdue overlay where relevant.
+// ────────────────────────────────────────────────────────────────────
+function WbsHealthStrip({ tasksByStatus, tasksByPriority, overdueByPriority, totalTasks }) {
+  if (!totalTasks) return null;
+
+  const statusItems = [
+    { key: "completed", label: "Completed", color: "bg-emerald-500", text: "text-emerald-700" },
+    { key: "in-progress", label: "In progress", color: "bg-amber-500", text: "text-amber-700" },
+    { key: "blocked", label: "Blocked", color: "bg-rose-500", text: "text-rose-700" },
+    { key: "not-started", label: "Not started", color: "bg-slate-400", text: "text-slate-700" },
+  ];
+
+  const priorityItems = [
+    { key: "critical", label: "Critical", color: "bg-rose-600", text: "text-rose-700", icon: "🔥" },
+    { key: "high", label: "High", color: "bg-amber-500", text: "text-amber-700", icon: "⚠" },
+    { key: "medium", label: "Medium", color: "bg-sky-500", text: "text-sky-700", icon: "●" },
+    { key: "low", label: "Low", color: "bg-slate-400", text: "text-slate-600", icon: "○" },
+    { key: "none", label: "Unset", color: "bg-slate-300", text: "text-slate-500", icon: "—" },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Status column */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              WBS Status
+            </div>
+            <div className="text-[10px] text-slate-400">
+              {totalTasks} task{totalTasks === 1 ? "" : "s"} total
+            </div>
+          </div>
+          {/* Stacked horizontal bar */}
+          <div className="flex h-6 w-full overflow-hidden rounded-lg bg-slate-100 mb-2">
+            {statusItems.map((s) => {
+              const c = safeNum(tasksByStatus?.[s.key]);
+              const w = totalTasks > 0 ? (c / totalTasks) * 100 : 0;
+              if (w === 0) return null;
+              return (
+                <div
+                  key={s.key}
+                  className={`${s.color} flex items-center justify-center text-[10px] font-semibold text-white`}
+                  style={{ width: `${w}%` }}
+                  title={`${s.label}: ${c}`}
+                >
+                  {w > 8 ? c : ""}
+                </div>
+              );
+            })}
+          </div>
+          {/* Per-status counts */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {statusItems.map((s) => {
+              const c = safeNum(tasksByStatus?.[s.key]);
+              return (
+                <div
+                  key={s.key}
+                  className="flex items-center gap-1.5 rounded-md border border-slate-100 px-2 py-1 dark:border-slate-700"
+                >
+                  <span className={`h-2 w-2 rounded-sm ${s.color}`} />
+                  <span className="text-[10px] text-slate-600 dark:text-slate-300 truncate flex-1">
+                    {s.label}
+                  </span>
+                  <span className={`text-xs font-bold ${s.text} dark:opacity-90`}>{c}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Priority column */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              WBS Priority
+            </div>
+            <div className="text-[10px] text-slate-400">
+              {priorityItems.reduce(
+                (acc, p) => acc + safeNum(overdueByPriority?.[p.key]),
+                0,
+              )}{" "}
+              overdue
+            </div>
+          </div>
+          {/* Stacked horizontal bar */}
+          <div className="flex h-6 w-full overflow-hidden rounded-lg bg-slate-100 mb-2">
+            {priorityItems.map((p) => {
+              const c = safeNum(tasksByPriority?.[p.key]);
+              const w = totalTasks > 0 ? (c / totalTasks) * 100 : 0;
+              if (w === 0) return null;
+              return (
+                <div
+                  key={p.key}
+                  className={`${p.color} flex items-center justify-center text-[10px] font-semibold text-white`}
+                  style={{ width: `${w}%` }}
+                  title={`${p.label}: ${c}${
+                    safeNum(overdueByPriority?.[p.key]) > 0
+                      ? ` (${overdueByPriority[p.key]} overdue)`
+                      : ""
+                  }`}
+                >
+                  {w > 8 ? c : ""}
+                </div>
+              );
+            })}
+          </div>
+          {/* Per-priority counts with overdue overlay note */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+            {priorityItems.map((p) => {
+              const c = safeNum(tasksByPriority?.[p.key]);
+              const od = safeNum(overdueByPriority?.[p.key]);
+              return (
+                <div
+                  key={p.key}
+                  className={`flex items-center gap-1.5 rounded-md border px-2 py-1 ${
+                    od > 0
+                      ? "border-rose-200 bg-rose-50/40 dark:border-rose-700 dark:bg-rose-900/20"
+                      : "border-slate-100 dark:border-slate-700"
+                  }`}
+                >
+                  <span className={`h-2 w-2 rounded-sm ${p.color}`} />
+                  <span className="text-[10px] text-slate-600 dark:text-slate-300 truncate flex-1">
+                    {p.label}
+                  </span>
+                  <span className={`text-xs font-bold ${p.text} dark:opacity-90`}>
+                    {c}
+                    {od > 0 ? (
+                      <span className="ml-0.5 text-[9px] text-rose-600 font-medium">
+                        ({od}!)
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
