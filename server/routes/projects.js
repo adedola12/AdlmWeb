@@ -465,7 +465,12 @@ function sanitizePreliminaryItems(items) {
       if (!completedAt) completedAt = new Date();
     }
     const notes = String(it.notes || "").trim().slice(0, 500);
-    out.push({ name, allocation, completed, completedAt, notes });
+    // actualAmount — QS-recorded spend on this prelim item. Coerce to
+    // non-negative number; missing field becomes 0.
+    const actualAmount = Number.isFinite(Number(it.actualAmount))
+      ? Math.max(0, Number(it.actualAmount))
+      : 0;
+    out.push({ name, allocation, completed, completedAt, notes, actualAmount });
   }
   return out;
 }
@@ -1283,6 +1288,25 @@ async function updateProject(req, res) {
             it.qty = baseQty;
             it.description = base.description || it.description;
             it.unit = base.unit || it.unit;
+          }
+          // Rate-lock: if the rate changed since lock, push the new rate
+          // into actualRate (so post-lock re-pricing surfaces as a
+          // claimable variance without losing the contract baseline)
+          // and snap rate back to the baseline. Mirrors the qty-lock
+          // pattern above. Client-side the input is disabled, but
+          // server-side enforcement is the source of truth — a
+          // misbehaving / older client can't quietly drift the
+          // contract rate.
+          const newRate = safeNum(it?.rate);
+          const baseRate = safeNum(base.rate);
+          if (newRate !== baseRate) {
+            const userActualRate = parseOptionalNumber(it?.actualRate);
+            if (userActualRate == null) {
+              it.actualRate = newRate;
+              it.actualUpdatedAt = new Date();
+              if (!it.actualRecordedAt) it.actualRecordedAt = new Date();
+            }
+            it.rate = baseRate;
           }
           return true;
         });
@@ -2361,9 +2385,35 @@ async function getPublicDashboard(req, res) {
 
     const remainingAmount = grossAmount - valuedAmount;
 
-    // Actual project cost = completed work + actual variance on tracked items + variations + provisional
-    // For the purposes of the public dashboard we keep the simpler: valued + variations + provisional.
-    const actualProjectCost = valuedAmount + variationsTotal + provisionalTotal;
+    // Variations + PC sums "earned" (executed) totals — only count
+    // when the QS has ticked the `completed` flag, mirroring the
+    // partial-aware semantics measured items use. Pre-fix this added
+    // the FULL provisionalTotal regardless of whether anything was
+    // drawn, which misled the public dashboard into showing a
+    // "₦2,100,000 actual cost" on projects with PC sums declared but
+    // nothing drawn.
+    const variationsEarned = (project.variations || []).reduce(
+      (acc, v) =>
+        v?.completed
+          ? acc + (Number(v?.qty) || 0) * (Number(v?.rate) || 0)
+          : acc,
+      0,
+    );
+    const provisionalEarned = (project.provisionalSums || []).reduce(
+      (acc, p) => (p?.completed ? acc + (Number(p?.amount) || 0) : acc),
+      0,
+    );
+
+    // Actual project cost = earned-only across every stream:
+    //   • measured items × completion factor (already partial-aware)
+    //   • completed preliminaries (preliminaryDone above)
+    //   • executed PC sums
+    //   • executed variations
+    // This makes the public "Actual project cost" tile match the QS
+    // dashboard's AC figure, which is what the client expects to see
+    // on their side of the share link.
+    const actualProjectCost =
+      valuedAmount + preliminaryDone + variationsEarned + provisionalEarned;
     const actualVarianceAmount = actualTrackedAmount - grossAmount;
     const actualVariancePercent = grossAmount > 0
       ? ((actualTrackedAmount - grossAmount) / grossAmount) * 100

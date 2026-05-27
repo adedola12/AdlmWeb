@@ -112,6 +112,12 @@ const PreliminaryItemSchema = new mongoose.Schema(
     completed: { type: Boolean, default: false },
     completedAt: { type: Date, default: null },
     notes: { type: String, default: "" },
+    // QS-entered actual spend on this preliminary item. Distinct from
+    // the allocation × pool calculation (which is what the contract
+    // pays). actualAmount captures what the contractor really spent,
+    // letting the QS spot rows that are running over their planned
+    // share of the preliminary pool.
+    actualAmount: { type: Number, default: 0 },
   },
   { _id: false },
 );

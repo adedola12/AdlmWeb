@@ -418,14 +418,14 @@ export default function PublicProjectDashboard() {
             color="text-adlm-blue-700"
           />
           <SummaryCard
-            label="Actual project cost"
+            label="Spent to date"
             value={money(data.actualProjectCost)}
             detail={
               data.contractLocked
                 ? data.actualProjectCost > data.contractSum
                   ? `${money(data.actualProjectCost - data.contractSum)} over contract`
-                  : `${money(data.contractSum - data.actualProjectCost)} under contract`
-                : "Including variations + provisional"
+                  : `${money(data.contractSum - data.actualProjectCost)} remaining of contract`
+                : "Earned work + executed variations & PC sums"
             }
             color={
               data.contractLocked && data.actualProjectCost > data.contractSum
@@ -457,70 +457,96 @@ export default function PublicProjectDashboard() {
           </div>
         ) : null}
 
-        {/* EVM — Earned Value Management */}
+        {/* Cost & forecast panel — client-friendly view of the EVM
+            numbers. The previous panel used QS jargon (BAC / BCWP /
+            ACWP / VAC) which made sense for the QS dashboard but
+            confused clients reading the public share link.
+            Re-labeled here to answer the two questions a client
+            actually asks:
+              1. "How much has been spent on my project so far?"
+              2. "What's the final cost expected to be?" */}
         {data.evm ? (
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <div className="mb-3">
               <div className="text-sm font-semibold text-slate-900">
-                Earned Value (EVM)
+                Cost &amp; forecast
               </div>
               <div className="text-xs text-slate-500">
-                BCWP / ACWP / EAC metrics — forecast cost at completion based
-                on current performance.
+                What has been spent so far and the expected final cost based
+                on current progress.
               </div>
             </div>
-            <div className="grid gap-3 text-xs sm:grid-cols-3 md:grid-cols-6">
+            <div className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+              {/* "Spent to date" — the ACWP/AC figure. For the client
+                  this is the live number on their statement, not a
+                  budget at completion. Renders as ₦0 cleanly when no
+                  spend has happened yet. */}
               <div>
-                <div className="text-slate-500">BAC</div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {money(data.evm.BAC)}
-                </div>
-                <div className="text-[10px] text-slate-400">Budget at completion</div>
-              </div>
-              <div>
-                <div className="text-slate-500">BCWP</div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {money(data.evm.BCWP)}
-                </div>
-                <div className="text-[10px] text-slate-400">Earned value</div>
-              </div>
-              <div>
-                <div className="text-slate-500">ACWP</div>
-                <div className="text-sm font-semibold text-slate-900">
+                <div className="text-slate-500">Spent to date</div>
+                <div className="text-base font-bold text-slate-900">
                   {money(data.evm.ACWP)}
                 </div>
-                <div className="text-[10px] text-slate-400">Actual cost</div>
+                <div className="text-[10px] text-slate-400">
+                  Actual cost incurred so far
+                </div>
               </div>
+              {/* Value delivered — same source as BCWP/EV; tells the
+                  client how much of the contract value has been
+                  completed (regardless of what's been paid out). */}
               <div>
-                <div className="text-slate-500">CPI</div>
-                <div
-                  className={`text-sm font-semibold ${
-                    data.evm.CPI >= 1 ? "text-emerald-700" : "text-red-700"
-                  }`}
-                >
-                  {Number(data.evm.CPI || 0).toFixed(2)}
+                <div className="text-slate-500">Value delivered</div>
+                <div className="text-base font-bold text-slate-900">
+                  {money(data.evm.BCWP)}
                 </div>
                 <div className="text-[10px] text-slate-400">
-                  {data.evm.CPI >= 1 ? "Under budget" : "Over budget"}
+                  Work completed at contract rates
                 </div>
               </div>
+              {/* Performance — CPI rendered as plain English. Above
+                  1.00 = healthy/under budget; below = at risk. */}
               <div>
-                <div className="text-slate-500">EAC</div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {money(data.evm.EAC)}
-                </div>
-                <div className="text-[10px] text-slate-400">Forecast final cost</div>
-              </div>
-              <div>
-                <div className="text-slate-500">VAC</div>
+                <div className="text-slate-500">Performance</div>
                 <div
-                  className={`text-sm font-semibold ${
-                    data.evm.VAC >= 0 ? "text-emerald-700" : "text-red-700"
+                  className={`text-base font-bold ${
+                    data.evm.CPI >= 1
+                      ? "text-emerald-700"
+                      : data.evm.CPI > 0
+                        ? "text-red-700"
+                        : "text-slate-400"
                   }`}
                 >
-                  {money(data.evm.VAC)}
+                  {data.evm.CPI > 0
+                    ? Number(data.evm.CPI || 0).toFixed(2)
+                    : "—"}
                 </div>
-                <div className="text-[10px] text-slate-400">Variance at completion</div>
+                <div className="text-[10px] text-slate-400">
+                  {data.evm.CPI >= 1
+                    ? "On or under budget"
+                    : data.evm.CPI > 0
+                      ? "Trending over budget"
+                      : "No actuals recorded yet"}
+                </div>
+              </div>
+              {/* Expected Final Cost — EAC renamed for the client.
+                  EAC = BAC / CPI on the server; with no spend (CPI
+                  defaults to 1.0) it equals the contract total, which
+                  is the natural "what will I pay at the end" answer. */}
+              <div>
+                <div className="text-slate-500">Expected Final Cost</div>
+                <div
+                  className={`text-base font-bold ${
+                    data.evm.VAC < 0 ? "text-red-700" : "text-emerald-700"
+                  }`}
+                >
+                  {money(data.evm.EAC)}
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {data.evm.VAC < 0
+                    ? `Forecast over contract by ${money(Math.abs(data.evm.VAC))}`
+                    : data.evm.VAC > 0
+                      ? `Forecast savings of ${money(data.evm.VAC)}`
+                      : "Tracking on contract"}
+                </div>
               </div>
             </div>
           </div>

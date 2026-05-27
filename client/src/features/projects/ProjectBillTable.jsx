@@ -301,6 +301,11 @@ function RateCell({
   boqCandidates = [],
   itemUnit = "",
   itemDescription = "",
+  // When true the cell renders as a read-only chip with a lock icon.
+  // The popup never opens and onChange never fires, so the rate is
+  // frozen until the contract is unlocked.
+  disabled = false,
+  disabledHint = "Locked — unlock the contract to edit rates.",
 }) {
   const [focused, setFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -434,6 +439,25 @@ function RateCell({
   };
 
   const displayValue = value !== "" && value != null ? formatRate(value) : "";
+
+  // Hard-block focus + change when disabled. Keeps the same look-and-feel
+  // as an editable cell so the layout doesn't shift, but the popup never
+  // opens and the value can't drift.
+  if (disabled) {
+    return (
+      <div
+        className="input !h-8 w-full !min-w-0 !px-1.5 !py-0.5 text-xs text-left text-slate-600 bg-slate-50 cursor-not-allowed border-slate-200 flex items-center gap-1"
+        title={disabledHint}
+      >
+        <span aria-hidden="true" className="text-[10px] text-slate-400">🔒</span>
+        <span className="truncate">
+          {displayValue || (
+            <span className="text-slate-400">{formatRate(placeholder) || "0"}</span>
+          )}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div ref={wrapRef} className="relative">
@@ -1939,11 +1963,21 @@ export default function ProjectBillTable({
                           /* Materials view — keep simple number input + picker */
                           <>
                             <input
-                              className="input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs"
+                              className={`input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs ${
+                                contractLocked
+                                  ? "bg-slate-50 text-slate-600 cursor-not-allowed"
+                                  : ""
+                              }`}
                               type="number"
                               step="any"
                               value={rateValue}
                               placeholder={formatRate(item?.rate || 0)}
+                              disabled={contractLocked}
+                              title={
+                                contractLocked
+                                  ? "Contract locked — unlock to edit rates"
+                                  : undefined
+                              }
                               onChange={(e) => onRateChange?.(row.i, e.target.value)}
                             />
 
@@ -2020,6 +2054,13 @@ export default function ProjectBillTable({
                               boqCandidates={getBoqCandidatesForItem?.(item) || []}
                               itemUnit={row.unit || item?.unit || ""}
                               itemDescription={row.description || item?.description || ""}
+                              // Lock the rate as soon as the contract is
+                              // locked. Editing rates after sign-off would
+                              // silently drift the contract sum away from
+                              // the signed value — variations are the
+                              // proper channel for any rate change.
+                              disabled={contractLocked}
+                              disabledHint="Contract locked — unlock it on the Contract Admin tab to edit rates, or raise a variation."
                             />
 
                             <button
@@ -2469,7 +2510,10 @@ export default function ProjectBillTable({
                     <th className="px-2 py-2 w-10 text-center">Done</th>
                     <th className="px-2 py-2">Preliminary item</th>
                     <th className="px-2 py-2 w-24 text-right">Alloc %</th>
-                    <th className="px-2 py-2 w-32 text-right">Amount</th>
+                    <th className="px-2 py-2 w-32 text-right">Planned ₦</th>
+                    {/* Actual column — QS-entered spend per prelim row.
+                        Variance vs Planned surfaces underneath. */}
+                    <th className="px-2 py-2 w-36 text-right">Actual ₦</th>
                     <th className="px-2 py-2 w-24">Done date</th>
                     <th className="px-2 py-2 w-10"></th>
                   </tr>
@@ -2479,6 +2523,9 @@ export default function ProjectBillTable({
                     const alloc = safeNum(p?.allocation);
                     const amount =
                       (preliminaryAmount * alloc) / preliminaryAllocBase;
+                    const actualAmount = safeNum(p?.actualAmount);
+                    const variance = actualAmount - amount;
+                    const hasActual = actualAmount > 0;
                     return (
                       <tr key={i} className="border-t">
                         <td className="px-2 py-2 text-slate-500">{i + 1}</td>
@@ -2536,6 +2583,52 @@ export default function ProjectBillTable({
                         >
                           {money(amount)}
                         </td>
+                        {/* Actual cell — number input + variance hint. */}
+                        <td className="px-2 py-2 text-right">
+                          <input
+                            className="input !h-8 w-full !px-2 text-xs text-right"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder={money(amount)}
+                            value={
+                              actualAmount === 0 || p?.actualAmount == null
+                                ? ""
+                                : p.actualAmount
+                            }
+                            onChange={(e) =>
+                              onUpdatePreliminaryItem?.(i, {
+                                actualAmount:
+                                  e.target.value === ""
+                                    ? 0
+                                    : Math.max(0, Number(e.target.value) || 0),
+                              })
+                            }
+                            title="What the contractor actually spent on this prelim. Compare against the planned allocation."
+                          />
+                          {hasActual ? (
+                            <div
+                              className={`mt-0.5 text-[10px] font-medium ${
+                                variance > 0
+                                  ? "text-rose-600"
+                                  : variance < 0
+                                    ? "text-emerald-600"
+                                    : "text-slate-400"
+                              }`}
+                              title={
+                                variance > 0
+                                  ? "Actual exceeds planned share of the preliminary pool"
+                                  : variance < 0
+                                    ? "Actual is below planned share — saving on this row"
+                                    : "Actual matches planned exactly"
+                              }
+                            >
+                              {variance === 0
+                                ? "On plan"
+                                : `${variance > 0 ? "+" : "−"}${money(Math.abs(variance))}`}
+                            </div>
+                          ) : null}
+                        </td>
                         <td className="px-2 py-2 text-[10px] text-slate-500">
                           {p?.completedAt
                             ? new Date(p.completedAt).toLocaleDateString()
@@ -2568,6 +2661,16 @@ export default function ProjectBillTable({
                     <td className="px-2 py-2 text-right text-emerald-700">
                       {money(preliminaryDone)}
                     </td>
+                    {/* Total of all actual amounts entered so far. */}
+                    <td className="px-2 py-2 text-right text-slate-700">
+                      {(() => {
+                        const totActual = (preliminaryItems || []).reduce(
+                          (acc, p) => acc + safeNum(p?.actualAmount),
+                          0,
+                        );
+                        return totActual > 0 ? money(totActual) : "—";
+                      })()}
+                    </td>
                     <td colSpan={2}></td>
                   </tr>
                   <tr>
@@ -2579,6 +2682,39 @@ export default function ProjectBillTable({
                     </td>
                     <td className="px-2 py-2 text-right text-adlm-blue-700">
                       {money(preliminaryOutstanding)}
+                    </td>
+                    {/* Variance: total actual vs preliminary pool */}
+                    <td className="px-2 py-2 text-right">
+                      {(() => {
+                        const totActual = (preliminaryItems || []).reduce(
+                          (acc, p) => acc + safeNum(p?.actualAmount),
+                          0,
+                        );
+                        if (totActual <= 0) return null;
+                        const variance = totActual - preliminaryAmount;
+                        return (
+                          <span
+                            className={
+                              variance > 0
+                                ? "text-rose-700 text-[10px]"
+                                : variance < 0
+                                  ? "text-emerald-700 text-[10px]"
+                                  : "text-slate-500 text-[10px]"
+                            }
+                            title={
+                              variance > 0
+                                ? "Actual spend has exceeded the preliminary pool"
+                                : variance < 0
+                                  ? "Total actual is below pool — saving overall"
+                                  : "Actual spend equals the pool"
+                            }
+                          >
+                            {variance === 0
+                              ? "On plan"
+                              : `${variance > 0 ? "+" : "−"}${money(Math.abs(variance))}`}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td colSpan={2}></td>
                   </tr>

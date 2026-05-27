@@ -235,6 +235,7 @@ function FinalAccountSection({
   onReopen,
   onDownload,
   contractSum,
+  contractLocked = false,
   measured,
   provisional,
   preliminary,
@@ -242,18 +243,65 @@ function FinalAccountSection({
   disabledFinalize,
 }) {
   const isFinalized = Boolean(finalAccount?.finalized);
+  const finalContractValue = measured + provisional + preliminary + variations;
+
+  // Savings/over-run semantics:
+  //
+  // • BEFORE contract lock — there is no signed agreement to over-run.
+  //   The "agreedContractSum" field is just a placeholder, so showing
+  //   "Over-run ₦8.1M" is misleading (the user hasn't agreed anything
+  //   yet). We set savings = 0 in that case and show a neutral
+  //   "Pending contract lock" label instead.
+  //
+  // • AFTER lock — the agreed value at lock time IS the contract.
+  //   A genuine over-run only occurs when VARIATIONS push the total
+  //   above (agreed + variations executed). Re-pricing of measured
+  //   work after lock would be unusual and is treated as drift, not
+  //   over-run.
+  //
+  // savings > 0  → under-run (project came in under contract)
+  // savings = 0  → balanced (or pre-lock placeholder)
+  // savings < 0  → over-run (variations exceeded baseline)
+  let savings = 0;
+  let savingsLabel = "Savings vs contract";
+  let savingsTone = "neutral"; // 'neutral' | 'positive' | 'negative'
+  if (isFinalized) {
+    // Finalised numbers come straight from the server snapshot.
+    savings = finalAccount.savings || 0;
+  } else if (!contractLocked) {
+    // Pre-lock: no contract to compare against.
+    savings = 0;
+    savingsLabel = "Pending contract lock";
+    savingsTone = "neutral";
+  } else {
+    savings = contractSum - finalContractValue;
+    if (savings > 0) {
+      savingsLabel = "Under-run (savings)";
+      savingsTone = "positive";
+    } else if (savings < 0) {
+      savingsLabel = "Over-run";
+      savingsTone = "negative";
+    } else {
+      savingsLabel = "On budget";
+      savingsTone = "neutral";
+    }
+  }
+
   const livePreview = {
     measuredWorkFinal: measured,
     provisionalFinal: provisional,
     preliminaryFinal: preliminary,
     variationsFinal: variations,
     agreedContractSum: contractSum,
-    finalContractValue: measured + provisional + preliminary + variations,
+    finalContractValue,
+    savings,
+    savingsLabel,
+    savingsTone,
   };
-  livePreview.savings =
-    livePreview.agreedContractSum - livePreview.finalContractValue;
 
-  const view = isFinalized ? finalAccount : livePreview;
+  const view = isFinalized
+    ? { ...finalAccount, savingsLabel, savingsTone }
+    : livePreview;
 
   return (
     <div className="space-y-3">
@@ -263,7 +311,9 @@ function FinalAccountSection({
           <div className="text-[11px] text-slate-500">
             {isFinalized
               ? `Finalized on ${formatDate(finalAccount.finalizedAt)} — all project data is frozen.`
-              : "Preview of the closing settlement based on current data."}
+              : contractLocked
+                ? "Preview of the closing settlement based on current data."
+                : "Pre-lock preview — savings / over-run only start tracking after the contract is locked."}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -329,22 +379,48 @@ function FinalAccountSection({
           </div>
         </div>
         <div>
-          <div className="text-slate-500">Final contract value</div>
+          <div className="text-slate-500">
+            {contractLocked || isFinalized
+              ? "Final contract value"
+              : "Live project total"}
+          </div>
           <div className="text-base font-bold text-adlm-blue-700">
             {money(view.finalContractValue)}
           </div>
+          {!contractLocked && !isFinalized ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">
+              Pre-lock preview.
+            </div>
+          ) : null}
         </div>
         <div>
           <div className="text-slate-500">
-            {view.savings >= 0 ? "Under-run (savings)" : "Over-run"}
+            {view.savingsLabel ||
+              (view.savings >= 0 ? "Under-run (savings)" : "Over-run")}
           </div>
           <div
             className={`text-base font-bold ${
-              view.savings >= 0 ? "text-emerald-700" : "text-red-700"
+              view.savingsTone === "positive"
+                ? "text-emerald-700"
+                : view.savingsTone === "negative"
+                  ? "text-red-700"
+                  : "text-slate-500"
             }`}
+            title={
+              !contractLocked && !isFinalized
+                ? "Lock the contract to start tracking savings or over-run against the agreed sum."
+                : undefined
+            }
           >
-            {money(Math.abs(view.savings))}
+            {!contractLocked && !isFinalized
+              ? "—"
+              : money(Math.abs(view.savings || 0))}
           </div>
+          {!contractLocked && !isFinalized ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">
+              Lock the contract to start tracking.
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -677,6 +753,10 @@ export default function ProjectContractPanel({
           onReopen={onReopenFinalAccount}
           onDownload={onDownloadFinalAccount}
           contractSum={contractSum}
+          // Pass contractLocked so the section can suppress the
+          // misleading "Over-run ₦Xm" reading before the contract is
+          // signed — pre-lock there's no agreement to over-run.
+          contractLocked={contractLocked}
           measured={measured}
           provisional={provisional}
           preliminary={preliminary}

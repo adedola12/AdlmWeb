@@ -2045,7 +2045,7 @@ export default function ProjectsGeneric() {
   function handleAddPreliminaryItem() {
     setPreliminaryItems((prev) => [
       ...(Array.isArray(prev) ? prev : []),
-      { name: "", allocation: 0, completed: false, completedAt: null, notes: "" },
+      { name: "", allocation: 0, completed: false, completedAt: null, notes: "", actualAmount: 0 },
     ]);
   }
   function handleRemovePreliminaryItem(idx) {
