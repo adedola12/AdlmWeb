@@ -52,13 +52,16 @@ export default function PmWbsScrollNav({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // All jumps are instant ("auto"). Long smooth-scrolls across a 200-row
+  // WBS were causing motion sickness; users prefer the target to appear
+  // immediately so they don't have to follow the page.
   function scrollToTop() {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
   function scrollToBottom() {
     window.scrollTo({
       top: document.documentElement.scrollHeight,
-      behavior: "smooth",
+      behavior: "auto",
     });
   }
   function scrollToSection(section) {
@@ -66,7 +69,7 @@ export default function PmWbsScrollNav({
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const target = rect.top + window.scrollY - scrollOffset;
-    window.scrollTo({ top: target, behavior: "smooth" });
+    window.scrollTo({ top: target, behavior: "auto" });
     setOpen(false);
   }
 

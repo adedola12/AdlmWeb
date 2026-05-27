@@ -13,7 +13,7 @@ import {
   FaSyncAlt,
   FaCalendarAlt,
 } from "react-icons/fa";
-import PmWbsScrollNav from "./PmWbsScrollNav.jsx";
+import SectionRail from "../SectionRail.jsx";
 
 // A row is treated as a section anchor in the scroll-nav drawer if it's
 // flagged as a summary (set during MS Project import) OR its WBS code is
@@ -196,6 +196,24 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
     }));
   }, [tasks]);
 
+  // SectionRail shape — { id, label, badge, indent, refGetter }. Reuses
+  // the WBS section list but adds indent based on dot depth so nested
+  // summary tasks appear visually nested in the rail.
+  const railSections = React.useMemo(() => {
+    return sections.map((s) => {
+      const depth = String(s.wbs || "")
+        .split(".")
+        .filter(Boolean).length - 1;
+      return {
+        id: s.id,
+        label: s.name || "(unnamed)",
+        badge: s.wbs || undefined,
+        indent: Math.max(0, depth),
+        refGetter: s.refGetter,
+      };
+    });
+  }, [sections]);
+
   // Any tasks visibly hidden right now? Drives the "Expand all" hint.
   const hasCollapsed = collapsedWbs.size > 0;
 
@@ -215,7 +233,18 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
   const summaryCount = tasks.filter((t) => t.isSummary && t.wbs).length;
 
   return (
-    <div className="rounded-xl border border-slate-200">
+    <div className="flex gap-4">
+      {/* Docked section rail — sticky on xl+ screens, falls back to a
+          floating pill on smaller screens. All jumps are instant
+          (behavior: "auto") so the user doesn't get the dizzy feel of
+          smooth-scrolling across a 200-row WBS. */}
+      <SectionRail
+        title="WBS sections"
+        sections={railSections}
+        scrollOffset={96}
+      />
+
+      <div className="flex-1 min-w-0 rounded-xl border border-slate-200">
       {summaryCount > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2 text-[11px] text-slate-600">
           <div>
@@ -510,9 +539,7 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
         </tbody>
       </table>
       </div>
-      {/* Floating jump nav — fixed to the viewport so it stays visible while
-          the user scrolls the long task list. */}
-      <PmWbsScrollNav sections={sections} />
+      </div>
     </div>
   );
 }

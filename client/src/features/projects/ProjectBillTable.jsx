@@ -17,6 +17,7 @@ import {
   FaChevronUp,
   FaChevronDown,
 } from "react-icons/fa";
+import SectionRail from "./SectionRail.jsx";
 
 /**
  * Draggable column-resize handle.
@@ -840,10 +841,15 @@ export default function ProjectBillTable({
   const topAnchorRef = useRef(null);
   const bottomAnchorRef = useRef(null);
 
+  // Section jumps use behavior: "auto" (instant) instead of "smooth".
+  // Long smooth-scrolls give users a "dizzy" feeling — the user feedback
+  // was that on a 50+ item BoQ, an animated scroll across 4 screens of
+  // content is more disorienting than helpful. Instant jumps put the
+  // target on screen immediately so the eye can re-anchor faster.
   const scrollToRef = useCallback((node) => {
     if (!node) return;
     try {
-      node.scrollIntoView({ behavior: "smooth", block: "start" });
+      node.scrollIntoView({ behavior: "auto", block: "start" });
     } catch {
       node.scrollIntoView();
     }
@@ -853,7 +859,7 @@ export default function ProjectBillTable({
     if (topAnchorRef.current) {
       scrollToRef(topAnchorRef.current);
     } else {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "auto" });
     }
   }, [scrollToRef]);
 
@@ -861,7 +867,7 @@ export default function ProjectBillTable({
     if (bottomAnchorRef.current) {
       try {
         bottomAnchorRef.current.scrollIntoView({
-          behavior: "smooth",
+          behavior: "auto",
           block: "end",
         });
       } catch {
@@ -870,7 +876,7 @@ export default function ProjectBillTable({
     } else {
       window.scrollTo({
         top: document.documentElement.scrollHeight,
-        behavior: "smooth",
+        behavior: "auto",
       });
     }
   }, []);
@@ -1085,8 +1091,74 @@ export default function ProjectBillTable({
     </button>
   );
 
+  // ── Build the side-rail section list ────────────────────────────────
+  // Pull together every navigable anchor (categories from the current
+  // grouping + the prelim / PC / variations sections) into one list the
+  // rail can render. Each entry is a getter so the rail reads the LIVE
+  // DOM node — anchors mounted late (e.g. variations only appears once
+  // a variation exists) won't be missed.
+  const railSections = React.useMemo(() => {
+    const out = [];
+    // Categories from the active grouping. Use groupedRows so the
+    // order matches what the user actually sees.
+    for (const grp of groupedRows) {
+      const cat = String(grp?.category || "").trim();
+      if (!cat) continue;
+      out.push({
+        id: `cat-${cat}`,
+        label: cat,
+        badge: isTradeGrouping ? "Trade" : "Cat",
+        refGetter: () => categoryAnchorRef.current?.[cat] || null,
+      });
+    }
+    // The three "extra scope" sections — only added when they have
+    // mount targets in the DOM. preliminarySectionRef etc. are nulled
+    // when the section isn't rendered, so refGetter returning null
+    // hides the row automatically.
+    if (preliminarySectionRef.current) {
+      out.push({
+        id: "preliminaries",
+        label: "Preliminaries",
+        badge: "Pre",
+        refGetter: () => preliminarySectionRef.current,
+      });
+    }
+    if (provisionalSectionRef.current) {
+      out.push({
+        id: "provisional",
+        label: "Provisional sums",
+        badge: "PC",
+        refGetter: () => provisionalSectionRef.current,
+      });
+    }
+    if (variationsSectionRef.current) {
+      out.push({
+        id: "variations",
+        label: "Variations",
+        badge: "Var",
+        refGetter: () => variationsSectionRef.current,
+      });
+    }
+    return out;
+    // groupedRows + the section refs change rarely, so this memo is
+    // cheap; the refs themselves don't trigger a recompute by design
+    // (they're populated by mount callbacks).
+  }, [groupedRows, isTradeGrouping]);
+
   return (
-    <div className="relative space-y-4">
+    <div className="relative flex gap-4">
+      {/* Persistent jump-to-section rail. On xl+ this is a sticky
+          vertical menu; on smaller screens it collapses to a floating
+          pill in the bottom-right that opens a drawer. */}
+      <SectionRail
+        title="Bill of Quantities"
+        sections={railSections}
+        scrollOffset={96}
+        onScrollTop={scrollToTop}
+        onScrollBottom={scrollToBottom}
+      />
+
+      <div className="flex-1 min-w-0 space-y-4">
       <div ref={topAnchorRef} className="scroll-mt-24" aria-hidden="true" />
 
       {/* Floating Undo bar — sticky at top while any delete is in the
@@ -2777,6 +2849,7 @@ export default function ProjectBillTable({
           }}
         />
       ) : null}
+      </div>
     </div>
   );
 }
