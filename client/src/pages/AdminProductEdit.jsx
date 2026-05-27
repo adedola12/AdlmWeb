@@ -677,6 +677,18 @@ export default function AdminProductEdit() {
             placeholder="Long description (markdown/plain)"
           />
 
+          <div className="border rounded-lg p-3">
+            <ReorderableList
+              title="Features"
+              items={features}
+              setItems={setFeatures}
+              placeholder="Add a feature bullet…"
+            />
+            <div className="text-xs text-slate-500 mt-2">
+              Shown as the bulleted Features list on the product page. Press Enter or click Add to append; use ↑ / ↓ to reorder.
+            </div>
+          </div>
+
           <label className="text-sm">
             Billing interval
             <select
