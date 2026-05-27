@@ -92,6 +92,204 @@ function buildItemIndex(project) {
   return map;
 }
 
+// ── Project scope breakdown ──────────────────────────────────────────────
+//
+// The PM dashboard's cost figures (BAC, EV, AC, EAC, VAC) need to reflect
+// the *full* contract — not just the measured BoQ items. A QS-grade total
+// is Measured + Provisional Sums + Preliminaries + Variations, mirroring
+// the contract panel shown in the BoQ tab.
+//
+// This function rolls those four streams up using the same convention the
+// projects.js valuation pipeline uses, so the PM Dashboard and the
+// Interim Payment Certificate flow stay numerically aligned.
+//
+// Earned semantics (matches existing computeValueToDate in projects.js):
+//   • Measured items → earned = planned × valuationFactor (partial-aware)
+//   • Provisional Sums → earned = full declared amount (declared = used)
+//   • Variations → earned = full qty × rate (claimed when entered)
+//   • Preliminaries → earned = pool × (completedAllocation / totalAllocation)
+//
+// Returns both the totals (for BAC / EV / AC) AND the per-entry virtual
+// items (for the heatmap / picker / dashboard list views).
+export function computeProjectScope(project) {
+  const items = Array.isArray(project?.items) ? project.items : [];
+  const isMaterials = String(project?.productKey || "").includes("materials");
+  const statusField = isMaterials ? "purchased" : "completed";
+
+  // ── Measured (line items) ─────────────────────────────────────────────
+  let measuredPlanned = 0;
+  let measuredEarned = 0;
+  let measuredActual = 0;
+  const measuredVirtual = items.map((item, idx) => {
+    const qty = safeNum(item?.qty);
+    const rate = safeNum(item?.rate);
+    const planned = qty * rate;
+    const ratified = Boolean(item?.[statusField]);
+    const pct = ratified ? 100 : clamp(safeNum(item?.percentComplete), 0, 100);
+    const factor = pct / 100;
+    const earned = planned * factor;
+    // Actual: prefer recorded actualQty × actualRate when present, scaled by
+    // the same valuation factor (so partial work shows partial actuals).
+    const aQty = item?.actualQty != null ? safeNum(item?.actualQty) : qty;
+    const aRate = item?.actualRate != null ? safeNum(item?.actualRate) : rate;
+    const actual = aQty * aRate * factor;
+
+    measuredPlanned += planned;
+    measuredEarned += earned;
+    measuredActual += actual;
+
+    return {
+      identity: itemIdentity(item, idx),
+      kind: "measured",
+      sn: safeNum(item?.sn) || idx + 1,
+      description: String(item?.description || item?.materialName || item?.takeoffLine || "").trim(),
+      unit: String(item?.unit || ""),
+      qty,
+      rate,
+      amount: planned,
+      category: String(item?.category || ""),
+      trade: String(item?.trade || ""),
+      completed: ratified,
+      purchased: Boolean(item?.purchased),
+      percentComplete: ratified ? 100 : pct,
+    };
+  });
+
+  // ── Provisional Sums (PC) ─────────────────────────────────────────────
+  const provisionalSums = Array.isArray(project?.provisionalSums) ? project.provisionalSums : [];
+  let provisionalTotal = 0;
+  const provisionalVirtual = provisionalSums.map((p, idx) => {
+    const amount = safeNum(p?.amount);
+    provisionalTotal += amount;
+    return {
+      identity: `pc::${idx}`,
+      kind: "provisional",
+      sn: idx + 1,
+      description: String(p?.description || `PC sum #${idx + 1}`),
+      unit: "sum",
+      qty: 1,
+      rate: amount,
+      amount,
+      category: "Provisional Sums",
+      trade: "",
+      completed: true, // PC sums are treated as fully claimed when declared
+      purchased: false,
+      percentComplete: 100,
+    };
+  });
+
+  // ── Variations ────────────────────────────────────────────────────────
+  const variations = Array.isArray(project?.variations) ? project.variations : [];
+  let variationsTotal = 0;
+  const variationsVirtual = variations.map((v, idx) => {
+    const qty = safeNum(v?.qty);
+    const rate = safeNum(v?.rate);
+    const amount = qty * rate;
+    variationsTotal += amount;
+    return {
+      identity: `var::${idx}`,
+      kind: "variation",
+      sn: idx + 1,
+      description: String(v?.description || `Variation #${idx + 1}`),
+      unit: String(v?.unit || ""),
+      qty,
+      rate,
+      amount,
+      category: "Variations",
+      trade: "",
+      // Variations are typically entered post-fact (work already done and
+      // claimed). Mark as 100% so the dashboard's EV reflects the claim.
+      completed: true,
+      purchased: false,
+      percentComplete: 100,
+    };
+  });
+
+  // ── Preliminaries (BESMM4 checklist) ─────────────────────────────────
+  const contract = project?.contract || {};
+  const preliminaryPercent = safeNum(contract?.preliminaryPercent) || 7.5;
+  const preliminaryPool = ((measuredPlanned + provisionalTotal) * preliminaryPercent) / 100;
+  const preliminaryItems = Array.isArray(project?.preliminaryItems) ? project.preliminaryItems : [];
+  const totalAllocation = preliminaryItems.reduce((acc, p) => acc + safeNum(p?.allocation), 0);
+  const allocationBase = totalAllocation > 0 ? totalAllocation : 100;
+
+  let preliminaryEarned = 0;
+  const preliminaryVirtual = preliminaryItems.map((p, idx) => {
+    const allocation = clamp(safeNum(p?.allocation), 0, 100);
+    const amount = preliminaryPool * (allocation / allocationBase);
+    const completed = Boolean(p?.completed);
+    if (completed) preliminaryEarned += amount;
+    return {
+      identity: `prelim::${idx}`,
+      kind: "preliminary",
+      sn: idx + 1,
+      description: String(p?.name || `Preliminary #${idx + 1}`),
+      unit: "%",
+      qty: allocation,
+      rate: amount > 0 && allocation > 0 ? amount / allocation : 0,
+      amount,
+      category: "Preliminaries",
+      trade: "",
+      completed,
+      purchased: false,
+      percentComplete: completed ? 100 : 0,
+    };
+  });
+
+  // ── Roll-up totals ────────────────────────────────────────────────────
+  // BAC: prefer the locked contract sum (frozen at lock time) + post-lock
+  // variations. If not locked, use the live total. budgetOverride from PM
+  // settings wins at the dashboard layer (handled in computePmDashboard).
+  const contractLocked = Boolean(contract?.locked);
+  const contractSumLocked = safeNum(contract?.contractSum);
+  const liveTotal =
+    measuredPlanned + provisionalTotal + preliminaryPool + variationsTotal;
+  const projectTotal = contractLocked && contractSumLocked > 0
+    ? contractSumLocked + variationsTotal
+    : liveTotal;
+
+  return {
+    measured: {
+      planned: measuredPlanned,
+      earned: measuredEarned,
+      actual: measuredActual,
+      count: measuredVirtual.length,
+    },
+    provisional: {
+      total: provisionalTotal,
+      earned: provisionalTotal, // declared = fully earned
+      count: provisionalVirtual.length,
+    },
+    variations: {
+      total: variationsTotal,
+      earned: variationsTotal,
+      count: variationsVirtual.length,
+    },
+    preliminary: {
+      pool: preliminaryPool,
+      earned: preliminaryEarned,
+      percent: preliminaryPercent,
+      itemCount: preliminaryVirtual.length,
+      completedCount: preliminaryVirtual.filter((p) => p.completed).length,
+    },
+    projectTotal,
+    contractLocked,
+    // Aggregate earned/actual across every category — the dashboard's true
+    // EV / AC. Provisional + variations + preliminary all roll into AC at
+    // their full amounts since we don't track separate actuals for them.
+    totalEarned:
+      measuredEarned + provisionalTotal + variationsTotal + preliminaryEarned,
+    totalActual:
+      measuredActual + provisionalTotal + variationsTotal + preliminaryEarned,
+    virtualItems: [
+      ...measuredVirtual,
+      ...preliminaryVirtual,
+      ...provisionalVirtual,
+      ...variationsVirtual,
+    ],
+  };
+}
+
 function hydrateTaskCost(task, itemIndex) {
   const links = Array.isArray(task?.linkedBoqIdentities)
     ? task.linkedBoqIdentities
@@ -650,18 +848,40 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   // Mutates the enriched tasks in place to attach `_rollup` and `_isSummary`.
   computeWbsRollups(enriched);
 
-  // Budget: prefer explicit override, then contract sum, then total baseline.
+  // ── Project-scope breakdown ────────────────────────────────────────────
+  // Pull the *full* contract picture from the BoQ side: measured items,
+  // provisional sums, preliminaries, variations. This is the same math the
+  // Interim Payment Certificate flow uses, so the PM dashboard and the
+  // valuation pipeline stay numerically aligned.
+  const scope = computeProjectScope(project);
+  const grossFromItems = scope.measured.planned;
   const contractSum = safeNum(project?.contract?.contractSum);
-  const grossFromItems = (Array.isArray(project?.items) ? project.items : []).reduce(
-    (acc, it) => acc + safeNum(it?.qty) * safeNum(it?.rate),
-    0,
-  );
-  const BAC = safeNum(pm.budgetOverride) || contractSum || totalBaseline || grossFromItems;
+  const contractLocked = scope.contractLocked;
 
-  // Budget reference: locked contract sum when available, else live BoQ total.
-  // Used by the dashboard's "Plan balanced against contract?" indicator.
-  const budgetReference = contractSum || grossFromItems;
-  const contractLocked = Boolean(project?.contract?.locked);
+  // BAC priority:
+  //   1. User-set budgetOverride from the Project Header modal
+  //   2. Full project total (measured + PC + prelim + variations) — matches
+  //      what the BoQ contract panel displays
+  //   3. Fall-back chain to legacy values for projects without scope set up
+  const projectTotal = scope.projectTotal;
+  const BAC =
+    safeNum(pm.budgetOverride) ||
+    projectTotal ||
+    contractSum ||
+    totalBaseline ||
+    grossFromItems;
+
+  // BoQ-derived EV / AC — replaces the task-only numbers for the dashboard's
+  // cost-side metrics so prelim, PC and variation work all flow through.
+  // PV stays task-based (it's a schedule projection); SPI then expresses
+  // "is the cost-earned tracking the schedule-planned?" which is the
+  // standard EVM meaning of SPI.
+  const totalScopeEarned = scope.totalEarned;
+  const totalScopeActual = scope.totalActual;
+
+  // Budget reference: BoQ project total when available, else locked contract
+  // sum, else gross of measured. Drives the "plan vs contract" indicator.
+  const budgetReference = projectTotal || contractSum || grossFromItems;
   const variance = totalBaseline - budgetReference;
   let balanceStatus = "no-data";
   if (budgetReference > 0 && totalBaseline > 0) {
@@ -674,9 +894,13 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     balanceStatus = "empty";
   }
 
-  const CPI = totalActual > 0 ? totalEarned / totalActual : totalEarned > 0 ? 1 : 0;
-  const SPI = totalPlannedValueToDate > 0 ? totalEarned / totalPlannedValueToDate : totalEarned > 0 ? 1 : 0;
-  const budgetUsedPercent = BAC > 0 ? (totalActual / BAC) * 100 : 0;
+  const CPI = totalScopeActual > 0
+    ? totalScopeEarned / totalScopeActual
+    : totalScopeEarned > 0 ? 1 : 0;
+  const SPI = totalPlannedValueToDate > 0
+    ? totalScopeEarned / totalPlannedValueToDate
+    : totalScopeEarned > 0 ? 1 : 0;
+  const budgetUsedPercent = BAC > 0 ? (totalScopeActual / BAC) * 100 : 0;
   const tasksDonePercent = totalTasks > 0 ? (buckets.completed / totalTasks) * 100 : 0;
 
   // Project start / finish — prefer explicitly set values, else derive.
@@ -716,8 +940,12 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       // round-tripping the computed BAC as the override.
       budgetOverride: Math.round(safeNum(pm.budgetOverride) * 100) / 100,
       PV: Math.round(totalPlannedValueToDate * 100) / 100,
-      EV: Math.round(totalEarned * 100) / 100,
-      AC: Math.round(totalActual * 100) / 100,
+      // EV / AC now reflect the BoQ-side reality (measured + PC + prelim +
+      // variations), not just the task baselines. The task-only equivalents
+      // are still exposed below under taskEarned / taskActual for callers
+      // that want them.
+      EV: Math.round(totalScopeEarned * 100) / 100,
+      AC: Math.round(totalScopeActual * 100) / 100,
       VAC: Math.round((BAC - (CPI > 0 ? BAC / CPI : BAC)) * 100) / 100,
       EAC: Math.round((CPI > 0 ? BAC / CPI : BAC) * 100) / 100,
       totalBaseline: Math.round(totalBaseline * 100) / 100,
@@ -725,8 +953,18 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
       manualBaseline: Math.round(manualBaseline * 100) / 100,
       contractSum: Math.round(contractSum * 100) / 100,
       grossFromItems: Math.round(grossFromItems * 100) / 100,
+      projectTotal: Math.round(projectTotal * 100) / 100,
       budgetReference: Math.round(budgetReference * 100) / 100,
       varianceVsBudget: Math.round(variance * 100) / 100,
+      // Per-stream contributions to BAC — surfaces for the EV summary
+      // footer so the user can see WHERE the budget comes from.
+      measuredAmount: Math.round(scope.measured.planned * 100) / 100,
+      provisionalAmount: Math.round(scope.provisional.total * 100) / 100,
+      preliminaryPool: Math.round(scope.preliminary.pool * 100) / 100,
+      variationsAmount: Math.round(scope.variations.total * 100) / 100,
+      // Task-only equivalents (left in for transparency / debugging).
+      taskEarned: Math.round(totalEarned * 100) / 100,
+      taskActual: Math.round(totalActual * 100) / 100,
       totalTasks,
       completedTasks: buckets.completed,
       inProgressTasks: buckets.inProgress,
@@ -768,23 +1006,22 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     })),
     risks,
     issues,
-    // Lightweight BoQ catalogue so the client's task modal can render the
-    // autocomplete picker without re-fetching the project. Each entry
-    // includes the identity hash used for linkedBoqIdentities.
-    boqItems: (Array.isArray(project?.items) ? project.items : []).map((item, idx) => ({
-      identity: itemIdentity(item, idx),
-      sn: safeNum(item?.sn) || idx + 1,
-      description: String(item?.description || item?.materialName || item?.takeoffLine || "").trim(),
-      unit: String(item?.unit || ""),
-      qty: safeNum(item?.qty),
-      rate: safeNum(item?.rate),
-      amount: safeNum(item?.qty) * safeNum(item?.rate),
-      category: String(item?.category || ""),
-      trade: String(item?.trade || ""),
-      completed: Boolean(item?.completed),
-      purchased: Boolean(item?.purchased),
-      percentComplete: clamp(safeNum(item?.percentComplete), 0, 100),
-    })),
+    // Full project-scope catalogue — measured BoQ lines + virtual entries
+    // for preliminaries, provisional sums, and variations. Each entry has
+    // a `kind` field ("measured" | "preliminary" | "provisional" |
+    // "variation") so the heatmap can group/colour them and the task
+    // modal picker can filter to kind === "measured" only.
+    boqItems: scope.virtualItems,
+    // Roll-up totals per stream — exposed separately for callers that
+    // want to display a contract-breakdown summary without re-computing.
+    scope: {
+      measured: scope.measured,
+      provisional: scope.provisional,
+      variations: scope.variations,
+      preliminary: scope.preliminary,
+      projectTotal: scope.projectTotal,
+      contractLocked: scope.contractLocked,
+    },
   };
 }
 

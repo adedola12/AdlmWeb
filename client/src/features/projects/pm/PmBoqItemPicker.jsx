@@ -44,10 +44,20 @@ export default function PmBoqItemPicker({
 
   const selectedSet = React.useMemo(() => new Set(value || []), [value]);
 
+  // Restrict picker to *measured* BoQ lines. The dashboard's boqItems now
+  // also carries virtual rows for preliminaries, provisional sums and
+  // variations (so the heatmap can render them) — but a task linking to
+  // those would double-count their amount in the BAC. Measured-only keeps
+  // the link semantics meaningful: a task's cost = qty × rate of the work.
+  const measuredItems = React.useMemo(
+    () => items.filter((it) => !it.kind || it.kind === "measured"),
+    [items],
+  );
+
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items.slice(0, 100); // cap to keep render cheap
-    return items
+    if (!q) return measuredItems.slice(0, 100); // cap to keep render cheap
+    return measuredItems
       .filter((item) => {
         const hay = [
           item.description,
@@ -62,11 +72,14 @@ export default function PmBoqItemPicker({
         return hay.includes(q);
       })
       .slice(0, 100);
-  }, [items, query]);
+  }, [measuredItems, query]);
 
+  // Only measured-kind links are valid for selection. If a task's
+  // linkedBoqIdentities contains a stale identity (e.g. an item that was
+  // deleted from the BoQ), it's silently dropped here.
   const selectedItems = React.useMemo(
-    () => items.filter((item) => selectedSet.has(item.identity)),
-    [items, selectedSet],
+    () => measuredItems.filter((item) => selectedSet.has(item.identity)),
+    [measuredItems, selectedSet],
   );
 
   const derivedAmount = React.useMemo(
@@ -90,7 +103,7 @@ export default function PmBoqItemPicker({
     if (next.has(identity)) next.delete(identity);
     else next.add(identity);
     const nextArr = Array.from(next);
-    const nextAmount = items
+    const nextAmount = measuredItems
       .filter((it) => next.has(it.identity))
       .reduce((acc, it) => acc + safeNum(it.amount), 0);
     onChange?.(nextArr, nextAmount);
@@ -104,7 +117,7 @@ export default function PmBoqItemPicker({
     const next = new Set(selectedSet);
     for (const item of filtered) next.add(item.identity);
     const nextArr = Array.from(next);
-    const nextAmount = items
+    const nextAmount = measuredItems
       .filter((it) => next.has(it.identity))
       .reduce((acc, it) => acc + safeNum(it.amount), 0);
     onChange?.(nextArr, nextAmount);
