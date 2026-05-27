@@ -1,12 +1,22 @@
 import React from "react";
-import { FaArrowLeft, FaTrash, FaShareAlt, FaCopy, FaCheck } from "react-icons/fa";
+import {
+  FaArrowLeft,
+  FaTrash,
+  FaShareAlt,
+  FaCopy,
+  FaCheck,
+} from "react-icons/fa";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 
-function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }) {
+function ShareDashboardButton({
+  publicShareEnabled,
+  publicToken,
+  onToggleShare,
+}) {
   const [open, setOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -36,15 +46,22 @@ function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }
         className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
         onClick={() => setOpen((v) => !v)}
       >
-        <FaShareAlt className={publicShareEnabled ? "text-adlm-blue-700" : "text-slate-400"} />
+        <FaShareAlt
+          className={
+            publicShareEnabled ? "text-adlm-blue-700" : "text-slate-400"
+          }
+        />
         {publicShareEnabled ? "Shared" : "Share"}
       </button>
 
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border bg-white p-4 shadow-xl">
-          <div className="text-sm font-semibold text-slate-900 mb-2">Share Dashboard</div>
+          <div className="text-sm font-semibold text-slate-900 mb-2">
+            Share Dashboard
+          </div>
           <p className="text-xs text-slate-500 mb-3">
-            Generate a public link so clients can view the project dashboard (progress & cost summary only).
+            Generate a public link so clients can view the project dashboard
+            (progress & cost summary only).
           </p>
 
           <label className="flex items-center gap-2 text-xs text-slate-700 mb-3">
@@ -71,11 +88,20 @@ function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }
                   onClick={copyUrl}
                   className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-adlm-blue-700 hover:bg-blue-50"
                 >
-                  {copied ? <><FaCheck /> Copied</> : <><FaCopy /> Copy</>}
+                  {copied ? (
+                    <>
+                      <FaCheck /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <FaCopy /> Copy
+                    </>
+                  )}
                 </button>
               </div>
               <p className="text-[10px] text-slate-400">
-                Anyone with this link can view the dashboard summary and chart (no editing, no item details).
+                Anyone with this link can view the dashboard summary and chart
+                (no editing, no item details).
               </p>
             </div>
           ) : null}
@@ -99,7 +125,7 @@ function ShareDashboardButton({ publicShareEnabled, publicToken, onToggleShare }
 //   1. Dashboard            — high-level financial / progress overview
 //   2. Bill of Quantity     — rates, items, contract panel (work surface)
 //   3. PM Dashboard         — schedule / EVM / risks / issues
-//   4. Variation            — interim certificates & valuation settings
+//   4. Valuation            — interim certificates & valuation settings
 //                              (kept the existing `valuation` id so the
 //                               render branches below don't have to change)
 const TAB_OPTIONS = [
@@ -120,7 +146,7 @@ const TAB_OPTIONS = [
   },
   {
     id: "valuation",
-    label: "Variation",
+    label: "Valuation",
     helper: "Certificates and settings",
   },
 ];
@@ -294,13 +320,21 @@ export default function ProjectOpenView({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <button className="btn btn-sm" onClick={onBack} title="Back to projects">
+            <button
+              className="btn btn-sm"
+              onClick={onBack}
+              title="Back to projects"
+            >
               <span className="inline-flex items-center gap-2">
                 <FaArrowLeft /> Back to projects
               </span>
             </button>
 
-            <button className="btn btn-sm" onClick={onDelete} title="Delete this project">
+            <button
+              className="btn btn-sm"
+              onClick={onDelete}
+              title="Delete this project"
+            >
               <span className="inline-flex items-center gap-2 text-orange-700">
                 <FaTrash className="text-[13px]" /> Delete
               </span>
@@ -315,7 +349,8 @@ export default function ProjectOpenView({
                   className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
                   title={`Contract locked${
                     contract?.lockedAt
-                      ? " on " + new Date(contract.lockedAt).toLocaleDateString()
+                      ? " on " +
+                        new Date(contract.lockedAt).toLocaleDateString()
                       : ""
                   }. Qty / description edits are frozen; new items flow to Variations.`}
                 >
@@ -333,9 +368,12 @@ export default function ProjectOpenView({
             <div className="mt-1 text-xs text-slate-500">
               Project ID: <code>{selectedId}</code>
             </div>
-            <div className="mt-1 text-xs text-slate-500">{statusHistoryText}</div>
             <div className="mt-1 text-xs text-slate-500">
-              You can still use this Project ID in the Windows plugin Open from Cloud flow.
+              {statusHistoryText}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              You can still use this Project ID in the Windows plugin Open from
+              Cloud flow.
             </div>
           </div>
         </div>
@@ -345,13 +383,21 @@ export default function ProjectOpenView({
             className={`btn btn-sm ${isDirty ? "btn-primary" : ""}`}
             onClick={onSave}
             disabled={!isDirty || saving}
-            title={!isDirty ? "No changes to save" : "Save rates and valuation progress"}
+            title={
+              !isDirty
+                ? "No changes to save"
+                : "Save rates and valuation progress"
+            }
           >
             {saving ? "Saving..." : "Save"}
           </button>
 
           <div className="relative">
-            <button className="btn btn-sm" onClick={onToggleExportOpen} type="button">
+            <button
+              className="btn btn-sm"
+              onClick={onToggleExportOpen}
+              type="button"
+            >
               Export
             </button>
 
@@ -385,7 +431,9 @@ export default function ProjectOpenView({
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("bungalow", undefined, "elemental")}
+                  onClick={() =>
+                    onExportElementalBoQ?.("bungalow", undefined, "elemental")
+                  }
                   title="Single-storey building format"
                 >
                   Bungalow
@@ -393,7 +441,13 @@ export default function ProjectOpenView({
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("multistorey", undefined, "elemental")}
+                  onClick={() =>
+                    onExportElementalBoQ?.(
+                      "multistorey",
+                      undefined,
+                      "elemental",
+                    )
+                  }
                   title="Multi-storey building"
                 >
                   Multi-storey
@@ -408,7 +462,9 @@ export default function ProjectOpenView({
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("bungalow", undefined, "trade")}
+                  onClick={() =>
+                    onExportElementalBoQ?.("bungalow", undefined, "trade")
+                  }
                   title="Concrete, formwork, reinforcement, masonry, finishes, painting, plumbing, electrical and HVAC each get their own bill"
                 >
                   Bungalow (Trade format)
@@ -416,7 +472,9 @@ export default function ProjectOpenView({
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  onClick={() => onExportElementalBoQ?.("multistorey", undefined, "trade")}
+                  onClick={() =>
+                    onExportElementalBoQ?.("multistorey", undefined, "trade")
+                  }
                   title="Multi-storey trade-format BoQ"
                 >
                   Multi-storey (Trade format)
@@ -444,7 +502,9 @@ export default function ProjectOpenView({
                 ].join(" ")}
               >
                 <div className="text-sm font-semibold">{tab.label}</div>
-                <div className={`mt-1 text-xs ${active ? "text-blue-100" : "text-slate-500"}`}>
+                <div
+                  className={`mt-1 text-xs ${active ? "text-blue-100" : "text-slate-500"}`}
+                >
                   {tab.helper}
                 </div>
               </button>
@@ -455,36 +515,36 @@ export default function ProjectOpenView({
 
       {activeTab === "dashboard" ? (
         <>
-        {/* Share Dashboard Button */}
-        <div className="flex items-center justify-end gap-2 mb-3">
-          <ShareDashboardButton
-            publicShareEnabled={publicShareEnabled}
-            publicToken={publicToken}
-            onToggleShare={onToggleShare}
+          {/* Share Dashboard Button */}
+          <div className="flex items-center justify-end gap-2 mb-3">
+            <ShareDashboardButton
+              publicShareEnabled={publicShareEnabled}
+              publicToken={publicToken}
+              onToggleShare={onToggleShare}
+            />
+          </div>
+          <ProjectDashboardSummary
+            actualCoverageCount={actualCoverageCount}
+            actualCoveragePercent={actualCoveragePercent}
+            actualLatestAt={actualLatestAt}
+            actualPlannedAmount={actualPlannedAmount}
+            actualQtyOverrideCount={actualQtyOverrideCount}
+            actualRateOverrideCount={actualRateOverrideCount}
+            actualTrackedAmount={actualTrackedAmount}
+            actualVarianceAmount={actualVarianceAmount}
+            actualVariancePercent={actualVariancePercent}
+            chartMode={dashboardChartMode}
+            comparisonRows={comparisonRows}
+            grossAmount={grossAmount}
+            onChartModeChange={onDashboardChartModeChange}
+            progressCount={progressCount}
+            progressPercent={progressPercent}
+            progressTotal={progressTotal}
+            remainingAmount={remainingAmount}
+            statusLabel={statusLabel}
+            statusPastLabel={statusPastLabel}
+            valuedAmount={valuedAmount}
           />
-        </div>
-        <ProjectDashboardSummary
-          actualCoverageCount={actualCoverageCount}
-          actualCoveragePercent={actualCoveragePercent}
-          actualLatestAt={actualLatestAt}
-          actualPlannedAmount={actualPlannedAmount}
-          actualQtyOverrideCount={actualQtyOverrideCount}
-          actualRateOverrideCount={actualRateOverrideCount}
-          actualTrackedAmount={actualTrackedAmount}
-          actualVarianceAmount={actualVarianceAmount}
-          actualVariancePercent={actualVariancePercent}
-          chartMode={dashboardChartMode}
-          comparisonRows={comparisonRows}
-          grossAmount={grossAmount}
-          onChartModeChange={onDashboardChartModeChange}
-          progressCount={progressCount}
-          progressPercent={progressPercent}
-          progressTotal={progressTotal}
-          remainingAmount={remainingAmount}
-          statusLabel={statusLabel}
-          statusPastLabel={statusPastLabel}
-          valuedAmount={valuedAmount}
-        />
         </>
       ) : null}
 
@@ -510,9 +570,12 @@ export default function ProjectOpenView({
       {activeTab === "valuation" ? (
         <div className="space-y-4">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="font-medium text-slate-900">Valuation workspace</div>
+            <div className="font-medium text-slate-900">
+              Valuation workspace
+            </div>
             <div className="mt-1 text-sm text-slate-600">
-              Control what you want to see while preparing valuation sheets for this project.
+              Control what you want to see while preparing valuation sheets for
+              this project.
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
@@ -520,7 +583,9 @@ export default function ProjectOpenView({
                 <input
                   type="checkbox"
                   checked={showDailyValuationLog}
-                  onChange={(e) => onToggleShowDailyValuationLog?.(e.target.checked)}
+                  onChange={(e) =>
+                    onToggleShowDailyValuationLog?.(e.target.checked)
+                  }
                   className={checkboxCls}
                 />
                 Show daily valuation log
@@ -530,7 +595,9 @@ export default function ProjectOpenView({
                 <input
                   type="checkbox"
                   checked={showValuationSettings}
-                  onChange={(e) => onToggleShowValuationSettings?.(e.target.checked)}
+                  onChange={(e) =>
+                    onToggleShowValuationSettings?.(e.target.checked)
+                  }
                   className={checkboxCls}
                 />
                 Show valuation settings
@@ -585,12 +652,12 @@ export default function ProjectOpenView({
             0,
           )}
           preliminary={
-            (grossAmount +
+            ((grossAmount +
               (provisionalSums || []).reduce(
                 (acc, s) => acc + (Number(s?.amount) || 0),
                 0,
               )) *
-            (Number(contract?.preliminaryPercent) || 0) /
+              (Number(contract?.preliminaryPercent) || 0)) /
             100
           }
           variations={(variations || []).reduce(
