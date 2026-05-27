@@ -89,6 +89,13 @@ const ProvisionalSumSchema = new mongoose.Schema(
   {
     description: { type: String, default: "", trim: true },
     amount: { type: Number, default: 0 },
+    // PC sums are budgetary allowances — the actual scope is executed and
+    // billed later. The `completed` flag is the QS's "yes, this allowance
+    // has been executed/used" toggle. Until ticked, the amount counts
+    // toward the BAC but NOT toward earned value or the PM dashboard's
+    // "Done" buckets. Matches preliminary-item semantics.
+    completed: { type: Boolean, default: false },
+    completedAt: { type: Date, default: null },
   },
   { _id: false },
 );
@@ -128,6 +135,12 @@ const VariationSchema = new mongoose.Schema(
       enum: ["manual", "post-lock-new-item"],
       default: "manual",
     },
+    // Variations represent extra/change work that may or may not yet be
+    // executed on site. The `completed` flag is the QS's "this variation
+    // has been done and is being claimed" toggle. Counts toward BAC always;
+    // toward earned value only when ticked. Same semantics as PC sums.
+    completed: { type: Boolean, default: false },
+    completedAt: { type: Date, default: null },
   },
   { _id: false },
 );
@@ -382,6 +395,11 @@ const ContractSchema = new mongoose.Schema(
     preliminaryAtLock: { type: Number, default: 0 },
     baseItems: { type: [ContractBaseItemSchema], default: [] },
     notes: { type: String, default: "" },
+    // bcrypt-hashed 4-digit PIN required to unlock the contract once locked.
+    // Stored hashed, never returned to the client. Empty string = no PIN set
+    // (back-compat for projects locked before this feature shipped — those
+    // can still be unlocked without a PIN).
+    lockPinHash: { type: String, default: "" },
   },
   { _id: false },
 );

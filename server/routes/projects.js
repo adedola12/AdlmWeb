@@ -2,6 +2,33 @@ import express from "express";
 import mongoose from "mongoose";
 import crypto from "crypto";
 import multer from "multer";
+import bcrypt from "bcryptjs";
+
+// Helper: a contract lock PIN must be exactly 4 digits (0000-9999). We
+// normalize whatever the client sends — trims whitespace, accepts numbers
+// or strings, rejects anything that's not 4 ASCII digits. Returns the
+// normalized string or null if invalid.
+function normalizeLockPin(value) {
+  if (value == null) return null;
+  const str = String(value).trim();
+  return /^\d{4}$/.test(str) ? str : null;
+}
+
+// Strip server-secret fields before serialising a project to the client.
+// Today: the contract lock PIN hash. Returns a plain object — safe to
+// JSON.stringify.
+function projectForClient(project) {
+  if (!project) return project;
+  const obj = project?.toObject ? project.toObject() : { ...project };
+  if (obj?.contract && obj.contract.lockPinHash !== undefined) {
+    // Don't leak the hash; replace with a boolean flag the UI can use to
+    // decide whether to prompt for a PIN on unlock.
+    obj.contract = { ...obj.contract };
+    obj.contract.hasLockPin = Boolean(obj.contract.lockPinHash);
+    delete obj.contract.lockPinHash;
+  }
+  return obj;
+}
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
@@ -376,7 +403,16 @@ function sanitizeProvisionalSums(sums) {
     const description = String(s.description || "").trim().slice(0, 500);
     const amount = Number.isFinite(Number(s.amount)) ? Number(s.amount) : 0;
     if (!description && amount === 0) continue;
-    out.push({ description, amount });
+    const completed = Boolean(s.completed);
+    let completedAt = null;
+    if (completed) {
+      if (s.completedAt) {
+        const d = new Date(s.completedAt);
+        if (!Number.isNaN(d.getTime())) completedAt = d;
+      }
+      if (!completedAt) completedAt = new Date();
+    }
+    out.push({ description, amount, completed, completedAt });
   }
   return out;
 }
@@ -451,8 +487,20 @@ function sanitizeVariations(variations) {
     }
     const source =
       v.source === "post-lock-new-item" ? "post-lock-new-item" : "manual";
+    const completed = Boolean(v.completed);
+    let completedAt = null;
+    if (completed) {
+      if (v.completedAt) {
+        const d = new Date(v.completedAt);
+        if (!Number.isNaN(d.getTime())) completedAt = d;
+      }
+      if (!completedAt) completedAt = new Date();
+    }
     if (!description && qty === 0 && rate === 0) continue;
-    out.push({ description, qty, unit, rate, reference, issuedAt, source });
+    out.push({
+      description, qty, unit, rate, reference, issuedAt, source,
+      completed, completedAt,
+    });
   }
   return out;
 }
@@ -792,7 +840,7 @@ async function createProject(req, res) {
       valuationSettings: normalizeValuationSettings(valuationSettings),
     });
 
-    res.json(project);
+    res.json(projectForClient(project));
   } catch (err) {
     console.error("POST project error:", err);
     res.status(500).json({ error: "Server error" });
@@ -1026,7 +1074,7 @@ async function getProject(req, res) {
       if (categoryDirty) await project.save();
     }
 
-    res.json(project);
+    res.json(projectForClient(project));
   } catch (err) {
     console.error("GET project error:", err);
     res.status(500).json({ error: "Server error" });
@@ -1309,7 +1357,7 @@ async function updateProject(req, res) {
     project.version += 1;
     await project.save();
 
-    res.json(project);
+    res.json(projectForClient(project));
   } catch (err) {
     console.error("PUT project error:", err);
     res.status(500).json({ error: "Server error" });
@@ -1387,7 +1435,7 @@ async function getProjectBySlug(req, res) {
     const project = await TakeoffProject.findOne({ slug, userId, productKey });
     if (!project) return res.status(404).json({ error: "Not found" });
 
-    res.json(project);
+    res.json(projectForClient(project));
   } catch (err) {
     console.error("GET project by slug error:", err);
     res.status(500).json({ error: "Server error" });
@@ -1453,6 +1501,20 @@ async function lockContract(req, res) {
       : safeNum(project.contract?.preliminaryPercent) || 7.5;
     const notes = String(req.body?.notes || "").trim().slice(0, 1000);
 
+    // 4-digit lock PIN. Required for new locks (this version onwards).
+    // We hash with bcrypt cost 10 — overkill for a 4-digit secret in raw
+    // brute-force terms, but consistent with how passwords are stored on
+    // this server, and gives us future room to grow PIN length without
+    // changing the verification path.
+    const lockPin = normalizeLockPin(req.body?.lockPin);
+    if (!lockPin) {
+      return res.status(400).json({
+        error: "A 4-digit lock PIN is required. You'll need the same PIN to unlock the contract.",
+        code: "LOCK_PIN_REQUIRED",
+      });
+    }
+    const lockPinHash = await bcrypt.hash(lockPin, 10);
+
     // Snapshot current scope. Use itemIdentity as the stable key so later
     // edits can be matched back to the baseline.
     const baseItems = (project.items || []).map((it, idx) => ({
@@ -1487,11 +1549,17 @@ async function lockContract(req, res) {
       provisionalAtLock: provisional,
       preliminaryAtLock: prelim,
       contractSum,
+      lockPinHash,
     };
     project.version += 1;
     await project.save();
 
-    res.json({ ok: true, contract: project.contract, version: project.version });
+    // Never echo the PIN hash back to the client.
+    const contractOut = project.contract?.toObject
+      ? project.contract.toObject()
+      : { ...project.contract };
+    delete contractOut.lockPinHash;
+    res.json({ ok: true, contract: contractOut, version: project.version });
   } catch (err) {
     console.error("POST lock error:", err);
     res.status(500).json({ error: "Server error" });
@@ -1510,16 +1578,45 @@ async function unlockContract(req, res) {
     const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
     if (!project) return res.status(404).json({ error: "Not found" });
 
+    // PIN check. If the contract has a stored hash, the caller must supply
+    // the matching 4-digit PIN. Contracts locked before this feature
+    // shipped have an empty lockPinHash and unlock without verification —
+    // back-compat for existing data, future locks will all carry a PIN.
+    const storedHash = String(project.contract?.lockPinHash || "");
+    if (storedHash) {
+      const suppliedPin = normalizeLockPin(req.body?.lockPin);
+      if (!suppliedPin) {
+        return res.status(400).json({
+          error: "Enter the 4-digit PIN used to lock this contract.",
+          code: "LOCK_PIN_REQUIRED",
+        });
+      }
+      const ok = await bcrypt.compare(suppliedPin, storedHash);
+      if (!ok) {
+        return res.status(401).json({
+          error: "Incorrect PIN. The contract stays locked.",
+          code: "LOCK_PIN_INVALID",
+        });
+      }
+    }
+
     if (!project.contract) project.contract = {};
     project.contract.locked = false;
     project.contract.lockedAt = null;
     project.contract.lockedBy = null;
+    // Clear the PIN — locking again sets a new one, ensuring the old PIN
+    // can't be reused after unlock without the user explicitly choosing it.
+    project.contract.lockPinHash = "";
     // Keep baseItems and contractSum so history is preserved; re-locking
     // overwrites them cleanly.
     project.version += 1;
     await project.save();
 
-    res.json({ ok: true, contract: project.contract, version: project.version });
+    const contractOut = project.contract?.toObject
+      ? project.contract.toObject()
+      : { ...project.contract };
+    delete contractOut.lockPinHash;
+    res.json({ ok: true, contract: contractOut, version: project.version });
   } catch (err) {
     console.error("POST unlock error:", err);
     res.status(500).json({ error: "Server error" });
@@ -1558,25 +1655,46 @@ function computeValueToDate(project) {
     measured += q * r * factor;
   }
 
-  const variationsAmount = (project.variations || []).reduce(
+  // Variations and PC sums each carry a `completed` flag. Both contribute
+  // to the BAC (project total) regardless, but only contribute to earned
+  // value (cumulativeValue) once flagged as executed. This matches how
+  // preliminary items already work.
+  const variationsTotal = (project.variations || []).reduce(
     (acc, v) => acc + safeNum(v?.qty) * safeNum(v?.rate),
     0,
   );
-  const provisionalAmount = (project.provisionalSums || []).reduce(
+  const variationsEarned = (project.variations || []).reduce(
+    (acc, v) =>
+      v?.completed
+        ? acc + safeNum(v?.qty) * safeNum(v?.rate)
+        : acc,
+    0,
+  );
+  const provisionalTotal = (project.provisionalSums || []).reduce(
     (acc, s) => acc + safeNum(s?.amount),
     0,
   );
+  const provisionalEarned = (project.provisionalSums || []).reduce(
+    (acc, s) => (s?.completed ? acc + safeNum(s?.amount) : acc),
+    0,
+  );
+  // Back-compat aliases — these were the old "treat as fully claimed" sums.
+  // Code below still references them; for cumulative-value math we now use
+  // the *Earned variants above.
+  const variationsAmount = variationsEarned;
+  const provisionalAmount = provisionalEarned;
 
-  // Preliminary pool: total preliminary amount (derived from contract
-  // percent on measured+provisional) and the portion already "earned" by
-  // completed preliminary items.
+  // Preliminary pool: derived from contract percent on (measured + ALL
+  // declared provisional). Uses the declared total — not just the completed
+  // portion — because the pool size is set by contract scope, not by what's
+  // been ticked off.
   const preliminaryPercent = safeNum(project.contract?.preliminaryPercent);
   const measuredTotal = items.reduce(
     (acc, it) => acc + safeNum(it?.qty) * safeNum(it?.rate),
     0,
   );
   const preliminaryTotal =
-    ((measuredTotal + provisionalAmount) * preliminaryPercent) / 100;
+    ((measuredTotal + provisionalTotal) * preliminaryPercent) / 100;
   const preliminaryItems = Array.isArray(project.preliminaryItems)
     ? project.preliminaryItems
     : [];

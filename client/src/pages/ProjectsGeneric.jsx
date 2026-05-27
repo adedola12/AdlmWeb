@@ -2802,9 +2802,14 @@ export default function ProjectsGeneric() {
   }
 
   // ── Contract lock / unlock ──
-  async function handleLockContract({ preliminaryPercent, approvedAt, notes } = {}) {
+  async function handleLockContract({ preliminaryPercent, approvedAt, notes, lockPin } = {}) {
     if (!selectedId || !accessToken) return null;
     if (contract.locked) return contract;
+    // Server requires a 4-digit PIN. Bail out early with a meaningful
+    // error code so the UI can re-open the prompt instead of toasting.
+    if (!/^\d{4}$/.test(String(lockPin || ""))) {
+      return { error: "LOCK_PIN_REQUIRED", message: "Enter a 4-digit PIN to lock." };
+    }
     setContractBusy(true);
     try {
       const result = await apiAuthed(endpoints.lock(selectedId), {
@@ -2814,6 +2819,7 @@ export default function ProjectsGeneric() {
           preliminaryPercent: Number(preliminaryPercent ?? contract.preliminaryPercent),
           approvedAt: approvedAt || new Date().toISOString(),
           notes: notes || "",
+          lockPin: String(lockPin).trim(),
         },
       });
       if (result?.contract) {
@@ -2837,6 +2843,10 @@ export default function ProjectsGeneric() {
       }
       return result;
     } catch (e) {
+      const code = e?.data?.code || null;
+      if (code === "LOCK_PIN_REQUIRED") {
+        return { error: code, message: e?.message || "Enter a 4-digit PIN to lock." };
+      }
       setErr(e?.message || "Failed to lock contract");
       return null;
     } finally {
@@ -2844,17 +2854,30 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function handleUnlockContract() {
+  async function handleUnlockContract({ lockPin } = {}) {
     if (!selectedId || !accessToken) return null;
     if (!contract.locked) return contract;
-    if (!window.confirm(
-      "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely — variations will no longer be auto-tracked until you lock again.",
-    )) return null;
+    // For contracts that have a PIN set (locked under this version
+    // onwards), the caller must supply it. The ContractPanel triggers a
+    // PIN modal before calling this; legacy unlock-without-PIN works
+    // through the same code path because lockPin defaults to undefined.
+    const hasPin = Boolean(contract?.hasLockPin || sel?.contract?.hasLockPin);
+    if (hasPin) {
+      if (!/^\d{4}$/.test(String(lockPin || ""))) {
+        return { error: "LOCK_PIN_REQUIRED", message: "Enter the 4-digit PIN to unlock." };
+      }
+    } else {
+      // Fallback for legacy unprotected locks — keep the confirmation prompt.
+      if (!window.confirm(
+        "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely — variations will no longer be auto-tracked until you lock again.",
+      )) return null;
+    }
     setContractBusy(true);
     try {
       const result = await apiAuthed(endpoints.unlock(selectedId), {
         token: accessToken,
         method: "POST",
+        body: lockPin ? { lockPin: String(lockPin).trim() } : {},
       });
       if (result?.contract) {
         setContract((prev) => ({
@@ -2869,6 +2892,12 @@ export default function ProjectsGeneric() {
       }
       return result;
     } catch (e) {
+      // Surface the PIN-specific code so the modal can show "Wrong PIN"
+      // inline and stay open; other errors fall through to the toast.
+      const code = e?.data?.code || null;
+      if (code === "LOCK_PIN_INVALID" || code === "LOCK_PIN_REQUIRED") {
+        return { error: code, message: e?.message || "Wrong PIN." };
+      }
       setErr(e?.message || "Failed to unlock contract");
       return null;
     } finally {

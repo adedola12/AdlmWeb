@@ -70,7 +70,12 @@ export default function Nav() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-adlm-navy/95 backdrop-blur border-b border-adlm-navy-tertiary">
+      {/* Sticky header — must stay fully opaque (no /alpha, no backdrop-blur)
+          so it never lets BoQ rows / sticky table threads bleed through. The
+          shadow + high z-index let it sit cleanly above every page-level
+          sticky element. Bumped from z-50 to z-[100] because some modals
+          and table threads inside pages were ending up at z-50 too. */}
+      <header className="sticky top-0 z-[100] bg-adlm-navy border-b border-adlm-navy-tertiary shadow-sm">
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2 overflow-visible">
           <Link to="/" className="flex items-center gap-1.5 flex-shrink-0">
             <img src={adlmLogo} alt="ADLM Logo" className="w-6 h-6 sm:w-7 sm:h-7" />
@@ -133,14 +138,14 @@ export default function Nav() {
       </header>
 
       <div
-        className={`fixed inset-0 z-[55] bg-black/50 transition-opacity md:hidden ${
+        className={`fixed inset-0 z-[110] bg-black/50 transition-opacity md:hidden ${
           open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setOpen(false)}
       />
 
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-[60] w-72 max-w-[80vw] bg-adlm-navy text-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
+        className={`fixed top-0 left-0 bottom-0 z-[120] w-72 max-w-[80vw] bg-adlm-navy text-white shadow-2xl transition-transform duration-300 ease-out md:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

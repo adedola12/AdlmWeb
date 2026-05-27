@@ -156,11 +156,18 @@ export function computeProjectScope(project) {
   });
 
   // ── Provisional Sums (PC) ─────────────────────────────────────────────
+  // PC sums always contribute to BAC (declared allowance) but only to EV
+  // when the QS ticks them as executed. Until then they show as "not
+  // started" in the PM dashboard heatmap, mirroring how preliminary items
+  // behave.
   const provisionalSums = Array.isArray(project?.provisionalSums) ? project.provisionalSums : [];
   let provisionalTotal = 0;
+  let provisionalEarned = 0;
   const provisionalVirtual = provisionalSums.map((p, idx) => {
     const amount = safeNum(p?.amount);
+    const isDone = Boolean(p?.completed);
     provisionalTotal += amount;
+    if (isDone) provisionalEarned += amount;
     return {
       identity: `pc::${idx}`,
       kind: "provisional",
@@ -172,20 +179,25 @@ export function computeProjectScope(project) {
       amount,
       category: "Provisional Sums",
       trade: "",
-      completed: true, // PC sums are treated as fully claimed when declared
+      completed: isDone,
       purchased: false,
-      percentComplete: 100,
+      percentComplete: isDone ? 100 : 0,
     };
   });
 
   // ── Variations ────────────────────────────────────────────────────────
+  // Same rule as PC sums: instruction-issued contributes to BAC; executed
+  // (completed flag set) contributes to EV.
   const variations = Array.isArray(project?.variations) ? project.variations : [];
   let variationsTotal = 0;
+  let variationsEarned = 0;
   const variationsVirtual = variations.map((v, idx) => {
     const qty = safeNum(v?.qty);
     const rate = safeNum(v?.rate);
     const amount = qty * rate;
+    const isDone = Boolean(v?.completed);
     variationsTotal += amount;
+    if (isDone) variationsEarned += amount;
     return {
       identity: `var::${idx}`,
       kind: "variation",
@@ -197,11 +209,9 @@ export function computeProjectScope(project) {
       amount,
       category: "Variations",
       trade: "",
-      // Variations are typically entered post-fact (work already done and
-      // claimed). Mark as 100% so the dashboard's EV reflects the claim.
-      completed: true,
+      completed: isDone,
       purchased: false,
-      percentComplete: 100,
+      percentComplete: isDone ? 100 : 0,
     };
   });
 
@@ -257,13 +267,15 @@ export function computeProjectScope(project) {
     },
     provisional: {
       total: provisionalTotal,
-      earned: provisionalTotal, // declared = fully earned
+      earned: provisionalEarned, // only when `completed` flag is ticked
       count: provisionalVirtual.length,
+      completedCount: provisionalVirtual.filter((p) => p.completed).length,
     },
     variations: {
       total: variationsTotal,
-      earned: variationsTotal,
+      earned: variationsEarned, // only when `completed` flag is ticked
       count: variationsVirtual.length,
+      completedCount: variationsVirtual.filter((v) => v.completed).length,
     },
     preliminary: {
       pool: preliminaryPool,
@@ -275,12 +287,12 @@ export function computeProjectScope(project) {
     projectTotal,
     contractLocked,
     // Aggregate earned/actual across every category — the dashboard's true
-    // EV / AC. Provisional + variations + preliminary all roll into AC at
-    // their full amounts since we don't track separate actuals for them.
+    // EV / AC. PC sums and variations now only contribute when their
+    // `completed` flag is ticked (matches preliminary-item semantics).
     totalEarned:
-      measuredEarned + provisionalTotal + variationsTotal + preliminaryEarned,
+      measuredEarned + provisionalEarned + variationsEarned + preliminaryEarned,
     totalActual:
-      measuredActual + provisionalTotal + variationsTotal + preliminaryEarned,
+      measuredActual + provisionalEarned + variationsEarned + preliminaryEarned,
     virtualItems: [
       ...measuredVirtual,
       ...preliminaryVirtual,

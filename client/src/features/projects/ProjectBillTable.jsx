@@ -631,6 +631,29 @@ export default function ProjectBillTable({
 
   // Ribbon tab state — mirrors MS Office ribbon (Home / Rates / Navigate / Extras)
   const [ribbonTab, setRibbonTab] = useState("home");
+  // PIN modal state — mode is 'lock' (set a new PIN) or 'unlock' (verify
+  // the saved PIN). null = closed. busy/err drive in-modal feedback so
+  // wrong-PIN attempts don't fall through to a global toast.
+  const [pinModal, setPinModal] = useState(null); // { mode, pin, confirm, err, busy } | null
+  // Collapsed state for the BoQ ribbon. Persisted in localStorage so users
+  // who don't need the tools strip can keep it folded across sessions.
+  const [ribbonCollapsed, setRibbonCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("adlm:boqRibbonCollapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  function toggleRibbonCollapsed() {
+    setRibbonCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("adlm:boqRibbonCollapsed", next ? "1" : "0");
+      } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   // Anchors for jump-to-section
   const categoryAnchorRef = useRef({});
@@ -932,10 +955,25 @@ export default function ProjectBillTable({
               Project total:{" "}
               <b className="text-adlm-blue-700">{money(projectTotal)}</b>
             </span>
+            {/* Collapse / expand the entire ribbon panel. The summary row
+                (Measured / PC / Variations / Project total) stays visible
+                either way so users keep their at-a-glance totals. */}
+            <button
+              type="button"
+              onClick={toggleRibbonCollapsed}
+              aria-expanded={!ribbonCollapsed}
+              aria-controls="boq-ribbon-body"
+              className="ml-1 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+              title={ribbonCollapsed ? "Show toolbar" : "Hide toolbar"}
+            >
+              <span aria-hidden="true" className={`inline-block transition-transform ${ribbonCollapsed ? "" : "rotate-180"}`}>▾</span>
+              {ribbonCollapsed ? "Show" : "Hide"}
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 p-3">
+        {ribbonCollapsed ? null : (
+        <div id="boq-ribbon-body" className="flex flex-wrap gap-2 p-3">
           {ribbonTab === "home" ? (
             <>
               <RibbonGroup title="View">
@@ -1217,9 +1255,17 @@ export default function ProjectBillTable({
                     <RibbonButton
                       icon={FaTimes}
                       label={contractBusy ? "..." : "Unlock"}
-                      onClick={onUnlockContract}
+                      onClick={() =>
+                        setPinModal({
+                          mode: "unlock",
+                          pin: "",
+                          confirm: "",
+                          err: "",
+                          busy: false,
+                        })
+                      }
                       disabled={contractBusy || !onUnlockContract}
-                      title="Unlock the contract — only do this if you really need to edit the priced scope again."
+                      title="Unlock the contract — you'll need the 4-digit PIN that was used to lock it."
                     />
                   </>
                 ) : (
@@ -1231,12 +1277,16 @@ export default function ProjectBillTable({
                       icon={FaFileInvoiceDollar}
                       label={contractBusy ? "Locking..." : "Lock contract"}
                       onClick={() =>
-                        onLockContract?.({
-                          preliminaryPercent: preliminaryPercent,
+                        setPinModal({
+                          mode: "lock",
+                          pin: "",
+                          confirm: "",
+                          err: "",
+                          busy: false,
                         })
                       }
                       disabled={contractBusy || !onLockContract}
-                      title="Freeze the priced scope. Post-lock: new items auto-flow to Variations, re-measured qty fills Actual qty."
+                      title="Freeze the priced scope. You'll choose a 4-digit PIN to protect the lock."
                     />
                   </>
                 )}
@@ -1316,8 +1366,9 @@ export default function ProjectBillTable({
             </RibbonGroup>
           ) : null}
         </div>
+        )}
 
-        {showActualColumns && ribbonTab === "home" ? (
+        {!ribbonCollapsed && showActualColumns && ribbonTab === "home" ? (
           <div className="border-t bg-white px-3 py-2 text-[11px] text-slate-500">
             Actual amount uses the entered actual qty and actual rate. If only
             one actual field is entered, the other value falls back to the
@@ -1914,6 +1965,7 @@ export default function ProjectBillTable({
                     <th className="px-2 py-2 w-28 text-right">Rate</th>
                     <th className="px-2 py-2 w-32 text-right">Amount</th>
                     <th className="px-2 py-2 w-28">Issued</th>
+                    <th className="px-2 py-2 w-16 text-center" title="Tick when variation has been executed on site — flows into earned value.">Done</th>
                     <th className="px-2 py-2 w-10"></th>
                   </tr>
                 </thead>
@@ -1923,7 +1975,7 @@ export default function ProjectBillTable({
                     const rate = safeNum(v?.rate);
                     const amount = qty * rate;
                     return (
-                      <tr key={i} className="border-t">
+                      <tr key={i} className={`border-t ${v?.completed ? "bg-emerald-50/50" : ""}`}>
                         <td className="px-2 py-2 text-slate-500">{i + 1}</td>
                         <td className="px-2 py-2">
                           <input
@@ -2013,6 +2065,17 @@ export default function ProjectBillTable({
                                 issuedAt: e.target.value,
                               })
                             }
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <input
+                            type="checkbox"
+                            className={checkboxCls}
+                            checked={Boolean(v?.completed)}
+                            onChange={(e) =>
+                              onUpdateVariation?.(i, { completed: e.target.checked })
+                            }
+                            title="Mark as executed — flows into earned value (EV)"
                           />
                         </td>
                         <td className="px-1 py-2 text-center">
@@ -2297,12 +2360,13 @@ export default function ProjectBillTable({
                     <th className="px-2 py-2 w-10">#</th>
                     <th className="px-2 py-2">Description</th>
                     <th className="px-2 py-2 w-40 text-right">Amount</th>
+                    <th className="px-2 py-2 w-20 text-center" title="Tick when the PC scope has been executed — earned value will then include it.">Done</th>
                     <th className="px-2 py-2 w-12"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {provisionalSums.map((s, i) => (
-                    <tr key={i} className="border-t">
+                    <tr key={i} className={`border-t ${s?.completed ? "bg-emerald-50/50" : ""}`}>
                       <td className="px-2 py-2 text-slate-500">{i + 1}</td>
                       <td className="px-2 py-2">
                         <input
@@ -2329,6 +2393,17 @@ export default function ProjectBillTable({
                           }
                         />
                       </td>
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          className={checkboxCls}
+                          checked={Boolean(s?.completed)}
+                          onChange={(e) =>
+                            onUpdateProvisionalSum?.(i, { completed: e.target.checked })
+                          }
+                          title="Mark as executed — flows into earned value (EV)"
+                        />
+                      </td>
                       <td className="px-1 py-2 text-center">
                         <button
                           type="button"
@@ -2353,6 +2428,10 @@ export default function ProjectBillTable({
                           0,
                         ),
                       )}
+                    </td>
+                    <td className="px-2 py-2 text-center text-[10px] text-slate-500">
+                      {provisionalSums.filter((s) => s?.completed).length}
+                      /{provisionalSums.length}
                     </td>
                     <td></td>
                   </tr>
@@ -2461,6 +2540,171 @@ export default function ProjectBillTable({
           </button>
         </div>
       ) : null}
+
+      {/* ── Contract lock PIN modal ──────────────────────────────────────
+          Centralised here so it shares state with the Lock / Unlock
+          ribbon buttons. Lock mode requires PIN + confirmation; unlock
+          mode just asks for the saved PIN. Wrong-PIN attempts surface as
+          inline error text and keep the modal open. */}
+      {pinModal ? (
+        <PinDialog
+          mode={pinModal.mode}
+          state={pinModal}
+          onChange={(patch) => setPinModal((s) => (s ? { ...s, ...patch } : s))}
+          onClose={() => setPinModal(null)}
+          onSubmit={async () => {
+            const state = pinModal;
+            if (!state) return;
+            const isLock = state.mode === "lock";
+            const cleanPin = String(state.pin || "").trim();
+            if (!/^\d{4}$/.test(cleanPin)) {
+              setPinModal((s) => (s ? { ...s, err: "PIN must be exactly 4 digits." } : s));
+              return;
+            }
+            if (isLock && cleanPin !== String(state.confirm || "").trim()) {
+              setPinModal((s) => (s ? { ...s, err: "PINs don't match." } : s));
+              return;
+            }
+            setPinModal((s) => (s ? { ...s, busy: true, err: "" } : s));
+            const result = isLock
+              ? await onLockContract?.({
+                  preliminaryPercent,
+                  lockPin: cleanPin,
+                })
+              : await onUnlockContract?.({ lockPin: cleanPin });
+            // The handler returns either the success payload OR an
+            // { error, message } object for PIN failures. Close on
+            // success, show inline error otherwise.
+            if (result && result.error) {
+              setPinModal((s) =>
+                s ? { ...s, busy: false, err: result.message || "PIN check failed." } : s,
+              );
+              return;
+            }
+            setPinModal(null);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// Reusable 4-digit PIN dialog. Single component handles both lock (set +
+// confirm) and unlock (verify) flows — the `mode` prop toggles the
+// confirm field and label copy. Auto-focuses the first input on open and
+// submits on Enter.
+function PinDialog({ mode, state, onChange, onClose, onSubmit }) {
+  const isLock = mode === "lock";
+  const pinRef = React.useRef(null);
+  React.useEffect(() => {
+    pinRef.current?.focus();
+  }, []);
+  React.useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape" && !state.busy) onClose?.();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose, state.busy]);
+
+  function sanitize(value) {
+    return String(value || "").replace(/\D/g, "").slice(0, 4);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !state.busy) onClose?.();
+      }}
+    >
+      <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="bg-gradient-to-r from-adlm-blue-700 to-blue-800 px-5 py-3 text-white">
+          <div className="text-xs uppercase tracking-widest opacity-80">
+            Contract security
+          </div>
+          <div className="text-base font-bold">
+            {isLock ? "Set a 4-digit lock PIN" : "Enter your 4-digit PIN to unlock"}
+          </div>
+        </div>
+        <form
+          className="px-5 py-4 space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!state.busy) onSubmit?.();
+          }}
+        >
+          <p className="text-xs text-slate-600">
+            {isLock
+              ? "Choose a PIN you'll remember — you'll need the same 4 digits to unlock the contract later. Store it somewhere safe; lost PINs cannot be recovered without a server-side reset."
+              : "This contract was locked with a 4-digit PIN. Enter it to unlock and resume editing the priced scope."}
+          </p>
+          <label className="block">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              PIN
+            </span>
+            <input
+              ref={pinRef}
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={4}
+              value={state.pin || ""}
+              onChange={(e) => onChange?.({ pin: sanitize(e.target.value), err: "" })}
+              placeholder="••••"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/30 focus:border-adlm-blue-700"
+            />
+          </label>
+          {isLock ? (
+            <label className="block">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Confirm PIN
+              </span>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={state.confirm || ""}
+                onChange={(e) =>
+                  onChange?.({ confirm: sanitize(e.target.value), err: "" })
+                }
+                placeholder="••••"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/30 focus:border-adlm-blue-700"
+              />
+            </label>
+          ) : null}
+          {state.err ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {state.err}
+            </div>
+          ) : null}
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={state.busy}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={state.busy}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50"
+            >
+              {state.busy ? (
+                <>
+                  <span className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Working…
+                </>
+              ) : (
+                <>{isLock ? "Lock contract" : "Unlock contract"}</>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
