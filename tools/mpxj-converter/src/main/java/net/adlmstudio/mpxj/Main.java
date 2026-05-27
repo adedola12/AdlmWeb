@@ -177,6 +177,18 @@ public class Main {
   private static void sendText(HttpExchange exchange, int status, String body) throws IOException {
     byte[] bytes = body.getBytes("UTF-8");
     exchange.getResponseHeaders().add("Content-Type", "text/plain; charset=utf-8");
+    // HEAD responses MUST NOT carry a body per RFC 7230. JDK's HttpServer
+    // throws IOException ("stream closed") if you try to write one after
+    // sendResponseHeaders with a non-zero length. Detect the method and
+    // signal "headers only" by passing -1.
+    final boolean isHead = "HEAD".equalsIgnoreCase(exchange.getRequestMethod());
+    if (isHead) {
+      // Set Content-Length manually since we're using -1 (no body).
+      exchange.getResponseHeaders().add("Content-Length", Integer.toString(bytes.length));
+      exchange.sendResponseHeaders(status, -1);
+      exchange.close();
+      return;
+    }
     exchange.sendResponseHeaders(status, bytes.length);
     try (OutputStream os = exchange.getResponseBody()) {
       os.write(bytes);

@@ -258,8 +258,37 @@ export async function parseMsProjectMpp(buffer, { filename = "" } = {}) {
   // Preferred for cloud deployments (Vercel, Render Node, etc.) where you
   // can't co-locate Java. POST the .mpp body to the service and read MS
   // Project XML from the response. Auth header is optional (MPXJ_API_KEY).
-  const apiUrl = process.env.MPXJ_API_URL;
+  let apiUrl = process.env.MPXJ_API_URL;
   if (apiUrl) {
+    // Sanitize common env-var setup mistakes before handing to fetch:
+    //   • Trim leading/trailing whitespace + newlines.
+    //   • Strip a "KEY = " / "KEY:" prefix — happens when operators paste
+    //     a whole .env line ("MPXJ_API_URL = https://…") into Render's
+    //     VALUE field, which expects just the value.
+    //   • Strip surrounding quotes — same paste-from-dotenv mistake.
+    apiUrl = String(apiUrl)
+      .trim()
+      .replace(/^MPXJ_API_URL\s*[:=]\s*/i, "")
+      .replace(/^['"]|['"]$/g, "")
+      .trim();
+
+    // Validate the URL is well-formed before passing it to fetch — gives
+    // a clearer error than the cryptic "Failed to parse URL" thrown by
+    // the URL constructor.
+    try {
+      // eslint-disable-next-line no-new
+      new URL(apiUrl);
+    } catch {
+      return {
+        ok: false,
+        format: "msproject-mpp",
+        tasks: [],
+        skipped: 0,
+        errorCode: "MPP_SERVICE_UNREACHABLE",
+        error: `MPXJ_API_URL is not a valid URL (got: "${apiUrl.slice(0, 120)}"). Expected something like https://adlm-mpxj-converter.onrender.com/convert — no "MPXJ_API_URL =" prefix, no quotes. Fix it in Render → Environment → MPXJ_API_URL.`,
+      };
+    }
+
     // Normalize: ensure the URL ends in /convert. Render shows the bare
     // service hostname in its dashboard ("https://x.onrender.com"), so
     // operators routinely paste that without the path — the Java service
@@ -275,7 +304,16 @@ export async function parseMsProjectMpp(buffer, { filename = "" } = {}) {
         "X-Filename": String(filename || "input.mpp").replace(/[^\w.\-]/g, "_"),
       };
       if (process.env.MPXJ_API_KEY) {
-        headers["X-API-Key"] = process.env.MPXJ_API_KEY;
+        // Same sanitisation as MPXJ_API_URL — strip whitespace, prefix
+        // ("MPXJ_API_KEY = "), and surrounding quotes. The Java service
+        // does a strict string equality check on the header, so any stray
+        // characters here would silently fail authentication.
+        const cleanKey = String(process.env.MPXJ_API_KEY)
+          .trim()
+          .replace(/^MPXJ_API_KEY\s*[:=]\s*/i, "")
+          .replace(/^['"]|['"]$/g, "")
+          .trim();
+        if (cleanKey) headers["X-API-Key"] = cleanKey;
       }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60_000);
