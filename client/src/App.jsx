@@ -39,7 +39,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-adlm-dark-bg text-slate-900 dark:text-adlm-dark-text transition-colors">
       {!bannerDismissed && (
         <CouponBanner
           banner={banner}

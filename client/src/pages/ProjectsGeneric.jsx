@@ -1463,9 +1463,20 @@ export default function ProjectsGeneric() {
         throw new Error(data?.error || `Import failed (${res.status})`);
       }
       if (data?.dashboard) setPmDashboard(data.dashboard);
-      setNotice(
-        `Imported ${data?.imported || 0} task(s) from ${data?.format || "file"}.`,
-      );
+      // Build a richer notice that explains auto-linking. Mentioning the
+      // numbers explicitly tells the user what to expect in the WBS view
+      // — they'll see existing tasks already linked to BoQ rows.
+      const a = data?.autoLink || {};
+      const parts = [
+        `Imported ${data?.imported || 0} task${data?.imported === 1 ? "" : "s"} from ${data?.format || "file"}.`,
+      ];
+      if (a.linkedCount) {
+        const learned = a.learnedCount
+          ? ` (${a.learnedCount} re-used from past mappings)`
+          : "";
+        parts.push(`Auto-linked ${a.linkedCount} to BoQ items${learned}.`);
+      }
+      setNotice(parts.join(" "));
     } catch (e) {
       setPmImportError(e?.message || "Import failed.");
     } finally {

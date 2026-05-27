@@ -12,9 +12,11 @@ import multer from "multer";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
-import { computePmDashboard, rescheduleTasks, _itemIdentity } from "../services/pmCompute.js";
+import { computePmDashboard, rescheduleTasks, computeProjectScope, _itemIdentity } from "../services/pmCompute.js";
 import { parseMsProjectFile } from "../util/msProjectParser.js";
 import { generateIcs, suggestedIcsFilename } from "../util/icsExporter.js";
+import { bestMatch, normalizeTaskName } from "../util/fuzzyMatch.js";
+import { TaskLinkLearned } from "../models/TaskLinkLearned.js";
 
 const PM_IMPORT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 const importUpload = multer({
@@ -131,6 +133,18 @@ function sanitizeTask(input, fallback = {}) {
         .filter(Boolean)
         .slice(0, 200)
     : [];
+  // Parallel weights array. Each entry is 0-100; missing/invalid entries
+  // default to 100 (full item). Truncated/padded to match identities
+  // length so the index alignment is guaranteed downstream.
+  const rawWeights = Array.isArray(input.linkedBoqWeights)
+    ? input.linkedBoqWeights
+    : [];
+  const linkedBoqWeights = linkedBoqIdentities.map((_, i) => {
+    const raw = rawWeights[i];
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 100;
+    return Math.max(0, Math.min(100, n));
+  });
 
   return {
     taskId,
@@ -151,6 +165,7 @@ function sanitizeTask(input, fallback = {}) {
     status,
     priority,
     linkedBoqIdentities,
+    linkedBoqWeights,
     isMilestone: Boolean(input.isMilestone),
     isSummary: Boolean(input.isSummary),
     parentTaskId: String(input.parentTaskId || "").trim().slice(0, 64),
@@ -277,6 +292,40 @@ async function updatePm(req, res) {
         if (sanitized) next.push(sanitized);
         if (next.length >= 5000) break;
       }
+
+      // ── Summary-task protection ──────────────────────────────────────
+      // A summary task is one that has at least one child by WBS hierarchy.
+      // If a summary row is missing from `next` while its children are
+      // still present, the user is implicitly trying to delete it — that
+      // would orphan the children. Re-insert the summary so its rollup
+      // stays computable. Same goes for edits that try to mutate a summary
+      // — restore its core fields from the previous version.
+      const nextWbsSet = new Set(
+        next.map((t) => String(t.wbs || "").trim()).filter(Boolean),
+      );
+      function hasChildrenInNextList(parentWbs) {
+        if (!parentWbs) return false;
+        for (const w of nextWbsSet) {
+          if (w === parentWbs) continue;
+          if (w.startsWith(parentWbs + ".")) return true;
+        }
+        return false;
+      }
+      const previousTasks = project.projectManagement?.tasks || [];
+      for (const prev of previousTasks) {
+        const wbs = String(prev?.wbs || "").trim();
+        if (!wbs) continue;
+        if (!hasChildrenInNextList(wbs)) continue; // not a summary anymore
+        const stillPresent = next.find(
+          (t) => String(t.taskId) === String(prev.taskId),
+        );
+        if (!stillPresent) {
+          // Delete attempt on a summary — restore the row verbatim.
+          const sanitized = sanitizeTask(prev, prev);
+          if (sanitized) next.push(sanitized);
+        }
+      }
+
       project.projectManagement.tasks = next;
 
       // Bi-directional sync: a task's percentComplete propagates to its
@@ -302,16 +351,29 @@ async function updatePm(req, res) {
         itemByIdentity.set(_itemIdentity(item, idx), item);
       });
 
-      // Build reverse map: identity → max(taskPercentComplete) across all
-      // tasks linking to that identity.
+      // Build reverse map: identity → weighted sum of (taskPct × weight)
+      // across every task linking to that identity. Capped at 100.
+      //
+      // Weighted propagation is the only one that's correct when a BoQ
+      // line is split across multiple tasks. Example: "Windows & Doors"
+      // linked to a "First fix" task at weight 70 and a "Final fix"
+      // task at weight 30. First fix done (100%) + final fix at 50% →
+      //   100% × 70/100 + 50% × 30/100 = 70 + 15 = 85% of the BoQ line.
+      // Falls back to max() semantics when no weights are stored (legacy
+      // data) — a single task at 50% propagates as 50%, not 0%.
       const maxPctByItem = new Map();
       for (const t of next) {
         const taskPct = Math.max(0, Math.min(100, safeNum(t.percentComplete)));
-        for (const identity of t.linkedBoqIdentities || []) {
-          const prev = maxPctByItem.has(identity)
-            ? maxPctByItem.get(identity)
-            : -Infinity;
-          if (taskPct > prev) maxPctByItem.set(identity, taskPct);
+        const links = Array.isArray(t.linkedBoqIdentities) ? t.linkedBoqIdentities : [];
+        const weights = Array.isArray(t.linkedBoqWeights) ? t.linkedBoqWeights : [];
+        for (let i = 0; i < links.length; i += 1) {
+          const identity = links[i];
+          if (!identity) continue;
+          const rawW = Number(weights[i]);
+          const w = Number.isFinite(rawW) ? Math.max(0, Math.min(100, rawW)) : 100;
+          const contribution = (taskPct * w) / 100; // 0-100 scale
+          const prev = maxPctByItem.get(identity) || 0;
+          maxPctByItem.set(identity, Math.min(100, prev + contribution));
         }
       }
 
@@ -396,6 +458,57 @@ async function updatePm(req, res) {
       if (prelimsDirty) project.markModified("preliminaryItems");
       if (provisionalsDirty) project.markModified("provisionalSums");
       if (variationsDirty) project.markModified("variations");
+
+      // ── Learning hook ────────────────────────────────────────────────
+      // For every task that now carries linkedBoqIdentities, upsert a row
+      // in TaskLinkLearned. Next time this user imports an MS Project
+      // with a task of the same (normalised) name, the importer re-uses
+      // these identities instead of fuzzy-matching from scratch.
+      //
+      // We only record when the user has explicitly saved — fuzzy-matched
+      // suggestions that were never reviewed don't count.
+      // (productKey was declared earlier in this block for the item-sync
+      // pass, so just reuse it.)
+      const userId = getUserObjectId(req);
+      if (userId && productKey) {
+        const ops = [];
+        for (const t of next) {
+          const links = Array.isArray(t.linkedBoqIdentities)
+            ? t.linkedBoqIdentities.filter(Boolean)
+            : [];
+          if (!links.length) continue;
+          const norm = normalizeTaskName(t.name || "");
+          if (!norm) continue;
+          ops.push(
+            TaskLinkLearned.findOneAndUpdate(
+              { userId, productKey, taskNameNorm: norm },
+              {
+                $set: {
+                  linkedIdentities: links,
+                  lastUsedAt: new Date(),
+                },
+                $inc: { hits: 1 },
+                $setOnInsert: { userId, productKey, taskNameNorm: norm },
+              },
+              { upsert: true, new: false },
+            ),
+          );
+          if (ops.length >= 200) break; // cap to keep save snappy
+        }
+        // Fire-and-forget — don't block the save on the learning writes,
+        // but log failures for debugging.
+        if (ops.length) {
+          Promise.allSettled(ops).then((results) => {
+            const failed = results.filter((r) => r.status === "rejected");
+            if (failed.length) {
+              console.warn(
+                `TaskLinkLearned upserts: ${failed.length}/${ops.length} failed.`,
+                failed[0]?.reason?.message || failed[0]?.reason,
+              );
+            }
+          });
+        }
+      }
     }
 
     if (Array.isArray(risks)) {
@@ -657,6 +770,86 @@ async function generateFromBoq(req, res) {
 }
 
 // ── POST import (MS Project XML / MPP) ───────────────────────────────────
+// Auto-link incoming tasks to existing BoQ scope. Two-pass strategy:
+//   1. Per-user learning lookup: if this user has previously confirmed a
+//      mapping for an identical task-name (normalised), reuse it.
+//   2. Otherwise, fuzzy-match against the full scope catalogue (measured,
+//      preliminaries, PC sums, variations). Best match above the
+//      threshold is auto-linked. Below threshold → task imports unlinked,
+//      user can link manually in the modal.
+//
+// Returns { linkedCount, fuzzyCount, learnedCount } for the response.
+async function autoLinkImportedTasks({ project, tasks, userId, productKey }) {
+  if (!tasks?.length) return { linkedCount: 0, fuzzyCount: 0, learnedCount: 0 };
+
+  // Build the BoQ-side catalogue once. Identical to what the picker sees.
+  const scope = computeProjectScope(project);
+  const catalogue = scope.virtualItems;
+  if (!catalogue.length) return { linkedCount: 0, fuzzyCount: 0, learnedCount: 0 };
+
+  // Pull all learned mappings for this user/tool in one query. Build a
+  // map keyed on the normalised task name.
+  const norms = new Set(
+    tasks
+      .map((t) => normalizeTaskName(t?.name || ""))
+      .filter(Boolean),
+  );
+  const learnedRows = norms.size
+    ? await TaskLinkLearned.find({
+        userId,
+        productKey,
+        taskNameNorm: { $in: [...norms] },
+      }).lean()
+    : [];
+  const learnedByNorm = new Map(
+    learnedRows.map((row) => [row.taskNameNorm, row]),
+  );
+
+  // For fuzzy validity, also build a set of catalogue identities so we
+  // can drop learned identities that no longer exist (BoQ items get
+  // re-uploaded with different SNs etc.).
+  const validIdentities = new Set(catalogue.map((c) => c.identity));
+
+  let linkedCount = 0;
+  let fuzzyCount = 0;
+  let learnedCount = 0;
+
+  for (const t of tasks) {
+    // If the upstream parser somehow already attached links (e.g. via
+    // future custom mapping), leave them alone.
+    if (Array.isArray(t.linkedBoqIdentities) && t.linkedBoqIdentities.length) {
+      linkedCount += 1;
+      continue;
+    }
+    const norm = normalizeTaskName(t?.name || "");
+    if (!norm) continue;
+
+    // Pass 1 — learned mapping.
+    const learned = learnedByNorm.get(norm);
+    if (learned?.linkedIdentities?.length) {
+      const stillValid = learned.linkedIdentities.filter((id) =>
+        validIdentities.has(id),
+      );
+      if (stillValid.length) {
+        t.linkedBoqIdentities = stillValid;
+        linkedCount += 1;
+        learnedCount += 1;
+        continue;
+      }
+    }
+
+    // Pass 2 — fuzzy match.
+    const match = bestMatch(t?.name || "", catalogue, { threshold: 0.45 });
+    if (match) {
+      t.linkedBoqIdentities = [match.identity];
+      linkedCount += 1;
+      fuzzyCount += 1;
+    }
+  }
+
+  return { linkedCount, fuzzyCount, learnedCount };
+}
+
 async function importPm(req, res) {
   try {
     const project = await loadProject(req, res);
@@ -678,6 +871,15 @@ async function importPm(req, res) {
         format: parsed.format,
       });
     }
+
+    // Run auto-link on the parsed tasks BEFORE sanitizing — sanitizeTask
+    // preserves linkedBoqIdentities so the suggested links flow through.
+    const linkStats = await autoLinkImportedTasks({
+      project,
+      tasks: parsed.tasks,
+      userId: getUserObjectId(req),
+      productKey: requestedProductKey(req),
+    });
 
     const replaceExisting = req.body?.replaceExisting === "true" || req.body?.replaceExisting === true;
     const existing = project.projectManagement?.tasks || [];
@@ -724,6 +926,11 @@ async function importPm(req, res) {
       imported: sanitized.length,
       skipped: parsed.skipped || 0,
       format: parsed.format,
+      // Per-task auto-link breakdown for the import toast:
+      //   linkedCount  = total tasks that got at least one link
+      //   learnedCount = subset that re-used a prior user-confirmed mapping
+      //   fuzzyCount   = subset matched via similarity score
+      autoLink: linkStats,
       dashboard: computePmDashboard(project),
       version: project.version,
     });

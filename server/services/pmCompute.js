@@ -312,13 +312,21 @@ function hydrateTaskCost(task, itemIndex) {
       derivedActualCost: safeNum(task?.actualCost),
     };
   }
+  // Parallel weights array; missing entries are treated as 100 (full
+  // share). Caller writes weights only when the user customises them.
+  const weights = Array.isArray(task?.linkedBoqWeights)
+    ? task.linkedBoqWeights
+    : [];
   let planned = 0;
   let actual = 0;
-  for (const id of links) {
+  for (let i = 0; i < links.length; i += 1) {
+    const id = links[i];
     const entry = itemIndex.get(id);
     if (!entry) continue;
-    planned += entry.plannedAmount;
-    actual += entry.actualAmount;
+    const rawWeight = Number(weights[i]);
+    const weight = (Number.isFinite(rawWeight) ? rawWeight : 100) / 100;
+    planned += entry.plannedAmount * weight;
+    actual += entry.actualAmount * weight;
   }
   // If the task also has a manually entered actualCost, prefer the larger
   // (so users can override BoQ-derived actuals upward if needed).
@@ -444,6 +452,8 @@ function buildBurndown(tasks, totalBaseline, projectStart, projectFinish, now) {
     return [];
   }
   const span = projectFinish.getTime() - projectStart.getTime();
+  // Invalid date range — finish on/before start. Returning empty here is
+  // caught by the dashboard's burndownStatus reporter below.
   if (span <= 0) return [];
 
   const points = [];
@@ -860,6 +870,39 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   // Mutates the enriched tasks in place to attach `_rollup` and `_isSummary`.
   computeWbsRollups(enriched);
 
+  // ── BoQ-link reverse index ───────────────────────────────────────────
+  // For each BoQ identity, count how many tasks link to it and capture
+  // the linked task names. Surfaced in the dashboard payload so the BoQ
+  // tab can render a "Linked to N tasks" chip per row — letting users
+  // spot accidental double-counts (same item linked from 2+ tasks)
+  // that would otherwise inflate the EV figure.
+  //
+  // Summary tasks are excluded — they roll up from leaves and don't
+  // directly carry links, but counting them would double-count any
+  // leaf's link.
+  const linkCountByIdentity = new Map();
+  const linkedTaskNamesByIdentity = new Map();
+  // Sum of weights across every task linking to each identity. Tells the
+  // BoQ tab whether a line is balanced (100), under-allocated (<100, gap
+  // in WBS coverage) or over-allocated (>100, double-count in EV).
+  const totalWeightByIdentity = new Map();
+  for (const t of enriched) {
+    if (t._isSummary) continue;
+    const links = Array.isArray(t.linkedBoqIdentities) ? t.linkedBoqIdentities : [];
+    const weights = Array.isArray(t.linkedBoqWeights) ? t.linkedBoqWeights : [];
+    for (let i = 0; i < links.length; i += 1) {
+      const id = String(links[i] || "");
+      if (!id) continue;
+      linkCountByIdentity.set(id, (linkCountByIdentity.get(id) || 0) + 1);
+      const arr = linkedTaskNamesByIdentity.get(id) || [];
+      arr.push(t.name || `Task ${t.taskId || ""}`);
+      linkedTaskNamesByIdentity.set(id, arr);
+      const rawW = Number(weights[i]);
+      const w = Number.isFinite(rawW) ? clamp(rawW, 0, 100) : 100;
+      totalWeightByIdentity.set(id, (totalWeightByIdentity.get(id) || 0) + w);
+    }
+  }
+
   // ── Project-scope breakdown ────────────────────────────────────────────
   // Pull the *full* contract picture from the BoQ side: measured items,
   // provisional sums, preliminaries, variations. This is the same math the
@@ -925,6 +968,18 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
   }
 
   const burndown = buildBurndown(enriched, totalBaseline, projectStart, projectFinish, now);
+  // Diagnose the burndown empty state. The UI uses this to show the
+  // right "fix this" prompt instead of a generic "burndown unavailable".
+  let burndownStatus = "ok";
+  if (!isFiniteDate(projectStart) || !isFiniteDate(projectFinish)) {
+    burndownStatus = "no-dates";
+  } else if (projectFinish.getTime() <= projectStart.getTime()) {
+    burndownStatus = "invalid-dates";
+  } else if (enriched.length === 0) {
+    burndownStatus = "no-tasks";
+  } else if (totalBaseline === 0) {
+    burndownStatus = "no-baseline";
+  }
 
   const openRisks = risks.filter((r) => r?.status !== "closed").length;
   const openIssues = issues.filter((i) => i?.status !== "resolved" && i?.status !== "closed").length;
@@ -1001,6 +1056,7 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     buckets,
     overdueByPriority,
     burndown,
+    burndownStatus,
     tasks: enriched.map((t) => ({
       ...t,
       // Strip internal-only fields but expose them under public names so
@@ -1023,7 +1079,21 @@ export function computePmDashboard(project, { now = new Date() } = {}) {
     // a `kind` field ("measured" | "preliminary" | "provisional" |
     // "variation") so the heatmap can group/colour them and the task
     // modal picker can filter to kind === "measured" only.
-    boqItems: scope.virtualItems,
+    //
+    // linkCount / linkedTaskNames let the BoQ table show users a "this
+    // line is linked to N task(s)" chip, with a warning style when N>1
+    // (potential double-count in EV).
+    boqItems: scope.virtualItems.map((item) => ({
+      ...item,
+      linkCount: linkCountByIdentity.get(item.identity) || 0,
+      linkedTaskNames: linkedTaskNamesByIdentity.get(item.identity) || [],
+      // Sum of weights across all linking tasks. 100 = balanced;
+      // <100 = WBS doesn't cover the full BoQ value; >100 = double-count
+      // in EV. Surfaced as the WbsLinkChip's primary signal.
+      totalLinkWeight: Math.round(
+        (totalWeightByIdentity.get(item.identity) || 0) * 100,
+      ) / 100,
+    })),
     // Roll-up totals per stream — exposed separately for callers that
     // want to display a contract-breakdown summary without re-computing.
     scope: {

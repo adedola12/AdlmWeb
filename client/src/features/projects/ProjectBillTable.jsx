@@ -537,6 +537,10 @@ export default function ProjectBillTable({
   checkboxCls = "",
   computedShown = [],
   getBoqCandidatesForItem,
+  // PM dashboard payload — used here only to read its boqItems, which
+  // carry linkCount + linkedTaskNames per identity. Lets us render a
+  // small "Linked to N task(s)" chip on each BoQ row.
+  pmDashboard,
   getCandidatesForItem,
   grossAmount = 0,
   isGroupLinked,
@@ -631,6 +635,44 @@ export default function ProjectBillTable({
 
   // Ribbon tab state — mirrors MS Office ribbon (Home / Rates / Navigate / Extras)
   const [ribbonTab, setRibbonTab] = useState("home");
+
+  // Build a Map<identity → {count, taskNames}> from the PM dashboard's
+  // boqItems list. The server already computes linkCount + linkedTaskNames
+  // for every BoQ entry by walking projectManagement.tasks. We just need
+  // a quick lookup keyed by identity so each row can read its own stats.
+  const boqLinkStats = React.useMemo(() => {
+    const map = new Map();
+    const boqs = Array.isArray(pmDashboard?.boqItems) ? pmDashboard.boqItems : [];
+    for (const entry of boqs) {
+      const count = Number(entry?.linkCount) || 0;
+      if (count > 0) {
+        map.set(String(entry.identity), {
+          count,
+          taskNames: Array.isArray(entry.linkedTaskNames) ? entry.linkedTaskNames : [],
+          // totalLinkWeight is the sum of weights across every task
+          // linking to this item. 100 = balanced, <100 = under-allocated
+          // (gap in WBS coverage), >100 = over-allocated (double-count).
+          totalWeight: Number(entry?.totalLinkWeight) || 0,
+        });
+      }
+    }
+    return map;
+  }, [pmDashboard?.boqItems]);
+
+  // Client-side mirror of the server's itemIdentity hashing (see
+  // server/services/pmCompute.js → itemIdentity). MUST stay in sync —
+  // otherwise the row's identity won't match the boqLinkStats key.
+  function boqItemIdentity(item, index) {
+    const sn = Number(item?.sn) || index + 1;
+    return [
+      sn,
+      String(item?.code || "").trim().toLowerCase(),
+      String(item?.description || "").trim().toLowerCase(),
+      String(item?.takeoffLine || "").trim().toLowerCase(),
+      String(item?.materialName || "").trim().toLowerCase(),
+      String(item?.unit || "").trim().toLowerCase(),
+    ].join("::");
+  }
   // PIN modal state — mode is 'lock' (set a new PIN) or 'unlock' (verify
   // the saved PIN). null = closed. busy/err drive in-modal feedback so
   // wrong-PIN attempts don't fall through to a global toast.
@@ -1601,6 +1643,14 @@ export default function ProjectBillTable({
 
                     <td className="px-2 py-2 overflow-hidden" title={row.description}>
                       <div className="font-medium text-slate-900 text-xs break-words leading-snug">{row.description}</div>
+                      {/* WBS / Task link indicator. Renders a colour-coded
+                          chip when this BoQ row is linked to one or more
+                          PM tasks. Single link = green (healthy). 2+ = amber
+                          (potential double-count in EV). 3+ = rose (likely
+                          imbalance). Hover shows the task names. */}
+                      <WbsLinkChip
+                        stats={boqLinkStats.get(boqItemIdentity(row, row.i))}
+                      />
                       {row.groupId ? (
                         <div className="mt-0.5 text-[10px] text-slate-500">
                           Group: <span className="text-slate-700">{row.groupLabel} ({row.groupCount})</span>
@@ -2705,6 +2755,79 @@ function PinDialog({ mode, state, onChange, onClose, onSubmit }) {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// WbsLinkChip — small pill on each BoQ row that surfaces how this item
+// is allocated across PM tasks. The primary signal is the SUM OF
+// WEIGHTS across every linking task:
+//
+//   No links             → nothing rendered (keeps clean rows clean)
+//   sum = 100% exactly   → emerald, "balanced" (or "1 task @ 100%")
+//   sum < 100%           → slate, "under-allocated · X%" (WBS gap)
+//   sum > 100%           → rose, "over-allocated · X%" (EV double-count)
+//
+// Hover tooltip shows the linked task names and explains the state in
+// plain QS terms so the user can act immediately.
+// ────────────────────────────────────────────────────────────────────
+function WbsLinkChip({ stats }) {
+  if (!stats || !stats.count) return null;
+  const n = Number(stats.count) || 0;
+  // Round to 1 decimal for display; tolerance of ±0.5% counts as balanced.
+  const total = Math.round((Number(stats.totalWeight) || 0) * 10) / 10;
+  const tolerance = 0.5;
+  const isBalanced = Math.abs(total - 100) <= tolerance;
+  const isOver = total > 100 + tolerance;
+  const isUnder = total < 100 - tolerance;
+
+  let tone;
+  let stateText;
+  let explanation;
+  if (isOver) {
+    tone = "rose";
+    stateText = "over-allocated";
+    explanation = `Sum of link weights = ${total}%. The same baseline value is being summed into more than one task's EV. Reduce the weight on one or more links so they total 100%.`;
+  } else if (isUnder) {
+    tone = "slate";
+    stateText = "under-allocated";
+    explanation = `Sum of link weights = ${total}%. Only ${total}% of this BoQ line's value is currently represented in the WBS — the rest won't appear in EV. Add a task or raise an existing weight.`;
+  } else {
+    tone = "emerald";
+    stateText = "balanced";
+    explanation = `Sum of link weights = ${total}%. This BoQ line is correctly allocated across the WBS.`;
+  }
+
+  const palette = {
+    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/40",
+    rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-700/40",
+    slate: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
+  }[tone];
+
+  const names = Array.isArray(stats.taskNames) ? stats.taskNames : [];
+  const previewNames = names.slice(0, 6);
+  const moreCount = Math.max(0, names.length - previewNames.length);
+  const title = [
+    explanation,
+    "",
+    `Linked from ${n} PM task${n === 1 ? "" : "s"}:`,
+    ...previewNames.map((nm) => "• " + nm),
+    moreCount > 0 ? `+ ${moreCount} more` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return (
+    <div className="mt-1 inline-flex items-center">
+      <span
+        title={title}
+        className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${palette}`}
+      >
+        <span aria-hidden="true">🔗</span>
+        {n} link{n === 1 ? "" : "s"} · {total}%
+        {!isBalanced ? <span className="font-bold ml-0.5">· {stateText}</span> : null}
+      </span>
     </div>
   );
 }

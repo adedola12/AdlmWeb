@@ -191,11 +191,43 @@ function OverdueBars({ overdueByPriority }) {
   );
 }
 
-function BurndownChart({ burndown, BAC }) {
+function BurndownChart({ burndown, BAC, burndownStatus }) {
   if (!Array.isArray(burndown) || burndown.length === 0) {
+    // Pick a specific message based on what's actually missing — the
+    // generic "set dates" prompt was misleading when dates ARE set but
+    // finish < start, or when no tasks exist yet.
+    const message = (
+      {
+        "invalid-dates": (
+          <>
+            <strong className="text-rose-700 block">Project dates are invalid.</strong>
+            Project finish must be after project start. Edit them in the
+            Project header to enable the burndown.
+          </>
+        ),
+        "no-tasks": (
+          <>
+            <strong className="text-slate-700 block">No tasks yet.</strong>
+            Generate tasks from BoQ or import an MS Project file to see
+            the burndown.
+          </>
+        ),
+        "no-baseline": (
+          <>
+            <strong className="text-slate-700 block">No baseline cost.</strong>
+            Link tasks to BoQ items (or enter manual baseline cost) so
+            the burndown has a value to track against.
+          </>
+        ),
+      }[burndownStatus]
+    ) || (
+      <>
+        Set project start &amp; finish dates to enable burndown.
+      </>
+    );
     return (
-      <div className="flex h-44 items-center justify-center text-center text-xs text-slate-400 px-3">
-        Set project start &amp; finish dates to enable burndown
+      <div className="flex h-44 items-center justify-center text-center text-xs text-slate-500 px-3 leading-relaxed">
+        <div>{message}</div>
       </div>
     );
   }
@@ -654,6 +686,11 @@ export default function PmDashboardView({
       {/* Balance indicator */}
       <BalanceIndicator balance={balance} />
 
+      {/* Contract movement — variations + provisional flow, with
+          execution status and forecast impact. Drives the user's awareness
+          of whether the project is going as scheduled AND as budgeted. */}
+      <ContractMovementPanel dashboard={dashboard} />
+
       {/* Charts grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
         <ChartCard title="Tasks">
@@ -666,7 +703,11 @@ export default function PmDashboardView({
           <OverdueBars overdueByPriority={overdueByPriority} />
         </ChartCard>
         <ChartCard title="Burndown">
-          <BurndownChart burndown={burndown} BAC={totals.BAC} />
+          <BurndownChart
+            burndown={burndown}
+            BAC={totals.BAC}
+            burndownStatus={dashboard?.burndownStatus}
+          />
         </ChartCard>
       </div>
 
@@ -728,6 +769,150 @@ function EvmStat({ label, value, hint, tone = "text-slate-900" }) {
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
       <div className={`mt-0.5 font-bold text-sm ${tone}`}>{value}</div>
       {hint ? <div className="text-[9px] text-slate-400 mt-0.5">{hint}</div> : null}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Contract Movement panel — variation + provisional tracker.
+//
+// Surfaces three things the user asked for:
+//   1. How much extra scope has been instructed (variations declared).
+//   2. How much of that scope has actually been executed (earned).
+//   3. The net impact on contract sum + forecast — savings or overrun.
+//
+// Data source: dashboard.scope.{variations,provisional} from the server
+// (computeProjectScope). All numbers respect the new completed-flag
+// semantics, so declared-but-not-done shows in BAC but not EV.
+// ────────────────────────────────────────────────────────────────────
+function ContractMovementPanel({ dashboard }) {
+  const scope = dashboard?.scope || {};
+  const variations = scope.variations || { total: 0, earned: 0, count: 0, completedCount: 0 };
+  const provisional = scope.provisional || { total: 0, earned: 0, count: 0, completedCount: 0 };
+  const totals = dashboard?.totals || {};
+
+  const variationsOpen = Math.max(0, safeNum(variations.total) - safeNum(variations.earned));
+  const provisionalOpen = Math.max(0, safeNum(provisional.total) - safeNum(provisional.earned));
+
+  // Forecast savings/overrun. Negative VAC = over-run, positive = savings.
+  const vac = safeNum(totals.VAC);
+  const eac = safeNum(totals.EAC);
+  const bac = safeNum(totals.BAC);
+  const variancePct = bac > 0 ? (vac / bac) * 100 : 0;
+
+  let healthTone = "slate";
+  let healthLabel = "Tracking";
+  let healthMsg = "Awaiting actuals.";
+  if (bac > 0 && eac > 0) {
+    if (vac >= 0) {
+      healthTone = "emerald";
+      healthLabel = `Forecast savings ₦${fmtMoney(Math.abs(vac))}`;
+      healthMsg = `Project is forecast to come in ${Math.abs(variancePct).toFixed(1)}% under contract.`;
+    } else {
+      const overrun = Math.abs(variancePct);
+      healthTone = overrun >= 5 ? "rose" : "amber";
+      healthLabel = `Forecast over-run ₦${fmtMoney(Math.abs(vac))}`;
+      healthMsg = `Project is forecast to exceed contract by ${overrun.toFixed(1)}%. Review variation execution and actuals.`;
+    }
+  }
+
+  const headerTone = {
+    emerald: "from-emerald-600 to-emerald-700",
+    amber: "from-amber-500 to-amber-600",
+    rose: "from-rose-600 to-rose-700",
+    slate: "from-slate-600 to-slate-700",
+  }[healthTone];
+
+  // Nothing to show if both streams are empty — keep the dashboard
+  // uncluttered when the project hasn't issued any variations or PC yet.
+  if (
+    safeNum(variations.total) === 0 &&
+    safeNum(provisional.total) === 0 &&
+    Math.abs(vac) < 1
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className={`bg-gradient-to-r ${headerTone} px-4 py-3 text-white`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest opacity-80">
+              Contract Movement
+            </div>
+            <div className="text-base font-bold">{healthLabel}</div>
+          </div>
+          <div className="text-[11px] text-white/85 max-w-xs text-right">
+            {healthMsg}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
+        <MovementStat
+          label="Variations declared"
+          value={`₦${fmtMoney(variations.total)}`}
+          hint={`${variations.count || 0} instruction${variations.count === 1 ? "" : "s"}`}
+        />
+        <MovementStat
+          label="Variations executed"
+          value={`₦${fmtMoney(variations.earned)}`}
+          hint={`${variations.completedCount || 0} of ${variations.count || 0} done · ₦${fmtMoney(variationsOpen)} open`}
+          tone={variations.earned > 0 ? "text-emerald-700" : "text-slate-700"}
+        />
+        <MovementStat
+          label="PC sums released"
+          value={`₦${fmtMoney(provisional.earned)}`}
+          hint={`${provisional.completedCount || 0} of ${provisional.count || 0} drawn · ₦${fmtMoney(provisionalOpen)} held`}
+        />
+        <MovementStat
+          label="Forecast at completion"
+          value={`₦${fmtMoney(eac)}`}
+          hint={vac >= 0 ? "Within budget" : "Over budget"}
+          tone={vac >= 0 ? "text-emerald-700" : "text-rose-700"}
+        />
+      </div>
+
+      {/* Visual variance bar — quick "are we tracking?" read */}
+      {bac > 0 ? (
+        <div className="px-4 pb-4">
+          <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+            <span>Contract baseline</span>
+            <span>Forecast at completion</span>
+          </div>
+          <div className="relative h-4 w-full rounded-full bg-slate-100 overflow-hidden">
+            {/* Baseline as the full 100% reference */}
+            <div className="absolute inset-y-0 left-0 right-0 bg-slate-200" />
+            {/* Forecast bar — width shows EAC vs BAC, capped at 130% so
+                massive overruns still render readably. */}
+            <div
+              className={`absolute inset-y-0 left-0 transition-all ${
+                vac >= 0 ? "bg-emerald-500" : "bg-rose-500"
+              }`}
+              style={{ width: `${Math.min(130, (eac / bac) * 100)}%` }}
+            />
+            {/* Baseline marker — a vertical line at 100% to anchor the eye */}
+            <div className="absolute inset-y-0 left-[76.92%] w-px bg-white/80" style={{ left: `${Math.min(100, 100 * bac / Math.max(bac, eac))}%` }} />
+          </div>
+          <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+            <span>₦{fmtMoney(bac)}</span>
+            <span className={vac >= 0 ? "text-emerald-700 font-semibold" : "text-rose-700 font-semibold"}>
+              ₦{fmtMoney(eac)} ({vac >= 0 ? "−" : "+"}{Math.abs(variancePct).toFixed(1)}%)
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MovementStat({ label, value, hint, tone = "text-slate-900" }) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={`mt-0.5 font-bold text-sm ${tone}`}>{value}</div>
+      {hint ? <div className="text-[10px] text-slate-500 mt-0.5">{hint}</div> : null}
     </div>
   );
 }

@@ -43,13 +43,18 @@ function kindBadgeFor(kind) {
 // { identity, sn, description, unit, qty, rate, amount, category, trade, completed }.
 //
 // value is an array of selected identity strings.
+// weights is a parallel array of 0-100 numbers (defaults to 100 each).
+//   Lets a single BoQ line be split across multiple tasks: e.g. Task A
+//   links to "Windows & Doors" at 70 (first fix), Task B at 30 (final
+//   fix). Per-task baseline = Σ item.amount × weight/100.
 //
-// onChange(nextIdentities, derivedAmount) fires whenever the selection
-// changes — derivedAmount is the summed qty × rate, useful for
-// auto-populating baselineCost on the parent task.
+// onChange(nextIdentities, derivedAmount, nextWeights) fires whenever
+// the selection OR a weight changes. derivedAmount is the weighted sum
+// — i.e. what the parent task's baselineCost should become.
 export default function PmBoqItemPicker({
   items = [],
   value = [],
+  weights = [],
   onChange,
   placeholder = "Search BoQ items by name, code, category…",
   showSelectAll = true,
@@ -60,6 +65,18 @@ export default function PmBoqItemPicker({
   const containerRef = React.useRef(null);
 
   const selectedSet = React.useMemo(() => new Set(value || []), [value]);
+
+  // Per-identity weight lookup. Falls back to 100 (full item) when a
+  // link has no explicit weight — covers both legacy data and newly
+  // added links before the user touches the slider.
+  const weightByIdentity = React.useMemo(() => {
+    const map = new Map();
+    (value || []).forEach((identity, i) => {
+      const raw = Number((weights || [])[i]);
+      map.set(identity, Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 100);
+    });
+    return map;
+  }, [value, weights]);
 
   // Picker shows *all* BoQ-side scope: measured items, preliminaries,
   // provisional sums and variations. Linking a task to a prelim or PC
@@ -96,9 +113,17 @@ export default function PmBoqItemPicker({
     [items, selectedSet],
   );
 
+  // Weighted derived amount — each selected item contributes
+  // amount × weight/100. This is what the task's baselineCost should
+  // become so over/under allocation isn't accidentally hidden.
   const derivedAmount = React.useMemo(
-    () => selectedItems.reduce((acc, item) => acc + safeNum(item.amount), 0),
-    [selectedItems],
+    () =>
+      selectedItems.reduce(
+        (acc, item) =>
+          acc + safeNum(item.amount) * (weightByIdentity.get(item.identity) ?? 100) / 100,
+        0,
+      ),
+    [selectedItems, weightByIdentity],
   );
 
   // Close the suggestion dropdown when the user clicks outside.
@@ -112,29 +137,57 @@ export default function PmBoqItemPicker({
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // Compute the weighted derivedAmount and the parallel weights array
+  // for any change. Encapsulates the recomputation so toggle / weight
+  // edit / clear all share a single source of truth.
+  function emit(nextIdentities, nextWeightsByIdentity) {
+    const nextWeights = nextIdentities.map((id) => {
+      const w = nextWeightsByIdentity.get(id);
+      return Number.isFinite(w) ? w : 100;
+    });
+    const nextAmount = nextIdentities.reduce((acc, id) => {
+      const item = items.find((it) => it.identity === id);
+      if (!item) return acc;
+      const w = nextWeightsByIdentity.get(id);
+      const weight = (Number.isFinite(w) ? w : 100) / 100;
+      return acc + safeNum(item.amount) * weight;
+    }, 0);
+    onChange?.(nextIdentities, nextAmount, nextWeights);
+  }
+
   function toggleItem(identity) {
     const next = new Set(selectedSet);
     if (next.has(identity)) next.delete(identity);
     else next.add(identity);
     const nextArr = Array.from(next);
-    const nextAmount = items
-      .filter((it) => next.has(it.identity))
-      .reduce((acc, it) => acc + safeNum(it.amount), 0);
-    onChange?.(nextArr, nextAmount);
+    // Preserve existing weights; new selections default to 100.
+    const nextWeights = new Map(weightByIdentity);
+    if (!nextWeights.has(identity) && next.has(identity)) {
+      nextWeights.set(identity, 100);
+    }
+    emit(nextArr, nextWeights);
+  }
+
+  function setWeight(identity, value) {
+    const clamped = Math.max(0, Math.min(100, Number(value) || 0));
+    const nextWeights = new Map(weightByIdentity);
+    nextWeights.set(identity, clamped);
+    emit(Array.from(selectedSet), nextWeights);
   }
 
   function clearAll() {
-    onChange?.([], 0);
+    onChange?.([], 0, []);
   }
 
   function selectAllVisible() {
     const next = new Set(selectedSet);
     for (const item of filtered) next.add(item.identity);
     const nextArr = Array.from(next);
-    const nextAmount = items
-      .filter((it) => next.has(it.identity))
-      .reduce((acc, it) => acc + safeNum(it.amount), 0);
-    onChange?.(nextArr, nextAmount);
+    const nextWeights = new Map(weightByIdentity);
+    for (const item of filtered) {
+      if (!nextWeights.has(item.identity)) nextWeights.set(item.identity, 100);
+    }
+    emit(nextArr, nextWeights);
   }
 
   return (
@@ -142,25 +195,54 @@ export default function PmBoqItemPicker({
       {/* Selected chips */}
       {selectedItems.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-1.5">
-          {selectedItems.map((item) => (
-            <span
-              key={item.identity}
-              className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-adlm-blue-700 border border-blue-200"
-            >
-              <span className="max-w-[180px] truncate" title={item.description}>
-                {item.description || `Item ${item.sn}`}
-              </span>
-              <span className="text-[10px] opacity-80">₦{fmtMoney(item.amount)}</span>
-              <button
-                type="button"
-                onClick={() => toggleItem(item.identity)}
-                className="rounded-full hover:bg-blue-100 p-0.5"
-                title="Unlink"
+          {selectedItems.map((item) => {
+            const weight = weightByIdentity.get(item.identity) ?? 100;
+            const contribution = safeNum(item.amount) * weight / 100;
+            return (
+              <span
+                key={item.identity}
+                className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-adlm-blue-700 border border-blue-200"
               >
-                <FaTimes className="text-[9px]" />
-              </button>
-            </span>
-          ))}
+                <span className="max-w-[180px] truncate" title={item.description}>
+                  {item.description || `Item ${item.sn}`}
+                </span>
+                {/* Weight input — defaults to 100%. Use this to split a
+                    single BoQ line across multiple tasks (e.g. 70% first
+                    fix, 30% final fix). Live updates the chip's
+                    contribution and the parent's baselineCost. */}
+                <span
+                  className="inline-flex items-center gap-0.5 rounded-full bg-white/70 px-1.5 py-0.5 border border-blue-200/60"
+                  title="Weight (%) — share of this BoQ line allocated to the current task. Lower this when other tasks also link to the same line."
+                >
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={weight}
+                    onChange={(e) => setWeight(item.identity, e.target.value)}
+                    className="w-10 bg-transparent text-[10px] font-semibold text-adlm-blue-700 text-right outline-none p-0"
+                  />
+                  <span className="text-[10px] opacity-80">%</span>
+                </span>
+                <span className="text-[10px] opacity-80">
+                  ₦{fmtMoney(contribution)}
+                  {weight !== 100 ? (
+                    <span className="ml-1 text-slate-500">
+                      (of ₦{fmtMoney(item.amount)})
+                    </span>
+                  ) : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleItem(item.identity)}
+                  className="rounded-full hover:bg-blue-100 p-0.5"
+                  title="Unlink"
+                >
+                  <FaTimes className="text-[9px]" />
+                </button>
+              </span>
+            );
+          })}
           <button
             type="button"
             onClick={clearAll}
@@ -260,12 +342,28 @@ export default function PmBoqItemPicker({
         </div>
       ) : null}
 
-      {/* Live sum hint */}
+      {/* Live sum hint — weighted across all links. Mentions the
+          weights when any are < 100% so the user understands why the
+          baseline isn't simply the sum of selected items. */}
       {selectedItems.length > 0 ? (
-        <div className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-[11px] text-emerald-800">
-          <b>Linked baseline:</b> ₦{fmtMoney(derivedAmount)} from {selectedItems.length} BoQ item
-          {selectedItems.length === 1 ? "" : "s"}
-        </div>
+        (() => {
+          const anyDownweighted = selectedItems.some(
+            (it) => (weightByIdentity.get(it.identity) ?? 100) !== 100,
+          );
+          return (
+            <div className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-[11px] text-emerald-800">
+              <b>Linked baseline{anyDownweighted ? " (weighted)" : ""}:</b>{" "}
+              ₦{fmtMoney(derivedAmount)} from {selectedItems.length} BoQ item
+              {selectedItems.length === 1 ? "" : "s"}
+              {anyDownweighted ? (
+                <div className="mt-0.5 text-[10px] text-emerald-700/80">
+                  Tip: when several tasks share a BoQ line, set each task's
+                  weight so the totals across all tasks sum to 100%.
+                </div>
+              ) : null}
+            </div>
+          );
+        })()
       ) : null}
     </div>
   );

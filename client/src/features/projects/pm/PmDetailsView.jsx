@@ -92,6 +92,100 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
   // re-render on every keystroke (percent edit, status change, etc.).
   const sectionRefs = React.useRef({});
 
+  // ── Collapsible summary state ────────────────────────────────────────
+  // The triangle on each summary row toggles whether its descendants
+  // render. Keyed on WBS code so the state survives task-id regeneration
+  // (e.g. after an import that re-creates tasks). Persisted in
+  // localStorage so users don't lose their layout on reload.
+  const STORAGE_KEY = "adlm:pmCollapsedWbs";
+  const [collapsedWbs, setCollapsedWbs] = React.useState(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  function toggleCollapsed(wbs) {
+    if (!wbs) return;
+    setCollapsedWbs((prev) => {
+      const next = new Set(prev);
+      if (next.has(wbs)) next.delete(wbs);
+      else next.add(wbs);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+      } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  function collapseAll() {
+    const allSummaryWbs = tasks
+      .filter((t) => t.isSummary && t.wbs)
+      .map((t) => t.wbs);
+    const next = new Set(allSummaryWbs);
+    setCollapsedWbs(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+    } catch { /* ignore */ }
+  }
+  function expandAll() {
+    setCollapsedWbs(new Set());
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    } catch { /* ignore */ }
+  }
+
+  // Walk-the-chain check: a task is hidden if ANY ancestor WBS is in the
+  // collapsed set. Uses the server-supplied parentWbs to skip recomputing
+  // hierarchy on the client.
+  const parentByWbs = React.useMemo(() => {
+    const m = new Map();
+    for (const t of tasks) {
+      if (t.wbs && t.parentWbs) m.set(t.wbs, t.parentWbs);
+    }
+    return m;
+  }, [tasks]);
+
+  function isHiddenByCollapse(task) {
+    if (collapsedWbs.size === 0) return false;
+    let p = task?.parentWbs || null;
+    let safety = 64; // pathological-tree guard
+    while (p && safety-- > 0) {
+      if (collapsedWbs.has(p)) return true;
+      p = parentByWbs.get(p) || null;
+    }
+    return false;
+  }
+
+  const visibleTasks = React.useMemo(
+    () => tasks.filter((t) => !isHiddenByCollapse(t)),
+    [tasks, collapsedWbs, parentByWbs],
+  );
+
+  // Pre-compute hidden-child counts so the collapsed summary can show
+  // "+ N hidden" for context. Cheap because tasks is already iterated.
+  const hiddenChildCountByWbs = React.useMemo(() => {
+    const map = new Map();
+    if (collapsedWbs.size === 0) return map;
+    for (const t of tasks) {
+      let p = t?.parentWbs || null;
+      let safety = 64;
+      while (p && safety-- > 0) {
+        if (collapsedWbs.has(p)) {
+          map.set(p, (map.get(p) || 0) + 1);
+          break; // count under the nearest collapsed ancestor only
+        }
+        p = parentByWbs.get(p) || null;
+      }
+    }
+    return map;
+  }, [tasks, collapsedWbs, parentByWbs]);
+
   const sections = React.useMemo(() => {
     if (!tasks?.length) return [];
     return tasks.filter(isSectionRow).map((t) => ({
@@ -101,6 +195,9 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
       refGetter: () => sectionRefs.current[t.taskId] || null,
     }));
   }, [tasks]);
+
+  // Any tasks visibly hidden right now? Drives the "Expand all" hint.
+  const hasCollapsed = collapsedWbs.size > 0;
 
   if (!tasks?.length) {
     return (
@@ -113,8 +210,46 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
       />
     );
   }
+  // How many summary rows can be collapsed? Used to decide whether to
+  // show the "Collapse all" button at all.
+  const summaryCount = tasks.filter((t) => t.isSummary && t.wbs).length;
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
+    <div className="rounded-xl border border-slate-200">
+      {summaryCount > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2 text-[11px] text-slate-600">
+          <div>
+            {hasCollapsed ? (
+              <span>
+                <strong className="text-slate-900">{collapsedWbs.size}</strong>{" "}
+                of {summaryCount} summary {summaryCount === 1 ? "row" : "rows"} collapsed.
+              </span>
+            ) : (
+              <span>
+                Click the ▼ on a summary row to collapse it. State persists across reloads.
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={collapseAll}
+              className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              Collapse all
+            </button>
+            <button
+              type="button"
+              onClick={expandAll}
+              disabled={!hasCollapsed}
+              className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Expand all
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <div className="overflow-x-auto">
       <table className="w-full text-sm" style={{ minWidth: 1100 }}>
         <thead className="sticky top-0 bg-slate-50 text-slate-600 z-10">
           <tr className="text-left">
@@ -133,7 +268,7 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {tasks.map((task) => {
+          {visibleTasks.map((task) => {
             const overdue = task?.computed?.isOverdue;
             const linked = (task.linkedBoqIdentities || []).length > 0;
             const isSection = isSectionRow(task);
@@ -142,6 +277,10 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
             const isSummary = Boolean(task?.isSummary || task?.rollup);
             const rollup = task?.rollup || null;
             const depth = Math.max(0, safeNum(task?.wbsDepth));
+            const isCollapsed = isSummary && collapsedWbs.has(task.wbs);
+            const hiddenChildCount = isCollapsed
+              ? hiddenChildCountByWbs.get(task.wbs) || 0
+              : 0;
 
             // Choose display values: summary rows show rollup values, leaves
             // show their own.
@@ -196,7 +335,17 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                     style={{ paddingLeft: Math.min(depth, 5) * 16 }}
                   >
                     {isSummary ? (
-                      <span className="mt-1 text-[10px] text-adlm-blue-700">▼</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleCollapsed(task.wbs)}
+                        title={isCollapsed ? `Expand (${hiddenChildCount} hidden)` : "Collapse children"}
+                        aria-expanded={!isCollapsed}
+                        className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded text-adlm-blue-700 hover:bg-blue-100/70 active:scale-95 transition"
+                      >
+                        <span className="text-[11px] leading-none">
+                          {isCollapsed ? "▶" : "▼"}
+                        </span>
+                      </button>
                     ) : depth > 0 ? (
                       <span className="mt-1 text-[10px] text-slate-300">└</span>
                     ) : null}
@@ -215,6 +364,11 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                         {isSummary && rollup ? (
                           <span className="inline-flex items-center gap-1 rounded bg-adlm-blue-700 px-1.5 py-0.5 text-white font-semibold">
                             Σ {rollup.leafCount} leaf{rollup.leafCount === 1 ? "" : "s"}
+                          </span>
+                        ) : null}
+                        {isCollapsed && hiddenChildCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-slate-700 font-medium">
+                            ▶ {hiddenChildCount} hidden
                           </span>
                         ) : null}
                         {isSummary && rollup?.durationDays ? (
@@ -325,19 +479,26 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                 </td>
                 <td className="px-3 py-2 align-top text-right">
                   <div className="inline-flex items-center gap-1">
+                    {/* Summary tasks are read-only — their values come from
+                        their leaf children. Editing or deleting them would
+                        leave orphan rows and a corrupted hierarchy. To make
+                        a summary editable, delete every child first; the
+                        row stops being a summary and the buttons re-enable. */}
                     <button
                       type="button"
-                      onClick={() => onEditTask?.(task)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-blue-50 hover:text-adlm-blue-700"
-                      title={isSummary ? "Edit summary task" : "Edit"}
+                      onClick={() => !isSummary && onEditTask?.(task)}
+                      disabled={isSummary}
+                      className={`rounded p-1.5 ${isSummary ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:bg-blue-50 hover:text-adlm-blue-700"}`}
+                      title={isSummary ? "Summary tasks are read-only. Delete or edit their child tasks instead." : "Edit"}
                     >
                       <FaPencilAlt className="text-xs" />
                     </button>
                     <button
                       type="button"
-                      onClick={() => onDeleteTask?.(task.taskId)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                      title="Delete"
+                      onClick={() => !isSummary && onDeleteTask?.(task.taskId)}
+                      disabled={isSummary}
+                      className={`rounded p-1.5 ${isSummary ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:bg-rose-50 hover:text-rose-600"}`}
+                      title={isSummary ? "Delete child tasks first — summary rows can't be removed while they have descendants." : "Delete"}
                     >
                       <FaTrash className="text-xs" />
                     </button>
@@ -348,6 +509,7 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
           })}
         </tbody>
       </table>
+      </div>
       {/* Floating jump nav — fixed to the viewport so it stays visible while
           the user scrolls the long task list. */}
       <PmWbsScrollNav sections={sections} />

@@ -155,6 +155,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
       assignedTo: "",
       resourceNames: "",
       linkedBoqIdentities: [],
+      linkedBoqWeights: [],
       isMilestone: false,
       notes: "",
       source: "manual",
@@ -190,10 +191,16 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
     onSave?.(next);
   }
 
-  function handleLinkChange(identities, derivedAmount) {
+  function handleLinkChange(identities, derivedAmount, weights) {
     setForm((prev) => ({
       ...prev,
       linkedBoqIdentities: identities,
+      // Parallel weights array. The picker hands us the canonical
+      // shape; if any caller forgets to provide one, fall back to a
+      // full-100 array so the schema invariant holds.
+      linkedBoqWeights: Array.isArray(weights) && weights.length === identities.length
+        ? weights
+        : identities.map(() => 100),
       // Surface the derived amount immediately so the user sees it; the
       // server will recompute on save based on current items.
       baselineCost: derivedAmount,
@@ -355,6 +362,7 @@ export function PmTaskModal({ open, mode = "add", task: initial, boqItems = [], 
             <PmBoqItemPicker
               items={boqItems}
               value={form.linkedBoqIdentities}
+              weights={form.linkedBoqWeights}
               onChange={handleLinkChange}
             />
           ) : (

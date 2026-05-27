@@ -6,6 +6,13 @@
 
 @import "tailwindcss";
 
+/* ── Dark-mode variant: class-based ──────────────────────────────────
+   Tailwind v4 defaults to media-query dark mode. We need explicit
+   class-based control so the ThemeProvider toggle can flip modes
+   regardless of OS preference. This declares the `dark:` variant to
+   activate when <html> (or any ancestor) carries the `.dark` class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* ── ADLM Design System – Tailwind v4 theme tokens ── */
   --font-sans: 'Lexend', sans-serif;
@@ -21,6 +28,19 @@
   --color-adlm-navy-deep: #040d18;
   --color-adlm-navy-mid: #061528;
   --color-adlm-navy-tertiary: #091e39;
+
+  /* Dark-mode surface tokens. Used by dark: utility variants directly
+     (e.g. bg-adlm-dark-bg, text-adlm-dark-text). The same colours are
+     also applied as global overrides below so components that haven't
+     yet been audited for dark: variants still look right. */
+  --color-adlm-dark-bg: #0a1320;
+  --color-adlm-dark-panel: #101e33;
+  --color-adlm-dark-raised: #162842;
+  --color-adlm-dark-border: #1f3559;
+  --color-adlm-dark-hover: #1a2d4a;
+  --color-adlm-dark-text: #e2e8f0;
+  --color-adlm-dark-muted: #94a3b8;
+  --color-adlm-dark-dim: #64748b;
 
   /* Border radii */
   --radius-adlm: 8px;
@@ -302,3 +322,124 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ────────────────────────────────────────────────────────────────────
+   DARK MODE — global surface overrides
+   ────────────────────────────────────────────────────────────────────
+   Rather than audit every existing .bg-white / .text-slate-900 / etc.
+   utility across 400+ files, we use class-scoped overrides keyed on the
+   `.dark` class that ThemeProvider adds to <html>. This re-paints the
+   most common light surfaces dark in one shot.
+
+   Components that need finer control still use `dark:` Tailwind variants
+   — those win via specificity since they apply at the same level.
+
+   The navbar (.bg-adlm-navy) deliberately stays dark in both modes —
+   that's brand chrome.
+*/
+
+:root { color-scheme: light; }
+:root.dark { color-scheme: dark; }
+
+.dark body {
+  background-color: #0a1320;
+  color: #e2e8f0;
+}
+
+/* Surfaces */
+.dark .bg-white { background-color: #101e33 !important; }
+.dark .bg-slate-50 { background-color: #0a1320 !important; }
+.dark .bg-slate-50\/50 { background-color: rgba(10, 19, 32, 0.6) !important; }
+.dark .bg-slate-50\/60 { background-color: rgba(10, 19, 32, 0.7) !important; }
+.dark .bg-slate-100 { background-color: #162842 !important; }
+.dark .bg-slate-100\/80 { background-color: rgba(22, 40, 66, 0.85) !important; }
+.dark .bg-slate-200 { background-color: #1f3559 !important; }
+.dark .bg-slate-300 { background-color: #2a4774 !important; }
+
+/* Soft semantic surfaces — keep their hue, darken */
+.dark .bg-blue-50,
+.dark .bg-blue-50\/40,
+.dark .bg-blue-50\/50,
+.dark .bg-blue-50\/60 { background-color: rgba(36, 99, 235, 0.15) !important; }
+.dark .bg-emerald-50,
+.dark .bg-emerald-50\/40,
+.dark .bg-emerald-50\/50,
+.dark .bg-emerald-50\/60 { background-color: rgba(16, 185, 129, 0.12) !important; }
+.dark .bg-amber-50,
+.dark .bg-amber-50\/50,
+.dark .bg-amber-50\/60 { background-color: rgba(245, 158, 11, 0.12) !important; }
+.dark .bg-rose-50,
+.dark .bg-rose-50\/40,
+.dark .bg-rose-50\/50,
+.dark .bg-rose-50\/60 { background-color: rgba(244, 63, 94, 0.14) !important; }
+.dark .bg-purple-50,
+.dark .bg-purple-50\/60 { background-color: rgba(168, 85, 247, 0.14) !important; }
+.dark .bg-sky-50 { background-color: rgba(14, 165, 233, 0.12) !important; }
+
+/* Borders */
+.dark .border-slate-100 { border-color: #1a2d4a !important; }
+.dark .border-slate-200 { border-color: #1f3559 !important; }
+.dark .border-slate-300 { border-color: #2a4774 !important; }
+.dark .border-blue-200 { border-color: rgba(36, 99, 235, 0.45) !important; }
+.dark .border-emerald-200 { border-color: rgba(16, 185, 129, 0.4) !important; }
+.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.45) !important; }
+.dark .border-rose-200 { border-color: rgba(244, 63, 94, 0.45) !important; }
+.dark .border-dashed.border-slate-200 { border-color: #2a4774 !important; }
+
+/* Divide colours (tables / lists) */
+.dark .divide-slate-100 > * + * { border-color: #1a2d4a !important; }
+.dark .divide-slate-200 > * + * { border-color: #1f3559 !important; }
+
+/* Text — keep palette ladder, shift everything lighter for contrast on dark */
+.dark .text-slate-900 { color: #e2e8f0 !important; }
+.dark .text-slate-800 { color: #d1d9e6 !important; }
+.dark .text-slate-700 { color: #b9c2d2 !important; }
+.dark .text-slate-600 { color: #a0aabd !important; }
+.dark .text-slate-500 { color: #8694ad !important; }
+.dark .text-slate-400 { color: #6b7993 !important; }
+.dark .text-slate-300 { color: #4b5870 !important; }
+/* Coloured text stays as-is — emerald-700, rose-700 etc. read fine on dark */
+
+/* Form inputs */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: #162842;
+  color: #e2e8f0;
+  border-color: #1f3559;
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: #64748b; }
+
+/* Date picker icon needs inverting against dark input bg */
+.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+
+/* Hover states — slate-50/100 hovers darken instead of lighten */
+.dark .hover\:bg-slate-50:hover { background-color: #162842 !important; }
+.dark .hover\:bg-slate-100:hover { background-color: #1a2d4a !important; }
+.dark .hover\:bg-blue-50:hover { background-color: rgba(36, 99, 235, 0.22) !important; }
+.dark .hover\:bg-rose-50:hover { background-color: rgba(244, 63, 94, 0.18) !important; }
+
+/* Shadows look unnatural on dark; tint to black-ish */
+.dark .shadow-sm,
+.dark .shadow,
+.dark .shadow-md,
+.dark .shadow-lg,
+.dark .shadow-xl,
+.dark .shadow-2xl {
+  --tw-shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Modal backdrops */
+.dark .bg-slate-900\/30 { background-color: rgba(0, 0, 0, 0.55) !important; }
+.dark .bg-slate-900\/60 { background-color: rgba(0, 0, 0, 0.75) !important; }
+
+/* Inline code / kbd */
+.dark code,
+.dark kbd { background-color: #1a2d4a !important; color: #e2e8f0 !important; }
+
+/* Override the .btn helper background for dark mode hover */
+.dark .btn:hover { background-color: #36a3ff; }
+
+/* Override .card helper */
+.dark .card { background-color: #101e33; border-color: #1f3559; }

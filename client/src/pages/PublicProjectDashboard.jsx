@@ -102,45 +102,77 @@ function DualProgressBars({ progressPercent = 0, costPercent = 0 }) {
   );
 }
 
-function StatusBanner({ status, delta = 0 }) {
+function StatusBanner({ status, delta = 0, sharedBy = "" }) {
+  // Bigger, more prominent banner. Each status gets its own gradient
+  // header colour, a chunky pill label, the QS-friendly explanation,
+  // and a "Contact QS for details" CTA so clients know where to
+  // direct questions instead of treating the dashboard as the full
+  // story.
   const map = {
     "starting": {
-      bg: "bg-slate-50 border-slate-200",
-      dot: "bg-slate-400",
-      text: "text-slate-700",
-      label: "Project just starting",
-      detail: "Not enough progress yet to read the trend.",
+      gradient: "from-slate-500 to-slate-600",
+      pill: "bg-slate-100 text-slate-800 border-slate-300",
+      label: "Project starting",
+      icon: "•",
+      detail: "Not enough progress yet to read the trend. Check back as work begins.",
     },
     "on-track": {
-      bg: "bg-emerald-50 border-emerald-200",
-      dot: "bg-emerald-500",
-      text: "text-emerald-900",
+      gradient: "from-emerald-600 to-emerald-700",
+      pill: "bg-emerald-100 text-emerald-800 border-emerald-300",
       label: "On track",
-      detail: "Cost progress is in line with physical progress.",
+      icon: "✓",
+      detail: "Cost progress is in line with physical progress. The project is tracking against its current programme.",
     },
     "watch": {
-      bg: "bg-amber-50 border-amber-200",
-      dot: "bg-amber-500",
-      text: "text-amber-900",
-      label: "Watch",
-      detail: `Cost is ${delta > 0 ? "running ahead" : "behind"} physical progress by ${Math.abs(delta).toFixed(1)}%.`,
+      gradient: "from-amber-500 to-amber-600",
+      pill: "bg-amber-100 text-amber-900 border-amber-300",
+      label: "Needs attention",
+      icon: "!",
+      detail: `Cost is ${delta > 0 ? "running ahead of" : "behind"} physical progress by ${Math.abs(delta).toFixed(1)}%. Worth a closer look with the QS.`,
     },
     "over-budget": {
-      bg: "bg-red-50 border-red-200",
-      dot: "bg-red-500",
-      text: "text-red-900",
+      gradient: "from-rose-600 to-rose-700",
+      pill: "bg-rose-100 text-rose-900 border-rose-300",
       label: "Over budget",
-      detail: `Spend is ${Math.abs(delta).toFixed(1)}% ahead of completed work. Review valuation.`,
+      icon: "⚠",
+      detail: `Spend is ${Math.abs(delta).toFixed(1)}% ahead of completed work. Review the valuation with the QS to confirm next steps.`,
     },
   };
   const c = map[status] || map["starting"];
   return (
-    <div className={`rounded-xl border p-4 ${c.bg}`}>
-      <div className="flex items-center gap-2">
-        <span className={`inline-block h-2.5 w-2.5 rounded-full ${c.dot}`} />
-        <div className={`text-sm font-semibold ${c.text}`}>{c.label}</div>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className={`bg-gradient-to-r ${c.gradient} px-5 py-4 text-white`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-xl font-bold">
+              {c.icon}
+            </span>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest opacity-80">Project status</div>
+              <div className="text-xl font-bold">{c.label}</div>
+            </div>
+          </div>
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${c.pill}`}>
+            <span className="h-2 w-2 rounded-full bg-current opacity-70" />
+            Last reviewed by your QS
+          </span>
+        </div>
       </div>
-      <div className={`mt-1 text-xs ${c.text} opacity-80`}>{c.detail}</div>
+      <div className="px-5 py-3 text-sm text-slate-700">{c.detail}</div>
+      {/* QS contact CTA — visible across all statuses because clients
+          always want to know who to call, especially when the badge is
+          green. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-3">
+        <div className="text-xs text-slate-600">
+          <span className="font-semibold text-slate-900">Need more detail?</span>{" "}
+          {sharedBy
+            ? `Reach out to ${sharedBy} — your Quantity Surveyor — for the certificate breakdown, variation log, or anything else not shown here.`
+            : "Reach out to your Quantity Surveyor — for the certificate breakdown, variation log, or anything else not shown here."}
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-adlm-blue-700 px-3 py-1.5 text-[11px] font-bold text-white">
+          ✉ Contact your QS
+        </span>
+      </div>
     </div>
   );
 }
@@ -296,7 +328,11 @@ export default function PublicProjectDashboard() {
 
       <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
         {/* Status banner */}
-        <StatusBanner status={data.status} delta={data.costVsProgressDelta} />
+        <StatusBanner
+          status={data.status}
+          delta={data.costVsProgressDelta}
+          sharedBy={data.sharedBy}
+        />
 
         {/* Progress Overview */}
         <div className="rounded-xl border border-slate-200 bg-white p-6">

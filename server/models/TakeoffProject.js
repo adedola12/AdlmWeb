@@ -282,6 +282,15 @@ const PmTaskSchema = new mongoose.Schema(
     // the task's baselineCost is derived from those items' qty × rate, so
     // edits to the BoQ flow through to the schedule view without a manual sync.
     linkedBoqIdentities: { type: [String], default: [] },
+    // Weight (0-100) per link, parallel to linkedBoqIdentities. Lets a
+    // single BoQ line be split across multiple tasks — e.g. "Windows &
+    // Doors" → "First fix" at 70 + "Final fix" at 30. Baseline cost for
+    // a task = Σ (item.amount × weight/100). Missing entries default to
+    // 100 (full item), preserving the pre-feature behaviour for legacy
+    // data. The dashboard surfaces total-weight-per-item so users see
+    // whether a single BoQ line is balanced (sum = 100), under-allocated
+    // (gap in WBS coverage), or over-allocated (double-counted in EV).
+    linkedBoqWeights: { type: [Number], default: [] },
     isMilestone: { type: Boolean, default: false },
     isSummary: { type: Boolean, default: false }, // collapse / roll-up parent
     parentTaskId: { type: String, default: "" }, // for hierarchical WBS

@@ -678,6 +678,7 @@ export default function ProjectOpenView({
           checkboxCls={checkboxCls}
           computedShown={computedShown}
           getCandidatesForItem={getCandidatesForItem}
+          pmDashboard={pmDashboard}
           grossAmount={grossAmount}
           isGroupLinked={isGroupLinked}
           itemQuery={itemQuery}

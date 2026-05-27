@@ -3,8 +3,13 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./store.jsx";
+import { ThemeProvider, initThemeBeforeRender } from "./theme.jsx";
 import App from "./App.jsx";
 import "./index.css";
+
+// Apply the saved theme class BEFORE React mounts so users on dark mode
+// don't see a brief flash of light UI on reload.
+initThemeBeforeRender();
 
 import AppError from "./pages/AppError.jsx";
 import Home from "./pages/Home.jsx";
@@ -371,10 +376,15 @@ const router = createBrowserRouter([
   },
 ]);
 
+// Find the AuthProvider wrap below; we add ThemeProvider as an outer
+// wrapper so theme is available everywhere including the AuthProvider's
+// internal state hooks if they ever want it.
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </ThemeProvider>
   </React.StrictMode>,
 );
