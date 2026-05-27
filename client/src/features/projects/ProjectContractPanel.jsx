@@ -551,27 +551,85 @@ export default function ProjectContractPanel({
   variations,
 }) {
   const [tab, setTab] = React.useState("certificates");
+  // Collapsed state persists per-browser so users who never need
+  // certificates / final account / BIM can keep the section folded.
+  // localStorage key is scoped, not project-specific — the preference
+  // travels with the user across all projects.
+  const [collapsed, setCollapsed] = React.useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("adlm:contractAdminCollapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(
+          "adlm:contractAdminCollapsed",
+          next ? "1" : "0",
+        );
+      } catch {
+        // ignore — feature still works without persistence
+      }
+      return next;
+    });
+  }
+
   const hasAnyFeature =
     onIssueCertificate || onFinalizeAccount || onUploadModel;
   if (!hasAnyFeature) return null;
 
   const modelCount = Object.values(projectModels || {}).filter(Boolean).length;
+  const certCount = certificates.length;
+  // Pre-compute a one-line summary the collapsed header can show. Gives
+  // users at-a-glance status without expanding.
+  const collapsedSummary = [
+    certCount ? `${certCount} certificate${certCount === 1 ? "" : "s"}` : null,
+    finalAccount?.finalized ? "Final account closed" : null,
+    modelCount ? `${modelCount} BIM model${modelCount === 1 ? "" : "s"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+        <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-900">
             Contract administration
           </div>
           <div className="text-[11px] text-slate-500">
-            Certificates, final account and BIM models — everything a QS needs
-            after contract award.
+            {collapsed && collapsedSummary
+              ? collapsedSummary
+              : "Certificates, final account and BIM models — everything a QS needs after contract award."}
           </div>
         </div>
+        {/* Collapse / expand toggle. Persists in localStorage so the
+            preference survives page reloads and crosses projects. */}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          aria-controls="contract-admin-body"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition"
+          title={collapsed ? "Show contract administration" : "Hide contract administration"}
+        >
+          <span
+            aria-hidden="true"
+            className={`inline-block transition-transform ${collapsed ? "" : "rotate-180"}`}
+          >
+            ▾
+          </span>
+          {collapsed ? "Show" : "Hide"}
+        </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 pb-2">
+      {collapsed ? null : (
+      <div id="contract-admin-body" className="flex flex-wrap items-center gap-1 border-b border-slate-100 pb-2">
         <SubTab
           id="certificates"
           active={tab === "certificates"}
@@ -593,8 +651,9 @@ export default function ProjectContractPanel({
           count={modelCount}
         />
       </div>
+      )}
 
-      {tab === "certificates" ? (
+      {!collapsed && tab === "certificates" ? (
         <CertificatesSection
           certificates={certificates}
           onIssue={onIssueCertificate}
@@ -611,7 +670,7 @@ export default function ProjectContractPanel({
         />
       ) : null}
 
-      {tab === "final" ? (
+      {!collapsed && tab === "final" ? (
         <FinalAccountSection
           finalAccount={finalAccount}
           onFinalize={onFinalizeAccount}
@@ -626,7 +685,7 @@ export default function ProjectContractPanel({
         />
       ) : null}
 
-      {tab === "models" ? (
+      {!collapsed && tab === "models" ? (
         <ModelsPanel
           projectModels={projectModels}
           modelUploadBusy={modelUploadBusy}
