@@ -4,87 +4,6 @@ import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
 
-/** Simple list with add/remove/reorder controls */
-function ReorderableList({
-  title,
-  items,
-  setItems,
-  placeholder = "Add item…",
-}) {
-  const [input, setInput] = React.useState("");
-
-  function add() {
-    const v = input.trim();
-    if (!v) return;
-    setItems((arr) => [...arr, v]);
-    setInput("");
-  }
-  function remove(i) {
-    setItems((arr) => arr.filter((_, idx) => idx !== i));
-  }
-  function move(i, dir) {
-    setItems((arr) => {
-      const j = i + dir;
-      if (j < 0 || j >= arr.length) return arr;
-      const copy = [...arr];
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-      return copy;
-    });
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="font-medium">{title}</div>
-      <div className="flex gap-2">
-        <input
-          className="input flex-1"
-          placeholder={placeholder}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-        />
-        <button className="btn btn-sm" type="button" onClick={add}>
-          Add
-        </button>
-      </div>
-      <ul className="text-sm space-y-1">
-        {items.map((v, i) => (
-          <li
-            key={`${v}-${i}`}
-            className="border rounded px-2 py-1 flex items-center justify-between gap-2"
-          >
-            <span className="truncate">{v}</span>
-            <div className="flex gap-1">
-              <button
-                className="btn btn-xs"
-                type="button"
-                onClick={() => move(i, -1)}
-              >
-                ↑
-              </button>
-              <button
-                className="btn btn-xs"
-                type="button"
-                onClick={() => move(i, +1)}
-              >
-                ↓
-              </button>
-              <button
-                className="btn btn-xs"
-                type="button"
-                onClick={() => remove(i)}
-              >
-                Remove
-              </button>
-            </div>
-          </li>
-        ))}
-        {!items.length && <li className="text-slate-500">No items yet.</li>}
-      </ul>
-    </div>
-  );
-}
-
 /** Video picker from Learn/free */
 function FreeVideoPicker({ selected, setSelected }) {
   const [query, setQuery] = React.useState("");
@@ -677,15 +596,24 @@ export default function AdminProductEdit() {
             placeholder="Long description (markdown/plain)"
           />
 
-          <div className="border rounded-lg p-3">
-            <ReorderableList
-              title="Features"
-              items={features}
-              setItems={setFeatures}
-              placeholder="Add a feature bullet…"
+          <div className="space-y-1">
+            <div className="font-medium text-sm">Features</div>
+            <textarea
+              className="input"
+              rows={8}
+              value={features.join("\n")}
+              onChange={(e) =>
+                setFeatures(
+                  e.target.value
+                    .split(/\r?\n/)
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                )
+              }
+              placeholder={"One feature per line, e.g.\n100% Online (Google Classroom)\n6-week structured roadmap\nAutodesk Revit (MEP)…"}
             />
-            <div className="text-xs text-slate-500 mt-2">
-              Shown as the bulleted Features list on the product page. Press Enter or click Add to append; use ↑ / ↓ to reorder.
+            <div className="text-xs text-slate-500">
+              One feature per line. Each line becomes a bullet on the product page.
             </div>
           </div>
 
