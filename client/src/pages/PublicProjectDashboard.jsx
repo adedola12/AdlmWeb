@@ -12,6 +12,13 @@ function pct(value) {
   return `${n.toFixed(1)}%`;
 }
 
+// safeNum — guards against NaN / undefined / null from server payloads
+// that may not include every field on older projects.
+function safeNum(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function SummaryCard({ label, value, detail, color = "text-slate-900" }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -370,37 +377,93 @@ export default function PublicProjectDashboard() {
             </div>
             <div className="text-right">
               <div className="text-xs text-slate-500">Planned contract sum</div>
-              <div className="text-xl font-bold text-adlm-blue-700">{money(data.contractSum)}</div>
+              <div className="text-xl font-bold text-adlm-blue-700">
+                {money(data.contractBreakdown?.plannedSum ?? data.contractSum)}
+              </div>
+              {/* Show current contract value (planned + variations) as
+                  a smaller line when there are variations. */}
+              {safeNum(data.contractBreakdown?.variations) !== 0 ? (
+                <div className="mt-0.5 text-[10px] text-slate-400">
+                  Current value (incl. variations):{" "}
+                  <span className="font-semibold text-slate-700">
+                    {money(data.contractBreakdown?.currentValue)}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
+          {/* QS grand-summary cascade — every visible row sums to the
+              Planned contract sum displayed above:
+                Measured + Provisional + Prelim = BoQ sub-total
+                + Contingency = pre-tax total
+                + Tax (VAT)   = Planned contract sum
+                + Variations  = Current value (during execution)
+              When the contract is locked these are the FROZEN values
+              from lock-time so the client sees what was signed. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 text-xs">
             <div>
               <div className="text-slate-500">Measured</div>
-              <div className="font-semibold text-slate-900">{money(data.grossAmount)}</div>
+              <div className="font-semibold text-slate-900">
+                {money(data.contractBreakdown?.measured ?? data.grossAmount)}
+              </div>
             </div>
             <div>
               <div className="text-slate-500">Provisional</div>
-              <div className="font-semibold text-slate-900">{money(data.provisionalTotal)}</div>
+              <div className="font-semibold text-slate-900">
+                {money(data.contractBreakdown?.provisional ?? data.provisionalTotal)}
+              </div>
             </div>
             <div>
               <div className="text-slate-500">Preliminaries ({pct(data.preliminaryPercent)})</div>
-              <div className="font-semibold text-slate-900">{money(data.preliminaryAmount)}</div>
-            </div>
-            <div>
-              <div className="text-slate-500">Variations</div>
-              <div
-                className={`font-semibold ${
-                  data.variationsTotal > 0
-                    ? "text-amber-700"
-                    : data.variationsTotal < 0
-                    ? "text-red-700"
-                    : "text-slate-900"
-                }`}
-              >
-                {money(data.variationsTotal)}
+              <div className="font-semibold text-slate-900">
+                {money(data.contractBreakdown?.preliminaries ?? data.preliminaryAmount)}
               </div>
             </div>
           </div>
+          {/* Contingency + Tax row — only rendered when either is set. */}
+          {safeNum(data.contractBreakdown?.contingency) > 0 ||
+          safeNum(data.contractBreakdown?.tax) > 0 ? (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-2 text-xs border-t border-slate-100 pt-2">
+              <div>
+                <div className="text-slate-500">
+                  Contingency ({pct(data.contractBreakdown?.contingencyPercent)})
+                </div>
+                <div className="font-semibold text-slate-900">
+                  {money(data.contractBreakdown?.contingency)}
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">
+                  Tax / VAT ({pct(data.contractBreakdown?.taxPercent)})
+                </div>
+                <div className="font-semibold text-slate-900">
+                  {money(data.contractBreakdown?.tax)}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {/* Variations row — outside the planned sum; only shown when
+              there are any (most pre-execution projects have none). */}
+          {safeNum(data.contractBreakdown?.variations ?? data.variationsTotal) !== 0 ? (
+            <div className="mt-3 grid grid-cols-1 text-xs border-t border-slate-100 pt-2">
+              <div>
+                <div className="text-slate-500">
+                  Variations (instructions during execution)
+                </div>
+                <div
+                  className={`font-semibold ${
+                    data.variationsTotal > 0
+                      ? "text-amber-700"
+                      : data.variationsTotal < 0
+                      ? "text-red-700"
+                      : "text-slate-900"
+                  }`}
+                >
+                  {money(data.contractBreakdown?.variations ?? data.variationsTotal)}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Summary Cards */}

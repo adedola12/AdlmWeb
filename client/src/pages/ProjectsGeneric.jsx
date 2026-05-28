@@ -998,6 +998,8 @@ export default function ProjectsGeneric() {
   const [contract, setContract] = React.useState({
     locked: false,
     preliminaryPercent: 7.5,
+    contingencyPercent: 5,
+    taxPercent: 7.5,
   });
   const [contractBusy, setContractBusy] = React.useState(false);
   const [certificates, setCertificates] = React.useState([]);
@@ -1273,10 +1275,23 @@ export default function ProjectsGeneric() {
         Number.isFinite(Number(contractSrc.preliminaryPercent))
           ? Number(contractSrc.preliminaryPercent)
           : 7.5,
+      // Contingency + tax — default to QS-standard values if the
+      // project predates the feature (old projects have no field).
+      contingencyPercent:
+        Number.isFinite(Number(contractSrc.contingencyPercent))
+          ? Number(contractSrc.contingencyPercent)
+          : 5,
+      taxPercent:
+        Number.isFinite(Number(contractSrc.taxPercent))
+          ? Number(contractSrc.taxPercent)
+          : 7.5,
       contractSum: Number(contractSrc.contractSum) || 0,
       measuredAtLock: Number(contractSrc.measuredAtLock) || 0,
       provisionalAtLock: Number(contractSrc.provisionalAtLock) || 0,
       preliminaryAtLock: Number(contractSrc.preliminaryAtLock) || 0,
+      contingencyAtLock: Number(contractSrc.contingencyAtLock) || 0,
+      taxAtLock: Number(contractSrc.taxAtLock) || 0,
+      hasLockPin: Boolean(contractSrc.hasLockPin),
     });
     setCertificates(
       Array.isArray(project?.certificates)
@@ -2261,12 +2276,19 @@ export default function ProjectsGeneric() {
           }))
           .filter((v) => v.description || v.qty > 0 || v.rate > 0),
         preliminaryPercent: Number(contract?.preliminaryPercent) || 0,
+        // Contingency + tax (VAT) percentages — only sent when not
+        // locked. Server clamps to 0-100. Locked contracts ignore
+        // these (the at-lock values stay frozen).
+        contingencyPercent: Number(contract?.contingencyPercent) || 0,
+        taxPercent: Number(contract?.taxPercent) || 0,
         preliminaryItems: preliminaryItems.map((p) => ({
           name: String(p?.name || "").trim(),
           allocation: Number(p?.allocation) || 0,
           completed: Boolean(p?.completed),
           completedAt: p?.completedAt || null,
           notes: String(p?.notes || "").trim(),
+          // actualAmount — QS-recorded spend (added in earlier session)
+          actualAmount: Number(p?.actualAmount) || 0,
         })),
       };
       const updated = await apiAuthed(endpoints.one(selectedId), {
@@ -2954,6 +2976,11 @@ export default function ProjectsGeneric() {
         method: "POST",
         body: {
           preliminaryPercent: Number(preliminaryPercent ?? contract.preliminaryPercent),
+          // Pass the contingency + tax % so they get frozen at lock
+          // time alongside the other rates. The server uses them in
+          // the contractSum cascade.
+          contingencyPercent: Number(contract.contingencyPercent),
+          taxPercent: Number(contract.taxPercent),
           approvedAt: approvedAt || new Date().toISOString(),
           notes: notes || "",
           lockPin: String(lockPin).trim(),
@@ -3045,6 +3072,14 @@ export default function ProjectsGeneric() {
   function handlePreliminaryPercentChange(value) {
     const n = Math.max(0, Math.min(100, Number(value) || 0));
     setContract((prev) => ({ ...(prev || {}), preliminaryPercent: n }));
+  }
+  function handleContingencyPercentChange(value) {
+    const n = Math.max(0, Math.min(100, Number(value) || 0));
+    setContract((prev) => ({ ...(prev || {}), contingencyPercent: n }));
+  }
+  function handleTaxPercentChange(value) {
+    const n = Math.max(0, Math.min(100, Number(value) || 0));
+    setContract((prev) => ({ ...(prev || {}), taxPercent: n }));
   }
 
   // ── Interim certificates ──
@@ -4319,6 +4354,13 @@ export default function ProjectsGeneric() {
                 onAddPreliminaryItem={handleAddPreliminaryItem}
                 onRemovePreliminaryItem={handleRemovePreliminaryItem}
                 onNormalizePreliminaryAllocations={handleNormalizePreliminaryAllocations}
+                // Project-total cascade % values (Contingency, Tax/VAT).
+                // Editable inline on the Project Total card.
+                preliminaryPercent={contract?.preliminaryPercent}
+                contingencyPercent={contract?.contingencyPercent}
+                taxPercent={contract?.taxPercent}
+                onContingencyPercentChange={handleContingencyPercentChange}
+                onTaxPercentChange={handleTaxPercentChange}
                 onToggleGroupLink={toggleGroupLink}
                 isGroupLinked={isGroupLinked}
                 getCandidatesForItem={getCandidatesForItem}

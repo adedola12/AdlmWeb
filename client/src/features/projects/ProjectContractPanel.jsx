@@ -240,41 +240,47 @@ function FinalAccountSection({
   provisional,
   preliminary,
   variations,
+  // Contingency / tax — full QS grand-summary cascade (Sub-total
+  // → +Contingency → +VAT → Planned). Default 0 so older callers
+  // that haven't passed them in still produce sensible output.
+  contingency = 0,
+  tax = 0,
+  contingencyPercent = 0,
+  taxPercent = 0,
+  // Actual spent so far — used for true over-run calculation
+  // (spend exceeds planned), NOT for live BoQ drift.
+  actualSpent = 0,
   disabledFinalize,
 }) {
   const isFinalized = Boolean(finalAccount?.finalized);
-  const finalContractValue = measured + provisional + preliminary + variations;
+  // Planned total now follows the full QS cascade — Sub-total +
+  // Contingency + Tax + Variations. Without contingency/tax the
+  // formula collapses to the old "measured + PC + prelim + var".
+  const subtotal = measured + provisional + preliminary;
+  const plannedTotal = subtotal + contingency + tax;
+  const currentValue = plannedTotal + variations;
 
-  // Savings/over-run semantics:
+  // Over-run / Savings semantics — driven by ACTUAL SPEND, not by
+  // live BoQ drift.
   //
-  // • BEFORE contract lock — there is no signed agreement to over-run.
-  //   The "agreedContractSum" field is just a placeholder, so showing
-  //   "Over-run ₦8.1M" is misleading (the user hasn't agreed anything
-  //   yet). We set savings = 0 in that case and show a neutral
-  //   "Pending contract lock" label instead.
+  //   over-run = max(0, actualSpent - plannedTotal)
+  //   savings  = max(0, plannedTotal - actualSpent)  [only after final]
   //
-  // • AFTER lock — the agreed value at lock time IS the contract.
-  //   A genuine over-run only occurs when VARIATIONS push the total
-  //   above (agreed + variations executed). Re-pricing of measured
-  //   work after lock would be unusual and is treated as drift, not
-  //   over-run.
-  //
-  // savings > 0  → under-run (project came in under contract)
-  // savings = 0  → balanced (or pre-lock placeholder)
-  // savings < 0  → over-run (variations exceeded baseline)
+  // Pre-lock: nothing to compare against → both zero.
+  // Locked, no actuals: actualSpent = 0 → over-run = 0 (correct;
+  //   the previous "compare contractSum vs live measured+PC+prelim"
+  //   produced phantom over-runs whenever the BoQ was edited after
+  //   lock without any actual money being spent).
+  // Locked with actuals: over-run only ticks up when spend exceeds
+  //   the planned baseline.
+  let overRun = 0;
   let savings = 0;
-  let savingsLabel = "Savings vs contract";
-  let savingsTone = "neutral"; // 'neutral' | 'positive' | 'negative'
+  let savingsLabel = "Over-run";
+  let savingsTone = "neutral";
+  let savingsValue = 0;
   if (isFinalized) {
-    // Finalised numbers come straight from the server snapshot.
     savings = finalAccount.savings || 0;
-  } else if (!contractLocked) {
-    // Pre-lock: no contract to compare against.
-    savings = 0;
-    savingsLabel = "Pending contract lock";
-    savingsTone = "neutral";
-  } else {
-    savings = contractSum - finalContractValue;
+    savingsValue = Math.abs(savings);
     if (savings > 0) {
       savingsLabel = "Under-run (savings)";
       savingsTone = "positive";
@@ -285,6 +291,32 @@ function FinalAccountSection({
       savingsLabel = "On budget";
       savingsTone = "neutral";
     }
+  } else if (!contractLocked) {
+    savingsLabel = "Pending contract lock";
+    savingsTone = "neutral";
+  } else {
+    // Compare ACTUAL EXPENDITURE to PLANNED + VARIATIONS. Variations
+    // legitimately expand the planned budget, so spending up to
+    // (planned + variations) is not an over-run.
+    const budget = plannedTotal + variations;
+    if (actualSpent > budget) {
+      overRun = actualSpent - budget;
+      savings = -overRun;
+      savingsLabel = "Over-run";
+      savingsTone = "negative";
+      savingsValue = overRun;
+    } else if (actualSpent > 0 && actualSpent < budget) {
+      savings = budget - actualSpent;
+      savingsLabel = "Forecast savings vs budget";
+      savingsTone = "positive";
+      savingsValue = savings;
+    } else {
+      // No actuals yet — show "no spend recorded" instead of a
+      // misleading zero.
+      savingsLabel = "Over-run";
+      savingsTone = "neutral";
+      savingsValue = 0;
+    }
   }
 
   const livePreview = {
@@ -292,15 +324,21 @@ function FinalAccountSection({
     provisionalFinal: provisional,
     preliminaryFinal: preliminary,
     variationsFinal: variations,
+    contingencyFinal: contingency,
+    taxFinal: tax,
     agreedContractSum: contractSum,
-    finalContractValue,
+    plannedTotal,
+    currentValue,
+    actualSpent,
+    finalContractValue: currentValue, // legacy alias
     savings,
     savingsLabel,
     savingsTone,
+    savingsValue,
   };
 
   const view = isFinalized
-    ? { ...finalAccount, savingsLabel, savingsTone }
+    ? { ...finalAccount, savingsLabel, savingsTone, savingsValue }
     : livePreview;
 
   return (
@@ -353,39 +391,61 @@ function FinalAccountSection({
         </div>
       </div>
 
-      <div className="grid gap-2 rounded border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-2 md:grid-cols-3">
+      <div className="grid gap-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 text-xs sm:grid-cols-2 md:grid-cols-3">
         <div>
-          <div className="text-slate-500">Measured work (final)</div>
-          <div className="font-semibold text-slate-900">
+          <div className="text-slate-500 dark:text-slate-400">Measured work (final)</div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
             {money(view.measuredWorkFinal)}
           </div>
         </div>
         <div>
-          <div className="text-slate-500">Provisional</div>
-          <div className="font-semibold text-slate-900">
+          <div className="text-slate-500 dark:text-slate-400">Provisional</div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
             {money(view.provisionalFinal)}
           </div>
         </div>
         <div>
-          <div className="text-slate-500">Preliminaries</div>
-          <div className="font-semibold text-slate-900">
+          <div className="text-slate-500 dark:text-slate-400">Preliminaries</div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
             {money(view.preliminaryFinal)}
           </div>
         </div>
+        {/* Contingency + Tax — only render when set so old projects
+            without these values don't show ₦0 stub tiles. */}
+        {safeNum(view.contingencyFinal) > 0 || contingencyPercent > 0 ? (
+          <div>
+            <div className="text-slate-500 dark:text-slate-400">
+              Contingency ({Number(contingencyPercent || 0).toFixed(1)}%)
+            </div>
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
+              {money(view.contingencyFinal)}
+            </div>
+          </div>
+        ) : null}
+        {safeNum(view.taxFinal) > 0 || taxPercent > 0 ? (
+          <div>
+            <div className="text-slate-500 dark:text-slate-400">
+              Tax / VAT ({Number(taxPercent || 0).toFixed(1)}%)
+            </div>
+            <div className="font-semibold text-slate-900 dark:text-slate-100">
+              {money(view.taxFinal)}
+            </div>
+          </div>
+        ) : null}
         <div>
-          <div className="text-slate-500">Variations</div>
-          <div className="font-semibold text-slate-900">
+          <div className="text-slate-500 dark:text-slate-400">Variations</div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100">
             {money(view.variationsFinal)}
           </div>
         </div>
         <div>
-          <div className="text-slate-500">
+          <div className="text-slate-500 dark:text-slate-400">
             {contractLocked || isFinalized
               ? "Final contract value"
               : "Live project total"}
           </div>
-          <div className="text-base font-bold text-adlm-blue-700">
-            {money(view.finalContractValue)}
+          <div className="text-base font-bold text-adlm-blue-700 dark:text-adlm-blue-300">
+            {money(view.currentValue ?? view.finalContractValue)}
           </div>
           {!contractLocked && !isFinalized ? (
             <div className="mt-0.5 text-[10px] text-slate-400">
@@ -393,32 +453,49 @@ function FinalAccountSection({
             </div>
           ) : null}
         </div>
+        {/* Actual spent — surfaces the live actuals figure so users can
+            see what their over-run is being calculated against. */}
         <div>
-          <div className="text-slate-500">
+          <div className="text-slate-500 dark:text-slate-400">Actual spent to date</div>
+          <div className="text-base font-bold text-slate-900 dark:text-slate-100">
+            {money(view.actualSpent)}
+          </div>
+          {safeNum(view.actualSpent) === 0 ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">No spend recorded yet.</div>
+          ) : null}
+        </div>
+        <div>
+          <div className="text-slate-500 dark:text-slate-400">
             {view.savingsLabel ||
               (view.savings >= 0 ? "Under-run (savings)" : "Over-run")}
           </div>
           <div
             className={`text-base font-bold ${
               view.savingsTone === "positive"
-                ? "text-emerald-700"
+                ? "text-emerald-700 dark:text-emerald-400"
                 : view.savingsTone === "negative"
-                  ? "text-red-700"
-                  : "text-slate-500"
+                  ? "text-red-700 dark:text-red-400"
+                  : "text-slate-500 dark:text-slate-400"
             }`}
             title={
               !contractLocked && !isFinalized
                 ? "Lock the contract to start tracking savings or over-run against the agreed sum."
-                : undefined
+                : safeNum(view.actualSpent) === 0
+                  ? "Over-run = max(0, actual spent − planned). With no spend recorded, the figure is 0."
+                  : `Over-run = Actual spent (₦${money(view.actualSpent)}) − Planned (₦${money(view.plannedTotal + view.variationsFinal)})`
             }
           >
             {!contractLocked && !isFinalized
               ? "—"
-              : money(Math.abs(view.savings || 0))}
+              : money(safeNum(view.savingsValue))}
           </div>
           {!contractLocked && !isFinalized ? (
             <div className="mt-0.5 text-[10px] text-slate-400">
               Lock the contract to start tracking.
+            </div>
+          ) : safeNum(view.actualSpent) === 0 && safeNum(view.savingsValue) === 0 ? (
+            <div className="mt-0.5 text-[10px] text-slate-400">
+              No actual spend yet — no over-run.
             </div>
           ) : null}
         </div>
@@ -625,6 +702,12 @@ export default function ProjectContractPanel({
   provisional,
   preliminary,
   variations,
+  // Full QS cascade values + actual spend, fed through to FinalAccount.
+  contingency = 0,
+  tax = 0,
+  contingencyPercent = 0,
+  taxPercent = 0,
+  actualSpent = 0,
 }) {
   const [tab, setTab] = React.useState("certificates");
   // Collapsed state persists per-browser so users who never need
@@ -761,6 +844,15 @@ export default function ProjectContractPanel({
           provisional={provisional}
           preliminary={preliminary}
           variations={variations}
+          // Full QS cascade — Contingency + Tax flow into the breakdown
+          // and into the planned-vs-actual over-run math.
+          contingency={contingency}
+          tax={tax}
+          contingencyPercent={contingencyPercent}
+          taxPercent={taxPercent}
+          // Actual spent so the over-run is computed off real
+          // expenditure, not BoQ drift.
+          actualSpent={actualSpent}
           disabledFinalize={!contractLocked}
         />
       ) : null}

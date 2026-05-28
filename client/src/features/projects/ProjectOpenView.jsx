@@ -664,6 +664,81 @@ export default function ProjectOpenView({
             (acc, v) => acc + Number(v?.qty || 0) * Number(v?.rate || 0),
             0,
           )}
+          // Contingency / Tax — full QS cascade. Inline calc mirrors
+          // the BoQ Project Total card so the Final Account stays in
+          // sync without re-fetching from the server.
+          contingency={(() => {
+            const grsp = (provisionalSums || []).reduce(
+              (a, s) => a + (Number(s?.amount) || 0),
+              0,
+            );
+            const prelim =
+              ((grossAmount + grsp) *
+                (Number(contract?.preliminaryPercent) || 0)) /
+              100;
+            const sub = grossAmount + grsp + prelim;
+            return (sub * (Number(contract?.contingencyPercent) || 0)) / 100;
+          })()}
+          tax={(() => {
+            const grsp = (provisionalSums || []).reduce(
+              (a, s) => a + (Number(s?.amount) || 0),
+              0,
+            );
+            const prelim =
+              ((grossAmount + grsp) *
+                (Number(contract?.preliminaryPercent) || 0)) /
+              100;
+            const sub = grossAmount + grsp + prelim;
+            const cont =
+              (sub * (Number(contract?.contingencyPercent) || 0)) / 100;
+            return (
+              ((sub + cont) * (Number(contract?.taxPercent) || 0)) / 100
+            );
+          })()}
+          contingencyPercent={Number(contract?.contingencyPercent) || 0}
+          taxPercent={Number(contract?.taxPercent) || 0}
+          // Actual spent — measured-valued + executed PC + completed
+          // prelims + executed variations. Drives the over-run vs
+          // planned comparison so the final-account figure reflects
+          // real spend, not BoQ drift.
+          actualSpent={
+            (valuedAmount || 0) +
+            (provisionalSums || []).reduce(
+              (acc, s) =>
+                s?.completed ? acc + (Number(s?.amount) || 0) : acc,
+              0,
+            ) +
+            (variations || []).reduce(
+              (acc, v) =>
+                v?.completed
+                  ? acc + Number(v?.qty || 0) * Number(v?.rate || 0)
+                  : acc,
+              0,
+            ) +
+            (() => {
+              const items = preliminaryItems || [];
+              const totalAlloc = items.reduce(
+                (a, p) => a + Number(p?.allocation || 0),
+                0,
+              );
+              const base = totalAlloc > 0 ? totalAlloc : 100;
+              const grsp = (provisionalSums || []).reduce(
+                (a, s) => a + (Number(s?.amount) || 0),
+                0,
+              );
+              const pool =
+                ((grossAmount + grsp) *
+                  (Number(contract?.preliminaryPercent) || 0)) /
+                100;
+              return items.reduce(
+                (a, p) =>
+                  p?.completed
+                    ? a + (pool * Number(p?.allocation || 0)) / base
+                    : a,
+                0,
+              );
+            })()
+          }
         />
       ) : null}
 

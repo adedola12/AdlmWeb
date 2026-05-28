@@ -747,6 +747,133 @@ function buildValuationLogs(project, productKey) {
     logsByDay.set(day, byItem);
   }
 
+  // ── Synthesise non-measured valuation entries ────────────────────
+  //
+  // Preliminary items, PC sums, and variations don't currently emit
+  // ValuationEvent records when ticked complete (the events table only
+  // captures measured-item changes via applyValuationTracking). That
+  // meant the Daily valuation log was blind to prelim / PC / variation
+  // completions — the QS would mark "Setting Out" done on the prelim
+  // checklist but see "no valuation entries" on the cert tab.
+  //
+  // We synthesise virtual entries here using each row's completedAt
+  // date as the valuation day. This is read-only (no rows added to
+  // the events collection) so the log automatically reflects the
+  // current state of the flags — uncheck a prelim and it disappears
+  // from the log on next refresh.
+
+  // Preliminary done items — pro-rate the pool by allocation.
+  const prelimItems = Array.isArray(project?.preliminaryItems)
+    ? project.preliminaryItems
+    : [];
+  const prelimTotalAlloc = prelimItems.reduce(
+    (acc, p) => acc + safeNum(p?.allocation),
+    0,
+  );
+  const prelimAllocBase = prelimTotalAlloc > 0 ? prelimTotalAlloc : 100;
+  const measuredTotalForPool = (Array.isArray(project?.items) ? project.items : [])
+    .reduce((acc, it) => acc + safeNum(it?.qty) * safeNum(it?.rate), 0);
+  const provTotalForPool = (Array.isArray(project?.provisionalSums) ? project.provisionalSums : [])
+    .reduce((acc, s) => acc + safeNum(s?.amount), 0);
+  const prelimPool =
+    ((measuredTotalForPool + provTotalForPool) *
+      safeNum(project?.contract?.preliminaryPercent)) /
+    100;
+
+  for (let i = 0; i < prelimItems.length; i += 1) {
+    const p = prelimItems[i];
+    if (!p?.completed) continue;
+    const completedAt = parseOptionalDate(p?.completedAt) || new Date();
+    const day = isoDay(completedAt);
+    if (!day) continue;
+    const amount =
+      (prelimPool * safeNum(p?.allocation)) / prelimAllocBase;
+    if (amount <= 0) continue;
+    const byItem = logsByDay.get(day) || new Map();
+    byItem.set(`prelim::${i}`, {
+      itemKey: `prelim::${i}`,
+      sn: i + 1,
+      description: `Preliminary — ${p?.name || `item #${i + 1}`}`,
+      kind: "preliminary",
+      qty: safeNum(p?.allocation),
+      unit: "%",
+      rate: prelimAllocBase > 0 ? prelimPool / prelimAllocBase : 0,
+      amount,
+      previousPercent: 0,
+      nextPercent: 100,
+      eventType: "binary",
+      markedValue: true,
+      markedAt: completedAt.toISOString(),
+    });
+    logsByDay.set(day, byItem);
+  }
+
+  // PC sums — declared amount counts as earned when completed=true.
+  const provSums = Array.isArray(project?.provisionalSums)
+    ? project.provisionalSums
+    : [];
+  for (let i = 0; i < provSums.length; i += 1) {
+    const s = provSums[i];
+    if (!s?.completed) continue;
+    const amount = safeNum(s?.amount);
+    if (amount <= 0) continue;
+    const completedAt = parseOptionalDate(s?.completedAt) || new Date();
+    const day = isoDay(completedAt);
+    if (!day) continue;
+    const byItem = logsByDay.get(day) || new Map();
+    byItem.set(`pc::${i}`, {
+      itemKey: `pc::${i}`,
+      sn: i + 1,
+      description: `PC sum — ${s?.description || `item #${i + 1}`}`,
+      kind: "provisional",
+      qty: 1,
+      unit: "sum",
+      rate: amount,
+      amount,
+      previousPercent: 0,
+      nextPercent: 100,
+      eventType: "binary",
+      markedValue: true,
+      markedAt: completedAt.toISOString(),
+    });
+    logsByDay.set(day, byItem);
+  }
+
+  // Variations — qty × rate counts as earned when completed=true.
+  const projectVariations = Array.isArray(project?.variations)
+    ? project.variations
+    : [];
+  for (let i = 0; i < projectVariations.length; i += 1) {
+    const v = projectVariations[i];
+    if (!v?.completed) continue;
+    const amount = safeNum(v?.qty) * safeNum(v?.rate);
+    if (amount <= 0) continue;
+    // Use completedAt if present, else fall back to issuedAt, else today.
+    const completedAt =
+      parseOptionalDate(v?.completedAt) ||
+      parseOptionalDate(v?.issuedAt) ||
+      new Date();
+    const day = isoDay(completedAt);
+    if (!day) continue;
+    const byItem = logsByDay.get(day) || new Map();
+    byItem.set(`var::${i}`, {
+      itemKey: `var::${i}`,
+      sn: i + 1,
+      description: `Variation — ${v?.description || `item #${i + 1}`}`,
+      kind: "variation",
+      qty: safeNum(v?.qty),
+      unit: String(v?.unit || ""),
+      rate: safeNum(v?.rate),
+      amount,
+      previousPercent: 0,
+      nextPercent: 100,
+      eventType: "binary",
+      markedValue: true,
+      markedAt: completedAt.toISOString(),
+    });
+    logsByDay.set(day, byItem);
+  }
+
   return [...logsByDay.entries()]
     .map(([date, byItem]) => {
       // Only show entries where net value was earned that day (positive
@@ -1109,6 +1236,11 @@ async function updateProject(req, res) {
       variations,
       preliminaryPercent,
       preliminaryItems,
+      // Contingency + tax (VAT) percentages — see ContractSchema for
+      // formula context. Default to 5% and 7.5% respectively when the
+      // user hasn't touched them.
+      contingencyPercent,
+      taxPercent,
     } = req.body || {};
 
     const userId = getUserObjectId(req);
@@ -1310,6 +1442,45 @@ async function updateProject(req, res) {
           }
           return true;
         });
+
+        // Delete-protection. The lock guard above filters incoming
+        // items against baseItems, but if the client OMITS a base item
+        // (e.g. the user deleted a row in their local state and the
+        // disabled button was bypassed somehow), we'd silently drop it
+        // from project.items. That would shrink the contract sum.
+        //
+        // Walk baseItems and re-insert any that don't appear in the
+        // already-filtered lockedItems. The restored items preserve
+        // the QS's previous valuation state (percentComplete, actuals)
+        // by reading from project.items, not baseItems, when present.
+        const incomingIdents = new Set(
+          lockedItems.map((it, idx) => itemIdentity(it, idx)),
+        );
+        const restoredItems = [];
+        for (const base of contract.baseItems || []) {
+          const baseId = String(base.identity || "");
+          if (!baseId || incomingIdents.has(baseId)) continue;
+          // Try to find the previous DB version (carries actuals /
+          // percent / status that the client may have lost). Fall
+          // back to the contract baseline values.
+          const prev = previousByIdent.get(baseId);
+          const restore = prev ? (prev.toObject ? prev.toObject() : { ...prev }) : null;
+          restoredItems.push(
+            restore || {
+              sn: base.sn,
+              code: base.code || "",
+              description: base.description || "",
+              takeoffLine: base.takeoffLine || "",
+              materialName: base.materialName || "",
+              unit: base.unit || "",
+              qty: safeNum(base.qty),
+              rate: safeNum(base.rate),
+            },
+          );
+        }
+        if (restoredItems.length) {
+          lockedItems = lockedItems.concat(restoredItems);
+        }
       }
 
       const tracked = applyValuationTracking({
@@ -1374,6 +1545,28 @@ async function updateProject(req, res) {
         project.contract.preliminaryPercent = clampPercentage(
           n,
           safeNum(project.contract?.preliminaryPercent) || 7.5,
+        );
+      }
+    }
+
+    if (contingencyPercent !== undefined) {
+      const n = Number(contingencyPercent);
+      if (Number.isFinite(n)) {
+        if (!project.contract) project.contract = {};
+        project.contract.contingencyPercent = clampPercentage(
+          n,
+          safeNum(project.contract?.contingencyPercent),
+        );
+      }
+    }
+
+    if (taxPercent !== undefined) {
+      const n = Number(taxPercent);
+      if (Number.isFinite(n)) {
+        if (!project.contract) project.contract = {};
+        project.contract.taxPercent = clampPercentage(
+          n,
+          safeNum(project.contract?.taxPercent),
         );
       }
     }
@@ -1558,7 +1751,20 @@ async function lockContract(req, res) {
       0,
     );
     const prelim = ((measured + provisional) * preliminaryPercent) / 100;
-    const contractSum = measured + provisional + prelim;
+    // Contingency + tax applied AFTER prelim. Mirrors the QS standard
+    // grand-summary cascade (Sub-total → +Contingency → +VAT → Final).
+    const subtotal = measured + provisional + prelim;
+    const contingencyPercent = clampPercentage(
+      Number(req.body?.contingencyPercent),
+      safeNum(project.contract?.contingencyPercent) || 5,
+    );
+    const taxPercent = clampPercentage(
+      Number(req.body?.taxPercent),
+      safeNum(project.contract?.taxPercent) || 7.5,
+    );
+    const contingency = (subtotal * contingencyPercent) / 100;
+    const tax = ((subtotal + contingency) * taxPercent) / 100;
+    const contractSum = subtotal + contingency + tax;
 
     project.contract = {
       ...(project.contract?.toObject ? project.contract.toObject() : project.contract || {}),
@@ -1567,11 +1773,15 @@ async function lockContract(req, res) {
       lockedBy: userId,
       approvedAt,
       preliminaryPercent,
+      contingencyPercent,
+      taxPercent,
       notes,
       baseItems,
       measuredAtLock: measured,
       provisionalAtLock: provisional,
       preliminaryAtLock: prelim,
+      contingencyAtLock: contingency,
+      taxAtLock: tax,
       contractSum,
       lockPinHash,
     };
@@ -2356,9 +2566,21 @@ async function getPublicDashboard(req, res) {
     const preliminaryForContract = contract?.locked
       ? Number(contract.preliminaryAtLock || 0)
       : ((measuredForContract + provisionalForContract) * preliminaryPercent) / 100;
+    // Contingency + tax cascade — same formula as the lock flow.
+    // QS standard: Sub-total → +Contingency → +VAT → Final.
+    const contingencyPercent = Number(contract?.contingencyPercent || 0);
+    const taxPercent = Number(contract?.taxPercent || 0);
+    const subtotalForContract =
+      measuredForContract + provisionalForContract + preliminaryForContract;
+    const contingencyForContract = contract?.locked
+      ? Number(contract.contingencyAtLock || 0)
+      : (subtotalForContract * contingencyPercent) / 100;
+    const taxForContract = contract?.locked
+      ? Number(contract.taxAtLock || 0)
+      : ((subtotalForContract + contingencyForContract) * taxPercent) / 100;
     const contractSum = contract?.locked
       ? Number(contract.contractSum || 0)
-      : measuredForContract + provisionalForContract + preliminaryForContract;
+      : subtotalForContract + contingencyForContract + taxForContract;
 
     // Preliminary progress — how much of the preliminary pool has been earned.
     const preliminaryItems = Array.isArray(project.preliminaryItems)
@@ -2548,6 +2770,10 @@ async function getPublicDashboard(req, res) {
       preliminaryOutstanding,
       preliminaryCompletedCount,
       preliminaryItemsCount: preliminaryItems.length,
+      contingencyPercent,
+      contingencyAmount: contingencyForContract,
+      taxPercent,
+      taxAmount: taxForContract,
       provisionalTotal,
       variationsTotal,
       // Contract breakdown — the four numbers that add up to the
@@ -2561,14 +2787,19 @@ async function getPublicDashboard(req, res) {
         measured: measuredForContract,
         provisional: provisionalForContract,
         preliminaries: preliminaryForContract,
+        contingency: contingencyForContract,
+        tax: taxForContract,
+        contingencyPercent,
+        taxPercent,
         variations: variationsTotal,
         // Pre-summed for the client so it doesn't have to recompute.
-        // Equals contractSum when locked (or grossAmount+prov+prelim
-        // when unlocked) — these are the same number by construction.
+        // Equals contractSum when locked.
         plannedSum:
-          measuredForContract + provisionalForContract + preliminaryForContract,
+          measuredForContract + provisionalForContract + preliminaryForContract +
+          contingencyForContract + taxForContract,
         currentValue:
-          measuredForContract + provisionalForContract + preliminaryForContract + variationsTotal,
+          measuredForContract + provisionalForContract + preliminaryForContract +
+          contingencyForContract + taxForContract + variationsTotal,
       },
       costPercent: Math.round(costPercent * 10) / 10,
       costVsProgressDelta: Math.round(delta * 10) / 10,

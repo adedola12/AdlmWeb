@@ -623,22 +623,62 @@ function RateCell({
 
 /**
  * ExpandInput — On focus, shows a popup overlay with full-width input
- * for Actual Qty and Actual Rate fields.
+ * for Actual Qty / Actual Rate fields and the materials view.
+ *
+ * Supports Excel-style formula entry: anything starting with "=" is
+ * parsed by evaluateFormula (=1.2*1.5*95000 → 171000) and the result
+ * is committed on Enter or blur. A small live-preview strip shows
+ * the evaluated number while you type, with a red error chip when
+ * the expression is invalid.
  */
 function ExpandInput({ value, placeholder, onChange, type = "number" }) {
   const [focused, setFocused] = useState(false);
+  // Holds the raw =-prefixed expression while the user is typing it.
+  // Cleared once committed (commitFormula clears it; switching away
+  // from formula mode also clears it).
+  const [formulaDraft, setFormulaDraft] = useState("");
   const wrapRef = useRef(null);
+
+  const formulaResult = isFormulaInput(formulaDraft)
+    ? evaluateFormula(formulaDraft)
+    : null;
 
   useEffect(() => {
     if (!focused) return;
     function handleClick(e) {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        // Commit a pending valid formula before closing on outside click.
+        if (formulaResult && formulaResult.ok) {
+          onChange?.(
+            String(Math.round(formulaResult.value * 100) / 100),
+          );
+        }
         setFocused(false);
+        setFormulaDraft("");
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [focused]);
+  }, [focused, formulaResult, onChange]);
+
+  const commitFormula = () => {
+    if (!formulaResult || !formulaResult.ok) return false;
+    onChange?.(String(Math.round(formulaResult.value * 100) / 100));
+    setFormulaDraft("");
+    setFocused(false);
+    return true;
+  };
+
+  const handleChange = (e) => {
+    const v = e.target.value;
+    if (isFormulaInput(v)) {
+      // Stash the formula text; don't propagate to parent until commit.
+      setFormulaDraft(v);
+      return;
+    }
+    if (formulaDraft) setFormulaDraft("");
+    onChange?.(v);
+  };
 
   if (!focused) {
     return (
@@ -659,17 +699,68 @@ function ExpandInput({ value, placeholder, onChange, type = "number" }) {
     <div ref={wrapRef} className="absolute left-0 top-0 z-40 w-56">
       <input
         autoFocus
-        className="input !h-9 w-full !px-2 !py-1 text-sm shadow-lg border-blue-300 rounded-lg"
-        type={type}
+        className={`input !h-9 w-full !px-2 !py-1 text-sm shadow-lg rounded-lg ${
+          formulaResult && !formulaResult.ok
+            ? "border-rose-400"
+            : formulaResult && formulaResult.ok
+              ? "border-emerald-400"
+              : "border-blue-300"
+        }`}
+        // Allow text input when the user is typing a formula
+        // (numbers don't permit "=").
+        type={formulaDraft ? "text" : type}
         step="any"
-        value={value}
+        value={formulaDraft || value}
         placeholder={placeholder}
-        onChange={(e) => onChange?.(e.target.value)}
+        onChange={handleChange}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setFocused(false);
-          if (e.key === "Enter") setFocused(false);
+          if (e.key === "Escape") {
+            setFormulaDraft("");
+            setFocused(false);
+            return;
+          }
+          if (e.key === "Enter") {
+            if (formulaResult) {
+              e.preventDefault();
+              commitFormula();
+            } else {
+              setFocused(false);
+            }
+          }
         }}
       />
+      {/* Live formula preview — green when valid, rose when not. Hides
+          when the input isn't a formula. */}
+      {formulaResult ? (
+        <div
+          className={`mt-1 rounded-md border px-2 py-1 text-[11px] ${
+            formulaResult.ok
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-rose-200 bg-rose-50 text-rose-800"
+          }`}
+        >
+          {formulaResult.ok ? (
+            <span>
+              <span className="opacity-70">= </span>
+              <strong>
+                {formatRate(formulaResult.value) || formulaResult.value}
+              </strong>
+              <span className="ml-2 text-[10px] opacity-70">
+                Enter to apply
+              </span>
+            </span>
+          ) : (
+            <span>
+              <strong>Formula error:</strong> {formulaResult.error}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="mt-1 text-[10px] text-slate-400 px-1">
+          Tip: start with <code className="rounded bg-slate-100 px-1 font-mono">=</code>{" "}
+          for a formula (e.g. <code className="font-mono">=1.2*1.5</code>)
+        </div>
+      )}
     </div>
   );
 }
@@ -725,6 +816,14 @@ export default function ProjectBillTable({
   contractApprovedAt = null,
   contractSum = 0,
   preliminaryPercent = 7.5,
+  // Contingency + tax (VAT) as percentages of (measured + prov + prelim)
+  // and (subtotal + contingency) respectively. The QS grand summary
+  // cascade: Sub-total → +Contingency → +VAT → Planned Total. Default
+  // values match Nigerian QS practice but are user-editable.
+  contingencyPercent = 5,
+  taxPercent = 7.5,
+  onContingencyPercentChange,
+  onTaxPercentChange,
   contractBusy = false,
   onLockContract,
   onUnlockContract,
@@ -1053,8 +1152,22 @@ export default function ProjectBillTable({
     (preliminaryAmount * preliminaryAllocCompleted) / preliminaryAllocBase;
   const preliminaryOutstanding = Math.max(0, preliminaryAmount - preliminaryDone);
 
-  const projectTotal =
-    grossAmount + provisionalTotal + preliminaryAmount + variationsTotal;
+  // QS grand-summary cascade:
+  //   Sub-total = measured + provisional + preliminaries
+  //   Contingency = sub-total × contingency%
+  //   Tax (VAT) = (sub-total + contingency) × tax%
+  //   Planned Total = sub-total + contingency + tax
+  //   Current Total = Planned + variations (claimed during execution)
+  const boqSubtotal = grossAmount + provisionalTotal + preliminaryAmount;
+  const contingencyAmount =
+    (boqSubtotal * safeNum(contingencyPercent)) / 100;
+  const taxAmount =
+    ((boqSubtotal + contingencyAmount) * safeNum(taxPercent)) / 100;
+  const plannedProjectTotal =
+    boqSubtotal + contingencyAmount + taxAmount;
+  // projectTotal is the LIVE total — what users actually owe today
+  // (planned + variations issued so far).
+  const projectTotal = plannedProjectTotal + variationsTotal;
 
   // Helper for sortable header
   const SortHeader = ({ col, children, className = "", ...rest }) => (
@@ -1629,14 +1742,19 @@ export default function ProjectBillTable({
                 icon={FaPlus}
                 label="Add sum"
                 onClick={() => {
+                  if (contractLocked) return;
                   onAddProvisionalSum?.();
                   setTimeout(
                     () => scrollToRef(provisionalSectionRef.current),
                     30,
                   );
                 }}
-                title="Add a provisional / PC sum"
-                disabled={!onAddProvisionalSum}
+                title={
+                  contractLocked
+                    ? "Contract locked — unlock to add PC sums"
+                    : "Add a provisional / PC sum"
+                }
+                disabled={!onAddProvisionalSum || contractLocked}
               />
               <RibbonButton
                 icon={FaListUl}
@@ -1960,25 +2078,27 @@ export default function ProjectBillTable({
                     <td className="px-2 py-2 relative">
                       <div className="flex items-start gap-1">
                         {showMaterials ? (
-                          /* Materials view — keep simple number input + picker */
+                          /* Materials view — uses the full RateCell so users
+                             get name search + formula + number input. The
+                             standalone "Pick" button (kept below) still works
+                             as an alternative rapid-pick UX. */
                           <>
-                            <input
-                              className={`input !h-8 !w-full !min-w-0 !px-1.5 !py-0.5 text-xs ${
-                                contractLocked
-                                  ? "bg-slate-50 text-slate-600 cursor-not-allowed"
-                                  : ""
-                              }`}
-                              type="number"
-                              step="any"
+                            <RateCell
                               value={rateValue}
-                              placeholder={formatRate(item?.rate || 0)}
-                              disabled={contractLocked}
-                              title={
-                                contractLocked
-                                  ? "Contract locked — unlock to edit rates"
-                                  : undefined
+                              placeholder={String(Number(item?.rate || 0))}
+                              onChange={(v) => onRateChange?.(row.i, v)}
+                              onSearchRateGen={onSearchRateGen}
+                              canRateGenBoq={canRateGen || canRateGenBoq}
+                              boqCandidates={candidates || []}
+                              itemUnit={row.unit || item?.unit || ""}
+                              itemDescription={
+                                row.description ||
+                                item?.description ||
+                                item?.materialName ||
+                                ""
                               }
-                              onChange={(e) => onRateChange?.(row.i, e.target.value)}
+                              disabled={contractLocked}
+                              disabledHint="Contract locked — unlock it to edit rates"
                             />
 
                             {candidates.length ? (
@@ -2089,10 +2209,23 @@ export default function ProjectBillTable({
 
                     {showActualColumns ? (
                       <td className="px-2 py-2 relative">
-                        <ExpandInput
+                        {/* Actual Rate cell uses the full RateCell so
+                            users can: (a) type a number, (b) start
+                            with "=" for a formula, or (c) type a name
+                            to search RateGen — same behaviour as the
+                            contract Rate cell, but writes to actualRate
+                            instead of rate. NOT locked when the
+                            contract is locked because actuals are
+                            valuation entries, not contract edits. */}
+                        <RateCell
                           value={actualRateValue}
                           placeholder="Measured rate"
                           onChange={(v) => onActualRateChange?.(row.i, v)}
+                          onSearchRateGen={onSearchRateGen}
+                          canRateGenBoq={canRateGenBoq}
+                          boqCandidates={getBoqCandidatesForItem?.(item) || []}
+                          itemUnit={row.unit || item?.unit || ""}
+                          itemDescription={row.description || item?.description || ""}
                         />
                       </td>
                     ) : null}
@@ -2136,9 +2269,21 @@ export default function ProjectBillTable({
                         </button>
                         <button
                           type="button"
-                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition"
-                          title="Delete row (you'll be able to undo)"
-                          onClick={() => onDeleteItem?.(row.i)}
+                          className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
+                            contractLocked
+                              ? "text-slate-300 cursor-not-allowed"
+                              : "hover:bg-red-50 text-slate-400 hover:text-red-600"
+                          }`}
+                          title={
+                            contractLocked
+                              ? "Contract locked — unlock it to delete measured items, or raise a variation"
+                              : "Delete row (you'll be able to undo)"
+                          }
+                          disabled={contractLocked}
+                          onClick={() => {
+                            if (contractLocked) return;
+                            onDeleteItem?.(row.i);
+                          }}
                         >
                           <FaTrashAlt className="text-[10px]" />
                         </button>
@@ -2442,7 +2587,12 @@ export default function ProjectBillTable({
                   type="button"
                   className="btn btn-xs"
                   onClick={onNormalizePreliminaryAllocations}
-                  title="Reset to an even allocation across all listed items"
+                  disabled={contractLocked}
+                  title={
+                    contractLocked
+                      ? "Contract locked — unlock to rebalance allocations"
+                      : "Reset to an even allocation across all listed items"
+                  }
                 >
                   Even split
                 </button>
@@ -2452,6 +2602,12 @@ export default function ProjectBillTable({
                   type="button"
                   className="btn btn-xs"
                   onClick={onAddPreliminaryItem}
+                  disabled={contractLocked}
+                  title={
+                    contractLocked
+                      ? "Contract locked — unlock to add a preliminary item"
+                      : undefined
+                  }
                 >
                   + Add item
                 </button>
@@ -2638,9 +2794,21 @@ export default function ProjectBillTable({
                           {onRemovePreliminaryItem ? (
                             <button
                               type="button"
-                              className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600"
-                              onClick={() => onRemovePreliminaryItem(i)}
-                              title="Remove this row"
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded ${
+                                contractLocked
+                                  ? "text-slate-300 cursor-not-allowed"
+                                  : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              }`}
+                              disabled={contractLocked}
+                              onClick={() => {
+                                if (contractLocked) return;
+                                onRemovePreliminaryItem(i);
+                              }}
+                              title={
+                                contractLocked
+                                  ? "Contract locked — unlock to remove preliminaries"
+                                  : "Remove this row"
+                              }
                             >
                               <FaTrashAlt className="text-[10px]" />
                             </button>
@@ -2807,9 +2975,21 @@ export default function ProjectBillTable({
                       <td className="px-1 py-2 text-center">
                         <button
                           type="button"
-                          className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
-                          title="Remove this row"
-                          onClick={() => onRemoveProvisionalSum?.(i)}
+                          className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
+                            contractLocked
+                              ? "text-slate-300 cursor-not-allowed"
+                              : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          }`}
+                          title={
+                            contractLocked
+                              ? "Contract locked — unlock to remove PC sums"
+                              : "Remove this row"
+                          }
+                          disabled={contractLocked}
+                          onClick={() => {
+                            if (contractLocked) return;
+                            onRemoveProvisionalSum?.(i);
+                          }}
                         >
                           <FaTrashAlt className="text-[10px]" />
                         </button>
@@ -2847,69 +3027,164 @@ export default function ProjectBillTable({
       ) : null}
 
       {(provisionalTotal > 0 || variationsTotal !== 0 || computedShown.length) ? (
-        <div className="rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-white p-4">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-800/60 p-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-slate-900">
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Project total
             </div>
-            <div className="text-[11px] text-slate-500">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
               {contractLocked
                 ? `Contract locked · baseline ${money(contractSum)}`
                 : "Draft — lock contract to freeze the baseline."}
             </div>
           </div>
-          <div className="grid gap-2 text-xs sm:grid-cols-5">
+
+          {/* Sub-total breakdown — three rows that add up to the BoQ
+              subtotal (measured + prov + prelim). */}
+          <div className="grid gap-2 text-xs sm:grid-cols-3">
             <div>
-              <div className="text-slate-500">Measured work</div>
-              <div className="text-sm font-semibold text-slate-900">
+              <div className="text-slate-500 dark:text-slate-400">Measured work</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {money(grossAmount)}
               </div>
             </div>
             <div>
-              <div className="text-slate-500">Provisional sums</div>
-              <div className="text-sm font-semibold text-slate-900">
+              <div className="text-slate-500 dark:text-slate-400">Provisional sums</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {money(provisionalTotal)}
               </div>
             </div>
             <div>
-              <div className="text-slate-500">
+              <div className="text-slate-500 dark:text-slate-400">
                 Preliminaries ({safeNum(preliminaryPercent).toFixed(1)}%)
               </div>
-              <div className="text-sm font-semibold text-slate-900">
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {money(preliminaryAmount)}
               </div>
               {preliminaryDone > 0 ? (
-                <div className="mt-0.5 text-[10px] text-emerald-700">
+                <div className="mt-0.5 text-[10px] text-emerald-700 dark:text-emerald-400">
                   Done: {money(preliminaryDone)}
                 </div>
               ) : null}
               {preliminaryOutstanding > 0 && preliminaryDone > 0 ? (
-                <div className="text-[10px] text-slate-500">
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
                   Outstanding: {money(preliminaryOutstanding)}
                 </div>
               ) : null}
             </div>
-            <div>
-              <div className="text-slate-500">Variations (instructions)</div>
-              <div
-                className={`text-sm font-semibold ${
-                  variationsTotal > 0
-                    ? "text-amber-700"
-                    : variationsTotal < 0
-                    ? "text-red-700"
-                    : "text-slate-900"
-                }`}
-              >
-                {money(variationsTotal)}
+          </div>
+
+          {/* Sub-total line — bold, separates BoQ from add-ons */}
+          <div className="mt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-2 text-xs">
+            <div className="font-semibold text-slate-700 dark:text-slate-200">
+              BoQ sub-total
+            </div>
+            <div className="font-bold text-slate-900 dark:text-slate-100">
+              {money(boqSubtotal)}
+            </div>
+          </div>
+
+          {/* Contingency + Tax row — editable percent inputs inline.
+              The cascade follows the standard QS grand-summary
+              convention: Sub-total → +Contingency → +Tax → Planned. */}
+          <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+            <div className="flex items-center justify-between gap-2 rounded-md bg-white dark:bg-slate-700/40 px-2 py-1.5 border border-slate-100 dark:border-slate-600">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 dark:text-slate-400">Contingency</span>
+                {onContingencyPercentChange ? (
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={safeNum(contingencyPercent)}
+                    onChange={(e) =>
+                      onContingencyPercentChange(
+                        Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                      )
+                    }
+                    disabled={contractLocked}
+                    className="w-12 rounded border border-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-1 py-0.5 text-[10px] text-right disabled:opacity-50"
+                  />
+                ) : (
+                  <span className="text-[10px] text-slate-600 dark:text-slate-300">
+                    {safeNum(contingencyPercent).toFixed(1)}
+                  </span>
+                )}
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">%</span>
+              </div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {money(contingencyAmount)}
               </div>
             </div>
-            <div>
-              <div className="text-slate-500">Total project cost</div>
-              <div className="text-base font-bold text-adlm-blue-700">
-                {money(projectTotal)}
+            <div className="flex items-center justify-between gap-2 rounded-md bg-white dark:bg-slate-700/40 px-2 py-1.5 border border-slate-100 dark:border-slate-600">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 dark:text-slate-400">Tax / VAT</span>
+                {onTaxPercentChange ? (
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={safeNum(taxPercent)}
+                    onChange={(e) =>
+                      onTaxPercentChange(
+                        Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                      )
+                    }
+                    disabled={contractLocked}
+                    className="w-12 rounded border border-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 px-1 py-0.5 text-[10px] text-right disabled:opacity-50"
+                  />
+                ) : (
+                  <span className="text-[10px] text-slate-600 dark:text-slate-300">
+                    {safeNum(taxPercent).toFixed(1)}
+                  </span>
+                )}
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">%</span>
+              </div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {money(taxAmount)}
               </div>
             </div>
           </div>
+
+          {/* Planned project total — what was agreed at lock. */}
+          <div className="mt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-2 text-xs">
+            <div className="font-semibold text-slate-700 dark:text-slate-200">
+              Planned project total
+            </div>
+            <div className="font-bold text-adlm-blue-700 dark:text-adlm-blue-400">
+              {money(plannedProjectTotal)}
+            </div>
+          </div>
+
+          {/* Variations (only visible when there are any) and current total */}
+          {variationsTotal !== 0 ? (
+            <>
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <div className="text-slate-600 dark:text-slate-300">
+                  + Variations (instructions during execution)
+                </div>
+                <div
+                  className={`font-semibold ${
+                    variationsTotal > 0
+                      ? "text-amber-700 dark:text-amber-400"
+                      : "text-red-700 dark:text-red-400"
+                  }`}
+                >
+                  {money(variationsTotal)}
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between border-t-2 border-adlm-blue-200 dark:border-adlm-blue-700 pt-2 text-sm">
+                <div className="font-bold text-slate-900 dark:text-slate-100">
+                  Current total project cost
+                </div>
+                <div className="text-lg font-bold text-adlm-blue-700 dark:text-adlm-blue-300">
+                  {money(projectTotal)}
+                </div>
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
 

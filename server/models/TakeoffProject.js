@@ -413,12 +413,25 @@ const ContractSchema = new mongoose.Schema(
     // Preliminaries as a percentage of (measured work + provisional sums).
     // Typical range in Nigerian practice is 5 – 10%. Stored as whole number.
     preliminaryPercent: { type: Number, default: 7.5 },
+    // Contingency reserve as a % of (measured + provisional + preliminaries).
+    // Allows the QS to allow for unforeseen costs. 5% is the QS standard;
+    // can be 0 to disable.
+    contingencyPercent: { type: Number, default: 5 },
+    // VAT / sales tax as a % of (subtotal + contingency). Nigeria's
+    // standard VAT is 7.5%. Set to 0 if the contract is tax-exclusive
+    // or VAT is handled outside the build.
+    taxPercent: { type: Number, default: 7.5 },
     // Frozen totals at lock time so the client can compare live actuals
     // against the contract baseline even after edits.
     contractSum: { type: Number, default: 0 },
     measuredAtLock: { type: Number, default: 0 },
     provisionalAtLock: { type: Number, default: 0 },
     preliminaryAtLock: { type: Number, default: 0 },
+    // Frozen contingency + tax amounts at lock time. Lets the client
+    // show "contract included ₦5.7M contingency" even years later,
+    // independent of the live BoQ values.
+    contingencyAtLock: { type: Number, default: 0 },
+    taxAtLock: { type: Number, default: 0 },
     baseItems: { type: [ContractBaseItemSchema], default: [] },
     notes: { type: String, default: "" },
     // bcrypt-hashed 4-digit PIN required to unlock the contract once locked.
