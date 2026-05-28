@@ -86,7 +86,18 @@ function StatusBadge({ status }) {
 // ─────────────────────────────────────────────────────────────────────
 // WBS / Task Table
 // ─────────────────────────────────────────────────────────────────────
-function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange, onStatusChange }) {
+function TaskTable({
+  tasks,
+  onEditTask,
+  onDeleteTask,
+  onAddTask,
+  onPercentChange,
+  onStatusChange,
+  // onActualDurationChange(taskId, days) — fired when the user types
+  // a number into the Actual-days input. Server derives variance vs
+  // planned and surfaces a slip/early pill underneath the input.
+  onActualDurationChange,
+}) {
   // Persist DOM refs for summary / section rows so the floating scroll nav
   // can jump to them. Stored in a ref-map keyed by taskId because tasks can
   // re-render on every keystroke (percent edit, status change, etc.).
@@ -287,6 +298,12 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
             <th className="px-3 py-2 font-semibold" style={{ minWidth: 280 }}>Name</th>
             <th className="px-3 py-2 font-semibold whitespace-nowrap" style={{ width: 110 }}>Start</th>
             <th className="px-3 py-2 font-semibold whitespace-nowrap" style={{ width: 110 }}>Finish</th>
+            {/* Days column — planned / actual / variance. Single
+                column keeps the table compact; the cell renders three
+                small lines stacked. */}
+            <th className="px-3 py-2 font-semibold text-right whitespace-nowrap" style={{ width: 110 }}>
+              Days (P / A)
+            </th>
             <th className="px-3 py-2 font-semibold text-right" style={{ width: 80 }}>%</th>
             <th className="px-3 py-2 font-semibold text-right whitespace-nowrap" style={{ width: 130 }}>Baseline ₦</th>
             <th className="px-3 py-2 font-semibold text-right whitespace-nowrap" style={{ width: 130 }}>Actual ₦</th>
@@ -467,6 +484,83 @@ function TaskTable({ tasks, onEditTask, onDeleteTask, onAddTask, onPercentChange
                 </td>
                 <td className={`px-3 py-2 align-top text-xs whitespace-nowrap ${isSummary ? "font-semibold text-slate-900" : "text-slate-700"}`}>
                   {fmtDateDisplay(displayEnd)}
+                </td>
+                {/* Days cell — planned (from durationDays) on top, actual
+                    (editable on leaves; rolled up on summaries) below,
+                    variance pill at the bottom. Hidden bookkeeping note:
+                    the server derives actualDurationDays from
+                    actualStartDate/actualEndDate when both are set and
+                    the user hasn't typed an explicit value. */}
+                <td className="px-3 py-2 align-top text-right text-xs whitespace-nowrap">
+                  {(() => {
+                    const planned = safeNum(
+                      isSummary && rollup ? rollup.durationDays : task.durationDays,
+                    );
+                    const actual = safeNum(
+                      task.computed?.actualDuration ?? task.actualDurationDays,
+                    );
+                    const variance = safeNum(task.computed?.scheduleVarianceDays);
+                    if (isSummary) {
+                      // Rolled-up summary: just show planned. Per-task
+                      // actuals aren't aggregated to summaries because
+                      // they'd double-count parallel work.
+                      return (
+                        <div className="text-slate-700">
+                          {planned > 0 ? `${planned}d` : "—"}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="inline-flex flex-col items-end gap-0.5">
+                        <span className="text-[10px] text-slate-500">
+                          P: {planned > 0 ? `${planned}d` : "—"}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={actual || ""}
+                          placeholder="Actual"
+                          onChange={(e) =>
+                            onActualDurationChange?.(
+                              task.taskId,
+                              Math.max(0, Number(e.target.value) || 0),
+                            )
+                          }
+                          className="w-16 rounded border-slate-200 px-1 py-0.5 text-[11px] text-right"
+                          title={
+                            actual > 0
+                              ? `Actual ${actual} days · planned was ${planned}`
+                              : "Enter actual duration in days"
+                          }
+                        />
+                        {actual > 0 && planned > 0 ? (
+                          <span
+                            className={`text-[9px] font-semibold ${
+                              variance > 0
+                                ? "text-rose-600 dark:text-rose-400"
+                                : variance < 0
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-slate-500"
+                            }`}
+                            title={
+                              variance > 0
+                                ? `Slip — task ran ${variance}d longer than planned`
+                                : variance < 0
+                                  ? `Finished ${Math.abs(variance)}d early`
+                                  : "On schedule"
+                            }
+                          >
+                            {variance > 0
+                              ? `+${variance}d slip`
+                              : variance < 0
+                                ? `${variance}d early`
+                                : "on time"}
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-3 py-2 align-top text-right">
                   {isSummary ? (
@@ -785,6 +879,9 @@ export default function PmDetailsView({
   onDeleteTask,
   onPercentChange,
   onStatusChange,
+  // Forwarded to TaskTable for the Actual-days input. Parent should
+  // patch the corresponding task's actualDurationDays.
+  onActualDurationChange,
   onAddRisk,
   onEditRisk,
   onDeleteRisk,
@@ -956,6 +1053,7 @@ export default function PmDetailsView({
             onAddTask={onAddTask}
             onPercentChange={onPercentChange}
             onStatusChange={onStatusChange}
+            onActualDurationChange={onActualDurationChange}
           />
         ) : subTab === "risks" ? (
           <RiskTable

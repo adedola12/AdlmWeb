@@ -268,6 +268,14 @@ const PmTaskSchema = new mongoose.Schema(
     baselineStart: { type: Date, default: null },
     baselineEnd: { type: Date, default: null },
     durationDays: { type: Number, default: 0 },
+    // Actual time tracking — QS-recorded "this task really took N days".
+    // When both actualStartDate and actualEndDate are set, the duration
+    // can be auto-derived (server falls back to that calc in summarise).
+    // Lets users see schedule slip (actual − planned days) alongside the
+    // existing cost variance.
+    actualStartDate: { type: Date, default: null },
+    actualEndDate: { type: Date, default: null },
+    actualDurationDays: { type: Number, default: 0 },
     percentComplete: { type: Number, default: 0 }, // 0-100
     predecessors: { type: [String], default: [] }, // array of taskIds
     baselineCost: { type: Number, default: 0 },

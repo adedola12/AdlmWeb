@@ -367,6 +367,20 @@ export default function ProjectManagementTab({
     );
     markDirty();
   }
+  // Actual-duration handler — the user types into the "Days (P / A)"
+  // column on the WBS table. Stores in days; server computes variance
+  // vs planned durationDays at dashboard-compute time.
+  function changeActualDuration(taskId, value) {
+    const days = Math.max(0, Number(value) || 0);
+    setTasks((prev) =>
+      prev.map((t) =>
+        String(t.taskId) === String(taskId)
+          ? { ...t, actualDurationDays: days }
+          : t,
+      ),
+    );
+    markDirty();
+  }
 
   // ── Risk handlers ──────────────────────────────────────────────────
   function openAddRisk() {
@@ -531,6 +545,7 @@ export default function ProjectManagementTab({
           onDeleteTask={deleteTask}
           onPercentChange={changePercent}
           onStatusChange={changeStatus}
+          onActualDurationChange={changeActualDuration}
           onAddRisk={openAddRisk}
           onEditRisk={openEditRisk}
           onDeleteRisk={deleteRisk}

@@ -341,47 +341,54 @@ function BalanceIndicator({ balance }) {
     balanced: {
       icon: FaCheckCircle,
       title: "Plan balanced",
-      detail: "PM baseline total equals the BoQ contract sum.",
-      bg: "from-emerald-50 to-emerald-100",
-      border: "border-emerald-300",
-      text: "text-emerald-800",
-      iconColor: "text-emerald-600",
+      detail: "PM baseline total equals the contract sum.",
+      bg: "from-emerald-50 to-emerald-100 dark:from-emerald-900/40 dark:to-emerald-800/30",
+      border: "border-emerald-300 dark:border-emerald-700",
+      text: "text-emerald-800 dark:text-emerald-200",
+      iconColor: "text-emerald-600 dark:text-emerald-400",
     },
     over: {
       icon: FaExclamationTriangle,
-      title: "Over budget",
-      detail: `PM baseline exceeds ${balance?.contractLocked ? "contract sum" : "BoQ total"} by ₦${fmtMoneyDec(diff)} (${pct.toFixed(1)}%).`,
-      bg: "from-rose-50 to-rose-100",
-      border: "border-rose-300",
-      text: "text-rose-800",
-      iconColor: "text-rose-600",
+      title: "Plan exceeds contract",
+      // Genuine warning — the WBS has been priced higher than the
+      // contract value. Variations are the proper channel for any
+      // legitimate over-allocation.
+      detail: `PM baseline exceeds ${balance?.contractLocked ? "contract sum" : "BoQ total"} by ₦${fmtMoneyDec(diff)} (${pct.toFixed(1)}%). Review weighted links or move excess scope to variations.`,
+      bg: "from-rose-50 to-rose-100 dark:from-rose-900/40 dark:to-rose-800/30",
+      border: "border-rose-300 dark:border-rose-700",
+      text: "text-rose-800 dark:text-rose-200",
+      iconColor: "text-rose-600 dark:text-rose-400",
     },
     under: {
-      icon: FaExclamationTriangle,
-      title: "Under budget",
-      detail: `PM baseline is ₦${fmtMoneyDec(Math.abs(diff))} (${Math.abs(pct).toFixed(1)}%) below ${balance?.contractLocked ? "contract sum" : "BoQ total"}. Link more BoQ items or add manual cost.`,
-      bg: "from-amber-50 to-amber-100",
-      border: "border-amber-300",
-      text: "text-amber-800",
-      iconColor: "text-amber-600",
+      // PM baseline below contract sum used to read as a warning
+      // ("Under budget") which confused users. Re-framed as a
+      // POSITIVE cost-saving signal: the WBS is forecast to cost
+      // less than the agreed contract → that's a saving, not a gap.
+      icon: FaCheckCircle,
+      title: "Forecast saving",
+      detail: `PM baseline is ₦${fmtMoneyDec(Math.abs(diff))} (${Math.abs(pct).toFixed(1)}%) below ${balance?.contractLocked ? "contract sum" : "BoQ total"} — project is forecast to come in under contract.`,
+      bg: "from-emerald-50 to-emerald-100 dark:from-emerald-900/40 dark:to-emerald-800/30",
+      border: "border-emerald-300 dark:border-emerald-700",
+      text: "text-emerald-800 dark:text-emerald-200",
+      iconColor: "text-emerald-600 dark:text-emerald-400",
     },
     empty: {
       icon: FaTimesCircle,
       title: "No baseline cost yet",
       detail: "Add tasks and link them to BoQ items, or enter manual cost. The dashboard will then track project books.",
-      bg: "from-slate-50 to-slate-100",
-      border: "border-slate-300",
-      text: "text-slate-700",
-      iconColor: "text-slate-500",
+      bg: "from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700",
+      border: "border-slate-300 dark:border-slate-600",
+      text: "text-slate-700 dark:text-slate-200",
+      iconColor: "text-slate-500 dark:text-slate-400",
     },
     "no-data": {
       icon: FaBalanceScale,
       title: "Add tasks and BoQ items to balance the project books",
       detail: "Generate tasks from BoQ, import a schedule, or add tasks manually to start tracking.",
-      bg: "from-slate-50 to-slate-100",
-      border: "border-slate-300",
-      text: "text-slate-700",
-      iconColor: "text-slate-500",
+      bg: "from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700",
+      border: "border-slate-300 dark:border-slate-600",
+      text: "text-slate-700 dark:text-slate-200",
+      iconColor: "text-slate-500 dark:text-slate-400",
     },
   };
 
@@ -397,14 +404,25 @@ function BalanceIndicator({ balance }) {
         <div className="flex-1 min-w-0">
           <div className={`font-semibold ${c.text}`}>{c.title}</div>
           <div className={`mt-0.5 text-xs ${c.text} opacity-90`}>{c.detail}</div>
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-            <Stat label="Linked baseline" value={`₦${fmtMoney(linked)}`} tone="text-emerald-700" />
-            <Stat label="Manual baseline" value={`₦${fmtMoney(manual)}`} tone="text-sky-700" />
-            <Stat label="PM total" value={`₦${fmtMoney(total)}`} tone="text-slate-900" bold />
+          {/* When every task is BoQ-linked, the manual baseline tile
+              just shows ₦0 and adds noise — hide it. The grid collapses
+              from 4 → 3 columns to fill the space cleanly. */}
+          <div
+            className={`mt-3 grid gap-2 text-[11px] ${
+              manual > 0
+                ? "grid-cols-2 sm:grid-cols-4"
+                : "grid-cols-2 sm:grid-cols-3"
+            }`}
+          >
+            <Stat label="Linked baseline" value={`₦${fmtMoney(linked)}`} tone="text-emerald-700 dark:text-emerald-300" />
+            {manual > 0 ? (
+              <Stat label="Manual baseline" value={`₦${fmtMoney(manual)}`} tone="text-sky-700 dark:text-sky-300" />
+            ) : null}
+            <Stat label="PM total" value={`₦${fmtMoney(total)}`} tone="text-slate-900 dark:text-slate-100" bold />
             <Stat
-              label={balance?.contractLocked ? "Contract sum" : "BoQ total"}
+              label={balance?.contractLocked ? "Contract sum" : "Planned total"}
               value={`₦${fmtMoney(ref)}`}
-              tone="text-slate-900"
+              tone="text-slate-900 dark:text-slate-100"
               bold
             />
           </div>
@@ -416,8 +434,8 @@ function BalanceIndicator({ balance }) {
 
 function Stat({ label, value, tone = "text-slate-900", bold }) {
   return (
-    <div className="rounded-lg bg-white/70 px-2.5 py-1.5">
-      <div className="text-[9px] uppercase tracking-wide text-slate-500">{label}</div>
+    <div className="rounded-lg bg-white/70 dark:bg-slate-800/70 px-2.5 py-1.5 border border-white/40 dark:border-slate-700/40">
+      <div className="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`mt-0.5 ${tone} ${bold ? "font-bold" : "font-semibold"} text-sm`}>
         {value}
       </div>
@@ -488,6 +506,20 @@ export default function PmDashboardView({
       String(t?.source || "").startsWith("msproject"),
     ).length;
   }, [dashboard?.tasks]);
+  // Count of tasks that have at least one BoQ link — drives the
+  // "Generate from BoQ" button visibility and the import-button label.
+  // Once the user has wired their schedule to the BoQ, they don't need
+  // "Generate" (it'd just create duplicates), and any subsequent MS
+  // Project import is functionally an UPDATE (smart-merge preserves
+  // their work — see #81).
+  const linkedTaskCount = React.useMemo(() => {
+    if (!Array.isArray(dashboard?.tasks)) return 0;
+    return dashboard.tasks.filter(
+      (t) => Array.isArray(t?.linkedBoqIdentities) && t.linkedBoqIdentities.length > 0,
+    ).length;
+  }, [dashboard?.tasks]);
+  const hasBoqLinks = linkedTaskCount > 0;
+  const hasAnyTasks = Array.isArray(dashboard?.tasks) && dashboard.tasks.length > 0;
   const headline = dashboard?.headline || {};
   const totals = dashboard?.totals || {};
   const buckets = dashboard?.buckets || {};
@@ -634,22 +666,44 @@ export default function PmDashboardView({
         </div>
       ) : null}
 
-      {/* Action strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+      {/* Action strip — adapts to WBS state. Once tasks have been
+          linked to BoQ items, hide "Generate from BoQ" (it'd just
+          create duplicates), and rename "Import MS Project" →
+          "Update MS Project" so the user understands re-imports are
+          smart-merge (preserve their progress, refresh schedule). */}
+      <div
+        className={`grid grid-cols-2 sm:grid-cols-3 gap-2.5 ${
+          hasBoqLinks ? "lg:grid-cols-4" : "lg:grid-cols-5"
+        }`}
+      >
         <ActionCard label="Add Task" subtitle="Schedule a work item" icon={FaPlus} color="blue" onClick={onAddTask} />
         <ActionCard label="Add Risk" subtitle="Log a risk" icon={FaExclamationTriangle} color="orange" onClick={onAddRisk} />
         <ActionCard label="Add Issue" subtitle="Log an issue" icon={FaBug} color="red" onClick={onAddIssue} />
+        {!hasBoqLinks ? (
+          <ActionCard
+            label="Generate from BoQ"
+            subtitle="One task per item"
+            icon={FaMagic}
+            color="purple"
+            onClick={onGenerateFromBoq}
+            disabled={generating}
+          />
+        ) : null}
         <ActionCard
-          label="Generate from BoQ"
-          subtitle="One task per item"
-          icon={FaMagic}
-          color="purple"
-          onClick={onGenerateFromBoq}
-          disabled={generating}
-        />
-        <ActionCard
-          label={importing ? "Importing…" : "Import MS Project"}
-          subtitle=".xml or .mpp"
+          label={
+            importing
+              ? hasAnyTasks
+                ? "Updating…"
+                : "Importing…"
+              : hasAnyTasks
+                ? "Update MS Project"
+                : "Import MS Project"
+          }
+          subtitle={
+            hasAnyTasks
+              ? "Refresh schedule (keeps progress + links)"
+              : ".xml or .mpp"
+          }
           icon={FaFileImport}
           color="slate"
           onClick={pickFile}
@@ -658,26 +712,39 @@ export default function PmDashboardView({
         <input ref={fileRef} type="file" accept=".xml,.mpp" className="hidden" onChange={onFile} />
       </div>
 
-      {/* Clear-imports row — only visible when imported tasks exist, so the
-          control doesn't add noise to a fresh project. */}
-      {importedTaskCount > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <div className="flex items-center gap-2 text-xs text-slate-600">
+      {/* Clear-imports row — hidden once tasks are linked to BoQ so
+          users can't accidentally nuke their wired-up WBS. They can
+          still reset via the Reset PM data button if they really
+          need to start over. */}
+      {importedTaskCount > 0 && !hasBoqLinks ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/40">
+          <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
             <FaFileImport className="text-slate-400" />
             <span>
-              <strong className="text-slate-900">{importedTaskCount}</strong>{" "}
+              <strong className="text-slate-900 dark:text-slate-100">{importedTaskCount}</strong>{" "}
               task{importedTaskCount === 1 ? "" : "s"} came from MS Project import.
             </span>
           </div>
           <button
             type="button"
             onClick={onClearImports}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-50 transition dark:bg-slate-800 dark:border-rose-700 dark:text-rose-300"
             title="Remove all MS Project imported tasks. Manual & BoQ-linked tasks are preserved."
           >
             <FaTimes className="text-[10px]" />
             Delete imported tasks
           </button>
+        </div>
+      ) : importedTaskCount > 0 ? (
+        // Linked-tasks-present variant: show the count as info but
+        // remove the destructive button.
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/40 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-200">
+          <FaFileImport className="text-emerald-500" />
+          <span>
+            <strong>{importedTaskCount}</strong> task{importedTaskCount === 1 ? "" : "s"}{" "}
+            imported from MS Project ·{" "}
+            <strong>{linkedTaskCount}</strong> linked to BoQ. Future re-imports will refresh the schedule and preserve your work.
+          </span>
         </div>
       ) : null}
 

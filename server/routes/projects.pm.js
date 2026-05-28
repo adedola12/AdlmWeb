@@ -120,6 +120,23 @@ function sanitizeTask(input, fallback = {}) {
     durationDays = days;
   }
 
+  // Actual schedule — QS-recorded start/end dates and resulting
+  // duration. When both actual dates are present and the user hasn't
+  // typed an explicit actualDurationDays, derive it from the date
+  // span (same convention as planned durationDays above).
+  const actualStartDate = parseOptionalDate(input.actualStartDate);
+  const actualEndDate = parseOptionalDate(input.actualEndDate);
+  let actualDurationDays = safeNum(input.actualDurationDays);
+  if (!actualDurationDays && actualStartDate && actualEndDate) {
+    actualDurationDays = Math.max(
+      0,
+      Math.round(
+        (actualEndDate.getTime() - actualStartDate.getTime()) /
+          (24 * 60 * 60 * 1000),
+      ),
+    );
+  }
+
   const predecessors = Array.isArray(input.predecessors)
     ? input.predecessors
         .map((p) => String(p || "").trim())
@@ -166,6 +183,10 @@ function sanitizeTask(input, fallback = {}) {
     priority,
     linkedBoqIdentities,
     linkedBoqWeights,
+    // Actual schedule tracking — pass-through with date validation.
+    actualStartDate,
+    actualEndDate,
+    actualDurationDays: Math.max(0, actualDurationDays),
     isMilestone: Boolean(input.isMilestone),
     isSummary: Boolean(input.isSummary),
     // Critical-path fields imported from MS Project — pass-through with

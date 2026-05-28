@@ -273,8 +273,19 @@ export function computeProjectScope(project) {
   // the formula behind it.
   const contractLocked = Boolean(contract?.locked);
   const contractSumLocked = safeNum(contract?.contractSum);
+  // Full QS grand-summary cascade for projectTotal so it matches the
+  // BoQ tab's "Total project cost" exactly:
+  //   Sub-total = Measured + Provisional + Preliminaries
+  //   + Contingency = Sub-total × contingencyPct/100
+  //   + Tax (VAT)   = (Sub-total + Contingency) × taxPct/100
+  //   + Variations  = live variations total
+  const contingencyPercent = safeNum(contract?.contingencyPercent);
+  const taxPercent = safeNum(contract?.taxPercent);
+  const subtotal = measuredPlanned + provisionalTotal + preliminaryPool;
+  const contingencyAmount = (subtotal * contingencyPercent) / 100;
+  const taxAmount = ((subtotal + contingencyAmount) * taxPercent) / 100;
   const projectTotal =
-    measuredPlanned + provisionalTotal + preliminaryPool + variationsTotal;
+    subtotal + contingencyAmount + taxAmount + variationsTotal;
 
   return {
     measured: {
@@ -482,6 +493,26 @@ function summariseTasks(tasks, itemIndex, now) {
       if (canonicalStatus !== "completed") criticalPathPending += 1;
     }
 
+    // Schedule variance — Actual duration vs planned duration in days.
+    // Positive = took longer (slip), negative = finished sooner.
+    const plannedDuration = safeNum(task?.durationDays);
+    let actualDuration = safeNum(task?.actualDurationDays);
+    if (!actualDuration) {
+      // Derive from actualStartDate / actualEndDate when both are set
+      // and the user hasn't typed an explicit value.
+      const aStart = asDate(task?.actualStartDate);
+      const aEnd = asDate(task?.actualEndDate);
+      if (aStart && aEnd) {
+        actualDuration = Math.max(
+          0,
+          Math.round((aEnd.getTime() - aStart.getTime()) / MS_DAY),
+        );
+      }
+    }
+    const scheduleVarianceDays = actualDuration > 0
+      ? actualDuration - plannedDuration
+      : 0;
+
     return {
       ...(task?.toObject ? task.toObject() : task),
       _computed: {
@@ -490,6 +521,9 @@ function summariseTasks(tasks, itemIndex, now) {
         earnedValue: earned,
         plannedValueToDate,
         isOverdue,
+        plannedDuration,
+        actualDuration,
+        scheduleVarianceDays,
       },
     };
   });

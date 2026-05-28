@@ -3511,13 +3511,67 @@ export default function ProjectsGeneric() {
     (acc, row) => acc + safeNum(row.fullAmount),
     0,
   );
-  const actualTrackedAmount = actualRows.reduce(
+  const measuredActualTracked = actualRows.reduce(
     (acc, row) => acc + safeNum(row.actualAmount),
     0,
   );
-  const actualVarianceAmount = actualTrackedAmount - plannedActualScopeAmount;
-  const actualVariancePercent = plannedActualScopeAmount > 0
-    ? (actualVarianceAmount / plannedActualScopeAmount) * 100
+
+  // Tracked value now spans the FULL scope, not just measured:
+  //   • Measured items with actualQty/actualRate (already in actualRows)
+  //   • Completed preliminary items — actualAmount (user-entered) OR
+  //     the planned-share-of-pool as the fall-back
+  //   • Executed PC sums — declared amount
+  //   • Executed variations — qty × rate
+  // Mirrors the server-side "actualProjectCost" formula so the Overview
+  // dashboard, public client view, and PM dashboard all reconcile.
+  const prelimActualTracked = (preliminaryItems || []).reduce((acc, p) => {
+    // Prefer user-entered actualAmount (added in earlier session);
+    // fall back to the planned share when completed but no actual
+    // figure typed.
+    if (safeNum(p?.actualAmount) > 0) return acc + safeNum(p?.actualAmount);
+    if (p?.completed) {
+      const totalAlloc = (preliminaryItems || []).reduce(
+        (a, pp) => a + safeNum(pp?.allocation),
+        0,
+      );
+      const base = totalAlloc > 0 ? totalAlloc : 100;
+      const provTotal = (provisionalSums || []).reduce(
+        (a, s) => a + safeNum(s?.amount),
+        0,
+      );
+      const pool =
+        ((grossAmount + provTotal) *
+          safeNum(contract?.preliminaryPercent || 0)) /
+        100;
+      return acc + (pool * safeNum(p?.allocation)) / base;
+    }
+    return acc;
+  }, 0);
+  const provActualTracked = (provisionalSums || []).reduce(
+    (acc, s) => (s?.completed ? acc + safeNum(s?.amount) : acc),
+    0,
+  );
+  const variationActualTracked = (variations || []).reduce(
+    (acc, v) =>
+      v?.completed ? acc + safeNum(v?.qty) * safeNum(v?.rate) : acc,
+    0,
+  );
+  const actualTrackedAmount =
+    measuredActualTracked +
+    prelimActualTracked +
+    provActualTracked +
+    variationActualTracked;
+
+  // Variance compares full tracked spend against the full project
+  // value (so the percentage reads "you've recorded X% of the planned
+  // scope as done"). Falls back to measured-only when fullProjectTotal
+  // isn't yet computed (early in the loading sequence).
+  const trackedScopeReference = fullProjectTotal > 0
+    ? fullProjectTotal
+    : plannedActualScopeAmount;
+  const actualVarianceAmount = actualTrackedAmount - trackedScopeReference;
+  const actualVariancePercent = trackedScopeReference > 0
+    ? (actualVarianceAmount / trackedScopeReference) * 100
     : 0;
   const actualQtyOverrideCount = actualRows.filter(
     (row) => row.actualQty != null,
