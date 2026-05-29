@@ -282,6 +282,117 @@ export function normalizeCustomRate(raw = {}) {
   };
 }
 
+// ── Rate composition (build-up) ───────────────────────────────────────────
+// The QUIV / HERON plugins read a structured build-up off each rate so they
+// can auto-derive Material + Labour lines for a takeoff and run the
+// "headline == net + overhead + profit" guardrail. See
+// docs/quiv-takeoff-material-rate-upgrade.server-spec.md §1.
+const LABOUR_KIND_RE =
+  /\b(labou?r(er)?|mason|carpenter|bender|fitter|fixer|painter|plumber|electrician|artisan|workmanship|gang|foreman|helper|operative|welder|bricklayer)\b/i;
+const PLANT_KIND_RE =
+  /\b(plant|excavat\w*|mixer|vibrator|crane|machine|pump|roller|compactor|scaffold(ing)?|hoist|hire)\b/i;
+const CONSUMABLE_KIND_RE =
+  /\b(nails?|binding\s*wire|tying\s*wire|fuel|diesel|petrol|consumable|disposab\w*)\b/i;
+
+// Map a component to one of: material | labour | plant | equipment | consumable.
+// Prefer an explicit refKind/rateType; otherwise classify by name keywords.
+export function classifyComponentKind(name, refKind) {
+  const rk = String(refKind || "")
+    .trim()
+    .toLowerCase();
+  if (rk) {
+    if (rk === "labour" || rk === "labor" || rk === "1") return "labour";
+    if (rk === "material" || rk === "0") return "material";
+    if (rk === "plant") return "plant";
+    if (rk === "equipment") return "equipment";
+    if (rk === "consumable") return "consumable";
+  }
+  const n = String(name || "");
+  if (LABOUR_KIND_RE.test(n)) return "labour";
+  if (PLANT_KIND_RE.test(n)) return "plant";
+  if (CONSUMABLE_KIND_RE.test(n)) return "consumable";
+  return "material";
+}
+
+// Build the `composition` object the plugin's RateCompositionParser expects.
+// Reads from a rate's breakdown lines (per-unit quantities) plus its
+// net/overhead/profit fields. Returns null when there is no structured
+// build-up, so partial rollout stays safe (the plugin reports "no build-up").
+export function buildRateComposition(rate = {}) {
+  const rawBreakdown = Array.isArray(rate.breakdown) ? rate.breakdown : [];
+
+  const components = rawBreakdown
+    .map((l) => {
+      const name = normalizeText(
+        l.componentName ??
+          l.ComponentName ??
+          l.refName ??
+          l.RefName ??
+          l.description ??
+          l.Description ??
+          ""
+      );
+      const quantity = toNum(l.quantity ?? l.Quantity, 0);
+      const unit = normalizeText(l.unit ?? l.Unit);
+      const unitPrice = toNum(l.unitPrice ?? l.UnitPrice, 0);
+      const totalCost = toNum(
+        l.lineTotal ??
+          l.LineTotal ??
+          l.totalCost ??
+          l.TotalCost ??
+          l.totalPrice ??
+          l.TotalPrice,
+        quantity * unitPrice
+      );
+      const refKind = l.refKind ?? l.RefKind ?? l.rateType ?? l.RateType ?? null;
+      const refSn = normalizeMaybeNumber(l.refSn ?? l.RefSn ?? l.sn ?? l.Sn, null);
+      const refName = normalizeText(l.refName ?? l.RefName);
+
+      const component = {
+        name,
+        kind: classifyComponentKind(name, refKind),
+        quantity, // per single unit of the rate
+        unit,
+        unitPrice,
+        totalCost,
+      };
+      // refSn / refName tie a row back to the Material/Labour master library
+      // so the plugin can re-resolve prices later.
+      if (refSn != null) component.refSn = refSn;
+      if (refName) component.refName = refName;
+      return component;
+    })
+    .filter(
+      (c) => c.name || c.totalCost > 0 || (c.quantity > 0 && c.unitPrice > 0)
+    );
+
+  if (!components.length) return null;
+
+  const componentsNet = components.reduce(
+    (sum, c) => sum + toNum(c.totalCost, 0),
+    0
+  );
+  const netCost = toNum(rate.netCost, 0) > 0 ? toNum(rate.netCost, 0) : componentsNet;
+  const overheadPercent = toNum(rate.overheadPercent, 0);
+  const profitPercent = toNum(rate.profitPercent, 0);
+  const overheadAmount =
+    toNum(rate.overheadValue, 0) || (netCost * overheadPercent) / 100;
+  const profitAmount =
+    toNum(rate.profitValue, 0) || (netCost * profitPercent) / 100;
+
+  return {
+    netCost,
+    overheadPercent,
+    profitPercent,
+    overheadAmount,
+    profitAmount,
+    // Both overhead and profit are applied on netCost (matches the website
+    // Rate Composition modal). Stated explicitly so the plugin can align.
+    profitBasis: "netCost",
+    components,
+  };
+}
+
 export function buildUserRateKey(raw = {}) {
   const sectionKey = normalizeSectionKey(raw.sectionKey);
   const itemNo = normalizeMaybeNumber(raw.itemNo, "");
@@ -339,6 +450,20 @@ export function toUserRateDefinition(rate = {}, extra = {}) {
   if (isCustom && Array.isArray(rate.labour)) {
     result.labour = rate.labour.map((l) => normalizeCustomRateLine(l, "labour"));
   }
+
+  // Structured build-up so QUIV/HERON can derive Material + Labour lines and
+  // run the headline-vs-build-up guardrail. Built from the normalized
+  // breakdown + net/overhead/profit so it is consistent across master,
+  // override and custom rates. Omitted when there is no build-up.
+  const composition = buildRateComposition({
+    netCost: result.netCost,
+    overheadPercent: result.overheadPercent,
+    profitPercent: result.profitPercent,
+    overheadValue: result.overheadValue,
+    profitValue: result.profitValue,
+    breakdown: result.breakdown,
+  });
+  if (composition) result.composition = composition;
 
   return result;
 }

@@ -12,6 +12,7 @@ import { RateGenRate } from "../models/RateGenRate.js";
 import { ensureMeta } from "../models/RateGenMeta.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import {
+  buildRateComposition,
   buildUserRateKey,
   getUserId,
   mergeRatesWithUserData,
@@ -639,7 +640,7 @@ function toComputeItemDefinition(x) {
 }
 
 function toRateDefinition(r) {
-  return {
+  const def = {
     id: String(r._id),
     sectionKey: r.sectionKey || "",
     sectionLabel: r.sectionLabel || "",
@@ -672,6 +673,12 @@ function toRateDefinition(r) {
         }))
       : [],
   };
+
+  // Structured build-up for QUIV/HERON material derivation + guardrail.
+  const composition = buildRateComposition(r);
+  if (composition) def.composition = composition;
+
+  return def;
 }
 
 /**

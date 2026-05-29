@@ -38,6 +38,7 @@ import {
   applyLearnedCategoriesToItems,
   recordCategoryFeedback,
 } from "../util/learnedCategory.js";
+import { computeProjectMargin } from "../util/profitMargin.js";
 import {
   isR2Configured,
   uploadBufferToR2,
@@ -147,10 +148,29 @@ function forcePsMaterialsProductKey(req, _res, next) {
   next();
 }
 
+// The unified save endpoint (§6) persists a Revit takeoff + its derived
+// materials in one call. Entitlement is checked against the base "revit"
+// product since that is what gates both halves.
+function forceRevitFullProductKey(req, _res, next) {
+  req.productKeyOriginal = "revit";
+  req.params.productKey = entitlementKeyFor("revit");
+  next();
+}
+
 function isMaterialsProductKey(productKey) {
   const key = normalizeProductKey(productKey);
   return key === "revit-materials" || key === "revit-material"
       || key === "planswift-materials" || key === "planswift-material";
+}
+
+// Map a takeoff product key to its sibling derived-materials product key, so a
+// takeoff project can find the materials saved alongside it (linked by
+// clientProjectKey + modelFingerprint). Returns null for keys with no sibling.
+function materialsProductKeyFor(productKey) {
+  const key = normalizeProductKey(productKey);
+  if (key === "revit") return MATERIAL_PRODUCT_KEY;
+  if (key === "planswift") return PS_MATERIAL_PRODUCT_KEY;
+  return null;
 }
 
 function statusFieldForProductKey(productKey) {
@@ -376,6 +396,19 @@ function sanitizeItems(items, productKey = "") {
       code: item.code != null ? String(item.code) : "",
       category: item.category != null ? String(item.category) : "",
       trade: item.trade != null ? String(item.trade) : "",
+
+      // ── Takeoff → Materials linkage + margin inputs (QUIV upgrade) ──
+      // Persist and echo these so derived material/labour lines stay linked
+      // to their parent takeoff line and the BoQ can compute proposed-vs-actual
+      // margin. parseOptionalNumber keeps them null when absent, so takeoff
+      // lines (which don't send them) are unaffected.
+      sourceTakeoffCode:
+        item.sourceTakeoffCode != null ? String(item.sourceTakeoffCode) : "",
+      componentKind: item.componentKind != null ? String(item.componentKind) : "",
+      derived: Boolean(item.derived),
+      netUnitCost: parseOptionalNumber(item.netUnitCost),
+      overheadPercent: parseOptionalNumber(item.overheadPercent),
+      profitPercent: parseOptionalNumber(item.profitPercent),
     };
 
     // Auto-derive category if not explicitly set by the caller, so legacy items
@@ -901,6 +934,96 @@ function buildValuationLogs(project, productKey) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+// Find-or-create a takeoff-like project keyed on the model it came from.
+// When clientProjectKey + modelFingerprint are both present we match an
+// existing project for this user+productKey and update it in place, so
+// re-saves upsert instead of duplicating (QUIV spec §3a/§4). Falls back to
+// creating a fresh project. Returns { project, created }.
+async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
+  const {
+    name,
+    items,
+    clientProjectKey,
+    fingerprint,
+    modelFingerprint,
+    modelTitle,
+    modelPath,
+    origin,
+    mergeSameTypeLevel,
+    mergeSameLine,
+    checklistCompositeKeys,
+    valuationSettings,
+  } = payload;
+
+  const key = String(clientProjectKey || "").trim();
+  const fp = String(modelFingerprint || "").trim();
+
+  let project = null;
+  if (key && fp) {
+    project = await TakeoffProject.findOne({
+      userId,
+      productKey,
+      clientProjectKey: key,
+      modelFingerprint: fp,
+    });
+  }
+
+  const created = !project;
+  if (!project) {
+    const trimmedName = String(name || "Project").trim() || "Project";
+    const baseSlug = generateSlug(trimmedName);
+    const slug = await uniqueSlug(userId, productKey, baseSlug);
+    project = new TakeoffProject({
+      userId,
+      productKey,
+      name: trimmedName,
+      slug,
+      clientProjectKey: key,
+      fingerprint: fingerprint || "",
+      modelFingerprint: fp,
+    });
+  }
+
+  const tracked = applyValuationTracking({
+    productKey,
+    previousItems: created ? [] : Array.isArray(project.items) ? project.items : [],
+    nextItems: sanitizeItems(items, productKey),
+    previousEvents:
+      created || !Array.isArray(project.valuationEvents)
+        ? []
+        : project.valuationEvents,
+  });
+  project.items = tracked.items;
+  project.valuationEvents = tracked.valuationEvents;
+
+  if (name !== undefined && String(name).trim()) project.name = String(name).trim();
+  if (fingerprint !== undefined) project.fingerprint = fingerprint || "";
+  if (modelFingerprint !== undefined && fp) project.modelFingerprint = fp;
+  if (modelTitle !== undefined) project.modelTitle = modelTitle || "";
+  if (modelPath !== undefined) project.modelPath = modelPath || "";
+  if (origin !== undefined) project.origin = origin || project.origin || "";
+  if (clientProjectKey !== undefined && key) project.clientProjectKey = key;
+
+  if (typeof mergeSameTypeLevel === "boolean") {
+    project.mergeSameTypeLevel = mergeSameTypeLevel;
+  } else if (typeof mergeSameLine === "boolean") {
+    project.mergeSameTypeLevel = mergeSameLine;
+  }
+  if (Array.isArray(checklistCompositeKeys)) {
+    project.checklistCompositeKeys = normalizeChecklistKeys(checklistCompositeKeys);
+  }
+  if (valuationSettings !== undefined) {
+    project.valuationSettings = normalizeValuationSettings(
+      valuationSettings,
+      project.valuationSettings || DEFAULT_VALUATION_SETTINGS,
+    );
+  }
+
+  if (!created) project.version += 1;
+  await project.save();
+  return { project, created };
+}
+
 async function createProject(req, res) {
   try {
     let productKey = requestedProductKey(req);
@@ -912,6 +1035,9 @@ async function createProject(req, res) {
       clientProjectKey,
       fingerprint,
       modelFingerprint,
+      modelTitle,
+      modelPath,
+      origin,
       mergeSameTypeLevel,
       mergeSameLine,
       checklistCompositeKeys,
@@ -941,6 +1067,23 @@ async function createProject(req, res) {
       return res.status(401).json({ error: "Invalid user id in token" });
     }
 
+    // QUIV spec §3a/§4: derived-materials saves should upsert (match by
+    // clientProjectKey + modelFingerprint) rather than duplicate on every
+    // re-save. Scoped to materials projects so takeoff-save behaviour is
+    // unchanged. Requires both keys; otherwise we fall through to create.
+    if (
+      isMaterialsProductKey(productKey) &&
+      String(clientProjectKey || "").trim() &&
+      String(modelFingerprint || "").trim()
+    ) {
+      const { project } = await upsertTakeoffLikeProject({
+        userId,
+        productKey,
+        payload: req.body || {},
+      });
+      return res.json(projectForClient(project));
+    }
+
     const tracked = applyValuationTracking({
       productKey,
       previousItems: [],
@@ -962,6 +1105,9 @@ async function createProject(req, res) {
       clientProjectKey: clientProjectKey || "",
       fingerprint: fingerprint || "",
       modelFingerprint: modelFingerprint || "",
+      modelTitle: modelTitle || "",
+      modelPath: modelPath || "",
+      origin: origin || "",
       mergeSameTypeLevel:
         typeof mergeSameTypeLevel === "boolean"
           ? mergeSameTypeLevel
@@ -975,6 +1121,104 @@ async function createProject(req, res) {
     res.json(projectForClient(project));
   } catch (err) {
     console.error("POST project error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── §6 Unified save: takeoff + derived materials in one call ──
+// POST/PUT /projects/revit/full. Upserts both the takeoff project (productKey
+// "revit") and its derived-materials sibling (productKey "revit-materials"),
+// both keyed on clientProjectKey + modelFingerprint so re-saves update in
+// place. Returns both project ids plus a proposed-vs-actual margin summary
+// (§5). Sequential (not transactional) — the codebase does not use Mongo
+// transactions; the materials write is skipped when no material items are sent.
+async function saveProjectFull(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid user id in token" });
+    }
+
+    const body = req.body || {};
+    const {
+      name,
+      clientProjectKey,
+      modelFingerprint,
+      modelTitle,
+      modelPath,
+      fingerprint,
+      origin,
+      takeoffItems,
+      materialItems,
+      mergeSameTypeLevel,
+      mergeSameLine,
+      checklistCompositeKeys,
+      valuationSettings,
+    } = body;
+
+    if (!String(name || "").trim()) {
+      return res.status(400).json({ error: "name required" });
+    }
+
+    const sharedMeta = {
+      name,
+      clientProjectKey,
+      modelFingerprint,
+      modelTitle,
+      modelPath,
+      fingerprint,
+      mergeSameTypeLevel,
+      mergeSameLine,
+      checklistCompositeKeys,
+      valuationSettings,
+    };
+
+    // 1) Takeoff project.
+    const takeoffRes = await upsertTakeoffLikeProject({
+      userId,
+      productKey: "revit",
+      payload: {
+        ...sharedMeta,
+        items: Array.isArray(takeoffItems) ? takeoffItems : [],
+        origin: origin || "",
+      },
+    });
+
+    // 2) Derived-materials project (only when material lines are supplied).
+    let materialsRes = null;
+    const mats = Array.isArray(materialItems) ? materialItems : [];
+    if (mats.length) {
+      materialsRes = await upsertTakeoffLikeProject({
+        userId,
+        productKey: MATERIAL_PRODUCT_KEY,
+        payload: {
+          ...sharedMeta,
+          items: mats,
+          origin: "takeoff-derived",
+        },
+      });
+    }
+
+    // 3) Proposed-vs-actual margin across the saved pair (§5).
+    const margins = computeProjectMargin({
+      takeoffItems: takeoffRes.project.items,
+      materialItems: materialsRes ? materialsRes.project.items : [],
+    });
+
+    res.json({
+      ok: true,
+      takeoffProjectId: String(takeoffRes.project._id),
+      materialsProjectId: materialsRes ? String(materialsRes.project._id) : null,
+      created: {
+        takeoff: takeoffRes.created,
+        materials: materialsRes ? materialsRes.created : false,
+      },
+      takeoff: projectForClient(takeoffRes.project),
+      materials: materialsRes ? projectForClient(materialsRes.project) : null,
+      margins,
+    });
+  } catch (err) {
+    console.error("POST/PUT project full save error:", err);
     res.status(500).json({ error: "Server error" });
   }
 }
@@ -1227,6 +1471,9 @@ async function updateProject(req, res) {
       baseVersion,
       fingerprint,
       modelFingerprint,
+      modelTitle,
+      modelPath,
+      origin,
       mergeSameTypeLevel,
       mergeSameLine,
       checklistCompositeKeys,
@@ -1504,6 +1751,9 @@ async function updateProject(req, res) {
     if (modelFingerprint !== undefined) {
       project.modelFingerprint = modelFingerprint || "";
     }
+    if (modelTitle !== undefined) project.modelTitle = modelTitle || "";
+    if (modelPath !== undefined) project.modelPath = modelPath || "";
+    if (origin !== undefined) project.origin = origin || "";
 
     if (typeof mergeSameTypeLevel === "boolean") {
       project.mergeSameTypeLevel = mergeSameTypeLevel;
@@ -1625,6 +1875,13 @@ async function getProjectValuations(req, res) {
     const project = await TakeoffProject.findOne({ _id: id, userId, productKey }).lean();
     if (!project) return res.status(404).json({ error: "Not found" });
 
+    // Proposed-vs-actual profit margin (spec §5). For a takeoff project we pull
+    // in the sibling derived-materials project (linked by clientProjectKey +
+    // modelFingerprint) so the cost side is built from the attached material /
+    // labour lines. For a materials project there is no sell rate, so we just
+    // surface its own lines as the cost basis.
+    const margins = await computeMarginForProject(project, userId, productKey);
+
     res.json({
       projectId: String(project._id),
       projectName: project.name || "Project",
@@ -1632,10 +1889,45 @@ async function getProjectValuations(req, res) {
       statusField: statusFieldForProductKey(productKey),
       statusLabel: statusLabelForProductKey(productKey),
       logs: buildValuationLogs(project, productKey),
+      margins,
     });
   } catch (err) {
     console.error("GET project valuations error:", err);
     res.status(500).json({ error: "Server error" });
+  }
+}
+
+// Build a proposed-vs-actual margin summary for a single loaded project,
+// resolving its sibling materials/takeoff project when needed (spec §5).
+async function computeMarginForProject(project, userId, productKey) {
+  try {
+    const items = Array.isArray(project.items) ? project.items : [];
+
+    if (isMaterialsProductKey(productKey)) {
+      // A materials project alone has no sell rate; report cost-side only.
+      return computeProjectMargin({ takeoffItems: [], materialItems: items });
+    }
+
+    let materialItems = [];
+    const matKey = materialsProductKeyFor(productKey);
+    const key = String(project.clientProjectKey || "").trim();
+    const fp = String(project.modelFingerprint || "").trim();
+    if (matKey && key && fp) {
+      const sibling = await TakeoffProject.findOne({
+        userId,
+        productKey: matKey,
+        clientProjectKey: key,
+        modelFingerprint: fp,
+      })
+        .select("items")
+        .lean();
+      if (sibling && Array.isArray(sibling.items)) materialItems = sibling.items;
+    }
+
+    return computeProjectMargin({ takeoffItems: items, materialItems });
+  } catch (err) {
+    console.error("computeMarginForProject error:", err);
+    return null;
   }
 }
 
@@ -2836,6 +3128,22 @@ async function getPublicDashboard(req, res) {
 // ── PUBLIC route (no auth) — must be before requireAuth ──
 // This is exported separately and mounted in index.js
 export { getPublicDashboard };
+
+// §6 unified save — must precede the generic "/:productKey" routes so
+// "/revit/full" isn't swallowed by a single-segment match.
+router.post(
+  "/revit/full",
+  forceRevitFullProductKey,
+  requireEntitlementParam,
+  saveProjectFull,
+);
+
+router.put(
+  "/revit/full",
+  forceRevitFullProductKey,
+  requireEntitlementParam,
+  saveProjectFull,
+);
 
 router.post(
   "/revit/materials",

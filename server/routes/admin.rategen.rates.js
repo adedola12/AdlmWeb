@@ -5,6 +5,7 @@ import { RateGenRate } from "../models/RateGenRate.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireStaff } from "../middleware/roles.js";
 import { ensureDb } from "../db.js";
+import { validateRateComposition } from "../util/rateGuardrail.js";
 
 const router = express.Router();
 
@@ -168,6 +169,33 @@ router.post("/rates", async (req, res, next) => {
     const overheadValue = (netCost * overheadPercent) / 100;
     const profitValue = (netCost * profitPercent) / 100;
     const totalCost = netCost + overheadValue + profitValue;
+
+    // Composite-rate guardrail (spec §2): a headline total must not exceed
+    // Material + Labour + Overhead + Profit beyond tolerance. The server always
+    // stores the derived `totalCost`, but if the client supplied one we reject
+    // overstated values so an invalid rate never gets created.
+    if (
+      b.totalCost !== undefined &&
+      b.totalCost !== null &&
+      String(b.totalCost).trim() !== ""
+    ) {
+      const guard = validateRateComposition({
+        netCost,
+        overheadAmount: overheadValue,
+        profitAmount: profitValue,
+        totalCost: b.totalCost,
+      });
+      if (guard.status === "overstated") {
+        return res.status(400).json({
+          error:
+            "totalCost exceeds its build-up (netCost + overhead + profit). " +
+            `Stated ${guard.stated.toFixed(2)} vs expected ${guard.expected.toFixed(
+              2
+            )} (tolerance ±${guard.tolerance.toFixed(2)}).`,
+          guardrail: guard,
+        });
+      }
+    }
 
     const itemNo =
       b.itemNo === undefined ||

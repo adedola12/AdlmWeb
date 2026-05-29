@@ -483,6 +483,22 @@ const ItemSchema = new mongoose.Schema(
     code: { type: String, default: "" },
     category: { type: String, default: "" },
     trade: { type: String, default: "" },
+
+    // ── Takeoff → Materials linkage (QUIV material-rate upgrade) ──
+    // Set on derived material/labour lines so each one ties back to the
+    // takeoff line it came from. sourceTakeoffCode matches the parent
+    // TakeoffItem.code; elementIds (above) are copied from that line.
+    sourceTakeoffCode: { type: String, default: "" },
+    // Material | Labour | Plant | Consumable | Equipment
+    componentKind: { type: String, default: "" },
+    // true ⇒ machine-derived from a takeoff save (vs a manual Material entry)
+    derived: { type: Boolean, default: false },
+    // Per-unit net cost from the rate build-up — kept for margin maths.
+    // null = not supplied (so legacy/takeoff lines stay untouched).
+    netUnitCost: { type: Number, default: null },
+    // Overhead / profit % carried from the rate build-up (for margin calc).
+    overheadPercent: { type: Number, default: null },
+    profitPercent: { type: Number, default: null },
   },
   { _id: false },
 );
@@ -494,6 +510,13 @@ const TakeoffProjectSchema = new mongoose.Schema(
     clientProjectKey: { type: String, default: "", index: true },
     modelFingerprint: { type: String, default: "" },
     fingerprint: { type: String, default: "" },
+    // Informational model metadata shared by takeoff + derived-materials
+    // payloads. Used for display and to make the two projects easy to relate.
+    modelTitle: { type: String, default: "" },
+    modelPath: { type: String, default: "" },
+    // "takeoff-derived" marks a materials project that was auto-created from a
+    // takeoff save (vs a manual Material-module save). "" for normal projects.
+    origin: { type: String, default: "" },
     mergeSameTypeLevel: { type: Boolean, default: true },
     name: { type: String, required: true, trim: true },
     slug: { type: String, trim: true, lowercase: true, default: "" },
