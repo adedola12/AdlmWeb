@@ -2553,19 +2553,39 @@ export default function ProjectsGeneric() {
       apiAuthed("/rategen/library", { token: accessToken }),
     ]);
 
-    const masterRows = Array.isArray(m?.materials) ? m.materials : [];
-    const userRows = Array.isArray(lib?.materials) ? lib.materials : [];
+    // Material + Labour component prices (NOT composite "actual" rates).
+    // Both user-library and master rows share the same {description, unit,
+    // price} shape, so a single toCandidate() handles materials and labour.
+    const masterMaterials = Array.isArray(m?.materials) ? m.materials : [];
+    const masterLabour = Array.isArray(m?.labour) ? m.labour : [];
+    const userMaterials = Array.isArray(lib?.materials) ? lib.materials : [];
+    const userLabour = Array.isArray(lib?.labour) ? lib.labour : [];
 
     const candidatesByKey = {};
 
-    for (const r of userRows) {
+    // User library takes precedence (pushCand prefers "my" source).
+    for (const r of userMaterials) {
       const cand = toCandidate(r, "My Library");
       const nameKey = normalizeMaterialName(cand.description);
       if (!cand.description || cand.price <= 0) continue;
       pushCand(candidatesByKey, nameKey, cand);
     }
 
-    for (const r of masterRows) {
+    for (const r of userLabour) {
+      const cand = toCandidate(r, "My Library");
+      const nameKey = normalizeMaterialName(cand.description);
+      if (!cand.description || cand.price <= 0) continue;
+      pushCand(candidatesByKey, nameKey, cand);
+    }
+
+    for (const r of masterMaterials) {
+      const cand = toCandidate(r, "Master");
+      const nameKey = normalizeMaterialName(cand.description);
+      if (!cand.description || cand.price <= 0) continue;
+      pushCand(candidatesByKey, nameKey, cand);
+    }
+
+    for (const r of masterLabour) {
       const cand = toCandidate(r, "Master");
       const nameKey = normalizeMaterialName(cand.description);
       if (!cand.description || cand.price <= 0) continue;
@@ -2958,6 +2978,103 @@ export default function ProjectsGeneric() {
       .slice(0, 10);
 
     return matches;
+  }
+
+  // ── Material + Labour price pool (materials view) ──
+  // The composite `rateGenPool` above is built from full build-up rates
+  // (rateOverrides + customRates) — wrong source for the Materials module,
+  // where each line is a single material or labour component. This pool is
+  // built from the RateGen Material + Labour price tables (master + the
+  // user's own overrides) so the materials rate cell searches component
+  // prices, not headline construction rates.
+  const [materialRatePool, setMaterialRatePool] = React.useState([]);
+  const [materialRatePoolLoading, setMaterialRatePoolLoading] = React.useState(false);
+  const [materialRatePoolLoaded, setMaterialRatePoolLoaded] = React.useState(false);
+
+  const loadMaterialRatePool = React.useCallback(async () => {
+    if (!canRateGen || !accessToken) return;
+    setMaterialRatePoolLoading(true);
+    try {
+      const [m, lib] = await Promise.all([
+        apiAuthed("/rategen/master", { token: accessToken }),
+        apiAuthed("/rategen/library", { token: accessToken }),
+      ]);
+
+      // Dedupe by name|unit|kind, preferring the user's own price over master.
+      const byKey = new Map();
+      const add = (rows, kind, source, userOwned) => {
+        for (const r of Array.isArray(rows) ? rows : []) {
+          const description = String(r?.description || r?.name || "").trim();
+          const unit = String(r?.unit || "").trim();
+          const price = Number(r?.price ?? r?.defaultUnitPrice ?? 0);
+          if (!description || !Number.isFinite(price) || price <= 0) continue;
+          const key = `${description.toLowerCase()}|${unit.toLowerCase()}|${kind}`;
+          const existing = byKey.get(key);
+          if (existing && !(userOwned && !existing.userOwned)) continue;
+          byKey.set(key, {
+            description,
+            unit,
+            totalCost: price,
+            netCost: price,
+            sectionLabel: kind, // "Material" | "Labour"
+            source,
+            kind,
+            userOwned,
+          });
+        }
+      };
+
+      // User overrides first (preferred), then master fills the gaps.
+      add(lib?.materials, "Material", "user-material", true);
+      add(lib?.labour, "Labour", "user-labour", true);
+      add(m?.materials, "Material", "master-material", false);
+      add(m?.labour, "Labour", "master-labour", false);
+
+      setMaterialRatePool(Array.from(byKey.values()));
+      setMaterialRatePoolLoaded(true);
+    } catch {
+      setMaterialRatePool([]);
+    } finally {
+      setMaterialRatePoolLoading(false);
+    }
+  }, [canRateGen, accessToken]);
+
+  // Auto-load the material/labour pool when the materials view is active.
+  React.useEffect(() => {
+    if (!showMaterials) return;
+    if (!canRateGen) return;
+    if (materialRatePoolLoaded || materialRatePoolLoading) return;
+    loadMaterialRatePool();
+  }, [
+    showMaterials,
+    canRateGen,
+    materialRatePoolLoaded,
+    materialRatePoolLoading,
+    loadMaterialRatePool,
+  ]);
+
+  // Client-side fuzzy search over the Material + Labour pool. Same scoring
+  // as searchRateGen, but returns component prices for the materials view.
+  async function searchMaterialRates(query) {
+    if (!query || query.length < 2) return [];
+    const q = query.trim().toLowerCase();
+    const qWords = q.split(/\s+/).filter(Boolean);
+
+    return materialRatePool
+      .map((r) => {
+        const descLower = r.description.toLowerCase();
+        const kindLower = String(r.sectionLabel || "").toLowerCase();
+        let score = 0;
+        for (const w of qWords) {
+          if (descLower.includes(w)) score += 2;
+          else if (kindLower.includes(w)) score += 1;
+        }
+        if (score === 0) return null;
+        return { ...r, score };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score || a.description.localeCompare(b.description))
+      .slice(0, 10);
   }
 
   // ── Contract lock / unlock ──
@@ -4364,7 +4481,7 @@ export default function ProjectsGeneric() {
                 onClosePickKey={() => setOpenPickKey(null)}
                 onPickCandidate={handlePickCandidate}
                 onRateChange={handleRateChange}
-                onSearchRateGen={searchRateGen}
+                onSearchRateGen={showMaterials ? searchMaterialRates : searchRateGen}
                 onActualQtyChange={handleActualQtyChange}
                 onActualRateChange={handleActualRateChange}
                 onStatusToggle={handleStatusToggle}
