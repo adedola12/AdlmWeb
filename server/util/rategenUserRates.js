@@ -347,6 +347,7 @@ export function buildRateComposition(rate = {}) {
       const refKind = l.refKind ?? l.RefKind ?? l.rateType ?? l.RateType ?? null;
       const refSn = normalizeMaybeNumber(l.refSn ?? l.RefSn ?? l.sn ?? l.Sn, null);
       const refName = normalizeText(l.refName ?? l.RefName);
+      const priceAsOf = normalizeDate(l.priceAsOf ?? l.PriceAsOf, null);
 
       const component = {
         name,
@@ -357,9 +358,11 @@ export function buildRateComposition(rate = {}) {
         totalCost,
       };
       // refSn / refName tie a row back to the Material/Labour master library
-      // so the plugin can re-resolve prices later.
+      // so the plugin can re-resolve prices later; priceAsOf records when the
+      // unit price was captured.
       if (refSn != null) component.refSn = refSn;
       if (refName) component.refName = refName;
+      if (priceAsOf) component.priceAsOf = priceAsOf;
       return component;
     })
     .filter(

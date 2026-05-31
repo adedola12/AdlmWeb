@@ -670,6 +670,7 @@ function toRateDefinition(r) {
           refKind: l.refKind ?? null,
           refSn: l.refSn ?? null,
           refName: l.refName ?? null,
+          priceAsOf: l.priceAsOf ?? null,
         }))
       : [],
   };

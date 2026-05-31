@@ -10,6 +10,14 @@ const BreakdownLineSchema = new Schema(
     unit: { type: String, trim: true, default: "" },
     unitPrice: { type: Number, default: 0 },
     totalPrice: { type: Number, default: 0 },
+
+    // Provenance: persist the kind + source-library linkage so every qty/rate
+    // traces back to its Material/Labour master row, and labour vs material is
+    // deterministic downstream instead of being re-guessed from the name.
+    refKind: { type: String, trim: true, default: "" }, // "material" | "labour" | "plant" | "consumable" | ...
+    refSn: { type: Number, default: null }, // serial no. in the Material/Labour master library
+    refName: { type: String, trim: true, default: "" }, // resolved library name
+    priceAsOf: { type: Date, default: null }, // when this unit price was captured
   },
   { _id: false }
 );
@@ -57,7 +65,20 @@ RateGenRateSchema.pre("save", function preSave(next) {
       const qty = safeNum(l.quantity);
       const unitPrice = safeNum(l.unitPrice);
       const total = safeNum(l.totalPrice) || qty * unitPrice;
-      return { ...l, quantity: qty, unitPrice, totalPrice: total };
+      // Build the line explicitly: spreading a Mongoose subdocument ({...l})
+      // copies internal props, not the schema fields, which would drop
+      // componentName + the provenance fields below.
+      return {
+        componentName: l.componentName,
+        quantity: qty,
+        unit: l.unit,
+        unitPrice,
+        totalPrice: total,
+        refKind: l.refKind,
+        refSn: l.refSn,
+        refName: l.refName,
+        priceAsOf: l.priceAsOf,
+      };
     });
   }
 

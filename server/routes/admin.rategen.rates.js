@@ -140,11 +140,15 @@ router.post("/rates", async (req, res, next) => {
           unit: unitLine,
           unitPrice,
           lineTotal,
+          // Persist the intended line total (incl. waste %, output conversions)
+          // so the stored breakdown sums to netCost and each qty/rate reconciles.
+          totalPrice: lineTotal,
 
-          // optional refs (safe if schema ignores unknown)
+          // provenance: kind + source-library linkage + capture time
           refKind: l?.refKind ?? null,
           refSn: l?.refSn ?? null,
           refName: l?.refName ?? null,
+          priceAsOf: l?.priceAsOf ? new Date(l.priceAsOf) : new Date(),
         };
       })
       .filter((l) => l.componentName);
