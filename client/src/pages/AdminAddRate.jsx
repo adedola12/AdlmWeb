@@ -469,7 +469,7 @@ export default function AdminAddRate() {
     setSaving(true);
     try {
       if (editingId) {
-        await apiAuthed(
+        const res = await apiAuthed(
           `${ADMIN_RATEGEN_V2_BASE}/rates/${editingId}`,
           {
             token: accessToken,
@@ -479,17 +479,32 @@ export default function AdminAddRate() {
           }
         );
 
+        // Only treat it as saved if the server actually returned the updated
+        // rate. Guards against a misrouted request that returns 200 without
+        // persisting (e.g. an SPA/catch-all fallback) reporting false success.
+        if (!res || res.ok !== true || !res.item) {
+          throw new Error(
+            res?.error || res?.message || "Update failed — unexpected server response."
+          );
+        }
+
         setMsg("✅ Rate updated.");
         resetForm();
         // reload list (keeps filter)
         loadExistingRates(sectionKey);
       } else {
-        await apiAuthed(`${ADMIN_RATEGEN_V2_BASE}/rates`, {
+        const res = await apiAuthed(`${ADMIN_RATEGEN_V2_BASE}/rates`, {
           token: accessToken,
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+
+        if (!res || res.ok !== true || !res.item) {
+          throw new Error(
+            res?.error || res?.message || "Save failed — unexpected server response."
+          );
+        }
 
         setMsg("✅ Rate saved to library.");
         resetForm();

@@ -232,6 +232,165 @@ router.post("/rates", async (req, res, next) => {
 });
 
 /**
+ * PATCH /admin/rategen-v2/rates/:id
+ * PUT   /admin/rategen-v2/rates/:id
+ *
+ * Update an existing master rate. Mirrors POST /rates: re-derives netCost from
+ * the breakdown, recomputes overhead/profit/totalCost, runs the composite-rate
+ * guardrail (reject overstated totals), persists breakdown provenance, and
+ * enforces canonical section keys.
+ *
+ * We load the doc and `.save()` it (rather than findByIdAndUpdate) so the
+ * RateGenRate `pre("save")` hook runs — it rebuilds each breakdown line
+ * (keeping refKind/refSn/refName/priceAsOf) and recomputes the derived totals.
+ */
+const updateRate = async (req, res, next) => {
+  try {
+    await ensureDb();
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+
+    const doc = await RateGenRate.findById(id);
+    if (!doc) return res.status(404).json({ error: "Rate not found" });
+
+    const b = req.body || {};
+    const sectionKey = normalizeSectionKey(b.sectionKey);
+
+    if (!ALLOWED_SECTION_KEYS.has(sectionKey)) {
+      return res.status(400).json({
+        error: `Invalid sectionKey '${sectionKey}'. Allowed: ${Array.from(
+          ALLOWED_SECTION_KEYS
+        ).join(", ")}`,
+      });
+    }
+
+    const sectionLabel = String(
+      SECTION_LABELS[sectionKey] || b.sectionLabel || ""
+    ).trim();
+
+    const description = String(b.description || "").trim();
+    const unit = String(b.unit || "").trim();
+
+    if (!description)
+      return res.status(400).json({ error: "description is required" });
+    if (!unit) return res.status(400).json({ error: "unit is required" });
+
+    const breakdownRaw = Array.isArray(b.breakdown) ? b.breakdown : [];
+    const breakdown = breakdownRaw
+      .map((l) => {
+        const componentName = String(l?.componentName || "").trim();
+        const quantity = toNum(l?.quantity, 0);
+        const unitLine = String(l?.unit || "").trim();
+        const unitPrice = toNum(l?.unitPrice, 0);
+
+        const lineTotal =
+          toNum(l?.lineTotal, 0) > 0
+            ? toNum(l?.lineTotal, 0)
+            : quantity * unitPrice;
+
+        return {
+          componentName,
+          quantity,
+          unit: unitLine,
+          unitPrice,
+          lineTotal,
+          // Persist the intended line total (incl. waste %, output conversions)
+          // so the stored breakdown sums to netCost and each qty/rate reconciles.
+          totalPrice: lineTotal,
+
+          // provenance: kind + source-library linkage + capture time
+          refKind: l?.refKind ?? null,
+          refSn: l?.refSn ?? null,
+          refName: l?.refName ?? null,
+          priceAsOf: l?.priceAsOf ? new Date(l.priceAsOf) : new Date(),
+        };
+      })
+      .filter((l) => l.componentName);
+
+    const breakdownNet = breakdown.reduce(
+      (sum, l) => sum + toNum(l.lineTotal, 0),
+      0
+    );
+    const netCost = breakdownNet > 0 ? breakdownNet : toNum(b.netCost, 0);
+
+    if (!(netCost > 0)) {
+      return res.status(400).json({
+        error: "netCost must be > 0 (use breakdown lines or provide netCost).",
+      });
+    }
+
+    const overheadPercent =
+      b.overheadPercent != null ? toNum(b.overheadPercent, 10) : 10;
+    const profitPercent =
+      b.profitPercent != null ? toNum(b.profitPercent, 25) : 25;
+
+    const overheadValue = (netCost * overheadPercent) / 100;
+    const profitValue = (netCost * profitPercent) / 100;
+    const totalCost = netCost + overheadValue + profitValue;
+
+    // Composite-rate guardrail (spec §2): a headline total must not exceed
+    // Material + Labour + Overhead + Profit beyond tolerance. The server always
+    // stores the derived `totalCost`, but if the client supplied one we reject
+    // overstated values so an edit can never overstate the rate.
+    if (
+      b.totalCost !== undefined &&
+      b.totalCost !== null &&
+      String(b.totalCost).trim() !== ""
+    ) {
+      const guard = validateRateComposition({
+        netCost,
+        overheadAmount: overheadValue,
+        profitAmount: profitValue,
+        totalCost: b.totalCost,
+      });
+      if (guard.status === "overstated") {
+        return res.status(400).json({
+          error:
+            "totalCost exceeds its build-up (netCost + overhead + profit). " +
+            `Stated ${guard.stated.toFixed(2)} vs expected ${guard.expected.toFixed(
+              2
+            )} (tolerance ±${guard.tolerance.toFixed(2)}).`,
+          guardrail: guard,
+        });
+      }
+    }
+
+    const itemNo =
+      b.itemNo === undefined ||
+      b.itemNo === null ||
+      String(b.itemNo).trim() === ""
+        ? undefined
+        : toNum(b.itemNo, 0);
+
+    doc.sectionKey = sectionKey;
+    doc.sectionLabel = sectionLabel;
+    doc.itemNo = itemNo;
+    doc.description = description;
+    doc.unit = unit;
+    doc.netCost = netCost;
+    doc.overheadPercent = overheadPercent;
+    doc.profitPercent = profitPercent;
+    doc.overheadValue = overheadValue;
+    doc.profitValue = profitValue;
+    doc.totalCost = totalCost;
+    doc.breakdown = breakdown;
+    doc.updatedBy = req.user?._id || req.user?.id || null;
+
+    await doc.save();
+
+    res.json({ ok: true, item: doc });
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.patch("/rates/:id", updateRate);
+router.put("/rates/:id", updateRate);
+
+/**
  * DELETE /admin/rategen-v2/rates/:id
  */
 router.delete("/rates/:id", async (req, res, next) => {
