@@ -94,6 +94,7 @@ function normalizeBreakdownLine(raw = {}) {
     refKind: normalizeText(raw.refKind ?? raw.RefKind),
     refSn: normalizeMaybeNumber(raw.refSn ?? raw.RefSn, null),
     refName: normalizeText(raw.refName ?? raw.RefName),
+    priceAsOf: normalizeDate(raw.priceAsOf ?? raw.PriceAsOf, null),
   };
 }
 
@@ -167,6 +168,7 @@ function normalizeCustomRateLine(raw = {}, fallbackType = "material") {
     category: normalizeText(raw.category ?? raw.Category),
     refSn: normalizeMaybeNumber(raw.refSn ?? raw.RefSn ?? raw.sn ?? raw.Sn, null),
     refName: normalizeText(raw.refName ?? raw.RefName),
+    priceAsOf: normalizeDate(raw.priceAsOf ?? raw.PriceAsOf, null),
   };
 }
 
@@ -180,6 +182,7 @@ function toBreakdownFromCustomLines(lines) {
     refKind: line.rateType,
     refSn: line.refSn,
     refName: line.refName || line.description,
+    priceAsOf: line.priceAsOf ?? null,
   }));
 }
 
@@ -414,6 +417,7 @@ function normalizeOutputBreakdown(lines) {
     refKind: normalizeText(line.refKind),
     refSn: normalizeMaybeNumber(line.refSn, null),
     refName: normalizeText(line.refName),
+    priceAsOf: normalizeDate(line.priceAsOf, null),
   }));
 }
 
