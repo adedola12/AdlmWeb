@@ -1,228 +1,160 @@
 // ──────────────────────────────────────────────────────────────────────────
-// SubscriptionTemplate — "Subscription Packages" pricing body (3 tiers).
+// SubscriptionTemplate — "Subscription Packages" pricing body.
 // ──────────────────────────────────────────────────────────────────────────
-// Renders ONLY the middle body (FlyerCanvas paints the bg, logo header and the
-// bottom contact bar). Theme-aware: heading/text colours come from `palette`
-// and are passed down to Badge/Headline/Subtitle so it reads correctly on both
-// light (navy-on-white "podium") and dark (white-on-navy "tech") flyers.
-//
-// Layout, top→bottom:
-//   TOP (centered, flex-shrink:0) — optional Badge, product Headline, the
-//     "Subscription Packages" sub-line, and an optional "Initial Installation"
-//     line in `accent`.
-//   MIDDLE (flex:1, centered) — up to 3 self-contained DARK NAVY ribbon price
-//     cards in a row. The middle card is the featured "podium" tier: lifted,
-//     with an accent glow/border so it stands out.
-//
-// Each card is intentionally dark navy (independent of theme) so the gold/blue
-// ribbon + white price always pop on both light and dark backgrounds — matching
-// the ADLM Revit / Planswift reference art.
+// Renders ONLY the middle body (FlyerCanvas paints bg + logo header + contact
+// bar). Theme-aware header (palette); the tier cards come in three export-safe
+// styles set by `flyer.tierStyle`, modelled on the ADLM reference flyers:
+//   • 'ribbon'  — navy/gold pennant cards with a red ribbon + ADLM mark (Revit)
+//   • 'stacked' — colour-coded stacked tier bars with label tabs (BIM training)
+//   • 'minimal' — clean panel tiles, theme-aware (Rate Generator)
 import React from "react";
 import { Badge, Headline, Subtitle, Rule } from "./parts.jsx";
+import { LOGO_SRC } from "../lib/brand.js";
 
-const CARD_BG = "#0a1f3a";
+const NAVY = "#0a1f3a";
+const GOLD = "#e8b84a";
+const RED = "#b3261e";
 
-// One dark-navy ribbon price card. `featured` lifts + glows the middle tier.
-function PriceCard({ tier, accent, currency, featured }) {
+// ── 'ribbon' — pennant card (gold border, red ribbon, pointed bottom) ────────
+function RibbonCard({ tier, accent, featured }) {
+  const W = 258;
   return (
-    <div
-      style={{
-        position: "relative",
-        width: 280,
-        display: "flex",
-        flexDirection: "column",
-        background: CARD_BG,
-        borderRadius: 20,
-        overflow: "hidden",
-        transform: featured ? "translateY(-18px)" : "none",
-        border: featured ? `2px solid ${accent}` : "2px solid rgba(255,255,255,0.06)",
-        boxShadow: featured
-          ? `0 26px 60px rgba(0,0,0,0.45), 0 0 0 6px ${accent}22`
-          : "0 18px 44px rgba(0,0,0,0.38)",
-      }}
-    >
-      {/* Top ribbon banner — accent strip with a small white ADLM-style diamond. */}
+    <div style={{ position: "relative", width: W, display: "flex", flexDirection: "column", alignItems: "center", transform: featured ? "translateY(-16px)" : "none" }}>
       <div
         style={{
-          background: accent,
-          padding: "18px 22px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 12,
-          minHeight: 30,
+          width: "100%",
+          background: NAVY,
+          border: `4px solid ${GOLD}`,
+          borderRadius: 16,
+          paddingTop: 66,
+          paddingBottom: 28,
+          position: "relative",
+          boxShadow: featured ? "0 26px 60px rgba(0,0,0,0.5)" : "0 16px 40px rgba(0,0,0,0.38)",
         }}
       >
-        <span
-          style={{
-            width: 14,
-            height: 14,
-            background: "#ffffff",
-            transform: "rotate(45deg)",
-            borderRadius: 3,
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            fontSize: 22,
-            fontWeight: 800,
-            color: "#ffffff",
-            letterSpacing: "0.04em",
-            lineHeight: 1,
-            textTransform: "uppercase",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {tier.label}
-        </span>
-      </div>
-
-      {/* Card body — big price, period (with divider), optional savings note. */}
-      <div
-        style={{
-          flex: 1,
-          padding: "34px 22px 30px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 0,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8 }}>
-          <span style={{ fontSize: 24, fontWeight: 700, color: "rgba(255,255,255,0.7)", lineHeight: 1 }}>
-            {currency}
-          </span>
-          <span style={{ fontSize: 58, fontWeight: 800, color: "#ffffff", letterSpacing: "-0.02em", lineHeight: 1 }}>
-            {tier.price}
-          </span>
-        </div>
-
-        {tier.period && (
-          <div style={{ width: "100%", marginTop: 22, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.25)", display: "flex", justifyContent: "center" }}>
-            <span
-              style={{
-                fontSize: 20,
-                fontWeight: 600,
-                color: "rgba(255,255,255,0.7)",
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                lineHeight: 1,
-                textAlign: "center",
-              }}
-            >
-              {tier.period}
-            </span>
+        {/* red ribbon fold with the ADLM mark */}
+        <div style={{ position: "absolute", top: -4, left: "50%", transform: "translateX(-50%)", width: 92, height: 76, background: `linear-gradient(180deg, ${RED}, #7f160f)`, borderRadius: "0 0 8px 8px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 14px rgba(0,0,0,0.35)" }}>
+          <div style={{ width: 46, height: 46, borderRadius: 10, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <img src={LOGO_SRC} alt="" crossOrigin="anonymous" style={{ width: 30, height: 30, objectFit: "contain" }} />
           </div>
-        )}
+        </div>
+        {/* dotted inner side rules */}
+        <div style={{ position: "absolute", left: 12, top: 64, bottom: 16, borderLeft: "2px dotted rgba(255,255,255,0.18)" }} />
+        <div style={{ position: "absolute", right: 12, top: 64, bottom: 16, borderRight: "2px dotted rgba(255,255,255,0.18)" }} />
 
-        {tier.note && (
-          <span style={{ marginTop: 16, fontSize: 16, fontWeight: 700, color: accent, lineHeight: 1.2, textAlign: "center" }}>
-            {tier.note}
-          </span>
-        )}
+        <div style={{ textAlign: "center", padding: "0 20px" }}>
+          <div style={{ fontSize: 46, fontWeight: 800, color: "#fff", lineHeight: 1, letterSpacing: "-0.02em" }}>{tier.price}</div>
+          <div style={{ width: "72%", height: 1, background: "rgba(255,255,255,0.28)", margin: "14px auto" }} />
+          <div style={{ fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.82)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{tier.period || tier.label}</div>
+          {tier.note && <div style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: accent }}>{tier.note}</div>}
+        </div>
       </div>
+      {/* pointed bottom (pennant) */}
+      <div style={{ width: 0, height: 0, borderLeft: `${W / 2}px solid transparent`, borderRight: `${W / 2}px solid transparent`, borderTop: `26px solid ${GOLD}` }} />
+    </div>
+  );
+}
+
+function RibbonTiers({ tiers, accent, featuredIdx }) {
+  return (
+    <div style={{ display: "flex", gap: 24, alignItems: "flex-start", justifyContent: "center" }}>
+      {tiers.map((t, i) => (
+        <RibbonCard key={t.id || i} tier={t} accent={accent} featured={i === featuredIdx} />
+      ))}
+    </div>
+  );
+}
+
+// ── 'stacked' — colour-coded tier bars with label tabs ───────────────────────
+function StackedTiers({ tiers, accent, currency }) {
+  const colors = [NAVY, accent, "#E86A27"];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18, width: "min(620px, 88%)", margin: "0 auto" }}>
+      {tiers.map((t, i) => {
+        const bg = colors[i % colors.length];
+        return (
+          <div key={t.id || i} style={{ position: "relative", background: bg, borderRadius: 16, padding: "20px 26px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, boxShadow: "0 14px 34px rgba(0,0,0,0.32)" }}>
+            <div style={{ minWidth: 0 }}>
+              {t.label && <div style={{ fontSize: 20, fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>{t.label}</div>}
+              {t.note && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.72)", marginTop: 3 }}>{t.note}</div>}
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexShrink: 0 }}>
+              <span style={{ fontSize: 20, fontWeight: 700, color: "rgba(255,255,255,0.82)" }}>{currency}</span>
+              <span style={{ fontSize: 46, fontWeight: 800, color: "#fff", lineHeight: 1, letterSpacing: "-0.02em" }}>{t.price}</span>
+              {t.period && <span style={{ fontSize: 16, color: "rgba(255,255,255,0.75)" }}>/{t.period}</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── 'minimal' — clean theme-aware tiles ─────────────────────────────────────
+function MinimalTiers({ tiers, accent, currency, palette, featuredIdx }) {
+  return (
+    <div style={{ display: "flex", gap: 22, justifyContent: "center", alignItems: "stretch", flexWrap: "wrap" }}>
+      {tiers.map((t, i) => {
+        const featured = i === featuredIdx;
+        return (
+          <div
+            key={t.id || i}
+            style={{
+              minWidth: 210,
+              padding: "26px 30px",
+              borderRadius: 18,
+              background: featured ? accent : palette.panel,
+              border: `1.5px solid ${featured ? accent : palette.border}`,
+              textAlign: "center",
+              transform: featured ? "translateY(-10px)" : "none",
+              boxShadow: featured ? `0 18px 44px ${accent}40` : "none",
+            }}
+          >
+            <div style={{ fontSize: 15, fontWeight: 700, color: featured ? "#fff" : accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
+              {t.label}{t.period ? ` (${currency})` : ""}
+            </div>
+            <div style={{ fontSize: 48, fontWeight: 800, color: featured ? "#fff" : palette.text, lineHeight: 1, letterSpacing: "-0.02em" }}>{t.price}</div>
+            {t.note && <div style={{ marginTop: 8, fontSize: 14, color: featured ? "rgba(255,255,255,0.85)" : palette.textSoft }}>{t.note}</div>}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export default function SubscriptionTemplate({ flyer, accent, days, palette }) {
-  const tiers = (flyer.tiers || [])
-    .filter((t) => t && (t.price || t.label))
-    .slice(0, 3);
+  const tiers = (flyer.tiers || []).filter((t) => t && (t.price || t.label)).slice(0, 3);
   const currency = flyer.currency || "NGN";
-  // Feature the middle tier (the "6 months / most popular" podium card).
   const featuredIdx = tiers.length ? Math.floor(tiers.length / 2) : -1;
+  const kind = flyer.tierStyle || "ribbon";
 
   return (
-    <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* ── TOP: product name + "Subscription Packages" + installation ── */}
-      <div
-        style={{
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 16,
-          textAlign: "center",
-        }}
-      >
-        {flyer.showBadge && flyer.badge && (
-          <Badge accent={accent} palette={palette} center>
-            {flyer.badge}
-          </Badge>
-        )}
-
-        <Headline
-          title={flyer.title}
-          highlightWordIndex={flyer.highlightWordIndex}
-          accent={accent}
-          palette={palette}
-          size={76}
-          center
-        />
-
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {/* header */}
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
+        {flyer.showBadge && flyer.badge && <Badge accent={accent} palette={palette} center>{flyer.badge}</Badge>}
+        <Headline title={flyer.title} highlightWordIndex={flyer.highlightWordIndex} accent={accent} palette={palette} size={76} center />
         {flyer.packagesHeading && (
-          <span
-            style={{
-              fontSize: 40,
-              fontWeight: 700,
-              color: palette.text,
-              letterSpacing: "-0.01em",
-              lineHeight: 1.1,
-            }}
-          >
-            {flyer.packagesHeading}
-          </span>
+          <span style={{ fontSize: 40, fontWeight: 700, color: palette.text, letterSpacing: "-0.01em", lineHeight: 1.1 }}>{flyer.packagesHeading}</span>
         )}
-
         {flyer.installation && (
-          <span style={{ fontSize: 26, fontWeight: 600, color: accent, lineHeight: 1.2 }}>
-            Initial Installation: {flyer.installation}
-          </span>
+          <span style={{ fontSize: 26, fontWeight: 600, color: accent, lineHeight: 1.2 }}>Initial Installation: {flyer.installation}</span>
         )}
       </div>
 
-      {/* ── MIDDLE: the hero — a row of dark navy ribbon price cards ── */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "stretch",
-          justifyContent: "center",
-          gap: 28,
-          paddingTop: 36,
-        }}
-      >
-        {tiers.length > 0 ? (
-          tiers.map((tier, i) => (
-            <PriceCard
-              key={tier.id || i}
-              tier={tier}
-              accent={accent}
-              currency={currency}
-              featured={i === featuredIdx}
-            />
-          ))
-        ) : (
-          <div style={{ alignSelf: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+      {/* tiers */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 32 }}>
+        {tiers.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
             <Rule accent={accent} w={88} center />
-            <Subtitle palette={palette} center>
-              Add up to 3 pricing tiers to build your packages.
-            </Subtitle>
+            <Subtitle palette={palette} center>Add up to 3 pricing tiers to build your packages.</Subtitle>
           </div>
+        ) : kind === "stacked" ? (
+          <StackedTiers tiers={tiers} accent={accent} currency={currency} />
+        ) : kind === "minimal" ? (
+          <MinimalTiers tiers={tiers} accent={accent} currency={currency} palette={palette} featuredIdx={featuredIdx} />
+        ) : (
+          <RibbonTiers tiers={tiers} accent={accent} featuredIdx={featuredIdx} />
         )}
       </div>
     </div>

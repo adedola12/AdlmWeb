@@ -290,7 +290,20 @@ export default function FlyerForm({ flyer, onChange, accessToken }) {
                 <Field label="Packages heading"><Input value={flyer.packagesHeading} onChange={(v) => set("packagesHeading", v)} placeholder="Subscription Packages" /></Field>
                 <Field label="Currency"><Input value={flyer.currency} onChange={(v) => set("currency", v)} placeholder="NGN" /></Field>
               </Row>
-              <Field label="Initial installation" hint="Optional"><Input value={flyer.installation} onChange={(v) => set("installation", v)} placeholder="e.g. NGN 25,000" /></Field>
+              <Row>
+                <Field label="Initial installation" hint="Optional"><Input value={flyer.installation} onChange={(v) => set("installation", v)} placeholder="e.g. NGN 25,000" /></Field>
+                <Field label="Tier style">
+                  <Select
+                    value={flyer.tierStyle || "ribbon"}
+                    onChange={(v) => set("tierStyle", v)}
+                    options={[
+                      { value: "ribbon", label: "Ribbon / pennant" },
+                      { value: "stacked", label: "Stacked tiers" },
+                      { value: "minimal", label: "Minimal tiles" },
+                    ]}
+                  />
+                </Field>
+              </Row>
               <label style={labelStyle}>Tiers ({tiers.length}/3)</label>
               {tiers.map((tier, i) => (
                 <div key={tier.id || i} style={{ border: "1.5px solid #DDE3F0", borderRadius: 8, padding: 12, marginBottom: 10, background: "#FAFBFF" }}>

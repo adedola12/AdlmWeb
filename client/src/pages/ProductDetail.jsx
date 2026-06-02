@@ -342,11 +342,12 @@ export default function ProductDetail() {
         </Link>
 
         {/* Hero: gallery (left) + buy panel (right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.55fr_1fr] gap-6 lg:gap-8">
-          {/* GALLERY — main image left, vertical thumbnail rail right */}
-          <div className="flex gap-3 items-stretch">
-            <div className="flex-1 min-w-0">
-              <div className="relative rounded-2xl overflow-hidden bg-slate-950 ring-1 ring-black/10 dark:ring-white/10 aspect-[16/10] group">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-stretch">
+          {/* GALLERY — main image left, vertical rail right; framed to the
+              flyer-engine 4:5 (1080×1350) ratio and matched to the buy-card height */}
+          <div className="lg:shrink-0 min-w-0">
+            <div className="flex gap-3 lg:h-[560px] xl:h-[600px]">
+              <div className="relative w-full aspect-[4/5] lg:aspect-auto lg:w-[448px] xl:w-[480px] lg:h-full rounded-2xl overflow-hidden bg-slate-950 ring-1 ring-black/10 dark:ring-white/10 group">
                 {!active ? (
                   <div className="absolute inset-0 grid place-items-center text-slate-500 text-sm">
                     No preview available
@@ -387,29 +388,29 @@ export default function ProductDetail() {
                 )}
               </div>
 
-              {/* Mobile thumbnail strip (horizontal) */}
+              {/* Desktop vertical thumbnail rail (right) */}
               {hasMany && (
-                <div className="lg:hidden mt-3 flex gap-2 overflow-x-auto pb-1">
+                <div className="hidden lg:flex flex-col gap-2.5 w-[84px] shrink-0 lg:h-full overflow-y-auto pr-0.5">
                   {slides.map((s, i) => (
-                    <Thumb key={`m-${i}`} s={s} i={i} className="w-20 shrink-0 aspect-[4/3]" />
+                    <Thumb key={`v-${i}`} s={s} i={i} className="w-full aspect-[4/5]" />
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Desktop vertical thumbnail rail (right) */}
+            {/* Mobile thumbnail strip (horizontal) */}
             {hasMany && (
-              <div className="hidden lg:flex flex-col gap-3 w-[92px] shrink-0 overflow-y-auto max-h-[70vh] pr-0.5">
+              <div className="lg:hidden mt-3 flex gap-2 overflow-x-auto pb-1">
                 {slides.map((s, i) => (
-                  <Thumb key={`v-${i}`} s={s} i={i} className="w-full aspect-[4/3]" />
+                  <Thumb key={`m-${i}`} s={s} i={i} className="w-16 shrink-0 aspect-[4/5]" />
                 ))}
               </div>
             )}
           </div>
 
-          {/* BUY PANEL (sticky) */}
-          <div className="lg:sticky lg:top-6 self-start">
-            <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm">
+          {/* BUY PANEL — drives the hero height; the image matches it */}
+          <div className="lg:flex-1 min-w-0">
+            <div className="lg:h-[560px] xl:h-[600px] lg:overflow-y-auto rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm flex flex-col">
               {p.category && (
                 <div className="text-xs font-semibold uppercase tracking-wider text-adlm-blue-700 dark:text-adlm-blue-400 mb-2">
                   {p.category}
