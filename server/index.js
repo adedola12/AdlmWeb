@@ -69,6 +69,7 @@ import adminRateGenMaster from "./routes/admin.rategen.master.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
+import adminFlyers from "./routes/admin.flyers.js";
 import entitlementsRouter from "./routes/entitlements.js";
 import adminUsersLite from "./routes/admin.usersLite.js";
 import projectsBoqRoutes from "./routes/projects.boq.js";
@@ -295,6 +296,7 @@ app.use("/admin/users-lite", adminUsersLite);
 
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
+app.use("/admin/flyers", adminFlyers);
 app.use("/admin/training-locations", adminTrainingLocations);
 app.use("/admin/invoices", adminInvoices);
 app.use("/admin/proposals", adminProposals);

@@ -371,8 +371,34 @@ const router = createBrowserRouter([
         ),
       },
 
+      // ✅ Mini-admin / staff flyer engine (lazy — keeps html2canvas/jspdf/jszip
+      // out of the main bundle; only loaded when an admin opens the engine)
+      {
+        path: "admin/flyers",
+        async lazy() {
+          const { default: AdminFlyers } = await import("./pages/AdminFlyers.jsx");
+          return {
+            element: (
+              <AdminRoute roles={["admin", "mini_admin"]}>
+                <AdminFlyers />
+              </AdminRoute>
+            ),
+          };
+        },
+      },
+
       { path: "*", element: <NotFound /> },
     ],
+  },
+
+  // TEMP: standalone public flyer-template preview for visual verification.
+  // Top-level (outside <App/>) so no Nav/HelpBot chrome — remove after review.
+  {
+    path: "/__flyer-preview",
+    async lazy() {
+      const { default: FlyerPreview } = await import("./pages/__FlyerPreview.jsx");
+      return { element: <FlyerPreview /> };
+    },
   },
 ]);
 

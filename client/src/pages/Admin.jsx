@@ -1973,6 +1973,14 @@ export default function Admin() {
 
             <button
               className="btn btn-sm"
+              onClick={() => navigate("/admin/flyers")}
+              title="Design & export ADLM flyers (announcements, countdowns, launches, events)"
+            >
+              Flyer Engine
+            </button>
+
+            <button
+              className="btn btn-sm"
               onClick={() => navigate("/admin/course-grading")}
               title="Grade submissions & mark course enrollments as complete"
             >
