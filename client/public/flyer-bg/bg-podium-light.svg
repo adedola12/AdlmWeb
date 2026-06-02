@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350" fill="none">
+  <defs>
+    <linearGradient id="pdg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef5ff"/>
+      <stop offset="0.6" stop-color="#f7faff"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <radialGradient id="pdGlow" cx="0.5" cy="0.62" r="0.55">
+      <stop offset="0" stop-color="#005be3" stop-opacity="0.16"/>
+      <stop offset="0.55" stop-color="#36a3ff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#36a3ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="pdPlate" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#0b3a8f" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#0b3a8f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#pdg)"/>
+  <rect width="1080" height="1350" fill="url(#pdGlow)"/>
+  <ellipse cx="540" cy="1120" rx="430" ry="120" fill="url(#pdPlate)"/>
+  <g stroke="#005be3" stroke-opacity="0.10" stroke-width="2" fill="none">
+    <polygon points="120,150 98,188 54,188 32,150 54,112 98,112"/>
+    <polygon points="1010,210 988,248 944,248 922,210 944,172 988,172"/>
+  </g>
+</svg>

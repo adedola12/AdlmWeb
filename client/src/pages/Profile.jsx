@@ -397,6 +397,10 @@ export default function Profile() {
                 Add / manage testimonials
               </Link>
 
+              <Link to="/admin/flyers" className="btn">
+                Flyer Engine
+              </Link>
+
               {/* ✅ NEW BUTTON: Mini-admin Users View */}
               <Link to="/admin/users-lite" className="btn">
                 Users (Mini Admin View)

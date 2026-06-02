@@ -1,59 +1,48 @@
 // ──────────────────────────────────────────────────────────────────────────
 // THE FLYER DATA CONTRACT
 // ──────────────────────────────────────────────────────────────────────────
-// This is the single source of truth for the shape of a `flyer` object. The
-// form (FlyerForm), the renderer (FlyerCanvas + the 4 template bodies), the
-// export controls, and the server `Flyer.data` blob all conform to THIS shape.
+// Single source of truth for the shape of a `flyer`. The form, the renderer
+// (FlyerCanvas + template bodies), export, and the server `Flyer.data` blob all
+// conform to this. A flyer is one flat object carrying the full superset of
+// fields; the active layout is `flyer.template`, and the look is driven by a
+// curated Style (see styles.js) which sets theme/background/accent together.
 //
-// A flyer is one flat object. Fields are grouped by which template consumes
-// them, but every flyer carries the full superset (unused fields are simply
-// ignored by templates that don't read them). The currently-selected template
-// is `flyer.template`.
+//   LOOK (set by a Style — see styles.js)
+//     style               style id (e.g. 'podium', 'navy-glow')
+//     theme               'light' | 'dark'  → palette (white-on-dark vs navy-on-light)
+//     background          background id (a branded plate or gradient)
+//     accent              accent colour hex
+//     backgroundImage     optional uploaded plate (data-URL/https) — overrides background
 //
-//   SHARED (all templates)
-//     template            'announcement' | 'countdown' | 'launch' | 'event'
-//     title               headline string
-//     highlightWordIndex  index of the word rendered in `accent` colour
-//     subtitle            supporting line under the headline
-//     badge               small eyebrow/pill text (e.g. "BIM COURSE")
-//     showBadge           bool — render the badge pill
-//     accent              accent colour hex (defaults to ADLM orange)
-//     background          background id from lib/backgrounds.js
-//     backgroundImage     uploaded bg image (data-URL or https URL); wins over `background`
-//     partnerLogo         co-brand logo (data-URL or https URL), shown beside ADLM logo
-//     contact             contact line text in the bottom bar
-//     website             small website string in the bottom bar
-//     showContactBar      bool — render the bottom contact bar
-//     showWebsite         bool — render the website string
+//   SHARED
+//     template            'announcement'|'countdown'|'launch'|'event'|'subscription'|'ticket'
+//     title               headline; highlightWordIndex picks the accent word
+//     subtitle            supporting line
+//     badge / showBadge   eyebrow pill text + visibility
+//     partnerLogo         co-brand logo (data-URL/https) beside the ADLM logo
+//     contact / website   bottom contact bar text
+//     showContactBar / showWebsite
 //
-//   COUNTDOWN
-//     launchDate          ISO YYYY-MM-DD; the big number = days until this date
-//     countdownLabel      label under the number (e.g. "days to go")
-//
-//   LAUNCH / PRODUCT SHOWCASE
-//     heroImage           screenshot/hero image (data-URL or https URL)
-//     heroFrame           'browser' | 'laptop' | 'none' — how the hero is framed
-//
-//   EVENT / TRAINING PROMO
-//     eventCategory       'Training' | 'Webinar'
-//     dateStart, dateEnd  ISO YYYY-MM-DD
-//     time, timeZone      "9:00 AM daily", "WAT"
-//     venueType           'In-Person' | 'Virtual' | 'Hybrid'
-//     venuePhysical, venueCity
-//     platform            'Zoom' | 'GoogleMeet' | 'Teams' | 'XSpaces' | 'YouTube' | 'WhatsApp'
-//     platformNote
-//     registrationUrl     drives the QR code + register line
-//     speakers            [{ id, name, role, topic, photo }]  (photo = data-URL/URL)
-//     enquiries           [string] phone numbers
+//   COUNTDOWN     launchDate (YYYY-MM-DD), countdownLabel
+//   LAUNCH        heroImage, heroFrame ('browser'|'laptop'|'none')
+//   EVENT         eventCategory, dateStart/dateEnd, time, timeZone, venueType,
+//                 venuePhysical, venueCity, platform, platformNote,
+//                 registrationUrl, speakers[{id,name,role,topic,photo}], enquiries[]
+//   SUBSCRIPTION  packagesHeading, currency, installation,
+//                 tiers[{id,label,price,period,note}]   (1–3 cards)
+//   TICKET        ticketTitle, ticketMeta, currency, ticketPrice, ticketCta
 // ──────────────────────────────────────────────────────────────────────────
 
-import { ORANGE, DEFAULT_WEBSITE } from "./brand.js";
+import { ORANGE } from "./brand.js";
+import { applyStyle, getStyle } from "./styles.js";
 
 export const TEMPLATES = [
-  { value: "announcement", label: "Coming Soon", hint: "Teaser / announcement" },
-  { value: "countdown", label: "Countdown", hint: "N days to go" },
-  { value: "launch", label: "Launch", hint: "Product / website showcase" },
-  { value: "event", label: "Event", hint: "Training / webinar promo" },
+  { value: "announcement", label: "Coming Soon",  hint: "Teaser / announcement" },
+  { value: "countdown",    label: "Countdown",    hint: "N days to go" },
+  { value: "launch",       label: "Launch",       hint: "Product / website showcase" },
+  { value: "event",        label: "Event",        hint: "Training / webinar promo" },
+  { value: "subscription", label: "Pricing",      hint: "Subscription packages (3 tiers)" },
+  { value: "ticket",       label: "Ticket",       hint: "Promo ticket with price seal" },
 ];
 
 export const PLATFORM_OPTIONS = [
@@ -65,21 +54,32 @@ export const PLATFORM_OPTIONS = [
   { value: "WhatsApp", label: "WhatsApp Live" },
 ];
 
-// Fields shared by every template.
+function newTiers() {
+  return [
+    { id: "t1", label: "Monthly",  price: "10,000",  period: "monthly",  note: "" },
+    { id: "t2", label: "6 Months", price: "50,000",  period: "6 months", note: "Save NGN 10,000" },
+    { id: "t3", label: "Yearly",   price: "100,000", period: "yearly",   note: "" },
+  ];
+}
+
+// Fields shared by every template (look fields filled by applyStyle below).
 const BASE = {
-  id: null, // server _id once saved; null = unsaved draft
+  id: null,
   template: "announcement",
+  style: "navy-glow",
+  theme: "dark",
+  background: "navy-glow",
+  accent: ORANGE,
+  backgroundImage: null,
+
   title: "Integrating AI & Data Analytical Tools",
-  highlightWordIndex: 1, // "AI & Data Analytical" → highlight word 1
+  highlightWordIndex: 1,
   subtitle: "tools on MEP & HVAC works cost management workflow",
   badge: "BIM COURSE",
   showBadge: true,
-  accent: ORANGE,
-  background: "navy-glow",
-  backgroundImage: null,
   partnerLogo: null,
   contact: "For more details, contact: 08106503524",
-  website: DEFAULT_WEBSITE,
+  website: "adlmstudio.net",
   showContactBar: true,
   showWebsite: true,
 
@@ -105,70 +105,99 @@ const BASE = {
   registrationUrl: "",
   speakers: [],
   enquiries: ["08106503524"],
+
+  // subscription / pricing
+  packagesHeading: "Subscription Packages",
+  currency: "NGN",
+  installation: "",
+  tiers: newTiers(),
+
+  // ticket
+  ticketTitle: "Integration of BIM, AI & Data analytical tools",
+  ticketMeta: "6-week training · Fri–Sun evenings · ADLM Platforms",
+  ticketPrice: "90k",
+  ticketCta: "You don't want to miss this — contact us to purchase today!",
 };
 
-// Per-template overrides applied on top of BASE so each template opens with
-// believable ADLM-flavoured placeholder copy.
+// Per-template overrides: believable ADLM copy + a sensible default Style.
 const PRESETS = {
   announcement: {
+    style: "navy-glow",
     title: "Integrating AI & Data Analytical Tools",
     highlightWordIndex: 1,
     subtitle: "tools on MEP & HVAC works cost management workflow",
     badge: "BIM COURSE",
-    background: "navy-glow",
   },
   countdown: {
+    style: "blue-tech",
     title: "Website Launch",
     highlightWordIndex: 1,
-    subtitle:
-      "We design construction-focused digital products that improve workflows and empower professionals.",
+    subtitle: "We design construction-focused digital products that improve workflows and empower professionals.",
     badge: "COUNTDOWN",
-    background: "navy-blue-glow",
     countdownLabel: "days to go",
   },
   launch: {
+    style: "hex-light",
     title: "Website Launch",
     highlightWordIndex: 1,
-    subtitle:
-      "We design construction-focused digital products that improve workflows and empower professionals.",
+    subtitle: "We design construction-focused digital products that improve workflows and empower professionals.",
     badge: "NOW LIVE",
-    background: "navy-gradient",
     heroFrame: "browser",
   },
   event: {
+    style: "hex-light",
     title: "Advancing Digital Cost Management",
     highlightWordIndex: 2,
     subtitle: "Hands-on BIM-driven quantity surveying & estimation workflows",
     badge: "CPD TRAINING",
-    background: "navy-glow",
     eventCategory: "Training",
     registrationUrl: "adlmstudio.net/trainings",
     speakers: [
       { id: "s1", name: "QS Adedolapo", role: "Lead Facilitator", topic: "BIM cost workflows", photo: null },
     ],
   },
+  subscription: {
+    style: "podium",
+    title: "ADLM Revit Plugin",
+    highlightWordIndex: 1,
+    subtitle: "",
+    badge: "PLUGIN",
+    packagesHeading: "Subscription Packages",
+    installation: "NGN 25,000",
+    tiers: newTiers(),
+  },
+  ticket: {
+    style: "hex-light",
+    title: "Missed the live classes?",
+    highlightWordIndex: 1,
+    subtitle: "The training is now available for you to go through at your own pace!",
+    badge: "BIM TRAINING",
+    ticketTitle: "Integration of BIM, AI & Data analytical tools",
+    ticketMeta: "6-week training · Fri–Sun evenings · ADLM Platforms",
+    ticketPrice: "90k",
+  },
 };
 
-// Build a fresh flyer for a given template. Always returns a new object with a
-// fresh `speakers`/`enquiries` array so edits never mutate the defaults.
+// Build a fresh flyer for a template: BASE + preset + the preset's Style.
 export function defaultFlyer(template = "announcement") {
   const preset = PRESETS[template] || {};
-  return {
+  const base = {
     ...BASE,
     ...preset,
     template,
     id: null,
     speakers: (preset.speakers || BASE.speakers).map((s) => ({ ...s })),
     enquiries: [...(preset.enquiries || BASE.enquiries)],
+    tiers: (preset.tiers || BASE.tiers).map((t) => ({ ...t })),
   };
+  return applyStyle(base, preset.style || BASE.style);
 }
 
-// Normalise an arbitrary object (e.g. loaded from the server) into a complete
-// flyer, filling any missing fields from BASE. Guards against old/partial docs.
+// Normalise an arbitrary object (e.g. a saved server doc) into a complete flyer.
 export function normalizeFlyer(obj = {}) {
   const template = obj.template || "announcement";
   const base = defaultFlyer(template);
-  return {
+  const merged = {
     ...base,
     ...obj,
     template,
@@ -181,10 +210,26 @@ export function normalizeFlyer(obj = {}) {
           photo: s.photo || null,
         }))
       : base.speakers,
-    enquiries: Array.isArray(obj.enquiries) && obj.enquiries.length
-      ? [...obj.enquiries]
-      : base.enquiries,
+    enquiries: Array.isArray(obj.enquiries) && obj.enquiries.length ? [...obj.enquiries] : base.enquiries,
+    tiers: Array.isArray(obj.tiers) && obj.tiers.length
+      ? obj.tiers.map((t, i) => ({
+          id: t.id || `t${i + 1}`,
+          label: t.label || "",
+          price: t.price || "",
+          period: t.period || "",
+          note: t.note || "",
+        }))
+      : base.tiers,
   };
+  // Backfill theme/background/accent for older docs that only stored a style.
+  if (!obj.theme || !obj.background) {
+    const s = getStyle(obj.style || merged.style);
+    merged.style = s.id;
+    merged.theme = obj.theme || s.theme;
+    merged.background = obj.background || s.background;
+    merged.accent = obj.accent || s.accent;
+  }
+  return merged;
 }
 
 export const DEFAULT_FLYER = defaultFlyer("announcement");

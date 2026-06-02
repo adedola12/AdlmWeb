@@ -22,6 +22,11 @@ export const FONT_DISPLAY = "'Lexend', sans-serif";
 // Primary ADLM logo (lives in client/public/Logo.png). Used in the flyer header.
 export const LOGO_SRC = "/Logo.png";
 
+// Theme-specific brand lockups (copied into client/public/flyer-assets).
+// Light flyers use the dark horizontal lockup; dark flyers use the white one.
+export const LOGO_LIGHTBG = "/flyer-assets/adlm-logo-horizontal.png";
+export const LOGO_DARKBG = "/flyer-assets/adlm-logo-white.png";
+
 // Default co-brand / contact strings.
 export const DEFAULT_WEBSITE = "adlmstudio.net";
 

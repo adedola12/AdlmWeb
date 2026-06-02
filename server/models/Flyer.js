@@ -12,7 +12,7 @@ const FlyerSchema = new mongoose.Schema(
     template: {
       type: String,
       trim: true,
-      enum: ["announcement", "countdown", "launch", "event"],
+      enum: ["announcement", "countdown", "launch", "event", "subscription", "ticket"],
       default: "announcement",
     },
     data: { type: mongoose.Schema.Types.Mixed, default: {} },

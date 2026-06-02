@@ -11,7 +11,7 @@ const router = express.Router();
 // Gate the whole router: must be authenticated AND admin/mini_admin.
 router.use(requireAuth, requireAdminOrMiniAdmin);
 
-const TEMPLATES = new Set(["announcement", "countdown", "launch", "event"]);
+const TEMPLATES = new Set(["announcement", "countdown", "launch", "event", "subscription", "ticket"]);
 
 function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(id);

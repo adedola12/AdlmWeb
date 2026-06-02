@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350" fill="none">
+  <defs>
+    <linearGradient id="clg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f3f6fc"/>
+    </linearGradient>
+    <pattern id="clGrid" width="54" height="54" patternUnits="userSpaceOnUse">
+      <path d="M54 0 H0 V54" fill="none" stroke="#05111f" stroke-opacity="0.04" stroke-width="1.5"/>
+    </pattern>
+    <radialGradient id="clBlue" cx="0.92" cy="0.06" r="0.4">
+      <stop offset="0" stop-color="#005be3" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#005be3" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#clg)"/>
+  <rect width="1080" height="1350" fill="url(#clGrid)"/>
+  <rect width="1080" height="1350" fill="url(#clBlue)"/>
+  <g stroke-width="4" stroke-linecap="round">
+    <line x1="72" y1="72" x2="132" y2="72" stroke="#E86A27" stroke-opacity="0.5"/>
+    <line x1="72" y1="72" x2="72" y2="132" stroke="#E86A27" stroke-opacity="0.5"/>
+    <line x1="1008" y1="1278" x2="948" y2="1278" stroke="#005be3" stroke-opacity="0.5"/>
+    <line x1="1008" y1="1278" x2="1008" y2="1218" stroke="#005be3" stroke-opacity="0.5"/>
+  </g>
+</svg>

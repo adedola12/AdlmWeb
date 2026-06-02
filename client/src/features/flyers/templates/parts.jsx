@@ -1,28 +1,22 @@
-// Shared presentational atoms used by every flyer template body. Keeping these
-// here means the 4 templates stay visually consistent (same pill, same headline
-// treatment, same accent rule) and the template files stay small.
+// Shared presentational atoms used by every flyer template body. Theme-aware:
+// each accepts a `palette` (from styles.getPalette) so the same atom renders
+// correctly on light (navy-on-white) and dark (white-on-navy) flyers.
 import React from "react";
-import { FONT, FONT_DISPLAY, WHITE } from "../lib/brand.js";
+import { FONT, FONT_DISPLAY } from "../lib/brand.js";
+import { getPalette } from "../lib/styles.js";
 import { highlightWords } from "../lib/helpers.js";
 
-// Short accent bar — the ADLM equivalent of the NIQS gold "eyebrow" rule.
+const DARK = getPalette("dark");
+
+// Short accent bar — the ADLM accent "eyebrow" rule.
 export function Rule({ accent, w = 56, center = false }) {
   return (
-    <span
-      style={{
-        display: "block",
-        width: w,
-        height: 4,
-        background: accent,
-        borderRadius: 4,
-        margin: center ? "0 auto" : 0,
-      }}
-    />
+    <span style={{ display: "block", width: w, height: 4, background: accent, borderRadius: 4, margin: center ? "0 auto" : 0 }} />
   );
 }
 
-// Eyebrow / category pill, e.g. "BIM COURSE", "COUNTDOWN".
-export function Badge({ children, accent, center = false }) {
+// Eyebrow / category pill, e.g. "BIM COURSE".
+export function Badge({ children, accent, palette = DARK, center = false }) {
   return (
     <div
       style={{
@@ -31,31 +25,13 @@ export function Badge({ children, accent, center = false }) {
         gap: 10,
         padding: "10px 20px",
         borderRadius: 999,
-        background: "rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.16)",
+        background: palette.panel,
+        border: `1px solid ${palette.border}`,
         alignSelf: center ? "center" : "flex-start",
       }}
     >
-      <span
-        style={{
-          width: 9,
-          height: 9,
-          borderRadius: "50%",
-          background: accent,
-          flexShrink: 0,
-        }}
-      />
-      <span
-        style={{
-          fontFamily: FONT,
-          fontSize: 17,
-          fontWeight: 700,
-          color: WHITE,
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-          lineHeight: 1,
-        }}
-      >
+      <span style={{ width: 9, height: 9, borderRadius: "50%", background: accent, flexShrink: 0 }} />
+      <span style={{ fontFamily: FONT, fontSize: 17, fontWeight: 700, color: palette.text, letterSpacing: "0.16em", textTransform: "uppercase", lineHeight: 1 }}>
         {children}
       </span>
     </div>
@@ -63,14 +39,7 @@ export function Badge({ children, accent, center = false }) {
 }
 
 // Big display headline with one accent-coloured word.
-export function Headline({
-  title,
-  highlightWordIndex,
-  accent,
-  size = 92,
-  center = false,
-  lineHeight = 0.98,
-}) {
+export function Headline({ title, highlightWordIndex, accent, palette = DARK, size = 92, center = false, lineHeight = 0.98 }) {
   const words = highlightWords(title, highlightWordIndex, accent);
   return (
     <h1
@@ -78,7 +47,7 @@ export function Headline({
         fontFamily: FONT_DISPLAY,
         fontSize: size,
         fontWeight: 800,
-        color: WHITE,
+        color: palette.text,
         letterSpacing: "-0.02em",
         lineHeight,
         margin: 0,
@@ -96,7 +65,7 @@ export function Headline({
 }
 
 // Muted supporting line under the headline.
-export function Subtitle({ children, center = false, size = 30, maxWidth }) {
+export function Subtitle({ children, palette = DARK, center = false, size = 30, maxWidth }) {
   if (!children) return null;
   return (
     <p
@@ -104,7 +73,7 @@ export function Subtitle({ children, center = false, size = 30, maxWidth }) {
         fontFamily: FONT,
         fontSize: size,
         fontWeight: 400,
-        color: "rgba(255,255,255,0.66)",
+        color: palette.textSoft,
         lineHeight: 1.4,
         margin: 0,
         textAlign: center ? "center" : "left",

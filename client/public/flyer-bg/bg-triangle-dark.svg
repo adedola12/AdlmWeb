@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350" fill="none">
+  <defs>
+    <linearGradient id="trg" x1="0" y1="0" x2="0.4" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#0b1f3f"/>
+      <stop offset="0.55" stop-color="#071730"/>
+      <stop offset="1" stop-color="#05111f"/>
+    </linearGradient>
+    <radialGradient id="trBlue" cx="0.15" cy="0.1" r="0.55">
+      <stop offset="0" stop-color="#36a3ff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#36a3ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="trOr" cx="0.9" cy="0.92" r="0.5">
+      <stop offset="0" stop-color="#E86A27" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#E86A27" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#trg)"/>
+  <g stroke="#36a3ff" stroke-opacity="0.06" stroke-width="1">
+    <polygon points="0,0 360,0 0,300" fill="#0c2349" fill-opacity="0.6"/>
+    <polygon points="360,0 0,300 380,360" fill="#0a1c3a" fill-opacity="0.7"/>
+    <polygon points="1080,0 700,0 1080,340" fill="#0b2147" fill-opacity="0.6"/>
+    <polygon points="700,0 1080,340 720,420" fill="#091a36" fill-opacity="0.7"/>
+    <polygon points="0,1350 0,1010 360,1350" fill="#0c2349" fill-opacity="0.55"/>
+    <polygon points="1080,1350 1080,1000 740,1350" fill="#0a1c3a" fill-opacity="0.6"/>
+    <polygon points="540,560 760,820 380,860" fill="#0b2045" fill-opacity="0.45"/>
+    <polygon points="540,560 760,820 820,520" fill="#08182f" fill-opacity="0.5"/>
+  </g>
+  <rect width="1080" height="1350" fill="url(#trBlue)"/>
+  <rect width="1080" height="1350" fill="url(#trOr)"/>
+</svg>

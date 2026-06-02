@@ -213,6 +213,7 @@ export default function ProductDetail() {
   }, [p]);
 
   const [activeSlide, setActiveSlide] = React.useState(0);
+  const [zoom, setZoom] = React.useState(false);
   React.useEffect(() => setActiveSlide(0), [key]);
 
   const hasMany = slides.length > 1;
@@ -233,6 +234,15 @@ export default function ProductDetail() {
     return () => window.removeEventListener("keydown", onKey);
   }, [hasMany, nextSlide, prevSlide]);
 
+  React.useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setZoom(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom]);
+
   const isComingSoon = !!p?.isComingSoon;
   const [showComingSoon, setShowComingSoon] = React.useState(false);
 
@@ -248,14 +258,16 @@ export default function ProductDetail() {
   }
 
   if (loading)
-    return <div className="text-sm text-slate-600 px-5 py-8">Loading…</div>;
+    return (
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 text-sm text-slate-500 dark:text-adlm-dark-muted">
+        Loading…
+      </div>
+    );
 
   if (!p) {
     return (
-      <div className="px-5 md:px-10 lg:px-20 py-8 space-y-3">
-        <div className="text-sm text-red-600">
-          {err || "Product not found."}
-        </div>
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 space-y-3">
+        <div className="text-sm text-red-600">{err || "Product not found."}</div>
         <Link className="btn" to="/products">
           Back to products
         </Link>
@@ -281,148 +293,314 @@ export default function ProductDetail() {
     ? p.relatedFreeVideoIds
     : [];
 
+  const active = slides[activeSlide];
+  const features = Array.isArray(p.features) ? p.features : [];
+  const subtitle = p.tagline || p.shortDescription || "";
+
+  // One thumbnail button — reused by the desktop rail and the mobile strip.
+  function Thumb({ s, i, className }) {
+    const activeThumb = i === activeSlide;
+    return (
+      <button
+        type="button"
+        onClick={() => setActiveSlide(i)}
+        title={s.type === "video" ? "Video preview" : "Image"}
+        className={`relative rounded-xl overflow-hidden transition ${className} ${
+          activeThumb
+            ? "ring-2 ring-adlm-blue-600"
+            : "ring-1 ring-black/10 dark:ring-white/10 opacity-60 hover:opacity-100"
+        }`}
+      >
+        <img
+          src={s.type === "video" ? s.poster || p.thumbnailUrl || "" : s.src}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        {s.type === "video" && (
+          <span className="absolute inset-0 grid place-items-center">
+            <span className="w-7 h-7 rounded-full bg-black/60 text-white grid place-items-center text-[10px] pl-0.5">
+              ▶
+            </span>
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  const arrowBtn =
+    "absolute top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/85 hover:bg-white text-slate-900 grid place-items-center shadow-lg text-2xl leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 transition";
+
   return (
-    <div className="space-y-6 px-5 md:px-10 lg:px-20 py-8">
-      <div className="card">
-        <h1 className="text-2xl font-semibold">
-          {p.name} ·{" "}
-          {hasDiscount ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="text-slate-400 line-through font-normal text-lg">{ngn(unitNGN)}</span>
-              <span className="text-slate-900">{ngn(discNGN)}</span>
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{pctOff}% OFF</span>
-              <span className="text-slate-500 text-base font-normal">/ {cadence}</span>
-            </span>
-          ) : (
-            <span className="text-slate-700">
-              {ngn(unitNGN)} / {cadence}
-            </span>
-          )}
-        </h1>
+    <>
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-8">
+        {/* Back link */}
+        <Link
+          to="/products"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-adlm-dark-muted hover:text-adlm-blue-700 dark:hover:text-adlm-blue-400 transition"
+        >
+          <span aria-hidden>←</span> Back to products
+        </Link>
 
-        <div className="mt-3 rounded-xl overflow-hidden border bg-black relative">
-          {slides.length === 0 ? null : slides[activeSlide]?.type ===
-            "video" ? (
-            <video
-              className="w-full aspect-video"
-              src={slides[activeSlide].src}
-              controls
-              muted
-              playsInline
-              preload="metadata"
-              poster={slides[activeSlide].poster || undefined}
-            />
-          ) : (
-            <img
-              className="w-full aspect-video object-cover"
-              src={slides[activeSlide].src}
-              alt=""
-            />
-          )}
+        {/* Hero: gallery (left) + buy panel (right) */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.55fr_1fr] gap-6 lg:gap-8">
+          {/* GALLERY — main image left, vertical thumbnail rail right */}
+          <div className="flex gap-3 items-stretch">
+            <div className="flex-1 min-w-0">
+              <div className="relative rounded-2xl overflow-hidden bg-slate-950 ring-1 ring-black/10 dark:ring-white/10 aspect-[16/10] group">
+                {!active ? (
+                  <div className="absolute inset-0 grid place-items-center text-slate-500 text-sm">
+                    No preview available
+                  </div>
+                ) : active.type === "video" ? (
+                  <video
+                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                    src={active.src}
+                    controls
+                    muted
+                    playsInline
+                    preload="metadata"
+                    poster={active.poster || undefined}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setZoom(true)}
+                    aria-label="Zoom image"
+                    className="absolute inset-0 w-full h-full cursor-zoom-in"
+                  >
+                    <img className="w-full h-full object-contain" src={active.src} alt={p.name} />
+                  </button>
+                )}
 
+                {hasMany && (
+                  <>
+                    <button type="button" onClick={prevSlide} aria-label="Previous" className={`${arrowBtn} left-3`}>
+                      ‹
+                    </button>
+                    <button type="button" onClick={nextSlide} aria-label="Next" className={`${arrowBtn} right-3`}>
+                      ›
+                    </button>
+                    <div className="absolute top-3 right-3 text-xs font-medium px-2.5 py-1 rounded-full bg-black/55 text-white">
+                      {activeSlide + 1} / {slides.length}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Mobile thumbnail strip (horizontal) */}
+              {hasMany && (
+                <div className="lg:hidden mt-3 flex gap-2 overflow-x-auto pb-1">
+                  {slides.map((s, i) => (
+                    <Thumb key={`m-${i}`} s={s} i={i} className="w-20 shrink-0 aspect-[4/3]" />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Desktop vertical thumbnail rail (right) */}
+            {hasMany && (
+              <div className="hidden lg:flex flex-col gap-3 w-[92px] shrink-0 overflow-y-auto max-h-[70vh] pr-0.5">
+                {slides.map((s, i) => (
+                  <Thumb key={`v-${i}`} s={s} i={i} className="w-full aspect-[4/3]" />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* BUY PANEL (sticky) */}
+          <div className="lg:sticky lg:top-6 self-start">
+            <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm">
+              {p.category && (
+                <div className="text-xs font-semibold uppercase tracking-wider text-adlm-blue-700 dark:text-adlm-blue-400 mb-2">
+                  {p.category}
+                </div>
+              )}
+              <h1 className="text-2xl md:text-[1.7rem] font-bold leading-tight text-slate-900 dark:text-adlm-dark-text">
+                {p.name}
+              </h1>
+              {subtitle && (
+                <p className="mt-1.5 text-sm text-slate-500 dark:text-adlm-dark-muted">{subtitle}</p>
+              )}
+
+              {/* Price */}
+              <div className="mt-5 flex items-end gap-2 flex-wrap">
+                {hasDiscount ? (
+                  <>
+                    <span className="text-3xl font-extrabold text-slate-900 dark:text-white">{ngn(discNGN)}</span>
+                    <span className="text-lg text-slate-400 line-through">{ngn(unitNGN)}</span>
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-500/15 dark:text-emerald-400 px-2 py-0.5 rounded-full">
+                      {pctOff}% OFF
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-3xl font-extrabold text-slate-900 dark:text-white">{ngn(unitNGN)}</span>
+                )}
+                <span className="text-sm text-slate-500 dark:text-adlm-dark-muted pb-1">/ {cadence}</span>
+              </div>
+              <div className="mt-1.5 text-sm text-slate-500 dark:text-adlm-dark-muted">
+                {unitUSD ? <>≈ {usd(unitUSD)} / {cadence}</> : null}
+                {Number(p.price?.installNGN) > 0 && (
+                  <>
+                    {unitUSD ? " · " : ""}One-time install fee{" "}
+                    <span className="font-semibold text-slate-700 dark:text-adlm-dark-text">{ngn(p.price.installNGN)}</span>
+                  </>
+                )}
+              </div>
+
+              {isComingSoon && (
+                <div className="mt-4 inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
+                  Coming Soon — not yet available for purchase
+                </div>
+              )}
+
+              {/* CTA */}
+              <button
+                type="button"
+                onClick={purchase}
+                className={`mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl py-3 text-base font-semibold text-white transition active:scale-[.99] shadow-lg ${
+                  isComingSoon
+                    ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                    : "bg-adlm-blue-700 hover:bg-adlm-blue-600 shadow-adlm-blue-700/25"
+                }`}
+              >
+                {isComingSoon ? "Notify me when available" : "Purchase now"}
+              </button>
+              <Link
+                to="/products"
+                className="mt-2.5 w-full inline-flex items-center justify-center rounded-xl py-2.5 text-sm font-medium border border-slate-200 dark:border-adlm-dark-border text-slate-700 dark:text-adlm-dark-text hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
+              >
+                Back to products
+              </Link>
+
+              {/* Trust row */}
+              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-adlm-dark-border space-y-2 text-xs text-slate-500 dark:text-adlm-dark-muted">
+                <TrustRow>Secure checkout · cancel anytime</TrustRow>
+                <TrustRow>Instant license activation</TrustRow>
+                <TrustRow>Free onboarding &amp; support</TrustRow>
+              </div>
+
+              {/* Quick feature highlights */}
+              {features.length > 0 && (
+                <ul className="mt-4 space-y-1.5">
+                  {features.slice(0, 4).map((f, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-slate-600 dark:text-adlm-dark-muted">
+                      <span className="text-adlm-blue-700 dark:text-adlm-blue-400 mt-0.5">✓</span>
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Features (full) */}
+        {features.length > 0 && (
+          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-3">What you get</h2>
+            <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+              {features.map((f, i) => (
+                <li key={i} className="flex gap-2 text-sm text-slate-600 dark:text-adlm-dark-muted">
+                  <span className="text-adlm-blue-700 dark:text-adlm-blue-400 mt-0.5">✓</span>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Description */}
+        {p.description && (
+          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-2">About this product</h2>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
+              {p.description}
+            </p>
+          </section>
+        )}
+
+        {/* Related learning */}
+        {related.length > 0 && (
+          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-3">Related learning</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {related.map((v, idx) => {
+                const youtubeId = typeof v === "string" ? v : v?.youtubeId;
+                const title = typeof v === "string" ? "Watch video" : v?.title || "Watch video";
+                const id = extractYouTubeId(youtubeId || "");
+                const thumb =
+                  (typeof v === "object" && v?.thumbnailUrl) ||
+                  (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "");
+
+                return (
+                  <a
+                    key={v?._id || id || idx}
+                    href={id ? `https://www.youtube.com/watch?v=${id}` : "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group rounded-xl border border-slate-200 dark:border-adlm-dark-border overflow-hidden hover:shadow-md transition"
+                  >
+                    {thumb && (
+                      <div className="relative">
+                        <img src={thumb} className="w-full aspect-video object-cover" alt="" />
+                        <span className="absolute inset-0 grid place-items-center">
+                          <span className="w-11 h-11 rounded-full bg-black/55 text-white grid place-items-center text-sm pl-0.5 group-hover:bg-adlm-blue-700 transition">
+                            ▶
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                    <div className="p-3 text-sm font-medium text-slate-700 dark:text-adlm-dark-text">{title}</div>
+                  </a>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {/* Lightbox */}
+      {zoom && active && active.type !== "video" && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 select-none"
+          onClick={() => setZoom(false)}
+        >
+          <img
+            src={active.src}
+            alt={p.name}
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setZoom(false)}
+            aria-label="Close"
+            className="absolute top-4 right-4 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white grid place-items-center text-2xl"
+          >
+            ×
+          </button>
           {hasMany && (
             <>
               <button
                 type="button"
-                onClick={prevSlide}
+                onClick={(e) => { e.stopPropagation(); prevSlide(); }}
                 aria-label="Previous"
-                className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-slate-900 rounded-full w-10 h-10 grid place-items-center shadow"
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 text-white grid place-items-center text-3xl"
               >
                 ‹
               </button>
               <button
                 type="button"
-                onClick={nextSlide}
+                onClick={(e) => { e.stopPropagation(); nextSlide(); }}
                 aria-label="Next"
-                className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-slate-900 rounded-full w-10 h-10 grid place-items-center shadow"
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 text-white grid place-items-center text-3xl"
               >
                 ›
               </button>
-              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-2">
-                {slides.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setActiveSlide(i)}
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      i === activeSlide ? "bg-white" : "bg-white/40"
-                    }`}
-                    aria-label={`Go to slide ${i + 1}`}
-                  />
-                ))}
-              </div>
             </>
           )}
         </div>
-
-        {hasMany && (
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {slides.map((s, i) => (
-              <button
-                key={`${s.type}-${i}`}
-                type="button"
-                onClick={() => setActiveSlide(i)}
-                className={`rounded border overflow-hidden text-left ${
-                  i === activeSlide ? "ring-2 ring-adlm-blue-700" : ""
-                }`}
-                title={s.type === "video" ? "Video preview" : "Image"}
-              >
-                {s.type === "video" ? (
-                  <div className="relative">
-                    <img
-                      src={s.poster || p.thumbnailUrl || ""}
-                      alt=""
-                      className="w-full aspect-video object-cover"
-                    />
-                    <div className="absolute inset-0 grid place-items-center">
-                      <div className="bg-black/60 text-white text-xs px-2 py-1 rounded">
-                        Video
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <img
-                    src={s.src}
-                    alt=""
-                    className="w-full aspect-video object-cover"
-                  />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-2 text-sm text-slate-700">
-          NGN: <span className="font-semibold">{ngn(unitNGN)}</span> / {cadence}
-          {unitUSD ? (
-            <>
-              {" · "}USD: <span className="font-semibold">{usd(unitUSD)}</span>{" "}
-              / {cadence}
-            </>
-          ) : null}
-          {Number(p.price?.installNGN) > 0 && (
-            <>
-              {" · "}Install fee:{" "}
-              <span className="font-semibold">{ngn(p.price.installNGN)}</span>
-            </>
-          )}
-        </div>
-
-        {isComingSoon && (
-          <div className="mt-3 inline-flex items-center gap-2 text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200">
-            Coming Soon — not yet available for purchase
-          </div>
-        )}
-
-        <div className="mt-4 flex gap-2">
-          <button className="btn" onClick={purchase}>
-            {isComingSoon ? "Coming Soon" : "Purchase"}
-          </button>
-          <Link className="btn" to="/products">
-            Back to products
-          </Link>
-        </div>
-      </div>
+      )}
 
       <ComingSoonModal
         show={showComingSoon}
@@ -430,67 +608,17 @@ export default function ProductDetail() {
         title="Coming Soon"
         message="This product isn't available for purchase yet. We'll announce availability here soon."
       />
-
-      {(p.features?.length || 0) > 0 && (
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-2">Features</h2>
-          <ul className="list-disc pl-5 space-y-1 text-sm">
-            {p.features.map((f, i) => (
-              <li key={i}>{f}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {p.description && (
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-2">Description</h2>
-          <p className="whitespace-pre-line text-sm text-slate-700">
-            {p.description}
-          </p>
-        </div>
-      )}
-
-      {related.length > 0 && (
-        <div className="card">
-          <h2 className="font-semibold mb-2">Related learning</h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {related.map((v, idx) => {
-              const youtubeId = typeof v === "string" ? v : v?.youtubeId;
-              const title =
-                typeof v === "string"
-                  ? "Watch video"
-                  : v?.title || "Watch video";
-              const id = extractYouTubeId(youtubeId || "");
-              const thumb =
-                (typeof v === "object" && v?.thumbnailUrl) ||
-                (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "");
-
-              return (
-                <a
-                  key={v?._id || id || idx}
-                  href={id ? `https://www.youtube.com/watch?v=${id}` : "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="border rounded overflow-hidden hover:shadow"
-                >
-                  {thumb && (
-                    <img
-                      src={thumb}
-                      className="w-full aspect-video object-cover"
-                      alt=""
-                    />
-                  )}
-                  <div className="p-2 text-sm">{title}</div>
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
-
-
+function TrustRow({ children }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 grid place-items-center text-[9px]">
+        ✓
+      </span>
+      <span>{children}</span>
+    </div>
+  );
+}

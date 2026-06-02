@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350" fill="none">
+  <defs>
+    <linearGradient id="tcg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#072043"/>
+      <stop offset="0.6" stop-color="#061528"/>
+      <stop offset="1" stop-color="#040d18"/>
+    </linearGradient>
+    <radialGradient id="tcBlue" cx="0.18" cy="0.12" r="0.5">
+      <stop offset="0" stop-color="#36a3ff" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#36a3ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="tcOr" cx="0.88" cy="0.9" r="0.5">
+      <stop offset="0" stop-color="#E86A27" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#E86A27" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="tcDots" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.6" fill="#36a3ff" fill-opacity="0.12"/>
+    </pattern>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#tcg)"/>
+  <rect width="1080" height="1350" fill="url(#tcDots)"/>
+  <g stroke="#36a3ff" stroke-opacity="0.10" stroke-width="1.5">
+    <line x1="40" y1="120" x2="240" y2="120"/>
+    <line x1="240" y1="120" x2="300" y2="200"/>
+    <line x1="840" y1="1230" x2="1040" y2="1230"/>
+    <line x1="780" y1="1150" x2="840" y2="1230"/>
+  </g>
+  <rect width="1080" height="1350" fill="url(#tcBlue)"/>
+  <rect width="1080" height="1350" fill="url(#tcOr)"/>
+</svg>
