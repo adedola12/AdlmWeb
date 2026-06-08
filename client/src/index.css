@@ -426,6 +426,18 @@ body {
 .dark .hover\:bg-gray-50:hover  { background-color: #162842 !important; }
 .dark .hover\:bg-gray-100:hover { background-color: #1a2d4a !important; }
 
+/* Red (error/alert) surfaces — e.g. dashboard reinstall banner. */
+.dark .bg-red-50  { background-color: rgba(244, 63, 94, 0.12) !important; }
+.dark .bg-red-100 { background-color: rgba(244, 63, 94, 0.18) !important; }
+.dark .border-red-200 { border-color: rgba(244, 63, 94, 0.40) !important; }
+.dark .border-red-300 { border-color: rgba(244, 63, 94, 0.50) !important; }
+.dark .text-red-900 { color: #fecdd3 !important; }
+.dark .text-red-800 { color: #fda4af !important; }
+.dark .text-red-700 { color: #fb7185 !important; }
+.dark .text-red-600 { color: #fb7185 !important; }
+.dark .ring-red-100 { --tw-ring-color: rgba(244, 63, 94, 0.32) !important; }
+.dark .ring-red-200 { --tw-ring-color: rgba(244, 63, 94, 0.42) !important; }
+
 /* Divide colours (tables / lists) */
 .dark .divide-slate-100 > * + * { border-color: #1a2d4a !important; }
 .dark .divide-slate-200 > * + * { border-color: #1f3559 !important; }

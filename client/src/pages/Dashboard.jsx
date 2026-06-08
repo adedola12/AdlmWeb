@@ -808,73 +808,64 @@ export default function Dashboard() {
           </div>
 
           <aside className="space-y-4">
-            <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-depth p-4 card-hover">
-              <div className="flex items-start gap-3">
-                <div className="flex-1">
-                  <div className="text-sm text-slate-500">Membership</div>
-                  <div className="mt-2 font-semibold text-lg">Premium Plus</div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    Started on{" "}
-                    {summary?.membership?.startedAt
-                      ? dayjs(summary.membership.startedAt).format("YYYY-MM-DD")
-                      : "—"}
+            <div className="group relative spotlight overflow-hidden bg-white rounded-2xl ring-1 ring-slate-200 shadow-depth p-5 card-hover">
+              <div aria-hidden="true" className="pointer-events-none absolute -top-12 -right-12 w-40 h-40 rounded-full bg-adlm-orange/10 blur-3xl" />
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="grid place-items-center w-11 h-11 rounded-xl flex-shrink-0 bg-gradient-to-br from-adlm-orange to-amber-500 text-white shadow-glow-orange">
+                    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>
+                  </span>
+                  <div>
+                    <div className="text-xs text-slate-500">Membership</div>
+                    <div className="font-bold text-lg text-slate-900 dark:text-white leading-tight">Premium Plus</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm text-slate-500">Status</div>
-                  <div className="mt-2">
-                    <span className="inline-flex items-center gap-2 px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-                      Active
-                    </span>
-                  </div>
-                </div>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Active
+                </span>
+              </div>
+              <div className="relative text-xs text-slate-400 mt-2">
+                Started on{" "}
+                {summary?.membership?.startedAt
+                  ? dayjs(summary.membership.startedAt).format("MMM D, YYYY")
+                  : "—"}
               </div>
 
-              <div className="mt-4 text-sm text-slate-700">
-                <ul className="space-y-2">
-                  <li className="flex items-start gap-2">
-                    <CheckIcon /> Unlimited access to all tutorials
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckIcon /> Priority customer support
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckIcon /> Advanced analytics dashboard
-                  </li>
-                </ul>
-              </div>
+              <ul className="relative mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                <li className="flex items-start gap-2"><CheckIcon /> Unlimited access to all tutorials</li>
+                <li className="flex items-start gap-2"><CheckIcon /> Priority customer support</li>
+                <li className="flex items-start gap-2"><CheckIcon /> Advanced analytics dashboard</li>
+              </ul>
 
-              <div className="mt-4">
-                <button
-                  className="text-left bg-adlm-blue-700 text-white text-sm py-2 px-3 rounded-md hover:bg-slate-50 hover:text-black transition"
-                  onClick={() => navigate("/freebies")}
-                >
-                  ADLM Freebies
-                </button>
-              </div>
+              <button
+                className="relative mt-5 w-full inline-flex items-center justify-center gap-2 bg-adlm-orange text-white text-sm font-semibold py-2.5 px-3 rounded-lg shadow-glow-orange hover:brightness-110 active:scale-[.99] transition"
+                onClick={() => navigate("/freebies")}
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5" /></svg>
+                Explore ADLM Freebies
+              </button>
             </div>
 
-            <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-depth p-4">
-              <div className="text-sm font-semibold">Quick Links</div>
-              <div className="mt-3 grid grid-cols-1 gap-2">
-                <button
-                  className="text-left text-sm py-2 px-3 rounded-md hover:bg-slate-50 transition"
-                  onClick={() => navigate("/projects/revit")}
-                >
-                  Your Projects (Revit)
-                </button>
-                <button
-                  className="text-left text-sm py-2 px-3 rounded-md hover:bg-slate-50 transition"
-                  onClick={() => navigate("/learn")}
-                >
-                  Learning Center
-                </button>
-                <button
-                  className="text-left text-sm py-2 px-3 rounded-md hover:bg-slate-50 transition"
-                  onClick={() => navigate("/support")}
-                >
-                  Contact Support
-                </button>
+            <div className="bg-white rounded-2xl ring-1 ring-slate-200 shadow-depth p-4">
+              <div className="text-sm font-semibold text-slate-900 dark:text-white">Quick Links</div>
+              <div className="mt-3 grid grid-cols-1 gap-1.5">
+                {[
+                  { label: "Your Projects (Revit)", to: "/projects/revit", icon: <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /> },
+                  { label: "Learning Center", to: "/learn", icon: <><path d="M22 10L12 5 2 10l10 5 10-5z" /><path d="M6 12v5c0 1 2.5 2.5 6 2.5s6-1.5 6-2.5v-5" /></> },
+                  { label: "Contact Support", to: "/support", icon: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z" /> },
+                ].map((q) => (
+                  <button
+                    key={q.to}
+                    className="group flex items-center gap-3 text-left text-sm py-2 px-3 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
+                    onClick={() => navigate(q.to)}
+                  >
+                    <span className="text-adlm-blue-700 dark:text-adlm-blue-400">
+                      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{q.icon}</svg>
+                    </span>
+                    <span className="flex-1">{q.label}</span>
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-slate-300 transition group-hover:text-adlm-blue-700 group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                  </button>
+                ))}
               </div>
             </div>
           </aside>
@@ -1007,13 +998,26 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
         return (
           <div
             key={i}
-            className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-depth"
+            className="group relative spotlight rounded-2xl ring-1 ring-slate-200 p-4 sm:p-5 bg-white shadow-depth transition-shadow hover:shadow-depth-lg"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm text-slate-500">{s.productKey}</div>
-                <div className="font-semibold mt-1">
-                  {s.productName || s.productKey}
+            <div className="flex items-start gap-4">
+              <div className="hidden sm:grid place-items-center w-12 h-12 rounded-xl flex-shrink-0 bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue">
+                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12" /></svg>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900 dark:text-white truncate">
+                      {s.productName || s.productKey}
+                    </div>
+                    <div className="mt-1 inline-flex items-center rounded-md bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                      {s.productKey}
+                    </div>
+                  </div>
+                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs ${st.pill}`}>
+                    {st.label}
+                  </span>
                 </div>
 
                 <div className="mt-2">
@@ -1024,45 +1028,34 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
                   />
                 </div>
 
-                <div className="text-xs text-slate-400 mt-2">
-                  {s.billingInterval ? `${s.billingInterval}` : ""}
-                  {s.installFee
-                    ? ` · Install: ₦${Number(s.installFee).toLocaleString()}`
-                    : ""}
-                </div>
-              </div>
-
-              <div className="text-right">
-                <div className="text-xs text-slate-400">Status</div>
-                <div className="mt-1">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-xs ${st.pill}`}
-                  >
-                    {st.label}
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                  {s.billingInterval ? <span className="capitalize">{s.billingInterval}</span> : null}
+                  {s.installFee ? <span>Install: ₦{Number(s.installFee).toLocaleString()}</span> : null}
+                  <span>
+                    Expires:{" "}
+                    <span className="font-medium text-slate-700 dark:text-slate-200">
+                      {s.expiresAt ? dayjs(s.expiresAt).format("MMM D, YYYY") : "—"}
+                    </span>
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 mt-2">Expires</div>
-                <div className="mt-1 text-sm">
-                  {s.expiresAt ? dayjs(s.expiresAt).format("YYYY-MM-DD") : "-"}
+
+                <div className="mt-4 flex gap-2">
+                  <button
+                    className="group/btn inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-adlm-blue-700 text-white text-sm font-medium hover:bg-adlm-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={expired}
+                    onClick={() => onOpen(s)}
+                  >
+                    Open
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover/btn:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                  </button>
+                  <button
+                    className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-adlm-dark-border text-sm hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
+                    onClick={() => onManage?.(s)}
+                  >
+                    Manage
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <button
-                className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={expired}
-                onClick={() => onOpen(s)}
-              >
-                Open
-              </button>
-
-              <button
-                className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
-                onClick={() => onManage?.(s)}
-              >
-                Manage
-              </button>
             </div>
           </div>
         );
