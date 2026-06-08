@@ -79,8 +79,10 @@ export default function Purchase() {
     );
   }, []);
 
-  // Product configuration drawer (which product's side panel is open)
-  const [configKey, setConfigKey] = React.useState(null);
+  // Master-detail config: which product is open in the middle panel, plus a
+  // local draft the user edits before clicking the 3D "Add to order" button.
+  const [activeKey, setActiveKey] = React.useState(null);
+  const [draft, setDraft] = React.useState({ periods: 1, seats: 1, firstTime: false });
 
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
@@ -226,12 +228,6 @@ export default function Purchase() {
     );
   }
 
-  function ensureInCart(key) {
-    setCart((c) =>
-      c[key] ? c : { ...c, [key]: { periods: 1, seats: 1, firstTime: false } },
-    );
-  }
-
   function removeFromCart(key) {
     setCart((c) => {
       const { [key]: _omit, ...rest } = c;
@@ -239,11 +235,44 @@ export default function Purchase() {
     });
   }
 
-  // Open the side configuration drawer for a product (adds it to the order
-  // with sensible defaults so the right-hand summary updates immediately).
-  function openConfig(key) {
-    ensureInCart(key);
-    setConfigKey(key);
+  // Select a product into the middle config panel. Loads its existing cart
+  // config into the draft if present, else defaults. Does NOT add to the
+  // order — that happens when the user clicks the 3D Add button.
+  function selectProduct(key) {
+    setActiveKey(key);
+    const e = cart[key];
+    setDraft(
+      e
+        ? { periods: e.periods, seats: e.seats, firstTime: !!e.firstTime }
+        : { periods: 1, seats: 1, firstTime: false },
+    );
+  }
+
+  // Patch the draft (clamped; seats locked to 1 for personal licenses).
+  function patchDraft(patch) {
+    setDraft((d) => {
+      const next = { ...d, ...patch };
+      next.periods = Math.max(parseInt(next.periods || 1, 10), 1);
+      next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
+      if (licenseType !== "organization") next.seats = 1;
+      return next;
+    });
+  }
+
+  // Commit the current draft to the cart (add or update the active product).
+  function commitActive() {
+    if (!activeKey) return;
+    setCart((c) => ({
+      ...c,
+      [activeKey]: {
+        periods: Math.max(parseInt(draft.periods || 1, 10), 1),
+        seats:
+          licenseType === "organization"
+            ? Math.max(parseInt(draft.seats || 1, 10), 1)
+            : 1,
+        firstTime: !!draft.firstTime,
+      },
+    }));
   }
 
   /** Pick the best price: discounted if set, otherwise actual */
@@ -785,83 +814,231 @@ export default function Purchase() {
         </div>
       )}
 
-      {/* Catalog + live summary */}
-      <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
-        {/* LEFT — product catalog */}
-        <div>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-              Choose your products
-            </h2>
-            <span className="text-xs text-slate-500">{chosen.length} in order</span>
+      {/* Products (vertical list) · Configurator (middle) · Summary (right) */}
+      <div className="grid lg:grid-cols-[260px_1fr_340px] gap-5 items-start">
+        {/* LEFT — vertical product list */}
+        <aside className="lg:sticky lg:top-20">
+          <div className="text-sm font-semibold text-slate-900 dark:text-white mb-2">
+            Products
           </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
             {products.map((p) => {
               const k = getProductKey(p);
-              const entry = cart[k];
-              const inCart = !!entry;
-              const { monthly, yearly, install } = getPrices(p);
+              const inCart = !!cart[k];
+              const active = activeKey === k;
+              const { monthly, yearly } = getPrices(p);
               const unitShown = p.billingInterval === "yearly" ? yearly : monthly;
-              const calc = inCart ? lineCalc(p, entry) : null;
-              const periodLabel = p.billingInterval === "yearly" ? "yr" : "mo";
-
               return (
                 <button
                   type="button"
                   key={p._id || k}
-                  onClick={() => openConfig(k)}
-                  className={`text-left group relative spotlight rounded-2xl border bg-white p-4 shadow-depth transition lift ${
-                    inCart
-                      ? "border-adlm-blue-700 ring-2 ring-adlm-blue-700"
-                      : "border-slate-200 dark:border-adlm-dark-border hover:border-adlm-blue-400"
+                  onClick={() => selectProduct(k)}
+                  className={`w-full text-left rounded-xl border p-3 shadow-depth transition flex items-center gap-2.5 ${
+                    active
+                      ? "border-adlm-blue-700 ring-2 ring-adlm-blue-700 bg-blue-50/60 dark:bg-adlm-blue-700/10"
+                      : "border-slate-200 dark:border-adlm-dark-border bg-white hover:border-adlm-blue-400"
                   }`}
                 >
-                  {inCart && (
-                    <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-                      <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>
-                      In order
+                  <span
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      inCart ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+                    }`}
+                    title={inCart ? "In your order" : undefined}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-slate-900 dark:text-white truncate">
+                      {p.name}
                     </span>
-                  )}
-                  <div className="font-semibold text-slate-900 dark:text-white pr-16">
-                    {p.name}
-                  </div>
-                  <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted clamp-2">
-                    {p.blurb}
-                  </div>
-                  <div className="mt-3 flex items-end gap-1">
-                    <span className="text-xl font-bold text-slate-900 dark:text-white">
-                      {fmt(unitShown, currency)}
+                    <span className="block text-xs text-slate-500">
+                      {fmt(unitShown, currency)} / {p.billingInterval === "yearly" ? "yr" : "mo"}
                     </span>
-                    <span className="text-xs text-slate-500 mb-0.5">
-                      / {p.billingInterval === "yearly" ? "year" : "month"}
-                    </span>
-                  </div>
-                  {!!install && (
-                    <div className="text-[11px] text-slate-500 mt-0.5">
-                      + {fmt(install, currency)} one-time install
-                    </div>
-                  )}
-                  {inCart && calc ? (
-                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-adlm-dark-border flex items-center justify-between text-sm">
-                      <span className="text-slate-500">
-                        {calc.periods} {periodLabel}
-                        {calc.seats > 1 ? ` · ${calc.seats} seats` : ""}
-                      </span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {fmt(calc.total, currency)}
-                      </span>
-                    </div>
-                  ) : null}
-                  <div className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-adlm-blue-700 dark:text-adlm-blue-400">
-                    {inCart ? "Edit configuration" : "Configure & add"}
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
-                  </div>
+                  </span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className={`w-4 h-4 flex-shrink-0 transition ${
+                      active ? "text-adlm-blue-700 dark:text-adlm-blue-400 translate-x-0.5" : "text-slate-300 dark:text-slate-600"
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
                 </button>
               );
             })}
           </div>
-        </div>
+        </aside>
+
+        {/* MIDDLE — configurator for the active product */}
+        <section>
+          {(() => {
+            const p = activeKey
+              ? products.find((pp) => getProductKey(pp) === activeKey)
+              : null;
+            if (!p) {
+              return (
+                <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border p-10 text-center">
+                  <div className="mx-auto w-12 h-12 rounded-xl grid place-items-center bg-adlm-blue-700/10 text-adlm-blue-700 dark:text-adlm-blue-400 mb-3">
+                    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+                  </div>
+                  <div className="font-semibold text-slate-900 dark:text-white">
+                    Pick a product to configure
+                  </div>
+                  <div className="mt-1 text-sm text-slate-500 max-w-sm mx-auto">
+                    Choose one from the list to set duration, seats and install —
+                    then add it to your order.
+                  </div>
+                </div>
+              );
+            }
+            const key = getProductKey(p);
+            const prices = getPrices(p);
+            const isYearly = p.billingInterval === "yearly";
+            const presets = isYearly ? [1, 2, 3] : [1, 6, 12];
+            const unitWord = isYearly ? "year" : "month";
+            const calc = lineCalc(p, draft);
+            const inCart = !!cart[key];
+            const stepClass =
+              "px-3.5 py-2 text-lg leading-none hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition select-none";
+            return (
+              <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth-lg overflow-hidden">
+                {/* header */}
+                <div className="relative overflow-hidden bg-adlm-navy text-white p-5 md:p-6">
+                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 grid-overlay opacity-40 mask-radial" />
+                  <div aria-hidden="true" className="pointer-events-none absolute -top-12 right-6 w-44 h-44 rounded-full bg-adlm-blue-600/25 blur-3xl" />
+                  <div className="relative">
+                    {p.category && (
+                      <div className="text-xs font-semibold uppercase tracking-wider text-blue-200/90">
+                        {p.category}
+                      </div>
+                    )}
+                    <h2 className="mt-1 text-xl md:text-2xl font-bold tracking-tight">{p.name}</h2>
+                    {p.blurb && <p className="mt-1 text-sm text-blue-100/80 max-w-xl">{p.blurb}</p>}
+                    <div className="mt-3 flex items-end gap-2">
+                      <span className="text-2xl font-extrabold">
+                        {fmt(isYearly ? prices.yearly : prices.monthly, currency)}
+                      </span>
+                      <span className="text-sm text-blue-100/80 mb-0.5">
+                        / {unitWord}{licenseType === "organization" ? " · per seat" : ""}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* body */}
+                <div className="p-5 md:p-6 space-y-6">
+                  {/* Duration */}
+                  <div>
+                    <div className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+                      Duration ({isYearly ? "years" : "months"})
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      {presets.map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => patchDraft({ periods: n })}
+                          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ring-1 transition ${
+                            Number(draft.periods) === n
+                              ? "bg-adlm-blue-700 text-white ring-adlm-blue-700"
+                              : "ring-slate-200 dark:ring-adlm-dark-border hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
+                          }`}
+                        >
+                          {n} {isYearly ? (n > 1 ? "yrs" : "yr") : "mo"}
+                        </button>
+                      ))}
+                      <div className="inline-flex items-center rounded-lg ring-1 ring-slate-200 dark:ring-adlm-dark-border overflow-hidden">
+                        <button type="button" className={stepClass} onClick={() => patchDraft({ periods: Number(draft.periods || 1) - 1 })} aria-label="Decrease">−</button>
+                        <input
+                          type="number"
+                          min="1"
+                          value={draft.periods}
+                          onChange={(e) => patchDraft({ periods: e.target.value })}
+                          className="w-12 text-center bg-transparent outline-none py-2"
+                        />
+                        <button type="button" className={stepClass} onClick={() => patchDraft({ periods: Number(draft.periods || 1) + 1 })} aria-label="Increase">+</button>
+                      </div>
+                    </div>
+                    {!isYearly && (
+                      <p className="text-xs text-slate-500">Tip: 6 and 12 months unlock better pricing.</p>
+                    )}
+                  </div>
+
+                  {/* Seats */}
+                  {licenseType === "organization" ? (
+                    <div>
+                      <div className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Seats / users</div>
+                      <div className="inline-flex items-center rounded-lg ring-1 ring-slate-200 dark:ring-adlm-dark-border overflow-hidden">
+                        <button type="button" className={stepClass} onClick={() => patchDraft({ seats: Number(draft.seats || 1) - 1 })} aria-label="Decrease seats">−</button>
+                        <input
+                          type="number"
+                          min="1"
+                          value={draft.seats}
+                          onChange={(e) => patchDraft({ seats: e.target.value })}
+                          className="w-12 text-center bg-transparent outline-none py-2"
+                        />
+                        <button type="button" className={stepClass} onClick={() => patchDraft({ seats: Number(draft.seats || 1) + 1 })} aria-label="Increase seats">+</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-500">
+                      Personal license · 1 seat. Switch to <b>Organization</b> in the header for multiple seats.
+                    </div>
+                  )}
+
+                  {/* Install */}
+                  {!!prices.install && (
+                    <label className="flex items-start gap-3 rounded-xl ring-1 ring-slate-200 dark:ring-adlm-dark-border p-3 cursor-pointer">
+                      <input type="checkbox" checked={draft.firstTime} onChange={(e) => patchDraft({ firstTime: e.target.checked })} className="mt-0.5" />
+                      <span className="text-sm">
+                        <span className="font-medium text-slate-800 dark:text-white">First-time install</span>
+                        <span className="block text-xs text-slate-500">
+                          One-time fee of {fmt(prices.install, currency)}
+                          {licenseType === "organization" ? " per seat" : ""}.
+                        </span>
+                      </span>
+                    </label>
+                  )}
+
+                  {/* Live total + 3D Add button */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-1">
+                    <div className="sm:flex-1">
+                      <div className="text-xs text-slate-500">
+                        {fmt(calc.unit, currency)} × {calc.seats} seat(s) × {calc.periods} {unitWord}(s)
+                        {draft.firstTime ? " + install" : ""}
+                      </div>
+                      <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                        {fmt(calc.total, currency)}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {inCart && (
+                        <button
+                          type="button"
+                          onClick={() => removeFromCart(key)}
+                          className="px-4 py-3 rounded-xl text-sm font-medium text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={commitActive}
+                        className="btn-3d inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-base font-bold text-white"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+                        {inCart ? "Update order" : "Add to order"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </section>
 
         {/* RIGHT — sticky live summary */}
         <aside className="lg:sticky lg:top-20">
@@ -870,7 +1047,7 @@ export default function Purchase() {
 
             {chosen.length === 0 ? (
               <div className="text-sm text-slate-600 dark:text-adlm-dark-muted">
-                No items yet. Pick a product on the left to configure it.
+                No items yet. Pick a product and tap <b>Add to order</b>.
               </div>
             ) : (
               <>
@@ -885,27 +1062,23 @@ export default function Purchase() {
                     const k = getProductKey(p);
                     const entry = cart[k];
                     const calc = lineCalc(p, entry);
-                    const periodLabel =
-                      p.billingInterval === "yearly" ? "yr" : "mo";
+                    const periodLabel = p.billingInterval === "yearly" ? "yr" : "mo";
 
                     return (
                       <button
                         type="button"
                         key={k}
-                        onClick={() => openConfig(k)}
+                        onClick={() => selectProduct(k)}
                         className="w-full flex items-center justify-between gap-3 text-left rounded-lg px-2 py-1.5 -mx-2 hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
                       >
                         <div className="min-w-0">
                           <div className="truncate">
-                            {p.name} · {calc.periods} {periodLabel} · {calc.seats}{" "}
-                            seat(s)
+                            {p.name} · {calc.periods} {periodLabel} · {calc.seats} seat(s)
                             {entry.firstTime ? " + install" : ""}
                           </div>
                           <div className="text-xs text-slate-500 truncate">{k}</div>
                         </div>
-                        <div className="font-medium shrink-0">
-                          {fmt(calc.total, currency)}
-                        </div>
+                        <div className="font-medium shrink-0">{fmt(calc.total, currency)}</div>
                       </button>
                     );
                   })}
@@ -923,21 +1096,15 @@ export default function Purchase() {
                           {selectedLocation.durationDays || 1} day(s)
                         </div>
                       </div>
-                      <div className="font-medium">
-                        {fmt(trainingCost, currency)}
-                      </div>
+                      <div className="font-medium">{fmt(trainingCost, currency)}</div>
                     </div>
                     {wantsBimInstall && bimInstallCost > 0 && (
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="truncate">BIM Software Installation</div>
-                          <div className="text-xs text-slate-500">
-                            Office computers setup
-                          </div>
+                          <div className="text-xs text-slate-500">Office computers setup</div>
                         </div>
-                        <div className="font-medium">
-                          {fmt(bimInstallCost, currency)}
-                        </div>
+                        <div className="font-medium">{fmt(bimInstallCost, currency)}</div>
                       </div>
                     )}
                   </div>
@@ -953,11 +1120,7 @@ export default function Purchase() {
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value)}
                     />
-                    <button
-                      className="btn btn-sm"
-                      type="button"
-                      onClick={applyCoupon}
-                    >
+                    <button className="btn btn-sm" type="button" onClick={applyCoupon}>
                       Apply
                     </button>
                   </div>
@@ -984,9 +1147,7 @@ export default function Purchase() {
 
                   {vatCfg.enabled && vatCfg.percent > 0 && (
                     <div className="flex items-center justify-between">
-                      <div>
-                        {vatCfg.label} ({vatCfg.percent}%)
-                      </div>
+                      <div>{vatCfg.label} ({vatCfg.percent}%)</div>
                       <div className="font-medium">+ {fmt(vatAmount, currency)}</div>
                     </div>
                   )}
@@ -1011,195 +1172,6 @@ export default function Purchase() {
           </div>
         </aside>
       </div>
-
-      {/* Product configuration drawer */}
-      {(() => {
-        const p = configKey
-          ? products.find((pp) => getProductKey(pp) === configKey)
-          : null;
-        const open = !!p;
-        const key = p ? getProductKey(p) : "";
-        const entry = p ? cart[key] : null;
-        const prices = p ? getPrices(p) : null;
-        const calc = p && entry ? lineCalc(p, entry) : null;
-        const isYearly = p?.billingInterval === "yearly";
-        const presets = isYearly ? [1, 2, 3] : [1, 6, 12];
-        const unitWord = isYearly ? "year" : "month";
-        const stepClass =
-          "px-3 py-2 text-lg leading-none hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition select-none";
-        return (
-          <>
-            <div
-              className={`fixed inset-0 z-[130] bg-black/50 backdrop-blur-sm transition-opacity ${
-                open ? "opacity-100" : "opacity-0 pointer-events-none"
-              }`}
-              onClick={() => setConfigKey(null)}
-            />
-            <aside
-              className={`fixed top-0 right-0 bottom-0 z-[140] w-[420px] max-w-[92vw] bg-white dark:bg-adlm-dark-panel shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
-                open ? "translate-x-0" : "translate-x-full"
-              }`}
-            >
-              {p && entry && (
-                <>
-                  <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-200 dark:border-adlm-dark-border">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wider text-adlm-blue-700 dark:text-adlm-blue-400">
-                        Configure
-                      </div>
-                      <h3 className="mt-0.5 text-lg font-bold text-slate-900 dark:text-white">
-                        {p.name}
-                      </h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setConfigKey(null)}
-                      className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-adlm-dark-hover"
-                      aria-label="Close"
-                    >
-                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 18 18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-5 space-y-6">
-                    <div className="flex items-end gap-2">
-                      <span className="text-2xl font-extrabold text-slate-900 dark:text-white">
-                        {fmt(isYearly ? prices.yearly : prices.monthly, currency)}
-                      </span>
-                      <span className="text-sm text-slate-500 mb-1">
-                        / {unitWord}
-                        {licenseType === "organization" ? " · per seat" : ""}
-                      </span>
-                    </div>
-
-                    {/* Duration */}
-                    <div>
-                      <div className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
-                        Duration ({isYearly ? "years" : "months"})
-                      </div>
-                      <div className="flex flex-wrap gap-2 mb-2.5">
-                        {presets.map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() => updateItem(key, { periods: n })}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium ring-1 transition ${
-                              Number(entry.periods) === n
-                                ? "bg-adlm-blue-700 text-white ring-adlm-blue-700"
-                                : "ring-slate-200 dark:ring-adlm-dark-border hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
-                            }`}
-                          >
-                            {n} {isYearly ? (n > 1 ? "yrs" : "yr") : "mo"}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="inline-flex items-center rounded-lg ring-1 ring-slate-200 dark:ring-adlm-dark-border overflow-hidden">
-                        <button type="button" className={stepClass} onClick={() => updateItem(key, { periods: Math.max(1, Number(entry.periods || 1) - 1) })} aria-label="Decrease">−</button>
-                        <input
-                          type="number"
-                          min="1"
-                          value={entry.periods}
-                          onChange={(e) => updateItem(key, { periods: e.target.value })}
-                          className="w-14 text-center bg-transparent outline-none py-2"
-                        />
-                        <button type="button" className={stepClass} onClick={() => updateItem(key, { periods: Number(entry.periods || 1) + 1 })} aria-label="Increase">+</button>
-                      </div>
-                      {!isYearly && (
-                        <p className="mt-1.5 text-xs text-slate-500">
-                          Tip: 6 and 12 months unlock better pricing.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Seats */}
-                    {licenseType === "organization" ? (
-                      <div>
-                        <div className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
-                          Seats / users
-                        </div>
-                        <div className="inline-flex items-center rounded-lg ring-1 ring-slate-200 dark:ring-adlm-dark-border overflow-hidden">
-                          <button type="button" className={stepClass} onClick={() => updateItem(key, { seats: Math.max(1, Number(entry.seats || 1) - 1) })} aria-label="Decrease seats">−</button>
-                          <input
-                            type="number"
-                            min="1"
-                            value={entry.seats}
-                            onChange={(e) => updateItem(key, { seats: e.target.value })}
-                            className="w-14 text-center bg-transparent outline-none py-2"
-                          />
-                          <button type="button" className={stepClass} onClick={() => updateItem(key, { seats: Number(entry.seats || 1) + 1 })} aria-label="Increase seats">+</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-slate-500">
-                        Personal license · 1 seat. Switch to <b>Organization</b> in
-                        the header to buy multiple seats.
-                      </div>
-                    )}
-
-                    {/* Install */}
-                    {!!prices.install && (
-                      <label className="flex items-start gap-3 rounded-xl ring-1 ring-slate-200 dark:ring-adlm-dark-border p-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={entry.firstTime}
-                          onChange={(e) => updateItem(key, { firstTime: e.target.checked })}
-                          className="mt-0.5"
-                        />
-                        <span className="text-sm">
-                          <span className="font-medium text-slate-800 dark:text-white">
-                            First-time install
-                          </span>
-                          <span className="block text-xs text-slate-500">
-                            One-time installation fee of {fmt(prices.install, currency)}
-                            {licenseType === "organization" ? " per seat" : ""}.
-                          </span>
-                        </span>
-                      </label>
-                    )}
-
-                    {/* Live item subtotal */}
-                    {calc && (
-                      <div className="rounded-xl bg-slate-50 dark:bg-white/5 p-4">
-                        <div className="text-xs text-slate-500">
-                          {fmt(calc.unit, currency)} × {calc.seats} seat(s) ×{" "}
-                          {calc.periods} {unitWord}(s)
-                          {entry.firstTime ? " + install" : ""}
-                        </div>
-                        <div className="mt-1 flex items-end justify-between">
-                          <span className="text-sm text-slate-500">Item subtotal</span>
-                          <span className="text-xl font-bold text-slate-900 dark:text-white">
-                            {fmt(calc.total, currency)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-5 border-t border-slate-200 dark:border-adlm-dark-border flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        removeFromCart(key);
-                        setConfigKey(null);
-                      }}
-                      className="px-4 py-2.5 rounded-lg text-sm font-medium text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
-                    >
-                      Remove
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfigKey(null)}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-adlm-blue-700 hover:bg-adlm-blue-600 shadow-glow-blue transition"
-                    >
-                      Done · {fmt(calc ? calc.total : 0, currency)}
-                    </button>
-                  </div>
-                </>
-              )}
-            </aside>
-          </>
-        );
-      })()}
 
       {/* Manual payment modal */}
       {showManualPayModal && (
