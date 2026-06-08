@@ -1127,7 +1127,7 @@ function LearningTab({
               return (
                 <div
                   key={course.sku || entry.enrollment?.courseSku}
-                  className="rounded-xl ring-1 ring-slate-200 bg-white p-4 shadow-depth"
+                  className="group relative spotlight rounded-2xl ring-1 ring-slate-200 bg-white p-4 shadow-depth lift"
                 >
                   <div className="flex flex-col gap-4 md:flex-row md:items-start">
                     <div className="h-20 w-28 overflow-hidden rounded-lg bg-slate-100 shrink-0">
@@ -1252,7 +1252,7 @@ function LearningTab({
               {classrooms.map((c) => (
                 <div
                   key={c._id}
-                  className="rounded-xl ring-1 ring-slate-200 bg-white p-4 shadow-depth"
+                  className="group relative spotlight rounded-2xl ring-1 ring-slate-200 bg-white p-4 shadow-depth lift"
                 >
                   <div className="flex flex-col md:flex-row md:items-start gap-3">
                     <div className="min-w-0 flex-1">
@@ -1335,7 +1335,7 @@ function LearningTab({
               return (
                 <div
                   key={String(enr._id)}
-                  className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-depth"
+                  className="group relative spotlight rounded-2xl ring-1 ring-slate-200 p-4 bg-white shadow-depth lift"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -1536,7 +1536,7 @@ function OrdersTab({
                 return (
                   <div
                     key={o._id}
-                    className="rounded-xl ring-1 ring-slate-200 bg-white p-4 shadow-depth"
+                    className="group relative spotlight rounded-2xl ring-1 ring-slate-200 bg-white p-4 shadow-depth lift"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
@@ -1748,7 +1748,7 @@ function OrdersTab({
               return (
                 <div
                   key={String(enr._id)}
-                  className="rounded-xl ring-1 ring-slate-200 bg-white p-4 shadow-depth"
+                  className="group relative spotlight rounded-2xl ring-1 ring-slate-200 bg-white p-4 shadow-depth lift"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -1882,7 +1882,7 @@ function InstallationsTab({
               return (
                 <div
                   key={String(enr._id)}
-                  className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-depth"
+                  className="group relative spotlight rounded-2xl ring-1 ring-slate-200 p-4 bg-white shadow-depth lift"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -2033,7 +2033,7 @@ function InstallationsTab({
               return (
                 <div
                   key={p._id}
-                  className="rounded-xl ring-1 ring-slate-200 p-4 bg-white shadow-depth"
+                  className="group relative spotlight rounded-2xl ring-1 ring-slate-200 p-4 bg-white shadow-depth lift"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

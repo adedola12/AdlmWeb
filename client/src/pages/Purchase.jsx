@@ -5,6 +5,10 @@ import { apiAuthed } from "../http.js";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import LicenseScene from "../components/LicenseScene.jsx";
 
+// Real 3D scene is lazy-loaded (it pulls in three.js) so it never blocks the
+// initial checkout render; the SVG <LicenseScene> is the instant fallback.
+const LicenseScene3D = React.lazy(() => import("../components/LicenseScene3D.jsx"));
+
 const fmt = (n, currency = "USD") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
     n || 0,
@@ -61,6 +65,19 @@ export default function Purchase() {
   const [qs] = useSearchParams();
   const navigate = useNavigate();
   const returnTo = qs.get("return") || "/dashboard";
+
+  // Use the real 3D scene unless the user prefers reduced motion. Starts false
+  // so the first paint uses the lightweight SVG, then upgrades to 3D.
+  const [use3D, setUse3D] = React.useState(false);
+  React.useEffect(() => {
+    setUse3D(
+      !(
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ),
+    );
+  }, []);
 
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
@@ -589,11 +606,28 @@ export default function Purchase() {
             </div>
           </div>
 
-          {/* Animated persona scene — morphs with the selected license type */}
-          <LicenseScene
-            type={licenseType}
-            className="w-full max-w-[300px] mx-auto lg:max-w-none"
-          />
+          {/* Animated persona scene — morphs with the selected license type.
+              Real 3D when supported; SVG scene as instant / reduced-motion fallback. */}
+          {use3D ? (
+            <React.Suspense
+              fallback={
+                <LicenseScene
+                  type={licenseType}
+                  className="w-full max-w-[300px] mx-auto lg:max-w-none"
+                />
+              }
+            >
+              <LicenseScene3D
+                type={licenseType}
+                className="w-full max-w-[300px] mx-auto lg:max-w-none"
+              />
+            </React.Suspense>
+          ) : (
+            <LicenseScene
+              type={licenseType}
+              className="w-full max-w-[300px] mx-auto lg:max-w-none"
+            />
+          )}
         </div>
       </div>
 

@@ -119,6 +119,10 @@ html {
   border: 1px solid #cbd5e1;
   border-radius: var(--adlm-radius-md);
   font-family: 'Lexend', sans-serif;
+  /* Explicit text color so inputs/selects placed inside a text-white
+     container (e.g. the navy hero) don't inherit white-on-white. */
+  color: #0f172a;
+  background-color: #ffffff;
 }
 .input:focus {
   border-color: var(--adlm-blue-700);
@@ -764,7 +768,9 @@ body {
 }
 
 /* ── License persona scene (Purchase page) ──────────────────────────── */
-.license-stage { perspective: 1000px; width: 100%; }
+.license-stage { position: relative; perspective: 1000px; width: 100%; }
+.license-stage__canvas { transform: none !important; transition: none !important; }
+.license-stage__canvas canvas { display: block; border-radius: 14px; }
 .license-stage__inner {
   position: relative;
   width: 100%;
