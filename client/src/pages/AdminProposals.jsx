@@ -661,7 +661,7 @@ export default function AdminProposals() {
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-xl font-semibold">Digital Transformation Proposals</h1>
+            <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight"><span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400" />Digital Transformation Proposals</h1>
             <p className="text-sm text-slate-500">
               Build, download, and send client proposals — auto-logged to the
               ADLM Notion CRM.

@@ -541,45 +541,52 @@ export default function Purchase() {
         }
       `}</style>
 
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">Subscribe</h1>
-          <p className="text-sm text-slate-600">
-            Select products, duration, seats (for organization), and
-            installation.
-          </p>
-        </div>
+      <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white shadow-depth">
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-16 right-10 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
+        <div className="relative p-5 md:p-7 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/15 ring-1 ring-adlm-orange/30">
+              Checkout
+            </span>
+            <h1 className="mt-3 text-2xl md:text-3xl font-bold tracking-tight">Subscribe</h1>
+            <p className="mt-1 text-sm text-blue-100/80 max-w-xl">
+              Select products, duration, seats (for organization), and installation.
+            </p>
+          </div>
 
-        <div className="flex items-end gap-3 flex-wrap">
-          <label className="text-sm">
-            <div className="mb-1">Currency</div>
-            <select
-              className="input"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-            >
-              <option value="NGN">NGN (₦)</option>
-              <option value="USD">USD ($)</option>
-            </select>
-          </label>
+          <div className="flex items-end gap-3 flex-wrap">
+            <label className="text-sm">
+              <div className="mb-1 text-blue-100/90">Currency</div>
+              <select
+                className="input"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+              >
+                <option value="NGN">NGN (₦)</option>
+                <option value="USD">USD ($)</option>
+              </select>
+            </label>
 
-          <label className="text-sm">
-            <div className="mb-1">Purchase for</div>
-            <select
-              className="input"
-              value={licenseType}
-              onChange={(e) =>
-                setLicenseType(
-                  e.target.value === "organization"
-                    ? "organization"
-                    : "personal",
-                )
-              }
-            >
-              <option value="personal">Personal</option>
-              <option value="organization">Organization</option>
-            </select>
-          </label>
+            <label className="text-sm">
+              <div className="mb-1 text-blue-100/90">Purchase for</div>
+              <select
+                className="input"
+                value={licenseType}
+                onChange={(e) =>
+                  setLicenseType(
+                    e.target.value === "organization"
+                      ? "organization"
+                      : "personal",
+                  )
+                }
+              >
+                <option value="personal">Personal</option>
+                <option value="organization">Organization</option>
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -730,9 +737,13 @@ export default function Purchase() {
           return (
             <div
               key={p._id || k}
-              className={`border rounded p-3 ${inCart ? "ring-2 ring-adlm-blue-700" : ""}`}
+              className={`group relative spotlight rounded-xl border bg-white p-4 shadow-depth transition lift ${
+                inCart
+                  ? "border-adlm-blue-700 ring-2 ring-adlm-blue-700"
+                  : "border-slate-200 dark:border-adlm-dark-border hover:border-adlm-blue-400"
+              }`}
             >
-              <div className="font-medium">{p.name}</div>
+              <div className="font-semibold text-slate-900">{p.name}</div>
               <div className="text-sm text-slate-600 clamp-2">{p.blurb}</div>
 
               <div className="mt-2 text-sm">
@@ -985,10 +996,10 @@ export default function Purchase() {
       {showManualPayModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowManualPayModal(false)}
           />
-          <div className="relative bg-white rounded p-6 max-w-lg w-full z-10">
+          <div className="relative bg-white rounded-2xl shadow-depth-lg p-6 max-w-lg w-full z-10">
             <h3 className="text-lg font-semibold mb-2">Pay to account</h3>
             <p className="text-sm text-slate-700 mb-4">
               Use the following account details to make payment, then click "I

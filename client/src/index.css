@@ -388,6 +388,23 @@ body {
 .dark .border-rose-200 { border-color: rgba(244, 63, 94, 0.45) !important; }
 .dark .border-dashed.border-slate-200 { border-color: #2a4774 !important; }
 
+/* Ring colours — secured/admin pages use ring-* heavily for card/pill
+   outlines. Without these, dark mode shows bright outlines on dark cards. */
+.dark .ring-slate-200 { --tw-ring-color: #1f3559 !important; }
+.dark .ring-slate-100 { --tw-ring-color: #1a2d4a !important; }
+.dark .ring-slate-300 { --tw-ring-color: #2a4774 !important; }
+.dark .ring-black\/5  { --tw-ring-color: rgba(255, 255, 255, 0.08) !important; }
+.dark .ring-black\/10 { --tw-ring-color: rgba(255, 255, 255, 0.12) !important; }
+.dark .ring-white\/40 { --tw-ring-color: rgba(255, 255, 255, 0.22) !important; }
+.dark .ring-blue-100   { --tw-ring-color: rgba(36, 99, 235, 0.35) !important; }
+.dark .ring-blue-200   { --tw-ring-color: rgba(36, 99, 235, 0.45) !important; }
+.dark .ring-emerald-100 { --tw-ring-color: rgba(16, 185, 129, 0.32) !important; }
+.dark .ring-emerald-200 { --tw-ring-color: rgba(16, 185, 129, 0.42) !important; }
+.dark .ring-amber-100  { --tw-ring-color: rgba(245, 158, 11, 0.32) !important; }
+.dark .ring-amber-200  { --tw-ring-color: rgba(245, 158, 11, 0.42) !important; }
+.dark .ring-rose-100   { --tw-ring-color: rgba(244, 63, 94, 0.32) !important; }
+.dark .ring-rose-200   { --tw-ring-color: rgba(244, 63, 94, 0.42) !important; }
+
 /* Divide colours (tables / lists) */
 .dark .divide-slate-100 > * + * { border-color: #1a2d4a !important; }
 .dark .divide-slate-200 > * + * { border-color: #1f3559 !important; }

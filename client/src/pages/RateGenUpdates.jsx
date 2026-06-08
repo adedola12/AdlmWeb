@@ -271,11 +271,14 @@ export default function RateGenUpdates() {
       `}</style>
 
       {/* Header */}
-      <div className="rounded-xl overflow-hidden bg-adlm-navy-tertiary text-white shadow-md">
-        <div className="max-w-6xl mx-auto px-4 py-6 md:py-8">
+      <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white shadow-depth">
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-16 right-10 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
+        <div className="relative max-w-6xl mx-auto px-4 py-6 md:py-8">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-xl md:text-2xl font-semibold">
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
                 RateGen Updates
               </h1>
               <p className="text-sm text-blue-100/90 mt-1">

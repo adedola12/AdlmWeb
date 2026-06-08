@@ -218,10 +218,42 @@ export default function Profile() {
   });
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* IDENTITY HERO */}
+      <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white shadow-depth">
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-16 right-8 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-16 left-1/4 w-56 h-56 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
+        <div className="relative p-5 md:p-7 flex items-center gap-4">
+          <img
+            key={`hero-${finalImgSrc}`}
+            src={finalImgSrc}
+            onError={() => setImgErr(true)}
+            className="w-20 h-20 rounded-2xl object-cover ring-2 ring-white/20 bg-slate-100 shadow-depth flex-shrink-0"
+            alt="Profile"
+          />
+          <div className="min-w-0">
+            <div className="text-xl md:text-2xl font-bold tracking-tight truncate">
+              {firstName || lastName ? `${firstName} ${lastName}`.trim() : (username || "Your profile")}
+            </div>
+            <div className="text-sm text-blue-100/80 truncate">{user?.email}</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 ring-1 ring-white/20 capitalize">
+                {user?.role || "member"}
+              </span>
+              {zone ? (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-adlm-orange/20 text-amber-200 ring-1 ring-adlm-orange/30">
+                  {zone}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* PROFILE CARD */}
       <div className="card">
-        <h1 className="text-xl font-semibold mb-4">Profile</h1>
+        <h1 className="text-xl font-semibold mb-4">Account details</h1>
 
         <div className="flex items-center gap-4 mb-4">
           <img

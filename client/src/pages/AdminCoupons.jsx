@@ -238,7 +238,7 @@ export default function AdminCoupons() {
     <div className="space-y-6 px-8 md:px-25 py-4">
       <div className="card">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">Admin · Coupons</h1>
+          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight"><span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400" />Admin · Coupons</h1>
           <button className="btn btn-sm" onClick={loadAll}>
             Refresh
           </button>
