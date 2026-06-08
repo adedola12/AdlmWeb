@@ -211,7 +211,7 @@ export default function PmBoqItemPicker({
                     fix, 30% final fix). Live updates the chip's
                     contribution and the parent's baselineCost. */}
                 <span
-                  className="inline-flex items-center gap-0.5 rounded-full bg-white/70 px-1.5 py-0.5 border border-blue-200/60"
+                  className="inline-flex items-center gap-0.5 rounded-full bg-white/70 dark:bg-white/10 px-1.5 py-0.5 border border-blue-200/60"
                   title="Weight (%) — share of this BoQ line allocated to the current task. Lower this when other tasks also link to the same line."
                 >
                   <input

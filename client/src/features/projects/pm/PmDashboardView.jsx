@@ -1493,7 +1493,7 @@ function CoverageOffenders({ title, icon: Icon, tone, rows, measureLabel, measur
         </span>
       </button>
       {open ? (
-        <div className="bg-white/70 px-3 pb-3 pt-1">
+        <div className="bg-white/70 dark:bg-white/5 px-3 pb-3 pt-1">
           {note ? (
             <div className="text-[10px] text-slate-600 italic mb-2">{note}</div>
           ) : null}

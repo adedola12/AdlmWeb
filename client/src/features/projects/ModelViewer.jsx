@@ -279,7 +279,7 @@ export default function ModelViewer({
                     onClick={() => selectItem(it, key)}
                     className={[
                       "block w-full border-b border-slate-100 px-2.5 py-2 text-left text-[11px] transition last:border-b-0 disabled:opacity-50",
-                      active ? "bg-orange-50" : "hover:bg-slate-50",
+                      active ? "bg-orange-50 dark:bg-orange-500/15" : "hover:bg-slate-50",
                     ].join(" ")}
                   >
                     <div className="truncate font-medium text-slate-800" title={itemLabel(it)}>
