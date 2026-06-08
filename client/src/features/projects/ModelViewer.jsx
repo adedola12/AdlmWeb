@@ -10,6 +10,7 @@
 import React from "react";
 import { IfcViewer } from "../../lib/ifcViewer.js";
 import { deriveItemDiscipline } from "../../lib/boqCategory.js";
+import { API_BASE } from "../../config";
 
 const DISCIPLINE_LABELS = {
   architectural: "Architectural",
@@ -24,7 +25,13 @@ function itemLabel(it) {
   return joined || String(it?.description || "").trim() || "(unnamed item)";
 }
 
-export default function ModelViewer({ projectModels = {}, items = [], productKey = "" }) {
+export default function ModelViewer({
+  projectModels = {},
+  items = [],
+  productKey = "",
+  projectId = "",
+  accessToken = "",
+}) {
   // Disciplines that actually have an attached model.
   const available = React.useMemo(
     () =>
@@ -96,19 +103,33 @@ export default function ModelViewer({ projectModels = {}, items = [], productKey
     viewer.onPick = (id) => setPickedId(id);
     viewerRef.current = viewer;
 
-    viewer
-      .loadFromUrl(modelUrl, (p) => {
-        if (!cancelled) setProgress(p);
-      })
-      .then(() => {
+    // Fetch the IFC through the SAME-ORIGIN API proxy (not the R2 URL directly):
+    // the public r2.dev URLs don't send CORS headers, which showed up as
+    // "Failed to fetch" in the viewer. The proxy is authed, so send the token.
+    (async () => {
+      try {
+        const base = API_BASE || window.location.origin;
+        const proxyUrl = `${base}/projects/${productKey}/${projectId}/models/${discipline}/file`;
+        const res = await fetch(proxyUrl, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+          credentials: "include",
+        });
+        if (!res.ok) {
+          throw new Error(`Couldn't load the model (HTTP ${res.status}).`);
+        }
+        const buf = await res.arrayBuffer();
+        if (cancelled) return;
+        await viewer.loadFromBuffer(buf, (p) => {
+          if (!cancelled) setProgress(p);
+        });
         if (!cancelled) setStatus("ready");
-      })
-      .catch((e) => {
+      } catch (e) {
         if (!cancelled) {
           setStatus("error");
           setError(e?.message || "Failed to load the model.");
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -119,7 +140,7 @@ export default function ModelViewer({ projectModels = {}, items = [], productKey
       }
       if (viewerRef.current === viewer) viewerRef.current = null;
     };
-  }, [modelUrl, isFragments]);
+  }, [modelUrl, isFragments, productKey, projectId, discipline, accessToken]);
 
   function selectItem(it, key) {
     setSelectedItemKey(key);

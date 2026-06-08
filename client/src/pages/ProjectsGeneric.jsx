@@ -4545,6 +4545,8 @@ export default function ProjectsGeneric() {
                 computedShown={computedShown}
                 items={items}
                 productKey={toolNorm}
+                projectId={selectedId}
+                accessToken={accessToken}
                 onDeleteItem={deleteItem}
                 onMoveItem={moveItem}
                 boqUndoStack={boqUndoStack}

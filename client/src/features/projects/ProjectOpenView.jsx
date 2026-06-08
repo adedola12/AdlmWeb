@@ -186,6 +186,8 @@ export default function ProjectOpenView({
   itemQuery = "",
   items = [],
   productKey = "",
+  projectId = "",
+  accessToken = "",
   linkedGroupsCount = 0,
   loadingValuations = false,
   onActualQtyChange,
@@ -649,6 +651,8 @@ export default function ProjectOpenView({
             projectModels={projectModels}
             items={items}
             productKey={productKey}
+            projectId={projectId}
+            accessToken={accessToken}
           />
         </React.Suspense>
       ) : null}

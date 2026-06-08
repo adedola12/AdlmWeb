@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+} from "@aws-sdk/client-s3";
 
 function requiredEnv(name) {
   const value = String(process.env[name] || "").trim();
@@ -52,6 +58,28 @@ export function isR2Configured() {
     "R2_BUCKET",
     "R2_PUBLIC_BASE_URL",
   ].every((name) => String(process.env[name] || "").trim());
+}
+
+/**
+ * Streams an object back from R2 (for same-origin proxying of model files so the
+ * browser viewer isn't blocked by R2's missing CORS headers). Returns the Node
+ * Readable body plus content metadata.
+ */
+export async function getR2ObjectStream(objectKey) {
+  if (!objectKey) throw new Error("An object key is required.");
+  if (!isR2Configured()) throw new Error("R2 storage is not configured.");
+
+  const bucket = requiredEnv("R2_BUCKET");
+  const client = createClient();
+
+  const resp = await client.send(
+    new GetObjectCommand({ Bucket: bucket, Key: objectKey }),
+  );
+  return {
+    stream: resp.Body, // Node.js Readable in the AWS SDK v3
+    contentType: resp.ContentType,
+    contentLength: resp.ContentLength,
+  };
 }
 
 export async function deleteFromR2(objectKey) {

@@ -47,6 +47,7 @@ import {
   isR2Configured,
   uploadBufferToR2,
   deleteFromR2,
+  getR2ObjectStream,
 } from "../utils/r2Upload.js";
 import {
   buildBillQtyChanges,
@@ -2895,6 +2896,52 @@ async function deleteProjectModel(req, res) {
   }
 }
 
+// ── Same-origin model proxy ──────────────────────────────────────────
+// Streams the attached IFC/.frag back through the API so the in-browser 3D
+// viewer can fetch it WITHOUT hitting R2 cross-origin (the public r2.dev URLs
+// don't send CORS headers, which surfaced as "Failed to fetch" in the viewer).
+async function streamProjectModel(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const discipline = String(req.params.discipline || "").toLowerCase();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    if (!DISCIPLINES.has(discipline)) {
+      return res.status(400).json({ error: "Invalid discipline" });
+    }
+
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const model = project.models?.[discipline];
+    if (!model?.key) return res.status(404).json({ error: "No model attached" });
+
+    const { stream, contentType, contentLength } = await getR2ObjectStream(model.key);
+    res.setHeader(
+      "Content-Type",
+      contentType ||
+        (model.format === "fragments"
+          ? "application/octet-stream"
+          : "application/x-step"),
+    );
+    if (contentLength) res.setHeader("Content-Length", String(contentLength));
+    res.setHeader("Cache-Control", "private, max-age=300");
+
+    stream.on("error", (e) => {
+      console.error("R2 stream error:", e?.message || e);
+      if (!res.headersSent) res.status(502).end();
+      else res.destroy();
+    });
+    stream.pipe(res);
+  } catch (err) {
+    console.error("GET model file error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Server error" });
+  }
+}
+
 async function reopenFinalAccount(req, res) {
   try {
     const productKey = requestedProductKey(req);
@@ -3525,6 +3572,14 @@ router.delete(
   mapEntitlementParam,
   requireEntitlementParam,
   deleteProjectModel,
+);
+
+// Same-origin proxy so the 3D viewer can fetch the IFC without R2 CORS issues.
+router.get(
+  "/:productKey/:id/models/:discipline/file",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  streamProjectModel,
 );
 
 router.get(
