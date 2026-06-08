@@ -4353,12 +4353,15 @@ export default function ProjectsGeneric() {
             {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="font-semibold truncate">{title}</h1>
-                <div className="text-xs text-slate-500 mt-1">
+                <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
+                  <span className="truncate">{title}</span>
+                </h1>
+                <div className="text-xs text-slate-500 dark:text-adlm-dark-muted mt-1">
                   {sel ? (
                     <>
-                      <span className="text-slate-600">Opened:</span>{" "}
-                      <b className="text-slate-800">{sel?.name}</b>
+                      <span className="text-slate-600 dark:text-adlm-dark-muted">Opened:</span>{" "}
+                      <b className="text-slate-800 dark:text-adlm-dark-text">{sel?.name}</b>
                     </>
                   ) : (
                     "Select a project folder to open"
@@ -4369,10 +4372,10 @@ export default function ProjectsGeneric() {
               {/* Search projects (always visible) */}
               {!sel && (
                 <div className="w-full md:w-[420px]">
-                  <div className="flex items-center gap-2 border rounded-md px-2 py-2 bg-white">
-                    <FaSearch className="text-slate-500" />
+                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border px-3 py-2 bg-white dark:bg-adlm-dark-panel shadow-depth focus-within:ring-2 focus-within:ring-adlm-blue-700/40 transition">
+                    <FaSearch className="text-slate-400" />
                     <input
-                      className="w-full outline-none text-sm"
+                      className="w-full outline-none text-sm bg-transparent"
                       placeholder="Search projects..."
                       value={projectQuery}
                       onChange={(e) => setProjectQuery(e.target.value)}
