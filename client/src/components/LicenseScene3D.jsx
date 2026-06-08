@@ -51,6 +51,20 @@ function makeWindowTexture() {
   return t;
 }
 
+/* Soft radial contact shadow (alpha) for grounding the model. */
+function makeShadowTexture() {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const x = c.getContext("2d");
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 60);
+  g.addColorStop(0, "rgba(0,0,0,0.55)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  x.fillStyle = g;
+  x.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+
 function buildPersonal() {
   const g = new THREE.Group();
   const navy = new THREE.MeshStandardMaterial({ color: 0x1d3e6e, roughness: 0.6 });
@@ -104,7 +118,7 @@ function buildOrg() {
     map: tex,
     emissive: 0xffffff,
     emissiveMap: tex,
-    emissiveIntensity: 0.6,
+    emissiveIntensity: 0.9,
     roughness: 0.4,
   });
 
@@ -118,6 +132,9 @@ function buildOrg() {
   const roof = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), orange);
   roof.position.y = 1.62;
   g.add(roof);
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8), orange);
+  antenna.position.y = 2.0;
+  g.add(antenna);
 
   const left = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.7, 0.85), b1);
   left.position.set(-1.18, -0.35, 0.1);
@@ -166,24 +183,45 @@ export default function LicenseScene3D({ type = "personal", className = "" }) {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(width, height);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-    camera.position.set(0, 1.2, 6.4);
-    camera.lookAt(0, 0.4, 0);
+    const camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 100);
+    camera.position.set(0, 1.5, 7);
+    camera.lookAt(0, 0.5, 0);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-    const key = new THREE.DirectionalLight(0xffffff, 1.15);
-    key.position.set(4, 6, 5);
+    // Lighting: soft sky/ground ambient + a key, a cool fill and a warm rim.
+    scene.add(new THREE.HemisphereLight(0xbfd8ff, 0x0a1320, 0.9));
+    const key = new THREE.DirectionalLight(0xffffff, 1.35);
+    key.position.set(4, 7, 5);
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0xe86a27, 0.5);
-    rim.position.set(-5, 2, -3);
+    const fill = new THREE.DirectionalLight(0x88b4ff, 0.45);
+    fill.position.set(-4, 2, 4);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xe86a27, 0.7);
+    rim.position.set(-5, 3, -4);
     scene.add(rim);
 
     const personal = buildPersonal();
     const org = buildOrg();
     scene.add(personal, org);
+
+    // Soft contact shadow under the active model (static — doesn't rotate).
+    const shadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.8, 4.8),
+      new THREE.MeshBasicMaterial({
+        map: makeShadowTexture(),
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.55,
+      }),
+    );
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = -1.28;
+    scene.add(shadow);
 
     const startOrg = typeRef.current === "organization";
     let pScale = startOrg ? 0.001 : 1;
@@ -201,8 +239,8 @@ export default function LicenseScene3D({ type = "personal", className = "" }) {
       personal.visible = pScale > 0.02;
       org.visible = oScale > 0.02;
       const active = isOrg ? org : personal;
-      active.rotation.y = t * 0.5;
-      active.position.y = Math.sin(t * 1.2) * 0.06;
+      active.rotation.y = t * 0.4;
+      active.position.y = Math.sin(t * 1.1) * 0.05;
       renderer.render(scene, camera);
       raf = requestAnimationFrame(frame);
     }

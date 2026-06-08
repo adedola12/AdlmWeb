@@ -189,23 +189,6 @@ export default function Dashboard() {
   const [err, setErr] = React.useState("");
   const [loadingSummary, setLoadingSummary] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState("subscriptions");
-  const [orders, setOrders] = React.useState([]);
-  const [ordersPage, setOrdersPage] = React.useState(1);
-  const [ordersPagination, setOrdersPagination] = React.useState({
-    page: 1,
-    pages: 1,
-    total: 0,
-    limit: 10,
-    hasPrev: false,
-    hasNext: false,
-  });
-
-  const [loadingOrders, setLoadingOrders] = React.useState(false);
-  const [ordersErr, setOrdersErr] = React.useState("");
-
-  // Invoices
-  const [invoices, setInvoices] = React.useState([]);
-  const [loadingInvoices, setLoadingInvoices] = React.useState(false);
 
   // ✅ Physical training enrollments (new)
   const [pEnrollments, setPEnrollments] = React.useState([]);
@@ -265,35 +248,6 @@ export default function Dashboard() {
     }
   }, [accessToken]);
 
-  const loadOrders = React.useCallback(
-    async (page) => {
-      setLoadingOrders(true);
-      setOrdersErr("");
-      try {
-        const data = await apiAuthed(`/me/orders?page=${page}&limit=10`, {
-          token: accessToken,
-        });
-
-        setOrders(data?.items || []);
-        setOrdersPagination(
-          data?.pagination || {
-            page,
-            pages: 1,
-            total: (data?.items || []).length,
-            limit: 10,
-            hasPrev: page > 1,
-            hasNext: false,
-          },
-        );
-      } catch (e) {
-        setOrdersErr(e.message || "Failed to load orders");
-      } finally {
-        setLoadingOrders(false);
-      }
-    },
-    [accessToken],
-  );
-
   const loadPTrainings = React.useCallback(async () => {
     setLoadingPEnrollments(true);
     setPEnrollmentsErr("");
@@ -306,23 +260,6 @@ export default function Dashboard() {
       setPEnrollmentsErr(e.message || "Failed to load physical trainings");
     } finally {
       setLoadingPEnrollments(false);
-    }
-  }, [accessToken]);
-
-  const [invoicesErr, setInvoicesErr] = React.useState("");
-
-  const loadInvoices = React.useCallback(async () => {
-    setLoadingInvoices(true);
-    setInvoicesErr("");
-    try {
-      const data = await apiAuthed(`/me/invoices`, { token: accessToken });
-      setInvoices(Array.isArray(data?.invoices) ? data.invoices : []);
-      if (data?._error) setInvoicesErr(data._error);
-    } catch (e) {
-      setInvoices([]);
-      setInvoicesErr(e?.message || "Failed to load invoices");
-    } finally {
-      setLoadingInvoices(false);
     }
   }, [accessToken]);
 
@@ -645,107 +582,7 @@ export default function Dashboard() {
 
               {/* Orders, Invoices & Installations now live on the Profile page */}
 
-              {activeTab === "invoices" && (
-                <div className="space-y-3">
-                  <h2 className="font-semibold text-lg">Invoices</h2>
-                  {loadingInvoices && (
-                    <div className="text-sm text-slate-500">Loading invoices…</div>
-                  )}
-                  {!loadingInvoices && invoices.length === 0 && (
-                    <div className="text-sm text-slate-500">
-                      No invoices found.
-                      {invoicesErr && (
-                        <span className="block text-xs text-rose-500 mt-1">
-                          {invoicesErr}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {invoices.map((inv) => {
-                    const curr = inv.currency === "USD" ? "$" : "\u20A6";
-                    const statusColors = {
-                      sent: "bg-blue-100 text-blue-700",
-                      paid: "bg-emerald-100 text-emerald-700",
-                      overdue: "bg-red-100 text-red-700",
-                      cancelled: "bg-slate-200 text-slate-500",
-                    };
-                    return (
-                      <div
-                        key={inv._id}
-                        className="rounded-xl bg-white ring-1 ring-slate-200 p-4"
-                      >
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div>
-                            <div className="font-semibold text-slate-900">
-                              {inv.invoiceNumber}
-                            </div>
-                            <div className="text-xs text-slate-500">
-                              {dayjs(inv.invoiceDate).format("MMM D, YYYY")}
-                              {inv.dueDate
-                                ? ` · Due: ${dayjs(inv.dueDate).format("MMM D, YYYY")}`
-                                : ""}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[inv.status] || "bg-slate-100 text-slate-600"}`}
-                            >
-                              {inv.status}
-                            </span>
-                            <span className="font-semibold text-slate-900">
-                              {curr}
-                              {Number(inv.total || 0).toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Quick summary of items */}
-                        <div className="mt-2 text-xs text-slate-500">
-                          {(inv.items || []).length} item{(inv.items || []).length !== 1 ? "s" : ""}
-                          {" · "}Total: <span className="font-medium text-slate-700">{curr}{Number(inv.total || 0).toLocaleString()}</span>
-                        </div>
-
-                        {/* View / Download */}
-                        <div className="mt-3 pt-2 border-t border-slate-100 flex gap-2">
-                          <button
-                            className="text-xs px-3 py-1.5 rounded-md font-medium text-white"
-                            style={{ backgroundColor: "#091E39" }}
-                            onClick={() => navigate(`/invoice/${inv._id}`)}
-                          >
-                            View Invoice
-                          </button>
-                          <button
-                            className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
-                            onClick={async () => {
-                              try {
-                                const resp = await fetch(
-                                  `${API_BASE}/me/invoices/${inv._id}/pdf`,
-                                  {
-                                    headers: { Authorization: `Bearer ${accessToken}` },
-                                    credentials: "include",
-                                  },
-                                );
-                                if (!resp.ok) throw new Error("Download failed");
-                                const blob = await resp.blob();
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement("a");
-                                a.href = url;
-                                a.download = `${inv.invoiceNumber}.pdf`;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                              } catch {
-                                alert("Download failed");
-                              }
-                            }}
-                          >
-                            Download PDF
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              {/* invoices tab moved to the Profile page */}
 
             </div>
           </div>
