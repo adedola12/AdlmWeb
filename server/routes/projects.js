@@ -33,7 +33,11 @@ import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { User } from "../models/User.js";
-import { deriveItemCategory, deriveItemTrade } from "../util/boqCategory.js";
+import {
+  deriveItemCategory,
+  deriveItemTrade,
+  deriveItemDiscipline,
+} from "../util/boqCategory.js";
 import {
   applyLearnedCategoriesToItems,
   recordCategoryFeedback,
@@ -52,7 +56,10 @@ const DISCIPLINES = new Set(["architectural", "structural", "mep"]);
 
 const uploadModelFile = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: IFC_MAX_BYTES },
+  // fileSize caps the IFC; fieldSize is raised well above busboy's 1 MB
+  // default so the `presentElementIds` JSON field (Element IDs the client
+  // parsed from the IFC) is never silently truncated on large models.
+  limits: { fileSize: IFC_MAX_BYTES, fieldSize: 25 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const name = String(file.originalname || "").toLowerCase();
     if (name.endsWith(".ifc") || name.endsWith(".ifczip") || name.endsWith(".frag")) {
@@ -396,6 +403,7 @@ function sanitizeItems(items, productKey = "") {
       code: item.code != null ? String(item.code) : "",
       category: item.category != null ? String(item.category) : "",
       trade: item.trade != null ? String(item.trade) : "",
+      discipline: item.discipline != null ? String(item.discipline) : "",
 
       // ── Takeoff → Materials linkage + margin inputs (QUIV upgrade) ──
       // Persist and echo these so derived material/labour lines stay linked
@@ -420,6 +428,11 @@ function sanitizeItems(items, productKey = "") {
     // rule-based classifier so the Trade-format BoQ and grouping view work.
     if (!baseItem.trade) {
       baseItem.trade = deriveItemTrade(baseItem, productKey);
+    }
+    // Same for discipline — drives the per-discipline IFC validation gate.
+    // Reuses the (now-derived) category so grouping and validation agree.
+    if (!baseItem.discipline) {
+      baseItem.discipline = deriveItemDiscipline(baseItem, productKey);
     }
 
     safe.push(baseItem);
@@ -2616,6 +2629,106 @@ async function uploadProjectModel(req, res) {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
+    // ── Element-ID validation gate ──────────────────────────────────────
+    // The quantities for this discipline were measured from specific Revit
+    // elements (item.elementIds). The uploaded model must contain every one
+    // of those Element IDs, matched on the Revit Element ID written into each
+    // IFC element's `Tag`. The client parses the IFC in-browser and sends the
+    // Element IDs it found that belong to this project (presentElementIds);
+    // we do the authoritative subset check here. Strict 100%: any missing
+    // required ID ⇒ the model is wrong/stale ⇒ reject. We run this BEFORE
+    // deleting/uploading so a rejected upload never disturbs an existing
+    // valid model.
+    const isFragUpload = String(file.originalname || "")
+      .toLowerCase()
+      .endsWith(".frag");
+
+    // Element IDs the quantities for THIS discipline depend on. Derived live
+    // (deriveItemDiscipline honors a persisted/explicit item.discipline, else
+    // classifies) so legacy projects validate without a re-save.
+    const requiredIds = new Set();
+    for (const item of project.items || []) {
+      if (deriveItemDiscipline(item, productKey) !== discipline) continue;
+      for (const raw of item.elementIds || []) {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n > 0) requiredIds.add(n);
+      }
+    }
+
+    // Element IDs the client found in the IFC (pre-filtered client-side to this
+    // project's element universe to keep the payload small).
+    const presentSet = new Set();
+    let presentParsed = null;
+    try {
+      presentParsed = JSON.parse(req.body?.presentElementIds || "[]");
+    } catch {
+      presentParsed = null;
+    }
+    if (Array.isArray(presentParsed)) {
+      for (const raw of presentParsed) {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n > 0) presentSet.add(n);
+      }
+    }
+    const ifcElementCount = Number(req.body?.ifcElementCount) || 0;
+
+    let validation;
+    if (isFragUpload) {
+      // Pre-converted fragments carry no STEP Tags — can't run the ID gate.
+      validation = {
+        status: "unchecked",
+        requiredCount: requiredIds.size,
+        matchedCount: 0,
+        missingCount: 0,
+        ifcElementCount,
+        sampleMissingIds: [],
+        checkedAt: new Date(),
+      };
+    } else if (requiredIds.size === 0) {
+      // Nothing measured for this discipline — nothing to gate against.
+      validation = {
+        status: "no-quantities",
+        requiredCount: 0,
+        matchedCount: 0,
+        missingCount: 0,
+        ifcElementCount,
+        sampleMissingIds: [],
+        checkedAt: new Date(),
+      };
+    } else {
+      const missing = [];
+      for (const id of requiredIds) {
+        if (!presentSet.has(id)) missing.push(id);
+      }
+      const matchedCount = requiredIds.size - missing.length;
+      if (missing.length > 0) {
+        // Wrong or stale model — reject. Existing model (if any) untouched.
+        return res.status(422).json({
+          error:
+            `This ${discipline} model is missing ${missing.length} of ${requiredIds.size} ` +
+            `element(s) the ${discipline} quantities were measured from. It looks like the ` +
+            `wrong or an outdated model — re-export the IFC from the same Revit model (with ` +
+            `Element IDs) and try again.`,
+          code: "MODEL_ELEMENT_MISMATCH",
+          discipline,
+          requiredCount: requiredIds.size,
+          matchedCount,
+          missingCount: missing.length,
+          ifcElementCount,
+          sampleMissing: missing.slice(0, 50),
+        });
+      }
+      validation = {
+        status: "valid",
+        requiredCount: requiredIds.size,
+        matchedCount,
+        missingCount: 0,
+        ifcElementCount,
+        sampleMissingIds: [],
+        checkedAt: new Date(),
+      };
+    }
+
     // Delete any existing model in this discipline — one per slot.
     const existing = project.models?.[discipline];
     if (existing?.key) {
@@ -2648,6 +2761,7 @@ async function uploadProjectModel(req, res) {
       format,
       uploadedAt: new Date(),
       uploadedBy: userId,
+      validation,
     };
 
     if (!project.models) project.models = {};
@@ -2660,6 +2774,7 @@ async function uploadProjectModel(req, res) {
       ok: true,
       discipline,
       model: modelEntry,
+      validation,
       version: project.version,
     });
   } catch (err) {

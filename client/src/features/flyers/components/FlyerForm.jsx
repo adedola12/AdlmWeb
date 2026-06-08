@@ -5,7 +5,7 @@
 // upload through /admin/media/upload-file (Cloudinary) and we store the URL.
 import React, { useRef, useState } from "react";
 import { apiAuthed } from "../../../http.js";
-import { TEMPLATES, PLATFORM_OPTIONS } from "../lib/defaults.js";
+import { TEMPLATES, PLATFORM_OPTIONS, templatesForFormat, defaultFlyer } from "../lib/defaults.js";
 import { STYLES, applyStyle } from "../lib/styles.js";
 
 const NAVY = "#05111f";
@@ -197,28 +197,33 @@ export default function FlyerForm({ flyer, onChange, accessToken }) {
   }
 
   const t = flyer.template;
+  const fmt = flyer.format || "portrait";
+  const isThumbnail = fmt === "thumbnail";
   const isEvent = t === "event";
   const isCountdown = t === "countdown";
-  const isLaunch = t === "launch";
+  const isLaunch = t === "launch" || t === "thumbTutorial";
   const isSubscription = t === "subscription";
   const isTicket = t === "ticket";
+  const hasFeaturePills = t === "thumbFeatures";
+  const isThumbHook = t === "thumbHook";
 
   return (
     <div style={{ fontFamily: "'Lexend', sans-serif" }}>
-      {/* Template switcher */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 3, background: "#ECEEF5", borderRadius: 8, padding: 3, marginBottom: 18 }}>
-        {TEMPLATES.map((tp) => (
-          <button
-            key={tp.value}
-            type="button"
-            onClick={() => switchTemplate(tp.value)}
-            title={tp.hint}
-            style={{ padding: "8px 2px", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Lexend', sans-serif", background: flyer.template === tp.value ? NAVY : "transparent", color: flyer.template === tp.value ? "#fff" : "#5A6485" }}
-          >
-            {tp.label}
-          </button>
-        ))}
-      </div>
+      {/* Template switcher — filtered to current format */}
+      {(() => {
+        const fmtTemplates = templatesForFormat(fmt);
+        const cols = fmtTemplates.length <= 3 ? fmtTemplates.length : 3;
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 3, background: "#ECEEF5", borderRadius: 8, padding: 3, marginBottom: 18 }}>
+            {fmtTemplates.map((tp) => (
+              <button key={tp.value} type="button" onClick={() => switchTemplate(tp.value)} title={tp.hint}
+                style={{ padding: "8px 4px", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Lexend', sans-serif", background: flyer.template === tp.value ? NAVY : "transparent", color: flyer.template === tp.value ? "#fff" : "#5A6485" }}>
+                {tp.label}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Style */}
       <div style={{ marginBottom: 18 }}>
@@ -264,6 +269,21 @@ export default function FlyerForm({ flyer, onChange, accessToken }) {
                   <Select value={flyer.heroFrame} onChange={(v) => set("heroFrame", v)} options={[{ value: "browser", label: "Browser window" }, { value: "laptop", label: "Laptop" }, { value: "none", label: "Plain" }]} />
                 </Field>
               </>
+            )}
+            {hasFeaturePills && (
+              <Field label="Feature pills" hint="Up to 4 — one per line">
+                <textarea
+                  style={{ ...inputStyle, minHeight: 80, resize: "vertical", lineHeight: 1.6 }}
+                  value={(flyer.bullets || []).join("\n")}
+                  onChange={(e) => set("bullets", e.target.value.split("\n").slice(0, 4))}
+                  placeholder={"Auto rate calculation\nCustomizable material prices\nReal-time rate logic\nNigerian & Int'l market"}
+                />
+              </Field>
+            )}
+            {isThumbHook && (
+              <p style={{ fontSize: 11, color: "#5A6485", background: "#F6F7FB", borderRadius: 6, padding: "8px 10px", margin: "0 0 14px" }}>
+                Hook style: the first accent-word(s) render giant in orange, remaining words in the theme colour. Set the accent word index below.
+              </p>
             )}
             {isTicket && (
               <>

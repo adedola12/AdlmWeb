@@ -390,16 +390,6 @@ const router = createBrowserRouter([
       { path: "*", element: <NotFound /> },
     ],
   },
-
-  // TEMP: standalone public flyer-template preview for visual verification.
-  // Top-level (outside <App/>) so no Nav/HelpBot chrome — remove after review.
-  {
-    path: "/__flyer-preview",
-    async lazy() {
-      const { default: FlyerPreview } = await import("./pages/__FlyerPreview.jsx");
-      return { element: <FlyerPreview /> };
-    },
-  },
 ]);
 
 // Find the AuthProvider wrap below; we add ThemeProvider as an outer

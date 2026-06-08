@@ -549,6 +549,44 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
             {bytes(model.sizeBytes)} · {model.format?.toUpperCase() || "IFC"}
             {model.uploadedAt ? ` · ${formatDate(model.uploadedAt)}` : ""}
           </div>
+          {model.validation?.status ? (
+            <div className="mt-1">
+              {(() => {
+                const v = model.validation || {};
+                const map = {
+                  valid: [
+                    "bg-emerald-100 text-emerald-800",
+                    `✓ Verified — ${v.matchedCount}/${v.requiredCount} quantity elements found`,
+                  ],
+                  "no-quantities": [
+                    "bg-slate-200 text-slate-600",
+                    "No quantities to verify against",
+                  ],
+                  unchecked: [
+                    "bg-amber-100 text-amber-800",
+                    "Not Element-ID checked",
+                  ],
+                  invalid: [
+                    "bg-red-100 text-red-800",
+                    `⚠ ${v.missingCount} of ${v.requiredCount} elements missing`,
+                  ],
+                };
+                const [cls, text] = map[v.status] || map.unchecked;
+                return (
+                  <span
+                    className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold ${cls}`}
+                    title={
+                      v.ifcElementCount
+                        ? `${v.ifcElementCount.toLocaleString()} elements in the IFC`
+                        : undefined
+                    }
+                  >
+                    {text}
+                  </span>
+                );
+              })()}
+            </div>
+          ) : null}
           <div className="mt-1 flex items-center gap-2">
             <a
               href={model.url}

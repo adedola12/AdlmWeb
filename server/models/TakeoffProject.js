@@ -225,6 +225,31 @@ const FinalAccountSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Result of validating an uploaded IFC against the discipline's quantities.
+// The Element IDs the quantities were measured from (item.elementIds) must
+// all be present in the model's IFC (matched on the Revit Element ID written
+// into each element's IFC `Tag`). status:
+//   "valid"         — every required Element ID was found in the IFC
+//   "invalid"       — (reserved) a previously-stored model failed a re-check
+//   "no-quantities" — this discipline has no measured items to validate against
+//   "unchecked"     — no client-side parse was available (e.g. a .frag upload)
+const ModelValidationSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["valid", "invalid", "no-quantities", "unchecked"],
+      default: "unchecked",
+    },
+    requiredCount: { type: Number, default: 0 }, // distinct Element IDs the discipline's quantities need
+    matchedCount: { type: Number, default: 0 }, // of those, how many are in the IFC
+    missingCount: { type: Number, default: 0 },
+    ifcElementCount: { type: Number, default: 0 }, // total elements the client parsed from the IFC
+    sampleMissingIds: { type: [Number], default: [] }, // capped sample for the UI
+    checkedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 // IFC / BIM model attached to the project — one per discipline. Files are
 // stored in Cloudflare R2 (S3-compatible); `key` is the R2 object key used
 // for deletion and signed-URL regeneration, `url` is the public-read URL.
@@ -237,6 +262,7 @@ const ProjectModelSchema = new mongoose.Schema(
     format: { type: String, default: "ifc" }, // "ifc" | "fragments"
     uploadedAt: { type: Date, default: null },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    validation: { type: ModelValidationSchema, default: () => ({}) },
   },
   { _id: false },
 );
@@ -483,6 +509,11 @@ const ItemSchema = new mongoose.Schema(
     code: { type: String, default: "" },
     category: { type: String, default: "" },
     trade: { type: String, default: "" },
+    // BIM model discipline this line belongs to (architectural | structural |
+    // mep | unknown). Derived from category on save (deriveItemDiscipline) or
+    // supplied explicitly by the plugin. Drives the per-discipline IFC
+    // Element-ID validation gate.
+    discipline: { type: String, default: "" },
 
     // ── Takeoff → Materials linkage (QUIV material-rate upgrade) ──
     // Set on derived material/labour lines so each one ties back to the

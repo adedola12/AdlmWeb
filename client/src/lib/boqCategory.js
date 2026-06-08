@@ -214,3 +214,31 @@ export function deriveItemTrade(item, productKey) {
   }
   return "Other";
 }
+
+/* ------------------------------------------------------------------ */
+/* Discipline classifier — mirrors server/util/boqCategory.js. Maps a  */
+/* BoQ item to the BIM model discipline (architectural | structural |  */
+/* mep) its quantity was measured from, so the 3D viewer can group     */
+/* items per attached model. An explicit item.discipline (persisted on */
+/* save or sent by the plugin) always wins over the derived value.     */
+
+export const DISCIPLINES = ["architectural", "structural", "mep"];
+
+const CATEGORY_DISCIPLINE = {
+  Substructure: "structural",
+  Frames: "structural",
+  Superstructure: "architectural",
+  HVAC: "mep",
+  Plumbing: "mep",
+  Electrical: "mep",
+};
+
+export function deriveItemDiscipline(item, productKey) {
+  const explicit = String(item?.discipline || "")
+    .trim()
+    .toLowerCase();
+  if (DISCIPLINES.includes(explicit)) return explicit;
+  if (isMepProductKey(productKey)) return "mep";
+  const category = deriveItemCategory(item, productKey);
+  return CATEGORY_DISCIPLINE[category] || "unknown";
+}

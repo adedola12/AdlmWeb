@@ -12,6 +12,9 @@ import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 
+// Lazy — pulls in three.js + the web-ifc wasm; only loads when the 3D tab opens.
+const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
+
 function ShareDashboardButton({
   publicShareEnabled,
   publicToken,
@@ -140,6 +143,11 @@ const TAB_OPTIONS = [
     helper: "Rates and line items",
   },
   {
+    id: "model",
+    label: "3D Model",
+    helper: "View & verify the BIM model",
+  },
+  {
     id: "pm",
     label: "PM Dashboard",
     helper: "Schedule, EVM, risks, issues",
@@ -177,6 +185,7 @@ export default function ProjectOpenView({
   isGroupLinked,
   itemQuery = "",
   items = [],
+  productKey = "",
   linkedGroupsCount = 0,
   loadingValuations = false,
   onActualQtyChange,
@@ -626,6 +635,22 @@ export default function ProjectOpenView({
             progressTotal={progressTotal}
           />
         </div>
+      ) : null}
+
+      {activeTab === "model" ? (
+        <React.Suspense
+          fallback={
+            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+              Loading 3D viewer…
+            </div>
+          }
+        >
+          <ModelViewer
+            projectModels={projectModels}
+            items={items}
+            productKey={productKey}
+          />
+        </React.Suspense>
       ) : null}
 
       {activeTab === "bill" ? (

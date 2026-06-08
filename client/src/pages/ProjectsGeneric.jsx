@@ -4,6 +4,9 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { API_BASE } from "../config";
+// ifcElements (which pulls in the ~1.5 MB web-ifc wasm wrapper) is imported
+// dynamically inside handleUploadModel so it is code-split out of the main
+// bundle and only fetched when a user actually uploads a model.
 import {
   FaInfoCircle,
   FaSearch,
@@ -3396,6 +3399,41 @@ export default function ProjectsGeneric() {
     }
     setModelUploadBusy((prev) => ({ ...prev, [discipline]: true }));
     try {
+      // Build this project's Element-ID universe (union of every BoQ line's
+      // elementIds) so we only send the IFC Tags that belong to the project —
+      // keeps the payload bounded by project size, not the whole model.
+      const projectElementIds = new Set();
+      for (const it of items) {
+        for (const raw of it?.elementIds || []) {
+          const n = Number(raw);
+          if (Number.isFinite(n) && n > 0) projectElementIds.add(n);
+        }
+      }
+
+      // Parse the IFC in-browser to read each element's Revit Element ID (the
+      // IFC `Tag`). .frag uploads carry no Tags — the server marks them
+      // "unchecked" rather than running the ID gate.
+      const lower = String(file.name || "").toLowerCase();
+      let presentElementIds = null;
+      let ifcElementCount = 0;
+      if (!lower.endsWith(".frag")) {
+        setNotice(`Reading ${discipline} model…`);
+        try {
+          const { extractPresentElementIds } = await import(
+            "../lib/ifcElements.js"
+          );
+          const parsed = await extractPresentElementIds(file, projectElementIds);
+          presentElementIds = parsed.presentElementIds;
+          ifcElementCount = parsed.ifcElementCount;
+        } catch (parseErr) {
+          setErr(
+            `Couldn't read "${file.name}" as an IFC: ${parseErr?.message || parseErr}. ` +
+              `Re-export it from Revit (IFC, with Element IDs) and try again.`,
+          );
+          return null;
+        }
+      }
+
       const base = API_BASE || window.location.origin;
       const absUrl = new URL(
         endpoints.modelUpload(selectedId, discipline),
@@ -3403,6 +3441,10 @@ export default function ProjectsGeneric() {
       ).toString();
       const form = new FormData();
       form.append("file", file);
+      if (presentElementIds) {
+        form.append("presentElementIds", JSON.stringify(presentElementIds));
+        form.append("ifcElementCount", String(ifcElementCount));
+      }
       const res = await fetch(absUrl, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -3410,13 +3452,47 @@ export default function ProjectsGeneric() {
         credentials: "include",
       });
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `Upload failed (${res.status})`);
+        // The validation gate returns structured JSON (HTTP 422).
+        let payload = null;
+        try {
+          payload = await res.json();
+        } catch {
+          payload = null;
+        }
+        if (payload?.code === "MODEL_ELEMENT_MISMATCH") {
+          const sample = Array.isArray(payload.sampleMissing)
+            ? payload.sampleMissing.slice(0, 8).join(", ")
+            : "";
+          throw new Error(
+            `Wrong or outdated ${discipline} model — it is missing ` +
+              `${payload.missingCount} of ${payload.requiredCount} element(s) your ` +
+              `${discipline} quantities were measured from` +
+              `${sample ? ` (e.g. IDs ${sample}…)` : ""}. ` +
+              `Re-export the IFC from the same Revit model and try again.`,
+          );
+        }
+        throw new Error(payload?.error || `Upload failed (${res.status})`);
       }
       const result = await res.json();
       if (result?.model) {
         setProjectModels((prev) => ({ ...prev, [discipline]: result.model }));
-        setNotice(`${discipline} model uploaded.`);
+        const v = result.validation || result.model.validation;
+        if (v?.status === "valid") {
+          setNotice(
+            `${discipline} model verified — all ${v.matchedCount}/${v.requiredCount} ` +
+              `quantity elements found.`,
+          );
+        } else if (v?.status === "no-quantities") {
+          setNotice(
+            `${discipline} model uploaded. No ${discipline} quantities to validate against yet.`,
+          );
+        } else if (v?.status === "unchecked") {
+          setNotice(
+            `${discipline} model uploaded (fragments — not Element-ID checked).`,
+          );
+        } else {
+          setNotice(`${discipline} model uploaded.`);
+        }
       }
       return result;
     } catch (e) {
@@ -4468,6 +4544,7 @@ export default function ProjectsGeneric() {
                 comparisonRows={computedAll}
                 computedShown={computedShown}
                 items={items}
+                productKey={toolNorm}
                 onDeleteItem={deleteItem}
                 onMoveItem={moveItem}
                 boqUndoStack={boqUndoStack}

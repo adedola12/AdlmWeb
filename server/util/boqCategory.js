@@ -163,3 +163,44 @@ export function deriveItemTrade(item, productKey) {
   }
   return "Other";
 }
+
+/* -------------------------------------------------------------- */
+/* Discipline classifier — maps a BoQ item to the BIM model        */
+/* discipline (architectural | structural | mep) whose IFC the      */
+/* quantity was measured from. Used to validate an uploaded IFC:    */
+/* a discipline's model must contain every Element ID referenced by  */
+/* that discipline's quantities (strict 100%). Reuses the tuned      */
+/* category rules above so we don't maintain a second keyword set.   */
+/* The Revit plugin may also send an explicit item.discipline, which */
+/* always takes precedence over the derived value.                  */
+
+export const DISCIPLINES = ["architectural", "structural", "mep"];
+
+// QUIV category -> discipline. Substructure (foundations) and Frames
+// (columns/beams/slabs/rebar) are structural; Superstructure (walls,
+// roof cover, doors, windows, finishes) is architectural. MEP categories
+// all roll up to the single mep model.
+const CATEGORY_DISCIPLINE = {
+  Substructure: "structural",
+  Frames: "structural",
+  Superstructure: "architectural",
+  HVAC: "mep",
+  Plumbing: "mep",
+  Electrical: "mep",
+};
+
+export function deriveItemDiscipline(item, productKey) {
+  // 1) Explicit discipline from the source tool wins (authoritative).
+  const explicit = String(item?.discipline || "")
+    .trim()
+    .toLowerCase();
+  if (DISCIPLINES.includes(explicit)) return explicit;
+
+  // 2) Whole-project MEP tools: every item belongs to the mep model,
+  //    even ones that don't match a keyword rule.
+  if (isMepProductKey(productKey)) return "mep";
+
+  // 3) Otherwise derive from the (reused) category classifier.
+  const category = deriveItemCategory(item, productKey);
+  return CATEGORY_DISCIPLINE[category] || "unknown";
+}
