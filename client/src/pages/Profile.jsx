@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { isAdmin, isStaff } from "../utils/roles.js";
+import AccountActivity from "../features/account/AccountActivity.jsx";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -376,6 +377,9 @@ export default function Profile() {
           </button>
         </form>
       </div>
+
+      {/* ORDERS · INVOICES · INSTALLATIONS (moved here from the dashboard) */}
+      <AccountActivity />
 
       {/* SECURITY + ADMIN CARD */}
       <div className="card">

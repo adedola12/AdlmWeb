@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import { parseBunny, bunnyIframeSrc } from "../lib/video";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
+import { TiltCard } from "../components/effects.jsx";
 
 dayjs.extend(relativeTime);
 
@@ -330,8 +331,7 @@ export default function Dashboard() {
     loadCourses();
     loadClassrooms();
     loadPTrainings();
-    loadInvoices();
-  }, [loadSummary, loadCourses, loadClassrooms, loadPTrainings, loadInvoices]);
+  }, [loadSummary, loadCourses, loadClassrooms, loadPTrainings]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -352,24 +352,9 @@ export default function Dashboard() {
     };
   }, []);
 
+  // refresh physical trainings when the learning tab is opened
   React.useEffect(() => {
-    if (activeTab !== "orders") return;
-    loadOrders(ordersPage);
-  }, [activeTab, ordersPage, loadOrders]);
-
-  React.useEffect(() => {
-    if (activeTab === "invoices") loadInvoices();
-  }, [activeTab, loadInvoices]);
-
-  // refresh physical trainings when user opens relevant tabs
-  React.useEffect(() => {
-    if (
-      activeTab === "learning" ||
-      activeTab === "orders" ||
-      activeTab === "installations"
-    ) {
-      loadPTrainings();
-    }
+    if (activeTab === "learning") loadPTrainings();
   }, [activeTab, loadPTrainings]);
 
   const activeProductsCount =
@@ -595,24 +580,13 @@ export default function Dashboard() {
                 active={activeTab === "learning"}
                 onClick={() => setActiveTab("learning")}
               />
-              <TabBtn
-                label="Order History"
-                active={activeTab === "orders"}
-                onClick={() => {
-                  setActiveTab("orders");
-                  setOrdersPage(1);
-                }}
-              />
-              <TabBtn
-                label={`Invoices${invoices.length ? ` (${invoices.length})` : ""}`}
-                active={activeTab === "invoices"}
-                onClick={() => setActiveTab("invoices")}
-              />
-              <TabBtn
-                label="Installations"
-                active={activeTab === "installations"}
-                onClick={() => setActiveTab("installations")}
-              />
+              <a
+                href="/profile"
+                className="px-3.5 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-adlm-dark-muted hover:bg-slate-100 dark:hover:bg-adlm-dark-hover transition"
+                title="Orders, invoices & installations are on your profile"
+              >
+                Orders &amp; Billing ↗
+              </a>
 
               {(user?.role === "admin" || user?.role === "mini_admin") && (
                 <div className="ml-auto flex gap-2">
@@ -669,27 +643,7 @@ export default function Dashboard() {
                 />
               )}
 
-              {activeTab === "orders" && (
-                <OrdersTab
-                  orders={orders}
-                  loading={loadingOrders}
-                  error={ordersErr}
-                  pagination={ordersPagination}
-                  onPageChange={setOrdersPage}
-                  onOpenReceipt={(orderId) =>
-                    window.open(
-                      `/receipt/${orderId}`,
-                      "_blank",
-                      "noopener,noreferrer",
-                    )
-                  }
-                  // ✅ physical trainings (new)
-                  pEnrollments={pEnrollments}
-                  loadingPTrainings={loadingPEnrollments}
-                  pTrainingsError={pEnrollmentsErr}
-                  onRefreshPTrainings={loadPTrainings}
-                />
-              )}
+              {/* Orders, Invoices & Installations now live on the Profile page */}
 
               {activeTab === "invoices" && (
                 <div className="space-y-3">
@@ -793,17 +747,6 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {activeTab === "installations" && (
-                <InstallationsTab
-                  installations={summary?.installations || []}
-                  installerHub={summary?.installerHub}
-                  // ✅ physical trainings (new)
-                  pEnrollments={pEnrollments}
-                  loadingPTrainings={loadingPEnrollments}
-                  pTrainingsError={pEnrollmentsErr}
-                  onRefreshPTrainings={loadPTrainings}
-                />
-              )}
             </div>
           </div>
 
@@ -902,20 +845,22 @@ function StatCard({ title, value, subtitle = "", delay = 0, icon = null, accent 
     violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
   };
   return (
-    <div
-      className="group relative spotlight bg-white rounded-2xl ring-1 ring-slate-200 shadow-depth p-4 stat-appear lift"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs font-medium text-slate-500">{title}</div>
-        {icon ? (
-          <span className={`w-9 h-9 rounded-xl grid place-items-center flex-shrink-0 ${accents[accent] || accents.blue}`}>
-            {icon}
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-2 text-2xl md:text-3xl font-bold text-slate-900">{value}</div>
-      {subtitle ? <div className="mt-0.5 text-xs text-slate-400">{subtitle}</div> : null}
+    <div className="stat-appear h-full" style={{ animationDelay: `${delay}ms` }}>
+      <TiltCard
+        max={9}
+        className="h-full bg-white rounded-2xl ring-1 ring-slate-200 shadow-depth p-4"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs font-medium text-slate-500">{title}</div>
+          {icon ? (
+            <span className={`tilt-layer w-9 h-9 rounded-xl grid place-items-center flex-shrink-0 ${accents[accent] || accents.blue}`}>
+              {icon}
+            </span>
+          ) : null}
+        </div>
+        <div className="tilt-layer mt-2 text-2xl md:text-3xl font-bold text-slate-900">{value}</div>
+        {subtitle ? <div className="mt-0.5 text-xs text-slate-400">{subtitle}</div> : null}
+      </TiltCard>
     </div>
   );
 }
@@ -1459,7 +1404,7 @@ function LearningTab({
   );
 }
 
-function OrdersTab({
+export function OrdersTab({
   orders = [],
   loading,
   error,
@@ -1827,7 +1772,7 @@ function OrdersTab({
   );
 }
 
-function InstallationsTab({
+export function InstallationsTab({
   installations = [],
   installerHub,
   pEnrollments = [],
