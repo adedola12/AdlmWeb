@@ -1309,7 +1309,7 @@ export default function ProjectBillTable({
       ) : null}
 
       {/* Office-style ribbon: tab strip + contextual groups */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-depth">
         <div className="flex flex-wrap gap-1 border-b border-slate-200 bg-white px-2 pt-2">
           {RIBBON_TABS.map((tab) => {
             const Icon = tab.icon;
@@ -2335,7 +2335,7 @@ export default function ProjectBillTable({
       ) : null}
 
       {computedShown.length && categoryTotals.length > 1 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth">
           <div className="mb-2 text-sm font-semibold text-slate-900">Summary by category</div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -2378,7 +2378,7 @@ export default function ProjectBillTable({
       {onAddVariation ? (
         <div
           ref={variationsSectionRef}
-          className="rounded-xl border border-slate-200 bg-white p-4 scroll-mt-24"
+          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -2567,7 +2567,7 @@ export default function ProjectBillTable({
       {onUpdatePreliminaryItem && Array.isArray(preliminaryItems) ? (
         <div
           ref={preliminarySectionRef}
-          className="rounded-xl border border-slate-200 bg-white p-4 scroll-mt-24"
+          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -2901,7 +2901,7 @@ export default function ProjectBillTable({
       {onAddProvisionalSum ? (
         <div
           ref={provisionalSectionRef}
-          className="rounded-xl border border-slate-200 bg-white p-4 scroll-mt-24"
+          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth scroll-mt-24"
         >
           <div className="flex items-center justify-between">
             <div>

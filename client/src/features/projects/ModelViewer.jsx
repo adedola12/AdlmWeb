@@ -164,7 +164,7 @@ export default function ModelViewer({
 
   if (available.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-depth">
         No model attached yet. Upload a validated IFC from the{" "}
         <span className="font-semibold">Bill of Quantity</span> tab to view it
         here.
@@ -173,7 +173,7 @@ export default function ModelViewer({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth">
       {/* Discipline selector */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {available.map((d) => {
@@ -205,7 +205,7 @@ export default function ModelViewer({
 
       <div className="grid gap-3 md:grid-cols-[1fr_320px]">
         {/* 3D canvas */}
-        <div className="relative h-[600px] overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+        <div className="relative h-[600px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
           <div ref={containerRef} className="absolute inset-0" />
           {status === "loading" ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100/80 text-sm text-slate-600">
@@ -227,7 +227,7 @@ export default function ModelViewer({
             <button
               type="button"
               onClick={clearSelection}
-              className="absolute right-2 top-2 rounded-md bg-white/90 px-2 py-1 text-[11px] font-semibold text-slate-700 shadow hover:bg-white"
+              className="absolute right-2 top-2 rounded-md bg-white/90 dark:bg-slate-900/85 px-2 py-1 text-[11px] font-semibold text-slate-700 shadow hover:bg-white dark:hover:bg-slate-900"
             >
               Clear highlight
             </button>

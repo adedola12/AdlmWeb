@@ -46,7 +46,7 @@ function ShareDashboardButton({
     <div className="relative">
       <button
         type="button"
-        className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
         onClick={() => setOpen((v) => !v)}
       >
         <FaShareAlt
@@ -58,7 +58,7 @@ function ShareDashboardButton({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border bg-white p-4 shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
           <div className="text-sm font-semibold text-slate-900 mb-2">
             Share Dashboard
           </div>
@@ -80,7 +80,7 @@ function ShareDashboardButton({
 
           {publicShareEnabled && shareUrl ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-1 rounded-lg border bg-slate-50 px-2 py-1.5">
+              <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
                 <input
                   readOnly
                   value={shareUrl}
@@ -352,7 +352,7 @@ export default function ProjectOpenView({
             </button>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 shadow-depth">
             <div className="flex flex-wrap items-center gap-2">
               <div className="font-medium text-slate-900">{projectName}</div>
               {contract?.locked ? (
@@ -413,7 +413,7 @@ export default function ProjectOpenView({
             </button>
 
             {exportOpen ? (
-              <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border bg-white shadow-lg">
+              <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
@@ -496,7 +496,7 @@ export default function ProjectOpenView({
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-depth">
         <div className="flex gap-1 overflow-x-auto">
           {TAB_OPTIONS.map((tab) => {
             const active = activeTab === tab.id;
@@ -580,7 +580,7 @@ export default function ProjectOpenView({
 
       {activeTab === "valuation" ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-depth">
             <div className="font-medium text-slate-900">
               Valuation workspace
             </div>
@@ -642,7 +642,7 @@ export default function ProjectOpenView({
       {activeTab === "model" ? (
         <React.Suspense
           fallback={
-            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-depth">
               Loading 3D viewer…
             </div>
           }
