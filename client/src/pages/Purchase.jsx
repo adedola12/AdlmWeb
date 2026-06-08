@@ -83,6 +83,8 @@ export default function Purchase() {
   // local draft the user edits before clicking the 3D "Add to order" button.
   const [activeKey, setActiveKey] = React.useState(null);
   const [draft, setDraft] = React.useState({ periods: 1, seats: 1, firstTime: false });
+  const configRef = React.useRef(null);
+  const summaryRef = React.useRef(null);
 
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
@@ -235,6 +237,21 @@ export default function Purchase() {
     });
   }
 
+  // On phones/tablets the columns stack, so bring the relevant section into
+  // view after an action (no-op on desktop where everything is visible).
+  function smoothScrollTo(ref) {
+    if (typeof window === "undefined" || window.innerWidth >= 1024) return;
+    const reduce =
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() =>
+      ref.current?.scrollIntoView({
+        behavior: reduce ? "auto" : "smooth",
+        block: "start",
+      }),
+    );
+  }
+
   // Select a product into the middle config panel. Loads its existing cart
   // config into the draft if present, else defaults. Does NOT add to the
   // order — that happens when the user clicks the 3D Add button.
@@ -246,6 +263,7 @@ export default function Purchase() {
         ? { periods: e.periods, seats: e.seats, firstTime: !!e.firstTime }
         : { periods: 1, seats: 1, firstTime: false },
     );
+    smoothScrollTo(configRef);
   }
 
   // Patch the draft (clamped; seats locked to 1 for personal licenses).
@@ -273,6 +291,7 @@ export default function Purchase() {
         firstTime: !!draft.firstTime,
       },
     }));
+    smoothScrollTo(summaryRef);
   }
 
   /** Pick the best price: discounted if set, otherwise actual */
@@ -873,7 +892,7 @@ export default function Purchase() {
         </aside>
 
         {/* MIDDLE — configurator for the active product */}
-        <section>
+        <section ref={configRef} className="scroll-mt-24">
           {(() => {
             const p = activeKey
               ? products.find((pp) => getProductKey(pp) === activeKey)
@@ -1041,7 +1060,7 @@ export default function Purchase() {
         </section>
 
         {/* RIGHT — sticky live summary */}
-        <aside className="lg:sticky lg:top-20">
+        <aside ref={summaryRef} className="lg:sticky lg:top-20 scroll-mt-24">
           <div className="card">
             <h2 className="font-semibold mb-2">Summary</h2>
 
