@@ -128,7 +128,7 @@ export default function SectionRail({
           On smaller viewports it's hidden; the floating button below
           takes over. */}
       <aside
-        className={`hidden xl:flex flex-col sticky top-24 self-start rounded-2xl border border-slate-200 bg-white shadow-sm dark:bg-slate-800 dark:border-slate-700 transition-all ${
+        className={`hidden xl:flex flex-col sticky top-24 self-start rounded-2xl border border-slate-200 bg-white shadow-depth dark:bg-slate-800 dark:border-slate-700 transition-all ${
           collapsed ? "w-14" : "w-60"
         }`}
         style={{ maxHeight: "calc(100vh - 7rem)" }}

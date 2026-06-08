@@ -832,10 +832,10 @@ export default function ProjectContractPanel({
     .join(" · ");
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+    <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-slate-900">
+          <div className="text-sm font-semibold text-slate-900 dark:text-white">
             Contract administration
           </div>
           <div className="text-[11px] text-slate-500">

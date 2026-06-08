@@ -34,20 +34,20 @@ function MetricCard({ label, value, helper, format = "money", tone = "default" }
 
   const toneClass =
     tone === "positive"
-      ? "text-emerald-700"
+      ? "text-emerald-700 dark:text-emerald-400"
       : tone === "warning"
-        ? "text-amber-700"
+        ? "text-amber-700 dark:text-amber-400"
         : tone === "danger"
-          ? "text-rose-700"
-          : "text-slate-900";
+          ? "text-rose-700 dark:text-rose-400"
+          : "text-slate-900 dark:text-white";
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className={`mt-1 text-lg font-semibold ${toneClass}`}>
+    <div className="group relative spotlight rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-4 transition-shadow hover:shadow-depth-lg">
+      <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">{label}</div>
+      <div className={`mt-1 text-xl font-bold ${toneClass}`}>
         {displayValue}
       </div>
-      <div className="mt-1 text-xs text-slate-500">{helper}</div>
+      <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-dim">{helper}</div>
     </div>
   );
 }
@@ -63,12 +63,12 @@ function ProgressOverviewCard({
   const chartStyle = {
     background:
       normalizedProgress > 0
-        ? `conic-gradient(#005be3 0 ${normalizedProgress}%, #cbd5e1 ${normalizedProgress}% 100%)`
-        : "conic-gradient(#e2e8f0 0 100%)",
+        ? `conic-gradient(#005be3 0 ${normalizedProgress}%, rgba(148,163,184,0.35) ${normalizedProgress}% 100%)`
+        : "conic-gradient(rgba(148,163,184,0.28) 0 100%)",
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
       {/* Header description sits above the chart at all widths now —
           previously it was inline at lg+ which ate horizontal space and
           made the 3 stat cards crammed under the donut. */}
@@ -113,7 +113,7 @@ function ProgressOverviewCard({
              • sm-lg   → 3 columns (plenty of width)
              • xl+     → 3 columns next to donut */}
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 min-w-0">
+          <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
             <div className="text-xs uppercase tracking-wide text-slate-400">Marked lines</div>
             <div className="mt-2 text-2xl font-semibold text-slate-900">{progressCount}</div>
             <div className="mt-1 text-xs text-slate-500">
@@ -121,13 +121,13 @@ function ProgressOverviewCard({
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 min-w-0">
+          <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
             <div className="text-xs uppercase tracking-wide text-slate-400">Remaining lines</div>
             <div className="mt-2 text-2xl font-semibold text-slate-900">{remainingCount}</div>
             <div className="mt-1 text-xs text-slate-500">Items still left to mark</div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 min-w-0">
+          <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
             <div className="text-xs uppercase tracking-wide text-slate-400">Total lines</div>
             <div className="mt-2 text-2xl font-semibold text-slate-900">{progressTotal}</div>
             <div className="mt-1 text-xs text-slate-500">Full project line count</div>
@@ -217,7 +217,7 @@ export default function ProjectDashboardSummary({
         />
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="font-medium text-slate-900">Actual vs planned dashboard</div>
@@ -250,7 +250,7 @@ export default function ProjectDashboardSummary({
           </div>
         </div>
 
-        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mt-4 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-4">
           <ProjectDashboardChart
             actualCoverageCount={actualCoverageCount}
             actualCoveragePercent={actualCoveragePercent}

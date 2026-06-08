@@ -501,7 +501,7 @@ export default function ProjectValuationSummary({
   return (
     <div className="space-y-4">
       {showValuationSettings ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
           <div className="font-medium">Valuation settings</div>
           <div className="mt-1 text-sm text-slate-600">
             Saved per project and reused for every valuation sheet.
@@ -530,7 +530,7 @@ export default function ProjectValuationSummary({
       ) : null}
 
       {!showDailyValuationLog ? null : (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <div className="font-medium">Daily valuation log</div>
@@ -605,8 +605,8 @@ export default function ProjectValuationSummary({
 
           {selectedValuation && certificate ? (
             <div className="mt-4 space-y-4">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                <div className="font-medium text-slate-900">
+              <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-3 text-sm text-slate-700 dark:text-adlm-dark-text">
+                <div className="font-medium text-slate-900 dark:text-white">
                   Valuation {certificate.valuationNumber} for {formatDate(selectedValuation.date)}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
