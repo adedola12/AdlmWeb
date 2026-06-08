@@ -7,6 +7,7 @@ import {
   FaUpload,
   FaCube,
 } from "react-icons/fa";
+import { deriveItemDiscipline } from "../../lib/boqCategory.js";
 
 function safeNum(v) {
   const n = Number(v);
@@ -34,7 +35,7 @@ function bytes(n) {
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-function SubTab({ id, active, onClick, label, count }) {
+function SubTab({ active, onClick, label, count }) {
   return (
     <button
       type="button"
@@ -649,11 +650,33 @@ function ModelsPanel({
   onUploadModel,
   onDeleteModel,
   disabled,
+  items = [],
+  productKey = "",
 }) {
   const [showManual, setShowManual] = React.useState(false);
   const attached = Object.entries(projectModels || {}).filter(
     ([, m]) => m?.url,
   );
+
+  // Element IDs whose BoQ line can't be classified into a discipline fall
+  // outside every per-discipline required set, so the validation gate can't
+  // check them. Surface the count until the plugin supplies an explicit
+  // discipline (which removes the guesswork entirely).
+  const unclassified = React.useMemo(() => {
+    const ids = new Set();
+    let lines = 0;
+    for (const it of items || []) {
+      const eids = (it?.elementIds || [])
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      if (!eids.length) continue;
+      if (deriveItemDiscipline(it, productKey) === "unknown") {
+        lines += 1;
+        eids.forEach((id) => ids.add(id));
+      }
+    }
+    return { elements: ids.size, lines };
+  }, [items, productKey]);
   return (
     <div className="space-y-3">
       <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
@@ -662,6 +685,19 @@ function ModelsPanel({
         100 MB) and pushed here automatically. For large models the plugin
         asks first since saving takes longer. No manual upload needed.
       </div>
+
+      {unclassified.elements > 0 ? (
+        <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+          <b>
+            {unclassified.elements.toLocaleString()} element
+            {unclassified.elements === 1 ? "" : "s"}
+          </b>{" "}
+          across {unclassified.lines} BoQ line
+          {unclassified.lines === 1 ? "" : "s"} aren’t classified into a
+          discipline, so they’re <b>not covered</b> by model validation. Re-save
+          the project from the updated Revit plugin to tag them automatically.
+        </div>
+      ) : null}
 
       {attached.length ? (
         <div className="grid gap-3 md:grid-cols-3">
@@ -695,7 +731,8 @@ function ModelsPanel({
           {showManual ? "Hide manual upload" : "Advanced: manual upload"}
         </button>
         <span className="text-slate-400">
-          3D viewer coming in the next release.
+          Open the <b className="font-semibold">3D Model</b> tab to view &amp;
+          verify.
         </span>
       </div>
 
@@ -734,6 +771,8 @@ export default function ProjectContractPanel({
   modelUploadBusy,
   onUploadModel,
   onDeleteModel,
+  items = [],
+  productKey = "",
   contractLocked,
   contractSum,
   measured,
@@ -901,6 +940,8 @@ export default function ProjectContractPanel({
           modelUploadBusy={modelUploadBusy}
           onUploadModel={onUploadModel}
           onDeleteModel={onDeleteModel}
+          items={items}
+          productKey={productKey}
           disabled={Boolean(finalAccount?.finalized)}
         />
       ) : null}

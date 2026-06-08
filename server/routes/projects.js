@@ -48,6 +48,10 @@ import {
   uploadBufferToR2,
   deleteFromR2,
 } from "../utils/r2Upload.js";
+import {
+  buildBillQtyChanges,
+  cascadeBillQtyToMaterials,
+} from "../util/billBudgetCascade.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
 // IFC files; we can raise this per-tier later via an entitlement flag.
@@ -111,6 +115,17 @@ function requestedProductKey(req) {
 const MAX_ITEMS = Number(process.env.PROJECT_MAX_ITEMS || 8000);
 const MATERIAL_PRODUCT_KEY = "revit-materials";
 const PS_MATERIAL_PRODUCT_KEY = "planswift-materials";
+
+// The materials/budget sibling productKey for a takeoff/bill productKey, or
+// null when the key is not a bill key (e.g. it is already a *-materials
+// project). Used by the Bill → Budget cascade to find the paired project.
+function materialsSiblingKey(pk) {
+  const k = normalizeProductKey(pk);
+  if (!k || k.endsWith("-materials")) return null;
+  if (k === "revit") return MATERIAL_PRODUCT_KEY;
+  if (k === "planswift") return PS_MATERIAL_PRODUCT_KEY;
+  return null;
+}
 const VALUATION_TIME_ZONE =
   process.env.PROJECT_VALUATION_TIMEZONE || "Africa/Lagos";
 
@@ -1511,6 +1526,13 @@ async function updateProject(req, res) {
     const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
     if (!project) return res.status(404).json({ error: "Not found" });
 
+    // Snapshot bill quantities (by code) BEFORE any mutation — used by the
+    // Bill → Budget cascade after save to compute which lines changed.
+    const prevBillSnapshot = (project.items || []).map((it) => ({
+      code: String(it?.code || ""),
+      qty: safeNum(it?.qty),
+    }));
+
     if (typeof baseVersion === "number" && baseVersion !== project.version) {
       return res.status(409).json({ error: "Version conflict" });
     }
@@ -1837,7 +1859,54 @@ async function updateProject(req, res) {
     project.version += 1;
     await project.save();
 
-    res.json(projectForClient(project));
+    // ── Bill → Budget cascade (one-way) ───────────────────────────────
+    // When a bill line's qty changed, scale the sibling budget (materials)
+    // project's linked lines proportionally (newQty/oldQty). Rates and
+    // per-unit factors stay; amount follows. Never blocks the bill save.
+    let budgetCascade = null;
+    try {
+      const matKey = materialsSiblingKey(productKey);
+      if (matKey && (project.clientProjectKey || project.modelFingerprint)) {
+        const { changes, skippedZeroQty } = buildBillQtyChanges(
+          prevBillSnapshot,
+          project.items,
+        );
+        if (changes.size > 0) {
+          const matProject = await TakeoffProject.findOne({
+            userId,
+            productKey: matKey,
+            ...(project.clientProjectKey
+              ? { clientProjectKey: project.clientProjectKey }
+              : {}),
+            ...(project.modelFingerprint
+              ? { modelFingerprint: project.modelFingerprint }
+              : {}),
+          });
+          if (matProject && Array.isArray(matProject.items) && matProject.items.length) {
+            const { items: scaled, updatedLines } = cascadeBillQtyToMaterials(
+              changes,
+              matProject.items,
+            );
+            if (updatedLines > 0) {
+              matProject.items = scaled;
+              matProject.markModified("items");
+              matProject.version += 1;
+              await matProject.save();
+              budgetCascade = {
+                materialsProjectId: String(matProject._id),
+                updatedLines,
+                changedBillLines: changes.size,
+                skippedZeroQty: skippedZeroQty.length,
+              };
+            }
+          }
+        }
+      }
+    } catch (cascadeErr) {
+      console.warn("Bill→Budget cascade skipped:", cascadeErr?.message || cascadeErr);
+    }
+
+    res.json({ ...projectForClient(project), budgetCascade });
   } catch (err) {
     console.error("PUT project error:", err);
     res.status(500).json({ error: "Server error" });

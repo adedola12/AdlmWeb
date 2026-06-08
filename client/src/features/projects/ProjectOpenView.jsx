@@ -669,6 +669,8 @@ export default function ProjectOpenView({
           modelUploadBusy={modelUploadBusy}
           onUploadModel={onUploadModel}
           onDeleteModel={onDeleteModel}
+          items={items}
+          productKey={productKey}
           contractLocked={Boolean(contract?.locked)}
           contractSum={Number(contract?.contractSum) || 0}
           measured={grossAmount}
