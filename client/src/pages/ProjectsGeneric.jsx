@@ -13,7 +13,8 @@ import {
   FaTimes,
   FaFolder,
   FaCubes,
-  FaArrowLeft,
+  FaThLarge,
+  FaSyncAlt,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
@@ -4259,91 +4260,114 @@ export default function ProjectsGeneric() {
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4">
         {/* SIDEBAR */}
         <aside className="md:w-[260px]">
-          <div className="card">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                <SidebarIcon className="text-adlm-blue-700" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs text-slate-500">{sidebarMeta.app}</div>
-                <div className="font-semibold truncate">
-                  {sidebarMeta.section}
+          <div className="card !p-0 overflow-hidden md:sticky md:top-6">
+            {/* Identity band — tells the user exactly which tool & mode
+                they're in, so the rest of the sidebar is purely navigation. */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 p-4 text-white">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl"
+              />
+              <div className="relative flex items-start gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
+                  <SidebarIcon className="text-lg text-white" />
                 </div>
-                <div className="text-xs text-slate-500 mt-1">
-                  {sidebarMeta.hint}
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-100/90">
+                    {sidebarMeta.app}
+                  </div>
+                  <div className="truncate text-base font-bold leading-tight">
+                    {sidebarMeta.section}
+                  </div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-blue-100/80">
+                    {sidebarMeta.hint}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Back to dashboard */}
-            <div className="mt-4">
-              <Link
-                to={DASHBOARD_PATH}
-                className="w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border hover:bg-slate-50 transition"
-                title="Back to dashboard"
-              >
-                <FaArrowLeft />
-                Back to dashboard
-              </Link>
-            </div>
+            <div className="space-y-4 p-3">
+              {/* Group 1 — Mode: switch between Takeoffs and Materials for
+                  the same tool. A segmented control reads as "pick one",
+                  unlike the old stack of identical bordered links. */}
+              {showRevitToggle && (
+                <div>
+                  <div className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
+                    Mode
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-adlm-dark-border dark:bg-white/5">
+                    <Link
+                      to={`/projects/${toolFamily}`}
+                      className={[
+                        "inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold transition",
+                        toolNorm === toolFamily
+                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
+                      ].join(" ")}
+                    >
+                      <FaFolder className="text-[12px]" />
+                      Takeoffs
+                    </Link>
+                    <Link
+                      to={`/projects/${toolFamily}-materials`}
+                      className={[
+                        "inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold transition",
+                        isMaterialsTool(tool)
+                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
+                      ].join(" ")}
+                    >
+                      <FaCubes className="text-[12px]" />
+                      Materials
+                    </Link>
+                  </div>
+                </div>
+              )}
 
-            {showRevitToggle && (
-              <div className="mt-4 space-y-2">
-                <Link
-                  to={`/projects/${toolFamily}`}
-                  className={[
-                    "w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border transition",
-                    toolNorm === toolFamily
-                      ? "bg-adlm-blue-700 text-white border-adlm-blue-700"
-                      : "hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  <FaFolder />
-                  Takeoffs
-                </Link>
-
-                <Link
-                  to={`/projects/${toolFamily}-materials`}
-                  className={[
-                    "w-full inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm border transition",
-                    isMaterialsTool(tool)
-                      ? "bg-adlm-blue-700 text-white border-adlm-blue-700"
-                      : "hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  <FaCubes />
-                  Materials
-                </Link>
+              {/* Group 2 — Navigate: leave the tool or refresh the list.
+                  "Back to projects" lives on the project header itself,
+                  so it isn't duplicated here. */}
+              <div>
+                <div className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
+                  Navigate
+                </div>
+                <div className="space-y-1.5">
+                  <Link
+                    to={DASHBOARD_PATH}
+                    className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
+                    title="Back to dashboard"
+                  >
+                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
+                      <FaThLarge className="text-[12px]" />
+                    </span>
+                    Dashboard
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => load({ keepSelection: true })}
+                    disabled={bulkBusy}
+                    title="Refresh projects"
+                    className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
+                  >
+                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
+                      <FaSyncAlt className={`text-[12px] ${bulkBusy ? "animate-spin" : ""}`} />
+                    </span>
+                    {bulkBusy ? "Refreshing…" : "Refresh projects"}
+                  </button>
+                </div>
               </div>
-            )}
 
-            <div className="mt-4 flex gap-2">
-              <button
-                className="btn btn-sm"
-                onClick={() => load({ keepSelection: true })}
-                disabled={bulkBusy}
-                title="Refresh projects"
-              >
-                Refresh
-              </button>
-
-              {!!sel && (
-                <button
-                  className="btn btn-sm"
-                  onClick={closeProject}
-                  title="Back to projects"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <FaArrowLeft /> Back
-                  </span>
-                </button>
+              {err && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {err}
+                </div>
+              )}
+              {notice && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  {notice}
+                </div>
               )}
             </div>
-
-            {err && <div className="text-red-600 text-sm mt-3">{err}</div>}
-            {notice && (
-              <div className="text-green-700 text-sm mt-3">{notice}</div>
-            )}
           </div>
         </aside>
 

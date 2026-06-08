@@ -5,6 +5,13 @@ import {
   FaShareAlt,
   FaCopy,
   FaCheck,
+  FaSave,
+  FaDownload,
+  FaChartPie,
+  FaFileInvoiceDollar,
+  FaCube,
+  FaProjectDiagram,
+  FaFileContract,
 } from "react-icons/fa";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
@@ -124,38 +131,48 @@ function ShareDashboardButton({
   );
 }
 
-// Tab order requested by the user:
-//   1. Dashboard            — high-level financial / progress overview
-//   2. Bill of Quantity     — rates, items, contract panel (work surface)
-//   3. PM Dashboard         — schedule / EVM / risks / issues
-//   4. Valuation            — interim certificates & valuation settings
-//                              (kept the existing `valuation` id so the
-//                               render branches below don't have to change)
+// Tabs are grouped so navigation reads as three clear stages of a job:
+//   Overview   → Dashboard      (high-level financial / progress)
+//   Commercial → Bill of Quantity, Valuation  (money: rates, certs)
+//   Delivery   → 3D Model, PM Dashboard        (build: model, schedule)
+// Order is group-contiguous so the in-project tab bar can show the
+// group dividers. `id`s are unchanged, so the render branches below
+// (which key off activeTab id, not position) are unaffected.
 const TAB_OPTIONS = [
   {
     id: "dashboard",
     label: "Dashboard",
     helper: "Overview and progress",
+    icon: FaChartPie,
+    group: "Overview",
   },
   {
     id: "bill",
     label: "Bill of Quantity",
     helper: "Rates and line items",
-  },
-  {
-    id: "model",
-    label: "3D Model",
-    helper: "View & verify the BIM model",
-  },
-  {
-    id: "pm",
-    label: "PM Dashboard",
-    helper: "Schedule, EVM, risks, issues",
+    icon: FaFileInvoiceDollar,
+    group: "Commercial",
   },
   {
     id: "valuation",
     label: "Valuation",
     helper: "Certificates and settings",
+    icon: FaFileContract,
+    group: "Commercial",
+  },
+  {
+    id: "model",
+    label: "3D Model",
+    helper: "View & verify the BIM model",
+    icon: FaCube,
+    group: "Delivery",
+  },
+  {
+    id: "pm",
+    label: "PM Dashboard",
+    helper: "Schedule, EVM, risks, issues",
+    icon: FaProjectDiagram,
+    group: "Delivery",
   },
 ];
 
@@ -332,23 +349,21 @@ export default function ProjectOpenView({
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <button
-              className="btn btn-sm"
+              type="button"
               onClick={onBack}
               title="Back to projects"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
             >
-              <span className="inline-flex items-center gap-2">
-                <FaArrowLeft /> Back to projects
-              </span>
+              <FaArrowLeft className="text-[12px]" /> Back to projects
             </button>
 
             <button
-              className="btn btn-sm"
+              type="button"
               onClick={onDelete}
               title="Delete this project"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-orange-700 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-orange-300 dark:hover:bg-orange-500/10"
             >
-              <span className="inline-flex items-center gap-2 text-orange-700">
-                <FaTrash className="text-[13px]" /> Delete
-              </span>
+              <FaTrash className="text-[12px]" /> Delete
             </button>
           </div>
 
@@ -391,7 +406,7 @@ export default function ProjectOpenView({
 
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
-            className={`btn btn-sm ${isDirty ? "btn-primary" : ""}`}
+            type="button"
             onClick={onSave}
             disabled={!isDirty || saving}
             title={
@@ -399,17 +414,24 @@ export default function ProjectOpenView({
                 ? "No changes to save"
                 : "Save rates and valuation progress"
             }
+            className={[
+              "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition",
+              isDirty && !saving
+                ? "btn-3d text-white"
+                : "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-white/10 dark:text-adlm-dark-dim",
+            ].join(" ")}
           >
-            {saving ? "Saving..." : "Save"}
+            <FaSave className="text-[12px]" />
+            {saving ? "Saving…" : isDirty ? "Save changes" : "Saved"}
           </button>
 
           <div className="relative">
             <button
-              className="btn btn-sm"
-              onClick={onToggleExportOpen}
               type="button"
+              onClick={onToggleExportOpen}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
             >
-              Export
+              <FaDownload className="text-[12px]" /> Export
             </button>
 
             {exportOpen ? (
@@ -496,29 +518,60 @@ export default function ProjectOpenView({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-1.5 shadow-depth">
-        <div className="flex gap-1 overflow-x-auto">
-          {TAB_OPTIONS.map((tab) => {
+      <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-depth dark:border-adlm-dark-border">
+        <div className="flex items-stretch gap-1 overflow-x-auto">
+          {TAB_OPTIONS.map((tab, i) => {
             const active = activeTab === tab.id;
+            const Icon = tab.icon;
+            const prev = TAB_OPTIONS[i - 1];
+            const newGroup = i > 0 && prev && prev.group !== tab.group;
             return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={[
-                  "min-w-[170px] flex-1 rounded-lg px-4 py-3 text-left transition",
-                  active
-                    ? "bg-adlm-blue-700 text-white shadow-sm"
-                    : "text-slate-700 hover:bg-slate-50",
-                ].join(" ")}
-              >
-                <div className="text-sm font-semibold">{tab.label}</div>
-                <div
-                  className={`mt-1 text-xs ${active ? "text-blue-100" : "text-slate-500"}`}
+              <React.Fragment key={tab.id}>
+                {/* Hairline divider marks a new group (Overview · Commercial · Delivery) */}
+                {newGroup ? (
+                  <div
+                    aria-hidden="true"
+                    className="mx-1 hidden w-px self-stretch bg-gradient-to-b from-transparent via-slate-200 to-transparent sm:block dark:via-adlm-dark-border"
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  aria-current={active ? "page" : undefined}
+                  title={`${tab.group} · ${tab.label}`}
+                  className={[
+                    "group relative min-w-[140px] flex-1 rounded-xl px-3 py-2.5 text-left transition-all duration-200",
+                    active
+                      ? "-translate-y-0.5 bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue"
+                      : "text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50 dark:text-adlm-dark-text dark:hover:bg-white/5",
+                  ].join(" ")}
                 >
-                  {tab.helper}
-                </div>
-              </button>
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={[
+                        "grid h-8 w-8 shrink-0 place-items-center rounded-lg transition",
+                        active
+                          ? "bg-white/15 text-white ring-1 ring-white/25"
+                          : "bg-slate-100 text-adlm-blue-700 group-hover:bg-blue-50 dark:bg-white/10 dark:text-adlm-blue-300",
+                      ].join(" ")}
+                    >
+                      <Icon className="text-sm" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold leading-tight">
+                        {tab.label}
+                      </div>
+                      <div
+                        className={`mt-0.5 hidden truncate text-[11px] leading-tight sm:block ${
+                          active ? "text-blue-100" : "text-slate-500 dark:text-adlm-dark-muted"
+                        }`}
+                      >
+                        {tab.helper}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </React.Fragment>
             );
           })}
         </div>
