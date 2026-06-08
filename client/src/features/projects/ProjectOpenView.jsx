@@ -334,10 +334,22 @@ export default function ProjectOpenView({
   onPmExportCalendar,
 }) {
   const [activeTab, setActiveTab] = React.useState("dashboard");
+  const [copiedId, setCopiedId] = React.useState(false);
 
   React.useEffect(() => {
     setActiveTab("dashboard");
   }, [selectedId]);
+
+  function copyProjectId() {
+    if (!selectedId || !navigator?.clipboard) return;
+    navigator.clipboard
+      .writeText(String(selectedId))
+      .then(() => {
+        setCopiedId(true);
+        setTimeout(() => setCopiedId(false), 2000);
+      })
+      .catch(() => {});
+  }
 
   const statusHistoryText = showMaterials
     ? "Purchased materials are deducted from the outstanding balance."
@@ -367,40 +379,47 @@ export default function ProjectOpenView({
             </button>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 shadow-depth">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="font-medium text-slate-900">{projectName}</div>
-              {contract?.locked ? (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
-                  title={`Contract locked${
-                    contract?.lockedAt
-                      ? " on " +
-                        new Date(contract.lockedAt).toLocaleDateString()
-                      : ""
-                  }. Qty / description edits are frozen; new items flow to Variations.`}
-                >
-                  🔒 Contract locked
-                </span>
-              ) : (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
-                  title="Contract is editable. Lock it on approval to start tracking variations."
-                >
-                  ✎ Draft (editable)
-                </span>
-              )}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
-              Project ID: <code>{selectedId}</code>
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {contract?.locked ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
+                title={`Contract locked${
+                  contract?.lockedAt
+                    ? " on " + new Date(contract.lockedAt).toLocaleDateString()
+                    : ""
+                }. Qty / description edits are frozen; new items flow to Variations.`}
+              >
+                🔒 Contract locked
+              </span>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
+                title="Contract is editable. Lock it on approval to start tracking variations."
+              >
+                ✎ Draft (editable)
+              </span>
+            )}
+            <span className="text-xs text-slate-500 dark:text-adlm-dark-muted">
               {statusHistoryText}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
-              You can still use this Project ID in the Windows plugin Open from
-              Cloud flow.
-            </div>
+            </span>
+            {/* Project ID is hidden to keep the header clean, but stays
+                one click away for the Windows plugin "Open from Cloud" flow. */}
+            <button
+              type="button"
+              onClick={copyProjectId}
+              title="Copy this project's ID for the Windows plugin 'Open from Cloud' flow"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-muted"
+            >
+              {copiedId ? (
+                <>
+                  <FaCheck className="text-[11px] text-emerald-600" /> Copied
+                </>
+              ) : (
+                <>
+                  <FaCopy className="text-[11px]" /> Copy project ID
+                </>
+              )}
+            </button>
           </div>
         </div>
 

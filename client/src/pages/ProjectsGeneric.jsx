@@ -4257,9 +4257,91 @@ export default function ProjectsGeneric() {
 
   return (
     <div className="min-h-screen p-4 md:p-6">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4">
-        {/* SIDEBAR */}
-        <aside className="md:w-[260px]">
+      <div className={`mx-auto flex flex-col gap-4 ${sel ? "max-w-[1700px]" : "max-w-7xl md:flex-row"}`}>
+        {/* SIDEBAR — vertical while browsing; collapses to a slim
+            horizontal bar once a project is open so the data tables get
+            the full width of the screen. */}
+        <aside className={sel ? "w-full" : "md:w-[260px]"}>
+          {sel ? (
+            <div className="space-y-3">
+              <div className="card !p-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue">
+                    <SidebarIcon className="text-base" />
+                  </div>
+                  <div className="min-w-0 leading-tight">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
+                      {sidebarMeta.app}
+                    </div>
+                    <div className="truncate text-sm font-bold text-slate-900 dark:text-white">
+                      {sidebarMeta.section}
+                    </div>
+                  </div>
+                </div>
+
+                {showRevitToggle && (
+                  <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-adlm-dark-border dark:bg-white/5">
+                    <Link
+                      to={`/projects/${toolFamily}`}
+                      className={[
+                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                        toolNorm === toolFamily
+                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
+                      ].join(" ")}
+                    >
+                      <FaFolder className="text-[12px]" />
+                      Takeoffs
+                    </Link>
+                    <Link
+                      to={`/projects/${toolFamily}-materials`}
+                      className={[
+                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                        isMaterialsTool(tool)
+                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
+                      ].join(" ")}
+                    >
+                      <FaCubes className="text-[12px]" />
+                      Materials
+                    </Link>
+                  </div>
+                )}
+
+                <div className="ml-auto flex items-center gap-2">
+                  <Link
+                    to={DASHBOARD_PATH}
+                    title="Back to dashboard"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
+                  >
+                    <FaThLarge className="text-[12px]" />
+                    <span className="hidden sm:inline">Dashboard</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => load({ keepSelection: true })}
+                    disabled={bulkBusy}
+                    title="Refresh projects"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
+                  >
+                    <FaSyncAlt className={`text-[12px] ${bulkBusy ? "animate-spin" : ""}`} />
+                    <span className="hidden sm:inline">{bulkBusy ? "Refreshing…" : "Refresh"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {err && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {err}
+                </div>
+              )}
+              {notice && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  {notice}
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="card !p-0 overflow-hidden md:sticky md:top-6">
             {/* Identity band — tells the user exactly which tool & mode
                 they're in, so the rest of the sidebar is purely navigation. */}
@@ -4369,6 +4451,7 @@ export default function ProjectsGeneric() {
               )}
             </div>
           </div>
+          )}
         </aside>
 
         {/* MAIN */}
@@ -4377,20 +4460,28 @@ export default function ProjectsGeneric() {
             {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                  <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
-                  <span className="truncate">{title}</span>
-                </h1>
-                <div className="text-xs text-slate-500 dark:text-adlm-dark-muted mt-1">
-                  {sel ? (
-                    <>
-                      <span className="text-slate-600 dark:text-adlm-dark-muted">Opened:</span>{" "}
-                      <b className="text-slate-800 dark:text-adlm-dark-text">{sel?.name}</b>
-                    </>
-                  ) : (
-                    "Select a project folder to open"
-                  )}
-                </div>
+                {sel ? (
+                  <>
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
+                      <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-adlm-orange" />
+                      {title}
+                    </div>
+                    <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      <span aria-hidden="true" className="h-7 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
+                      <span className="truncate">{sel?.name || "Untitled project"}</span>
+                    </h1>
+                  </>
+                ) : (
+                  <>
+                    <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
+                      <span className="truncate">{title}</span>
+                    </h1>
+                    <div className="text-xs text-slate-500 dark:text-adlm-dark-muted mt-1">
+                      Select a project folder to open
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Search projects (always visible) */}
