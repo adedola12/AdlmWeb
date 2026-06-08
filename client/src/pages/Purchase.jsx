@@ -3,6 +3,7 @@ import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import LicenseScene from "../components/LicenseScene.jsx";
 
 const fmt = (n, currency = "USD") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
@@ -545,7 +546,7 @@ export default function Purchase() {
         <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
         <div aria-hidden="true" className="absolute -top-16 right-10 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
         <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
-        <div className="relative p-5 md:p-7 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div className="relative p-5 md:p-7 grid lg:grid-cols-[1fr_320px] gap-6 lg:gap-8 items-center">
           <div>
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/15 ring-1 ring-adlm-orange/30">
               Checkout
@@ -554,39 +555,45 @@ export default function Purchase() {
             <p className="mt-1 text-sm text-blue-100/80 max-w-xl">
               Select products, duration, seats (for organization), and installation.
             </p>
+
+            <div className="mt-5 flex items-end gap-3 flex-wrap">
+              <label className="text-sm">
+                <div className="mb-1 text-white/80 font-medium">Currency</div>
+                <select
+                  className="input"
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                >
+                  <option value="NGN">NGN (₦)</option>
+                  <option value="USD">USD ($)</option>
+                </select>
+              </label>
+
+              <label className="text-sm">
+                <div className="mb-1 text-white/80 font-medium">Purchase for</div>
+                <select
+                  className="input"
+                  value={licenseType}
+                  onChange={(e) =>
+                    setLicenseType(
+                      e.target.value === "organization"
+                        ? "organization"
+                        : "personal",
+                    )
+                  }
+                >
+                  <option value="personal">Personal</option>
+                  <option value="organization">Organization</option>
+                </select>
+              </label>
+            </div>
           </div>
 
-          <div className="flex items-end gap-3 flex-wrap">
-            <label className="text-sm">
-              <div className="mb-1 text-blue-100/90">Currency</div>
-              <select
-                className="input"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-              >
-                <option value="NGN">NGN (₦)</option>
-                <option value="USD">USD ($)</option>
-              </select>
-            </label>
-
-            <label className="text-sm">
-              <div className="mb-1 text-blue-100/90">Purchase for</div>
-              <select
-                className="input"
-                value={licenseType}
-                onChange={(e) =>
-                  setLicenseType(
-                    e.target.value === "organization"
-                      ? "organization"
-                      : "personal",
-                  )
-                }
-              >
-                <option value="personal">Personal</option>
-                <option value="organization">Organization</option>
-              </select>
-            </label>
-          </div>
+          {/* Animated persona scene — morphs with the selected license type */}
+          <LicenseScene
+            type={licenseType}
+            className="w-full max-w-[300px] mx-auto lg:max-w-none"
+          />
         </div>
       </div>
 
