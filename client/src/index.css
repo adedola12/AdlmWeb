@@ -405,6 +405,27 @@ body {
 .dark .ring-rose-100   { --tw-ring-color: rgba(244, 63, 94, 0.32) !important; }
 .dark .ring-rose-200   { --tw-ring-color: rgba(244, 63, 94, 0.42) !important; }
 
+/* Gray scale — some pages (admin + public Trainings) use gray-* instead of
+   slate-*. Mirror the slate dark treatment so they're dark-compliant too. */
+.dark .bg-gray-50  { background-color: #0a1320 !important; }
+.dark .bg-gray-100 { background-color: #162842 !important; }
+.dark .bg-gray-200 { background-color: #1f3559 !important; }
+.dark .text-gray-900 { color: #e2e8f0 !important; }
+.dark .text-gray-800 { color: #d1d9e6 !important; }
+.dark .text-gray-700 { color: #b9c2d2 !important; }
+.dark .text-gray-600 { color: #a0aabd !important; }
+.dark .text-gray-500 { color: #8694ad !important; }
+.dark .text-gray-400 { color: #6b7993 !important; }
+.dark .border-gray-100 { border-color: #1a2d4a !important; }
+.dark .border-gray-200 { border-color: #1f3559 !important; }
+.dark .border-gray-300 { border-color: #2a4774 !important; }
+.dark .ring-gray-100 { --tw-ring-color: #1a2d4a !important; }
+.dark .ring-gray-200 { --tw-ring-color: #1f3559 !important; }
+.dark .divide-gray-100 > * + * { border-color: #1a2d4a !important; }
+.dark .divide-gray-200 > * + * { border-color: #1f3559 !important; }
+.dark .hover\:bg-gray-50:hover  { background-color: #162842 !important; }
+.dark .hover\:bg-gray-100:hover { background-color: #1a2d4a !important; }
+
 /* Divide colours (tables / lists) */
 .dark .divide-slate-100 > * + * { border-color: #1a2d4a !important; }
 .dark .divide-slate-200 > * + * { border-color: #1f3559 !important; }

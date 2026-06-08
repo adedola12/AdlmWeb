@@ -441,7 +441,8 @@ export default function AdminTrainings() {
       <div className="max-w-5xl mx-auto space-y-8">
         <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">
+            <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+              <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400" />
               Manage Trainings &amp; Events
             </h1>
             <p className="text-sm text-gray-600 mt-1">

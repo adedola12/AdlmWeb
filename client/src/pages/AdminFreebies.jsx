@@ -423,9 +423,11 @@ export default function AdminFreebies() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      <div className="rounded-xl bg-adlm-navy text-white p-5 shadow">
-        <div className="text-xl font-semibold">Admin · Freebies</div>
-        <div className="text-sm text-slate-300 mt-1">
+      <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white p-5 md:p-7 shadow-depth">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 grid-overlay opacity-50 mask-radial" />
+        <div aria-hidden="true" className="pointer-events-none absolute -top-16 right-10 w-56 h-56 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
+        <div className="relative text-2xl font-bold tracking-tight">Admin · Freebies</div>
+        <div className="relative text-sm text-blue-100/80 mt-1">
           Add image, download link, description, and related videos.
         </div>
       </div>

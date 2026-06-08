@@ -215,7 +215,7 @@ export default function AdminLearn() {
   return (
     <div className="space-y-8">
       <div className="card">
-        <h1 className="text-xl font-semibold">Admin · Learn</h1>
+        <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight"><span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400" />Admin · Learn</h1>
         {msg && <div className="text-sm mt-2">{msg}</div>}
       </div>
 

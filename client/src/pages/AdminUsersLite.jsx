@@ -173,7 +173,8 @@ export default function AdminUsersLite() {
     <div className="px-3 md:px-6 lg:px-10 py-6 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold">
+          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+            <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400" />
             Users (Mini Admin View)
           </h1>
           <p className="text-sm text-slate-600">

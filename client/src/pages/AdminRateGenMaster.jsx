@@ -350,7 +350,7 @@ export default function AdminRateGenMaster() {
       <div className="card">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <h1 className="font-semibold">RateGen Master Library (Admin)</h1>
+            <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight"><span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400" />RateGen Master Library (Admin)</h1>
             <p className="text-xs text-slate-600 mt-1">
               Editing here updates master Materials/Labour only — it does not
               touch user libraries.
