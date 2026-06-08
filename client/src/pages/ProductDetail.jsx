@@ -410,7 +410,7 @@ export default function ProductDetail() {
 
           {/* BUY PANEL — drives the hero height; the image matches it */}
           <div className="lg:flex-1 min-w-0">
-            <div className="lg:h-[560px] xl:h-[600px] lg:overflow-y-auto rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm flex flex-col">
+            <div className="lg:h-[560px] xl:h-[600px] lg:overflow-y-auto rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth flex flex-col">
               {p.category && (
                 <div className="text-xs font-semibold uppercase tracking-wider text-adlm-blue-700 dark:text-adlm-blue-400 mb-2">
                   {p.category}
@@ -477,7 +477,8 @@ export default function ProductDetail() {
               <div className="mt-5 pt-4 border-t border-slate-100 dark:border-adlm-dark-border space-y-2 text-xs text-slate-500 dark:text-adlm-dark-muted">
                 <TrustRow>Secure checkout · cancel anytime</TrustRow>
                 <TrustRow>Instant license activation</TrustRow>
-                <TrustRow>Free onboarding &amp; support</TrustRow>
+                <TrustRow>Free support after purchase</TrustRow>
+                <TrustRow muted>Onboarding available (paid add-on)</TrustRow>
               </div>
 
               {/* Quick feature highlights */}
@@ -497,7 +498,7 @@ export default function ProductDetail() {
 
         {/* Features (full) */}
         {features.length > 0 && (
-          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm">
+          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-3">What you get</h2>
             <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
               {features.map((f, i) => (
@@ -512,7 +513,7 @@ export default function ProductDetail() {
 
         {/* Description */}
         {p.description && (
-          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm">
+          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-2">About this product</h2>
             <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
               {p.description}
@@ -522,7 +523,7 @@ export default function ProductDetail() {
 
         {/* Related learning */}
         {related.length > 0 && (
-          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-sm">
+          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-3">Related learning</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {related.map((v, idx) => {
@@ -539,7 +540,7 @@ export default function ProductDetail() {
                     href={id ? `https://www.youtube.com/watch?v=${id}` : "#"}
                     target="_blank"
                     rel="noreferrer"
-                    className="group rounded-xl border border-slate-200 dark:border-adlm-dark-border overflow-hidden hover:shadow-md transition"
+                    className="group rounded-xl border border-slate-200 dark:border-adlm-dark-border overflow-hidden hover:shadow-depth-lg transition lift"
                   >
                     {thumb && (
                       <div className="relative">
@@ -613,11 +614,17 @@ export default function ProductDetail() {
   );
 }
 
-function TrustRow({ children }) {
+function TrustRow({ children, muted = false }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 grid place-items-center text-[9px]">
-        ✓
+      <span
+        className={`w-4 h-4 rounded-full grid place-items-center text-[9px] ${
+          muted
+            ? "bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-adlm-dark-muted"
+            : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+        }`}
+      >
+        {muted ? "+" : "✓"}
       </span>
       <span>{children}</span>
     </div>

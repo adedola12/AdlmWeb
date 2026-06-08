@@ -5,6 +5,7 @@ import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
+import { SecureVideo, SecureEmbed } from "../components/SecureVideo.jsx";
 
 function accessTone(access) {
   if (access?.isExpired) {
@@ -311,30 +312,31 @@ export default function CourseDetail() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="card lg:col-span-2">
-          <div className="rounded overflow-hidden border bg-black">
-            {playerSrc ? (
-              isBunny ? (
-                <iframe
-                  src={playerSrc}
-                  allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                  allowFullScreen
-                  className="w-full aspect-video"
-                  title="course-player"
-                />
-              ) : (
-                <video
-                  className="w-full aspect-video"
-                  src={playerSrc}
-                  controls
-                  preload="metadata"
-                />
-              )
+          {playerSrc ? (
+            isBunny ? (
+              <SecureEmbed
+                className="aspect-video w-full rounded-xl ring-1 ring-black/10 dark:ring-white/10 shadow-depth"
+                src={playerSrc}
+                title="course-player"
+                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+              />
             ) : (
-              <div className="grid w-full aspect-video place-items-center text-white/70">
-                No video available
-              </div>
-            )}
-          </div>
+              <SecureVideo
+                className="aspect-video w-full rounded-xl ring-1 ring-black/10 dark:ring-white/10 shadow-depth"
+                src={playerSrc}
+                videoClassName="object-contain"
+                preload="metadata"
+              />
+            )
+          ) : (
+            <div className="grid w-full aspect-video place-items-center rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-black text-white/70">
+              No video available
+            </div>
+          )}
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-adlm-dark-dim">
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
+            Protected stream — watermarked to your account. Recording or sharing is prohibited.
+          </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button

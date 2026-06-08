@@ -127,8 +127,10 @@ html {
 
 /* ── Card ── */
 .card {
-  @apply bg-white p-6 shadow-sm border;
+  @apply bg-white p-6 border transition-shadow duration-200;
   border-radius: var(--adlm-radius-xl);
+  box-shadow: 0 1px 2px rgba(5, 17, 31, 0.04),
+              0 6px 16px -8px rgba(5, 17, 31, 0.10);
 }
 
 .prata-regular {
@@ -442,4 +444,280 @@ body {
 .dark .btn:hover { background-color: #36a3ff; }
 
 /* Override .card helper */
-.dark .card { background-color: #101e33; border-color: #1f3559; }
+.dark .card {
+  background-color: #101e33;
+  border-color: #1f3559;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.30),
+              0 6px 16px -8px rgba(0, 0, 0, 0.55);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ADLM DEPTH LAYER — premium 3D / glass / motion utilities
+   ────────────────────────────────────────────────────────────────────
+   Added for the UI/UX upgrade. Dependency-free, dark-mode aware, and
+   fully disabled under prefers-reduced-motion. These are opt-in helper
+   classes — they sit ON TOP of the existing design tokens and never
+   change layout or component behavior on their own.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Layered "premium" shadows ──────────────────────────────────────── */
+.shadow-depth {
+  box-shadow: 0 1px 2px rgba(5, 17, 31, 0.04),
+              0 4px 8px rgba(5, 17, 31, 0.05),
+              0 12px 24px rgba(5, 17, 31, 0.07);
+}
+.shadow-depth-lg {
+  box-shadow: 0 2px 4px rgba(5, 17, 31, 0.05),
+              0 8px 16px rgba(5, 17, 31, 0.07),
+              0 24px 48px -8px rgba(5, 17, 31, 0.12);
+}
+.shadow-glow-orange { box-shadow: 0 12px 34px -10px rgba(232, 106, 39, 0.55); }
+.shadow-glow-blue   { box-shadow: 0 12px 34px -10px rgba(0, 91, 227, 0.45); }
+.dark .shadow-depth {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.30),
+              0 4px 8px rgba(0, 0, 0, 0.35),
+              0 12px 28px rgba(0, 0, 0, 0.45);
+}
+.dark .shadow-depth-lg {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35),
+              0 10px 20px rgba(0, 0, 0, 0.45),
+              0 28px 56px -8px rgba(0, 0, 0, 0.60);
+}
+
+/* ── Glass surfaces (adaptive) ──────────────────────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+.dark .glass {
+  background: rgba(16, 30, 51, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* For glass placed over a dark/photo backdrop (e.g. hero) — same in both modes */
+.glass-dark {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* ── Blueprint grid overlay (on-brand for AEC/QS) ───────────────────── */
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.grid-overlay-ink {
+  background-image:
+    linear-gradient(rgba(5, 17, 31, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(5, 17, 31, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.dark .grid-overlay-ink {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+}
+/* Radial mask helper to fade an overlay toward the edges */
+.mask-radial {
+  -webkit-mask-image: radial-gradient(70% 70% at 50% 40%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(70% 70% at 50% 40%, #000 30%, transparent 100%);
+}
+
+/* ── Brand gradient text ────────────────────────────────────────────── */
+.text-gradient-warm {
+  background: linear-gradient(115deg, #ffb472 0%, #E86A27 55%, #c2410c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.text-gradient-brand {
+  background: linear-gradient(120deg, #E86A27 0%, #f59e0b 45%, #239cff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Aurora / mesh backdrop (subtle, brand hues) ────────────────────── */
+.aurora { position: relative; isolation: isolate; }
+.aurora::before {
+  content: "";
+  position: absolute;
+  inset: -25%;
+  z-index: -1;
+  background:
+    radial-gradient(38% 38% at 18% 22%, rgba(232, 106, 39, 0.20), transparent 60%),
+    radial-gradient(40% 40% at 82% 28%, rgba(0, 91, 227, 0.18), transparent 60%),
+    radial-gradient(44% 44% at 62% 82%, rgba(35, 156, 255, 0.14), transparent 60%);
+  filter: blur(46px);
+  animation: aurora-drift 20s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2%, -2%, 0) scale(1.06); }
+  100% { transform: translate3d(-2%, 2%, 0) scale(1.03); }
+}
+
+/* ── 3D tilt (vars are set by the TiltCard component) ───────────────── */
+.tilt {
+  transform: perspective(900px)
+             rotateX(var(--tilt-rx, 0deg))
+             rotateY(var(--tilt-ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 200ms ease-out;
+  will-change: transform;
+}
+.tilt-layer { transform: translateZ(40px); transform-style: preserve-3d; }
+
+/* ── Spotlight sheen that follows the cursor (--mx/--my from JS) ─────── */
+.spotlight { position: relative; }
+.spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%),
+              rgba(255, 255, 255, 0.18), transparent 60%);
+  opacity: 0;
+  transition: opacity 260ms ease;
+  pointer-events: none;
+}
+.spotlight:hover::after { opacity: 1; }
+.dark .spotlight::after {
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%),
+              rgba(255, 255, 255, 0.10), transparent 60%);
+}
+
+/* ── Hover lift (opt-in for cards/links) ────────────────────────────── */
+.lift {
+  transition: transform 280ms cubic-bezier(.2, .7, .2, 1),
+              box-shadow 280ms ease;
+}
+.lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 2px 4px rgba(5, 17, 31, 0.05),
+              0 12px 24px rgba(5, 17, 31, 0.08),
+              0 28px 56px -10px rgba(5, 17, 31, 0.14);
+}
+.dark .lift:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35),
+              0 14px 28px rgba(0, 0, 0, 0.5),
+              0 32px 60px -10px rgba(0, 0, 0, 0.65);
+}
+
+/* ── Gradient hairline border (premium edge) ────────────────────────── */
+.border-glow {
+  position: relative;
+  background-clip: padding-box;
+}
+.border-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg,
+              rgba(232, 106, 39, 0.55),
+              rgba(0, 91, 227, 0.40) 55%,
+              rgba(35, 156, 255, 0.30));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Scroll reveal (driven by the Reveal component) ─────────────────────
+   Namespaced .fx-reveal to avoid colliding with page-local .reveal styles
+   (e.g. About.jsx ships its own .reveal/.reveal.show animation). */
+.fx-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 650ms cubic-bezier(.2, .7, .2, 1),
+              transform 650ms cubic-bezier(.2, .7, .2, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+.fx-reveal.is-visible { opacity: 1; transform: none; }
+
+/* ── Floating accents (hero blobs) ──────────────────────────────────── */
+@keyframes float-slow {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(10px, -18px); }
+}
+@keyframes float-slower {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(-12px, 14px); }
+}
+.animate-float       { animation: float-slow 9s ease-in-out infinite; }
+.animate-float-slow  { animation: float-slower 13s ease-in-out infinite; }
+
+/* ── Shine sweep (badges / buttons) ─────────────────────────────────── */
+@keyframes shine-sweep {
+  0%   { background-position: -150% 0; }
+  100% { background-position: 250% 0; }
+}
+.shine {
+  background-image: linear-gradient(110deg,
+              transparent 25%, rgba(255, 255, 255, 0.45) 50%, transparent 75%);
+  background-size: 250% 100%;
+  animation: shine-sweep 3.2s ease-in-out infinite;
+}
+
+/* ── Protected media: watermark + screenshot guard ──────────────────── */
+.secure-media { background: #000; }
+.secure-watermark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.secure-watermark__chip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  pointer-events: none;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  backdrop-filter: blur(4px);
+}
+.secure-guard {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 12, 0.97);
+  color: #e2e8f0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.secure-guard.is-active { opacity: 1; pointer-events: auto; }
+.secure-guard__msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* ── Respect reduced-motion: kill all the new motion ────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .fx-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .tilt { transition: none !important; }
+  .lift { transition: none !important; }
+  .animate-float, .animate-float-slow,
+  .aurora::before, .shine { animation: none !important; }
+}

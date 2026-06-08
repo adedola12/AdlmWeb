@@ -121,84 +121,64 @@ function JourneyTimeline() {
     { year: "2025", title: "Launched ADLM Rate Gen" },
   ];
 
-  // Reveal hook for the whole block (drives the line draw)
-  const { ref, shown } = useInView(0.2);
-
   return (
-    <section className="max-w-6xl mx-auto px-4 py-14">
+    <div>
       <Reveal>
-        <h2 className="text-center text-2xl md:text-3xl font-semibold">
-          Our Journey
-        </h2>
-        <p className="text-center text-slate-600 mt-1">
-          Key milestones in our growth story
-        </p>
+        <div className="text-center">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/10 ring-1 ring-adlm-orange/20">
+            Milestones
+          </span>
+          <h2 className="mt-4 text-2xl md:text-3xl font-bold tracking-tight">
+            Our Journey
+          </h2>
+          <p className="text-slate-600 dark:text-adlm-dark-muted mt-2">
+            Key milestones in our growth story
+          </p>
+        </div>
       </Reveal>
 
-      <div ref={ref} className="relative mt-10">
-        {/* Center spine */}
-        <div
-          className="absolute left-1/2 -translate-x-1/2 top-0 w-1 rounded-full bg-gradient-to-b from-adlm-blue-700 to-adlm-navy-tertiary"
-          style={{
-            height: shown ? "100%" : 0,
-            animation: shown
-              ? "line-grow 900ms cubic-bezier(.2,.7,.2,1) forwards"
-              : "none",
-          }}
-          aria-hidden="true"
-        />
-
-        {/* Items */}
-        <ol className="space-y-12">
-          {items.map((m, i) => {
-            const left = i % 2 === 0;
-            const delay = 120 * i;
-            return (
-              <li key={m.year} className="relative">
-                {/* dot */}
-                <span
-                  className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-adlm-blue-700"
-                  style={{
-                    boxShadow: "0 0 0 6px rgba(59,130,246,.25)",
-                    animation: shown
-                      ? `dot-pop 480ms ${200 + delay}ms ease-out both`
-                      : "none",
-                  }}
-                  aria-hidden="true"
-                />
-
-                {/* left/right card */}
-                <div
-                  className={`relative w-full md:w-[calc(50%-2rem)] 
-                    ${
-                      left
-                        ? "md:pr-10 md:ml-0 md:mr-auto"
-                        : "md:pl-10 md:ml-auto md:mr-0"
-                    }`}
-                  style={{
-                    animation: shown
-                      ? `${left ? "slide-left" : "slide-right"} 560ms ${
-                          120 + delay
-                        }ms cubic-bezier(.2,.7,.2,1) both`
-                      : "none",
-                  }}
-                >
-                  <div
-                    className={`hidden md:block absolute top-1/2 -translate-y-1/2 ${
-                      left ? "right-0" : "left-0"
-                    } w-10 h-px bg-blue-200`}
+      <ol className="relative mt-12 max-w-2xl mx-auto">
+        {items.map((m, i) => {
+          const last = i === items.length - 1;
+          return (
+            <li key={m.year} className="flex gap-4 sm:gap-5">
+              {/* Rail: glowing node + connecting line */}
+              <div className="relative flex flex-col items-center">
+                <span className="z-10 grid place-items-center w-7 h-7 rounded-full bg-white dark:bg-adlm-dark-bg ring-2 ring-adlm-blue-600 shadow-glow-blue">
+                  <span className="w-2.5 h-2.5 rounded-full bg-adlm-orange" />
+                </span>
+                {!last && (
+                  <span
+                    aria-hidden="true"
+                    className="w-0.5 flex-1 my-1 rounded-full bg-gradient-to-b from-adlm-blue-600/70 to-adlm-blue-700/30"
                   />
-                  <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-sm px-5 py-4">
-                    <div className="text-adlm-blue-700 font-semibold">{m.year}</div>
-                    <div className="text-slate-700">{m.title}</div>
+                )}
+              </div>
+
+              {/* Milestone card */}
+              <div className={`flex-1 ${last ? "" : "pb-6"}`}>
+                <Reveal delay={70 * i}>
+                  <div className="group relative spotlight overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 shadow-depth lift">
+                    <div
+                      aria-hidden="true"
+                      className={`pointer-events-none absolute -top-10 -right-10 w-28 h-28 rounded-full blur-2xl ${
+                        i % 2 ? "bg-adlm-blue-600/15" : "bg-adlm-orange/15"
+                      }`}
+                    />
+                    <div className="relative text-2xl font-extrabold leading-none text-gradient-warm">
+                      {m.year}
+                    </div>
+                    <div className="relative mt-2 font-medium text-slate-800 dark:text-adlm-dark-text">
+                      {m.title}
+                    </div>
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-    </section>
+                </Reveal>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -326,10 +306,13 @@ export default function AboutADLM() {
           alt=""
           className="absolute inset-0 w-full h-full object-cover opacity-10"
         />
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-40 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-16 -right-10 w-80 h-80 rounded-full bg-adlm-orange/20 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-72 h-72 rounded-full bg-adlm-blue-600/25 blur-3xl animate-float-slow" />
         <div className="max-w-6xl mx-auto px-4 py-16 md:py-20 relative">
           <Reveal>
             <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
-              About <span className="text-blue-200">ADLM</span>
+              About <span className="text-gradient-warm">ADLM</span>
             </h1>
           </Reveal>
           <Reveal delay={120}>
@@ -363,7 +346,7 @@ export default function AboutADLM() {
       <section className="max-w-6xl mx-auto px-4 py-10 md:py-14">
         <div className="grid md:grid-cols-2 gap-6">
           <Reveal>
-            <div className="rounded-xl bg-white p-6 ring-1 ring-slate-200 shadow-sm">
+            <div className="rounded-xl bg-white p-6 ring-1 ring-slate-200 shadow-depth">
               <h3 className="text-xl font-semibold">Our Mission</h3>
               <p className="mt-2 text-slate-600">
                 To empower Quantity Surveyors and construction teams with{" "}
@@ -374,7 +357,7 @@ export default function AboutADLM() {
             </div>
           </Reveal>
           <Reveal delay={120}>
-            <div className="rounded-xl bg-white p-6 ring-1 ring-slate-200 shadow-sm">
+            <div className="rounded-xl bg-white p-6 ring-1 ring-slate-200 shadow-depth">
               <h3 className="text-xl font-semibold">Our Vision</h3>
               <p className="mt-2 text-slate-600">
                 To become the leading ConTech ecosystem for the
@@ -404,7 +387,7 @@ export default function AboutADLM() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mt-6">
           {values.map((v, i) => (
             <Reveal key={v.title} delay={100 * i}>
-              <div className="rounded-xl bg-white p-5 ring-1 ring-slate-200 shadow-sm hover:shadow-lg transition hover:-translate-y-0.5">
+              <div className="relative spotlight rounded-xl bg-white p-5 ring-1 ring-slate-200 shadow-depth hover:shadow-depth-lg transition hover:-translate-y-0.5">
                 <div className="w-9 h-9 rounded-full bg-blue-50 text-adlm-blue-700 flex items-center justify-center ring-1 ring-blue-200">
                   {v.icon}
                 </div>
@@ -435,7 +418,7 @@ export default function AboutADLM() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mt-6">
           {leaders.map((p, i) => (
             <Reveal key={p.name} delay={90 * i}>
-              <div className="rounded-xl bg-white ring-1 ring-slate-200 shadow-sm hover:shadow-lg transition hover:-translate-y-0.5">
+              <div className="relative spotlight overflow-hidden rounded-xl bg-white ring-1 ring-slate-200 shadow-depth hover:shadow-depth-lg transition hover:-translate-y-0.5">
                 <div className="aspect-[4/3] overflow-hidden rounded-t-xl">
                   <SafeImg
                     src={p.img}
@@ -467,8 +450,11 @@ export default function AboutADLM() {
       </section>
 
       {/* NUMBERS (dark band) */}
-      <section className="mt-10 bg-adlm-navy-tertiary text-white">
-        <div className="max-w-6xl mx-auto px-4 py-10">
+      <section className="relative overflow-hidden mt-10 bg-adlm-navy-tertiary text-white">
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-40 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-16 right-1/4 w-72 h-72 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-16 left-1/4 w-72 h-72 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
+        <div className="relative max-w-6xl mx-auto px-4 py-10">
           <Reveal>
             <h2 className="text-center text-2xl md:text-3xl font-semibold">
               By the Numbers
@@ -505,7 +491,7 @@ export default function AboutADLM() {
             "Hands-on training, internships, and community growth.",
           ].map((t, i) => (
             <Reveal key={i} delay={80 * i}>
-              <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200 shadow-sm flex items-start gap-3">
+              <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200 shadow-depth flex items-start gap-3">
                 <span className="mt-1 inline-flex w-6 h-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
                   ✓
                 </span>

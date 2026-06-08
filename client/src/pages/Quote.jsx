@@ -222,14 +222,22 @@ export default function Quote() {
       `}</style>
 
       {/* Header */}
-      <div className="no-print">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-          Quick Quotation
-        </h1>
-        <p className="text-slate-600 mt-1">
-          Select the software products you need, number of PCs/users, and
-          whether you need physical training. Get an instant price estimate.
-        </p>
+      <div className="no-print relative overflow-hidden rounded-2xl bg-adlm-navy text-white px-5 py-7 md:px-8 md:py-9 shadow-depth">
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-16 right-8 w-64 h-64 rounded-full bg-adlm-orange/20 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float-slow" />
+        <div className="relative">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/15 ring-1 ring-adlm-orange/30">
+            Instant estimate
+          </span>
+          <h1 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight">
+            Build Your Quotation
+          </h1>
+          <p className="mt-2 text-sm md:text-base text-white/70 max-w-2xl">
+            Pick the software you need, set the number of PCs/users, and add
+            physical training — get an instant estimate you can print or email.
+          </p>
+        </div>
       </div>
 
       {/* Controls */}
@@ -274,10 +282,10 @@ export default function Quote() {
                 <div
                   key={key}
                   onClick={() => toggleProduct(key)}
-                  className={`cursor-pointer rounded-xl p-4 border-2 transition ${
+                  className={`group relative spotlight lift cursor-pointer rounded-xl p-4 border-2 shadow-depth transition ${
                     isSelected
-                      ? "border-[#091E39] bg-blue-50 ring-1 ring-[#091E39]"
-                      : "border-slate-200 bg-white hover:border-slate-300"
+                      ? "border-adlm-blue-700 bg-blue-50 dark:bg-adlm-blue-700/10 ring-1 ring-adlm-blue-700"
+                      : "border-slate-200 dark:border-adlm-dark-border bg-white hover:border-adlm-blue-400"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -343,7 +351,7 @@ export default function Quote() {
       {/* Physical training */}
       <div className="mt-8 no-print">
         <h2 className="font-semibold text-lg mb-3">Physical Training</h2>
-        <div className="rounded-xl bg-white border border-slate-200 p-4">
+        <div className="rounded-xl bg-white dark:bg-adlm-dark-panel border border-slate-200 dark:border-adlm-dark-border p-4 shadow-depth">
           <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
             <input
               type="checkbox"

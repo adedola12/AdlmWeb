@@ -47,9 +47,9 @@ function TrainingCard({ training }) {
   return (
     <div
       className="
-        group bg-white rounded-[12px] shadow-md flex flex-col overflow-hidden
+        group spotlight bg-white rounded-[12px] shadow-depth flex flex-col overflow-hidden
         transition-all duration-300
-        hover:-translate-y-2 hover:shadow-xl
+        hover:-translate-y-2 hover:shadow-depth-lg
         hover:ring-1 hover:ring-gray-200
       "
     >
@@ -172,8 +172,11 @@ export default function Trainings() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header Banner */}
-      <section className="w-full bg-adlm-navy text-white pt-20 pb-12 px-4 md:px-12 lg:px-24">
-        <div className="max-w-6xl mx-auto space-y-6">
+      <section className="relative overflow-hidden w-full bg-adlm-navy text-white pt-20 pb-12 px-4 md:px-12 lg:px-24">
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-20 right-10 w-72 h-72 rounded-full bg-adlm-blue-600/15 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-24 left-1/4 w-72 h-72 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
+        <div className="relative max-w-6xl mx-auto space-y-6">
           <div>
             <p className="text-sm md:text-base opacity-80">
               Training &amp; Events Gallery

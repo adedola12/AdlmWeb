@@ -119,7 +119,7 @@ function TrainingCard({ t }) {
     .join(" • ");
 
   return (
-    <article className="rounded-2xl bg-white p-3 md:p-4 shadow-sm ring-1 ring-black/5 hover:shadow-lg hover:ring-black/10 transition">
+    <article className="relative spotlight rounded-2xl bg-white p-3 md:p-4 shadow-depth ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-depth-lg hover:ring-black/10 transition">
       <div className="rounded-xl overflow-hidden aspect-video bg-slate-100 ring-1 ring-black/5">
         {img ? (
           <img src={img} alt={t?.title || "Training"} className="w-full h-full object-cover" />
@@ -439,8 +439,43 @@ export default function Products() {
 
       <ComingSoonModal show={showModal} onClose={closeModal} />
 
+      {/* Page header */}
+      <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white px-5 py-7 md:px-8 md:py-9 shadow-depth">
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-16 right-8 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
+        <div className="relative">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/15 ring-1 ring-adlm-orange/30">
+            ADLM Products
+          </span>
+          <h1 className="mt-3 text-2xl md:text-3xl font-bold tracking-tight">
+            Software, Plugins &amp; Training
+          </h1>
+          <p className="mt-2 text-sm md:text-base text-white/70 max-w-2xl">
+            Everything a modern Quantity Surveyor needs — instant rate build-ups,
+            2D/3D take-off plugins, and hands-on professional training.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              onClick={() => navigate("/quote")}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-orange px-4 py-2 text-sm font-semibold text-white shadow-glow-orange hover:brightness-110 active:scale-[.98] transition"
+            >
+              Get a Quotation
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/trainings")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/25 px-4 py-2 text-sm font-medium text-white hover:bg-white/10 hover:border-white/40 transition"
+            >
+              Training &amp; Events
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Toolbar */}
-      <div className="rounded-2xl bg-white p-3 md:p-4 sticky top-[56px] z-10 shadow-sm ring-1 ring-black/5">
+      <div className="rounded-2xl bg-white p-3 md:p-4 sticky top-[56px] z-10 shadow-depth ring-1 ring-black/5">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="flex-1 relative">
             <input
@@ -510,19 +545,25 @@ export default function Products() {
 
       {/* ✅ NEW: Physical Trainings section */}
       <div className="rounded-2xl bg-white p-4 md:p-5 ring-1 ring-black/5">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-lg font-bold">Physical Trainings</div>
-            {/* <div className="text-sm text-slate-600">
-              Upcoming physical programs (flyer + location).
-            </div> */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl grid place-items-center bg-adlm-orange/10 text-adlm-orange flex-shrink-0">
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+            </span>
+            <div>
+              <div className="text-lg font-bold text-slate-900 dark:text-white">Physical Trainings</div>
+              <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">In-person workshops & hands-on sessions</div>
+            </div>
           </div>
           <button
-            className="px-3 py-2 rounded-xl border font-semibold hover:bg-gray-50"
-            onClick={() => navigate("/ptrainings")}
+            className="shrink-0 px-3 py-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border font-semibold text-sm hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
+            onClick={() => navigate("/trainings")}
             type="button"
           >
-            View all physical trainings
+            View all
           </button>
         </div>
 
@@ -673,9 +714,9 @@ function ProductCard({
     <article
       ref={cardRef}
       className={`
-        relative rounded-2xl bg-white p-3 md:p-4 flex flex-col
-        shadow-sm ring-1 ring-black/5 transition will-change-transform
-        hover:-translate-y-0.5 hover:shadow-lg hover:ring-black/10
+        relative spotlight rounded-2xl bg-white p-3 md:p-4 flex flex-col
+        shadow-depth ring-1 ring-black/5 transition will-change-transform
+        hover:-translate-y-0.5 hover:shadow-depth-lg hover:ring-black/10
         ${inView ? "opacity-100" : "opacity-0"}
       `}
       style={{

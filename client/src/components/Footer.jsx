@@ -58,7 +58,7 @@ export default function Footer() {
     return (
       <button
         type="button"
-        className={`text-left hover:underline ${className}`}
+        className={`text-left text-white/70 hover:text-white transition-colors duration-200 ${className}`}
         onClick={() => {
           if (isAvailable) navigate(raw);
           else openNotAvailable(label);
@@ -87,7 +87,12 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-adlm-navy text-white">
+    <footer className="relative overflow-hidden bg-adlm-navy text-white">
+      {/* Premium top edge — brand gradient hairline + soft glow */}
+      <div aria-hidden="true" className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-adlm-orange/70 to-transparent" />
+      <div aria-hidden="true" className="absolute -top-24 left-1/2 -translate-x-1/2 w-[40rem] h-48 bg-adlm-blue-600/10 blur-3xl rounded-full" />
+      <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-40 mask-radial" />
+
       {/* ComingSoonModal remains your existing modal component */}
       <ComingSoonModal
         show={showComingSoonModal}
@@ -122,14 +127,14 @@ export default function Footer() {
         </div>
       </ComingSoonModal>
 
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="relative z-10 mx-auto max-w-6xl px-6 py-12">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
           <div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 grid place-items-center rounded bg-white/20 font-bold">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 grid place-items-center rounded-xl font-bold text-white bg-gradient-to-br from-adlm-orange to-amber-600 shadow-glow-orange">
                 AS
               </div>
-              <span className="font-semibold">ADLM Studio</span>
+              <span className="font-semibold text-lg tracking-tight">ADLM Studio</span>
             </div>
             <p className="mt-3 text-white/70 text-sm">
               Digital tools and training for modern Quantity Surveyors.
@@ -222,7 +227,7 @@ export default function Footer() {
               <button
                 type="button"
                 onClick={() => openNotAvailable("App Store download")}
-                className="w-full flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700"
+                className="w-full flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.06] border border-white/10 hover:bg-white/[0.12] hover:-translate-y-0.5 transition-all"
               >
                 <img
                   src={appleLogo}
@@ -240,7 +245,7 @@ export default function Footer() {
                 href={appUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.06] border border-white/10 hover:bg-white/[0.12] hover:-translate-y-0.5 transition-all"
               >
                 <img
                   src={googlePlayLogo}

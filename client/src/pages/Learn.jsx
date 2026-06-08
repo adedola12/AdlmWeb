@@ -61,6 +61,10 @@ function HoverVideo({ src, poster }) {
         muted
         preload="metadata"
         controls={false}
+        controlsList="nodownload noremoteplayback"
+        disablePictureInPicture
+        draggable={false}
+        onContextMenu={(e) => e.preventDefault()}
       />
     </div>
   );
@@ -104,7 +108,7 @@ function HoverYouTube({ id, title, thumb }) {
 function FreeCard({ v }) {
   const id = extractYouTubeId(v.youtubeId);
   return (
-    <div className="group card p-0">
+    <div className="group card p-0 lift spotlight">
       <HoverYouTube id={id} title={v.title} thumb={v.thumbnailUrl} />
       <Link
         to={`/learn/free/${encodeURIComponent(v._id)}`}
@@ -121,7 +125,7 @@ function PaidCard({ c }) {
   const purchaseKey = c.productKey || c.sku;
 
   return (
-    <div className="group card p-0">
+    <div className="group card p-0 lift spotlight">
       <HoverVideo src={preview || c.previewUrl} poster={c.thumbnailUrl} />
       <Link
         to={`/learn/course/${encodeURIComponent(c.sku)}`}
@@ -196,10 +200,37 @@ export default function Learn() {
 
   return (
     <div className="space-y-10">
+      {/* Page header */}
+      <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white px-5 py-7 md:px-8 md:py-9 shadow-depth">
+        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
+        <div aria-hidden="true" className="absolute -top-16 right-8 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
+        <div className="relative">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/15 ring-1 ring-adlm-orange/30">
+            ADLM Learn
+          </span>
+          <h1 className="mt-3 text-2xl md:text-3xl font-bold tracking-tight">
+            Learn BIM, QS &amp; Cost Management
+          </h1>
+          <p className="mt-2 text-sm md:text-base text-white/70 max-w-2xl">
+            Free YouTube lessons and in-depth paid courses with certificates —
+            learn at your own pace, anywhere.
+          </p>
+        </div>
+      </div>
+
       <section className="card">
-        <h2 className="text-xl font-semibold mb-4">Free Courses (YouTube)</h2>
-        <p className="text-sm text-slate-600 mb-4">
-          Hover to preview. Click title for details.
+        <div className="flex items-center gap-2.5 mb-1">
+          <span className="w-9 h-9 rounded-xl grid place-items-center bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400 flex-shrink-0">
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M10 8.5l5 3.5-5 3.5z" fill="currentColor" stroke="none" />
+            </svg>
+          </span>
+          <h2 className="text-xl font-semibold">Free Courses</h2>
+        </div>
+        <p className="text-sm text-slate-600 dark:text-adlm-dark-muted mb-4 ml-0.5">
+          Hover to preview. Click a title to watch.
         </p>
 
         {loadingFree ? (
@@ -238,7 +269,15 @@ export default function Learn() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Paid Courses</h2>
+        <div className="flex items-center gap-2.5">
+          <span className="w-9 h-9 rounded-xl grid place-items-center bg-adlm-blue-700/10 text-adlm-blue-700 dark:text-adlm-blue-400 flex-shrink-0">
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 10L12 5 2 10l10 5 10-5z" />
+              <path d="M6 12v5c0 1 2.5 2.5 6 2.5s6-1.5 6-2.5v-5" />
+            </svg>
+          </span>
+          <h2 className="text-xl font-semibold">Paid Courses</h2>
+        </div>
         {loadingCourses ? (
           <div className="text-sm text-slate-600">Loading...</div>
         ) : courses.length ? (
