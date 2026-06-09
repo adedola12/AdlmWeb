@@ -73,9 +73,9 @@ function ProgressOverviewCard({
           previously it was inline at lg+ which ate horizontal space and
           made the 3 stat cards crammed under the donut. */}
       <div className="mb-4">
-        <div className="font-medium text-slate-900">Progress overview</div>
-        <div className="mt-1 text-sm text-slate-600">
-          Quick view of project delivery progress based on the lines marked {statusLabel.toLowerCase()}.
+        <div className="font-semibold text-slate-900 dark:text-white">Progress overview</div>
+        <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
+          Delivery progress based on the items of work marked {statusLabel.toLowerCase()}.
         </div>
       </div>
 
@@ -85,13 +85,13 @@ function ProgressOverviewCard({
       <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)] xl:items-center">
         <div className="mx-auto w-full max-w-[220px]">
           <div className="relative mx-auto h-48 w-48 rounded-full" style={chartStyle}>
-            <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white px-4 text-center shadow-inner">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Progress</div>
-              <div className="mt-1 text-3xl font-semibold text-slate-900">
+            <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white dark:bg-adlm-dark-panel px-4 text-center shadow-inner">
+              <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">Progress</div>
+              <div className="mt-1 text-3xl font-semibold text-slate-900 dark:text-white">
                 {normalizedProgress.toFixed(1)}%
               </div>
-              <div className="mt-1 text-[11px] text-slate-500">
-                {progressCount} of {progressTotal} lines marked
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+                {progressCount} of {progressTotal} items of work
               </div>
             </div>
           </div>
@@ -114,23 +114,23 @@ function ProgressOverviewCard({
              • xl+     → 3 columns next to donut */}
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Marked lines</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900">{progressCount}</div>
-            <div className="mt-1 text-xs text-slate-500">
-              Items already marked {statusLabel.toLowerCase()}
+            <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">{statusLabel} work items</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{progressCount}</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
+              Items of work {statusLabel.toLowerCase()} to date
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Remaining lines</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900">{remainingCount}</div>
-            <div className="mt-1 text-xs text-slate-500">Items still left to mark</div>
+            <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">Remaining work items</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{remainingCount}</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">Items of work outstanding</div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-3 min-w-0">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Total lines</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900">{progressTotal}</div>
-            <div className="mt-1 text-xs text-slate-500">Full project line count</div>
+            <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-adlm-dark-dim">Total work items</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{progressTotal}</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">All items of work in the project</div>
           </div>
         </div>
       </div>
@@ -197,14 +197,14 @@ export default function ProjectDashboardSummary({
         <MetricCard
           label="Actual tracked value"
           value={actualTrackedAmount}
-          helper={`${actualCoverageCount} line${actualCoverageCount === 1 ? "" : "s"} with actual data`}
+          helper={`${actualCoverageCount} work item${actualCoverageCount === 1 ? "" : "s"} with actual data`}
         />
         <MetricCard
           label="Actual variance"
           value={actualVarianceAmount}
           helper={
             actualCoverageCount
-              ? `${actualVariancePercent.toFixed(1)}% against planned value for tracked lines`
+              ? `${actualVariancePercent.toFixed(1)}% against planned value for tracked work items`
               : "Add actual qty or rate to start comparing against plan"
           }
           tone={varianceTone}
@@ -213,15 +213,15 @@ export default function ProjectDashboardSummary({
           label="Progress"
           value={progressPercent}
           format="percent"
-          helper={`${progressCount} of ${progressTotal} lines marked ${statusLabel.toLowerCase()}`}
+          helper={`${progressCount} of ${progressTotal} work items ${statusLabel.toLowerCase()}`}
         />
       </div>
 
       <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="font-medium text-slate-900">Actual vs planned dashboard</div>
-            <div className="mt-1 text-sm text-slate-600">
+            <div className="font-semibold text-slate-900 dark:text-white">Actual vs planned performance</div>
+            <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
               Compare entered actuals with the saved project plan and switch between chart styles.
             </div>
           </div>
@@ -229,8 +229,8 @@ export default function ProjectDashboardSummary({
           <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
             <div>
               <div className="text-xs uppercase tracking-wide text-slate-400">Actual coverage</div>
-              <div className="mt-1 font-medium text-slate-900">
-                {actualCoverageCount} of {progressTotal} lines ({actualCoveragePercent.toFixed(1)}%)
+              <div className="mt-1 font-medium text-slate-900 dark:text-white">
+                {actualCoverageCount} of {progressTotal} work items ({actualCoveragePercent.toFixed(1)}%)
               </div>
             </div>
             <div>
