@@ -479,6 +479,51 @@ function sanitizeProvisionalSums(sums) {
   return out;
 }
 
+// Budget items — the internal cost plan persisted on the project. Mirrors
+// sanitizeProvisionalSums: drops empty rows, coerces numbers, clamps the
+// procurement percent and normalises the procured / target dates.
+function sanitizeBudgetItems(items) {
+  if (!Array.isArray(items)) return [];
+  const out = [];
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  for (let i = 0; i < items.length && out.length < 5000; i += 1) {
+    const b = items[i] || {};
+    const description = String(b.description || "").trim().slice(0, 1000);
+    const billIdentity = String(b.billIdentity || "").trim().slice(0, 200);
+    if (!description && !billIdentity) continue;
+    const procured = Boolean(b.procured);
+    let procuredAt = null;
+    if (procured) {
+      if (b.procuredAt) {
+        const d = new Date(b.procuredAt);
+        if (!Number.isNaN(d.getTime())) procuredAt = d;
+      }
+      if (!procuredAt) procuredAt = new Date();
+    }
+    let targetDate = null;
+    if (b.targetDate) {
+      const d = new Date(b.targetDate);
+      if (!Number.isNaN(d.getTime())) targetDate = d;
+    }
+    out.push({
+      billIdentity,
+      sn: num(b.sn),
+      description,
+      category: String(b.category || "").trim().slice(0, 200),
+      unit: String(b.unit || "").trim().slice(0, 50),
+      qty: num(b.qty),
+      budgetRate: num(b.budgetRate),
+      procured,
+      procuredAt,
+      procuredPercent: Math.max(0, Math.min(100, num(b.procuredPercent))),
+      targetDate,
+      supplier: String(b.supplier || "").trim().slice(0, 300),
+      notes: String(b.notes || "").trim().slice(0, 1000),
+    });
+  }
+  return out;
+}
+
 // BESMM4-aligned default preliminary items. Surfaced to the client so new
 // projects start with a sensible checklist instead of a blank slate.
 const DEFAULT_PRELIMINARY_ITEMS = Object.freeze([
@@ -1509,6 +1554,7 @@ async function updateProject(req, res) {
       clientProjectKey,
       valuationSettings,
       provisionalSums,
+      budgetItems,
       variations,
       preliminaryPercent,
       preliminaryItems,
@@ -1814,6 +1860,10 @@ async function updateProject(req, res) {
 
     if (Array.isArray(provisionalSums)) {
       project.provisionalSums = sanitizeProvisionalSums(provisionalSums);
+    }
+
+    if (Array.isArray(budgetItems)) {
+      project.budgetItems = sanitizeBudgetItems(budgetItems);
     }
 
     if (Array.isArray(variations)) {

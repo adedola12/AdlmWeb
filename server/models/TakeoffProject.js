@@ -100,6 +100,31 @@ const ProvisionalSumSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Budget items — the internal cost plan. Each line links back to a bill
+// item (billIdentity) and carries its own cost rate, plus procurement
+// marking (procured / procuredPercent, mirroring how measured items drive
+// valuation) and a forward buy-schedule slot (targetDate / supplier).
+// Additive + optional: existing projects default to an empty list, so this
+// is fully backward-compatible.
+const BudgetItemSchema = new mongoose.Schema(
+  {
+    billIdentity: { type: String, default: "" },
+    sn: { type: Number, default: 0 },
+    description: { type: String, default: "", trim: true },
+    category: { type: String, default: "" },
+    unit: { type: String, default: "" },
+    qty: { type: Number, default: 0 },
+    budgetRate: { type: Number, default: 0 },
+    procured: { type: Boolean, default: false },
+    procuredAt: { type: Date, default: null },
+    procuredPercent: { type: Number, default: 0 },
+    targetDate: { type: Date, default: null },
+    supplier: { type: String, default: "", trim: true },
+    notes: { type: String, default: "", trim: true },
+  },
+  { _id: false },
+);
+
 // Preliminary items — one entry per BESMM4 preliminary line (setting out,
 // insurances, site accommodation, etc). allocation = percentage of total
 // preliminary amount assigned to this line (sum should be 100). completed
@@ -556,6 +581,7 @@ const TakeoffProjectSchema = new mongoose.Schema(
     checklistCompositeKeys: { type: [String], default: [] },
     items: { type: [ItemSchema], default: [] },
     provisionalSums: { type: [ProvisionalSumSchema], default: [] },
+    budgetItems: { type: [BudgetItemSchema], default: [] },
     variations: { type: [VariationSchema], default: [] },
     preliminaryItems: { type: [PreliminaryItemSchema], default: [] },
     contract: { type: ContractSchema, default: () => ({}) },
