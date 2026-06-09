@@ -12,8 +12,10 @@ import {
   FaCube,
   FaProjectDiagram,
   FaFileContract,
+  FaWallet,
 } from "react-icons/fa";
 import ProjectBillTable from "./ProjectBillTable.jsx";
+import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
@@ -151,6 +153,13 @@ const TAB_OPTIONS = [
     label: "Bill of Quantity",
     helper: "Rates and line items",
     icon: FaFileInvoiceDollar,
+    group: "Commercial",
+  },
+  {
+    id: "budget",
+    label: "Budget",
+    helper: "Cost plan & procurement",
+    icon: FaWallet,
     group: "Commercial",
   },
   {
@@ -629,6 +638,15 @@ export default function ProjectOpenView({
             valuedAmount={valuedAmount}
           />
         </>
+      ) : null}
+
+      {activeTab === "budget" ? (
+        <ProjectBudgetTab
+          items={items}
+          grossAmount={grossAmount}
+          pmDashboard={pmDashboard}
+          statusLabel={statusLabel}
+        />
       ) : null}
 
       {activeTab === "pm" ? (
