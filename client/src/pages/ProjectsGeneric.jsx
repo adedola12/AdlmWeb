@@ -4662,6 +4662,7 @@ export default function ProjectsGeneric() {
                 comparisonRows={computedAll}
                 computedShown={computedShown}
                 items={items}
+                budgetItems={sel?.budgetItems || []}
                 productKey={toolNorm}
                 projectId={selectedId}
                 accessToken={accessToken}

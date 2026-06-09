@@ -211,6 +211,7 @@ export default function ProjectOpenView({
   isGroupLinked,
   itemQuery = "",
   items = [],
+  budgetItems = [],
   productKey = "",
   projectId = "",
   accessToken = "",
@@ -649,7 +650,11 @@ export default function ProjectOpenView({
       ) : null}
 
       {activeTab === "budget" ? (
-        <ProjectBudgetTab items={items} showMaterials={showMaterials} />
+        <ProjectBudgetTab
+          items={items}
+          budgetItems={budgetItems}
+          showMaterials={showMaterials}
+        />
       ) : null}
 
       {activeTab === "pm" ? (

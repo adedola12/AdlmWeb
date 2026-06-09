@@ -111,9 +111,17 @@ const BudgetItemSchema = new mongoose.Schema(
     billIdentity: { type: String, default: "" },
     sn: { type: Number, default: 0 },
     description: { type: String, default: "", trim: true },
+    materialName: { type: String, default: "" },
+    takeoffLine: { type: String, default: "" },
+    // Material | Labour | Plant | Consumable | Equipment (from the plugin).
+    componentKind: { type: String, default: "" },
     category: { type: String, default: "" },
     unit: { type: String, default: "" },
     qty: { type: Number, default: 0 },
+    rate: { type: Number, default: 0 },
+    netUnitCost: { type: Number, default: 0 },
+    overheadPercent: { type: Number, default: 0 },
+    profitPercent: { type: Number, default: 0 },
     budgetRate: { type: Number, default: 0 },
     procured: { type: Boolean, default: false },
     procuredAt: { type: Date, default: null },
@@ -580,6 +588,11 @@ const TakeoffProjectSchema = new mongoose.Schema(
     publicShareEnabled: { type: Boolean, default: false },
     checklistCompositeKeys: { type: [String], default: [] },
     items: { type: [ItemSchema], default: [] },
+    // Derived material/labour lines (the budget) embedded alongside the bill, so ONE
+    // revit project document holds both bill + budget. Reuses ItemSchema — it already
+    // carries sourceTakeoffCode / componentKind / derived / netUnitCost /
+    // overheadPercent / profitPercent, which is exactly the plugin's MaterialItemDto.
+    materialItems: { type: [ItemSchema], default: [] },
     provisionalSums: { type: [ProvisionalSumSchema], default: [] },
     budgetItems: { type: [BudgetItemSchema], default: [] },
     variations: { type: [VariationSchema], default: [] },

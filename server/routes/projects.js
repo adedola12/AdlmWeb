@@ -497,14 +497,23 @@ function sanitizeBudgetItems(items) {
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
   for (let i = 0; i < items.length && out.length < 5000; i += 1) {
     const b = items[i] || {};
-    const description = String(b.description || "").trim().slice(0, 1000);
-    const billIdentity = String(b.billIdentity || "").trim().slice(0, 200);
+    // Accept either a budget-shaped row or a raw material/labour item from a
+    // plugin save: sourceTakeoffCode -> billIdentity, materialName -> name.
+    const billIdentity = String(b.billIdentity || b.sourceTakeoffCode || "")
+      .trim()
+      .slice(0, 200);
+    const materialName = String(b.materialName || "").trim().slice(0, 1000);
+    const description = String(b.description || materialName || "")
+      .trim()
+      .slice(0, 1000);
     if (!description && !billIdentity) continue;
-    const procured = Boolean(b.procured);
+    // Procurement mark: budget rows use procured*, material rows use purchased*.
+    const procured = Boolean(b.procured != null ? b.procured : b.purchased);
     let procuredAt = null;
+    const procuredAtSrc = b.procuredAt || b.purchasedAt;
     if (procured) {
-      if (b.procuredAt) {
-        const d = new Date(b.procuredAt);
+      if (procuredAtSrc) {
+        const d = new Date(procuredAtSrc);
         if (!Number.isNaN(d.getTime())) procuredAt = d;
       }
       if (!procuredAt) procuredAt = new Date();
@@ -514,17 +523,28 @@ function sanitizeBudgetItems(items) {
       const d = new Date(b.targetDate);
       if (!Number.isNaN(d.getTime())) targetDate = d;
     }
+    const rate = num(b.rate);
+    const netUnitCost = num(b.netUnitCost);
+    const procuredPercentSrc =
+      b.procuredPercent != null ? b.procuredPercent : b.percentComplete;
     out.push({
       billIdentity,
       sn: num(b.sn),
       description,
+      materialName,
+      takeoffLine: String(b.takeoffLine || "").trim().slice(0, 1000),
+      componentKind: String(b.componentKind || "").trim().slice(0, 40),
       category: String(b.category || "").trim().slice(0, 200),
       unit: String(b.unit || "").trim().slice(0, 50),
       qty: num(b.qty),
-      budgetRate: num(b.budgetRate),
+      rate,
+      netUnitCost,
+      overheadPercent: num(b.overheadPercent),
+      profitPercent: num(b.profitPercent),
+      budgetRate: num(b.budgetRate) || netUnitCost || rate,
       procured,
       procuredAt,
-      procuredPercent: Math.max(0, Math.min(100, num(b.procuredPercent))),
+      procuredPercent: Math.max(0, Math.min(100, num(procuredPercentSrc))),
       targetDate,
       supplier: String(b.supplier || "").trim().slice(0, 300),
       notes: String(b.notes || "").trim().slice(0, 1000),
@@ -1245,6 +1265,7 @@ async function createProject(req, res) {
     const {
       name,
       items,
+      materialItems,
       isMaterials: bodyIsMaterials,
       clientProjectKey,
       fingerprint,
@@ -1315,6 +1336,10 @@ async function createProject(req, res) {
       name: trimmedName,
       slug,
       items: tracked.items,
+      // Embedded budget — one revit project holds both bill + budget.
+      materialItems: Array.isArray(materialItems)
+        ? sanitizeItems(materialItems, "revit-materials")
+        : [],
       valuationEvents: tracked.valuationEvents,
       clientProjectKey: clientProjectKey || "",
       fingerprint: fingerprint || "",
@@ -1417,6 +1442,23 @@ async function saveProjectFull(req, res) {
           origin: "takeoff-derived",
         },
       });
+    }
+
+    // 2b) Consolidate the material/labour breakdown onto the takeoff project
+    // so bill + budget live on ONE document (budgetItems[], keyed by
+    // sourceTakeoffCode -> billIdentity). Guarded and run AFTER the critical
+    // takeoff/materials saves, so a mapping issue can never break the save.
+    // The separate materials project is still written above during the
+    // transition; budgetItems[] is the canonical source for the Budget tab.
+    if (mats.length) {
+      try {
+        takeoffRes.project.budgetItems = sanitizeBudgetItems(
+          materialsRes ? materialsRes.project.items : mats,
+        );
+        await takeoffRes.project.save();
+      } catch (e) {
+        console.error("[full] budget consolidation failed:", e?.message || e);
+      }
     }
 
     // 3) Proposed-vs-actual margin across the saved pair (§5).
@@ -1701,6 +1743,7 @@ async function updateProject(req, res) {
       valuationSettings,
       provisionalSums,
       budgetItems,
+      materialItems,
       variations,
       preliminaryPercent,
       preliminaryItems,
@@ -1906,6 +1949,12 @@ async function updateProject(req, res) {
 
     if (Array.isArray(budgetItems)) {
       project.budgetItems = sanitizeBudgetItems(budgetItems);
+    }
+
+    // Embedded budget (derived material/labour) — one revit project holds both
+    // bill + budget. Partial-update safe: only replaced when sent.
+    if (Array.isArray(materialItems)) {
+      project.materialItems = sanitizeItems(materialItems, "revit-materials");
     }
 
     if (Array.isArray(variations)) {

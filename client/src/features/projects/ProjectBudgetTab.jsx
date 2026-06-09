@@ -28,7 +28,9 @@ function money(v) {
 
 function lineDone(it) {
   return (
-    Boolean(it?.purchased || it?.completed) || safeNum(it?.percentComplete) >= 100
+    Boolean(it?.procured || it?.purchased || it?.completed) ||
+    safeNum(it?.procuredPercent) >= 100 ||
+    safeNum(it?.percentComplete) >= 100
   );
 }
 
@@ -55,7 +57,7 @@ function kindMeta(kind) {
 
 function groupLabel(it) {
   return (
-    (it?.takeoffLine || it?.sourceTakeoffCode || it?.description || "")
+    (it?.takeoffLine || it?.sourceTakeoffCode || it?.billIdentity || it?.description || "")
       .toString()
       .trim() || "Unlinked lines"
   );
@@ -69,12 +71,20 @@ function lineName(it) {
   );
 }
 
-export default function ProjectBudgetTab({ items = [], showMaterials = false }) {
-  // Group breakdown rows under their parent bill line (sourceTakeoffCode).
+export default function ProjectBudgetTab({
+  items = [],
+  budgetItems = [],
+  showMaterials = false,
+}) {
+  // Group breakdown rows under their parent bill line. Prefer the
+  // consolidated budgetItems[] (material + labour folded onto the unified
+  // project); fall back to the project's own items (materials view).
   const groups = React.useMemo(() => {
+    const source = budgetItems.length ? budgetItems : items;
     const map = new Map();
-    for (const it of items || []) {
+    for (const it of source || []) {
       const key =
+        (it?.billIdentity || "").toString().trim() ||
         (it?.sourceTakeoffCode || "").toString().trim() ||
         (it?.takeoffLine || "").toString().trim() ||
         (it?.code || "").toString().trim() ||
@@ -103,17 +113,20 @@ export default function ProjectBudgetTab({ items = [], showMaterials = false }) 
         allDone: g.lines.length > 0 && doneCount === g.lines.length,
       };
     });
-  }, [items]);
+  }, [items, budgetItems]);
 
-  // Does the current project actually carry a breakdown? (Materials view
-  // does; a pure takeoff/bill view does not.)
-  const hasBreakdown = React.useMemo(
-    () =>
-      (items || []).some(
-        (it) => it?.componentKind || it?.sourceTakeoffCode || it?.derived,
-      ),
-    [items],
-  );
+  // Does the project carry a breakdown? (Unified budgetItems[] or a
+  // materials-view items[] both qualify; a pure takeoff/bill view does not.)
+  const hasBreakdown = React.useMemo(() => {
+    const source = budgetItems.length ? budgetItems : items;
+    return (source || []).some(
+      (it) =>
+        it?.componentKind ||
+        it?.sourceTakeoffCode ||
+        it?.billIdentity ||
+        it?.derived,
+    );
+  }, [items, budgetItems]);
 
   const budgetTotal = groups.reduce((a, g) => a + g.cost, 0);
   const procuredTotal = groups.reduce((a, g) => a + g.procuredCost, 0);
