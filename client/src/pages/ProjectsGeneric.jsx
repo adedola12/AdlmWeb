@@ -173,6 +173,7 @@ function getEndpoints(tool) {
     share: (id) => "/projects/" + t + "/" + id + "/share",
     lock: (id) => "/projects/" + t + "/" + id + "/contract/lock",
     unlock: (id) => "/projects/" + t + "/" + id + "/contract/unlock",
+    budget: (id) => "/projects/" + t + "/" + id + "/budget",
     certificates: (id) => "/projects/" + t + "/" + id + "/certificates",
     certificate: (id, n) =>
       "/projects/" + t + "/" + id + "/certificates/" + n,
@@ -4251,6 +4252,23 @@ export default function ProjectsGeneric() {
 
   const title = TITLES[tool] || "Projects";
 
+  // Persist procurement marking from the Budget tab. Isolated PUT that only
+  // updates budgetItems[] — never touches the BoQ/valuation save path.
+  async function saveBudgetProcurement(nextBudgetItems) {
+    if (!selectedId || !endpoints.budget) return;
+    try {
+      const updated = await apiAuthed(endpoints.budget(selectedId), {
+        token: accessToken,
+        method: "PUT",
+        body: { baseVersion: sel?.version, budgetItems: nextBudgetItems },
+      });
+      setSel(updated);
+      setNotice("Procurement updated.");
+    } catch (e) {
+      setErr(e?.message || "Couldn't save procurement.");
+    }
+  }
+
   // checkbox styling: no surrounding border look
   const checkboxCls =
     "h-4 w-4 accent-blue-600 border-0 outline-none ring-0 focus:ring-0 focus:outline-none";
@@ -4664,6 +4682,7 @@ export default function ProjectsGeneric() {
                 items={items}
                 budgetItems={sel?.budgetItems || []}
                 materialItems={sel?.materialItems || []}
+                onSaveBudget={saveBudgetProcurement}
                 productKey={toolNorm}
                 projectId={selectedId}
                 accessToken={accessToken}

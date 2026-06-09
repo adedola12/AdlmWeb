@@ -1955,6 +1955,15 @@ async function updateProject(req, res) {
     // bill + budget. Partial-update safe: only replaced when sent.
     if (Array.isArray(materialItems)) {
       project.materialItems = sanitizeItems(materialItems, "revit-materials");
+      // Canonicalise the breakdown into budgetItems[] too (QUIV embeds the
+      // material/labour via this PUT), so the Budget tab + procurement
+      // marking have one source of truth on the bill project. Guarded so a
+      // mapping issue can never break the save.
+      try {
+        project.budgetItems = sanitizeBudgetItems(materialItems);
+      } catch (e) {
+        console.error("[update] budget consolidation failed:", e?.message || e);
+      }
     }
 
     if (Array.isArray(variations)) {
@@ -3501,6 +3510,51 @@ async function getPublicDashboard(req, res) {
 // This is exported separately and mounted in index.js
 export { getPublicDashboard };
 
+// Persist procurement marking on the budget breakdown. Isolated from the
+// main save: it only replaces budgetItems[] (procured flags, target dates,
+// supplier, qty/rate edits) and bumps the version, so it can never disturb
+// the bill items or valuation tracking.
+async function markBudget(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    const userId = getUserObjectId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid user id in token" });
+    }
+    const project = await TakeoffProject.findOne({
+      _id: id,
+      userId,
+      productKey,
+    });
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const body = req.body || {};
+    if (!Array.isArray(body.budgetItems)) {
+      return res.status(400).json({ error: "budgetItems array required" });
+    }
+    if (
+      body.baseVersion !== undefined &&
+      Number(body.baseVersion) !== Number(project.version)
+    ) {
+      return res
+        .status(409)
+        .json({ error: "Version conflict", version: project.version });
+    }
+
+    project.budgetItems = sanitizeBudgetItems(body.budgetItems);
+    project.version = (Number(project.version) || 0) + 1;
+    await project.save();
+    return res.json(projectForClient(project));
+  } catch (err) {
+    console.error("markBudget error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
 // §6 unified save — must precede the generic "/:productKey" routes so
 // "/revit/full" isn't swallowed by a single-segment match.
 router.post(
@@ -3651,6 +3705,13 @@ router.post(
   mapEntitlementParam,
   requireEntitlementParam,
   toggleShare,
+);
+
+router.put(
+  "/:productKey/:id/budget",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  markBudget,
 );
 
 router.post(

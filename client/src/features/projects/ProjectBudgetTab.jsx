@@ -75,6 +75,7 @@ export default function ProjectBudgetTab({
   items = [],
   budgetItems = [],
   materialItems = [],
+  onSaveBudget,
   showMaterials = false,
 }) {
   // Group breakdown rows under their parent bill line. Prefer the
@@ -141,6 +142,64 @@ export default function ProjectBudgetTab({
   const procuredTotal = groups.reduce((a, g) => a + g.procuredCost, 0);
   const doneTone = "text-emerald-700 dark:text-emerald-400";
 
+  // Procurement marking is enabled only when budgetItems[] is the canonical
+  // source (the unified bill project). In the materials-view fallback we stay
+  // read-only — that surface has its own purchased flow.
+  const canMark = budgetItems.length > 0 && typeof onSaveBudget === "function";
+  const [saving, setSaving] = React.useState(false);
+
+  const keyOf = (it) =>
+    [
+      it?.billIdentity || it?.sourceTakeoffCode || "",
+      it?.componentKind || "",
+      it?.materialName || it?.description || "",
+      it?.sn ?? "",
+    ].join("|");
+
+  async function persist(next) {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSaveBudget(next);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Toggle one budget line procured (autosaves).
+  function toggleLine(line) {
+    const k = keyOf(line);
+    const wasDone = lineDone(line);
+    persist(
+      budgetItems.map((b) =>
+        keyOf(b) === k
+          ? {
+              ...b,
+              procured: !wasDone,
+              procuredAt: !wasDone ? new Date().toISOString() : null,
+            }
+          : b,
+      ),
+    );
+  }
+
+  // Mark every line under one bill item — the down-cascade ("mark the bill
+  // item complete -> the whole breakdown is procured").
+  function markGroup(group, value) {
+    const keys = new Set(group.lines.map(keyOf));
+    persist(
+      budgetItems.map((b) =>
+        keys.has(keyOf(b))
+          ? {
+              ...b,
+              procured: value,
+              procuredAt: value ? new Date().toISOString() : null,
+            }
+          : b,
+      ),
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Intro + the completion rule. Intentionally light — no dashboard. */}
@@ -154,9 +213,11 @@ export default function ProjectBudgetTab({
         </div>
         <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
           A bill item is only complete when <b>every</b> line below it is
-          marked done/procured — buying the materials isn’t enough until the
-          labour is done too. Marking the bill item complete will mark all of
-          its lines. <b>Interactive marking arrives in the next phase.</b>
+          marked procured/done — buying the materials isn’t enough until the
+          labour is done too.{" "}
+          {canMark
+            ? "Tick a line to mark it procured, or use “Mark all” to procure a whole bill item’s breakdown."
+            : "Re-save this project from the plugin to enable procurement marking here."}
         </div>
       </div>
 
@@ -204,6 +265,17 @@ export default function ProjectBudgetTab({
                         ? "Part"
                         : "Pending"}
                   </span>
+                  {canMark ? (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => markGroup(g, !g.allDone)}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-adlm-dark-border dark:text-adlm-dark-muted dark:hover:bg-white/5"
+                      title={g.allDone ? "Unmark all lines" : "Mark all lines procured"}
+                    >
+                      {g.allDone ? "Unmark all" : "Mark all"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -259,7 +331,16 @@ export default function ProjectBudgetTab({
                             {money(amount)}
                           </td>
                           <td className="px-3 py-2 text-center">
-                            {done ? (
+                            {canMark ? (
+                              <input
+                                type="checkbox"
+                                checked={done}
+                                disabled={saving}
+                                onChange={() => toggleLine(l)}
+                                className="h-4 w-4 cursor-pointer accent-emerald-600 disabled:opacity-50"
+                                title={done ? "Mark not procured" : "Mark procured"}
+                              />
+                            ) : done ? (
                               <span className={`font-semibold ${doneTone}`}>✓</span>
                             ) : (
                               <span className="text-slate-300 dark:text-adlm-dark-dim">

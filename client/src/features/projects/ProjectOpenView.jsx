@@ -213,6 +213,7 @@ export default function ProjectOpenView({
   items = [],
   budgetItems = [],
   materialItems = [],
+  onSaveBudget,
   productKey = "",
   projectId = "",
   accessToken = "",
@@ -655,6 +656,7 @@ export default function ProjectOpenView({
           items={items}
           budgetItems={budgetItems}
           materialItems={materialItems}
+          onSaveBudget={onSaveBudget}
           showMaterials={showMaterials}
         />
       ) : null}
