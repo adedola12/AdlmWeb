@@ -180,6 +180,15 @@ function forceRevitFullProductKey(req, _res, next) {
   next();
 }
 
+// PlanSwift unified save (§6, HERON plugin): persists the PlanSwift takeoff (bill) + its
+// derived materials (budget) in one call, linked by clientProjectKey + modelFingerprint.
+// Entitlement is gated on the base "planswift" product, which covers both halves.
+function forcePsFullProductKey(req, _res, next) {
+  req.productKeyOriginal = "planswift";
+  req.params.productKey = entitlementKeyFor("planswift");
+  next();
+}
+
 function isMaterialsProductKey(productKey) {
   const key = normalizeProductKey(productKey);
   return key === "revit-materials" || key === "revit-material"
@@ -1247,10 +1256,16 @@ async function saveProjectFull(req, res) {
       valuationSettings,
     };
 
+    // The takeoff product key is set by the route middleware (revit/full → "revit",
+    // planswift/full → "planswift") and the materials sibling key follows from it, so this
+    // one unified save serves both Revit and PlanSwift (HERON).
+    const takeoffKey = requestedProductKey(req);
+    const materialsKey = materialsProductKeyFor(takeoffKey) || MATERIAL_PRODUCT_KEY;
+
     // 1) Takeoff project.
     const takeoffRes = await upsertTakeoffLikeProject({
       userId,
-      productKey: "revit",
+      productKey: takeoffKey,
       payload: {
         ...sharedMeta,
         items: Array.isArray(takeoffItems) ? takeoffItems : [],
@@ -1264,7 +1279,7 @@ async function saveProjectFull(req, res) {
     if (mats.length) {
       materialsRes = await upsertTakeoffLikeProject({
         userId,
-        productKey: MATERIAL_PRODUCT_KEY,
+        productKey: materialsKey,
         payload: {
           ...sharedMeta,
           items: mats,
@@ -3422,6 +3437,22 @@ router.post(
 router.put(
   "/revit/full",
   forceRevitFullProductKey,
+  requireEntitlementParam,
+  saveProjectFull,
+);
+
+// PlanSwift unified save (HERON): one call persists the bill + budget, linked.
+// Must precede the generic "/:productKey" routes so it isn't swallowed.
+router.post(
+  "/planswift/full",
+  forcePsFullProductKey,
+  requireEntitlementParam,
+  saveProjectFull,
+);
+
+router.put(
+  "/planswift/full",
+  forcePsFullProductKey,
   requireEntitlementParam,
   saveProjectFull,
 );
