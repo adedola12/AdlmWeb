@@ -1017,6 +1017,124 @@ function buildValuationLogs(project, productKey) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+// Contract-lock enforcement — the SINGLE source of truth shared by the website edit path
+// (updateProject) and the plugin / unified-save path (upsertTakeoffLikeProject), so a HERON
+// re-save can never overwrite a locked contract. When the project's contract is locked:
+// structural edits are frozen to the locked baseline — a changed qty/rate is diverted to
+// actualQty/actualRate (the contract value snaps back), brand-new lines become variations, and
+// omitted base items are re-inserted (delete-protection). Returns { lockedItems, extraVariations };
+// a no-op (returns the input, no variations) when not locked. Mutates the incoming items in place.
+function enforceContractLock({ project, sanitizedNext }) {
+  const contract = project.contract || {};
+  const extraVariations = [];
+  let lockedItems = sanitizedNext;
+  if (contract?.locked) {
+    const baseByIdentity = new Map(
+      (contract.baseItems || []).map((b) => [String(b.identity || ""), b]),
+    );
+    const previousByIdent = new Map();
+    (project.items || []).forEach((it, idx) => {
+      previousByIdent.set(itemIdentity(it, idx), it);
+    });
+    lockedItems = sanitizedNext.filter((it, idx) => {
+      const ident = itemIdentity(it, idx);
+      const base = baseByIdentity.get(ident);
+      if (!base) {
+        // Item didn't exist at lock — push to variations and drop from
+        // measured work.
+        if (safeNum(it?.qty) > 0 || safeNum(it?.rate) > 0) {
+          extraVariations.push({
+            description: String(it?.description || it?.takeoffLine || "New scope (post-lock)"),
+            qty: safeNum(it?.qty),
+            unit: String(it?.unit || ""),
+            rate: safeNum(it?.rate),
+            reference: "AUTO",
+            issuedAt: new Date(),
+            source: "post-lock-new-item",
+          });
+        }
+        return false;
+      }
+      // Re-measurement: qty changed since lock → push new qty into
+      // actualQty unless the user has already set one. Keep contract qty.
+      const newQty = safeNum(it?.qty);
+      const baseQty = safeNum(base.qty);
+      if (newQty !== baseQty) {
+        const userActualQty = parseOptionalNumber(it?.actualQty);
+        if (userActualQty == null) {
+          it.actualQty = newQty;
+          it.actualUpdatedAt = new Date();
+          if (!it.actualRecordedAt) it.actualRecordedAt = new Date();
+        }
+        // Revert qty to contract baseline so contract sum stays locked.
+        it.qty = baseQty;
+        it.description = base.description || it.description;
+        it.unit = base.unit || it.unit;
+      }
+      // Rate-lock: if the rate changed since lock, push the new rate
+      // into actualRate (so post-lock re-pricing surfaces as a
+      // claimable variance without losing the contract baseline)
+      // and snap rate back to the baseline. Mirrors the qty-lock
+      // pattern above. Client-side the input is disabled, but
+      // server-side enforcement is the source of truth — a
+      // misbehaving / older client can't quietly drift the
+      // contract rate.
+      const newRate = safeNum(it?.rate);
+      const baseRate = safeNum(base.rate);
+      if (newRate !== baseRate) {
+        const userActualRate = parseOptionalNumber(it?.actualRate);
+        if (userActualRate == null) {
+          it.actualRate = newRate;
+          it.actualUpdatedAt = new Date();
+          if (!it.actualRecordedAt) it.actualRecordedAt = new Date();
+        }
+        it.rate = baseRate;
+      }
+      return true;
+    });
+
+    // Delete-protection. The lock guard above filters incoming
+    // items against baseItems, but if the client OMITS a base item
+    // (e.g. the user deleted a row in their local state and the
+    // disabled button was bypassed somehow), we'd silently drop it
+    // from project.items. That would shrink the contract sum.
+    //
+    // Walk baseItems and re-insert any that don't appear in the
+    // already-filtered lockedItems. The restored items preserve
+    // the QS's previous valuation state (percentComplete, actuals)
+    // by reading from project.items, not baseItems, when present.
+    const incomingIdents = new Set(
+      lockedItems.map((it, idx) => itemIdentity(it, idx)),
+    );
+    const restoredItems = [];
+    for (const base of contract.baseItems || []) {
+      const baseId = String(base.identity || "");
+      if (!baseId || incomingIdents.has(baseId)) continue;
+      // Try to find the previous DB version (carries actuals /
+      // percent / status that the client may have lost). Fall
+      // back to the contract baseline values.
+      const prev = previousByIdent.get(baseId);
+      const restore = prev ? (prev.toObject ? prev.toObject() : { ...prev }) : null;
+      restoredItems.push(
+        restore || {
+          sn: base.sn,
+          code: base.code || "",
+          description: base.description || "",
+          takeoffLine: base.takeoffLine || "",
+          materialName: base.materialName || "",
+          unit: base.unit || "",
+          qty: safeNum(base.qty),
+          rate: safeNum(base.rate),
+        },
+      );
+    }
+    if (restoredItems.length) {
+      lockedItems = lockedItems.concat(restoredItems);
+    }
+  }
+  return { lockedItems, extraVariations };
+}
+
 // Find-or-create a takeoff-like project keyed on the model it came from.
 // When clientProjectKey + modelFingerprint are both present we match an
 // existing project for this user+productKey and update it in place, so
@@ -1067,10 +1185,17 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
     });
   }
 
+  // Contract-lock enforcement (integrity): when the matched project's contract is locked, freeze
+  // qty/rate to the baseline and divert post-lock changes to actualQty/actualRate, push brand-new
+  // lines to variations, and re-insert omitted base items — so a plugin (HERON) re-save via the
+  // unified /full or per-key POST can never overwrite a locked contract. No-op when unlocked/new.
+  const sanitizedNext = sanitizeItems(items, productKey);
+  const { lockedItems, extraVariations } = enforceContractLock({ project, sanitizedNext });
+
   const tracked = applyValuationTracking({
     productKey,
     previousItems: created ? [] : Array.isArray(project.items) ? project.items : [],
-    nextItems: sanitizeItems(items, productKey),
+    nextItems: lockedItems,
     previousEvents:
       created || !Array.isArray(project.valuationEvents)
         ? []
@@ -1078,6 +1203,12 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
   });
   project.items = tracked.items;
   project.valuationEvents = tracked.valuationEvents;
+  if (extraVariations.length) {
+    project.variations = sanitizeVariations([
+      ...(Array.isArray(project.variations) ? project.variations : []),
+      ...extraVariations,
+    ]);
+  }
 
   if (name !== undefined && String(name).trim()) project.name = String(name).trim();
   if (fingerprint !== undefined) project.fingerprint = fingerprint || "";
@@ -1719,113 +1850,9 @@ async function updateProject(req, res) {
       // Brand-new items that didn't exist at lock are rejected from the
       // measured work list and pushed onto the variations array so the
       // contract sum stays stable.
-      const contract = project.contract || {};
-      const extraVariations = [];
-      let lockedItems = sanitizedNext;
-      if (contract?.locked) {
-        const baseByIdentity = new Map(
-          (contract.baseItems || []).map((b) => [String(b.identity || ""), b]),
-        );
-        const previousByIdent = new Map();
-        (project.items || []).forEach((it, idx) => {
-          previousByIdent.set(itemIdentity(it, idx), it);
-        });
-        lockedItems = sanitizedNext.filter((it, idx) => {
-          const ident = itemIdentity(it, idx);
-          const base = baseByIdentity.get(ident);
-          if (!base) {
-            // Item didn't exist at lock — push to variations and drop from
-            // measured work.
-            if (safeNum(it?.qty) > 0 || safeNum(it?.rate) > 0) {
-              extraVariations.push({
-                description: String(it?.description || it?.takeoffLine || "New scope (post-lock)"),
-                qty: safeNum(it?.qty),
-                unit: String(it?.unit || ""),
-                rate: safeNum(it?.rate),
-                reference: "AUTO",
-                issuedAt: new Date(),
-                source: "post-lock-new-item",
-              });
-            }
-            return false;
-          }
-          // Re-measurement: qty changed since lock → push new qty into
-          // actualQty unless the user has already set one. Keep contract qty.
-          const newQty = safeNum(it?.qty);
-          const baseQty = safeNum(base.qty);
-          if (newQty !== baseQty) {
-            const userActualQty = parseOptionalNumber(it?.actualQty);
-            if (userActualQty == null) {
-              it.actualQty = newQty;
-              it.actualUpdatedAt = new Date();
-              if (!it.actualRecordedAt) it.actualRecordedAt = new Date();
-            }
-            // Revert qty to contract baseline so contract sum stays locked.
-            it.qty = baseQty;
-            it.description = base.description || it.description;
-            it.unit = base.unit || it.unit;
-          }
-          // Rate-lock: if the rate changed since lock, push the new rate
-          // into actualRate (so post-lock re-pricing surfaces as a
-          // claimable variance without losing the contract baseline)
-          // and snap rate back to the baseline. Mirrors the qty-lock
-          // pattern above. Client-side the input is disabled, but
-          // server-side enforcement is the source of truth — a
-          // misbehaving / older client can't quietly drift the
-          // contract rate.
-          const newRate = safeNum(it?.rate);
-          const baseRate = safeNum(base.rate);
-          if (newRate !== baseRate) {
-            const userActualRate = parseOptionalNumber(it?.actualRate);
-            if (userActualRate == null) {
-              it.actualRate = newRate;
-              it.actualUpdatedAt = new Date();
-              if (!it.actualRecordedAt) it.actualRecordedAt = new Date();
-            }
-            it.rate = baseRate;
-          }
-          return true;
-        });
-
-        // Delete-protection. The lock guard above filters incoming
-        // items against baseItems, but if the client OMITS a base item
-        // (e.g. the user deleted a row in their local state and the
-        // disabled button was bypassed somehow), we'd silently drop it
-        // from project.items. That would shrink the contract sum.
-        //
-        // Walk baseItems and re-insert any that don't appear in the
-        // already-filtered lockedItems. The restored items preserve
-        // the QS's previous valuation state (percentComplete, actuals)
-        // by reading from project.items, not baseItems, when present.
-        const incomingIdents = new Set(
-          lockedItems.map((it, idx) => itemIdentity(it, idx)),
-        );
-        const restoredItems = [];
-        for (const base of contract.baseItems || []) {
-          const baseId = String(base.identity || "");
-          if (!baseId || incomingIdents.has(baseId)) continue;
-          // Try to find the previous DB version (carries actuals /
-          // percent / status that the client may have lost). Fall
-          // back to the contract baseline values.
-          const prev = previousByIdent.get(baseId);
-          const restore = prev ? (prev.toObject ? prev.toObject() : { ...prev }) : null;
-          restoredItems.push(
-            restore || {
-              sn: base.sn,
-              code: base.code || "",
-              description: base.description || "",
-              takeoffLine: base.takeoffLine || "",
-              materialName: base.materialName || "",
-              unit: base.unit || "",
-              qty: safeNum(base.qty),
-              rate: safeNum(base.rate),
-            },
-          );
-        }
-        if (restoredItems.length) {
-          lockedItems = lockedItems.concat(restoredItems);
-        }
-      }
+      // Contract-lock enforcement — shared with the plugin / unified-save path so both freeze a
+      // locked contract identically (see enforceContractLock above).
+      const { lockedItems, extraVariations } = enforceContractLock({ project, sanitizedNext });
 
       const tracked = applyValuationTracking({
         productKey,
