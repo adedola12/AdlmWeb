@@ -641,12 +641,7 @@ export default function ProjectOpenView({
       ) : null}
 
       {activeTab === "budget" ? (
-        <ProjectBudgetTab
-          items={items}
-          grossAmount={grossAmount}
-          pmDashboard={pmDashboard}
-          statusLabel={statusLabel}
-        />
+        <ProjectBudgetTab items={items} showMaterials={showMaterials} />
       ) : null}
 
       {activeTab === "pm" ? (

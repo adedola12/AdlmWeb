@@ -1,15 +1,20 @@
 import React from "react";
-import { FaWallet, FaListUl, FaProjectDiagram, FaArrowRight } from "react-icons/fa";
+import { FaCubes, FaHardHat, FaTools, FaBoxes, FaLayerGroup } from "react-icons/fa";
 
 // ─────────────────────────────────────────────────────────────────────
-// Project Budget tab (Phase 1 — derived, read-only)
+// Project Budget tab — Material & Labour breakdown
 //
-// The budget is the internal cost plan that sits between the priced Bill
-// of Quantity (what the client is billed) and the WBS work items (how the
-// work is scheduled & costed). For this first phase it is *derived* from
-// the bill so the surface and the Bill → Budget → WBS chain are visible;
-// Phase 2 adds an editable, persisted budgetItems[] with its own cost
-// rates, and Phase 3 layers procurement tracking on top.
+// The budget is the material + labour build-up of each Bill of Quantity
+// item, pushed by the desktop plugins (QUIV / Heron / ADLM) during save.
+// One bill line explodes into several budget lines: its materials, its
+// labour, plant, etc. Each breakdown row links back to its bill item via
+// `sourceTakeoffCode` (= the bill item's `code`) and is classified by
+// `componentKind`.
+//
+// Completion linkage (interactive marking lands in the next phase):
+//   • A bill item is only 100% when EVERY line below it is done/procured —
+//     fully buying the materials isn't "done" until the labour is too.
+//   • Marking the bill item complete cascades down and marks every line.
 // ─────────────────────────────────────────────────────────────────────
 
 function safeNum(v) {
@@ -21,302 +26,249 @@ function money(v) {
   return safeNum(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function itemName(it) {
-  const name = (
-    it?.takeoffLine ||
-    it?.materialName ||
-    it?.description ||
-    ""
-  )
-    .toString()
-    .trim();
-  return name || `Item ${it?.sn ?? ""}`.trim();
-}
-
-function ChainStep({ icon: Icon, label, sublabel, tone = "blue" }) {
-  const toneCls =
-    tone === "orange"
-      ? "from-adlm-orange to-amber-400"
-      : tone === "slate"
-        ? "from-slate-500 to-slate-400"
-        : "from-adlm-blue-700 to-adlm-blue-600";
+function lineDone(it) {
   return (
-    <div className="flex items-center gap-2.5">
-      <div
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br ${toneCls} text-white shadow-glow-blue`}
-      >
-        <Icon className="text-sm" />
-      </div>
-      <div className="leading-tight">
-        <div className="text-sm font-semibold text-slate-900 dark:text-white">
-          {label}
-        </div>
-        <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-          {sublabel}
-        </div>
-      </div>
-    </div>
+    Boolean(it?.purchased || it?.completed) || safeNum(it?.percentComplete) >= 100
   );
 }
 
-function SummaryCard({ label, value, helper, tone = "default" }) {
-  const valueCls =
-    tone === "budget"
-      ? "text-adlm-orange"
-      : tone === "wbs"
-        ? "text-adlm-blue-700 dark:text-adlm-blue-300"
-        : "text-slate-900 dark:text-white";
+// componentKind → label + visual treatment.
+const KIND_META = {
+  material: { label: "Material", icon: FaCubes, cls: "bg-amber-100 text-amber-800" },
+  labour: { label: "Labour", icon: FaHardHat, cls: "bg-blue-100 text-blue-800" },
+  labor: { label: "Labour", icon: FaHardHat, cls: "bg-blue-100 text-blue-800" },
+  plant: { label: "Plant", icon: FaTools, cls: "bg-violet-100 text-violet-800" },
+  equipment: { label: "Equipment", icon: FaTools, cls: "bg-violet-100 text-violet-800" },
+  consumable: { label: "Consumable", icon: FaBoxes, cls: "bg-emerald-100 text-emerald-800" },
+};
+
+function kindMeta(kind) {
+  const key = String(kind || "").trim().toLowerCase();
   return (
-    <div className="group relative spotlight rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-4 transition-shadow hover:shadow-depth-lg">
-      <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">{label}</div>
-      <div className={`mt-1 text-xl font-bold ${valueCls}`}>{value}</div>
-      <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-dim">{helper}</div>
-    </div>
+    KIND_META[key] || {
+      label: kind ? String(kind) : "Item",
+      icon: FaLayerGroup,
+      cls: "bg-slate-100 text-slate-700",
+    }
   );
 }
 
-export default function ProjectBudgetTab({
-  items = [],
-  grossAmount = 0,
-  pmDashboard = null,
-  statusLabel = "Completed",
-}) {
-  const rows = React.useMemo(
+function groupLabel(it) {
+  return (
+    (it?.takeoffLine || it?.sourceTakeoffCode || it?.description || "")
+      .toString()
+      .trim() || "Unlinked lines"
+  );
+}
+
+function lineName(it) {
+  return (
+    (it?.materialName || it?.description || it?.takeoffLine || "")
+      .toString()
+      .trim() || "(unnamed)"
+  );
+}
+
+export default function ProjectBudgetTab({ items = [], showMaterials = false }) {
+  // Group breakdown rows under their parent bill line (sourceTakeoffCode).
+  const groups = React.useMemo(() => {
+    const map = new Map();
+    for (const it of items || []) {
+      const key =
+        (it?.sourceTakeoffCode || "").toString().trim() ||
+        (it?.takeoffLine || "").toString().trim() ||
+        (it?.code || "").toString().trim() ||
+        "__unlinked__";
+      if (!map.has(key)) {
+        map.set(key, { key, label: groupLabel(it), lines: [] });
+      }
+      map.get(key).lines.push(it);
+    }
+    return [...map.values()].map((g) => {
+      const cost = g.lines.reduce(
+        (a, l) => a + safeNum(l.qty) * safeNum(l.rate),
+        0,
+      );
+      const procuredCost = g.lines.reduce(
+        (a, l) => a + (lineDone(l) ? safeNum(l.qty) * safeNum(l.rate) : 0),
+        0,
+      );
+      const doneCount = g.lines.filter(lineDone).length;
+      return {
+        ...g,
+        cost,
+        procuredCost,
+        doneCount,
+        total: g.lines.length,
+        allDone: g.lines.length > 0 && doneCount === g.lines.length,
+      };
+    });
+  }, [items]);
+
+  // Does the current project actually carry a breakdown? (Materials view
+  // does; a pure takeoff/bill view does not.)
+  const hasBreakdown = React.useMemo(
     () =>
-      (items || []).map((it, i) => {
-        const qty = safeNum(it?.qty);
-        const rate = safeNum(it?.rate);
-        return {
-          key: `${it?.sn ?? i}-${i}`,
-          name: itemName(it),
-          category: (it?.category || "Uncategorised").toString(),
-          unit: it?.unit || "",
-          qty,
-          rate,
-          amount: qty * rate,
-        };
-      }),
+      (items || []).some(
+        (it) => it?.componentKind || it?.sourceTakeoffCode || it?.derived,
+      ),
     [items],
   );
 
-  const budgetTotal = React.useMemo(
-    () => rows.reduce((a, r) => a + r.amount, 0),
-    [rows],
-  );
-
-  const byCategory = React.useMemo(() => {
-    const m = new Map();
-    for (const r of rows) {
-      const cur = m.get(r.category) || { amount: 0, count: 0 };
-      cur.amount += r.amount;
-      cur.count += 1;
-      m.set(r.category, cur);
-    }
-    return [...m.entries()]
-      .map(([name, v]) => ({ name, ...v }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [rows]);
-
-  const tasks = pmDashboard?.tasks || [];
-  const linkedTasks = tasks.filter(
-    (t) => (t?.linkedBoqIdentities?.length || 0) > 0,
-  );
-  const wbsBaseline = tasks.reduce((a, t) => a + safeNum(t?.baselineCost), 0);
-
-  const billValue = grossAmount || budgetTotal;
+  const budgetTotal = groups.reduce((a, g) => a + g.cost, 0);
+  const procuredTotal = groups.reduce((a, g) => a + g.procuredCost, 0);
+  const doneTone = "text-emerald-700 dark:text-emerald-400";
 
   return (
     <div className="space-y-4">
-      {/* Intro + the Bill → Budget → WBS chain this tab sits in. */}
+      {/* Intro + the completion rule. Intentionally light — no dashboard. */}
       <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
-        <div className="flex items-start gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-adlm-orange to-amber-400 text-white shadow-glow-blue">
-            <FaWallet />
-          </div>
-          <div className="min-w-0">
-            <div className="text-base font-bold text-slate-900 dark:text-white">
-              Project budget
-            </div>
-            <div className="mt-0.5 text-sm text-slate-600 dark:text-adlm-dark-muted">
-              The internal cost plan linking the priced bill to the work
-              breakdown. Bill quantities flow into the budget automatically, and
-              the budget feeds the WBS work items and procurement.
-            </div>
-          </div>
+        <div className="text-base font-bold text-slate-900 dark:text-white">
+          Material &amp; Labour breakdown
         </div>
-
-        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <ChainStep
-            icon={FaListUl}
-            label="Bill of Quantity"
-            sublabel="Priced to the client"
-            tone="slate"
-          />
-          <FaArrowRight className="hidden shrink-0 text-slate-300 dark:text-adlm-dark-dim sm:block" />
-          <ChainStep
-            icon={FaWallet}
-            label="Budget"
-            sublabel="Internal cost plan"
-            tone="orange"
-          />
-          <FaArrowRight className="hidden shrink-0 text-slate-300 dark:text-adlm-dark-dim sm:block" />
-          <ChainStep
-            icon={FaProjectDiagram}
-            label="WBS work items"
-            sublabel="Scheduled & costed"
-            tone="blue"
-          />
+        <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
+          The build-up of each bill item — its materials, labour and plant —
+          pushed from your QUIV / Heron save and linked back to the bill.
         </div>
-
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-          <b>Phase 1 — derived view.</b> The budget currently mirrors the bill
-          baseline. Editable cost rates, persistence and per-line procurement
-          marking are coming next.
+        <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+          A bill item is only complete when <b>every</b> line below it is
+          marked done/procured — buying the materials isn’t enough until the
+          labour is done too. Marking the bill item complete will mark all of
+          its lines. <b>Interactive marking arrives in the next phase.</b>
         </div>
       </div>
 
-      {/* Summary cards: bill value vs budget baseline vs WBS coverage. */}
-      <div className="grid gap-3 md:grid-cols-3">
-        <SummaryCard
-          label="Bill value (to client)"
-          value={`₦${money(billValue)}`}
-          helper={`${rows.length} bill line${rows.length === 1 ? "" : "s"} measured`}
-        />
-        <SummaryCard
-          label="Budget baseline (cost plan)"
-          value={`₦${money(budgetTotal)}`}
-          helper="Mirrors the bill until cost rates are entered"
-          tone="budget"
-        />
-        <SummaryCard
-          label="WBS linked"
-          value={`${linkedTasks.length} task${linkedTasks.length === 1 ? "" : "s"}`}
-          helper={
-            wbsBaseline > 0
-              ? `₦${money(wbsBaseline)} baseline scheduled`
-              : "Link bill lines on the PM Dashboard"
-          }
-          tone="wbs"
-        />
-      </div>
-
-      {/* Category subtotals — quick read on where the budget sits. */}
-      {byCategory.length > 1 ? (
-        <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
-          <div className="text-sm font-semibold text-slate-900 dark:text-white">
-            Budget by category
-          </div>
-          <div className="mt-3 space-y-2">
-            {byCategory.map((c) => {
-              const pct = budgetTotal ? (c.amount / budgetTotal) * 100 : 0;
-              return (
-                <div key={c.name}>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="truncate font-medium text-slate-700 dark:text-adlm-dark-text">
-                      {c.name}
-                      <span className="ml-1.5 text-slate-400 dark:text-adlm-dark-dim">
-                        · {c.count} line{c.count === 1 ? "" : "s"}
-                      </span>
-                    </span>
-                    <span className="font-semibold text-slate-900 dark:text-white">
-                      &#8358;{money(c.amount)}
-                    </span>
+      {!hasBreakdown ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
+          No material &amp; labour breakdown on this project yet. The breakdown
+          is generated when you save from the Revit plugin (QUIV / Heron) and
+          appears in the <span className="font-semibold">Materials</span> view.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {groups.map((g) => (
+            <div
+              key={g.key}
+              className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth"
+            >
+              {/* Bill-line header + rolled-up status. */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                    {g.label}
                   </div>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-adlm-orange to-amber-400 transition-[width] duration-700"
-                      style={{ width: `${pct}%` }}
-                    />
+                  <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+                    {g.total} line{g.total === 1 ? "" : "s"} ·{" "}
+                    {showMaterials ? "procured" : "done"} {g.doneCount}/{g.total}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-900 dark:text-white">
+                    &#8358;{money(g.cost)}
+                  </span>
+                  <span
+                    className={[
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                      g.allDone
+                        ? "bg-emerald-100 text-emerald-800"
+                        : g.doneCount > 0
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-adlm-dark-muted",
+                    ].join(" ")}
+                  >
+                    {g.allDone
+                      ? "Complete"
+                      : g.doneCount > 0
+                        ? "Part"
+                        : "Pending"}
+                  </span>
+                </div>
+              </div>
 
-      {/* Derived budget lines. */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth">
-        <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3">
-          <div className="text-sm font-semibold text-slate-900 dark:text-white">
-            Budget lines
-          </div>
-          <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-            Derived from the bill · auto-synced
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 dark:bg-white/5 text-left text-slate-600 dark:text-adlm-dark-muted">
+                    <tr>
+                      <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Resource</th>
+                      <th className="px-3 py-2">Unit</th>
+                      <th className="px-3 py-2 text-right">Qty</th>
+                      <th className="px-3 py-2 text-right">Rate</th>
+                      <th className="px-3 py-2 text-right">Amount</th>
+                      <th className="px-3 py-2 text-center">
+                        {showMaterials ? "Procured" : "Done"}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.lines.map((l, i) => {
+                      const meta = kindMeta(l?.componentKind);
+                      const Icon = meta.icon;
+                      const amount = safeNum(l.qty) * safeNum(l.rate);
+                      const done = lineDone(l);
+                      return (
+                        <tr
+                          key={`${g.key}-${i}`}
+                          className="border-t border-slate-100 dark:border-adlm-dark-border"
+                        >
+                          <td className="px-3 py-2">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.cls}`}
+                            >
+                              <Icon className="text-[9px]" />
+                              {meta.label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-medium text-slate-800 dark:text-adlm-dark-text">
+                            <span className="line-clamp-1" title={lineName(l)}>
+                              {lineName(l)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
+                            {l?.unit || ""}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
+                            {money(l?.qty)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
+                            {money(l?.rate)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">
+                            {money(amount)}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {done ? (
+                              <span className={`font-semibold ${doneTone}`}>✓</span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-adlm-dark-dim">
+                                —
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+
+          {/* Compact totals — a single line, not a dashboard. */}
+          <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 px-5 py-3 text-sm">
+            <span className="text-slate-600 dark:text-adlm-dark-muted">
+              {showMaterials ? "Procured" : "Done"} to date:{" "}
+              <b className="text-slate-900 dark:text-white">
+                &#8358;{money(procuredTotal)}
+              </b>
+            </span>
+            <span className="text-slate-600 dark:text-adlm-dark-muted">
+              Budget total:{" "}
+              <b className="text-adlm-orange">&#8358;{money(budgetTotal)}</b>
+            </span>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50 dark:bg-white/5 text-left text-slate-600 dark:text-adlm-dark-muted">
-              <tr>
-                <th className="w-12 px-3 py-2">#</th>
-                <th className="px-3 py-2">Description</th>
-                <th className="px-3 py-2">Category</th>
-                <th className="px-3 py-2">Unit</th>
-                <th className="px-3 py-2 text-right">Qty</th>
-                <th className="px-3 py-2 text-right">Budget rate</th>
-                <th className="px-3 py-2 text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-3 py-6 text-center text-slate-500 dark:text-adlm-dark-muted"
-                  >
-                    No bill items yet — measure quantities in the Bill of
-                    Quantity tab and they’ll appear here.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r, i) => (
-                  <tr
-                    key={r.key}
-                    className="border-t border-slate-100 dark:border-adlm-dark-border"
-                  >
-                    <td className="px-3 py-2 text-slate-500 dark:text-adlm-dark-dim">
-                      {i + 1}
-                    </td>
-                    <td className="px-3 py-2 font-medium text-slate-800 dark:text-adlm-dark-text">
-                      <span className="line-clamp-2" title={r.name}>
-                        {r.name}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
-                      {r.category}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
-                      {r.unit}
-                    </td>
-                    <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
-                      {money(r.qty)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
-                      {money(r.rate)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">
-                      {money(r.amount)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-            {rows.length > 0 ? (
-              <tfoot className="bg-slate-50 dark:bg-white/5 font-semibold text-slate-900 dark:text-white">
-                <tr className="border-t border-slate-200 dark:border-adlm-dark-border">
-                  <td colSpan={6} className="px-3 py-2 text-right">
-                    Budget total
-                  </td>
-                  <td className="px-3 py-2 text-right text-adlm-orange">
-                    &#8358;{money(budgetTotal)}
-                  </td>
-                </tr>
-              </tfoot>
-            ) : null}
-          </table>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
