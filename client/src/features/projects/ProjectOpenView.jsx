@@ -212,6 +212,7 @@ export default function ProjectOpenView({
   itemQuery = "",
   items = [],
   budgetItems = [],
+  materialItems = [],
   productKey = "",
   projectId = "",
   accessToken = "",
@@ -653,6 +654,7 @@ export default function ProjectOpenView({
         <ProjectBudgetTab
           items={items}
           budgetItems={budgetItems}
+          materialItems={materialItems}
           showMaterials={showMaterials}
         />
       ) : null}

@@ -4663,6 +4663,7 @@ export default function ProjectsGeneric() {
                 computedShown={computedShown}
                 items={items}
                 budgetItems={sel?.budgetItems || []}
+                materialItems={sel?.materialItems || []}
                 productKey={toolNorm}
                 projectId={selectedId}
                 accessToken={accessToken}

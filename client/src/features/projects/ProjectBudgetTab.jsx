@@ -74,13 +74,18 @@ function lineName(it) {
 export default function ProjectBudgetTab({
   items = [],
   budgetItems = [],
+  materialItems = [],
   showMaterials = false,
 }) {
   // Group breakdown rows under their parent bill line. Prefer the
   // consolidated budgetItems[] (material + labour folded onto the unified
   // project); fall back to the project's own items (materials view).
   const groups = React.useMemo(() => {
-    const source = budgetItems.length ? budgetItems : items;
+    const source = budgetItems.length
+      ? budgetItems
+      : materialItems.length
+        ? materialItems
+        : items;
     const map = new Map();
     for (const it of source || []) {
       const key =
@@ -113,12 +118,16 @@ export default function ProjectBudgetTab({
         allDone: g.lines.length > 0 && doneCount === g.lines.length,
       };
     });
-  }, [items, budgetItems]);
+  }, [items, budgetItems, materialItems]);
 
   // Does the project carry a breakdown? (Unified budgetItems[] or a
   // materials-view items[] both qualify; a pure takeoff/bill view does not.)
   const hasBreakdown = React.useMemo(() => {
-    const source = budgetItems.length ? budgetItems : items;
+    const source = budgetItems.length
+      ? budgetItems
+      : materialItems.length
+        ? materialItems
+        : items;
     return (source || []).some(
       (it) =>
         it?.componentKind ||
@@ -126,7 +135,7 @@ export default function ProjectBudgetTab({
         it?.billIdentity ||
         it?.derived,
     );
-  }, [items, budgetItems]);
+  }, [items, budgetItems, materialItems]);
 
   const budgetTotal = groups.reduce((a, g) => a + g.cost, 0);
   const procuredTotal = groups.reduce((a, g) => a + g.procuredCost, 0);
