@@ -349,6 +349,14 @@ export default function ProjectOpenView({
     setActiveTab("dashboard");
   }, [selectedId]);
 
+  // MEP projects don't carry a material/labour budget breakdown, so the
+  // Budget tab is hidden for them (productKey like "revitmep").
+  const isMep = /mep/i.test(productKey);
+  const visibleTabs = React.useMemo(
+    () => (isMep ? TAB_OPTIONS.filter((t) => t.id !== "budget") : TAB_OPTIONS),
+    [isMep],
+  );
+
   function copyProjectId() {
     if (!selectedId || !navigator?.clipboard) return;
     navigator.clipboard
@@ -548,10 +556,10 @@ export default function ProjectOpenView({
 
       <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-depth dark:border-adlm-dark-border">
         <div className="flex items-stretch gap-1 overflow-x-auto">
-          {TAB_OPTIONS.map((tab, i) => {
+          {visibleTabs.map((tab, i) => {
             const active = activeTab === tab.id;
             const Icon = tab.icon;
-            const prev = TAB_OPTIONS[i - 1];
+            const prev = visibleTabs[i - 1];
             const newGroup = i > 0 && prev && prev.group !== tab.group;
             return (
               <React.Fragment key={tab.id}>
