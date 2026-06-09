@@ -305,9 +305,10 @@ export default function PublicProjectDashboard() {
       <div className="bg-adlm-navy-tertiary text-white px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider">Project Dashboard</div>
-            <div className="flex items-center gap-2">
-              <div className="text-lg font-semibold">{data.name}</div>
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Project Dashboard</div>
+            <div className="mt-1 flex items-center gap-2.5">
+              <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
+              <div className="text-xl font-bold tracking-tight">{data.name}</div>
               {data.finalAccount?.finalized ? (
                 <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-200">
                   ✓ Final account closed
