@@ -503,6 +503,7 @@ const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
+  basis: "boq",
 });
 
 function clampPercentage(value, fallback = 0) {
@@ -545,6 +546,10 @@ function normalizeValuationSettings(settings) {
       typeof source.rateSyncEnabled === "boolean"
         ? source.rateSyncEnabled
         : false,
+    basis:
+      source.basis === "budget" || source.basis === "boq"
+        ? source.basis
+        : DEFAULT_VALUATION_SETTINGS.basis,
   };
 }
 
@@ -559,7 +564,8 @@ function valuationSettingsEqual(a, b) {
     safeNum(A.retentionPct) === safeNum(B.retentionPct) &&
     safeNum(A.vatPct) === safeNum(B.vatPct) &&
     safeNum(A.withholdingPct) === safeNum(B.withholdingPct) &&
-    A.rateSyncEnabled === B.rateSyncEnabled
+    A.rateSyncEnabled === B.rateSyncEnabled &&
+    A.basis === B.basis
   );
 }
 
@@ -957,7 +963,10 @@ export default function ProjectsGeneric() {
     : toolNorm === "planswift" || toolNorm === "planswift-materials" || toolNorm === "planswift-material"
       ? "planswift"
       : null;
-  const showRevitToggle = Boolean(toolFamily);
+  // Materials is no longer a separate project/list — the budget now lives as a
+  // "Budget" tab inside each project (reads sel.materialItems). Hide the
+  // Takeoffs/Materials switcher entirely.
+  const showRevitToggle = false;
   const statusField = showMaterials ? "purchased" : "completed";
   const statusLabel = showMaterials ? "Purchased" : "Completed";
   const statusPastLabel = showMaterials
@@ -2171,6 +2180,8 @@ export default function ProjectsGeneric() {
         next.showActualColumns = Boolean(value);
       } else if (field === "dashboardChartMode") {
         next.dashboardChartMode = normalizeChartMode(value, next.dashboardChartMode);
+      } else if (field === "basis") {
+        next.basis = value === "budget" ? "budget" : "boq";
       } else if (
         field === "retentionPct" ||
         field === "vatPct" ||
@@ -4263,6 +4274,9 @@ export default function ProjectsGeneric() {
         body: { baseVersion: sel?.version, budgetItems: nextBudgetItems },
       });
       setSel(updated);
+      // Re-init the derived item state so the valuation figures reflect the
+      // budget-driven % (when basis = budget the server reconciles items).
+      initRatesFromProject(updated);
       setNotice("Procurement updated.");
     } catch (e) {
       setErr(e?.message || "Couldn't save procurement.");

@@ -691,6 +691,43 @@ export default function ProjectOpenView({
               this project.
             </div>
 
+            {/* Valuation basis — value the job by the bill line, or derive
+                it from each line's material & labour breakdown. */}
+            <div className="mt-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
+                Valuation basis
+              </div>
+              <div className="mt-1.5 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-adlm-dark-border dark:bg-white/5">
+                {[
+                  { id: "boq", label: "By Bill of Quantity" },
+                  { id: "budget", label: "By Budget (Material & Labour)" },
+                ].map((opt) => {
+                  const active =
+                    (valuationSettings?.basis || "boq") === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => onValuationSettingChange?.("basis", opt.id)}
+                      className={[
+                        "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                        active
+                          ? "bg-white text-adlm-blue-700 shadow-sm dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                          : "text-slate-600 hover:text-slate-900 dark:text-adlm-dark-muted dark:hover:text-white",
+                      ].join(" ")}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+                {(valuationSettings?.basis || "boq") === "budget"
+                  ? "Each bill line is valued from its material & labour breakdown — mark procurement on the Budget tab. Save to apply."
+                  : "Each bill line is valued by its own % complete on the Bill of Quantity tab."}
+              </div>
+            </div>
+
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-700">
               <label className="inline-flex items-center gap-2">
                 <input

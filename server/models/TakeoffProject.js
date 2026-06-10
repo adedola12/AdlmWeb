@@ -45,6 +45,13 @@ const ValuationSettingsSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Valuation basis. "boq" values each bill line by its own % complete;
+    // "budget" derives the line's % from its material/labour breakdown.
+    basis: {
+      type: String,
+      enum: ["boq", "budget"],
+      default: "boq",
+    },
   },
   { _id: false },
 );

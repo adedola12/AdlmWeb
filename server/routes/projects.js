@@ -283,6 +283,7 @@ const DEFAULT_VALUATION_SETTINGS = Object.freeze({
   retentionPct: 5,
   vatPct: 7.5,
   withholdingPct: 2.5,
+  basis: "boq",
 });
 
 function clampPercentage(value, fallback = 0) {
@@ -328,6 +329,12 @@ function normalizeValuationSettings(settings, current = DEFAULT_VALUATION_SETTIN
       source.withholdingPct,
       safeNum(base.withholdingPct),
     ),
+    basis:
+      source.basis === "budget" || source.basis === "boq"
+        ? source.basis
+        : base.basis === "budget"
+          ? "budget"
+          : "boq",
   };
 }
 
@@ -1455,6 +1462,7 @@ async function saveProjectFull(req, res) {
         takeoffRes.project.budgetItems = sanitizeBudgetItems(
           materialsRes ? materialsRes.project.items : mats,
         );
+        reconcileItemsFromBudget(takeoffRes.project);
         await takeoffRes.project.save();
       } catch (e) {
         console.error("[full] budget consolidation failed:", e?.message || e);
@@ -2006,6 +2014,10 @@ async function updateProject(req, res) {
         );
       }
     }
+
+    // Budget-basis projects: derive bill % from the material/labour breakdown
+    // before saving so valuation follows procurement (no-op when basis=boq).
+    reconcileItemsFromBudget(project);
 
     project.version += 1;
     await project.save();
@@ -3510,10 +3522,65 @@ async function getPublicDashboard(req, res) {
 // This is exported separately and mounted in index.js
 export { getPublicDashboard };
 
-// Persist procurement marking on the budget breakdown. Isolated from the
-// main save: it only replaces budgetItems[] (procured flags, target dates,
-// supplier, qty/rate edits) and bumps the version, so it can never disturb
-// the bill items or valuation tracking.
+// When valuation basis = "budget", derive each bill line's % complete from
+// its material/labour breakdown (budgetItems linked by billIdentity = code)
+// and write it onto the BoQ item, so the existing valuation engine,
+// certificates and EVM all read one consistent source. No-op (and existing
+// behaviour preserved) when basis = "boq". Fully guarded.
+function reconcileItemsFromBudget(project) {
+  try {
+    if (!project || project?.valuationSettings?.basis !== "budget") return;
+    const budget = Array.isArray(project.budgetItems)
+      ? project.budgetItems
+      : [];
+    if (!budget.length) return;
+    const byCode = new Map();
+    for (const b of budget) {
+      const code = String(b.billIdentity || "").trim().toLowerCase();
+      if (!code) continue;
+      if (!byCode.has(code)) byCode.set(code, []);
+      byCode.get(code).push(b);
+    }
+    for (const it of project.items || []) {
+      const code = String(it.code || "").trim().toLowerCase();
+      const comps = code ? byCode.get(code) : null;
+      if (!comps || !comps.length) continue;
+      let totalVal = 0;
+      let doneVal = 0;
+      for (const c of comps) {
+        const unit = Number(c.netUnitCost) || Number(c.rate) || 0;
+        const val = (Number(c.qty) || 0) * unit;
+        const f = c.procured
+          ? 1
+          : Math.max(0, Math.min(100, Number(c.procuredPercent) || 0)) / 100;
+        totalVal += val;
+        doneVal += val * f;
+      }
+      let pct;
+      if (totalVal > 0) {
+        pct = (doneVal / totalVal) * 100;
+      } else {
+        // Cost-less components (e.g. labour with no rate): fall back to a
+        // simple count of procured lines so the line still progresses.
+        const done = comps.filter(
+          (c) => c.procured || (Number(c.procuredPercent) || 0) >= 100,
+        ).length;
+        pct = comps.length ? (done / comps.length) * 100 : 0;
+      }
+      it.percentComplete = Math.round(pct * 100) / 100;
+      it.completed = pct >= 99.999;
+      if (it.completed && !it.completedAt) it.completedAt = new Date();
+      if (!it.completed) it.completedAt = null;
+    }
+    project.markModified("items");
+  } catch (e) {
+    console.error("reconcileItemsFromBudget failed:", e?.message || e);
+  }
+}
+
+// Persist procurement marking on the budget breakdown. When basis = "budget"
+// it also derives the bill lines' % from the breakdown (reconcile) so the
+// valuation figures follow procurement. Bumps the version.
 async function markBudget(req, res) {
   try {
     const productKey = requestedProductKey(req);
@@ -3546,6 +3613,7 @@ async function markBudget(req, res) {
     }
 
     project.budgetItems = sanitizeBudgetItems(body.budgetItems);
+    reconcileItemsFromBudget(project);
     project.version = (Number(project.version) || 0) + 1;
     await project.save();
     return res.json(projectForClient(project));
