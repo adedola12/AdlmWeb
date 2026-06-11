@@ -180,8 +180,10 @@ app.use(
 );
 
 app.use(cookieParser());
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: false, limit: "2mb" }));
+// Raised from 2mb: a bill plus embedded materialItems (100s of lines, each with an
+// elementIds[] array) in one revit-project payload can exceed 2mb.
+app.use(express.json({ limit: "16mb" }));
+app.use(express.urlencoded({ extended: false, limit: "16mb" }));
 app.use(morgan("dev"));
 
 /* =========================
