@@ -656,6 +656,7 @@ export default function ProjectOpenView({
           items={items}
           budgetItems={budgetItems}
           materialItems={materialItems}
+          pmDashboard={pmDashboard}
           onSaveBudget={onSaveBudget}
           showMaterials={showMaterials}
         />

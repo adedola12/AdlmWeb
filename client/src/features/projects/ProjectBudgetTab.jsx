@@ -75,6 +75,7 @@ export default function ProjectBudgetTab({
   items = [],
   budgetItems = [],
   materialItems = [],
+  pmDashboard = null,
   onSaveBudget,
   showMaterials = false,
 }) {
@@ -200,6 +201,80 @@ export default function ProjectBudgetTab({
     );
   }
 
+  // ── Buy schedule (3c) — "what to buy & when" ──────────────────────────
+  // Need-on-site = earliest Program-of-Works (WBS) task start linked to a
+  // material's bill line; Buy-by = need-on-site − lead time. Labour is
+  // scheduled, not bought, so it's excluded.
+  const [view, setView] = React.useState("breakdown");
+  const [leadDays, setLeadDays] = React.useState(14);
+
+  const buyRows = React.useMemo(() => {
+    const src = budgetItems.length
+      ? budgetItems
+      : materialItems.length
+        ? materialItems
+        : items;
+    const tasks = pmDashboard?.tasks || [];
+    // Map a bill code -> earliest linked task start. Task identities are
+    // "sn::code::desc::…", so the code is the second segment.
+    const codeToStart = new Map();
+    for (const t of tasks) {
+      const s = t?.startDate ? new Date(t.startDate) : null;
+      if (!s || Number.isNaN(s.getTime())) continue;
+      for (const ident of t?.linkedBoqIdentities || []) {
+        const norm = String(ident).split("::")[1];
+        const code = (norm || "").trim().toLowerCase();
+        if (!code) continue;
+        const cur = codeToStart.get(code);
+        if (!cur || s < cur) codeToStart.set(code, s);
+      }
+    }
+    const rows = [];
+    for (const it of src || []) {
+      const kind = String(it?.componentKind || "").toLowerCase();
+      if (kind === "labour" || kind === "labor") continue;
+      const code = String(it?.billIdentity || it?.sourceTakeoffCode || "")
+        .trim()
+        .toLowerCase();
+      const needBy = code ? codeToStart.get(code) || null : null;
+      const buyBy = needBy
+        ? new Date(needBy.getTime() - leadDays * 86400000)
+        : null;
+      rows.push({
+        key: keyOf(it),
+        name: lineName(it),
+        qty: safeNum(it?.qty),
+        unit: it?.unit || "",
+        forLine: groupLabel(it),
+        needBy,
+        buyBy,
+        done: lineDone(it),
+      });
+    }
+    rows.sort((a, b) => {
+      if (a.buyBy && b.buyBy) return a.buyBy - b.buyBy;
+      if (a.buyBy) return -1;
+      if (b.buyBy) return 1;
+      return 0;
+    });
+    return rows;
+  }, [budgetItems, materialItems, items, pmDashboard, leadDays]);
+
+  const scheduledCount = buyRows.filter((r) => r.buyBy).length;
+
+  function fmtDate(d) {
+    if (!d) return "—";
+    try {
+      return d.toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return "—";
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Intro + the completion rule. Intentionally light — no dashboard. */}
@@ -221,11 +296,146 @@ export default function ProjectBudgetTab({
         </div>
       </div>
 
+      {hasBreakdown ? (
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-adlm-dark-border dark:bg-white/5">
+          {[
+            { id: "breakdown", label: "Breakdown" },
+            { id: "schedule", label: "Buy schedule" },
+          ].map((opt) => {
+            const active = view === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setView(opt.id)}
+                className={[
+                  "rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+                  active
+                    ? "bg-white text-adlm-blue-700 shadow-sm dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                    : "text-slate-600 hover:text-slate-900 dark:text-adlm-dark-muted dark:hover:text-white",
+                ].join(" ")}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       {!hasBreakdown ? (
         <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
           No material &amp; labour breakdown on this project yet. The breakdown
           is generated when you save from the Revit plugin (QUIV / Heron) and
           appears in the <span className="font-semibold">Materials</span> view.
+        </div>
+      ) : view === "schedule" ? (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                Procurement buy schedule
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+                What to buy &amp; when — materials timed off the Program of
+                Works. {scheduledCount} of {buyRows.length} dated.
+              </div>
+            </div>
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-adlm-dark-muted">
+              Lead time
+              <input
+                type="number"
+                min="0"
+                value={leadDays}
+                onChange={(e) =>
+                  setLeadDays(Math.max(0, Number(e.target.value) || 0))
+                }
+                className="w-16 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
+              />
+              days
+            </label>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 dark:bg-white/5 text-left text-slate-600 dark:text-adlm-dark-muted">
+                <tr>
+                  <th className="px-3 py-2">Buy by</th>
+                  <th className="px-3 py-2">Need on site</th>
+                  <th className="px-3 py-2">Material</th>
+                  <th className="px-3 py-2 text-right">Qty</th>
+                  <th className="px-3 py-2">Unit</th>
+                  <th className="px-3 py-2">For</th>
+                  <th className="px-3 py-2 text-center">Procured</th>
+                </tr>
+              </thead>
+              <tbody>
+                {buyRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-3 py-6 text-center text-slate-500 dark:text-adlm-dark-muted"
+                    >
+                      No materials to buy on this project.
+                    </td>
+                  </tr>
+                ) : (
+                  buyRows.map((r) => (
+                    <tr
+                      key={r.key}
+                      className={[
+                        "border-t border-slate-100 dark:border-adlm-dark-border",
+                        r.done ? "opacity-60" : "",
+                      ].join(" ")}
+                    >
+                      <td className="px-3 py-2 font-semibold text-slate-900 dark:text-white">
+                        {r.buyBy ? (
+                          fmtDate(r.buyBy)
+                        ) : (
+                          <span className="text-slate-400 dark:text-adlm-dark-dim">
+                            Not scheduled
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
+                        {fmtDate(r.needBy)}
+                      </td>
+                      <td className="px-3 py-2 font-medium text-slate-800 dark:text-adlm-dark-text">
+                        <span className="line-clamp-1" title={r.name}>
+                          {r.name}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
+                        {money(r.qty)}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
+                        {r.unit}
+                      </td>
+                      <td className="px-3 py-2 text-slate-500 dark:text-adlm-dark-muted">
+                        <span className="line-clamp-1" title={r.forLine}>
+                          {r.forLine}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {r.done ? (
+                          <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                            ✓
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-adlm-dark-dim">
+                            —
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-slate-100 dark:border-adlm-dark-border px-4 py-2 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+            “Need on site” is the earliest Program-of-Works task linked to each
+            item’s bill line; “Buy by” subtracts the lead time. Link bill lines
+            to tasks on the PM Dashboard to schedule the “Not scheduled” items.
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
