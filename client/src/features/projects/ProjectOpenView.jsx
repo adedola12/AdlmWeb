@@ -659,6 +659,9 @@ export default function ProjectOpenView({
           pmDashboard={pmDashboard}
           onSaveBudget={onSaveBudget}
           showMaterials={showMaterials}
+          categoryOptions={categoryOptions}
+          tradeOptions={tradeOptions}
+          groupByMode={groupByMode}
         />
       ) : null}
 

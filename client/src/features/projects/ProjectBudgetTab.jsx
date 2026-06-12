@@ -71,6 +71,27 @@ function lineName(it) {
   );
 }
 
+// Order resources within a bill item so material and labour read together:
+// materials first, then labour, then plant / consumable / equipment, others
+// last. Array.sort is stable, so lines keep their order inside each kind.
+const KIND_ORDER = { material: 0, labour: 1, labor: 1, plant: 2, consumable: 3, equipment: 4 };
+function kindRank(kind) {
+  const k = String(kind || "").trim().toLowerCase();
+  return KIND_ORDER[k] ?? 5;
+}
+
+// The bill line a breakdown row belongs to. budgetItems carry billIdentity,
+// QUIV materialItems carry sourceTakeoffCode; both equal the bill item's code.
+function billCode(it) {
+  return (
+    (it?.billIdentity || "").toString().trim() ||
+    (it?.sourceTakeoffCode || "").toString().trim() ||
+    (it?.code || "").toString().trim()
+  )
+    .toString()
+    .toLowerCase();
+}
+
 export default function ProjectBudgetTab({
   items = [],
   budgetItems = [],
@@ -78,10 +99,34 @@ export default function ProjectBudgetTab({
   pmDashboard = null,
   onSaveBudget,
   showMaterials = false,
+  // The Bill's grouping, so the budget can be arranged the same way.
+  categoryOptions = [],
+  tradeOptions = [],
+  groupByMode = "category",
 }) {
+  // Map every bill line (items[] is the Bill, in bill order) to its place +
+  // section, so the budget can mirror the Bill: code → {order, category,
+  // trade, description}. Breakdown rows link back via billCode() === code.
+  const billMeta = React.useMemo(() => {
+    const m = new Map();
+    (items || []).forEach((it, idx) => {
+      const code = (it?.code || "").toString().trim().toLowerCase();
+      if (!code || m.has(code)) return; // first occurrence sets the order
+      m.set(code, {
+        order: idx,
+        category: (it?.category || "").toString().trim(),
+        trade: (it?.trade || "").toString().trim(),
+        description: (it?.description || it?.takeoffLine || "").toString().trim(),
+      });
+    });
+    return m;
+  }, [items]);
+
   // Group breakdown rows under their parent bill line. Prefer the
   // consolidated budgetItems[] (material + labour folded onto the unified
-  // project); fall back to the project's own items (materials view).
+  // project); fall back to the project's own items (materials view). Each
+  // group inherits the Bill order + section of the line it belongs to, and
+  // its rows are sorted material → labour so the two read together.
   const groups = React.useMemo(() => {
     const source = budgetItems.length
       ? budgetItems
@@ -89,38 +134,100 @@ export default function ProjectBudgetTab({
         ? materialItems
         : items;
     const map = new Map();
+    let seen = 0;
     for (const it of source || []) {
-      const key =
-        (it?.billIdentity || "").toString().trim() ||
-        (it?.sourceTakeoffCode || "").toString().trim() ||
-        (it?.takeoffLine || "").toString().trim() ||
-        (it?.code || "").toString().trim() ||
-        "__unlinked__";
+      const code = billCode(it);
+      const tl = (it?.takeoffLine || "").toString().trim().toLowerCase();
+      const key = code || (tl ? `tl:${tl}` : "") || "__unlinked__";
       if (!map.has(key)) {
-        map.set(key, { key, label: groupLabel(it), lines: [] });
+        const meta = code ? billMeta.get(code) : null;
+        map.set(key, {
+          key,
+          label:
+            (it?.takeoffLine || "").toString().trim() ||
+            meta?.description ||
+            groupLabel(it),
+          category: meta?.category || (it?.category || "").toString().trim(),
+          trade: meta?.trade || (it?.trade || "").toString().trim(),
+          // Linked groups follow the Bill order; unlinked ones trail it in
+          // first-seen order.
+          order: meta ? meta.order : 1e6 + seen,
+          lines: [],
+        });
+        seen += 1;
       }
       map.get(key).lines.push(it);
     }
-    return [...map.values()].map((g) => {
-      const cost = g.lines.reduce(
-        (a, l) => a + safeNum(l.qty) * safeNum(l.rate),
-        0,
-      );
-      const procuredCost = g.lines.reduce(
-        (a, l) => a + (lineDone(l) ? safeNum(l.qty) * safeNum(l.rate) : 0),
-        0,
-      );
-      const doneCount = g.lines.filter(lineDone).length;
-      return {
-        ...g,
-        cost,
-        procuredCost,
-        doneCount,
-        total: g.lines.length,
-        allDone: g.lines.length > 0 && doneCount === g.lines.length,
-      };
-    });
-  }, [items, budgetItems, materialItems]);
+    return [...map.values()]
+      .map((g) => {
+        const lines = [...g.lines].sort(
+          (a, b) => kindRank(a?.componentKind) - kindRank(b?.componentKind),
+        );
+        const cost = lines.reduce(
+          (a, l) => a + safeNum(l.qty) * safeNum(l.rate),
+          0,
+        );
+        const procuredCost = lines.reduce(
+          (a, l) => a + (lineDone(l) ? safeNum(l.qty) * safeNum(l.rate) : 0),
+          0,
+        );
+        const doneCount = lines.filter(lineDone).length;
+        return {
+          ...g,
+          lines,
+          cost,
+          procuredCost,
+          doneCount,
+          total: lines.length,
+          allDone: lines.length > 0 && doneCount === lines.length,
+        };
+      })
+      .sort((a, b) => a.order - b.order);
+  }, [items, budgetItems, materialItems, billMeta]);
+
+  // Bucket the bill-line groups into the Bill's sections (category, or trade
+  // when the Bill is in trade mode), honouring the same canonical order the
+  // Bill uses. Mirrors ProjectBillTable's groupedRows.
+  const isTradeGrouping = String(groupByMode || "category") === "trade";
+  const canonicalSections = React.useMemo(
+    () =>
+      isTradeGrouping
+        ? Array.isArray(tradeOptions)
+          ? tradeOptions
+          : []
+        : Array.isArray(categoryOptions)
+          ? categoryOptions
+          : [],
+    [isTradeGrouping, tradeOptions, categoryOptions],
+  );
+  const sections = React.useMemo(() => {
+    const map = new Map();
+    for (const g of groups) {
+      const cat =
+        (isTradeGrouping ? g.trade : g.category).toString().trim() ||
+        "Uncategorized";
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat).push(g);
+    }
+    const ordered = [
+      ...canonicalSections
+        .filter((c) => map.has(c))
+        .map((c) => ({ category: c, groups: map.get(c) })),
+      ...[...map.entries()]
+        .filter(([c]) => !canonicalSections.includes(c))
+        .map(([c, gs]) => ({ category: c, groups: gs })),
+    ];
+    return ordered.map((s) => ({
+      ...s,
+      cost: s.groups.reduce((a, g) => a + g.cost, 0),
+    }));
+  }, [groups, canonicalSections, isTradeGrouping]);
+
+  // Only show section headers when the Bill actually carries sections —
+  // otherwise (e.g. a bare QUIV materials push) keep the clean flat list.
+  const hasRealCategories = sections.some(
+    (s) => s.category && s.category !== "Uncategorized",
+  );
 
   // Does the project carry a breakdown? (Unified budgetItems[] or a
   // materials-view items[] both qualify; a pure takeoff/bill view does not.)
@@ -283,8 +390,9 @@ export default function ProjectBudgetTab({
           Material &amp; Labour breakdown
         </div>
         <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
-          The build-up of each bill item — its materials, labour and plant —
-          pushed from your QUIV / Heron save and linked back to the bill.
+          The build-up of each bill item — its materials, labour and plant
+          shown together — pushed from your QUIV / Heron save and arranged in
+          the same order and sections as your Bill of Quantity.
         </div>
         <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
           A bill item is only complete when <b>every</b> line below it is
@@ -438,8 +546,26 @@ export default function ProjectBudgetTab({
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
-          {groups.map((g) => (
+        <div className="space-y-5">
+          {sections.map((section) => (
+            <div key={section.category} className="space-y-3">
+              {hasRealCategories ? (
+                <div className="flex items-center justify-between gap-2 px-1 pt-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
+                      {section.category}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-adlm-dark-muted">
+                      {section.groups.length} item
+                      {section.groups.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
+                    &#8358;{money(section.cost)}
+                  </span>
+                </div>
+              ) : null}
+              {section.groups.map((g) => (
             <div
               key={g.key}
               className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth"
@@ -564,6 +690,8 @@ export default function ProjectBudgetTab({
                   </tbody>
                 </table>
               </div>
+            </div>
+              ))}
             </div>
           ))}
 
