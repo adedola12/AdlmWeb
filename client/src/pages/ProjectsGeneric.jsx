@@ -3055,14 +3055,16 @@ export default function ProjectsGeneric() {
     }
   }, [canRateGen, accessToken]);
 
-  // Auto-load the material/labour pool when the materials view is active.
+  // Auto-load the material/labour pool when the materials view is active OR a
+  // project is open (the Budget tab prices its rows from the same pool).
   React.useEffect(() => {
-    if (!showMaterials) return;
+    if (!showMaterials && !selectedId) return;
     if (!canRateGen) return;
     if (materialRatePoolLoaded || materialRatePoolLoading) return;
     loadMaterialRatePool();
   }, [
     showMaterials,
+    selectedId,
     canRateGen,
     materialRatePoolLoaded,
     materialRatePoolLoading,
@@ -3857,10 +3859,70 @@ export default function ProjectsGeneric() {
         );
       });
 
-  const categoryOptions = React.useMemo(
-    () => allCategoriesForProductKey(toolNorm),
-    [toolNorm],
-  );
+  const categoryOptions = React.useMemo(() => {
+    // Canonical per-product list (…, "Uncategorized") + this project's custom
+    // categories, inserted before "Uncategorized" so it stays last.
+    const base = allCategoriesForProductKey(toolNorm);
+    const custom = Array.isArray(sel?.customCategories)
+      ? sel.customCategories
+      : [];
+    const seen = new Set(base.map((c) => String(c).toLowerCase()));
+    const extra = [];
+    for (const c of custom) {
+      const t = String(c || "").trim();
+      if (t && !seen.has(t.toLowerCase())) {
+        seen.add(t.toLowerCase());
+        extra.push(t);
+      }
+    }
+    if (!extra.length) return base;
+    const last = base[base.length - 1];
+    return [...base.slice(0, -1), ...extra, last];
+  }, [toolNorm, sel?.customCategories]);
+
+  // Codes whose bill rate is derived from a priced material/labour build-up —
+  // those BoQ rate cells become read-only (the Budget tab drives them).
+  const budgetDrivenCodes = React.useMemo(() => {
+    const totals = new Map();
+    for (const b of sel?.budgetItems || []) {
+      const code = String(b?.billIdentity || "").trim().toLowerCase();
+      if (!code) continue;
+      totals.set(code, (totals.get(code) || 0) + safeNum(b.qty) * safeNum(b.rate));
+    }
+    const set = new Set();
+    for (const [code, net] of totals) if (net > 0) set.add(code);
+    return set;
+  }, [sel?.budgetItems]);
+
+  // Add a user-defined category for this project's bill arrangement; persists
+  // immediately (items untouched — only customCategories[] is sent).
+  async function handleAddCategory(name) {
+    const t = String(name || "").trim();
+    if (!t || !selectedId || !accessToken) return;
+    const canonical = allCategoriesForProductKey(toolNorm).map((c) =>
+      String(c).toLowerCase(),
+    );
+    const existing = Array.isArray(sel?.customCategories)
+      ? sel.customCategories
+      : [];
+    if (
+      canonical.includes(t.toLowerCase()) ||
+      existing.some((c) => String(c).toLowerCase() === t.toLowerCase())
+    ) {
+      return;
+    }
+    try {
+      const updated = await apiAuthed(endpoints.one(selectedId), {
+        token: accessToken,
+        method: "PUT",
+        body: { baseVersion: sel?.version, customCategories: [...existing, t] },
+      });
+      setSel(updated);
+      setNotice(`Category “${t}” added.`);
+    } catch (e) {
+      setErr(e?.message || "Couldn't add the category.");
+    }
+  }
 
   const selectedValuation = React.useMemo(
     () =>
@@ -4714,6 +4776,10 @@ export default function ProjectsGeneric() {
                 onPickCandidate={handlePickCandidate}
                 onRateChange={handleRateChange}
                 onSearchRateGen={showMaterials ? searchMaterialRates : searchRateGen}
+                onSearchBudgetRates={searchMaterialRates}
+                budgetRateGenReady={canRateGen}
+                budgetDrivenCodes={budgetDrivenCodes}
+                onAddCategory={handleAddCategory}
                 onActualQtyChange={handleActualQtyChange}
                 onActualRateChange={handleActualRateChange}
                 onStatusToggle={handleStatusToggle}

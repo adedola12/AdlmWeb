@@ -123,6 +123,9 @@ const BudgetItemSchema = new mongoose.Schema(
     // Material | Labour | Plant | Consumable | Equipment (from the plugin).
     componentKind: { type: String, default: "" },
     category: { type: String, default: "" },
+    // Work-section tag mirrored from the bill line so the Budget can section
+    // by trade as well as category (matches ItemSchema.trade).
+    trade: { type: String, default: "" },
     unit: { type: String, default: "" },
     qty: { type: Number, default: 0 },
     rate: { type: Number, default: 0 },
@@ -136,6 +139,10 @@ const BudgetItemSchema = new mongoose.Schema(
     targetDate: { type: Date, default: null },
     supplier: { type: String, default: "", trim: true },
     notes: { type: String, default: "", trim: true },
+    // Revit element IDs copied from the source line — lets the budget fall
+    // back to element-overlap matching against the bill when a line has no
+    // billIdentity/code (so material + labour still bundle to the right line).
+    elementIds: { type: [Number], default: [] },
   },
   { _id: false },
 );
@@ -594,6 +601,10 @@ const TakeoffProjectSchema = new mongoose.Schema(
     publicToken: { type: String, default: null, sparse: true },
     publicShareEnabled: { type: Boolean, default: false },
     checklistCompositeKeys: { type: [String], default: [] },
+    // User-defined building-element categories for THIS project's bill
+    // arrangement, on top of the canonical per-product list. Surfaced to the
+    // Bill + Budget category pickers so the QS can organise their own way.
+    customCategories: { type: [String], default: [] },
     items: { type: [ItemSchema], default: [] },
     // Derived material/labour lines (the budget) embedded alongside the bill, so ONE
     // revit project document holds both bill + budget. Reuses ItemSchema — it already

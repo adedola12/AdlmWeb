@@ -245,6 +245,11 @@ export default function ProjectOpenView({
   categoryOptions = [],
   tradeOptions = [],
   onTradeChange,
+  // Budget-tab pricing + custom categories + budget-driven (read-only) rates.
+  onSearchBudgetRates,
+  budgetRateGenReady = false,
+  budgetDrivenCodes,
+  onAddCategory,
   groupByMode = "category",
   onGroupByModeChange,
   contract,
@@ -662,6 +667,9 @@ export default function ProjectOpenView({
           categoryOptions={categoryOptions}
           tradeOptions={tradeOptions}
           groupByMode={groupByMode}
+          onSearchRateGen={onSearchBudgetRates}
+          canRateGen={budgetRateGenReady}
+          contractLocked={Boolean(contract?.locked)}
         />
       ) : null}
 
@@ -948,6 +956,8 @@ export default function ProjectOpenView({
           onPercentChange={onPercentChange}
           onCategoryChange={onCategoryChange}
           categoryOptions={categoryOptions}
+          onAddCategory={onAddCategory}
+          budgetDrivenCodes={budgetDrivenCodes}
           tradeOptions={tradeOptions}
           onTradeChange={onTradeChange}
           groupByMode={groupByMode}

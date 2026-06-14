@@ -292,7 +292,7 @@ function convertRateUnit(rateCost, rateUnit, boqUnit, boqDescription) {
  * 3. Supports typing a rate name to search RateGen library suggestions
  * 4. Clicking a suggestion fills the totalCost into the rate (with unit conversion)
  */
-function RateCell({
+export function RateCell({
   value,
   placeholder,
   onChange,
@@ -806,7 +806,11 @@ export default function ProjectBillTable({
   percentMap = {},
   onPercentChange,
   onCategoryChange,
+  onAddCategory,
   categoryOptions = [],
+  // Set of bill codes (lowercased) whose rate is derived from a priced
+  // material/labour build-up — those rate cells render read-only.
+  budgetDrivenCodes,
   tradeOptions = [],
   onTradeChange,
   groupByMode = "category",
@@ -2026,9 +2030,24 @@ export default function ProjectBillTable({
                               <select
                                 className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-700 focus:border-adlm-blue-500 focus:outline-none"
                                 value={row.category || ""}
-                                onChange={(e) =>
-                                  onCategoryChange(row.i, e.target.value)
-                                }
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === "__add_category__") {
+                                    const name =
+                                      typeof window !== "undefined"
+                                        ? window.prompt(
+                                            "New category name (e.g. External Works)",
+                                          )
+                                        : "";
+                                    const trimmed = String(name || "").trim();
+                                    if (trimmed && onAddCategory) {
+                                      onAddCategory(trimmed);
+                                      onCategoryChange(row.i, trimmed);
+                                    }
+                                    return;
+                                  }
+                                  onCategoryChange(row.i, v);
+                                }}
                                 title="Re-classify this item by building element"
                               >
                                 {categoryOptions.map((opt) => (
@@ -2040,6 +2059,11 @@ export default function ProjectBillTable({
                                 !categoryOptions.includes(row.category) ? (
                                   <option value={row.category}>
                                     {row.category}
+                                  </option>
+                                ) : null}
+                                {onAddCategory ? (
+                                  <option value="__add_category__">
+                                    + New category…
                                   </option>
                                 ) : null}
                               </select>
@@ -2178,9 +2202,23 @@ export default function ProjectBillTable({
                               // locked. Editing rates after sign-off would
                               // silently drift the contract sum away from
                               // the signed value — variations are the
-                              // proper channel for any rate change.
-                              disabled={contractLocked}
-                              disabledHint="Contract locked — unlock it on the Contract Admin tab to edit rates, or raise a variation."
+                              // proper channel for any rate change. Also lock
+                              // when the rate is derived from a priced Budget
+                              // build-up (Material + Labour + O&P).
+                              disabled={
+                                contractLocked ||
+                                Boolean(
+                                  budgetDrivenCodes &&
+                                    budgetDrivenCodes.has(
+                                      String(item?.code || "").trim().toLowerCase(),
+                                    ),
+                                )
+                              }
+                              disabledHint={
+                                contractLocked
+                                  ? "Contract locked — unlock it on the Contract Admin tab to edit rates, or raise a variation."
+                                  : "Rate derived from the Budget build-up (Material + Labour + O&P). Edit the prices on the Budget tab."
+                              }
                             />
 
                             <button

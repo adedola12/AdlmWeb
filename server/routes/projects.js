@@ -53,6 +53,8 @@ import {
   buildBillQtyChanges,
   cascadeBillQtyToMaterials,
 } from "../util/billBudgetCascade.js";
+import { backfillBudgetLinks } from "../util/budgetBillLink.js";
+import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
 // IFC files; we can raise this per-tier later via an entitlement flag.
@@ -534,6 +536,14 @@ function sanitizeBudgetItems(items) {
     const netUnitCost = num(b.netUnitCost);
     const procuredPercentSrc =
       b.procuredPercent != null ? b.procuredPercent : b.percentComplete;
+    // Element IDs carried from the source material/labour line — used by the
+    // budget↔bill linker to match by element overlap when a code is missing.
+    const elementIds = Array.isArray(b.elementIds)
+      ? b.elementIds
+          .map((n) => Number(n))
+          .filter((n) => Number.isFinite(n))
+          .slice(0, 5000)
+      : [];
     out.push({
       billIdentity,
       sn: num(b.sn),
@@ -542,6 +552,7 @@ function sanitizeBudgetItems(items) {
       takeoffLine: String(b.takeoffLine || "").trim().slice(0, 1000),
       componentKind: String(b.componentKind || "").trim().slice(0, 40),
       category: String(b.category || "").trim().slice(0, 200),
+      trade: String(b.trade || "").trim().slice(0, 200),
       unit: String(b.unit || "").trim().slice(0, 50),
       qty: num(b.qty),
       rate,
@@ -555,6 +566,7 @@ function sanitizeBudgetItems(items) {
       targetDate,
       supplier: String(b.supplier || "").trim().slice(0, 300),
       notes: String(b.notes || "").trim().slice(0, 1000),
+      elementIds,
     });
   }
   return out;
@@ -1459,9 +1471,15 @@ async function saveProjectFull(req, res) {
     // transition; budgetItems[] is the canonical source for the Budget tab.
     if (mats.length) {
       try {
-        takeoffRes.project.budgetItems = sanitizeBudgetItems(
+        const budget = sanitizeBudgetItems(
           materialsRes ? materialsRes.project.items : mats,
         );
+        // Link each budget line to its bill line (code → elementIds → title)
+        // so material + labour bundle under the right line, then derive the
+        // bill rates from the priced build-up before reconciling progress.
+        backfillBudgetLinks(takeoffRes.project.items, budget);
+        takeoffRes.project.budgetItems = budget;
+        deriveBillRatesFromBudget(takeoffRes.project);
         reconcileItemsFromBudget(takeoffRes.project);
         await takeoffRes.project.save();
       } catch (e) {
@@ -1955,8 +1973,25 @@ async function updateProject(req, res) {
       project.provisionalSums = sanitizeProvisionalSums(provisionalSums);
     }
 
+    // User-defined bill categories — additive to the canonical per-product
+    // list. De-duped, trimmed, capped. Surfaced to the Bill + Budget pickers.
+    if (Array.isArray(req.body?.customCategories)) {
+      const seen = new Set();
+      project.customCategories = req.body.customCategories
+        .map((c) => String(c || "").trim().slice(0, 200))
+        .filter((c) => {
+          const k = c.toLowerCase();
+          if (!c || seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        })
+        .slice(0, 200);
+    }
+
     if (Array.isArray(budgetItems)) {
-      project.budgetItems = sanitizeBudgetItems(budgetItems);
+      const budget = sanitizeBudgetItems(budgetItems);
+      backfillBudgetLinks(project.items, budget);
+      project.budgetItems = budget;
     }
 
     // Embedded budget (derived material/labour) — one revit project holds both
@@ -1965,10 +2000,13 @@ async function updateProject(req, res) {
       project.materialItems = sanitizeItems(materialItems, "revit-materials");
       // Canonicalise the breakdown into budgetItems[] too (QUIV embeds the
       // material/labour via this PUT), so the Budget tab + procurement
-      // marking have one source of truth on the bill project. Guarded so a
+      // marking have one source of truth on the bill project. Link each line
+      // to its bill line so material + labour bundle together. Guarded so a
       // mapping issue can never break the save.
       try {
-        project.budgetItems = sanitizeBudgetItems(materialItems);
+        const budget = sanitizeBudgetItems(materialItems);
+        backfillBudgetLinks(project.items, budget);
+        project.budgetItems = budget;
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
       }
@@ -2015,8 +2053,11 @@ async function updateProject(req, res) {
       }
     }
 
-    // Budget-basis projects: derive bill % from the material/labour breakdown
-    // before saving so valuation follows procurement (no-op when basis=boq).
+    // Bill Rate = Material + Labour + O&P: where a bill line has a priced
+    // material/labour build-up, derive its rate from the budget (no-op when
+    // nothing is priced). Then derive bill % from the breakdown so valuation
+    // follows procurement (no-op when basis=boq).
+    deriveBillRatesFromBudget(project);
     reconcileItemsFromBudget(project);
 
     project.version += 1;
@@ -3612,7 +3653,12 @@ async function markBudget(req, res) {
         .json({ error: "Version conflict", version: project.version });
     }
 
-    project.budgetItems = sanitizeBudgetItems(body.budgetItems);
+    const budget = sanitizeBudgetItems(body.budgetItems);
+    backfillBudgetLinks(project.items, budget);
+    project.budgetItems = budget;
+    // Pricing edits on the Budget tab flow up: derive the bill rates from the
+    // build-up, then reconcile progress.
+    deriveBillRatesFromBudget(project);
     reconcileItemsFromBudget(project);
     project.version = (Number(project.version) || 0) + 1;
     await project.save();

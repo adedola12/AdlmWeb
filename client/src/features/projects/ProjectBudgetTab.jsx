@@ -1,20 +1,30 @@
 import React from "react";
-import { FaCubes, FaHardHat, FaTools, FaBoxes, FaLayerGroup } from "react-icons/fa";
+import {
+  FaCubes,
+  FaHardHat,
+  FaTools,
+  FaBoxes,
+  FaLayerGroup,
+  FaSearch,
+  FaTimes,
+} from "react-icons/fa";
+import SectionRail from "./SectionRail.jsx";
+import { RateCell } from "./ProjectBillTable.jsx";
+import {
+  buildBillIndex,
+  resolveBillIdentity,
+  normalizeTitle,
+} from "../../lib/budgetBillLink.js";
 
 // ─────────────────────────────────────────────────────────────────────
-// Project Budget tab — Material & Labour breakdown
+// Project Budget tab — Material & Labour build-up of each Bill line.
 //
-// The budget is the material + labour build-up of each Bill of Quantity
-// item, pushed by the desktop plugins (QUIV / Heron / ADLM) during save.
-// One bill line explodes into several budget lines: its materials, its
-// labour, plant, etc. Each breakdown row links back to its bill item via
-// `sourceTakeoffCode` (= the bill item's `code`) and is classified by
-// `componentKind`.
-//
-// Completion linkage (interactive marking lands in the next phase):
-//   • A bill item is only 100% when EVERY line below it is done/procured —
-//     fully buying the materials isn't "done" until the labour is too.
-//   • Marking the bill item complete cascades down and marks every line.
+// The Bill of Quantity is the determinant of the arrangement: every budget
+// row is matched back to its bill line (code → Revit element overlap → title),
+// then laid out in Bill order and the Bill's sections, with each line's
+// material AND labour bundled together. Users can price each row (manually or
+// from RateGen) and set a per-line Overhead & Profit %; the resulting
+// Bill Rate = Material + Labour + O&P flows up to the BoQ automatically.
 // ─────────────────────────────────────────────────────────────────────
 
 function safeNum(v) {
@@ -80,16 +90,9 @@ function kindRank(kind) {
   return KIND_ORDER[k] ?? 5;
 }
 
-// The bill line a breakdown row belongs to. budgetItems carry billIdentity,
-// QUIV materialItems carry sourceTakeoffCode; both equal the bill item's code.
-function billCode(it) {
-  return (
-    (it?.billIdentity || "").toString().trim() ||
-    (it?.sourceTakeoffCode || "").toString().trim() ||
-    (it?.code || "").toString().trim()
-  )
-    .toString()
-    .toLowerCase();
+function isLabour(it) {
+  const k = String(it?.componentKind || "").trim().toLowerCase();
+  return k === "labour" || k === "labor";
 }
 
 export default function ProjectBudgetTab({
@@ -103,55 +106,119 @@ export default function ProjectBudgetTab({
   categoryOptions = [],
   tradeOptions = [],
   groupByMode = "category",
+  // RateGen search (material + labour) for pricing budget rows.
+  onSearchRateGen,
+  canRateGen = false,
+  contractLocked = false,
 }) {
-  // Map every bill line (items[] is the Bill, in bill order) to its place +
-  // section, so the budget can mirror the Bill: code → {order, category,
-  // trade, description}. Breakdown rows link back via billCode() === code.
-  const billMeta = React.useMemo(() => {
+  const [view, setView] = React.useState("breakdown");
+  const [leadDays, setLeadDays] = React.useState(14);
+  const [query, setQuery] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  // In-progress Overhead/Profit edits, keyed by group — committed on blur.
+  const [opDraft, setOpDraft] = React.useState({});
+
+  // The active breakdown source: prefer the consolidated budgetItems[]; fall
+  // back to the QUIV materials view. Edits persist as budgetItems either way.
+  const sourceLines = React.useMemo(
+    () =>
+      budgetItems.length
+        ? budgetItems
+        : materialItems.length
+          ? materialItems
+          : [],
+    [budgetItems, materialItems],
+  );
+
+  const isTradeGrouping = String(groupByMode || "category") === "trade";
+
+  // Bill index for robust matching + per-code metadata (order/section/qty).
+  const billIndex = React.useMemo(() => buildBillIndex(items), [items]);
+  const billByCode = React.useMemo(() => {
     const m = new Map();
     (items || []).forEach((it, idx) => {
       const code = (it?.code || "").toString().trim().toLowerCase();
-      if (!code || m.has(code)) return; // first occurrence sets the order
+      if (!code || m.has(code)) return;
       m.set(code, {
+        code: (it?.code || "").toString().trim(),
         order: idx,
         category: (it?.category || "").toString().trim(),
         trade: (it?.trade || "").toString().trim(),
         description: (it?.description || it?.takeoffLine || "").toString().trim(),
+        qty: safeNum(it?.qty),
+        unit: (it?.unit || "").toString().trim(),
       });
     });
     return m;
   }, [items]);
 
-  // Group breakdown rows under their parent bill line. Prefer the
-  // consolidated budgetItems[] (material + labour folded onto the unified
-  // project); fall back to the project's own items (materials view). Each
-  // group inherits the Bill order + section of the line it belongs to, and
-  // its rows are sorted material → labour so the two read together.
+  // Element IDs by line key, harvested from materialItems — lets budgetItems
+  // saved before elementIds existed still match the bill by element overlap.
+  const elementEnrich = React.useMemo(() => {
+    const m = new Map();
+    for (const mi of materialItems || []) {
+      const eids = Array.isArray(mi?.elementIds) ? mi.elementIds : [];
+      if (!eids.length) continue;
+      const snKey = `sn:${mi?.sn ?? ""}`;
+      const tKey = `t:${normalizeTitle(mi?.materialName)}|${normalizeTitle(
+        mi?.unit,
+      )}|${normalizeTitle(mi?.takeoffLine)}`;
+      if (!m.has(snKey)) m.set(snKey, eids);
+      if (!m.has(tKey)) m.set(tKey, eids);
+    }
+    return m;
+  }, [materialItems]);
+
+  const eidsFor = React.useCallback(
+    (l) => {
+      if (Array.isArray(l?.elementIds) && l.elementIds.length) return l.elementIds;
+      return (
+        elementEnrich.get(`sn:${l?.sn ?? ""}`) ||
+        elementEnrich.get(
+          `t:${normalizeTitle(l?.materialName)}|${normalizeTitle(
+            l?.unit,
+          )}|${normalizeTitle(l?.takeoffLine)}`,
+        ) ||
+        []
+      );
+    },
+    [elementEnrich],
+  );
+
+  const keyOf = (it) =>
+    [
+      it?.billIdentity || it?.sourceTakeoffCode || "",
+      it?.componentKind || "",
+      it?.materialName || it?.description || "",
+      it?.sn ?? "",
+    ].join("|");
+
+  // Build the bill-line groups: every budget row resolved to its bill line,
+  // bundled, sorted material → labour, ordered like the Bill.
   const groups = React.useMemo(() => {
-    const source = budgetItems.length
-      ? budgetItems
-      : materialItems.length
-        ? materialItems
-        : items;
     const map = new Map();
     let seen = 0;
-    for (const it of source || []) {
-      const code = billCode(it);
-      const tl = (it?.takeoffLine || "").toString().trim().toLowerCase();
-      const key = code || (tl ? `tl:${tl}` : "") || "__unlinked__";
+    for (const it of sourceLines) {
+      const resolved = resolveBillIdentity(it, billIndex, eidsFor(it));
+      const lc = resolved ? resolved.toLowerCase() : "";
+      const tl = normalizeTitle(it?.takeoffLine || it?.materialName);
+      const key = lc || (tl ? `tl:${tl}` : `__${seen}`);
       if (!map.has(key)) {
-        const meta = code ? billMeta.get(code) : null;
+        const meta = lc ? billByCode.get(lc) : null;
         map.set(key, {
           key,
+          code: resolved || "",
+          // Linked groups read with the bill line's description; unlinked ones
+          // fall back to their own takeoff line.
           label:
-            (it?.takeoffLine || "").toString().trim() ||
             meta?.description ||
+            (it?.takeoffLine || "").toString().trim() ||
             groupLabel(it),
           category: meta?.category || (it?.category || "").toString().trim(),
           trade: meta?.trade || (it?.trade || "").toString().trim(),
-          // Linked groups follow the Bill order; unlinked ones trail it in
-          // first-seen order.
           order: meta ? meta.order : 1e6 + seen,
+          billQty: meta ? meta.qty : 0,
+          billUnit: meta ? meta.unit : (it?.unit || "").toString().trim(),
           lines: [],
         });
         seen += 1;
@@ -163,7 +230,7 @@ export default function ProjectBudgetTab({
         const lines = [...g.lines].sort(
           (a, b) => kindRank(a?.componentKind) - kindRank(b?.componentKind),
         );
-        const cost = lines.reduce(
+        const net = lines.reduce(
           (a, l) => a + safeNum(l.qty) * safeNum(l.rate),
           0,
         );
@@ -171,24 +238,65 @@ export default function ProjectBudgetTab({
           (a, l) => a + (lineDone(l) ? safeNum(l.qty) * safeNum(l.rate) : 0),
           0,
         );
+        const overheadPercent = lines.reduce(
+          (a, l) => Math.max(a, safeNum(l.overheadPercent)),
+          0,
+        );
+        const profitPercent = lines.reduce(
+          (a, l) => Math.max(a, safeNum(l.profitPercent)),
+          0,
+        );
         const doneCount = lines.filter(lineDone).length;
         return {
           ...g,
           lines,
-          cost,
+          net,
           procuredCost,
+          overheadPercent,
+          profitPercent,
           doneCount,
           total: lines.length,
           allDone: lines.length > 0 && doneCount === lines.length,
         };
       })
       .sort((a, b) => a.order - b.order);
-  }, [items, budgetItems, materialItems, billMeta]);
+  }, [sourceLines, billIndex, billByCode, eidsFor]);
 
-  // Bucket the bill-line groups into the Bill's sections (category, or trade
-  // when the Bill is in trade mode), honouring the same canonical order the
-  // Bill uses. Mirrors ProjectBillTable's groupedRows.
-  const isTradeGrouping = String(groupByMode || "category") === "trade";
+  // Effective Overhead/Profit for a group (live draft overrides committed).
+  const effOH = (g) => {
+    const d = opDraft[g.key]?.overheadPercent;
+    return d != null && d !== "" ? safeNum(d) : g.overheadPercent;
+  };
+  const effPR = (g) => {
+    const d = opDraft[g.key]?.profitPercent;
+    return d != null && d !== "" ? safeNum(d) : g.profitPercent;
+  };
+  const billAmountOf = (g) => g.net * (1 + (effOH(g) + effPR(g)) / 100);
+  const billRateOf = (g) => {
+    const amt = billAmountOf(g);
+    return g.billQty > 0 ? amt / g.billQty : amt;
+  };
+
+  // ── Search filter ────────────────────────────────────────────────────
+  const q = normalizeTitle(query);
+  const lineMatches = React.useCallback(
+    (l) => {
+      if (!q) return true;
+      const hay = normalizeTitle(
+        [
+          lineName(l),
+          kindMeta(l?.componentKind).label,
+          l?.unit,
+          l?.takeoffLine,
+        ].join(" "),
+      );
+      return hay.includes(q);
+    },
+    [q],
+  );
+
+  // Bucket groups into the Bill's sections (category, or trade), honouring the
+  // same canonical order the Bill uses (+ any custom categories the user added).
   const canonicalSections = React.useMemo(
     () =>
       isTradeGrouping
@@ -200,14 +308,18 @@ export default function ProjectBudgetTab({
           : [],
     [isTradeGrouping, tradeOptions, categoryOptions],
   );
+
   const sections = React.useMemo(() => {
     const map = new Map();
     for (const g of groups) {
+      // When searching, only keep groups that have a matching line.
+      const matched = q ? g.lines.filter(lineMatches) : g.lines;
+      if (q && matched.length === 0) continue;
       const cat =
         (isTradeGrouping ? g.trade : g.category).toString().trim() ||
         "Uncategorized";
       if (!map.has(cat)) map.set(cat, []);
-      map.get(cat).push(g);
+      map.get(cat).push({ ...g, shownLines: matched });
     }
     const ordered = [
       ...canonicalSections
@@ -219,50 +331,64 @@ export default function ProjectBudgetTab({
     ];
     return ordered.map((s) => ({
       ...s,
-      cost: s.groups.reduce((a, g) => a + g.cost, 0),
+      cost: s.groups.reduce((a, g) => a + g.net, 0),
     }));
-  }, [groups, canonicalSections, isTradeGrouping]);
+  }, [groups, canonicalSections, isTradeGrouping, q, lineMatches]);
 
-  // Only show section headers when the Bill actually carries sections —
-  // otherwise (e.g. a bare QUIV materials push) keep the clean flat list.
   const hasRealCategories = sections.some(
     (s) => s.category && s.category !== "Uncategorized",
   );
 
-  // Does the project carry a breakdown? (Unified budgetItems[] or a
-  // materials-view items[] both qualify; a pure takeoff/bill view does not.)
-  const hasBreakdown = React.useMemo(() => {
-    const source = budgetItems.length
-      ? budgetItems
-      : materialItems.length
-        ? materialItems
-        : items;
-    return (source || []).some(
-      (it) =>
-        it?.componentKind ||
-        it?.sourceTakeoffCode ||
-        it?.billIdentity ||
-        it?.derived,
+  // Floating Material/Labour total for the active search.
+  const floatTotals = React.useMemo(() => {
+    if (!q) return null;
+    const byKind = new Map();
+    for (const l of sourceLines) {
+      if (!lineMatches(l)) continue;
+      const label = kindMeta(l?.componentKind).label;
+      if (!byKind.has(label)) {
+        byKind.set(label, {
+          label,
+          count: 0,
+          qtyByUnit: new Map(),
+          done: 0,
+          priced: 0,
+        });
+      }
+      const e = byKind.get(label);
+      e.count += 1;
+      const unit = (l?.unit || "").toString().trim() || "—";
+      e.qtyByUnit.set(unit, (e.qtyByUnit.get(unit) || 0) + safeNum(l.qty));
+      if (lineDone(l)) e.done += 1;
+      if (safeNum(l.rate) > 0) e.priced += 1;
+    }
+    return [...byKind.values()].sort(
+      (a, b) => kindRank(a.label.toLowerCase()) - kindRank(b.label.toLowerCase()),
     );
-  }, [items, budgetItems, materialItems]);
+  }, [q, sourceLines, lineMatches]);
 
-  const budgetTotal = groups.reduce((a, g) => a + g.cost, 0);
+  // Does the project carry a breakdown at all?
+  const hasBreakdown = React.useMemo(
+    () =>
+      (sourceLines || []).some(
+        (it) =>
+          it?.componentKind ||
+          it?.sourceTakeoffCode ||
+          it?.billIdentity ||
+          it?.derived,
+      ),
+    [sourceLines],
+  );
+
+  const budgetTotal = groups.reduce((a, g) => a + g.net, 0);
+  const billTotal = groups.reduce((a, g) => a + billAmountOf(g), 0);
   const procuredTotal = groups.reduce((a, g) => a + g.procuredCost, 0);
   const doneTone = "text-emerald-700 dark:text-emerald-400";
 
-  // Procurement marking is enabled only when budgetItems[] is the canonical
-  // source (the unified bill project). In the materials-view fallback we stay
-  // read-only — that surface has its own purchased flow.
-  const canMark = budgetItems.length > 0 && typeof onSaveBudget === "function";
-  const [saving, setSaving] = React.useState(false);
-
-  const keyOf = (it) =>
-    [
-      it?.billIdentity || it?.sourceTakeoffCode || "",
-      it?.componentKind || "",
-      it?.materialName || it?.description || "",
-      it?.sn ?? "",
-    ].join("|");
+  // Editing (procurement + pricing) is available whenever we can save and the
+  // contract isn't locked. Persisted as budgetItems regardless of source.
+  const canEdit =
+    typeof onSaveBudget === "function" && !contractLocked && sourceLines.length > 0;
 
   async function persist(next) {
     if (saving) return;
@@ -274,56 +400,50 @@ export default function ProjectBudgetTab({
     }
   }
 
-  // Toggle one budget line procured (autosaves).
+  function patchLines(predicate, patch) {
+    persist(
+      sourceLines.map((b) => (predicate(b) ? { ...b, ...patch } : b)),
+    );
+  }
+
   function toggleLine(line) {
     const k = keyOf(line);
     const wasDone = lineDone(line);
-    persist(
-      budgetItems.map((b) =>
-        keyOf(b) === k
-          ? {
-              ...b,
-              procured: !wasDone,
-              procuredAt: !wasDone ? new Date().toISOString() : null,
-            }
-          : b,
-      ),
-    );
+    patchLines((b) => keyOf(b) === k, {
+      procured: !wasDone,
+      procuredAt: !wasDone ? new Date().toISOString() : null,
+    });
   }
 
-  // Mark every line under one bill item — the down-cascade ("mark the bill
-  // item complete -> the whole breakdown is procured").
   function markGroup(group, value) {
     const keys = new Set(group.lines.map(keyOf));
-    persist(
-      budgetItems.map((b) =>
-        keys.has(keyOf(b))
-          ? {
-              ...b,
-              procured: value,
-              procuredAt: value ? new Date().toISOString() : null,
-            }
-          : b,
-      ),
-    );
+    patchLines((b) => keys.has(keyOf(b)), {
+      procured: value,
+      procuredAt: value ? new Date().toISOString() : null,
+    });
   }
 
-  // ── Buy schedule (3c) — "what to buy & when" ──────────────────────────
-  // Need-on-site = earliest Program-of-Works (WBS) task start linked to a
-  // material's bill line; Buy-by = need-on-site − lead time. Labour is
-  // scheduled, not bought, so it's excluded.
-  const [view, setView] = React.useState("breakdown");
-  const [leadDays, setLeadDays] = React.useState(14);
+  function updateLineRate(line, raw) {
+    const k = keyOf(line);
+    patchLines((b) => keyOf(b) === k, { rate: safeNum(raw) });
+  }
 
+  function commitGroupMarkup(group, overheadPercent, profitPercent) {
+    const keys = new Set(group.lines.map(keyOf));
+    patchLines((b) => keys.has(keyOf(b)), {
+      overheadPercent: safeNum(overheadPercent),
+      profitPercent: safeNum(profitPercent),
+    });
+    setOpDraft((prev) => {
+      const next = { ...prev };
+      delete next[group.key];
+      return next;
+    });
+  }
+
+  // ── Buy schedule — "what to buy & when" ────────────────────────────────
   const buyRows = React.useMemo(() => {
-    const src = budgetItems.length
-      ? budgetItems
-      : materialItems.length
-        ? materialItems
-        : items;
     const tasks = pmDashboard?.tasks || [];
-    // Map a bill code -> earliest linked task start. Task identities are
-    // "sn::code::desc::…", so the code is the second segment.
     const codeToStart = new Map();
     for (const t of tasks) {
       const s = t?.startDate ? new Date(t.startDate) : null;
@@ -337,9 +457,8 @@ export default function ProjectBudgetTab({
       }
     }
     const rows = [];
-    for (const it of src || []) {
-      const kind = String(it?.componentKind || "").toLowerCase();
-      if (kind === "labour" || kind === "labor") continue;
+    for (const it of sourceLines) {
+      if (isLabour(it)) continue;
       const code = String(it?.billIdentity || it?.sourceTakeoffCode || "")
         .trim()
         .toLowerCase();
@@ -365,7 +484,7 @@ export default function ProjectBudgetTab({
       return 0;
     });
     return rows;
-  }, [budgetItems, materialItems, items, pmDashboard, leadDays]);
+  }, [sourceLines, pmDashboard, leadDays]);
 
   const scheduledCount = buyRows.filter((r) => r.buyBy).length;
 
@@ -382,51 +501,112 @@ export default function ProjectBudgetTab({
     }
   }
 
+  // Section rail wiring.
+  const sectionRefs = React.useRef({});
+  const topRef = React.useRef(null);
+  const bottomRef = React.useRef(null);
+  const railSections = React.useMemo(
+    () =>
+      hasRealCategories
+        ? sections.map((s) => ({
+            id: `budget-sec-${s.category}`,
+            label: s.category,
+            badge: isTradeGrouping ? "Trade" : "Cat",
+            refGetter: () => sectionRefs.current[s.category] || null,
+          }))
+        : [],
+    [sections, hasRealCategories, isTradeGrouping],
+  );
+  const scrollToRef = (node) => {
+    if (!node) return;
+    try {
+      node.scrollIntoView({ behavior: "auto", block: "start" });
+    } catch {
+      node.scrollIntoView();
+    }
+  };
+
+  function qtyByUnitText(map) {
+    return [...map.entries()]
+      .map(([u, v]) => `${money(v)} ${u}`)
+      .join(" · ");
+  }
+
+  function pct(n, d) {
+    return d > 0 ? Math.round((n / d) * 100) : 0;
+  }
+
   return (
     <div className="space-y-4">
-      {/* Intro + the completion rule. Intentionally light — no dashboard. */}
+      {/* Intro + the completion rule. */}
       <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
         <div className="text-base font-bold text-slate-900 dark:text-white">
           Material &amp; Labour breakdown
         </div>
         <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
-          The build-up of each bill item — its materials, labour and plant
-          shown together — pushed from your QUIV / Heron save and arranged in
-          the same order and sections as your Bill of Quantity.
+          The build-up of each bill item — its materials and labour shown
+          together — arranged in the same order and sections as your Bill of
+          Quantity. Price each row (type a rate, paste a <code>=</code>formula,
+          or pull from RateGen) and set Overhead &amp; Profit; the
+          <b> Bill Rate = Material + Labour + O&amp;P</b> flows up to the BoQ.
         </div>
         <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
           A bill item is only complete when <b>every</b> line below it is
           marked procured/done — buying the materials isn’t enough until the
           labour is done too.{" "}
-          {canMark
-            ? "Tick a line to mark it procured, or use “Mark all” to procure a whole bill item’s breakdown."
+          {canEdit
+            ? "Tick a line to mark it procured, or use “Mark all” for a whole bill item."
             : "Re-save this project from the plugin to enable procurement marking here."}
         </div>
       </div>
 
       {hasBreakdown ? (
-        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-adlm-dark-border dark:bg-white/5">
-          {[
-            { id: "breakdown", label: "Breakdown" },
-            { id: "schedule", label: "Buy schedule" },
-          ].map((opt) => {
-            const active = view === opt.id;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setView(opt.id)}
-                className={[
-                  "rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
-                  active
-                    ? "bg-white text-adlm-blue-700 shadow-sm dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                    : "text-slate-600 hover:text-slate-900 dark:text-adlm-dark-muted dark:hover:text-white",
-                ].join(" ")}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-adlm-dark-border dark:bg-white/5">
+            {[
+              { id: "breakdown", label: "Breakdown" },
+              { id: "schedule", label: "Buy schedule" },
+            ].map((opt) => {
+              const active = view === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setView(opt.id)}
+                  className={[
+                    "rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+                    active
+                      ? "bg-white text-adlm-blue-700 shadow-sm dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                      : "text-slate-600 hover:text-slate-900 dark:text-adlm-dark-muted dark:hover:text-white",
+                  ].join(" ")}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {view === "breakdown" ? (
+            <div className="relative min-w-[220px] flex-1 max-w-sm">
+              <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search material / labour…"
+                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-8 text-xs text-slate-900 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                  title="Clear search"
+                >
+                  <FaTimes className="text-xs" />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -546,170 +726,374 @@ export default function ProjectBudgetTab({
           </div>
         </div>
       ) : (
-        <div className="space-y-5">
-          {sections.map((section) => (
-            <div key={section.category} className="space-y-3">
-              {hasRealCategories ? (
-                <div className="flex items-center justify-between gap-2 px-1 pt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
-                      {section.category}
+        <div className="relative flex gap-4">
+          {railSections.length > 1 ? (
+            <SectionRail
+              title="Budget sections"
+              sections={railSections}
+              scrollOffset={96}
+              onScrollTop={() => scrollToRef(topRef.current)}
+              onScrollBottom={() => scrollToRef(bottomRef.current)}
+            />
+          ) : null}
+
+          <div className="min-w-0 flex-1 space-y-5">
+            <div ref={topRef} className="scroll-mt-24" aria-hidden="true" />
+
+            {sections.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
+                No lines match “{query}”.
+              </div>
+            ) : null}
+
+            {sections.map((section) => (
+              <div
+                key={section.category}
+                ref={(el) => {
+                  sectionRefs.current[section.category] = el;
+                }}
+                className="space-y-3 scroll-mt-24"
+              >
+                {hasRealCategories ? (
+                  <div className="flex items-center justify-between gap-2 px-1 pt-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
+                        {section.category}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-adlm-dark-muted">
+                        {section.groups.length} item
+                        {section.groups.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
+                      &#8358;{money(section.cost)}
                     </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-adlm-dark-muted">
-                      {section.groups.length} item
-                      {section.groups.length === 1 ? "" : "s"}
-                    </span>
                   </div>
-                  <span className="text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
-                    &#8358;{money(section.cost)}
-                  </span>
-                </div>
-              ) : null}
-              {section.groups.map((g) => (
-            <div
-              key={g.key}
-              className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth"
-            >
-              {/* Bill-line header + rolled-up status. */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">
-                    {g.label}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-                    {g.total} line{g.total === 1 ? "" : "s"} ·{" "}
-                    {showMaterials ? "procured" : "done"} {g.doneCount}/{g.total}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    &#8358;{money(g.cost)}
-                  </span>
-                  <span
-                    className={[
-                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                      g.allDone
-                        ? "bg-emerald-100 text-emerald-800"
-                        : g.doneCount > 0
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-adlm-dark-muted",
-                    ].join(" ")}
-                  >
-                    {g.allDone
-                      ? "Complete"
-                      : g.doneCount > 0
-                        ? "Part"
-                        : "Pending"}
-                  </span>
-                  {canMark ? (
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => markGroup(g, !g.allDone)}
-                      className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-adlm-dark-border dark:text-adlm-dark-muted dark:hover:bg-white/5"
-                      title={g.allDone ? "Unmark all lines" : "Mark all lines procured"}
+                ) : null}
+
+                {section.groups.map((g) => {
+                  const oh = effOH(g);
+                  const pr = effPR(g);
+                  const billAmount = billAmountOf(g);
+                  const billRate = billRateOf(g);
+                  const shown = g.shownLines || g.lines;
+                  return (
+                    <div
+                      key={g.key}
+                      className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth"
                     >
-                      {g.allDone ? "Unmark all" : "Mark all"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 dark:bg-white/5 text-left text-slate-600 dark:text-adlm-dark-muted">
-                    <tr>
-                      <th className="px-3 py-2">Type</th>
-                      <th className="px-3 py-2">Resource</th>
-                      <th className="px-3 py-2">Unit</th>
-                      <th className="px-3 py-2 text-right">Qty</th>
-                      <th className="px-3 py-2 text-right">Rate</th>
-                      <th className="px-3 py-2 text-right">Amount</th>
-                      <th className="px-3 py-2 text-center">
-                        {showMaterials ? "Procured" : "Done"}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.lines.map((l, i) => {
-                      const meta = kindMeta(l?.componentKind);
-                      const Icon = meta.icon;
-                      const amount = safeNum(l.qty) * safeNum(l.rate);
-                      const done = lineDone(l);
-                      return (
-                        <tr
-                          key={`${g.key}-${i}`}
-                          className="border-t border-slate-100 dark:border-adlm-dark-border"
-                        >
-                          <td className="px-3 py-2">
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.cls}`}
-                            >
-                              <Icon className="text-[9px]" />
-                              {meta.label}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 font-medium text-slate-800 dark:text-adlm-dark-text">
-                            <span className="line-clamp-1" title={lineName(l)}>
-                              {lineName(l)}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
-                            {l?.unit || ""}
-                          </td>
-                          <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
-                            {money(l?.qty)}
-                          </td>
-                          <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
-                            {money(l?.rate)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">
-                            {money(amount)}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            {canMark ? (
+                      {/* Bill-line header + rolled-up status. */}
+                      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+                            {g.label}
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+                            {g.total} line{g.total === 1 ? "" : "s"} ·{" "}
+                            {showMaterials ? "procured" : "done"} {g.doneCount}/
+                            {g.total}
+                            {g.billQty > 0 ? (
+                              <>
+                                {" "}
+                                · bill {money(g.billQty)} {g.billUnit}
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                          {/* Overhead / Profit. */}
+                          <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-adlm-dark-muted">
+                            <label className="inline-flex items-center gap-1">
+                              O/H
                               <input
-                                type="checkbox"
-                                checked={done}
-                                disabled={saving}
-                                onChange={() => toggleLine(l)}
-                                className="h-4 w-4 cursor-pointer accent-emerald-600 disabled:opacity-50"
-                                title={done ? "Mark not procured" : "Mark procured"}
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                disabled={!canEdit || saving}
+                                value={
+                                  opDraft[g.key]?.overheadPercent != null
+                                    ? opDraft[g.key].overheadPercent
+                                    : g.overheadPercent || ""
+                                }
+                                onChange={(e) =>
+                                  setOpDraft((p) => ({
+                                    ...p,
+                                    [g.key]: {
+                                      ...p[g.key],
+                                      overheadPercent: e.target.value,
+                                    },
+                                  }))
+                                }
+                                onBlur={() =>
+                                  opDraft[g.key] != null
+                                    ? commitGroupMarkup(g, oh, pr)
+                                    : null
+                                }
+                                placeholder="0"
+                                className="w-12 rounded-md border border-slate-200 bg-white px-1 py-0.5 text-right text-[11px] text-slate-900 disabled:opacity-50 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
                               />
-                            ) : done ? (
-                              <span className={`font-semibold ${doneTone}`}>✓</span>
-                            ) : (
-                              <span className="text-slate-300 dark:text-adlm-dark-dim">
-                                —
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-              ))}
-            </div>
-          ))}
+                              %
+                            </label>
+                            <label className="inline-flex items-center gap-1">
+                              Profit
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                disabled={!canEdit || saving}
+                                value={
+                                  opDraft[g.key]?.profitPercent != null
+                                    ? opDraft[g.key].profitPercent
+                                    : g.profitPercent || ""
+                                }
+                                onChange={(e) =>
+                                  setOpDraft((p) => ({
+                                    ...p,
+                                    [g.key]: {
+                                      ...p[g.key],
+                                      profitPercent: e.target.value,
+                                    },
+                                  }))
+                                }
+                                onBlur={() =>
+                                  opDraft[g.key] != null
+                                    ? commitGroupMarkup(g, oh, pr)
+                                    : null
+                                }
+                                placeholder="0"
+                                className="w-12 rounded-md border border-slate-200 bg-white px-1 py-0.5 text-right text-[11px] text-slate-900 disabled:opacity-50 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
+                              />
+                              %
+                            </label>
+                          </div>
+                          {/* Net + derived bill rate. */}
+                          <div className="text-right leading-tight">
+                            <div className="text-[10px] text-slate-400 dark:text-adlm-dark-dim">
+                              net &#8358;{money(g.net)}
+                            </div>
+                            <div className="text-sm font-bold text-slate-900 dark:text-white">
+                              &#8358;{money(billAmount)}
+                            </div>
+                            {g.billQty > 0 ? (
+                              <div className="text-[10px] text-adlm-orange">
+                                rate &#8358;{money(billRate)}/{g.billUnit}
+                              </div>
+                            ) : null}
+                          </div>
+                          <span
+                            className={[
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                              g.allDone
+                                ? "bg-emerald-100 text-emerald-800"
+                                : g.doneCount > 0
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-adlm-dark-muted",
+                            ].join(" ")}
+                          >
+                            {g.allDone
+                              ? "Complete"
+                              : g.doneCount > 0
+                                ? "Part"
+                                : "Pending"}
+                          </span>
+                          {canEdit ? (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => markGroup(g, !g.allDone)}
+                              className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-adlm-dark-border dark:text-adlm-dark-muted dark:hover:bg-white/5"
+                              title={
+                                g.allDone
+                                  ? "Unmark all lines"
+                                  : "Mark all lines procured"
+                              }
+                            >
+                              {g.allDone ? "Unmark all" : "Mark all"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
 
-          {/* Compact totals — a single line, not a dashboard. */}
-          <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 px-5 py-3 text-sm">
-            <span className="text-slate-600 dark:text-adlm-dark-muted">
-              {showMaterials ? "Procured" : "Done"} to date:{" "}
-              <b className="text-slate-900 dark:text-white">
-                &#8358;{money(procuredTotal)}
-              </b>
-            </span>
-            <span className="text-slate-600 dark:text-adlm-dark-muted">
-              Budget total:{" "}
-              <b className="text-adlm-orange">&#8358;{money(budgetTotal)}</b>
-            </span>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 dark:bg-white/5 text-left text-slate-600 dark:text-adlm-dark-muted">
+                            <tr>
+                              <th className="px-3 py-2">Type</th>
+                              <th className="px-3 py-2">Resource</th>
+                              <th className="px-3 py-2">Unit</th>
+                              <th className="px-3 py-2 text-right">Qty</th>
+                              <th className="px-3 py-2 text-right">Rate</th>
+                              <th className="px-3 py-2 text-right">Amount</th>
+                              <th className="px-3 py-2 text-center">
+                                {showMaterials ? "Procured" : "Done"}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {shown.map((l) => {
+                              const meta = kindMeta(l?.componentKind);
+                              const Icon = meta.icon;
+                              const amount = safeNum(l.qty) * safeNum(l.rate);
+                              const done = lineDone(l);
+                              return (
+                                <tr
+                                  key={`${g.key}-${keyOf(l)}`}
+                                  className="border-t border-slate-100 dark:border-adlm-dark-border"
+                                >
+                                  <td className="px-3 py-2">
+                                    <span
+                                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.cls}`}
+                                    >
+                                      <Icon className="text-[9px]" />
+                                      {meta.label}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 font-medium text-slate-800 dark:text-adlm-dark-text">
+                                    <span
+                                      className="line-clamp-1"
+                                      title={lineName(l)}
+                                    >
+                                      {lineName(l)}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
+                                    {l?.unit || ""}
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
+                                    {money(l?.qty)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
+                                    {canEdit ? (
+                                      <div className="ml-auto w-28">
+                                        <RateCell
+                                          value={
+                                            safeNum(l.rate) ? l.rate : ""
+                                          }
+                                          placeholder="0"
+                                          onChange={(v) => updateLineRate(l, v)}
+                                          onSearchRateGen={onSearchRateGen}
+                                          canRateGenBoq={Boolean(
+                                            canRateGen && onSearchRateGen,
+                                          )}
+                                          boqCandidates={[]}
+                                          itemUnit={l?.unit || ""}
+                                          itemDescription={lineName(l)}
+                                        />
+                                      </div>
+                                    ) : (
+                                      money(l?.rate)
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-semibold text-slate-900 dark:text-white">
+                                    {money(amount)}
+                                  </td>
+                                  <td className="px-3 py-2 text-center">
+                                    {canEdit ? (
+                                      <input
+                                        type="checkbox"
+                                        checked={done}
+                                        disabled={saving}
+                                        onChange={() => toggleLine(l)}
+                                        className="h-4 w-4 cursor-pointer accent-emerald-600 disabled:opacity-50"
+                                        title={
+                                          done
+                                            ? "Mark not procured"
+                                            : "Mark procured"
+                                        }
+                                      />
+                                    ) : done ? (
+                                      <span
+                                        className={`font-semibold ${doneTone}`}
+                                      >
+                                        ✓
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-300 dark:text-adlm-dark-dim">
+                                        —
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* Compact totals. */}
+            <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 px-5 py-3 text-sm">
+              <span className="text-slate-600 dark:text-adlm-dark-muted">
+                {showMaterials ? "Procured" : "Done"} to date:{" "}
+                <b className="text-slate-900 dark:text-white">
+                  &#8358;{money(procuredTotal)}
+                </b>
+              </span>
+              <span className="text-slate-600 dark:text-adlm-dark-muted">
+                Net build-up:{" "}
+                <b className="text-slate-900 dark:text-white">
+                  &#8358;{money(budgetTotal)}
+                </b>
+              </span>
+              <span className="text-slate-600 dark:text-adlm-dark-muted">
+                Bill total (incl. O&amp;P):{" "}
+                <b className="text-adlm-orange">&#8358;{money(billTotal)}</b>
+              </span>
+            </div>
+
+            <div ref={bottomRef} aria-hidden="true" />
           </div>
         </div>
       )}
+
+      {/* Floating Material/Labour total for the active search. */}
+      {view === "breakdown" && floatTotals && floatTotals.length ? (
+        <div className="fixed bottom-6 left-6 z-30 w-72 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-depth backdrop-blur dark:border-adlm-dark-border dark:bg-adlm-dark-panel/95">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-900 dark:text-white">
+              “{query}” totals
+            </span>
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="rounded p-0.5 text-slate-400 hover:text-slate-700"
+              title="Clear"
+            >
+              <FaTimes className="text-[10px]" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {floatTotals.map((t) => (
+              <div
+                key={t.label}
+                className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 dark:border-adlm-dark-border dark:bg-white/5"
+              >
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-800 dark:text-adlm-dark-text">
+                  <span>{t.label}</span>
+                  <span className="text-slate-500 dark:text-adlm-dark-muted">
+                    {t.count} line{t.count === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-600 dark:text-adlm-dark-muted">
+                  Qty: <b>{qtyByUnitText(t.qtyByUnit)}</b>
+                </div>
+                <div className="mt-0.5 flex items-center gap-3 text-[10px]">
+                  <span className="text-emerald-700 dark:text-emerald-400">
+                    {pct(t.done, t.count)}% available
+                  </span>
+                  <span className="text-adlm-blue-700 dark:text-adlm-blue-300">
+                    {pct(t.priced, t.count)}% priced
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
