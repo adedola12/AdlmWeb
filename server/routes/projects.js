@@ -2032,25 +2032,71 @@ async function getProject(req, res) {
       if (categoryDirty) await project.save();
     }
 
-    // Lazy budget heal for legacy projects (saved before the linker existed):
-    // consolidate materialItems → budgetItems when missing, link each line to
-    // its bill line (so material + labour bundle), and derive bill rates from
-    // any priced build-up. Idempotent + version-neutral (like the backfills
-    // above), so opening an OLD project fixes it with no re-save needed.
+    // Lazy budget heal. Opening a project re-derives the Budget from the
+    // authoritative materialItems so material + labour bundle correctly under
+    // each bill line — and any earlier mis-link (a material dumped onto the
+    // wrong line by the old loose matcher) is recovered. User edits
+    // (procurement + pricing) are preserved by a stable key, and we only write
+    // when the linkage/shape actually changed (idempotent — no churn on opens).
     try {
-      const hasBudget =
-        Array.isArray(project.budgetItems) && project.budgetItems.length;
+      const currentBudget = Array.isArray(project.budgetItems)
+        ? project.budgetItems
+        : [];
       const hasMaterials =
         Array.isArray(project.materialItems) && project.materialItems.length;
-      let budgetDirty = false;
-      if (!hasBudget && hasMaterials) {
-        project.budgetItems = sanitizeBudgetItems(project.materialItems);
-        budgetDirty = true;
-      }
-      if (Array.isArray(project.budgetItems) && project.budgetItems.length) {
+
+      const editKey = (b) =>
+        [
+          Number(b?.sn) || 0,
+          String(b?.materialName || b?.description || "").trim().toLowerCase(),
+          String(b?.unit || "").trim().toLowerCase(),
+          String(b?.componentKind || "").trim().toLowerCase(),
+        ].join("|");
+      const linkSig = (list) =>
+        (list || [])
+          .map(
+            (b) =>
+              `${b.sn}:${String(b.billIdentity || "").toLowerCase()}:${String(
+                b.materialName || "",
+              )
+                .trim()
+                .toLowerCase()}`,
+          )
+          .join("|");
+
+      if (hasMaterials) {
+        const edits = new Map();
+        for (const b of currentBudget) edits.set(editKey(b), b);
+
+        const fresh = sanitizeBudgetItems(project.materialItems);
+        for (const b of fresh) {
+          const prev = edits.get(editKey(b));
+          if (!prev) continue;
+          if (prev.procured) {
+            b.procured = true;
+            b.procuredAt = prev.procuredAt || b.procuredAt;
+          }
+          if (Number(prev.procuredPercent)) b.procuredPercent = prev.procuredPercent;
+          if (Number(prev.rate)) b.rate = prev.rate;
+          if (Number(prev.overheadPercent)) b.overheadPercent = prev.overheadPercent;
+          if (Number(prev.profitPercent)) b.profitPercent = prev.profitPercent;
+        }
+        backfillBudgetLinks(project.items, fresh);
+
+        const changed =
+          currentBudget.length !== fresh.length ||
+          linkSig(currentBudget) !== linkSig(fresh);
+        project.budgetItems = fresh;
+        const { updated } = deriveBillRatesFromBudget(project);
+        if (changed || updated > 0) {
+          project.markModified("budgetItems");
+          project.markModified("items");
+          await project.save();
+        }
+      } else if (currentBudget.length) {
         const { linked } = backfillBudgetLinks(project.items, project.budgetItems);
         const { updated } = deriveBillRatesFromBudget(project);
-        if (budgetDirty || linked > 0 || updated > 0) {
+        if (linked > 0 || updated > 0) {
           project.markModified("budgetItems");
           if (updated > 0) project.markModified("items");
           await project.save();

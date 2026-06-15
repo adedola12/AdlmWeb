@@ -1271,6 +1271,21 @@ export default function ProjectBillTable({
         refGetter: () => categoryAnchorRef.current?.[cat] || null,
       });
     }
+    // Empty categories/sections (e.g. one you just created) — surfaced so they
+    // are findable in Quick Jump and you can scroll to their drop zone.
+    if (!itemQuery) {
+      for (const cat of Array.isArray(activeCanonical) ? activeCanonical : []) {
+        const c = String(cat || "").trim();
+        if (!c || c === "Uncategorized" || c === "Other") continue;
+        if (groupedRows.some((g) => g.category === c)) continue;
+        out.push({
+          id: `cat-${c}`,
+          label: c,
+          badge: isTradeGrouping ? "Trade" : "Cat",
+          refGetter: () => categoryAnchorRef.current?.[c] || null,
+        });
+      }
+    }
     // The three "extra scope" sections — only added when they have
     // mount targets in the DOM. preliminarySectionRef etc. are nulled
     // when the section isn't rendered, so refGetter returning null
@@ -1303,7 +1318,7 @@ export default function ProjectBillTable({
     // groupedRows + the section refs change rarely, so this memo is
     // cheap; the refs themselves don't trigger a recompute by design
     // (they're populated by mount callbacks).
-  }, [groupedRows, isTradeGrouping]);
+  }, [groupedRows, isTradeGrouping, activeCanonical, itemQuery]);
 
   return (
     <div className="relative flex gap-4">

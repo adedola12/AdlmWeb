@@ -54,6 +54,33 @@ test("resolveBillIdentity: title match when no code/elements", () => {
   assert.equal(resolveBillIdentity(labour, idx), "C-CEIL");
 });
 
+test("resolveBillIdentity: no match without an element majority (no collapse)", () => {
+  const items = [
+    { code: "A", elementIds: [1, 2, 3, 4] },
+    { code: "B", elementIds: [5, 6, 7, 8] },
+  ];
+  const idx = buildBillIndex(items);
+  // Shares only 1 of its 4 elements with A → not a majority → stays unlinked
+  // (rather than being dumped onto A).
+  assert.equal(resolveBillIdentity({ elementIds: [1, 90, 91, 92] }, idx), "");
+});
+
+test("resolveAll: a foreign material does NOT collapse onto an unrelated bill line", () => {
+  // Bill: a tiny "Blinding" line + a big "Blockwork" line, distinct elements.
+  const items = [
+    { code: "BLIND", description: "Strip – Blinding", elementIds: [1, 2] },
+    { code: "BLOCK", description: "Blockwork – Wall", elementIds: [10, 11, 12, 13] },
+  ];
+  const lines = [
+    { componentKind: "Labour", sourceTakeoffCode: "BLIND", elementIds: [1, 2] },
+    // Blocks live on the blockwork elements — must land on BLOCK, never BLIND.
+    { componentKind: "Material", materialName: "Blocks", elementIds: [10, 11, 12] },
+  ];
+  const codes = resolveAll(items, lines);
+  assert.equal(codes[0], "BLIND");
+  assert.equal(codes[1], "BLOCK");
+});
+
 test("resolveAll: material bundles onto its labour's bill code via shared element", () => {
   // Bill line carries NO elementIds, so the material can only reach it through
   // the labour line (which has the bill code + the work item's elements).
