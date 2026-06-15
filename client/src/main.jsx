@@ -46,6 +46,7 @@ import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
+import JoinProject from "./pages/JoinProject.jsx";
 import RateGenLibrary from "./pages/RateGenLibrary.jsx";
 import AdminRateGen from "./pages/AdminRateGen.jsx";
 import AdminAddRate from "./pages/AdminAddRate.jsx";
@@ -206,6 +207,17 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <ProjectsGeneric />
+          </ProtectedRoute>
+        ),
+      },
+
+      // Short share link / QR target — redeems a collaborator code then
+      // forwards into the project.
+      {
+        path: "j/:code",
+        element: (
+          <ProtectedRoute>
+            <JoinProject />
           </ProtectedRoute>
         ),
       },
