@@ -896,6 +896,24 @@ export default function ProjectBillTable({
   // Drag-and-drop reorder state
   const [dragIdx, setDragIdx] = useState(null);    // items-array index being dragged
   const [dragOverIdx, setDragOverIdx] = useState(null); // items-array index being hovered
+  // Category/section header being hovered while dragging a row — drop there to
+  // re-assign the dragged item to that category (or trade in trade mode).
+  const [dragOverCat, setDragOverCat] = useState(null);
+
+  // Assign the dragged bill item to a category/section. Marks dirty → Save
+  // persists it and the server learns the mapping for future projects.
+  const assignDraggedToCategory = useCallback(
+    (category) => {
+      if (dragIdx == null) return;
+      const trade = String(groupByMode || "category") === "trade";
+      if (trade) onTradeChange?.(dragIdx, category);
+      else onCategoryChange?.(dragIdx, category);
+      setDragIdx(null);
+      setDragOverIdx(null);
+      setDragOverCat(null);
+    },
+    [dragIdx, groupByMode, onTradeChange, onCategoryChange],
+  );
 
   // Ribbon tab state — mirrors MS Office ribbon (Home / Rates / Navigate / Extras)
   const [ribbonTab, setRibbonTab] = useState("home");
@@ -1434,10 +1452,10 @@ export default function ProjectBillTable({
                     Trade
                   </button>
                 </div>
-                <div className="text-[10px] text-slate-500 max-w-[160px] leading-tight">
+                <div className="text-[10px] text-slate-500 max-w-[180px] leading-tight">
                   {isTradeGrouping
-                    ? "Items are grouped by the work being done. Overrides train the learner."
-                    : "Items are grouped by the element they belong to."}
+                    ? "Grouped by the work being done. Drag a row onto a section to re-file it — learned for next time."
+                    : "Grouped by the element they belong to. Drag a row onto a category to re-file it — learned for next time."}
                 </div>
                 {(isTradeGrouping ? onAddTrade : onAddCategory) ? (
                   <button
@@ -1883,8 +1901,26 @@ export default function ProjectBillTable({
                     ref={(el) => {
                       categoryAnchorRef.current[category] = el;
                     }}
-                    className="border-t-2 border-adlm-blue-200 bg-slate-100 scroll-mt-24"
+                    className={[
+                      "border-t-2 border-adlm-blue-200 scroll-mt-24 transition-colors",
+                      dragOverCat === category && dragIdx != null
+                        ? "bg-adlm-blue-100 outline-dashed outline-2 outline-adlm-blue-400"
+                        : "bg-slate-100",
+                    ].join(" ")}
                     data-section={`cat-${category}`}
+                    onDragOver={(e) => {
+                      if (dragIdx == null) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDragOverCat(category);
+                    }}
+                    onDragLeave={() =>
+                      setDragOverCat((prev) => (prev === category ? null : prev))
+                    }
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      assignDraggedToCategory(category);
+                    }}
                   >
                     <td colSpan={totalCols} className="px-3 py-2">
                       <div className="flex items-center justify-between">
@@ -1892,7 +1928,13 @@ export default function ProjectBillTable({
                           {category}
                         </span>
                         <span className="text-[11px] text-slate-600">
-                          {rows.length} {rows.length === 1 ? "item" : "items"}
+                          {dragOverCat === category && dragIdx != null ? (
+                            <span className="font-semibold text-adlm-blue-700">
+                              Drop to move here
+                            </span>
+                          ) : (
+                            `${rows.length} ${rows.length === 1 ? "item" : "items"}`
+                          )}
                         </span>
                       </div>
                     </td>
@@ -2392,6 +2434,86 @@ export default function ProjectBillTable({
                   </tr>
                 </React.Fragment>
               ))}
+
+              {/* Empty categories/sections (e.g. ones you just created) render
+                  as drop zones so you can drag work items into them. Hidden
+                  while searching to avoid clutter. */}
+              {!itemQuery
+                ? activeCanonical
+                    .filter(
+                      (c) =>
+                        c &&
+                        c !== "Uncategorized" &&
+                        c !== "Other" &&
+                        !groupedRows.some((g) => g.category === c),
+                    )
+                    .map((category) => (
+                      <React.Fragment key={`empty-cat-${category}`}>
+                        <tr
+                          ref={(el) => {
+                            categoryAnchorRef.current[category] = el;
+                          }}
+                          className={[
+                            "border-t-2 border-adlm-blue-200 scroll-mt-24 transition-colors",
+                            dragOverCat === category && dragIdx != null
+                              ? "bg-adlm-blue-100 outline-dashed outline-2 outline-adlm-blue-400"
+                              : "bg-slate-100",
+                          ].join(" ")}
+                          data-section={`cat-${category}`}
+                          onDragOver={(e) => {
+                            if (dragIdx == null) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            setDragOverCat(category);
+                          }}
+                          onDragLeave={() =>
+                            setDragOverCat((prev) =>
+                              prev === category ? null : prev,
+                            )
+                          }
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            assignDraggedToCategory(category);
+                          }}
+                        >
+                          <td colSpan={totalCols} className="px-3 py-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-slate-900">
+                                {category}
+                              </span>
+                              <span className="text-[11px] text-slate-600">
+                                {dragOverCat === category && dragIdx != null ? (
+                                  <span className="font-semibold text-adlm-blue-700">
+                                    Drop to move here
+                                  </span>
+                                ) : (
+                                  "empty"
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr
+                          onDragOver={(e) => {
+                            if (dragIdx == null) return;
+                            e.preventDefault();
+                            setDragOverCat(category);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            assignDraggedToCategory(category);
+                          }}
+                        >
+                          <td
+                            colSpan={totalCols}
+                            className="px-3 py-4 text-center text-[11px] text-slate-400"
+                          >
+                            Drag a work item here to file it under “{category}”.
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    ))
+                : null}
             </tbody>
 
             <tfoot className="bg-slate-50">
