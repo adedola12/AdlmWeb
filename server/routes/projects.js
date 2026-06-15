@@ -14,10 +14,124 @@ function normalizeLockPin(value) {
   return /^\d{4}$/.test(str) ? str : null;
 }
 
-// Strip server-secret fields before serialising a project to the client.
-// Today: the contract lock PIN hash. Returns a plain object — safe to
-// JSON.stringify.
-function projectForClient(project) {
+// Zero/null every rate & money field on a (plain-object) project payload.
+// Honours the RateGen rule: a collaborator WITHOUT an active rategen
+// subscription may see quantities / descriptions / progress but NOT pricing.
+// Quantities, units, %complete, categories, dates, flags and percentages are
+// intentionally preserved — only currency amounts are stripped.
+function maskRates(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+
+  const blankItem = (it) => {
+    if (!it || typeof it !== "object") return;
+    it.rate = 0;
+    it.actualRate = null;
+    it.netUnitCost = null;
+    it.overheadPercent = null;
+    it.profitPercent = null;
+  };
+  (obj.items || []).forEach(blankItem);
+  (obj.materialItems || []).forEach(blankItem);
+
+  (obj.budgetItems || []).forEach((b) => {
+    if (!b || typeof b !== "object") return;
+    b.rate = 0;
+    b.netUnitCost = 0;
+    b.overheadPercent = 0;
+    b.profitPercent = 0;
+    b.budgetRate = 0;
+  });
+
+  (obj.provisionalSums || []).forEach((p) => {
+    if (p && typeof p === "object") p.amount = 0;
+  });
+  (obj.preliminaryItems || []).forEach((p) => {
+    if (p && typeof p === "object") p.actualAmount = 0;
+  });
+  (obj.variations || []).forEach((v) => {
+    if (v && typeof v === "object") v.rate = 0;
+  });
+
+  const CERT_MONEY = [
+    "cumulativeValue", "lessPrevious", "thisCertificate", "retentionAmount",
+    "retentionReleased", "vatAmount", "whtAmount", "netPayable",
+  ];
+  (obj.certificates || []).forEach((c) => {
+    if (!c || typeof c !== "object") return;
+    CERT_MONEY.forEach((k) => {
+      if (c[k] !== undefined) c[k] = 0;
+    });
+  });
+
+  // FinalAccount: every numeric field on it is a money figure.
+  if (obj.finalAccount && typeof obj.finalAccount === "object") {
+    Object.keys(obj.finalAccount).forEach((k) => {
+      if (typeof obj.finalAccount[k] === "number") obj.finalAccount[k] = 0;
+    });
+  }
+
+  if (obj.contract && typeof obj.contract === "object") {
+    [
+      "contractSum", "measuredAtLock", "provisionalAtLock", "preliminaryAtLock",
+      "contingencyAtLock", "taxAtLock",
+    ].forEach((k) => {
+      if (obj.contract[k] !== undefined) obj.contract[k] = 0;
+    });
+    (obj.contract.baseItems || []).forEach((bi) => {
+      if (bi && typeof bi === "object") bi.rate = 0;
+    });
+  }
+
+  (obj.valuationEvents || []).forEach((e) => {
+    if (!e || typeof e !== "object") return;
+    if (e.rate !== undefined) e.rate = 0;
+    if (e.amount !== undefined) e.amount = 0;
+  });
+
+  // PM costs are derived from BoQ rates — strip them too.
+  if (obj.projectManagement && typeof obj.projectManagement === "object") {
+    obj.projectManagement.budgetOverride = 0;
+    (obj.projectManagement.tasks || []).forEach((t) => {
+      if (!t || typeof t !== "object") return;
+      t.baselineCost = 0;
+      t.actualCost = 0;
+    });
+  }
+
+  return obj;
+}
+
+// Mask the money fields on a single certificate / final-account object before
+// returning it from a mutation handler to a collaborator without RateGen. (The
+// full GET payload is masked by maskRates(); these partial write responses
+// compute fresh money that bypasses it, so they need the same treatment.)
+function maskCertForClient(cert) {
+  const c = cert?.toObject ? cert.toObject() : { ...(cert || {}) };
+  [
+    "cumulativeValue", "lessPrevious", "thisCertificate", "retentionAmount",
+    "retentionReleased", "vatAmount", "whtAmount", "netPayable",
+  ].forEach((k) => {
+    if (c[k] !== undefined) c[k] = 0;
+  });
+  return c;
+}
+function maskFinalAccountForClient(fa) {
+  const f = fa?.toObject ? fa.toObject() : { ...(fa || {}) };
+  Object.keys(f).forEach((k) => {
+    if (typeof f[k] === "number") f[k] = 0;
+  });
+  return f;
+}
+
+// Strip server-secret fields before serialising a project to the client and
+// apply collaborator-aware visibility. `access` comes from
+// resolveProjectAccess(); when omitted we default to full owner visibility
+// (the historical behaviour — only ever used for owner-served data).
+//   • contract lock PIN hash → boolean flag (never leak the hash)
+//   • shareCodes / collaborators → owner-only (shaped, no hashes)
+//   • rate/amount fields → masked unless access.canSeeRates
+//   • attaches `_access` so the client can gate edit/export/manage + rates
+function projectForClient(project, access) {
   if (!project) return project;
   const obj = project?.toObject ? project.toObject() : { ...project };
   if (obj?.contract && obj.contract.lockPinHash !== undefined) {
@@ -27,12 +141,71 @@ function projectForClient(project) {
     obj.contract.hasLockPin = Boolean(obj.contract.lockPinHash);
     delete obj.contract.lockPinHash;
   }
+
+  const canManage = access ? !!access.canManage : true;
+  const canSeeRates = access ? !!access.canSeeRates : true;
+
+  if (canManage) {
+    // Owner view: expose share codes (plaintext for re-copy, never the hash)
+    // and the collaborator roster.
+    if (Array.isArray(obj.shareCodes)) {
+      obj.shareCodes = obj.shareCodes
+        .filter((c) => c && !c.revoked)
+        .map((c) => ({
+          id: String(c._id),
+          codePlain: c.codePlain || "",
+          codeLast4: c.codeLast4 || "",
+          accessLevel: c.accessLevel,
+          label: c.label || "",
+          allowedEmails: c.allowedEmails || [],
+          maxUses: c.maxUses || 0,
+          uses: c.uses || 0,
+          createdAt: c.createdAt,
+        }));
+    }
+    if (Array.isArray(obj.collaborators)) {
+      obj.collaborators = obj.collaborators.map((c) => ({
+        userId: String(c.userId),
+        email: c.email || "",
+        accessLevel: c.accessLevel,
+        addedAt: c.addedAt,
+      }));
+    }
+  } else {
+    // Collaborators never receive the code/roster internals.
+    delete obj.shareCodes;
+    delete obj.collaborators;
+  }
+
+  if (!canSeeRates) {
+    maskRates(obj);
+    obj._ratesMasked = true;
+  }
+
+  obj._access = access
+    ? {
+        role: access.role,
+        accessLevel: access.accessLevel || null,
+        canEdit: !!access.canEdit,
+        canExport: !!access.canExport,
+        canManage: !!access.canManage,
+        canSeeRates: !!access.canSeeRates,
+      }
+    : {
+        role: "owner",
+        accessLevel: null,
+        canEdit: true,
+        canExport: true,
+        canManage: true,
+        canSeeRates: true,
+      };
   return obj;
 }
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { User } from "../models/User.js";
+import { Product } from "../models/Product.js";
 import {
   deriveItemCategory,
   deriveItemTrade,
@@ -113,6 +286,69 @@ function mapEntitlementParam(req, _res, next) {
 
 function requestedProductKey(req) {
   return normalizeProductKey(req.productKeyOriginal ?? req.params.productKey);
+}
+
+// ── Collaborator access resolution ───────────────────────────────────────
+// True when `userId` holds an active, unexpired entitlement for `key`. Mirrors
+// requireEntitlement() — used for the RateGen rate-mask decision and the
+// claim-time plugin gate.
+async function userHasActiveEntitlement(userId, key) {
+  if (!userId || !key) return false;
+  const u = await User.findById(userId, { entitlements: 1 }).lean();
+  if (!u) return false;
+  const e = (u.entitlements || []).find(
+    (x) => x.productKey === key && x.status === "active",
+  );
+  if (!e) return false;
+  if (e.expiresAt && new Date(e.expiresAt).getTime() < Date.now()) return false;
+  return true;
+}
+
+// Mongo filter matching a project the requester may READ: they own it OR are a
+// collaborator on it. Write/export/manage powers are refined by
+// resolveProjectAccess() once the document is loaded.
+function accessFilter(id, userId, productKey) {
+  return {
+    _id: id,
+    productKey,
+    $or: [{ userId }, { "collaborators.userId": userId }],
+  };
+}
+
+// Resolve what the requester may do with an already-loaded project document.
+//   role:        owner | full | view | none
+//   canEdit:     owner or full  (mutations)
+//   canExport:   owner or full  (xlsx / model download)
+//   canManage:   owner only     (codes, collaborators, delete project)
+//   canSeeRates: owner always; collaborator only with active rategen
+async function resolveProjectAccess(req, project) {
+  const uid = getUserObjectId(req);
+  const out = {
+    role: "none",
+    accessLevel: null,
+    canEdit: false,
+    canExport: false,
+    canManage: false,
+    canSeeRates: false,
+  };
+  if (!project || !uid) return out;
+
+  if (project.userId && uid.equals(project.userId)) {
+    out.role = "owner";
+    out.canEdit = out.canExport = out.canManage = out.canSeeRates = true;
+    return out;
+  }
+
+  const collab = (project.collaborators || []).find(
+    (c) => c.userId && uid.equals(c.userId),
+  );
+  if (!collab) return out; // not owner, not collaborator → no access
+
+  out.role = collab.accessLevel === "full" ? "full" : "view";
+  out.accessLevel = out.role;
+  out.canEdit = out.canExport = out.role === "full";
+  out.canSeeRates = await userHasActiveEntitlement(uid, "rategen");
+  return out;
 }
 
 const MAX_ITEMS = Number(process.env.PROJECT_MAX_ITEMS || 8000);
@@ -388,6 +624,17 @@ function sanitizeItems(items, productKey = "") {
           .filter((value) => Number.isFinite(value) && value > 0)
       : [];
 
+    // Per-element quantity split: [{ id, qty }] — one entry per element on the
+    // line so the web viewer can show a single element's share. Drop malformed
+    // entries; keep unknown extras out.
+    const elementQuantities = Array.isArray(item.elementQuantities)
+      ? item.elementQuantities
+          .map((e) => ({ id: Number(e && e.id), qty: Number(e && e.qty) }))
+          .filter(
+            (e) => Number.isFinite(e.id) && e.id > 0 && Number.isFinite(e.qty),
+          )
+      : [];
+
     // The Revit plugin's quantity takeoff sends the planned rate in actualRate
     // (its DTO has no rate field). Detect this: if rate is 0/missing but
     // actualRate has a value and no actualRecordedAt exists, promote
@@ -432,6 +679,8 @@ function sanitizeItems(items, productKey = "") {
       takeoffLine: item.takeoffLine != null ? String(item.takeoffLine) : "",
       materialName: item.materialName != null ? String(item.materialName) : "",
       elementIds,
+      elementQuantities,
+      elementQuantitiesEstimated: Boolean(item.elementQuantitiesEstimated),
       level: item.level != null ? String(item.level) : "",
       type: item.type != null ? String(item.type) : "",
       code: item.code != null ? String(item.code) : "",
@@ -544,6 +793,16 @@ function sanitizeBudgetItems(items) {
           .filter((n) => Number.isFinite(n))
           .slice(0, 5000)
       : [];
+    // Per-element quantity split copied/scaled from the source line — lets the
+    // web viewer show a single element's share of this budget line.
+    const elementQuantities = Array.isArray(b.elementQuantities)
+      ? b.elementQuantities
+          .map((e) => ({ id: Number(e && e.id), qty: Number(e && e.qty) }))
+          .filter(
+            (e) => Number.isFinite(e.id) && e.id > 0 && Number.isFinite(e.qty),
+          )
+          .slice(0, 5000)
+      : [];
     out.push({
       billIdentity,
       sn: num(b.sn),
@@ -567,6 +826,8 @@ function sanitizeBudgetItems(items) {
       supplier: String(b.supplier || "").trim().slice(0, 300),
       notes: String(b.notes || "").trim().slice(0, 1000),
       elementIds,
+      elementQuantities,
+      elementQuantitiesEstimated: Boolean(b.elementQuantitiesEstimated),
     });
   }
   return out;
@@ -1577,7 +1838,13 @@ async function listProjects(req, res) {
     };
 
     const list = await TakeoffProject.aggregate([
-      { $match: { userId, productKey } },
+      // Owner's own projects OR projects shared with this user.
+      {
+        $match: {
+          productKey,
+          $or: [{ userId }, { "collaborators.userId": userId }],
+        },
+      },
       {
         $addFields: {
           safeItems: { $ifNull: ["$items", []] },
@@ -1592,6 +1859,24 @@ async function listProjects(req, res) {
           publicShareEnabled: 1,
           updatedAt: 1,
           version: 1,
+          // Ownership badge: true when this row was shared with the requester.
+          shared: { $ne: ["$userId", userId] },
+          accessLevel: {
+            $let: {
+              vars: {
+                mine: {
+                  $first: {
+                    $filter: {
+                      input: { $ifNull: ["$collaborators", []] },
+                      as: "c",
+                      cond: { $eq: ["$$c.userId", userId] },
+                    },
+                  },
+                },
+              },
+              in: { $ifNull: ["$$mine.accessLevel", null] },
+            },
+          },
           itemCount: { $size: "$safeItems" },
           markedCount: {
             $size: {
@@ -1695,13 +1980,22 @@ async function getProject(req, res) {
       return res.status(401).json({ error: "Invalid user id in token" });
     }
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
 
-    // Lazy slug generation for existing projects without slugs
+    // Lazy slug generation for existing projects without slugs. Scope
+    // uniqueness to the OWNER's namespace (project.userId), not the requester —
+    // a collaborator opening the project must not reslug it under their own id.
     if (!project.slug) {
       const baseSlug = generateSlug(project.name);
-      project.slug = await uniqueSlug(userId, productKey, baseSlug, project._id);
+      project.slug = await uniqueSlug(
+        project.userId,
+        productKey,
+        baseSlug,
+        project._id,
+      );
       await project.save();
     }
 
@@ -1766,7 +2060,8 @@ async function getProject(req, res) {
       console.error("[get] budget heal failed:", e?.message || e);
     }
 
-    res.json(projectForClient(project));
+    const access = await resolveProjectAccess(req, project);
+    res.json(projectForClient(project, access));
   } catch (err) {
     console.error("GET project error:", err);
     res.status(500).json({ error: "Server error" });
@@ -1813,8 +2108,21 @@ async function updateProject(req, res) {
       return res.status(401).json({ error: "Invalid user id in token" });
     }
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    // Authorisation: owner or full-access collaborator may edit; view-only is
+    // rejected before any mutation. Contract-lock handling below is unchanged,
+    // so a full collaborator's edits respect locks exactly like the owner's.
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     // Snapshot bill quantities (by code) BEFORE any mutation — used by the
     // Bill → Budget cascade after save to compute which lines changed.
@@ -2138,7 +2446,7 @@ async function updateProject(req, res) {
       console.warn("Bill→Budget cascade skipped:", cascadeErr?.message || cascadeErr);
     }
 
-    res.json({ ...projectForClient(project), budgetCascade });
+    res.json({ ...projectForClient(project, access), budgetCascade });
   } catch (err) {
     console.error("PUT project error:", err);
     res.status(500).json({ error: "Server error" });
@@ -2186,15 +2494,19 @@ async function getProjectValuations(req, res) {
       return res.status(401).json({ error: "Invalid user id in token" });
     }
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey }).lean();
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    ).lean();
     if (!project) return res.status(404).json({ error: "Not found" });
 
-    // Proposed-vs-actual profit margin (spec §5). For a takeoff project we pull
-    // in the sibling derived-materials project (linked by clientProjectKey +
-    // modelFingerprint) so the cost side is built from the attached material /
-    // labour lines. For a materials project there is no sell rate, so we just
-    // surface its own lines as the cost basis.
-    const margins = await computeMarginForProject(project, userId, productKey);
+    const access = await resolveProjectAccess(req, project);
+
+    // The daily log and margins carry money. Gate on canSeeRates (owner always;
+    // collaborator only with rategen). Sibling materials are resolved against
+    // the OWNER's account so a collaborator's margin still reflects real cost.
+    const margins = access.canSeeRates
+      ? await computeMarginForProject(project, project.userId, productKey)
+      : null;
 
     res.json({
       projectId: String(project._id),
@@ -2202,8 +2514,16 @@ async function getProjectValuations(req, res) {
       productKey,
       statusField: statusFieldForProductKey(productKey),
       statusLabel: statusLabelForProductKey(productKey),
-      logs: buildValuationLogs(project, productKey),
+      logs: access.canSeeRates ? buildValuationLogs(project, productKey) : [],
       margins,
+      _ratesMasked: !access.canSeeRates,
+      _access: {
+        role: access.role,
+        canEdit: access.canEdit,
+        canExport: access.canExport,
+        canManage: access.canManage,
+        canSeeRates: access.canSeeRates,
+      },
     });
   } catch (err) {
     console.error("GET project valuations error:", err);
@@ -2255,10 +2575,15 @@ async function getProjectBySlug(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ slug, userId, productKey });
+    const project = await TakeoffProject.findOne({
+      slug,
+      productKey,
+      $or: [{ userId }, { "collaborators.userId": userId }],
+    });
     if (!project) return res.status(404).json({ error: "Not found" });
 
-    res.json(projectForClient(project));
+    const access = await resolveProjectAccess(req, project);
+    res.json(projectForClient(project, access));
   } catch (err) {
     console.error("GET project by slug error:", err);
     res.status(500).json({ error: "Server error" });
@@ -2310,8 +2635,18 @@ async function lockContract(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     const approvedAt = req.body?.approvedAt
       ? new Date(req.body.approvedAt)
@@ -2415,8 +2750,18 @@ async function unlockContract(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     // PIN check. If the contract has a stored hash, the caller must supply
     // the matching 4-digit PIN. Contracts locked before this feature
@@ -2578,8 +2923,18 @@ async function issueCertificate(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     if (project.finalAccount?.finalized) {
       return res.status(400).json({
@@ -2657,7 +3012,11 @@ async function issueCertificate(req, res) {
     project.version += 1;
     await project.save();
 
-    res.json({ ok: true, certificate: cert, version: project.version });
+    res.json({
+      ok: true,
+      certificate: access.canSeeRates ? cert : maskCertForClient(cert),
+      version: project.version,
+    });
   } catch (err) {
     console.error("POST certificate error:", err);
     res.status(500).json({ error: "Server error" });
@@ -2676,8 +3035,18 @@ async function updateCertificate(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     const idx = (project.certificates || []).findIndex(
       (c) => Number(c.number) === number,
@@ -2704,7 +3073,11 @@ async function updateCertificate(req, res) {
     project.version += 1;
     await project.save();
 
-    res.json({ ok: true, certificate: cert, version: project.version });
+    res.json({
+      ok: true,
+      certificate: access.canSeeRates ? cert : maskCertForClient(cert),
+      version: project.version,
+    });
   } catch (err) {
     console.error("PUT certificate error:", err);
     res.status(500).json({ error: "Server error" });
@@ -2723,8 +3096,18 @@ async function deleteCertificate(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     const certs = project.certificates || [];
     const idx = certs.findIndex((c) => Number(c.number) === number);
@@ -2760,8 +3143,18 @@ async function finalizeAccount(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     const rollup = computeValueToDate(project);
     const provisionalFinal = (project.provisionalSums || []).reduce(
@@ -2808,7 +3201,13 @@ async function finalizeAccount(req, res) {
     project.version += 1;
     await project.save();
 
-    res.json({ ok: true, finalAccount: project.finalAccount, version: project.version });
+    res.json({
+      ok: true,
+      finalAccount: access.canSeeRates
+        ? project.finalAccount
+        : maskFinalAccountForClient(project.finalAccount),
+      version: project.version,
+    });
   } catch (err) {
     console.error("POST finalize error:", err);
     res.status(500).json({ error: "Server error" });
@@ -2838,8 +3237,26 @@ async function exportCertificateXlsx(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canExport) {
+      return res.status(403).json({
+        error: "View-only access cannot export this project.",
+        code: "VIEW_ONLY",
+      });
+    }
+    // Priced documents (certificate / final-account workbooks) carry rates —
+    // a collaborator without an active RateGen subscription may not export them.
+    if (!access.canSeeRates) {
+      return res.status(403).json({
+        error: "A RateGen subscription is required to export priced documents.",
+        code: "RATEGEN_REQUIRED",
+      });
+    }
 
     const certs = project.certificates || [];
     const cert = certs.find((c) => Number(c.number) === number);
@@ -2877,8 +3294,26 @@ async function exportFinalAccountXlsx(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canExport) {
+      return res.status(403).json({
+        error: "View-only access cannot export this project.",
+        code: "VIEW_ONLY",
+      });
+    }
+    // Priced documents (certificate / final-account workbooks) carry rates —
+    // a collaborator without an active RateGen subscription may not export them.
+    if (!access.canSeeRates) {
+      return res.status(403).json({
+        error: "A RateGen subscription is required to export priced documents.",
+        code: "RATEGEN_REQUIRED",
+      });
+    }
 
     if (!project.finalAccount?.finalized) {
       return res
@@ -2922,8 +3357,18 @@ async function uploadProjectModel(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     const file = req.file;
     if (!file || !file.buffer || file.buffer.length === 0) {
@@ -3102,8 +3547,18 @@ async function deleteProjectModel(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     const existing = project.models?.[discipline];
     if (existing?.key) {
@@ -3144,7 +3599,13 @@ async function streamProjectModel(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    // Any collaborator (view or full) may STREAM the model for the in-browser
+    // 3D viewer — seeing the model is core view access. The "no download"
+    // restriction for view-only is enforced on the explicit xlsx export
+    // endpoints, not on the viewer stream (which would break the 3D tab).
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
 
     const model = project.models?.[discipline];
@@ -3182,8 +3643,18 @@ async function reopenFinalAccount(req, res) {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
 
-    const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     if (!project.finalAccount) project.finalAccount = {};
     project.finalAccount.finalized = false;
@@ -3191,7 +3662,13 @@ async function reopenFinalAccount(req, res) {
     project.version += 1;
     await project.save();
 
-    res.json({ ok: true, finalAccount: project.finalAccount, version: project.version });
+    res.json({
+      ok: true,
+      finalAccount: access.canSeeRates
+        ? project.finalAccount
+        : maskFinalAccountForClient(project.finalAccount),
+      version: project.version,
+    });
   } catch (err) {
     console.error("POST reopen error:", err);
     res.status(500).json({ error: "Server error" });
@@ -3661,12 +4138,18 @@ async function markBudget(req, res) {
     if (!userId) {
       return res.status(401).json({ error: "Invalid user id in token" });
     }
-    const project = await TakeoffProject.findOne({
-      _id: id,
-      userId,
-      productKey,
-    });
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, productKey),
+    );
     if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
 
     const body = req.body || {};
     if (!Array.isArray(body.budgetItems)) {
@@ -3690,9 +4173,335 @@ async function markBudget(req, res) {
     reconcileItemsFromBudget(project);
     project.version = (Number(project.version) || 0) + 1;
     await project.save();
-    return res.json(projectForClient(project));
+    return res.json(projectForClient(project, access));
   } catch (err) {
     console.error("markBudget error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// ── Collaborator share codes ─────────────────────────────────────────────
+// Crockford-ish alphabet (no I/L/O/0/1/U) — readable + typeable. The code is
+// shown grouped (XXXXX-XXXXX); the stored hash is over the normalized form
+// (uppercased, separators stripped) so casing/spacing on entry never matters.
+const SHARE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
+
+function sha256Hex(s) {
+  return crypto.createHash("sha256").update(String(s)).digest("hex");
+}
+
+function generateShareCode() {
+  const bytes = crypto.randomBytes(10);
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    out += SHARE_CODE_ALPHABET[bytes[i] % SHARE_CODE_ALPHABET.length];
+  }
+  return `${out.slice(0, 5)}-${out.slice(5, 10)}`;
+}
+
+function normalizeShareCode(s) {
+  return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function parseAllowedEmails(input) {
+  const arr = Array.isArray(input)
+    ? input
+    : String(input || "").split(/[,\s;]+/);
+  return [...new Set(arr.map((e) => String(e || "").trim().toLowerCase()).filter(Boolean))];
+}
+
+// Owner-only guard shared by the collab-management handlers. Loads the project
+// via accessFilter (so a stray collaborator 404s the same as a stranger) and
+// rejects anyone who is not the owner.
+async function loadOwnedProject(req, res) {
+  const productKey = requestedProductKey(req);
+  const id = String(req.params.id || "").trim();
+  if (!isValidObjectId(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return null;
+  }
+  const userId = getUserObjectId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Invalid user id" });
+    return null;
+  }
+  const project = await TakeoffProject.findOne(
+    accessFilter(id, userId, productKey),
+  );
+  if (!project) {
+    res.status(404).json({ error: "Not found" });
+    return null;
+  }
+  const access = await resolveProjectAccess(req, project);
+  if (!access.canManage) {
+    res.status(403).json({
+      error: "Only the project owner can manage sharing.",
+      code: "OWNER_ONLY",
+    });
+    return null;
+  }
+  return { project, userId };
+}
+
+// POST /:productKey/:id/collab/codes — owner generates a share code.
+async function createShareCode(req, res) {
+  try {
+    const owned = await loadOwnedProject(req, res);
+    if (!owned) return;
+    const { project, userId } = owned;
+
+    const accessLevel =
+      String(req.body?.accessLevel || "view").toLowerCase() === "full"
+        ? "full"
+        : "view";
+    const label = String(req.body?.label || "").trim().slice(0, 80);
+    const maxUses = Math.max(parseInt(req.body?.maxUses, 10) || 0, 0);
+    const allowedEmails = parseAllowedEmails(req.body?.allowedEmails);
+
+    const code = generateShareCode();
+    const norm = normalizeShareCode(code);
+    project.shareCodes.push({
+      codeHash: sha256Hex(norm),
+      codeLast4: norm.slice(-4),
+      codePlain: code,
+      accessLevel,
+      label,
+      allowedEmails,
+      maxUses,
+      uses: 0,
+      revoked: false,
+      createdBy: userId,
+    });
+    await project.save();
+
+    const created = project.shareCodes[project.shareCodes.length - 1];
+    return res.json({
+      ok: true,
+      code, // shown once; also re-copyable via listCollab (codePlain)
+      codeId: String(created._id),
+      accessLevel,
+      label,
+      allowedEmails,
+      maxUses,
+    });
+  } catch (err) {
+    console.error("create share code error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// GET /:productKey/:id/collab — owner lists collaborators + active codes.
+async function listCollab(req, res) {
+  try {
+    const owned = await loadOwnedProject(req, res);
+    if (!owned) return;
+    const { project } = owned;
+
+    const collaborators = (project.collaborators || []).map((c) => ({
+      userId: String(c.userId),
+      email: c.email || "",
+      accessLevel: c.accessLevel,
+      addedAt: c.addedAt,
+    }));
+    const codes = (project.shareCodes || [])
+      .filter((c) => !c.revoked)
+      .map((c) => ({
+        id: String(c._id),
+        codePlain: c.codePlain || "",
+        codeLast4: c.codeLast4 || "",
+        accessLevel: c.accessLevel,
+        label: c.label || "",
+        allowedEmails: c.allowedEmails || [],
+        maxUses: c.maxUses || 0,
+        uses: c.uses || 0,
+        createdAt: c.createdAt,
+      }));
+    return res.json({ ok: true, collaborators, codes });
+  } catch (err) {
+    console.error("list collab error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// PATCH /:productKey/:id/collab/:userId — owner changes a collaborator's level.
+async function updateCollabLevel(req, res) {
+  try {
+    const targetUserId = String(req.params.userId || "").trim();
+    if (!isValidObjectId(targetUserId)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+    const owned = await loadOwnedProject(req, res);
+    if (!owned) return;
+    const { project } = owned;
+
+    const accessLevel =
+      String(req.body?.accessLevel || "").toLowerCase() === "full"
+        ? "full"
+        : "view";
+    const collab = (project.collaborators || []).find(
+      (c) => String(c.userId) === targetUserId,
+    );
+    if (!collab) return res.status(404).json({ error: "Collaborator not found" });
+    collab.accessLevel = accessLevel;
+    await project.save();
+    return res.json({ ok: true, userId: targetUserId, accessLevel });
+  } catch (err) {
+    console.error("update collab level error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// DELETE /:productKey/:id/collab/:userId — owner removes a collaborator.
+async function removeCollab(req, res) {
+  try {
+    const targetUserId = String(req.params.userId || "").trim();
+    if (!isValidObjectId(targetUserId)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+    const owned = await loadOwnedProject(req, res);
+    if (!owned) return;
+    const { project } = owned;
+
+    const before = (project.collaborators || []).length;
+    project.collaborators = (project.collaborators || []).filter(
+      (c) => String(c.userId) !== targetUserId,
+    );
+    if (project.collaborators.length === before) {
+      return res.status(404).json({ error: "Collaborator not found" });
+    }
+    await project.save();
+    return res.json({ ok: true, userId: targetUserId });
+  } catch (err) {
+    console.error("remove collab error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// DELETE /:productKey/:id/collab/codes/:codeId — owner revokes a share code.
+// Revoke (not delete) so existing collaborators who joined via it are
+// unaffected and the row stays for audit.
+async function revokeCode(req, res) {
+  try {
+    const codeId = String(req.params.codeId || "").trim();
+    if (!isValidObjectId(codeId)) {
+      return res.status(400).json({ error: "Invalid code id" });
+    }
+    const owned = await loadOwnedProject(req, res);
+    if (!owned) return;
+    const { project } = owned;
+
+    const sc = (project.shareCodes || []).find((c) => String(c._id) === codeId);
+    if (!sc) return res.status(404).json({ error: "Code not found" });
+    sc.revoked = true;
+    await project.save();
+    return res.json({ ok: true, codeId });
+  } catch (err) {
+    console.error("revoke code error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// POST /claim — a colleague redeems a share code to join a project. NOT
+// productKey-scoped (we look the project up by code), so it carries no
+// entitlement middleware — the plugin gate is enforced inline (block-with-
+// upsell) before the collaborator is added.
+async function claimProject(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+
+    const norm = normalizeShareCode(req.body?.code);
+    if (!norm) return res.status(400).json({ error: "Share code required" });
+    const codeHash = sha256Hex(norm);
+
+    const project = await TakeoffProject.findOne({
+      "shareCodes.codeHash": codeHash,
+    });
+    if (!project) return res.status(404).json({ error: "Invalid or expired code" });
+
+    const sc = (project.shareCodes || []).find(
+      (c) => c.codeHash === codeHash && !c.revoked,
+    );
+    if (!sc) {
+      return res.status(403).json({ error: "This share code has been revoked." });
+    }
+    if (sc.maxUses > 0 && sc.uses >= sc.maxUses) {
+      return res
+        .status(403)
+        .json({ error: "This share code has reached its use limit." });
+    }
+
+    const myEmail = String(req.user?.email || "").trim().toLowerCase();
+    if (
+      Array.isArray(sc.allowedEmails) &&
+      sc.allowedEmails.length &&
+      !sc.allowedEmails.includes(myEmail)
+    ) {
+      return res.status(403).json({
+        error: "This share code is restricted to specific email addresses.",
+      });
+    }
+
+    // Owner can't claim their own project.
+    if (project.userId && userId.equals(project.userId)) {
+      return res.status(400).json({ error: "You already own this project." });
+    }
+
+    const level = sc.accessLevel === "full" ? "full" : "view";
+
+    // Already a collaborator → idempotent success (don't add twice).
+    const existing = (project.collaborators || []).find(
+      (c) => c.userId && userId.equals(c.userId),
+    );
+    if (existing) {
+      return res.json({
+        ok: true,
+        alreadyMember: true,
+        projectId: String(project._id),
+        productKey: project.productKey,
+        slug: project.slug || null,
+        accessLevel: existing.accessLevel,
+      });
+    }
+
+    // PLUGIN GATE (block-with-upsell): the colleague must hold an active
+    // entitlement for the project's own product before they can open it.
+    const reqKey = entitlementKeyFor(project.productKey);
+    const hasIt = await userHasActiveEntitlement(userId, reqKey);
+    if (!hasIt) {
+      let productName = reqKey;
+      try {
+        const prod = await Product.findOne({ key: reqKey }).select("name").lean();
+        if (prod?.name) productName = prod.name;
+      } catch {
+        /* fall back to the key */
+      }
+      return res.status(403).json({
+        error: `You need an active ${productName} subscription to open this shared project.`,
+        code: "ENTITLEMENT_REQUIRED",
+        requiredProductKey: reqKey,
+        productName,
+      });
+    }
+
+    project.collaborators.push({
+      userId,
+      email: myEmail,
+      accessLevel: level,
+      addedViaCode: sc._id,
+    });
+    sc.uses = (sc.uses || 0) + 1;
+    await project.save();
+
+    return res.json({
+      ok: true,
+      projectId: String(project._id),
+      productKey: project.productKey,
+      slug: project.slug || null,
+      accessLevel: level,
+    });
+  } catch (err) {
+    console.error("claim project error:", err);
     return res.status(500).json({ error: "Server error" });
   }
 }
@@ -3814,6 +4623,11 @@ router.delete(
   deleteProject,
 );
 
+// Claim a shared project by code. MUST precede "/:productKey" so "claim" is
+// not captured as a product key. Auth-only (router.use(requireAuth)); the
+// plugin entitlement is enforced inside claimProject (block-with-upsell).
+router.post("/claim", claimProject);
+
 router.post(
   "/:productKey",
   mapEntitlementParam,
@@ -3847,6 +4661,44 @@ router.post(
   mapEntitlementParam,
   requireEntitlementParam,
   toggleShare,
+);
+
+// ── Collaborator management (owner only; each handler re-checks canManage) ──
+// More-specific "/collab/codes/:codeId" is registered before "/collab/:userId"
+// so "codes" is never captured as a :userId.
+router.post(
+  "/:productKey/:id/collab/codes",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  createShareCode,
+);
+
+router.get(
+  "/:productKey/:id/collab",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  listCollab,
+);
+
+router.delete(
+  "/:productKey/:id/collab/codes/:codeId",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  revokeCode,
+);
+
+router.patch(
+  "/:productKey/:id/collab/:userId",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  updateCollabLevel,
+);
+
+router.delete(
+  "/:productKey/:id/collab/:userId",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  removeCollab,
 );
 
 router.put(

@@ -13,6 +13,9 @@ import {
   FaProjectDiagram,
   FaFileContract,
   FaWallet,
+  FaUserFriends,
+  FaEye,
+  FaLock,
 } from "react-icons/fa";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
@@ -20,6 +23,7 @@ import ProjectContractPanel from "./ProjectContractPanel.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
+import CollaboratorsModal from "./CollaboratorsModal.jsx";
 
 // Lazy — pulls in three.js + the web-ifc wasm; only loads when the 3D tab opens.
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
@@ -217,6 +221,15 @@ export default function ProjectOpenView({
   productKey = "",
   projectId = "",
   accessToken = "",
+  // Collaborator access descriptor from the server (project._access). Defaults
+  // to full owner access so owner-opened projects behave exactly as before.
+  access = {
+    role: "owner",
+    canEdit: true,
+    canExport: true,
+    canManage: true,
+    canSeeRates: true,
+  },
   linkedGroupsCount = 0,
   loadingValuations = false,
   onActualQtyChange,
@@ -250,6 +263,7 @@ export default function ProjectOpenView({
   budgetRateGenReady = false,
   budgetDrivenCodes,
   onAddCategory,
+  onAddTrade,
   groupByMode = "category",
   onGroupByModeChange,
   contract,
@@ -352,6 +366,17 @@ export default function ProjectOpenView({
 }) {
   const [activeTab, setActiveTab] = React.useState("dashboard");
   const [copiedId, setCopiedId] = React.useState(false);
+  const [collabOpen, setCollabOpen] = React.useState(false);
+
+  // Access flags (server-resolved). canEdit/canExport/canManage gate the action
+  // buttons; canSeeRates drives the "rates hidden" notice. The server is the
+  // real boundary — these only hide affordances the user isn't allowed to use.
+  const canEdit = access?.canEdit !== false;
+  const canExport = access?.canExport !== false;
+  const canManage = access?.canManage !== false;
+  const canSeeRates = access?.canSeeRates !== false;
+  const accessRole = access?.role || "owner";
+  const isShared = accessRole !== "owner";
 
   React.useEffect(() => {
     setActiveTab("dashboard");
@@ -379,6 +404,25 @@ export default function ProjectOpenView({
 
   return (
     <div className="mt-5 space-y-5">
+      {isShared ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-adlm-blue-200 bg-blue-50 px-4 py-2.5 text-xs dark:border-adlm-blue-600/30 dark:bg-adlm-blue-600/10">
+          <span className="inline-flex items-center gap-1.5 font-semibold text-adlm-blue-700 dark:text-adlm-blue-300">
+            {canEdit ? <FaUserFriends /> : <FaEye />}
+            Shared project · {canEdit ? "Full access" : "View only"}
+          </span>
+          {!canEdit ? (
+            <span className="text-slate-500 dark:text-adlm-dark-muted">
+              You can view this project but can't edit or download it.
+            </span>
+          ) : null}
+          {!canSeeRates ? (
+            <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+              <FaLock /> Rates hidden — a RateGen subscription is required to view
+              rates.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -391,14 +435,27 @@ export default function ProjectOpenView({
               <FaArrowLeft className="text-[12px]" /> Back to projects
             </button>
 
-            <button
-              type="button"
-              onClick={onDelete}
-              title="Delete this project"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-orange-700 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-orange-300 dark:hover:bg-orange-500/10"
-            >
-              <FaTrash className="text-[12px]" /> Delete
-            </button>
+            {canManage ? (
+              <button
+                type="button"
+                onClick={onDelete}
+                title="Delete this project"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-orange-700 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:bg-orange-50 active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-orange-300 dark:hover:bg-orange-500/10"
+              >
+                <FaTrash className="text-[12px]" /> Delete
+              </button>
+            ) : null}
+
+            {canManage ? (
+              <button
+                type="button"
+                onClick={() => setCollabOpen(true)}
+                title="Share this project with colleagues"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-adlm-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-blue-300 dark:hover:bg-adlm-blue-600/10"
+              >
+                <FaUserFriends className="text-[12px]" /> Collaborators
+              </button>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -446,36 +503,39 @@ export default function ProjectOpenView({
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={!isDirty || saving}
-            title={
-              !isDirty
-                ? "No changes to save"
-                : "Save rates and valuation progress"
-            }
-            className={[
-              "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition",
-              isDirty && !saving
-                ? "btn-3d text-white"
-                : "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-white/10 dark:text-adlm-dark-dim",
-            ].join(" ")}
-          >
-            <FaSave className="text-[12px]" />
-            {saving ? "Saving…" : isDirty ? "Save changes" : "Saved"}
-          </button>
-
-          <div className="relative">
+          {canEdit ? (
             <button
               type="button"
-              onClick={onToggleExportOpen}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
+              onClick={onSave}
+              disabled={!isDirty || saving}
+              title={
+                !isDirty
+                  ? "No changes to save"
+                  : "Save rates and valuation progress"
+              }
+              className={[
+                "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition",
+                isDirty && !saving
+                  ? "btn-3d text-white"
+                  : "cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-white/10 dark:text-adlm-dark-dim",
+              ].join(" ")}
             >
-              <FaDownload className="text-[12px]" /> Export
+              <FaSave className="text-[12px]" />
+              {saving ? "Saving…" : isDirty ? "Save changes" : "Saved"}
             </button>
+          ) : null}
 
-            {exportOpen ? (
+          {canExport ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={onToggleExportOpen}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
+              >
+                <FaDownload className="text-[12px]" /> Export
+              </button>
+
+              {exportOpen ? (
               <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
                 <button
                   type="button"
@@ -554,8 +614,9 @@ export default function ProjectOpenView({
                   Multi-storey (Trade format)
                 </button>
               </div>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -798,6 +859,7 @@ export default function ProjectOpenView({
           <ModelViewer
             projectModels={projectModels}
             items={items}
+            materialItems={materialItems}
             productKey={productKey}
             projectId={projectId}
             accessToken={accessToken}
@@ -954,6 +1016,7 @@ export default function ProjectOpenView({
           onCategoryChange={onCategoryChange}
           categoryOptions={categoryOptions}
           onAddCategory={onAddCategory}
+          onAddTrade={onAddTrade}
           budgetDrivenCodes={budgetDrivenCodes}
           tradeOptions={tradeOptions}
           onTradeChange={onTradeChange}
@@ -1016,6 +1079,18 @@ export default function ProjectOpenView({
           rateGenPoolLoading={rateGenPoolLoading}
           rateGenPoolLoaded={rateGenPoolLoaded}
           onReloadRateGenPool={onReloadRateGenPool}
+          canSeeRates={canSeeRates}
+          readOnly={!canEdit}
+        />
+      ) : null}
+
+      {canManage ? (
+        <CollaboratorsModal
+          open={collabOpen}
+          onClose={() => setCollabOpen(false)}
+          tool={productKey}
+          projectId={projectId || selectedId}
+          accessToken={accessToken}
         />
       ) : null}
     </div>

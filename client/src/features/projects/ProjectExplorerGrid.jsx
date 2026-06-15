@@ -150,18 +150,21 @@ export default function ProjectExplorerGrid({
                 />
               </button>
 
-              <button
-                type="button"
-                className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-orange-500/10"
-                title="Delete project"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteProject?.(id, row?.name);
-                }}
-                disabled={!id || bulkBusy}
-              >
-                <FaTrash className="text-[13px]" />
-              </button>
+              {/* Only the owner can delete; shared projects hide this. */}
+              {!row?.shared ? (
+                <button
+                  type="button"
+                  className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-orange-500/10"
+                  title="Delete project"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteProject?.(id, row?.name);
+                  }}
+                  disabled={!id || bulkBusy}
+                >
+                  <FaTrash className="text-[13px]" />
+                </button>
+              ) : null}
 
               <div className="relative mt-2 flex items-center justify-center">
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue transition-transform duration-300 group-hover:scale-105">
@@ -177,6 +180,11 @@ export default function ProjectExplorerGrid({
                   {itemCount} item{itemCount === 1 ? "" : "s"}
                   {markedCount ? ` · ${markedCount} done` : ""}
                 </div>
+                {row?.shared ? (
+                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-600/15 dark:text-adlm-blue-300">
+                    Shared · {row.accessLevel === "full" ? "Full" : "View"}
+                  </div>
+                ) : null}
               </div>
 
               {itemCount ? (

@@ -12,6 +12,7 @@ import multer from "multer";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { User } from "../models/User.js";
 import { computePmDashboard, rescheduleTasks, computeProjectScope, _itemIdentity } from "../services/pmCompute.js";
 import { parseMsProjectFile } from "../util/msProjectParser.js";
 import { generateIcs, suggestedIcsFilename } from "../util/icsExporter.js";
@@ -65,6 +66,27 @@ function getUserObjectId(req) {
 
 function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(String(id));
+}
+
+// Owner-or-collaborator read filter — mirrors accessFilter() in projects.js.
+function accessFilter(id, userId, productKey) {
+  return {
+    _id: id,
+    productKey,
+    $or: [{ userId }, { "collaborators.userId": userId }],
+  };
+}
+
+async function userHasActiveEntitlement(userId, key) {
+  if (!userId || !key) return false;
+  const u = await User.findById(userId, { entitlements: 1 }).lean();
+  if (!u) return false;
+  const e = (u.entitlements || []).find(
+    (x) => x.productKey === key && x.status === "active",
+  );
+  if (!e) return false;
+  if (e.expiresAt && new Date(e.expiresAt).getTime() < Date.now()) return false;
+  return true;
 }
 
 function safeNum(v) {
@@ -242,7 +264,10 @@ function sanitizeIssue(input, fallback = {}) {
   };
 }
 
-async function loadProject(req, res) {
+// Loads the project for a PM request, enforcing collaborator access. The PM
+// surface is entirely cost + schedule (EVM), so a non-owner collaborator needs
+// an active RateGen subscription to see it at all, and "full" access to edit.
+async function loadProject(req, res, { requireEdit = false } = {}) {
   const productKey = requestedProductKey(req);
   const id = String(req.params.id || "").trim();
   if (!isValidObjectId(id)) {
@@ -254,11 +279,36 @@ async function loadProject(req, res) {
     res.status(401).json({ error: "Invalid user id" });
     return null;
   }
-  const project = await TakeoffProject.findOne({ _id: id, userId, productKey });
+  const project = await TakeoffProject.findOne(
+    accessFilter(id, userId, productKey),
+  );
   if (!project) {
     res.status(404).json({ error: "Not found" });
     return null;
   }
+
+  const isOwner = project.userId && userId.equals(project.userId);
+  if (!isOwner) {
+    const collab = (project.collaborators || []).find(
+      (c) => c.userId && userId.equals(c.userId),
+    );
+    if (requireEdit && collab?.accessLevel !== "full") {
+      res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+      return null;
+    }
+    if (!(await userHasActiveEntitlement(userId, "rategen"))) {
+      res.status(403).json({
+        error:
+          "A RateGen subscription is required to view the schedule & cost dashboard on this shared project.",
+        code: "RATEGEN_REQUIRED",
+      });
+      return null;
+    }
+  }
+
   if (!project.projectManagement) project.projectManagement = {};
   return project;
 }
@@ -285,7 +335,7 @@ async function getDashboard(req, res) {
 // ── PATCH bulk PM update (tasks/risks/issues/header) ─────────────────────
 async function updatePm(req, res) {
   try {
-    const project = await loadProject(req, res);
+    const project = await loadProject(req, res, { requireEdit: true });
     if (!project) return;
 
     const {
@@ -626,7 +676,7 @@ async function updatePm(req, res) {
 // a specific date; otherwise uses the project's stored projectStart.
 async function reschedulePm(req, res) {
   try {
-    const project = await loadProject(req, res);
+    const project = await loadProject(req, res, { requireEdit: true });
     if (!project) return;
 
     const requested = parseOptionalDate(req.body?.projectStart);
@@ -678,7 +728,7 @@ async function reschedulePm(req, res) {
 // linked identity already exists it is updated rather than duplicated.
 async function generateFromBoq(req, res) {
   try {
-    const project = await loadProject(req, res);
+    const project = await loadProject(req, res, { requireEdit: true });
     if (!project) return;
 
     const requestedStart = parseOptionalDate(req.body?.projectStart);
@@ -878,7 +928,7 @@ async function autoLinkImportedTasks({ project, tasks, userId, productKey }) {
 
 async function importPm(req, res) {
   try {
-    const project = await loadProject(req, res);
+    const project = await loadProject(req, res, { requireEdit: true });
     if (!project) return;
 
     const file = req.file;
@@ -1104,7 +1154,7 @@ async function importPm(req, res) {
 // tasks are preserved. Optional ?keepHistory=true preserves imports[].
 async function clearImports(req, res) {
   try {
-    const project = await loadProject(req, res);
+    const project = await loadProject(req, res, { requireEdit: true });
     if (!project) return;
 
     const pm = project.projectManagement || {};
@@ -1197,7 +1247,7 @@ async function exportPmCalendar(req, res) {
 // ── DELETE all PM data (reset) ───────────────────────────────────────────
 async function resetPm(req, res) {
   try {
-    const project = await loadProject(req, res);
+    const project = await loadProject(req, res, { requireEdit: true });
     if (!project) return;
     project.projectManagement = {
       projectStart: null,

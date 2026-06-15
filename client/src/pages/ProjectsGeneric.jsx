@@ -2,7 +2,7 @@
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 // ifcElements (which pulls in the ~1.5 MB web-ifc wasm wrapper) is imported
 // dynamically inside handleUploadModel so it is code-split out of the main
@@ -15,6 +15,8 @@ import {
   FaCubes,
   FaThLarge,
   FaSyncAlt,
+  FaUserPlus,
+  FaKey,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
@@ -952,6 +954,7 @@ export default function ProjectsGeneric() {
   const { tool } = useParams();
   const { accessToken, user: authUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const toolNorm = normTool(tool);
   const endpoints = React.useMemo(() => getEndpoints(tool), [tool]);
@@ -1006,8 +1009,28 @@ export default function ProjectsGeneric() {
   const [baseCategoryMap, setBaseCategoryMap] = React.useState({});
   const [tradeMap, setTradeMap] = React.useState({});
   const [baseTradeMap, setBaseTradeMap] = React.useState({});
-  // "category" (default) | "trade" — controls how the BoQ table groups rows
-  const [groupByMode, setGroupByMode] = React.useState("category");
+  // "category" (default) | "trade" — controls how the BoQ table groups rows.
+  // Remembered per user (localStorage) so the chosen arrangement sticks across
+  // reloads and future projects.
+  const [groupByMode, setGroupByMode] = React.useState(() => {
+    if (typeof window === "undefined") return "category";
+    try {
+      return localStorage.getItem("adlm:boqGroupByMode") || "category";
+    } catch {
+      return "category";
+    }
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("adlm:boqGroupByMode", groupByMode);
+    } catch {
+      /* ignore */
+    }
+  }, [groupByMode]);
+  // Set true when the user reorders bill items so the Save button activates
+  // (item order isn't otherwise part of the dirty check). Reset on project
+  // load — see the effect just after selectedId is defined.
+  const [orderDirty, setOrderDirty] = React.useState(false);
   // Contract lock state — populated from the loaded project.
   const [contract, setContract] = React.useState({
     locked: false,
@@ -1069,6 +1092,13 @@ export default function ProjectsGeneric() {
   // save UX
   const [saving, setSaving] = React.useState(false);
   const [notice, setNotice] = React.useState("");
+
+  // "Add shared project" (claim a project shared with me by code)
+  const [claimOpen, setClaimOpen] = React.useState(false);
+  const [claimCode, setClaimCode] = React.useState("");
+  const [claimBusy, setClaimBusy] = React.useState(false);
+  const [claimErr, setClaimErr] = React.useState("");
+  const [claimUpsell, setClaimUpsell] = React.useState(null); // { requiredProductKey, productName }
   const [valuations, setValuations] = React.useState([]);
   const [valuationErr, setValuationErr] = React.useState("");
   const [loadingValuations, setLoadingValuations] = React.useState(false);
@@ -1141,6 +1171,11 @@ export default function ProjectsGeneric() {
   }
 
   const items = Array.isArray(sel?.items) ? sel.items : [];
+
+  // Clear the reorder-dirty flag whenever a different project is opened.
+  React.useEffect(() => {
+    setOrderDirty(false);
+  }, [selectedId]);
 
   const { itemGroupId, groupMeta } = React.useMemo(() => {
     if (showMaterials) return buildMaterialGroups(items);
@@ -1712,6 +1747,60 @@ export default function ProjectsGeneric() {
     }
   }
 
+  // Redeem a share code → join the project as a collaborator. On the plugin
+  // gate (403) the server returns the required product so we can upsell.
+  async function claimSharedProject() {
+    const code = String(claimCode || "").trim();
+    if (!code) {
+      setClaimErr("Enter a share code.");
+      return;
+    }
+    setClaimBusy(true);
+    setClaimErr("");
+    setClaimUpsell(null);
+    try {
+      const data = await apiAuthed("/projects/claim", {
+        token: accessToken,
+        method: "POST",
+        body: { code },
+      });
+      const pk = normTool(data?.productKey || toolNorm);
+      const projKey = data?.slug || data?.projectId || "";
+      setClaimOpen(false);
+      setClaimCode("");
+      if (pk === toolNorm) {
+        // Same tool — refresh this list, sync the URL, then open the project.
+        await load({ keepSelection: false });
+        if (projKey) {
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("project", projKey);
+            return next;
+          });
+        }
+        if (data?.projectId) await view(data.projectId);
+        setNotice("Project added to your list.");
+      } else {
+        // Different tool — route to that tool's projects with it preselected.
+        navigate(`/projects/${pk}?project=${encodeURIComponent(projKey)}`);
+      }
+    } catch (e) {
+      if (e?.status === 403 && e?.data?.requiredProductKey) {
+        setClaimUpsell({
+          requiredProductKey: e.data.requiredProductKey,
+          productName: e.data.productName || e.data.requiredProductKey,
+        });
+        setClaimErr(
+          e.data.error || "You don't have the required subscription.",
+        );
+      } else {
+        setClaimErr(e?.data?.error || e?.message || "Could not add the project.");
+      }
+    } finally {
+      setClaimBusy(false);
+    }
+  }
+
   async function load({ keepSelection = true } = {}) {
     setErr("");
     setNotice("");
@@ -2219,7 +2308,8 @@ export default function ProjectsGeneric() {
     !provisionalSumsEqual(provisionalSums, baseProvisionalSums) ||
     !variationsEqual(variations, baseVariations) ||
     !preliminaryItemsEqual(preliminaryItems, basePreliminaryItems) ||
-    !valuationSettingsEqual(valuationSettings, baseValuationSettings);
+    !valuationSettingsEqual(valuationSettings, baseValuationSettings) ||
+    orderDirty;
 
   async function saveRatesToCloud() {
     if (!sel || !selectedId) return;
@@ -2314,6 +2404,7 @@ export default function ProjectsGeneric() {
       });
       setSel(updated);
       initRatesFromProject(updated);
+      setOrderDirty(false); // order is now persisted
       setRows((prev) =>
         Array.isArray(prev)
           ? prev.map((row) =>
@@ -2438,6 +2529,7 @@ export default function ProjectsGeneric() {
     const [moved] = its.splice(fromIndex, 1);
     its.splice(toIndex, 0, moved);
     setSel((prev) => (prev ? { ...prev, items: its } : prev));
+    setOrderDirty(true); // so the Save button activates and persists the order
   }
 
   React.useEffect(() => {
@@ -3859,13 +3951,30 @@ export default function ProjectsGeneric() {
         );
       });
 
+  // Categories the user has created on ANY project — remembered per user
+  // (localStorage) so a section made once is offered on every future project.
+  const [userCategories, setUserCategories] = React.useState([]);
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`adlm:customCategories:${toolNorm}`);
+      const arr = raw ? JSON.parse(raw) : [];
+      setUserCategories(
+        Array.isArray(arr) ? arr.filter((c) => typeof c === "string") : [],
+      );
+    } catch {
+      setUserCategories([]);
+    }
+  }, [toolNorm]);
+
   const categoryOptions = React.useMemo(() => {
     // Canonical per-product list (…, "Uncategorized") + this project's custom
-    // categories, inserted before "Uncategorized" so it stays last.
+    // categories + the user's remembered categories, inserted before
+    // "Uncategorized" so it stays last.
     const base = allCategoriesForProductKey(toolNorm);
-    const custom = Array.isArray(sel?.customCategories)
-      ? sel.customCategories
-      : [];
+    const custom = [
+      ...(Array.isArray(sel?.customCategories) ? sel.customCategories : []),
+      ...userCategories,
+    ];
     const seen = new Set(base.map((c) => String(c).toLowerCase()));
     const extra = [];
     for (const c of custom) {
@@ -3878,7 +3987,7 @@ export default function ProjectsGeneric() {
     if (!extra.length) return base;
     const last = base[base.length - 1];
     return [...base.slice(0, -1), ...extra, last];
-  }, [toolNorm, sel?.customCategories]);
+  }, [toolNorm, sel?.customCategories, userCategories]);
 
   // Codes whose bill rate is derived from a priced material/labour build-up —
   // those BoQ rate cells become read-only (the Budget tab drives them).
@@ -3898,15 +4007,33 @@ export default function ProjectsGeneric() {
   // immediately (items untouched — only customCategories[] is sent).
   async function handleAddCategory(name) {
     const t = String(name || "").trim();
-    if (!t || !selectedId || !accessToken) return;
+    if (!t) return;
     const canonical = allCategoriesForProductKey(toolNorm).map((c) =>
       String(c).toLowerCase(),
     );
+    const isCanonical = canonical.includes(t.toLowerCase());
+
+    // Remember at user level (future projects) unless it's a built-in.
+    if (!isCanonical && !userCategories.some((c) => c.toLowerCase() === t.toLowerCase())) {
+      const nextUser = [...userCategories, t];
+      setUserCategories(nextUser);
+      try {
+        localStorage.setItem(
+          `adlm:customCategories:${toolNorm}`,
+          JSON.stringify(nextUser),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Persist on the current project too, so it round-trips server-side.
+    if (!selectedId || !accessToken) return;
     const existing = Array.isArray(sel?.customCategories)
       ? sel.customCategories
       : [];
     if (
-      canonical.includes(t.toLowerCase()) ||
+      isCanonical ||
       existing.some((c) => String(c).toLowerCase() === t.toLowerCase())
     ) {
       return;
@@ -3922,6 +4049,60 @@ export default function ProjectsGeneric() {
     } catch (e) {
       setErr(e?.message || "Couldn't add the category.");
     }
+  }
+
+  // User-remembered work sections (trades), parallel to userCategories.
+  const [userTrades, setUserTrades] = React.useState([]);
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`adlm:customTrades:${toolNorm}`);
+      const arr = raw ? JSON.parse(raw) : [];
+      setUserTrades(
+        Array.isArray(arr) ? arr.filter((c) => typeof c === "string") : [],
+      );
+    } catch {
+      setUserTrades([]);
+    }
+  }, [toolNorm]);
+
+  const tradeOptions = React.useMemo(() => {
+    const base = Array.isArray(tradesForProductKey(toolNorm))
+      ? tradesForProductKey(toolNorm)
+      : [];
+    const seen = new Set(base.map((c) => String(c).toLowerCase()));
+    const extra = [];
+    for (const c of userTrades) {
+      const t = String(c || "").trim();
+      if (t && !seen.has(t.toLowerCase())) {
+        seen.add(t.toLowerCase());
+        extra.push(t);
+      }
+    }
+    return extra.length ? [...base, ...extra] : base;
+  }, [toolNorm, userTrades]);
+
+  // Add a user-defined work section (trade). Trade picks ride on item.trade at
+  // save, so this only needs user-level memory to surface the new section.
+  function handleAddTrade(name) {
+    const t = String(name || "").trim();
+    if (!t) return;
+    const base = tradesForProductKey(toolNorm).map((c) =>
+      String(c).toLowerCase(),
+    );
+    if (
+      base.includes(t.toLowerCase()) ||
+      userTrades.some((c) => c.toLowerCase() === t.toLowerCase())
+    ) {
+      return;
+    }
+    const next = [...userTrades, t];
+    setUserTrades(next);
+    try {
+      localStorage.setItem(`adlm:customTrades:${toolNorm}`, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+    setNotice(`Work section “${t}” added.`);
   }
 
   const selectedValuation = React.useMemo(
@@ -4657,28 +4838,43 @@ export default function ProjectsGeneric() {
                 )}
               </div>
 
-              {/* Search projects (always visible) */}
+              {/* Search projects + Add shared project (always visible) */}
               {!sel && (
-                <div className="w-full md:w-[420px]">
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border px-3 py-2 bg-white dark:bg-adlm-dark-panel shadow-depth focus-within:ring-2 focus-within:ring-adlm-blue-700/40 transition">
-                    <FaSearch className="text-slate-400" />
-                    <input
-                      className="w-full outline-none text-sm bg-transparent"
-                      placeholder="Search projects..."
-                      value={projectQuery}
-                      onChange={(e) => setProjectQuery(e.target.value)}
-                    />
-                    {!!projectQuery && (
-                      <button
-                        type="button"
-                        className="text-slate-500 hover:text-slate-700"
-                        onClick={() => setProjectQuery("")}
-                        title="Clear"
-                      >
-                        <FaTimes />
-                      </button>
-                    )}
+                <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center md:w-auto">
+                  <div className="w-full md:w-[420px]">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border px-3 py-2 bg-white dark:bg-adlm-dark-panel shadow-depth focus-within:ring-2 focus-within:ring-adlm-blue-700/40 transition">
+                      <FaSearch className="text-slate-400" />
+                      <input
+                        className="w-full outline-none text-sm bg-transparent"
+                        placeholder="Search projects..."
+                        value={projectQuery}
+                        onChange={(e) => setProjectQuery(e.target.value)}
+                      />
+                      {!!projectQuery && (
+                        <button
+                          type="button"
+                          className="text-slate-500 hover:text-slate-700"
+                          onClick={() => setProjectQuery("")}
+                          title="Clear"
+                        >
+                          <FaTimes />
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClaimErr("");
+                      setClaimUpsell(null);
+                      setClaimCode("");
+                      setClaimOpen(true);
+                    }}
+                    title="Add a project a colleague shared with you (enter the share code)"
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-adlm-blue-700 shadow-depth transition hover:-translate-y-0.5 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                  >
+                    <FaUserPlus /> Add shared project
+                  </button>
                 </div>
               )}
             </div>
@@ -4841,6 +5037,7 @@ export default function ProjectsGeneric() {
                 productKey={toolNorm}
                 projectId={selectedId}
                 accessToken={accessToken}
+                access={sel?._access}
                 onDeleteItem={deleteItem}
                 onMoveItem={moveItem}
                 boqUndoStack={boqUndoStack}
@@ -4859,6 +5056,7 @@ export default function ProjectsGeneric() {
                 budgetRateGenReady={canRateGen}
                 budgetDrivenCodes={budgetDrivenCodes}
                 onAddCategory={handleAddCategory}
+                onAddTrade={handleAddTrade}
                 onActualQtyChange={handleActualQtyChange}
                 onActualRateChange={handleActualRateChange}
                 onStatusToggle={handleStatusToggle}
@@ -4866,7 +5064,7 @@ export default function ProjectsGeneric() {
                 onPercentChange={handlePercentChange}
                 onCategoryChange={handleCategoryChange}
                 categoryOptions={categoryOptions}
-                tradeOptions={tradesForProductKey(toolNorm)}
+                tradeOptions={tradeOptions}
                 onTradeChange={handleTradeChange}
                 groupByMode={groupByMode}
                 onGroupByModeChange={setGroupByMode}
@@ -4936,6 +5134,86 @@ export default function ProjectsGeneric() {
           </div>
         </main>
       </div>
+
+      {/* Add-shared-project (claim by code) modal */}
+      {claimOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            onClick={() => !claimBusy && setClaimOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-adlm-dark-border dark:bg-adlm-dark-bg">
+            <div className="flex items-center justify-between bg-gradient-to-r from-adlm-blue-700 to-adlm-blue-600 px-5 py-4 text-white">
+              <div className="flex items-center gap-2.5">
+                <FaUserPlus />
+                <div className="text-sm font-bold">Add a shared project</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClaimOpen(false)}
+                className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
+                aria-label="Close"
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <div className="space-y-3 p-5">
+              <p className="text-xs text-slate-500 dark:text-adlm-dark-muted">
+                Enter the share code a colleague gave you. You'll need the
+                matching plugin subscription to open the project.
+              </p>
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-adlm-dark-border">
+                <FaKey className="text-slate-400" />
+                <input
+                  autoFocus
+                  className="w-full bg-transparent font-mono text-sm tracking-wider outline-none dark:text-adlm-dark-text"
+                  placeholder="e.g. ABCDE-FGHIJ"
+                  value={claimCode}
+                  onChange={(e) => setClaimCode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") claimSharedProject();
+                  }}
+                />
+              </div>
+
+              {claimErr ? (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300">
+                  {claimErr}
+                  {claimUpsell ? (
+                    <div className="mt-2">
+                      <Link
+                        to={`/product/${claimUpsell.requiredProductKey}`}
+                        onClick={() => setClaimOpen(false)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-orange px-3 py-1.5 text-xs font-bold text-white shadow-glow-orange"
+                      >
+                        Get {claimUpsell.productName}
+                      </Link>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setClaimOpen(false)}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={claimSharedProject}
+                  disabled={claimBusy}
+                  className="btn-3d inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {claimBusy ? "Adding…" : "Add project"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

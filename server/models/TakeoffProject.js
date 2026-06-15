@@ -107,6 +107,20 @@ const ProvisionalSumSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Per-element quantity breakdown entry. One {id, qty} per Revit element on a
+// bill/budget line, so the web IFC viewer can show a single clicked element's
+// share of that line's quantity. _id:false keeps these (potentially large)
+// arrays lean.
+const ElementQtySchema = new mongoose.Schema(
+  {
+    id: { type: Number, default: 0 },
+    qty: { type: Number, default: 0 },
+  },
+  // _id:false keeps these arrays lean; id:false disables Mongoose's default `id`
+  // virtual so our real numeric `id` path stores/reads correctly.
+  { _id: false, id: false },
+);
+
 // Budget items — the internal cost plan. Each line links back to a bill
 // item (billIdentity) and carries its own cost rate, plus procurement
 // marking (procured / procuredPercent, mirroring how measured items drive
@@ -143,6 +157,10 @@ const BudgetItemSchema = new mongoose.Schema(
     // back to element-overlap matching against the bill when a line has no
     // billIdentity/code (so material + labour still bundle to the right line).
     elementIds: { type: [Number], default: [] },
+    // Per-element quantity split (see ElementQtySchema). estimated = even-split
+    // fallback (viewer shows ≈) vs exact per-element measurement.
+    elementQuantities: { type: [ElementQtySchema], default: [] },
+    elementQuantitiesEstimated: { type: Boolean, default: false },
   },
   { _id: false },
 );
@@ -551,6 +569,11 @@ const ItemSchema = new mongoose.Schema(
     takeoffLine: { type: String, default: "" },
     materialName: { type: String, default: "" },
     elementIds: { type: [Number], default: [] },
+    // Per-element quantity split (see ElementQtySchema). One {id, qty} per
+    // element on this line so the web viewer can show a single element's share.
+    // estimated = even-split fallback (viewer shows ≈) vs exact measurement.
+    elementQuantities: { type: [ElementQtySchema], default: [] },
+    elementQuantitiesEstimated: { type: Boolean, default: false },
     level: { type: String, default: "" },
     type: { type: String, default: "" },
     code: { type: String, default: "" },
@@ -581,6 +604,51 @@ const ItemSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// ── Collaborator sharing ──
+// A project is owned by one userId, but can be SHARED with colleagues who
+// then collaborate on the SAME document. Each collaborator carries an access
+// level; "view" is read-only (no download/edit), "full" can edit + export
+// (everything the owner can do EXCEPT manage collaborators/codes or delete).
+const CollaboratorSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    // Email snapshot at join time, purely for the owner's roster display.
+    email: { type: String, default: "", trim: true, lowercase: true },
+    accessLevel: { type: String, enum: ["view", "full"], default: "view" },
+    addedAt: { type: Date, default: Date.now },
+    // The shareCodes._id this person joined through (audit / level origin).
+    addedViaCode: { type: mongoose.Schema.Types.ObjectId, default: null },
+  },
+  { _id: true },
+);
+
+// A share code acts as a password to claim a project. We store a sha256 hash
+// for the global claim lookup, plus the plaintext so the owner can re-copy it
+// (same posture as the existing plaintext publicToken bearer secret).
+const ShareCodeSchema = new mongoose.Schema(
+  {
+    codeHash: { type: String, required: true, index: true },
+    codeLast4: { type: String, default: "" },
+    codePlain: { type: String, default: "" },
+    accessLevel: { type: String, enum: ["view", "full"], default: "view" },
+    label: { type: String, default: "", trim: true },
+    // Lowercased emails this code is restricted to. Empty ⇒ anyone with the code.
+    allowedEmails: { type: [String], default: [] },
+    // 0 ⇒ unlimited uses.
+    maxUses: { type: Number, default: 0, min: 0 },
+    uses: { type: Number, default: 0, min: 0 },
+    revoked: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  },
+  { _id: true },
+);
+
 const TakeoffProjectSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -600,6 +668,10 @@ const TakeoffProjectSchema = new mongoose.Schema(
     slug: { type: String, trim: true, lowercase: true, default: "" },
     publicToken: { type: String, default: null, sparse: true },
     publicShareEnabled: { type: Boolean, default: false },
+    // ── Collaborator sharing (private, account-to-account) ──
+    // Distinct from publicToken/publicShareEnabled (anonymous read-only link).
+    collaborators: { type: [CollaboratorSchema], default: [] },
+    shareCodes: { type: [ShareCodeSchema], default: [] },
     checklistCompositeKeys: { type: [String], default: [] },
     // User-defined building-element categories for THIS project's bill
     // arrangement, on top of the canonical per-product list. Surfaced to the
@@ -636,6 +708,10 @@ const TakeoffProjectSchema = new mongoose.Schema(
 TakeoffProjectSchema.index({ userId: 1, productKey: 1, updatedAt: -1 });
 TakeoffProjectSchema.index({ userId: 1, productKey: 1, clientProjectKey: 1 });
 TakeoffProjectSchema.index({ userId: 1, productKey: 1, slug: 1 }, { sparse: true });
+// Global claim lookup: find the project carrying a given share code.
+TakeoffProjectSchema.index({ "shareCodes.codeHash": 1 });
+// "Projects shared with me" listing + per-request owner-or-collaborator resolve.
+TakeoffProjectSchema.index({ "collaborators.userId": 1, productKey: 1, updatedAt: -1 });
 
 export const TakeoffProject = mongoose.model(
   "TakeoffProject",
