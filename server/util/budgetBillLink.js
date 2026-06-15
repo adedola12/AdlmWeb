@@ -4,8 +4,10 @@
 // references (`billIdentity` / `sourceTakeoffCode`). When the plugin didn't
 // stamp that code on a line — e.g. QUIV Material-module materials carry only
 // `takeoffLine` + `elementIds`, while the labour line carries the code — we
-// fall back to Revit element-ID overlap, then to a normalized title match, so
-// each bill line's material AND labour still bundle to the same line.
+// fall back to Revit element-ID overlap, then to a normalized title match.
+// A second pass anchors still-un-coded materials onto the bill code of a
+// resolved sibling (the work item's labour line carries the bill code), so a
+// bill line's material AND labour bundle together even on legacy data.
 //
 // Pure (no DB / mongoose), so it unit-tests trivially like billBudgetCascade.js.
 
@@ -13,23 +15,24 @@ function norm(v) {
   return String(v == null ? "" : v).trim().toLowerCase();
 }
 
-// Normalize a title for fuzzy matching: drop "[L:All Floors | T:…]" qualifiers,
-// turn arrows/punctuation into spaces, collapse whitespace.
+// Keep bracket content (e.g. "[T:225mm Masonry]") so wall-type variants stay
+// distinct; just fold punctuation/arrows to spaces and collapse whitespace.
 export function normalizeTitle(s) {
   return String(s == null ? "" : s)
     .toLowerCase()
-    .replace(/\[[^\]]*\]/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
 }
 
-// Build lookup maps from the bill items[]: code, element-id, and title → code.
-// First occurrence wins so the order of items[] (= the Bill order) is honoured.
+function eidsOf(line) {
+  return Array.isArray(line?.elementIds) ? line.elementIds : [];
+}
+
 export function buildBillIndex(items) {
-  const byCode = new Map(); // lowercased code -> original code
-  const byElement = new Map(); // elementId -> original code
-  const byTitle = new Map(); // normalized title -> original code
+  const byCode = new Map();
+  const byElement = new Map();
+  const byTitle = new Map();
   for (const it of Array.isArray(items) ? items : []) {
     const code = String(it?.code ?? "").trim();
     if (!code) continue;
@@ -47,12 +50,26 @@ export function buildBillIndex(items) {
   return { byCode, byElement, byTitle };
 }
 
-// Resolve the bill code a single budget line belongs to. Returns the original
-// bill code, or "" when nothing matches.
+// Add element/title → code anchors from already-resolved lines (esp. labour,
+// which carries the bill code). Never overwrites existing bill entries.
+function addAnchors(index, lines, codes) {
+  lines.forEach((l, i) => {
+    const code = codes[i];
+    if (!code) return;
+    for (const eid of eidsOf(l)) {
+      const k = Number(eid);
+      if (Number.isFinite(k) && !index.byElement.has(k)) index.byElement.set(k, code);
+    }
+    for (const t of [l?.takeoffLine, l?.description]) {
+      const nt = normalizeTitle(t);
+      if (nt && !index.byTitle.has(nt)) index.byTitle.set(nt, code);
+    }
+  });
+}
+
 export function resolveBillIdentity(line, index) {
   if (!line || !index) return "";
 
-  // 1) Explicit code that exists in the bill.
   const explicit = String(
     line.billIdentity || line.sourceTakeoffCode || line.code || "",
   ).trim();
@@ -60,8 +77,7 @@ export function resolveBillIdentity(line, index) {
     return index.byCode.get(explicit.toLowerCase());
   }
 
-  // 2) Revit element-ID overlap (the bill line sharing the most elements wins).
-  const eids = Array.isArray(line.elementIds) ? line.elementIds : [];
+  const eids = eidsOf(line);
   if (eids.length && index.byElement.size) {
     const tally = new Map();
     for (const eid of eids) {
@@ -79,31 +95,44 @@ export function resolveBillIdentity(line, index) {
     if (best) return best;
   }
 
-  // 3) Normalized title (takeoffLine, then description, then materialName).
   for (const t of [line.takeoffLine, line.description, line.materialName]) {
     const nt = normalizeTitle(t);
     if (nt && index.byTitle.has(nt)) return index.byTitle.get(nt);
   }
 
-  // 4) Keep an explicit code even when the bill has no matching line, so we
-  //    never lose linkage the plugin already provided.
   return explicit;
+}
+
+// Resolve a bill code for EVERY line (parallel array). Two passes: first against
+// the bill items, then — using the codes found as anchors — re-resolve whatever
+// is still unlinked. Pure; does not mutate.
+export function resolveAll(items, lines) {
+  const list = Array.isArray(lines) ? lines : [];
+  const index = buildBillIndex(items);
+  const codes = new Array(list.length).fill("");
+  list.forEach((l, i) => {
+    codes[i] = resolveBillIdentity(l, index);
+  });
+  addAnchors(index, list, codes);
+  list.forEach((l, i) => {
+    if (!codes[i]) codes[i] = resolveBillIdentity(l, index);
+  });
+  return codes;
 }
 
 // Mutate budgetItems in place: set `billIdentity` to the resolved bill code
 // wherever we can establish or improve the link. Returns { items, linked }.
 export function backfillBudgetLinks(items, budgetItems) {
   const list = Array.isArray(budgetItems) ? budgetItems : [];
-  const index = buildBillIndex(items);
-  if (index.byCode.size === 0) return { items: list, linked: 0 };
+  if (!list.length) return { items: list, linked: 0 };
+  const codes = resolveAll(items, list);
   let linked = 0;
-  for (const b of list) {
-    if (!b) continue;
-    const resolved = resolveBillIdentity(b, index);
-    if (resolved && norm(b.billIdentity) !== resolved.toLowerCase()) {
+  list.forEach((b, i) => {
+    const resolved = codes[i];
+    if (b && resolved && norm(b.billIdentity) !== resolved.toLowerCase()) {
       b.billIdentity = resolved;
       linked += 1;
     }
-  }
+  });
   return { items: list, linked };
 }

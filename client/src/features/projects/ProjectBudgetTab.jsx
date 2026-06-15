@@ -10,11 +10,7 @@ import {
 } from "react-icons/fa";
 import SectionRail from "./SectionRail.jsx";
 import { RateCell } from "./ProjectBillTable.jsx";
-import {
-  buildBillIndex,
-  resolveBillIdentity,
-  normalizeTitle,
-} from "../../lib/budgetBillLink.js";
+import { resolveAll, normalizeTitle } from "../../lib/budgetBillLink.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Project Budget tab — Material & Labour build-up of each Bill line.
@@ -117,6 +113,9 @@ export default function ProjectBudgetTab({
   const [saving, setSaving] = React.useState(false);
   // In-progress Overhead/Profit edits, keyed by group — committed on blur.
   const [opDraft, setOpDraft] = React.useState({});
+  // Global Overhead/Profit — when set, overrides every item's O&P. Empty = off.
+  const [globalOH, setGlobalOH] = React.useState("");
+  const [globalPR, setGlobalPR] = React.useState("");
 
   // The active breakdown source: prefer the consolidated budgetItems[]; fall
   // back to the QUIV materials view. Edits persist as budgetItems either way.
@@ -132,8 +131,7 @@ export default function ProjectBudgetTab({
 
   const isTradeGrouping = String(groupByMode || "category") === "trade";
 
-  // Bill index for robust matching + per-code metadata (order/section/qty).
-  const billIndex = React.useMemo(() => buildBillIndex(items), [items]);
+  // Per-code bill metadata (order/section/qty) for laying groups out like the Bill.
   const billByCode = React.useMemo(() => {
     const m = new Map();
     (items || []).forEach((it, idx) => {
@@ -196,10 +194,13 @@ export default function ProjectBudgetTab({
   // Build the bill-line groups: every budget row resolved to its bill line,
   // bundled, sorted material → labour, ordered like the Bill.
   const groups = React.useMemo(() => {
+    // Two-pass resolve so a work item's materials bundle with its labour (which
+    // carries the bill code) even when the materials arrived without one.
+    const codes = resolveAll(items, sourceLines, eidsFor);
     const map = new Map();
     let seen = 0;
-    for (const it of sourceLines) {
-      const resolved = resolveBillIdentity(it, billIndex, eidsFor(it));
+    sourceLines.forEach((it, idx) => {
+      const resolved = codes[idx];
       const lc = resolved ? resolved.toLowerCase() : "";
       const tl = normalizeTitle(it?.takeoffLine || it?.materialName);
       const key = lc || (tl ? `tl:${tl}` : `__${seen}`);
@@ -224,7 +225,7 @@ export default function ProjectBudgetTab({
         seen += 1;
       }
       map.get(key).lines.push(it);
-    }
+    });
     return [...map.values()]
       .map((g) => {
         const lines = [...g.lines].sort(
@@ -260,14 +261,18 @@ export default function ProjectBudgetTab({
         };
       })
       .sort((a, b) => a.order - b.order);
-  }, [sourceLines, billIndex, billByCode, eidsFor]);
+  }, [sourceLines, items, billByCode, eidsFor]);
 
-  // Effective Overhead/Profit for a group (live draft overrides committed).
+  // Global O&P overrides every item when either field is set.
+  const globalActive = globalOH !== "" || globalPR !== "";
+  // Effective Overhead/Profit for a group: global override → live draft → saved.
   const effOH = (g) => {
+    if (globalActive) return safeNum(globalOH);
     const d = opDraft[g.key]?.overheadPercent;
     return d != null && d !== "" ? safeNum(d) : g.overheadPercent;
   };
   const effPR = (g) => {
+    if (globalActive) return safeNum(globalPR);
     const d = opDraft[g.key]?.profitPercent;
     return d != null && d !== "" ? safeNum(d) : g.profitPercent;
   };
@@ -278,17 +283,14 @@ export default function ProjectBudgetTab({
   };
 
   // ── Search filter ────────────────────────────────────────────────────
+  // Match the resource (material / labour) name only — NOT the bill-line title
+  // — so "cement" returns cement rows, not every row under a concrete line.
   const q = normalizeTitle(query);
   const lineMatches = React.useCallback(
     (l) => {
       if (!q) return true;
       const hay = normalizeTitle(
-        [
-          lineName(l),
-          kindMeta(l?.componentKind).label,
-          l?.unit,
-          l?.takeoffLine,
-        ].join(" "),
+        [lineName(l), kindMeta(l?.componentKind).label].join(" "),
       );
       return hay.includes(q);
     },
@@ -439,6 +441,15 @@ export default function ProjectBudgetTab({
       delete next[group.key];
       return next;
     });
+  }
+
+  // Stamp the global Overhead/Profit onto EVERY line (overrides per-item).
+  function commitGlobalMarkup() {
+    if (!canEdit) return;
+    const oh = safeNum(globalOH);
+    const pr = safeNum(globalPR);
+    patchLines(() => true, { overheadPercent: oh, profitPercent: pr });
+    setOpDraft({});
   }
 
   // ── Buy schedule — "what to buy & when" ────────────────────────────────
@@ -606,6 +617,71 @@ export default function ProjectBudgetTab({
                 </button>
               ) : null}
             </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {hasBreakdown && view === "breakdown" ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs dark:border-adlm-dark-border dark:bg-white/5">
+          <span className="font-semibold text-slate-700 dark:text-adlm-dark-text">
+            Global Overhead &amp; Profit
+          </span>
+          <span className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+            one rate for every item — overrides each item’s own O&amp;P
+          </span>
+          <label className="inline-flex items-center gap-1 text-slate-600 dark:text-adlm-dark-muted">
+            O/H
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={globalOH}
+              disabled={!canEdit || saving}
+              onChange={(e) => setGlobalOH(e.target.value)}
+              placeholder="—"
+              className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-right text-slate-900 disabled:opacity-50 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
+            />
+            %
+          </label>
+          <label className="inline-flex items-center gap-1 text-slate-600 dark:text-adlm-dark-muted">
+            Profit
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={globalPR}
+              disabled={!canEdit || saving}
+              onChange={(e) => setGlobalPR(e.target.value)}
+              placeholder="—"
+              className="w-14 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-right text-slate-900 disabled:opacity-50 dark:border-adlm-dark-border dark:bg-white/5 dark:text-white"
+            />
+            %
+          </label>
+          <button
+            type="button"
+            disabled={!canEdit || saving || !globalActive}
+            onClick={commitGlobalMarkup}
+            className="rounded-lg bg-adlm-blue-700 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-adlm-blue-600 disabled:opacity-50"
+            title="Write this Overhead & Profit onto every item"
+          >
+            Apply to all
+          </button>
+          {globalActive ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setGlobalOH("");
+                  setGlobalPR("");
+                }}
+                className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-white dark:border-adlm-dark-border dark:text-adlm-dark-muted"
+              >
+                Clear
+              </button>
+              <span className="text-[10px] font-semibold text-adlm-orange">
+                Previewing {safeNum(globalOH) + safeNum(globalPR)}% on every item
+              </span>
+            </>
           ) : null}
         </div>
       ) : null}
@@ -789,7 +865,7 @@ export default function ProjectBudgetTab({
                             {g.label}
                           </div>
                           <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-                            {g.total} line{g.total === 1 ? "" : "s"} ·{" "}
+                            {g.total} item{g.total === 1 ? "" : "s"} ·{" "}
                             {showMaterials ? "procured" : "done"} {g.doneCount}/
                             {g.total}
                             {g.billQty > 0 ? (
@@ -809,11 +885,18 @@ export default function ProjectBudgetTab({
                                 type="number"
                                 min="0"
                                 step="0.5"
-                                disabled={!canEdit || saving}
+                                disabled={!canEdit || saving || globalActive}
+                                title={
+                                  globalActive
+                                    ? "Overridden by the global Overhead & Profit above"
+                                    : undefined
+                                }
                                 value={
-                                  opDraft[g.key]?.overheadPercent != null
-                                    ? opDraft[g.key].overheadPercent
-                                    : g.overheadPercent || ""
+                                  globalActive
+                                    ? safeNum(globalOH)
+                                    : opDraft[g.key]?.overheadPercent != null
+                                      ? opDraft[g.key].overheadPercent
+                                      : g.overheadPercent || ""
                                 }
                                 onChange={(e) =>
                                   setOpDraft((p) => ({
@@ -840,11 +923,18 @@ export default function ProjectBudgetTab({
                                 type="number"
                                 min="0"
                                 step="0.5"
-                                disabled={!canEdit || saving}
+                                disabled={!canEdit || saving || globalActive}
+                                title={
+                                  globalActive
+                                    ? "Overridden by the global Overhead & Profit above"
+                                    : undefined
+                                }
                                 value={
-                                  opDraft[g.key]?.profitPercent != null
-                                    ? opDraft[g.key].profitPercent
-                                    : g.profitPercent || ""
+                                  globalActive
+                                    ? safeNum(globalPR)
+                                    : opDraft[g.key]?.profitPercent != null
+                                      ? opDraft[g.key].profitPercent
+                                      : g.profitPercent || ""
                                 }
                                 onChange={(e) =>
                                   setOpDraft((p) => ({
@@ -1075,7 +1165,7 @@ export default function ProjectBudgetTab({
                 <div className="flex items-center justify-between text-[11px] font-semibold text-slate-800 dark:text-adlm-dark-text">
                   <span>{t.label}</span>
                   <span className="text-slate-500 dark:text-adlm-dark-muted">
-                    {t.count} line{t.count === 1 ? "" : "s"}
+                    {t.count} item{t.count === 1 ? "" : "s"}
                   </span>
                 </div>
                 <div className="mt-0.5 text-[11px] text-slate-600 dark:text-adlm-dark-muted">

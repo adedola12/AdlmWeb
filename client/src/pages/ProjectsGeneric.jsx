@@ -3971,29 +3971,108 @@ export default function ProjectsGeneric() {
 
     const wb = XLSX.utils.book_new();
 
-    // One sheet per category that has items.
+    // ── Material & Labour budget breakdown (formula-linked) ─────────────
+    // One block per bill line: its material + labour rows with live
+    // Amount = Qty×Rate, a Net = SUM(...), Overhead/Profit %, and a derived
+    // Bill rate = Net×(1+(O/H+Profit)/100)/billQty. Each bill line's Rate on
+    // the category sheets then links back to that derived rate, so the whole
+    // workbook re-prices from the build-up — for every export type.
+    const budgetByCode = new Map();
+    for (const b of sel?.budgetItems || []) {
+      const code = String(b?.billIdentity || "").trim().toLowerCase();
+      if (!code) continue;
+      if (!budgetByCode.has(code)) budgetByCode.set(code, []);
+      budgetByCode.get(code).push(b);
+    }
+    const rateCellByCode = new Map(); // bill code -> "'Sheet'!F12"
+    const kindRankX = (l) => {
+      const s = String(l?.componentKind || "").toLowerCase();
+      return s === "material" ? 0 : s === "labour" || s === "labor" ? 1 : 2;
+    };
+    const kindLabelX = (k) => {
+      const s = String(k || "").toLowerCase();
+      if (s === "labour" || s === "labor") return "Labour";
+      return s ? s[0].toUpperCase() + s.slice(1) : "Material";
+    };
+    if (budgetByCode.size) {
+      const budgetSheetName = sanitizeSheetName("Material & Labour");
+      const bAoa = [["Bill item / Resource", "Type", "Unit", "Qty", "Rate", "Amount"]];
+      const bFormulas = [];
+      for (const row of computedAll) {
+        const rawItem = items[row.i] || {};
+        const code = String(rawItem.code || "").trim().toLowerCase();
+        const blk = code ? budgetByCode.get(code) : null;
+        if (!blk || !blk.length) continue;
+        const lines = [...blk].sort((a, b) => kindRankX(a) - kindRankX(b));
+        bAoa.push([row.description, "", "", Number(safeNum(row.qty).toFixed(2)), "", ""]);
+        const headerRow = bAoa.length; // 1-based row of the bill-line header
+        const firstRow = headerRow + 1;
+        for (const l of lines) {
+          bAoa.push([
+            "    " + String(l.materialName || l.description || "").trim(),
+            kindLabelX(l.componentKind),
+            l.unit || "",
+            Number(safeNum(l.qty).toFixed(4)),
+            Number(safeNum(l.rate).toFixed(2)),
+            null,
+          ]);
+          const r = bAoa.length;
+          bFormulas.push({ addr: `F${r}`, f: `D${r}*E${r}` });
+        }
+        const lastRow = bAoa.length;
+        bAoa.push(["Net build-up", "", "", "", "", null]);
+        const netRow = bAoa.length;
+        bFormulas.push({ addr: `F${netRow}`, f: `SUM(F${firstRow}:F${lastRow})` });
+        const oh = blk.reduce((a, l) => Math.max(a, safeNum(l.overheadPercent)), 0);
+        const pr = blk.reduce((a, l) => Math.max(a, safeNum(l.profitPercent)), 0);
+        bAoa.push(["Overhead %", "", "", "", "", oh]);
+        const ohRow = bAoa.length;
+        bAoa.push(["Profit %", "", "", "", "", pr]);
+        const prRow = bAoa.length;
+        bAoa.push(["Bill rate (Material + Labour + O&P)", "", "", "", "", null]);
+        const rateRow = bAoa.length;
+        bFormulas.push({
+          addr: `F${rateRow}`,
+          f: `IF(D${headerRow}=0,F${netRow}*(1+(F${ohRow}+F${prRow})/100),F${netRow}*(1+(F${ohRow}+F${prRow})/100)/D${headerRow})`,
+        });
+        rateCellByCode.set(code, `'${budgetSheetName}'!F${rateRow}`);
+        bAoa.push(["", "", "", "", "", ""]);
+      }
+      const bws = XLSX.utils.aoa_to_sheet(bAoa);
+      bws["!cols"] = [{ wch: 48 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
+      for (const { addr, f } of bFormulas) bws[addr] = { t: "n", f };
+      XLSX.utils.book_append_sheet(wb, bws, budgetSheetName);
+    }
+
+    // One sheet per category that has items — Amount and Rate are formulas so
+    // the BoQ stays linked to the build-up.
     for (const cat of orderedCats) {
       const rows = byCategory.get(cat) || [];
       if (!rows.length) continue;
 
-      const subtotal = rows.reduce(
-        (acc, r) => acc + safeNum(r.fullAmount),
-        0,
-      );
       const aoa = [
         headers,
         ...rows.map((row, i) => [
           i + 1,
           row.description,
-          Number(row.qty.toFixed(2)),
+          Number(safeNum(row.qty).toFixed(2)),
           row.unit,
-          Number(row.rate.toFixed(2)),
-          Number(row.fullAmount.toFixed(2)),
+          Number(safeNum(row.rate).toFixed(2)),
+          null,
         ]),
-        ["", "", "", "", "SUBTOTAL", Number(subtotal.toFixed(2))],
+        ["", "", "", "", "SUBTOTAL", null],
       ];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws["!cols"] = cols;
+      rows.forEach((row, i) => {
+        const r = i + 2; // 1-based row (header is row 1)
+        const code = String(items[row.i]?.code || "").trim().toLowerCase();
+        const ref = code ? rateCellByCode.get(code) : null;
+        if (ref) ws[`E${r}`] = { t: "n", f: ref }; // Rate ← build-up
+        ws[`F${r}`] = { t: "n", f: `C${r}*E${r}` }; // Amount = Qty×Rate
+      });
+      const subtotalRow = rows.length + 2;
+      ws[`F${subtotalRow}`] = { t: "n", f: `SUM(F2:F${rows.length + 1})` };
       XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(cat));
     }
 

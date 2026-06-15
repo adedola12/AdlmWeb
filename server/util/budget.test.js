@@ -6,6 +6,7 @@ import {
   normalizeTitle,
   buildBillIndex,
   resolveBillIdentity,
+  resolveAll,
   backfillBudgetLinks,
 } from "./budgetBillLink.js";
 import {
@@ -15,12 +16,17 @@ import {
 
 // ── budgetBillLink ──────────────────────────────────────────────────
 
-test("normalizeTitle strips [..] qualifiers, arrows and punctuation", () => {
+test("normalizeTitle keeps bracket content so variants stay distinct", () => {
   assert.equal(
     normalizeTitle("Ceiling → Area [L:All Floors | T:Plain | 600mm]"),
-    "ceiling area",
+    "ceiling area l all floors t plain 600mm",
   );
   assert.equal(normalizeTitle("  Oversite – Blinding  "), "oversite blinding");
+  // Two wall-type variants must NOT collapse to the same key.
+  assert.notEqual(
+    normalizeTitle("Blockwork – Lintel Concrete [T:225mm Masonry]"),
+    normalizeTitle("Blockwork – Lintel Concrete [T:Interior - Blockwork 140]"),
+  );
 });
 
 const BILL = [
@@ -43,8 +49,24 @@ test("resolveBillIdentity: element-ID overlap links a code-less material", () =>
 
 test("resolveBillIdentity: title match when no code/elements", () => {
   const idx = buildBillIndex(BILL);
-  const labour = { takeoffLine: "Ceiling → Area [L:All Floors | T:Plain]" };
+  // Same takeoff title as the bill line (plugin emits matching strings).
+  const labour = { takeoffLine: "Ceiling → Area" };
   assert.equal(resolveBillIdentity(labour, idx), "C-CEIL");
+});
+
+test("resolveAll: material bundles onto its labour's bill code via shared element", () => {
+  // Bill line carries NO elementIds, so the material can only reach it through
+  // the labour line (which has the bill code + the work item's elements).
+  const items = [
+    { code: "C-CEIL", description: "Ceiling – Area", takeoffLine: "Ceiling → Area", elementIds: [] },
+  ];
+  const lines = [
+    { componentKind: "Labour", sourceTakeoffCode: "C-CEIL", elementIds: [11, 12] },
+    { componentKind: "Material", materialName: "Ceiling board", takeoffLine: "Ceiling → Materials", elementIds: [12] },
+  ];
+  const codes = resolveAll(items, lines);
+  assert.equal(codes[0], "C-CEIL"); // labour by explicit code
+  assert.equal(codes[1], "C-CEIL"); // material anchored to labour via element 12
 });
 
 test("resolveBillIdentity: returns '' when nothing matches", () => {

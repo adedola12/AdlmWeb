@@ -357,13 +357,10 @@ export default function ProjectOpenView({
     setActiveTab("dashboard");
   }, [selectedId]);
 
-  // MEP projects don't carry a material/labour budget breakdown, so the
-  // Budget tab is hidden for them (productKey like "revitmep").
-  const isMep = /mep/i.test(productKey);
-  const visibleTabs = React.useMemo(
-    () => (isMep ? TAB_OPTIONS.filter((t) => t.id !== "budget") : TAB_OPTIONS),
-    [isMep],
-  );
+  // Budget tab is available for every source (QUIV/Revit, Heron/PlanSwift,
+  // MEP, CIVIQ). It shows whatever material/labour breakdown the plugin
+  // pushed (and an empty-state prompt when none has been pushed yet).
+  const visibleTabs = TAB_OPTIONS;
 
   function copyProjectId() {
     if (!selectedId || !navigator?.clipboard) return;

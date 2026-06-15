@@ -1738,6 +1738,34 @@ async function getProject(req, res) {
       if (categoryDirty) await project.save();
     }
 
+    // Lazy budget heal for legacy projects (saved before the linker existed):
+    // consolidate materialItems → budgetItems when missing, link each line to
+    // its bill line (so material + labour bundle), and derive bill rates from
+    // any priced build-up. Idempotent + version-neutral (like the backfills
+    // above), so opening an OLD project fixes it with no re-save needed.
+    try {
+      const hasBudget =
+        Array.isArray(project.budgetItems) && project.budgetItems.length;
+      const hasMaterials =
+        Array.isArray(project.materialItems) && project.materialItems.length;
+      let budgetDirty = false;
+      if (!hasBudget && hasMaterials) {
+        project.budgetItems = sanitizeBudgetItems(project.materialItems);
+        budgetDirty = true;
+      }
+      if (Array.isArray(project.budgetItems) && project.budgetItems.length) {
+        const { linked } = backfillBudgetLinks(project.items, project.budgetItems);
+        const { updated } = deriveBillRatesFromBudget(project);
+        if (budgetDirty || linked > 0 || updated > 0) {
+          project.markModified("budgetItems");
+          if (updated > 0) project.markModified("items");
+          await project.save();
+        }
+      }
+    } catch (e) {
+      console.error("[get] budget heal failed:", e?.message || e);
+    }
+
     res.json(projectForClient(project));
   } catch (err) {
     console.error("GET project error:", err);

@@ -1206,9 +1206,99 @@ function writeSummarySheet(workbook, billRefs) {
 /* =========================
    Public API
    ========================= */
+// Material & Labour build-up sheet — one block per bill line with formula-
+// linked Amount = Qty×Rate, Net = SUM(...), Overhead/Profit %, and a derived
+// Bill rate = Net×(1+(O/H+Profit)/100)/billQty. Grouped by billIdentity (=bill
+// code) so it lines up with the rest of the workbook.
+function writeBudgetBreakdownSheet(workbook, items, budgetItems) {
+  const budget = Array.isArray(budgetItems) ? budgetItems : [];
+  if (!budget.length) return null;
+  const byCode = new Map();
+  for (const b of budget) {
+    const code = String(b?.billIdentity || "").trim().toLowerCase();
+    if (!code) continue;
+    if (!byCode.has(code)) byCode.set(code, []);
+    byCode.get(code).push(b);
+  }
+  if (!byCode.size) return null;
+
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const kindRankX = (l) => {
+    const s = String(l?.componentKind || "").toLowerCase();
+    return s === "material" ? 0 : s === "labour" || s === "labor" ? 1 : 2;
+  };
+  const kindLabelX = (k) => {
+    const s = String(k || "").toLowerCase();
+    if (s === "labour" || s === "labor") return "Labour";
+    return s ? s[0].toUpperCase() + s.slice(1) : "Material";
+  };
+
+  const ws = workbook.addWorksheet(safeSheetName("Material & Labour", workbook));
+  ws.columns = [
+    { width: 48 },
+    { width: 10 },
+    { width: 8 },
+    { width: 12 },
+    { width: 14 },
+    { width: 16 },
+  ];
+  ws.addRow(["Bill item / Resource", "Type", "Unit", "Qty", "Rate", "Amount"]).font = {
+    bold: true,
+  };
+
+  for (const it of Array.isArray(items) ? items : []) {
+    const code = String(it?.code || "").trim().toLowerCase();
+    const blk = code ? byCode.get(code) : null;
+    if (!blk || !blk.length) continue;
+    const lines = [...blk].sort((a, b) => kindRankX(a) - kindRankX(b));
+
+    const headerRow = ws.addRow([
+      String(it?.description || it?.takeoffLine || "").trim(),
+      "",
+      "",
+      num(it?.qty),
+      "",
+      "",
+    ]);
+    headerRow.font = { bold: true };
+    const headerNum = headerRow.number;
+    const firstRow = headerNum + 1;
+
+    for (const l of lines) {
+      const row = ws.addRow([
+        "    " + String(l.materialName || l.description || "").trim(),
+        kindLabelX(l.componentKind),
+        l.unit || "",
+        num(l.qty),
+        num(l.rate),
+        null,
+      ]);
+      row.getCell(6).value = { formula: `D${row.number}*E${row.number}` };
+    }
+    const lastRow = ws.lastRow.number;
+
+    const netRow = ws.addRow(["Net build-up", "", "", "", "", null]);
+    netRow.getCell(6).value = { formula: `SUM(F${firstRow}:F${lastRow})` };
+    const oh = blk.reduce((a, l) => Math.max(a, num(l.overheadPercent)), 0);
+    const pr = blk.reduce((a, l) => Math.max(a, num(l.profitPercent)), 0);
+    const ohRow = ws.addRow(["Overhead %", "", "", "", "", oh]);
+    const prRow = ws.addRow(["Profit %", "", "", "", "", pr]);
+    const rateRow = ws.addRow(["Bill rate (Material + Labour + O&P)", "", "", "", "", null]);
+    rateRow.getCell(6).value = {
+      formula: `IF(D${headerNum}=0,F${netRow.number}*(1+(F${ohRow.number}+F${prRow.number})/100),F${netRow.number}*(1+(F${ohRow.number}+F${prRow.number})/100)/D${headerNum})`,
+    };
+    ws.addRow([]);
+  }
+  return ws;
+}
+
 export async function exportElementalBoQ({
   projectName = "Project",
   items = [],
+  budgetItems = [],
   productKey = "",
   buildingType = "bungalow",
   foundationType,
@@ -1320,6 +1410,9 @@ export async function exportElementalBoQ({
   }
 
   writeSummarySheet(workbook, billRefs);
+
+  // Material & Labour build-up (after the summary so it reads as an appendix).
+  writeBudgetBreakdownSheet(workbook, projectItems, budgetItems);
 
   const buf = await workbook.xlsx.writeBuffer();
   const safeName = String(projectName || "Project")

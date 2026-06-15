@@ -180,6 +180,7 @@ router.get(
     const out = await exportElementalBoQ({
       projectName: project.name || "Project",
       items: project.items,
+      budgetItems: project.budgetItems || [],
       productKey: tool,
       buildingType,
       foundationType: foundationType || undefined,
