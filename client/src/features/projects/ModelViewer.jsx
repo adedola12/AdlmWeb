@@ -25,9 +25,30 @@ function itemLabel(it) {
   return joined || String(it?.description || "").trim() || "(unnamed item)";
 }
 
+// A single element's share of a line's quantity. Reads the per-element split
+// (elementQuantities) when present; otherwise falls back to an even split of
+// the line total across its elements (flagged estimated so the UI shows ≈).
+function elementQtyFor(it, id) {
+  const eqs = it?.elementQuantities;
+  if (Array.isArray(eqs) && eqs.length) {
+    const hit = eqs.find((e) => Number(e?.id) === id);
+    if (hit && Number.isFinite(Number(hit.qty))) {
+      return { qty: Number(hit.qty), estimated: !!it.elementQuantitiesEstimated };
+    }
+  }
+  const ids = it?.elementIds || [];
+  const n = ids.length || 1;
+  return { qty: (Number(it?.qty) || 0) / n, estimated: true };
+}
+
+function fmtQty(n) {
+  return (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
+}
+
 export default function ModelViewer({
   projectModels = {},
   items = [],
+  materialItems = [],
   productKey = "",
   projectId = "",
   accessToken = "",
@@ -154,13 +175,22 @@ export default function ModelViewer({
     viewerRef.current?.clearHighlight();
   }
 
-  // BoQ lines that reference the clicked element.
-  const pickedItems = React.useMemo(() => {
+  // BoQ (takeoff) lines that reference the clicked element.
+  const pickedBoqItems = React.useMemo(() => {
     if (!pickedId) return [];
     return (items || []).filter((it) =>
       (it?.elementIds || []).some((n) => Number(n) === pickedId),
     );
   }, [pickedId, items]);
+
+  // Material/labour (budget) lines that reference the clicked element — its
+  // material breakdown.
+  const pickedMaterialItems = React.useMemo(() => {
+    if (!pickedId) return [];
+    return (materialItems || []).filter((it) =>
+      (it?.elementIds || []).some((n) => Number(n) === pickedId),
+    );
+  }, [pickedId, materialItems]);
 
   if (available.length === 0) {
     return (
@@ -236,23 +266,74 @@ export default function ModelViewer({
 
         {/* Side panel: BoQ lines + pick info */}
         <div className="flex h-[600px] flex-col gap-3">
-          {/* Clicked element trace */}
+          {/* Clicked element trace: this element's own BoQ qty + materials */}
           {pickedId ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px]">
               <div className="font-semibold text-amber-900">
                 Element ID {pickedId}
               </div>
-              {pickedItems.length ? (
-                <ul className="mt-1 list-disc pl-4 text-amber-800">
-                  {pickedItems.slice(0, 6).map((it, i) => (
-                    <li key={i} className="truncate" title={itemLabel(it)}>
-                      {itemLabel(it)}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
+
+              {pickedBoqItems.length ? (
+                <div className="mt-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                    Bill of Quantity
+                  </div>
+                  <ul className="mt-0.5 space-y-0.5 text-amber-900">
+                    {pickedBoqItems.slice(0, 8).map((it, i) => {
+                      const q = elementQtyFor(it, pickedId);
+                      return (
+                        <li
+                          key={i}
+                          className="flex items-baseline justify-between gap-2"
+                        >
+                          <span className="truncate" title={itemLabel(it)}>
+                            {itemLabel(it)}
+                          </span>
+                          <span className="shrink-0 font-medium tabular-nums">
+                            {q.estimated ? "≈" : ""}
+                            {fmtQty(q.qty)} {it.unit || ""}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+
+              {pickedMaterialItems.length ? (
+                <div className="mt-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                    Material breakdown
+                  </div>
+                  <ul className="mt-0.5 space-y-0.5 text-amber-900">
+                    {pickedMaterialItems.slice(0, 12).map((it, i) => {
+                      const q = elementQtyFor(it, pickedId);
+                      return (
+                        <li
+                          key={i}
+                          className="flex items-baseline justify-between gap-2"
+                        >
+                          <span className="truncate" title={itemLabel(it)}>
+                            {itemLabel(it)}
+                          </span>
+                          <span className="shrink-0 font-medium tabular-nums">
+                            {q.estimated ? "≈" : ""}
+                            {fmtQty(q.qty)} {it.unit || ""}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+
+              {!pickedBoqItems.length && !pickedMaterialItems.length ? (
                 <div className="mt-1 text-amber-700">
                   Not referenced by any quantity in this project.
+                </div>
+              ) : (
+                <div className="mt-1.5 text-[10px] text-amber-600">
+                  ≈ = estimated (even split across this line&apos;s elements)
                 </div>
               )}
             </div>
