@@ -1,21 +1,34 @@
 // Client mirror of server/util/budgetBillLink.js — keep the two in sync.
 //
 // Resolves which bill line a budget/material/labour line belongs to so the
-// Budget can bundle each bill line's material + labour together in Bill order.
+// Budget bundles each bill line's material + labour together in Bill order.
 //
-// CONSERVATIVE by design — it must NEVER dump unrelated materials onto the wrong
-// bill line. Match order, each only when confident:
+// CONSERVATIVE — never dump unrelated materials onto the wrong bill line.
+// Match order, each only when confident:
 //   1. exact bill code (billIdentity / sourceTakeoffCode === bill code)
-//   2. Revit element MAJORITY (most of the line's elements live in one bill
-//      line; a single shared element is not enough)
-//   3. exact normalized title
-// Anything else stays unlinked (grouped by its own takeoff line) rather than
-// being mis-filed. Labour reliably carries the bill code, so its elements
-// anchor a work item's materials in pass two.
+//   2. exact normalized title (brackets kept — variant-safe)
+//   3. bracket-stripped title, but ONLY when it maps to exactly one bill line
+//      (e.g. "Strip → Blinding" ↔ "Strip – Blinding"); ambiguous titles that
+//      hit several variants are skipped so nothing is mis-filed
+//   4. Revit element MAJORITY (most of the line's elements in one bill line)
+// Anything else stays unlinked (grouped by its own takeoff line). Labour
+// carries the bill code, so its elements/title also anchor a work item.
 
 export function normalizeTitle(s) {
   return String(s == null ? "" : s)
     .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+// Like normalizeTitle but first drops "[L:… | T:…]" qualifiers, so a coarse
+// material group ("Strip → Blinding") lines up with a bracketed bill
+// description ("Strip – Blinding [L:Multiple | T:Oversite]").
+export function strippedTitle(s) {
+  return String(s == null ? "" : s)
+    .toLowerCase()
+    .replace(/\[[^\]]*\]/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
@@ -32,7 +45,8 @@ function eidsOf(line, getEids) {
 export function buildBillIndex(items) {
   const byCode = new Map();
   const byElement = new Map(); // elementId -> Set<code>
-  const byTitle = new Map();
+  const byTitle = new Map(); // exact normalized title -> code
+  const byStripped = new Map(); // bracket-stripped title -> Set<code>
   for (const it of Array.isArray(items) ? items : []) {
     const code = String(it?.code ?? "").trim();
     if (!code) continue;
@@ -51,9 +65,18 @@ export function buildBillIndex(items) {
     for (const t of [it?.description, it?.takeoffLine, it?.materialName]) {
       const nt = normalizeTitle(t);
       if (nt && !byTitle.has(nt)) byTitle.set(nt, code);
+      const st = strippedTitle(t);
+      if (st) {
+        let set = byStripped.get(st);
+        if (!set) {
+          set = new Set();
+          byStripped.set(st, set);
+        }
+        set.add(code);
+      }
     }
   }
-  return { byCode, byElement, byTitle };
+  return { byCode, byElement, byTitle, byStripped };
 }
 
 // The bill code that holds the MAJORITY of the line's elements, or "".
@@ -72,7 +95,6 @@ function bestByElement(eids, byElement) {
       bestN = n;
     }
   }
-  // Majority of the line's own elements must fall in that bill line.
   return best && bestN * 2 >= eids.length ? best : "";
 }
 
@@ -86,6 +108,26 @@ export function resolveBillIdentity(line, index, elementIds) {
     return index.byCode.get(explicit.toLowerCase());
   }
 
+  const titleSources = [line.takeoffLine, line.description, line.materialName];
+
+  // Exact title (variant-safe).
+  for (const t of titleSources) {
+    const nt = normalizeTitle(t);
+    if (nt && index.byTitle.has(nt)) return index.byTitle.get(nt);
+  }
+
+  // Bracket-stripped title — only when unambiguous (one bill line).
+  if (index.byStripped) {
+    for (const t of titleSources) {
+      const st = strippedTitle(t);
+      if (st && index.byStripped.has(st)) {
+        const set = index.byStripped.get(st);
+        if (set.size === 1) return [...set][0];
+      }
+    }
+  }
+
+  // Element majority.
   const eids = (
     Array.isArray(elementIds) && elementIds.length
       ? elementIds
@@ -97,11 +139,6 @@ export function resolveBillIdentity(line, index, elementIds) {
     .filter(Number.isFinite);
   const byEl = bestByElement(eids, index.byElement);
   if (byEl) return byEl;
-
-  for (const t of [line.takeoffLine, line.description, line.materialName]) {
-    const nt = normalizeTitle(t);
-    if (nt && index.byTitle.has(nt)) return index.byTitle.get(nt);
-  }
 
   return explicit;
 }
@@ -125,9 +162,7 @@ function addAnchors(index, lines, codes, getEids) {
   });
 }
 
-// Resolve a bill code for EVERY line (parallel array). Two passes: against the
-// bill, then — using resolved lines' elements as anchors — re-resolve the rest.
-// Pure; does not mutate lines.
+// Resolve a bill code for EVERY line (parallel array). Two passes. Pure.
 export function resolveAll(items, lines, getEids) {
   const list = Array.isArray(lines) ? lines : [];
   const index = buildBillIndex(items);

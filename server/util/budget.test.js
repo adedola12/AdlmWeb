@@ -65,6 +65,32 @@ test("resolveBillIdentity: no match without an element majority (no collapse)", 
   assert.equal(resolveBillIdentity({ elementIds: [1, 90, 91, 92] }, idx), "");
 });
 
+test("resolveBillIdentity: bracket-stripped title links a coarse material (unique)", () => {
+  const items = [
+    { code: "SB", description: "Strip – Blinding [L:Multiple | T:Oversite]" },
+    { code: "OC", description: "Oversite – Concrete [L:All | T:Oversite]" },
+  ];
+  const idx = buildBillIndex(items);
+  // Material module groups it as "Strip → Blinding" — no code, no brackets.
+  assert.equal(
+    resolveBillIdentity({ materialName: "Cement", takeoffLine: "Strip → Blinding" }, idx),
+    "SB",
+  );
+});
+
+test("resolveBillIdentity: ambiguous stripped title does NOT link (variants)", () => {
+  const items = [
+    { code: "LC1", description: "Blockwork – Lintel Concrete [T:225mm Masonry]" },
+    { code: "LC2", description: "Blockwork – Lintel Concrete [T:Interior - 140]" },
+  ];
+  const idx = buildBillIndex(items);
+  // Maps to BOTH variants → skipped so it is never mis-filed.
+  assert.equal(
+    resolveBillIdentity({ takeoffLine: "Blockwork → Lintel Concrete" }, idx),
+    "",
+  );
+});
+
 test("resolveAll: a foreign material does NOT collapse onto an unrelated bill line", () => {
   // Bill: a tiny "Blinding" line + a big "Blockwork" line, distinct elements.
   const items = [

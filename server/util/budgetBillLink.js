@@ -1,12 +1,13 @@
-// Robust budget↔bill linker. CONSERVATIVE — it must never dump unrelated
-// materials onto the wrong bill line. Match order, each only when confident:
+// Robust budget↔bill linker. CONSERVATIVE — never dump unrelated materials onto
+// the wrong bill line. Match order, each only when confident:
 //   1. exact bill code (billIdentity / sourceTakeoffCode === bill code)
-//   2. Revit element MAJORITY (most of the line's elements live in one bill
-//      line; a single shared element is not enough)
-//   3. exact normalized title
-// Anything else stays unlinked (grouped by its own takeoff line) rather than
-// mis-filed. Labour reliably carries the bill code; its elements anchor a work
-// item's materials in pass two.
+//   2. exact normalized title (brackets kept — variant-safe)
+//   3. bracket-stripped title, but ONLY when it maps to exactly one bill line
+//      (e.g. "Strip → Blinding" ↔ "Strip – Blinding"); ambiguous titles that
+//      hit several variants are skipped so nothing is mis-filed
+//   4. Revit element MAJORITY (most of the line's elements in one bill line)
+// Anything else stays unlinked (grouped by its own takeoff line). Labour carries
+// the bill code, so its elements anchor a work item's materials in pass two.
 //
 // Pure (no DB / mongoose), so it unit-tests trivially like billBudgetCascade.js.
 
@@ -22,6 +23,15 @@ export function normalizeTitle(s) {
     .replace(/\s+/g, " ");
 }
 
+export function strippedTitle(s) {
+  return String(s == null ? "" : s)
+    .toLowerCase()
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 function eidsOf(line) {
   return Array.isArray(line?.elementIds) ? line.elementIds : [];
 }
@@ -30,6 +40,7 @@ export function buildBillIndex(items) {
   const byCode = new Map();
   const byElement = new Map(); // elementId -> Set<code>
   const byTitle = new Map();
+  const byStripped = new Map(); // stripped title -> Set<code>
   for (const it of Array.isArray(items) ? items : []) {
     const code = String(it?.code ?? "").trim();
     if (!code) continue;
@@ -48,12 +59,20 @@ export function buildBillIndex(items) {
     for (const t of [it?.description, it?.takeoffLine, it?.materialName]) {
       const nt = normalizeTitle(t);
       if (nt && !byTitle.has(nt)) byTitle.set(nt, code);
+      const st = strippedTitle(t);
+      if (st) {
+        let set = byStripped.get(st);
+        if (!set) {
+          set = new Set();
+          byStripped.set(st, set);
+        }
+        set.add(code);
+      }
     }
   }
-  return { byCode, byElement, byTitle };
+  return { byCode, byElement, byTitle, byStripped };
 }
 
-// The bill code that holds the MAJORITY of the line's elements, or "".
 function bestByElement(eids, byElement) {
   if (!eids.length || !byElement.size) return "";
   const tally = new Map();
@@ -82,20 +101,30 @@ export function resolveBillIdentity(line, index) {
     return index.byCode.get(explicit.toLowerCase());
   }
 
-  const eids = eidsOf(line).map(Number).filter(Number.isFinite);
-  const byEl = bestByElement(eids, index.byElement);
-  if (byEl) return byEl;
+  const titleSources = [line.takeoffLine, line.description, line.materialName];
 
-  for (const t of [line.takeoffLine, line.description, line.materialName]) {
+  for (const t of titleSources) {
     const nt = normalizeTitle(t);
     if (nt && index.byTitle.has(nt)) return index.byTitle.get(nt);
   }
 
+  if (index.byStripped) {
+    for (const t of titleSources) {
+      const st = strippedTitle(t);
+      if (st && index.byStripped.has(st)) {
+        const set = index.byStripped.get(st);
+        if (set.size === 1) return [...set][0];
+      }
+    }
+  }
+
+  const eids = eidsOf(line).map(Number).filter(Number.isFinite);
+  const byEl = bestByElement(eids, index.byElement);
+  if (byEl) return byEl;
+
   return explicit;
 }
 
-// Add resolved lines' elements → their code, so a work item's materials can
-// anchor onto its labour line's elements (labour carries the bill code).
 function addAnchors(index, lines, codes) {
   lines.forEach((l, i) => {
     const code = codes[i];
@@ -113,7 +142,6 @@ function addAnchors(index, lines, codes) {
   });
 }
 
-// Resolve a bill code for EVERY line (parallel array). Two passes. Pure.
 export function resolveAll(items, lines) {
   const list = Array.isArray(lines) ? lines : [];
   const index = buildBillIndex(items);
