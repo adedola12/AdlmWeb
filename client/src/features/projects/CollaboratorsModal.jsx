@@ -400,7 +400,7 @@ export default function CollaboratorsModal({
                           ].join(" ")}
                           title="Share link & QR code"
                         >
-                          <FaQrcode /> Link
+                          <FaQrcode /> Link & QR
                         </button>
                         <button
                           type="button"
