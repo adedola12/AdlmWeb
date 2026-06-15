@@ -807,6 +807,7 @@ export default function ProjectBillTable({
   onPercentChange,
   onCategoryChange,
   onAddCategory,
+  onAddTrade,
   categoryOptions = [],
   // Set of bill codes (lowercased) whose rate is derived from a priced
   // material/labour build-up — those rate cells render read-only.
@@ -1438,6 +1439,26 @@ export default function ProjectBillTable({
                     ? "Items are grouped by the work being done. Overrides train the learner."
                     : "Items are grouped by the element they belong to."}
                 </div>
+                {(isTradeGrouping ? onAddTrade : onAddCategory) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const label = isTradeGrouping ? "work section" : "category";
+                      const name =
+                        typeof window !== "undefined"
+                          ? window.prompt(`New ${label} name`)
+                          : "";
+                      const t = String(name || "").trim();
+                      if (!t) return;
+                      if (isTradeGrouping) onAddTrade?.(t);
+                      else onAddCategory?.(t);
+                    }}
+                    className="mt-1 inline-flex items-center gap-1 self-start rounded-md border border-dashed border-adlm-blue-300 bg-white px-2 py-1 text-[10px] font-semibold text-adlm-blue-700 hover:bg-blue-50"
+                    title="Create a new category / work section — remembered for your future projects"
+                  >
+                    + New {isTradeGrouping ? "section" : "category"}
+                  </button>
+                ) : null}
               </RibbonGroup>
 
               <RibbonGroup title="Stats">
@@ -2075,9 +2096,24 @@ export default function ProjectBillTable({
                               <select
                                 className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[10px] text-slate-700 focus:border-adlm-blue-500 focus:outline-none"
                                 value={row.trade || ""}
-                                onChange={(e) =>
-                                  onTradeChange(row.i, e.target.value)
-                                }
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === "__add_trade__") {
+                                    const name =
+                                      typeof window !== "undefined"
+                                        ? window.prompt(
+                                            "New work section name (e.g. Waterproofing)",
+                                          )
+                                        : "";
+                                    const trimmed = String(name || "").trim();
+                                    if (trimmed && onAddTrade) {
+                                      onAddTrade(trimmed);
+                                      onTradeChange(row.i, trimmed);
+                                    }
+                                    return;
+                                  }
+                                  onTradeChange(row.i, v);
+                                }}
                                 title="Re-classify this item by work section / trade. Saved overrides train the self-learning classifier."
                               >
                                 {tradeOptions.map((opt) => (
@@ -2088,6 +2124,11 @@ export default function ProjectBillTable({
                                 {row.trade &&
                                 !tradeOptions.includes(row.trade) ? (
                                   <option value={row.trade}>{row.trade}</option>
+                                ) : null}
+                                {onAddTrade ? (
+                                  <option value="__add_trade__">
+                                    + New work section…
+                                  </option>
                                 ) : null}
                               </select>
                             </span>

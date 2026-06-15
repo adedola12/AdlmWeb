@@ -341,6 +341,24 @@ export default function ProjectBudgetTab({
     (s) => s.category && s.category !== "Uncategorized",
   );
 
+  // Flat search results — each matched resource with the work item (bill line)
+  // it belongs to and its section, so a search for "cement" shows where it's used.
+  const searchResults = React.useMemo(() => {
+    if (!q) return [];
+    const out = [];
+    for (const g of groups) {
+      const section =
+        (isTradeGrouping ? g.trade : g.category).toString().trim() ||
+        "Uncategorized";
+      for (const l of g.lines) {
+        if (lineMatches(l)) {
+          out.push({ line: l, workItem: g.label, section, key: `${g.key}-${keyOf(l)}` });
+        }
+      }
+    }
+    return out;
+  }, [q, groups, isTradeGrouping, lineMatches]);
+
   // Floating Material/Labour total for the active search.
   const floatTotals = React.useMemo(() => {
     if (!q) return null;
@@ -803,7 +821,7 @@ export default function ProjectBudgetTab({
         </div>
       ) : (
         <div className="relative flex gap-4">
-          {railSections.length > 1 ? (
+          {!q && railSections.length > 1 ? (
             <SectionRail
               title="Budget sections"
               sections={railSections}
@@ -816,13 +834,102 @@ export default function ProjectBudgetTab({
           <div className="min-w-0 flex-1 space-y-5">
             <div ref={topRef} className="scroll-mt-24" aria-hidden="true" />
 
-            {sections.length === 0 ? (
+            {!q && sections.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
-                No lines match “{query}”.
+                No build-up on this project yet.
               </div>
             ) : null}
 
-            {sections.map((section) => (
+            {/* Search mode — flat results showing each resource's work item + section. */}
+            {q ? (
+              searchResults.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
+                  No material / labour matches “{query}”.
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth">
+                  <div className="border-b border-slate-100 dark:border-adlm-dark-border px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">
+                    {searchResults.length} result
+                    {searchResults.length === 1 ? "" : "s"} for “{query}”
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 dark:bg-white/5 text-left text-slate-600 dark:text-adlm-dark-muted">
+                        <tr>
+                          <th className="px-3 py-2">Type</th>
+                          <th className="px-3 py-2">Resource</th>
+                          <th className="px-3 py-2">Work item</th>
+                          <th className="px-3 py-2">Section</th>
+                          <th className="px-3 py-2">Unit</th>
+                          <th className="px-3 py-2 text-right">Qty</th>
+                          <th className="px-3 py-2 text-right">Rate</th>
+                          <th className="px-3 py-2 text-center">
+                            {showMaterials ? "Procured" : "Done"}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {searchResults.map(({ line: l, workItem, section, key }) => {
+                          const meta = kindMeta(l?.componentKind);
+                          const Icon = meta.icon;
+                          const done = lineDone(l);
+                          return (
+                            <tr
+                              key={key}
+                              className="border-t border-slate-100 dark:border-adlm-dark-border"
+                            >
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.cls}`}
+                                >
+                                  <Icon className="text-[9px]" />
+                                  {meta.label}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 font-medium text-slate-800 dark:text-adlm-dark-text">
+                                <span className="line-clamp-1" title={lineName(l)}>
+                                  {lineName(l)}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-slate-700 dark:text-adlm-dark-text">
+                                <span className="line-clamp-1" title={workItem}>
+                                  {workItem}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-white/10 dark:text-adlm-dark-muted">
+                                  {section}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 dark:text-adlm-dark-muted">
+                                {l?.unit || ""}
+                              </td>
+                              <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
+                                {money(l?.qty)}
+                              </td>
+                              <td className="px-3 py-2 text-right text-slate-700 dark:text-adlm-dark-text">
+                                {money(l?.rate)}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                {done ? (
+                                  <span className={`font-semibold ${doneTone}`}>✓</span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-adlm-dark-dim">
+                                    —
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            ) : null}
+
+            {!q && sections.map((section) => (
               <div
                 key={section.category}
                 ref={(el) => {
