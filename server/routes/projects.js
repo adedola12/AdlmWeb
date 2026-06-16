@@ -228,6 +228,7 @@ import {
 } from "../util/billBudgetCascade.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
+import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
 // IFC files; we can raise this per-tier later via an entitlement flag.
@@ -1739,7 +1740,10 @@ async function saveProjectFull(req, res) {
         // so material + labour bundle under the right line, then derive the
         // bill rates from the priced build-up before reconciling progress.
         backfillBudgetLinks(takeoffRes.project.items, budget);
-        takeoffRes.project.budgetItems = budget;
+        takeoffRes.project.budgetItems = ensureBillItemCoverage(
+          takeoffRes.project.items,
+          budget,
+        );
         deriveBillRatesFromBudget(takeoffRes.project);
         reconcileItemsFromBudget(takeoffRes.project);
         await takeoffRes.project.save();
@@ -2068,7 +2072,13 @@ async function getProject(req, res) {
         const edits = new Map();
         for (const b of currentBudget) edits.set(editKey(b), b);
 
-        const fresh = sanitizeBudgetItems(project.materialItems);
+        let fresh = sanitizeBudgetItems(project.materialItems);
+        backfillBudgetLinks(project.items, fresh);
+        // Every bill line must carry a Labour line (qty = item qty) and a
+        // Material line — synthesise the gaps so each card is complete.
+        fresh = ensureBillItemCoverage(project.items, fresh);
+        // Re-apply user edits (procurement + pricing) onto the rebuilt list,
+        // including the synthetic placeholders.
         for (const b of fresh) {
           const prev = edits.get(editKey(b));
           if (!prev) continue;
@@ -2081,7 +2091,6 @@ async function getProject(req, res) {
           if (Number(prev.overheadPercent)) b.overheadPercent = prev.overheadPercent;
           if (Number(prev.profitPercent)) b.profitPercent = prev.profitPercent;
         }
-        backfillBudgetLinks(project.items, fresh);
 
         const changed =
           currentBudget.length !== fresh.length ||
@@ -2093,12 +2102,15 @@ async function getProject(req, res) {
           project.markModified("items");
           await project.save();
         }
-      } else if (currentBudget.length) {
+      } else {
         const { linked } = backfillBudgetLinks(project.items, project.budgetItems);
+        const covered = ensureBillItemCoverage(project.items, project.budgetItems);
+        const grew = covered.length !== currentBudget.length;
+        project.budgetItems = covered;
         const { updated } = deriveBillRatesFromBudget(project);
-        if (linked > 0 || updated > 0) {
+        if (linked > 0 || grew || updated > 0) {
           project.markModified("budgetItems");
-          if (updated > 0) project.markModified("items");
+          project.markModified("items");
           await project.save();
         }
       }
@@ -2373,7 +2385,7 @@ async function updateProject(req, res) {
     if (Array.isArray(budgetItems)) {
       const budget = sanitizeBudgetItems(budgetItems);
       backfillBudgetLinks(project.items, budget);
-      project.budgetItems = budget;
+      project.budgetItems = ensureBillItemCoverage(project.items, budget);
     }
 
     // Embedded budget (derived material/labour) — one revit project holds both
@@ -2388,7 +2400,7 @@ async function updateProject(req, res) {
       try {
         const budget = sanitizeBudgetItems(materialItems);
         backfillBudgetLinks(project.items, budget);
-        project.budgetItems = budget;
+        project.budgetItems = ensureBillItemCoverage(project.items, budget);
       } catch (e) {
         console.error("[update] budget consolidation failed:", e?.message || e);
       }
@@ -4212,7 +4224,7 @@ async function markBudget(req, res) {
 
     const budget = sanitizeBudgetItems(body.budgetItems);
     backfillBudgetLinks(project.items, budget);
-    project.budgetItems = budget;
+    project.budgetItems = ensureBillItemCoverage(project.items, budget);
     // Pricing edits on the Budget tab flow up: derive the bill rates from the
     // build-up, then reconcile progress.
     deriveBillRatesFromBudget(project);

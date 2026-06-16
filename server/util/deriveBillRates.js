@@ -77,6 +77,8 @@ export function deriveBillRatesFromBudget(project) {
       if (!lines || !lines.length) continue;
       const derived = deriveLineRate(it.qty, lines);
       if (!derived) continue;
+      // Only count a real change so callers that save-on-change stay idempotent.
+      if (num(it.rate) === derived.rate) continue;
       it.rate = derived.rate;
       it.netUnitCost = derived.netUnitCost;
       it.overheadPercent = derived.overheadPercent;

@@ -13,6 +13,7 @@ import {
   deriveLineRate,
   deriveBillRatesFromBudget,
 } from "./deriveBillRates.js";
+import { ensureBillItemCoverage } from "./budgetCoverage.js";
 
 // ── budgetBillLink ──────────────────────────────────────────────────
 
@@ -166,6 +167,62 @@ test("deriveLineRate: net × (1 + O&P) / billQty", () => {
 test("deriveLineRate: null when nothing priced", () => {
   assert.equal(deriveLineRate(5, [{ qty: 3, rate: 0 }]), null);
   assert.equal(deriveLineRate(5, []), null);
+});
+
+// ── ensureBillItemCoverage ──────────────────────────────────────────
+
+test("ensureBillItemCoverage: adds Labour + Material for a bare bill item", () => {
+  const items = [
+    { code: "DPM", description: "Oversite – DPM [L:.. | T:Oversite]", qty: 254, unit: "m2" },
+    { code: "CON", description: "Oversite – Concrete", qty: 38, unit: "m3" },
+  ];
+  const budget = [
+    { billIdentity: "CON", componentKind: "Material", materialName: "Cement", qty: 100, unit: "bag" },
+    { billIdentity: "CON", componentKind: "Labour", materialName: "Labour", qty: 38, unit: "m3" },
+  ];
+  const out = ensureBillItemCoverage(items, budget);
+  const dpm = out.filter((b) => b.billIdentity === "DPM");
+  assert.equal(dpm.length, 2); // synthesised labour + material
+  assert.ok(dpm.some((b) => b.componentKind === "Labour" && b.qty === 254));
+  assert.ok(dpm.some((b) => b.componentKind === "Material" && b.qty === 254));
+  // The complete CON item is left untouched.
+  assert.equal(out.filter((b) => b.billIdentity === "CON").length, 2);
+});
+
+test("ensureBillItemCoverage: fills only the missing side (labour present)", () => {
+  const items = [{ code: "BRC", description: "Oversite – BRC Mesh", qty: 254, unit: "m2" }];
+  const budget = [
+    { billIdentity: "BRC", componentKind: "Labour", materialName: "Labour", qty: 254, unit: "m2" },
+  ];
+  const out = ensureBillItemCoverage(items, budget);
+  const brc = out.filter((b) => b.billIdentity === "BRC");
+  assert.equal(brc.length, 2);
+  assert.equal(brc.filter((b) => b.componentKind === "Material").length, 1);
+});
+
+test("ensureBillItemCoverage: labour-only items get NO synthetic material", () => {
+  const items = [
+    { code: "EXC", description: "Strip – Footing Excavation", qty: 88, unit: "m3" },
+    { code: "DISP", description: "Strip – Disposal", qty: 30, unit: "m3" },
+    { code: "BF", description: "Strip – Backfill", qty: 60, unit: "m2" },
+    { code: "ES", description: "Strip – Earthwork Support", qty: 295, unit: "m2" },
+    { code: "LVL", description: "Strip – Leveling & Compacting", qty: 197, unit: "m2" },
+  ];
+  const out = ensureBillItemCoverage(items, []);
+  // Each is labour-only → exactly one Labour line, no Material.
+  assert.equal(out.length, items.length);
+  assert.ok(out.every((b) => b.componentKind === "Labour"));
+});
+
+test("ensureBillItemCoverage: deterministic sn (stable across re-runs)", () => {
+  const items = [{ code: "DPM", description: "Oversite – DPM", qty: 254, unit: "m2" }];
+  const a = ensureBillItemCoverage(items, []);
+  const b = ensureBillItemCoverage(items, []);
+  assert.equal(a.length, 2); // material + labour
+  assert.deepEqual(
+    a.map((x) => x.sn).sort(),
+    b.map((x) => x.sn).sort(),
+  );
 });
 
 test("deriveBillRatesFromBudget mutates items[].rate only where priced", () => {
