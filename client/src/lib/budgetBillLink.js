@@ -13,6 +13,13 @@
 //   4. Revit element MAJORITY (most of the line's elements in one bill line)
 // Anything else stays unlinked (grouped by its own takeoff line). Labour
 // carries the bill code, so its elements/title also anchor a work item.
+//
+// FINAL RESCUE (resolveAll only): a row STILL unlinked after every confident
+// rule is adopted by the bill line owning the PLURALITY of its elements (unique
+// max, no tie). Mirrors server/util/budgetBillLink.js — rehomes a real
+// concrete/blockwork breakdown that would otherwise be stranded and shadowed by
+// a synthetic placeholder. Plurality routes each row to where most of its
+// elements physically live, so it can't repeat the old over-eager mis-filing.
 
 export function normalizeTitle(s) {
   return String(s == null ? "" : s)
@@ -98,6 +105,31 @@ function bestByElement(eids, byElement) {
   return best && bestN * 2 >= eids.length ? best : "";
 }
 
+// The bill code owning the PLURALITY of the line's elements (unique max, ≥1, no
+// tie), or "". Looser than bestByElement — used only as the final rescue for
+// leftovers in resolveAll. Mirrors the server helper of the same name.
+function pluralityByElement(eids, byElement) {
+  if (!eids.length || !byElement.size) return "";
+  const tally = new Map();
+  for (const eid of eids) {
+    const set = byElement.get(Number(eid));
+    if (set) for (const code of set) tally.set(code, (tally.get(code) || 0) + 1);
+  }
+  let best = "";
+  let bestN = 0;
+  let tie = false;
+  for (const [code, n] of tally) {
+    if (n > bestN) {
+      best = code;
+      bestN = n;
+      tie = false;
+    } else if (n === bestN) {
+      tie = true;
+    }
+  }
+  return best && bestN >= 1 && !tie ? best : "";
+}
+
 export function resolveBillIdentity(line, index, elementIds) {
   if (!line || !index) return "";
 
@@ -162,7 +194,7 @@ function addAnchors(index, lines, codes, getEids) {
   });
 }
 
-// Resolve a bill code for EVERY line (parallel array). Two passes. Pure.
+// Resolve a bill code for EVERY line (parallel array). Two passes + rescue. Pure.
 export function resolveAll(items, lines, getEids) {
   const list = Array.isArray(lines) ? lines : [];
   const index = buildBillIndex(items);
@@ -173,6 +205,15 @@ export function resolveAll(items, lines, getEids) {
   addAnchors(index, list, codes, getEids);
   list.forEach((l, i) => {
     if (!codes[i]) codes[i] = resolveBillIdentity(l, index, eidsOf(l, getEids));
+  });
+  // Final rescue: adopt any still-unlinked row onto its element-plurality home
+  // so a real breakdown is never stranded/shadowed (mirrors the server).
+  addAnchors(index, list, codes, getEids);
+  list.forEach((l, i) => {
+    if (codes[i]) return;
+    const eids = eidsOf(l, getEids).map(Number).filter(Number.isFinite);
+    const home = pluralityByElement(eids, index.byElement);
+    if (home) codes[i] = home;
   });
   return codes;
 }

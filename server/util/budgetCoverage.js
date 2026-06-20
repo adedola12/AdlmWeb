@@ -8,6 +8,13 @@
 // default the QS can rate (or zero). Real breakdowns from the plugin are left
 // untouched; this only fills gaps.
 //
+// IMPORTANT: a synthetic Material line is added only when the item's bill code
+// has NO non-labour budget row. That depends on backfillBudgetLinks/resolveAll
+// having LINKED the real material rows first — including the element-plurality
+// rescue. Without it, a real concrete/blockwork breakdown that failed the
+// conservative link would sit under billIdentity="" and this gap-fill would
+// SHADOW it with one generic line. Keep the two in step.
+//
 // Pure (no DB / mongoose). Synthetic `sn` is deterministic (per bill-line code)
 // so user pricing/procurement edits survive re-heals via the sn|name|unit|kind
 // merge key.
@@ -91,6 +98,15 @@ export function ensureBillItemCoverage(items, budgetItems) {
     elementIds: Array.isArray(it?.elementIds)
       ? it.elementIds.map(Number).filter(Number.isFinite)
       : [],
+    // Carry the bill item's per-element quantity split so a synthesised line
+    // still resolves a single element's share in the 3D viewer (was dropped
+    // before, leaving exactly the gap-filled lines with no per-element qty).
+    elementQuantities: Array.isArray(it?.elementQuantities)
+      ? it.elementQuantities
+          .map((e) => ({ id: Number(e && e.id), qty: Number(e && e.qty) }))
+          .filter((e) => Number.isFinite(e.id) && Number.isFinite(e.qty))
+      : [],
+    elementQuantitiesEstimated: Boolean(it?.elementQuantitiesEstimated),
   });
 
   for (const it of billItems) {

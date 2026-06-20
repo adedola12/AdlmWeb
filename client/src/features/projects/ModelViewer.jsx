@@ -45,6 +45,18 @@ function fmtQty(n) {
   return (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
 }
 
+function fmtMoney(n) {
+  return (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+// A single element's cost on a line = its quantity share × the line's rate.
+// Returns 0 when the rate is absent OR masked — RateGen-gated collaborators
+// receive rate 0 from the server, so money simply doesn't render for them.
+function elementCostFor(it, id) {
+  const { qty } = elementQtyFor(it, id);
+  return qty * (Number(it?.rate) || 0);
+}
+
 export default function ModelViewer({
   projectModels = {},
   items = [],
@@ -192,6 +204,18 @@ export default function ModelViewer({
     );
   }, [pickedId, materialItems]);
 
+  // This element's own cost (Σ qty-share × rate over its BoQ lines) and budget
+  // (same over its material/labour breakdown). Stays 0 when rates are masked.
+  const pickedBoqCost = React.useMemo(
+    () => pickedBoqItems.reduce((a, it) => a + elementCostFor(it, pickedId), 0),
+    [pickedBoqItems, pickedId],
+  );
+  const pickedBudgetCost = React.useMemo(
+    () =>
+      pickedMaterialItems.reduce((a, it) => a + elementCostFor(it, pickedId), 0),
+    [pickedMaterialItems, pickedId],
+  );
+
   if (available.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-depth">
@@ -273,6 +297,27 @@ export default function ModelViewer({
                 Element ID {pickedId}
               </div>
 
+              {pickedBoqCost > 0 || pickedBudgetCost > 0 ? (
+                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-amber-800">
+                  {pickedBoqCost > 0 ? (
+                    <span>
+                      Cost{" "}
+                      <span className="font-semibold tabular-nums">
+                        {fmtMoney(pickedBoqCost)}
+                      </span>
+                    </span>
+                  ) : null}
+                  {pickedBudgetCost > 0 ? (
+                    <span>
+                      Budget{" "}
+                      <span className="font-semibold tabular-nums">
+                        {fmtMoney(pickedBudgetCost)}
+                      </span>
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+
               {pickedBoqItems.length ? (
                 <div className="mt-1.5">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
@@ -281,6 +326,7 @@ export default function ModelViewer({
                   <ul className="mt-0.5 space-y-0.5 text-amber-900">
                     {pickedBoqItems.slice(0, 8).map((it, i) => {
                       const q = elementQtyFor(it, pickedId);
+                      const cost = elementCostFor(it, pickedId);
                       return (
                         <li
                           key={i}
@@ -289,9 +335,16 @@ export default function ModelViewer({
                           <span className="truncate" title={itemLabel(it)}>
                             {itemLabel(it)}
                           </span>
-                          <span className="shrink-0 font-medium tabular-nums">
-                            {q.estimated ? "≈" : ""}
-                            {fmtQty(q.qty)} {it.unit || ""}
+                          <span className="shrink-0 text-right tabular-nums">
+                            <span className="font-medium">
+                              {q.estimated ? "≈" : ""}
+                              {fmtQty(q.qty)} {it.unit || ""}
+                            </span>
+                            {cost > 0 ? (
+                              <span className="block text-[10px] font-semibold text-amber-700">
+                                {fmtMoney(cost)}
+                              </span>
+                            ) : null}
                           </span>
                         </li>
                       );
@@ -308,6 +361,7 @@ export default function ModelViewer({
                   <ul className="mt-0.5 space-y-0.5 text-amber-900">
                     {pickedMaterialItems.slice(0, 12).map((it, i) => {
                       const q = elementQtyFor(it, pickedId);
+                      const cost = elementCostFor(it, pickedId);
                       return (
                         <li
                           key={i}
@@ -316,9 +370,16 @@ export default function ModelViewer({
                           <span className="truncate" title={itemLabel(it)}>
                             {itemLabel(it)}
                           </span>
-                          <span className="shrink-0 font-medium tabular-nums">
-                            {q.estimated ? "≈" : ""}
-                            {fmtQty(q.qty)} {it.unit || ""}
+                          <span className="shrink-0 text-right tabular-nums">
+                            <span className="font-medium">
+                              {q.estimated ? "≈" : ""}
+                              {fmtQty(q.qty)} {it.unit || ""}
+                            </span>
+                            {cost > 0 ? (
+                              <span className="block text-[10px] font-semibold text-amber-700">
+                                {fmtMoney(cost)}
+                              </span>
+                            ) : null}
                           </span>
                         </li>
                       );

@@ -128,6 +128,41 @@ test("resolveBillIdentity: returns '' when nothing matches", () => {
   assert.equal(resolveBillIdentity({ takeoffLine: "Roof → Sheeting" }, idx), "");
 });
 
+test("resolveAll: rescues a stranded breakdown by element plurality (no majority)", () => {
+  // A concrete line + a blockwork line. The cement row arrived code-less with a
+  // variant takeoffLine that doesn't title-match, and shares only ONE of its
+  // four elements with the concrete line (the rest are ghost/unmodelled ids) —
+  // so the conservative majority gate leaves it unlinked. The plurality rescue
+  // rehomes it onto the concrete line so the breakdown isn't stranded/shadowed.
+  const items = [
+    { code: "OVC", description: "Oversite – Concrete [T:Mass]", elementIds: [1] },
+    { code: "BLK", description: "Blockwork – Wall [T:225]", elementIds: [9] },
+  ];
+  const cement = {
+    componentKind: "Material",
+    materialName: "Cement",
+    // A generic module title that neither exact- nor stripped-matches a bill
+    // line, so the only remaining signal is the elements.
+    takeoffLine: "Concrete Works → Materials → Cement",
+    elementIds: [1, 80, 81, 82],
+  };
+  // The single-line conservative resolver leaves it unlinked (1 of 4 ≠ majority).
+  assert.equal(resolveBillIdentity(cement, buildBillIndex(items)), "");
+  // resolveAll's final rescue places it on its unique plurality home.
+  assert.equal(resolveAll(items, [cement])[0], "OVC");
+});
+
+test("resolveAll: a plurality tie stays unlinked (never mis-filed)", () => {
+  const items = [
+    { code: "A", description: "Strip – Blinding", elementIds: [1, 2] },
+    { code: "B", description: "Blockwork – Wall", elementIds: [3, 4] },
+  ];
+  // Shares 1 element with A, 1 with B, plus 2 ghosts → no majority, exact tie.
+  const mystery = { componentKind: "Material", materialName: "Mystery", elementIds: [1, 3, 90, 91] };
+  assert.equal(resolveBillIdentity(mystery, buildBillIndex(items)), ""); // no majority
+  assert.equal(resolveAll(items, [mystery])[0], ""); // tie → rescue declines
+});
+
 test("backfillBudgetLinks bundles material + labour under one bill code", () => {
   const budget = [
     { materialName: "Ceiling board", takeoffLine: "Ceiling → Materials → All Floors → Ceiling", elementIds: [11], billIdentity: "" },
@@ -223,6 +258,49 @@ test("ensureBillItemCoverage: deterministic sn (stable across re-runs)", () => {
     a.map((x) => x.sn).sort(),
     b.map((x) => x.sn).sort(),
   );
+});
+
+test("ensureBillItemCoverage: a rescued breakdown is NOT shadowed by a synthetic line", () => {
+  // The reported bug, end to end: a concrete item whose real cement/sand/granite
+  // rows arrived code-less and below the majority gate. backfillBudgetLinks now
+  // rescues them by plurality, so coverage sees real materials and adds ONLY a
+  // Labour line — never a generic "Material" line that hides the breakdown.
+  const items = [
+    { code: "OVC", description: "Oversite – Concrete [T:Mass]", qty: 38, unit: "m3", elementIds: [1] },
+  ];
+  const budget = [
+    { componentKind: "Material", materialName: "Cement", qty: 100, unit: "bag", elementIds: [1, 80, 81, 82] },
+    { componentKind: "Material", materialName: "Sand", qty: 5, unit: "m3", elementIds: [1, 80, 81, 82] },
+    { componentKind: "Material", materialName: "Granite", qty: 8, unit: "m3", elementIds: [1, 80, 81, 82] },
+  ];
+  backfillBudgetLinks(items, budget); // rescue links all three to OVC
+  const out = ensureBillItemCoverage(items, budget);
+  const ovc = out.filter((b) => String(b.billIdentity).toUpperCase() === "OVC");
+  const materials = ovc.filter((b) => b.componentKind === "Material");
+  assert.equal(materials.length, 3); // the real breakdown survives, un-shadowed
+  assert.deepEqual(
+    materials.map((b) => b.materialName).sort(),
+    ["Cement", "Granite", "Sand"],
+  );
+  assert.equal(ovc.filter((b) => b.componentKind === "Labour").length, 1); // gap-filled
+});
+
+test("ensureBillItemCoverage: synthetic lines carry the item's per-element split", () => {
+  const items = [
+    {
+      code: "DPM",
+      description: "Oversite – DPM",
+      qty: 254,
+      unit: "m2",
+      elementIds: [5, 6],
+      elementQuantities: [{ id: 5, qty: 154 }, { id: 6, qty: 100 }],
+    },
+  ];
+  const out = ensureBillItemCoverage(items, []);
+  assert.equal(out.length, 2); // material + labour, both synthetic
+  for (const b of out) {
+    assert.deepEqual(b.elementQuantities, [{ id: 5, qty: 154 }, { id: 6, qty: 100 }]);
+  }
 });
 
 test("deriveBillRatesFromBudget mutates items[].rate only where priced", () => {
