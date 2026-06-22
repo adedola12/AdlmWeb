@@ -234,7 +234,7 @@ function AdminShowcase() {
 
   /* ---------- Submit handlers ---------- */
 
-  // ✅ OPEN: no admin key
+  // ✅ PROTECTED: sends admin JWT
   async function handleTestimonialSubmit(e) {
     e.preventDefault();
     setError("");
@@ -254,7 +254,10 @@ function AdminShowcase() {
       setLoading(true);
       const res = await fetch(`${API_BASE}/admin/showcase/testimonials`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({ ...tForm, rating: Number(tForm.rating) || 5 }),
       });
 
@@ -283,7 +286,7 @@ function AdminShowcase() {
     }
   }
 
-  // ✅ OPEN: no admin key
+  // ✅ PROTECTED: sends admin JWT
   async function handleCompanySubmit(e) {
     e.preventDefault();
     setError("");
@@ -297,7 +300,10 @@ function AdminShowcase() {
       setLoading(true);
       const res = await fetch(`${API_BASE}/admin/showcase/companies`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify(cForm),
       });
 
@@ -364,12 +370,13 @@ function AdminShowcase() {
 
   /* ---------- Delete handlers ---------- */
 
-  // ✅ OPEN: no admin key
+  // ✅ PROTECTED: sends admin JWT
   async function handleDeleteTestimonial(id) {
     if (!window.confirm("Delete this testimonial?")) return;
     try {
       const res = await fetch(`${API_BASE}/admin/showcase/testimonials/${id}`, {
         method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) throw new Error("Failed to delete testimonial");
       setTestimonials((prev) => prev.filter((t) => t._id !== id));
@@ -379,12 +386,13 @@ function AdminShowcase() {
     }
   }
 
-  // ✅ OPEN: no admin key
+  // ✅ PROTECTED: sends admin JWT
   async function handleDeleteCompany(id) {
     if (!window.confirm("Delete this company?")) return;
     try {
       const res = await fetch(`${API_BASE}/admin/showcase/companies/${id}`, {
         method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) throw new Error("Failed to delete company");
       setCompanies((prev) => prev.filter((c) => c._id !== id));
