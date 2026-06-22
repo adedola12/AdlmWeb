@@ -268,6 +268,7 @@ export default function ProjectOpenView({
   onGroupByModeChange,
   contract,
   contractBusy = false,
+  stepUpEnabled = false,
   onLockContract,
   onUnlockContract,
   onPreliminaryPercentChange,
@@ -1032,6 +1033,7 @@ export default function ProjectOpenView({
               : 7.5
           }
           contractBusy={contractBusy}
+          stepUpEnabled={stepUpEnabled}
           onLockContract={onLockContract}
           onUnlockContract={onUnlockContract}
           onPreliminaryPercentChange={onPreliminaryPercentChange}

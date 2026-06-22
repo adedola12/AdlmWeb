@@ -6,13 +6,19 @@ import { ensureDb } from "../db.js";
 import { User } from "../models/User.js";
 import { Refresh } from "../models/Refresh.js";
 import { PasswordReset } from "../models/PasswordReset.js";
+import { StepUpOtp } from "../models/StepUpOtp.js";
 import { sendMail } from "../util/mailer.js";
 import { buildWelcomeEmail } from "../util/welcomeEmail.js";
 import { Invoice } from "../models/Invoice.js";
+import { requireAuth } from "../middleware/auth.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
+import { rolePermissionList, isSuperAdminRole } from "../util/rbac.js";
+import { ALL_AREA_KEYS } from "../config/permissions.js";
 import {
   signAccess,
   signRefresh,
   verifyRefresh,
+  signStepUp,
   REFRESH_COOKIE,
   refreshCookieOpts,
 } from "../util/jwt.js";
@@ -45,6 +51,9 @@ function buildAuthPayload(user) {
     whatsapp: user.whatsapp || "",
     username: user.username || "",
     avatarUrl: user.avatarUrl || "",
+    stepUpEnabled: !!user.security?.stepUpEnabled,
+    isSuperAdmin: isSuperAdminRole(user.role),
+    permissions: rolePermissionList(user.role, ALL_AREA_KEYS),
   };
 }
 
@@ -729,6 +738,104 @@ router.post("/password/reset", async (req, res) => {
   } catch (err) {
     console.error("[/auth/password/reset] error:", err);
     res.status(500).json({ error: "Reset failed" });
+  }
+});
+
+// ── Step-up verification (email OTP for sensitive actions) ──
+// Mirrors the forgot/reset OTP pattern, but authenticated and keyed on the
+// logged-in user. /request emails a code; /verify exchanges a correct code for
+// a short-lived step-up token the client sends as X-Step-Up on delete / lock.
+router.post("/step-up/request", authLimiter, requireAuth, async (req, res) => {
+  try {
+    await ensureDb();
+    const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
+    const user = await User.findById(uid);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Throttle resends: if a still-valid code was issued in the last 60s, don't
+    // send another (the existing one still works).
+    const recent = await StepUpOtp.findOne({
+      userId: user._id,
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+      createdAt: { $gt: new Date(Date.now() - 60 * 1000) },
+    });
+    if (recent) {
+      return res.status(429).json({
+        error: "A code was just sent. Please wait a minute before requesting another.",
+        code: "RATE_LIMITED",
+      });
+    }
+
+    const code = String(crypto.randomInt(100000, 999999));
+    await StepUpOtp.create({
+      userId: user._id,
+      code,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      requestedFromIp: req.ip,
+    });
+
+    const safeName = user.firstName || user.username || user.email.split("@")[0];
+    try {
+      await sendMail({
+        to: user.email,
+        subject: "Your ADLM security code",
+        html: `<p>Hi ${safeName},</p>
+               <p>Use this code to confirm a sensitive action (deleting projects or locking a contract):</p>
+               <p style="font-size:22px;font-weight:bold;letter-spacing:4px">${code}</p>
+               <p>This code expires in 10 minutes. If you didn't request it, someone may have your password — please change it.</p>`,
+      });
+    } catch (mailErr) {
+      console.error("[/auth/step-up/request] mail error:", mailErr);
+      return res.status(500).json({ error: "Unable to send code" });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[/auth/step-up/request] error:", err);
+    res.status(500).json({ error: "Unable to send code" });
+  }
+});
+
+router.post("/step-up/verify", authLimiter, requireAuth, async (req, res) => {
+  try {
+    await ensureDb();
+    const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
+    const { code } = req.body || {};
+    if (!code) return res.status(400).json({ error: "code required" });
+
+    const record = await StepUpOtp.findOne({
+      userId: uid,
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+    if (!record) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
+
+    if (record.attempts >= 5) {
+      return res
+        .status(429)
+        .json({ error: "Too many attempts. Request a new code." });
+    }
+
+    const a = Buffer.from(String(code));
+    const b = Buffer.from(String(record.code));
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      record.attempts += 1;
+      await record.save();
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
+
+    record.usedAt = new Date();
+    await record.save();
+
+    const ttlMs = 10 * 60 * 1000;
+    const token = signStepUp({ sub: uid });
+    res.json({ token, expiresAt: new Date(Date.now() + ttlMs).toISOString() });
+  } catch (err) {
+    console.error("[/auth/step-up/verify] error:", err);
+    res.status(500).json({ error: "Verification failed" });
   }
 });
 

@@ -3,7 +3,7 @@ import crypto from "crypto";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import dayjs from "dayjs";
-import { requireAuth, verifyAccess } from "../middleware/auth.js";
+import { requireAuth, requirePermission, verifyAccess } from "../middleware/auth.js";
 import { Proposal } from "../models/Proposal.js";
 import { Product } from "../models/Product.js";
 import { TrainingLocation } from "../models/TrainingLocation.js";
@@ -39,11 +39,8 @@ router.use((req, res, next) => {
   return requireAuth(req, res, () => requireAdminOrMini(req, res, next));
 });
 
-function requireAdminOrMini(req, res, next) {
-  const role = String(req.user?.role || "").toLowerCase();
-  if (role === "admin" || role === "mini_admin") return next();
-  return res.status(403).json({ error: "Forbidden" });
-}
+// Anyone holding the "proposals" admin area (admin / mini-admin / custom role).
+const requireAdminOrMini = requirePermission("proposals");
 
 const isFullAdmin = (req) =>
   String(req.user?.role || "").toLowerCase() === "admin";

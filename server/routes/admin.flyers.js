@@ -4,12 +4,12 @@
 import express from "express";
 import mongoose from "mongoose";
 import { Flyer } from "../models/Flyer.js";
-import { requireAuth, requireAdminOrMiniAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Gate the whole router: must be authenticated AND admin/mini_admin.
-router.use(requireAuth, requireAdminOrMiniAdmin);
+// Gate the whole router: authenticated + holds the "flyers" admin area.
+router.use(requireAuth, requirePermission("flyers"));
 
 const TEMPLATES = new Set(["announcement", "countdown", "launch", "event", "subscription", "ticket", "thumbBold", "thumbTutorial", "thumbFeatures", "thumbHook"]);
 

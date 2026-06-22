@@ -5,6 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
+import AdminPageHeader from "../components/AdminPageHeader.jsx";
+import AdminLauncher from "../features/admin/AdminLauncher.jsx";
+import { FiShield } from "react-icons/fi";
 
 const MONTH_CHOICES = [
   { label: "1 month", value: 1 },
@@ -1903,6 +1906,14 @@ export default function Admin() {
 
   return (
     <div className="space-y-6">
+      <AdminPageHeader
+        icon={FiShield}
+        title="Admin Hub"
+        subtitle="Purchases, subscriptions, installations, trainings & settings."
+      />
+
+      <AdminLauncher title="Jump to a tool" />
+
       <div className="card">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold">Admin</h1>

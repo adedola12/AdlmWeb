@@ -1,9 +1,10 @@
 import express from "express";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { TrainingLocation } from "../models/TrainingLocation.js";
 
 const router = express.Router();
-router.use(requireAuth, requireAdmin);
+// Training locations are part of the "trainings" admin area.
+router.use(requireAuth, requirePermission("trainings"));
 
 // List all training locations (including inactive)
 router.get("/", async (_req, res) => {

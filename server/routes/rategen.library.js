@@ -140,6 +140,37 @@ function scoreMatch(reqTokens, candTokens) {
   return 0.75 * coverage + 0.25 * precision;
 }
 
+// Fraction of a rate's build-up that is plant/equipment hire. A "concrete mixer
+// hire" rate shares the token "concrete" with a concrete BoQ line and would win on
+// text alone — but it's plant, not the work item's material+labour. We demote such
+// rates so a real rate wins. Returns 0 (no demotion) when there's no breakdown.
+const PLANT_RE =
+  /\b(excavat\w*|mixer|vibrator|poker|crane|loader|roller|grader|compressor|bulldozer|dozer|tipper|truck|pump|hire|plant|machine|machinery|equipment|scaffold\w*)\b/i;
+function plantShareOf(rate) {
+  const bd = Array.isArray(rate?.breakdown)
+    ? rate.breakdown
+    : Array.isArray(rate?.Breakdown)
+      ? rate.Breakdown
+      : [];
+  if (!bd.length) return 0;
+  let plant = 0;
+  let net = 0;
+  for (const b of bd) {
+    const amt =
+      Number(
+        b?.lineTotal ??
+          b?.LineTotal ??
+          Number(b?.quantity ?? b?.Quantity ?? 0) * Number(b?.unitPrice ?? b?.UnitPrice ?? 0),
+      ) || 0;
+    if (amt <= 0) continue;
+    net += amt;
+    const rk = String(b?.refKind ?? b?.RefKind ?? "").toLowerCase();
+    const nm = String(b?.componentName ?? b?.ComponentName ?? "");
+    if (rk === "plant" || rk === "equipment" || PLANT_RE.test(nm)) plant += amt;
+  }
+  return net > 0 ? plant / net : 0;
+}
+
 router.post("/library/material-prices/resolve", async (req, res, next) => {
   try {
     await ensureDb();
@@ -419,6 +450,7 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
           rateId: r?.rateId || r?.id || r?._id || null,
           _tokens: tokens(desc),
           _unitNorm: normUnit(r?.unit),
+          _plantShare: plantShareOf(r),
         };
       })
       .filter(Boolean);
@@ -437,7 +469,13 @@ router.post("/library/rate-items/resolve", async (req, res, next) => {
         .map((c) => {
           let s = scoreMatch(reqToks, c._tokens);
           if (reqUnit && c._unitNorm && reqUnit === c._unitNorm) s += 0.1;
-          if (reqUnit && c._unitNorm && reqUnit !== c._unitNorm) s *= 0.75;
+          // Harder unit penalty (was ×0.75): a m³ work item shouldn't fall back to a
+          // per-day plant rate just because the descriptions share a word.
+          if (reqUnit && c._unitNorm && reqUnit !== c._unitNorm) s *= 0.5;
+          // Demote plant/equipment-hire rates for a work item — pushes them below the
+          // 0.25 acceptance floor so a real material+labour rate wins (the "Lintel
+          // Concrete → plant-hire" mismatch).
+          if (c._plantShare > 0.6) s -= 1.5;
           return { ...c, score: s };
         })
         .filter((x) => x.score >= 0.25)

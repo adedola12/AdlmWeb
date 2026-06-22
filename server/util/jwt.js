@@ -71,6 +71,27 @@ export function signRefresh(payload) {
 export function verifyAccess(token) {
   return jwt.verify(token, process.env.JWT_ACCESS_SECRET);
 }
+
+// ── Step-up (re-authentication) tokens ──
+// Short-lived proof that the user recently passed an email OTP. Issued by
+// POST /auth/step-up/verify, presented in the X-Step-Up header on sensitive
+// actions, and checked by the requireStepUp middleware. Reuses the access
+// secret but is namespaced by scope:"step_up" so it can never be swapped in
+// for a normal access token (verifyAccess ignores scope; verifyStepUp asserts it).
+export function signStepUp({ sub }) {
+  return jwt.sign(
+    { sub: String(sub), scope: "step_up" },
+    process.env.JWT_ACCESS_SECRET,
+    { expiresIn: "10m" }
+  );
+}
+export function verifyStepUp(token) {
+  const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  if (!decoded || decoded.scope !== "step_up") {
+    throw new Error("Not a step-up token");
+  }
+  return decoded;
+}
 export function verifyRefresh(token) {
   return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
 }

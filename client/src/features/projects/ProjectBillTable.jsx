@@ -830,6 +830,7 @@ export default function ProjectBillTable({
   onContingencyPercentChange,
   onTaxPercentChange,
   contractBusy = false,
+  stepUpEnabled = false,
   onLockContract,
   onUnlockContract,
   onPreliminaryPercentChange,
@@ -1711,16 +1712,22 @@ export default function ProjectBillTable({
                       icon={FaTimes}
                       label={contractBusy ? "..." : "Unlock"}
                       onClick={() =>
-                        setPinModal({
-                          mode: "unlock",
-                          pin: "",
-                          confirm: "",
-                          err: "",
-                          busy: false,
-                        })
+                        stepUpEnabled
+                          ? onUnlockContract?.({})
+                          : setPinModal({
+                              mode: "unlock",
+                              pin: "",
+                              confirm: "",
+                              err: "",
+                              busy: false,
+                            })
                       }
                       disabled={contractBusy || !onUnlockContract}
-                      title="Unlock the contract — you'll need the 4-digit PIN that was used to lock it."
+                      title={
+                        stepUpEnabled
+                          ? "Unlock the contract — we'll email you a verification code."
+                          : "Unlock the contract — you'll need the 4-digit PIN that was used to lock it."
+                      }
                     />
                   </>
                 ) : (
@@ -1732,16 +1739,22 @@ export default function ProjectBillTable({
                       icon={FaFileInvoiceDollar}
                       label={contractBusy ? "Locking..." : "Lock contract"}
                       onClick={() =>
-                        setPinModal({
-                          mode: "lock",
-                          pin: "",
-                          confirm: "",
-                          err: "",
-                          busy: false,
-                        })
+                        stepUpEnabled
+                          ? onLockContract?.({ preliminaryPercent })
+                          : setPinModal({
+                              mode: "lock",
+                              pin: "",
+                              confirm: "",
+                              err: "",
+                              busy: false,
+                            })
                       }
                       disabled={contractBusy || !onLockContract}
-                      title="Freeze the priced scope. You'll choose a 4-digit PIN to protect the lock."
+                      title={
+                        stepUpEnabled
+                          ? "Freeze the priced scope. We'll email you a verification code to confirm."
+                          : "Freeze the priced scope. You'll choose a 4-digit PIN to protect the lock."
+                      }
                     />
                   </>
                 )}

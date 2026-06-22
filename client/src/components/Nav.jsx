@@ -2,11 +2,12 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { useTheme } from "../theme.jsx";
+import { isStaff } from "../utils/roles.js";
 import { api } from "../api.js";
 import adlmLogo from "../assets/logo/adlmLogo.png";
 import {
   FiHome, FiBox, FiCalendar, FiInfo, FiPlayCircle, FiFileText,
-  FiShoppingCart, FiUser, FiGrid, FiShield, FiLogOut,
+  FiShoppingCart, FiUser, FiGrid, FiShield, FiLogOut, FiZap,
 } from "react-icons/fi";
 
 // Lightweight inline icons so we don't pull in another react-icons import.
@@ -201,6 +202,7 @@ export default function Nav() {
             <DesktopLink to="/products">Products</DesktopLink>
             <DesktopLink to="/trainings">Trainings</DesktopLink>
             <DesktopLink to="/learn">Learn</DesktopLink>
+            <DesktopLink to="/whats-new">What&apos;s New</DesktopLink>
             <DesktopLink to="/about">About</DesktopLink>
           </nav>
 
@@ -226,7 +228,7 @@ export default function Nav() {
                 <DesktopLink to="/purchase">Purchase</DesktopLink>
                 <DesktopLink to="/dashboard">Dashboard</DesktopLink>
                 <DesktopLink to="/profile">Profile</DesktopLink>
-                {(user.role === "admin" || user.role === "mini_admin") && <DesktopLink to="/admin">Admin</DesktopLink>}
+                {isStaff(user) && <DesktopLink to="/admin">Admin</DesktopLink>}
                 <button
                   onClick={logout}
                   className="ml-1 px-3 py-1.5 rounded bg-white text-adlm-navy text-sm font-medium hover:bg-blue-50"
@@ -300,6 +302,7 @@ export default function Nav() {
           <MobileLink to="/products" onClick={() => setOpen(false)} icon={<FiBox />}>Products</MobileLink>
           <MobileLink to="/trainings" onClick={() => setOpen(false)} icon={<FiCalendar />}>Training &amp; Events</MobileLink>
           <MobileLink to="/learn" onClick={() => setOpen(false)} icon={<FiPlayCircle />}>Learn</MobileLink>
+          <MobileLink to="/whats-new" onClick={() => setOpen(false)} icon={<FiZap />}>What&apos;s New</MobileLink>
           <MobileLink to="/about" onClick={() => setOpen(false)} icon={<FiInfo />}>About</MobileLink>
           <MobileLink to="/quote" onClick={() => setOpen(false)} icon={<FiFileText />}>Get Quotation</MobileLink>
 
@@ -328,7 +331,7 @@ export default function Nav() {
               <MobileLink to="/purchase" onClick={() => setOpen(false)} icon={<FiShoppingCart />}>Purchase</MobileLink>
               <MobileLink to="/dashboard" onClick={() => setOpen(false)} icon={<FiGrid />}>Dashboard</MobileLink>
               <MobileLink to="/profile" onClick={() => setOpen(false)} icon={<FiUser />}>Profile</MobileLink>
-              {(user.role === "admin" || user.role === "mini_admin") && (
+              {isStaff(user) && (
                 <MobileLink to="/admin" onClick={() => setOpen(false)} icon={<FiShield />}>Admin</MobileLink>
               )}
               <div className="px-4 pt-3">

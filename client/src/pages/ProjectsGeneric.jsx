@@ -1,6 +1,7 @@
 // src/pages/ProjectsGeneric.jsx
 import React from "react";
 import { useAuth } from "../store.jsx";
+import { useStepUp } from "../features/security/useStepUp.jsx";
 import { apiAuthed } from "../http.js";
 import { Link, useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
@@ -953,7 +954,45 @@ function pickKeyFromCandidate(c) {
 export default function ProjectsGeneric() {
   const { tool } = useParams();
   const { accessToken, user: authUser } = useAuth();
+  const { ensureVerified } = useStepUp();
+  const stepUpEnabled = !!authUser?.stepUpEnabled;
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Email-OTP "step-up" gate for destructive actions (delete / lock / unlock).
+  // When the user has opted in, acquireStepUp() returns the X-Step-Up header,
+  // prompting for an emailed code if there's no valid ~10-min session yet; when
+  // they haven't opted in it returns undefined and the request runs as before.
+  // ensureVerified() throws "Verification cancelled" if the modal is dismissed —
+  // callers treat that as a silent abort.
+  const acquireStepUp = React.useCallback(
+    async ({ force = false } = {}) => {
+      if (!stepUpEnabled && !force) return undefined;
+      const token = await ensureVerified();
+      return { "X-Step-Up": token };
+    },
+    [stepUpEnabled, ensureVerified],
+  );
+
+  // Run a single gated request. Pre-acquires the header when enabled, and if the
+  // server still answers 428 STEP_UP_REQUIRED (e.g. the flag was toggled on
+  // another device so our copy was stale), verifies and retries once.
+  const runGated = React.useCallback(
+    async (doRequest) => {
+      let headers = await acquireStepUp();
+      try {
+        return await doRequest(headers);
+      } catch (e) {
+        if (e?.data?.code === "STEP_UP_REQUIRED") {
+          headers = await acquireStepUp({ force: true });
+          return await doRequest(headers);
+        }
+        throw e;
+      }
+    },
+    [acquireStepUp],
+  );
+
+  const isStepUpCancel = (e) => e?.message === "Verification cancelled";
   const navigate = useNavigate();
 
   const toolNorm = normTool(tool);
@@ -1902,6 +1941,17 @@ export default function ProjectsGeneric() {
     );
     if (!ok) return;
 
+    // Verify once up front (not per-item) so a bulk delete prompts for a single
+    // code and every DELETE in the batch carries the same step-up token.
+    let stepHeaders;
+    try {
+      stepHeaders = await acquireStepUp();
+    } catch (e) {
+      if (isStepUpCancel(e)) return;
+      setErr(e?.message || "Verification failed");
+      return;
+    }
+
     setBulkBusy(true);
     setErr("");
     setNotice("");
@@ -1912,6 +1962,7 @@ export default function ProjectsGeneric() {
           apiAuthed(endpoints.del(id), {
             token: accessToken,
             method: "DELETE",
+            headers: stepHeaders,
           }),
         ),
       );
@@ -1968,10 +2019,13 @@ export default function ProjectsGeneric() {
     setNotice("");
 
     try {
-      await apiAuthed(endpoints.del(id), {
-        token: accessToken,
-        method: "DELETE",
-      });
+      await runGated((headers) =>
+        apiAuthed(endpoints.del(id), {
+          token: accessToken,
+          method: "DELETE",
+          headers,
+        }),
+      );
 
       purgeLocal(tool, id);
 
@@ -1989,6 +2043,7 @@ export default function ProjectsGeneric() {
 
       setNotice("Project deleted.");
     } catch (e) {
+      if (isStepUpCancel(e)) return;
       setErr(e?.message || "Failed to delete project");
     }
   }
@@ -3191,28 +3246,36 @@ export default function ProjectsGeneric() {
   async function handleLockContract({ preliminaryPercent, approvedAt, notes, lockPin } = {}) {
     if (!selectedId || !accessToken) return null;
     if (contract.locked) return contract;
-    // Server requires a 4-digit PIN. Bail out early with a meaningful
-    // error code so the UI can re-open the prompt instead of toasting.
-    if (!/^\d{4}$/.test(String(lockPin || ""))) {
+    // With email step-up enabled, the OTP is the only gate — no PIN. Otherwise
+    // a 4-digit PIN is required; bail early so the UI re-opens the PIN prompt
+    // instead of toasting.
+    if (!stepUpEnabled && !/^\d{4}$/.test(String(lockPin || ""))) {
       return { error: "LOCK_PIN_REQUIRED", message: "Enter a 4-digit PIN to lock." };
     }
     setContractBusy(true);
     try {
-      const result = await apiAuthed(endpoints.lock(selectedId), {
-        token: accessToken,
-        method: "POST",
-        body: {
-          preliminaryPercent: Number(preliminaryPercent ?? contract.preliminaryPercent),
-          // Pass the contingency + tax % so they get frozen at lock
-          // time alongside the other rates. The server uses them in
-          // the contractSum cascade.
-          contingencyPercent: Number(contract.contingencyPercent),
-          taxPercent: Number(contract.taxPercent),
-          approvedAt: approvedAt || new Date().toISOString(),
-          notes: notes || "",
-          lockPin: String(lockPin).trim(),
-        },
-      });
+      const result = await runGated((headers) =>
+        apiAuthed(endpoints.lock(selectedId), {
+          token: accessToken,
+          method: "POST",
+          headers,
+          body: {
+            preliminaryPercent: Number(preliminaryPercent ?? contract.preliminaryPercent),
+            // Pass the contingency + tax % so they get frozen at lock
+            // time alongside the other rates. The server uses them in
+            // the contractSum cascade.
+            contingencyPercent: Number(contract.contingencyPercent),
+            taxPercent: Number(contract.taxPercent),
+            approvedAt: approvedAt || new Date().toISOString(),
+            notes: notes || "",
+            // Only send a PIN when one was actually entered (step-up flow sends
+            // none — the server accepts that because the OTP was verified).
+            ...(/^\d{4}$/.test(String(lockPin || ""))
+              ? { lockPin: String(lockPin).trim() }
+              : {}),
+          },
+        }),
+      );
       if (result?.contract) {
         const c = result.contract;
         setContract({
@@ -3234,6 +3297,9 @@ export default function ProjectsGeneric() {
       }
       return result;
     } catch (e) {
+      if (isStepUpCancel(e)) {
+        return { error: "STEP_UP_CANCELLED", message: "Email verification cancelled." };
+      }
       const code = e?.data?.code || null;
       if (code === "LOCK_PIN_REQUIRED") {
         return { error: code, message: e?.message || "Enter a 4-digit PIN to lock." };
@@ -3252,24 +3318,31 @@ export default function ProjectsGeneric() {
     // onwards), the caller must supply it. The ContractPanel triggers a
     // PIN modal before calling this; legacy unlock-without-PIN works
     // through the same code path because lockPin defaults to undefined.
-    const hasPin = Boolean(contract?.hasLockPin || sel?.contract?.hasLockPin);
-    if (hasPin) {
-      if (!/^\d{4}$/.test(String(lockPin || ""))) {
-        return { error: "LOCK_PIN_REQUIRED", message: "Enter the 4-digit PIN to unlock." };
+    // With email step-up enabled, the OTP is the only gate — skip PIN entry and
+    // the legacy confirm; the step-up modal (via runGated below) is the prompt.
+    if (!stepUpEnabled) {
+      const hasPin = Boolean(contract?.hasLockPin || sel?.contract?.hasLockPin);
+      if (hasPin) {
+        if (!/^\d{4}$/.test(String(lockPin || ""))) {
+          return { error: "LOCK_PIN_REQUIRED", message: "Enter the 4-digit PIN to unlock." };
+        }
+      } else {
+        // Fallback for legacy unprotected locks — keep the confirmation prompt.
+        if (!window.confirm(
+          "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely — variations will no longer be auto-tracked until you lock again.",
+        )) return null;
       }
-    } else {
-      // Fallback for legacy unprotected locks — keep the confirmation prompt.
-      if (!window.confirm(
-        "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely — variations will no longer be auto-tracked until you lock again.",
-      )) return null;
     }
     setContractBusy(true);
     try {
-      const result = await apiAuthed(endpoints.unlock(selectedId), {
-        token: accessToken,
-        method: "POST",
-        body: lockPin ? { lockPin: String(lockPin).trim() } : {},
-      });
+      const result = await runGated((headers) =>
+        apiAuthed(endpoints.unlock(selectedId), {
+          token: accessToken,
+          method: "POST",
+          headers,
+          body: lockPin ? { lockPin: String(lockPin).trim() } : {},
+        }),
+      );
       if (result?.contract) {
         setContract((prev) => ({
           ...prev,
@@ -3283,6 +3356,9 @@ export default function ProjectsGeneric() {
       }
       return result;
     } catch (e) {
+      if (isStepUpCancel(e)) {
+        return { error: "STEP_UP_CANCELLED", message: "Email verification cancelled." };
+      }
       // Surface the PIN-specific code so the modal can show "Wrong PIN"
       // inline and stay open; other errors fall through to the toast.
       const code = e?.data?.code || null;
@@ -5070,6 +5146,7 @@ export default function ProjectsGeneric() {
                 onGroupByModeChange={setGroupByMode}
                 contract={contract}
                 contractBusy={contractBusy}
+                stepUpEnabled={stepUpEnabled}
                 onLockContract={handleLockContract}
                 onUnlockContract={handleUnlockContract}
                 onPreliminaryPercentChange={handlePreliminaryPercentChange}

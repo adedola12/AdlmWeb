@@ -2,6 +2,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { Freebie } from "../models/Freebie.js";
+import { requirePermission } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -42,11 +43,9 @@ function requireAuth(req, res, next) {
   }
 }
 
-function requireStaff(req, res, next) {
-  const role = (req.user?.role || "").toLowerCase();
-  if (role === "admin" || role === "mini_admin") return next();
-  return res.status(403).json({ ok: false, error: "Forbidden" });
-}
+// Permission-gated: requires the "freebies" admin area (admin / mini-admin /
+// any custom role granted it). req.user is set by the local requireAuth above.
+const requireStaff = requirePermission("freebies");
 
 function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(id);

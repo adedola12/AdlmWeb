@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 import { connectDB } from "./db.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
+import { ensureRolesSeeded } from "./util/rbac.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
@@ -79,6 +80,7 @@ import trainingLocationsPublic from "./routes/training-locations.js";
 import adminTrainingLocations from "./routes/admin.training-locations.js";
 import adminInvoices from "./routes/admin.invoices.js";
 import adminProposals from "./routes/admin.proposals.js";
+import adminRoles from "./routes/admin.roles.js";
 import proposalsPublic from "./routes/proposals.public.js";
 import quoteRoutes from "./routes/quote.js";
 import settingsPublicRoutes from "./routes/settings.public.js";
@@ -302,6 +304,8 @@ app.use("/admin/flyers", adminFlyers);
 app.use("/admin/training-locations", adminTrainingLocations);
 app.use("/admin/invoices", adminInvoices);
 app.use("/admin/proposals", adminProposals);
+// UAC / role management — mount BEFORE the catch-all "/admin" so it isn't swallowed.
+app.use("/admin/roles", adminRoles);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin
@@ -386,6 +390,14 @@ const port = process.env.PORT || 4000;
 
 try {
   await connectDB(process.env.MONGO_URI);
+
+  // Seed built-in roles (admin / mini_admin / user) and warm the permission
+  // cache before serving. Non-fatal: a seed failure logs but doesn't block boot.
+  try {
+    await ensureRolesSeeded();
+  } catch (e) {
+    console.error("[rbac] role seed failed:", e?.message || e);
+  }
 
   app.listen(port, () => console.log(`Server running on :${port}`));
 

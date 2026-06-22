@@ -1,7 +1,7 @@
 // server/routes/admin.usersLite.js
 import express from "express";
 import dayjs from "dayjs";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
@@ -9,13 +9,8 @@ import { Purchase } from "../models/Purchase.js";
 const router = express.Router();
 
 /* -------------------- auth -------------------- */
-// allow ONLY admin + mini_admin
-function requireStaff(req, res, next) {
-  const roleRaw = String(req.user?.role || "");
-  const role = roleRaw.toLowerCase().replace(/-/g, "_").trim(); // accept mini-admin too
-  if (role === "admin" || role === "mini_admin") return next();
-  return res.status(403).json({ error: "Forbidden" });
-}
+// Anyone holding the "users" admin area (admin / mini-admin / custom role).
+const requireStaff = requirePermission("users");
 
 router.use(requireAuth, requireStaff);
 

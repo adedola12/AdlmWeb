@@ -3,6 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./store.jsx";
+import { StepUpProvider } from "./features/security/useStepUp.jsx";
 import { ThemeProvider, initThemeBeforeRender } from "./theme.jsx";
 import App from "./App.jsx";
 import "./index.css";
@@ -33,6 +34,7 @@ import AdminProductEdit from "./pages/AdminProductEdit.jsx";
 import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
 import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 import AboutADLM from "./pages/About.jsx";
+import QuivWhatsNew from "./pages/QuivWhatsNew.jsx";
 import Trainings from "./pages/Trainings.jsx";
 import AdminTrainings from "./pages/AdminTrainings.jsx";
 import NotFound from "./pages/NotFound.jsx";
@@ -42,6 +44,7 @@ import TrainingDetail from "./pages/TrainingDetail.jsx";
 import AdminCoupons from "./pages/AdminCoupons.jsx";
 import AdminInvoices from "./pages/AdminInvoices.jsx";
 import AdminProposals from "./pages/AdminProposals.jsx";
+import AdminRoles from "./pages/AdminRoles.jsx";
 import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
@@ -92,6 +95,9 @@ const router = createBrowserRouter([
       { path: "learn/free/:id", element: <FreeVideoDetail /> },
 
       { path: "about", element: <AboutADLM /> },
+
+      // Public product changelog / "What's New" (content in src/data/quivChangelog.js)
+      { path: "whats-new", element: <QuivWhatsNew /> },
 
       // Online trainings
       { path: "trainings", element: <Trainings /> },
@@ -283,7 +289,7 @@ const router = createBrowserRouter([
       {
         path: "admin/invoices",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="invoices">
             <AdminInvoices />
           </AdminRoute>
         ),
@@ -291,7 +297,7 @@ const router = createBrowserRouter([
       {
         path: "admin/proposals",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="proposals">
             <AdminProposals />
           </AdminRoute>
         ),
@@ -309,7 +315,7 @@ const router = createBrowserRouter([
       {
         path: "admin/trainings",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="trainings">
             <AdminTrainings />
           </AdminRoute>
         ),
@@ -317,7 +323,7 @@ const router = createBrowserRouter([
       {
         path: "admin/learn",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="learn">
             <AdminLearn />
           </AdminRoute>
         ),
@@ -325,7 +331,7 @@ const router = createBrowserRouter([
       {
         path: "admin/users-lite",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="users">
             <AdminUsersLite />
           </AdminRoute>
         ),
@@ -333,7 +339,7 @@ const router = createBrowserRouter([
       {
         path: "admin/showcase",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="showcase">
             <AdminShowcase />
           </AdminRoute>
         ),
@@ -341,7 +347,7 @@ const router = createBrowserRouter([
       {
         path: "admin/rategen",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="rategen">
             <AdminRateGen />
           </AdminRoute>
         ),
@@ -349,7 +355,7 @@ const router = createBrowserRouter([
       {
         path: "admin/rategen/add-rate",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="rategen">
             <AdminAddRate />
           </AdminRoute>
         ),
@@ -357,7 +363,7 @@ const router = createBrowserRouter([
       {
         path: "admin/rategen-master",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="rategen">
             <AdminRateGenMaster />
           </AdminRoute>
         ),
@@ -373,11 +379,21 @@ const router = createBrowserRouter([
         ),
       },
 
+      // ✅ Roles & Access Control (UAC) — admin-only
+      {
+        path: "admin/roles",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <AdminRoles />
+          </AdminRoute>
+        ),
+      },
+
       // ✅ Mini-admin / staff freebies
       {
         path: "admin/freebies",
         element: (
-          <AdminRoute roles={["admin", "mini_admin"]}>
+          <AdminRoute permission="freebies">
             <AdminFreebies />
           </AdminRoute>
         ),
@@ -391,7 +407,7 @@ const router = createBrowserRouter([
           const { default: AdminFlyers } = await import("./pages/AdminFlyers.jsx");
           return {
             element: (
-              <AdminRoute roles={["admin", "mini_admin"]}>
+              <AdminRoute permission="flyers">
                 <AdminFlyers />
               </AdminRoute>
             ),
@@ -411,7 +427,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <StepUpProvider>
+          <RouterProvider router={router} />
+        </StepUpProvider>
       </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>,

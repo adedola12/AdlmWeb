@@ -2,15 +2,14 @@
 import express from "express";
 import mongoose from "mongoose";
 import { RateGenRate } from "../models/RateGenRate.js";
-import { requireAuth } from "../middleware/auth.js";
-import { requireStaff } from "../middleware/roles.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { ensureDb } from "../db.js";
 import { validateRateComposition } from "../util/rateGuardrail.js";
 
 const router = express.Router();
 
-// admin + mini_admin can manage rates
-router.use(requireAuth, requireStaff);
+// anyone holding the "rategen" admin area can manage rates
+router.use(requireAuth, requirePermission("rategen"));
 
 /** canonical section keys */
 const ALLOWED_SECTION_KEYS = new Set([

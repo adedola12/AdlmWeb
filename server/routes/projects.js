@@ -201,7 +201,7 @@ function projectForClient(project, access) {
       };
   return obj;
 }
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireStepUp } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { User } from "../models/User.js";
@@ -2723,13 +2723,16 @@ async function lockContract(req, res) {
     // this server, and gives us future room to grow PIN length without
     // changing the verification path.
     const lockPin = normalizeLockPin(req.body?.lockPin);
-    if (!lockPin) {
+    // A 4-digit PIN is required UNLESS the request passed email step-up
+    // verification — in that case the OTP is the gate and the contract locks
+    // with no PIN (unlock will require the OTP again).
+    if (!lockPin && !req.stepUpVerified) {
       return res.status(400).json({
         error: "A 4-digit lock PIN is required. You'll need the same PIN to unlock the contract.",
         code: "LOCK_PIN_REQUIRED",
       });
     }
-    const lockPinHash = await bcrypt.hash(lockPin, 10);
+    const lockPinHash = lockPin ? await bcrypt.hash(lockPin, 10) : "";
 
     // Snapshot current scope. Use itemIdentity as the stable key so later
     // edits can be matched back to the baseline.
@@ -2826,7 +2829,9 @@ async function unlockContract(req, res) {
     // shipped have an empty lockPinHash and unlock without verification —
     // back-compat for existing data, future locks will all carry a PIN.
     const storedHash = String(project.contract?.lockPinHash || "");
-    if (storedHash) {
+    // Email step-up substitutes for the PIN: a verified OTP proves identity,
+    // so a PIN-protected contract can be unlocked without re-entering the PIN.
+    if (storedHash && !req.stepUpVerified) {
       const suppliedPin = normalizeLockPin(req.body?.lockPin);
       if (!suppliedPin) {
         return res.status(400).json({
@@ -4635,6 +4640,7 @@ router.delete(
   "/revit/materials/:id",
   forceMaterialsProductKey,
   requireEntitlementParam,
+  requireStepUp,
   deleteProject,
 );
 
@@ -4678,6 +4684,7 @@ router.delete(
   "/planswift/materials/:id",
   forcePsMaterialsProductKey,
   requireEntitlementParam,
+  requireStepUp,
   deleteProject,
 );
 
@@ -4770,6 +4777,7 @@ router.post(
   "/:productKey/:id/contract/lock",
   mapEntitlementParam,
   requireEntitlementParam,
+  requireStepUp,
   lockContract,
 );
 
@@ -4777,6 +4785,7 @@ router.post(
   "/:productKey/:id/contract/unlock",
   mapEntitlementParam,
   requireEntitlementParam,
+  requireStepUp,
   unlockContract,
 );
 
@@ -4870,6 +4879,7 @@ router.delete(
   "/:productKey/:id",
   mapEntitlementParam,
   requireEntitlementParam,
+  requireStepUp,
   deleteProject,
 );
 

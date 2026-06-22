@@ -1,12 +1,12 @@
 // server/routes/admin.learn.js
 import express from "express";
-import { requireAuth, requireAdminOrMiniAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { FreeVideo, PaidCourseVideo } from "../models/Learn.js";
 
 const router = express.Router();
 
-// ✅ Admin + Mini-admin can access these routes
-router.use(requireAuth, requireAdminOrMiniAdmin);
+// ✅ Anyone holding the "learn" admin area (admin / mini-admin / custom role)
+router.use(requireAuth, requirePermission("learn"));
 
 // small helper so async errors go to your global error handler (no silent crashes)
 const asyncHandler = (fn) => (req, res, next) =>

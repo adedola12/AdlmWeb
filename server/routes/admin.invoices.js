@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { requireAuth, requireAdmin, verifyAccess } from "../middleware/auth.js";
+import { requireAuth, requirePermission, verifyAccess } from "../middleware/auth.js";
 import { Invoice } from "../models/Invoice.js";
 import { User } from "../models/User.js";
 import { Setting } from "../models/Setting.js";
@@ -61,12 +61,8 @@ router.use((req, res, next) => {
   return requireAuth(req, res, () => requireAdminOrMini(req, res, next));
 });
 
-// Allow both admin and mini_admin roles
-function requireAdminOrMini(req, res, next) {
-  const role = String(req.user?.role || "").toLowerCase();
-  if (role === "admin" || role === "mini_admin") return next();
-  return res.status(403).json({ error: "Forbidden" });
-}
+// Anyone holding the "invoices" admin area (admin / mini-admin / custom role).
+const requireAdminOrMini = requirePermission("invoices");
 
 // True only for the full "admin" role; mini_admin returns false.
 function isFullAdmin(req) {

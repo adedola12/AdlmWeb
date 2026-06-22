@@ -445,7 +445,20 @@ export default function ProjectBudgetTab({
 
   function updateLineRate(line, raw) {
     const k = keyOf(line);
-    patchLines((b) => keyOf(b) === k, { rate: safeNum(raw) });
+    const rate = safeNum(raw);
+    // Same-name price linking: setting a material's rate applies it to ALL materials
+    // with the same name (price "Cement" once → every Cement row updates). Materials
+    // only (skip Labour); the edited row is included by the same-name match.
+    const kind = String(line?.componentKind || "").toLowerCase();
+    const name = normalizeTitle(line?.materialName);
+    if (name && kind !== "labour" && kind !== "labor") {
+      patchLines((b) => {
+        const bk = String(b?.componentKind || "").toLowerCase();
+        return bk !== "labour" && bk !== "labor" && normalizeTitle(b?.materialName) === name;
+      }, { rate });
+      return;
+    }
+    patchLines((b) => keyOf(b) === k, { rate });
   }
 
   function commitGroupMarkup(group, overheadPercent, profitPercent) {

@@ -1,13 +1,12 @@
 // server/routes/admin.trainings.js
 import express from "express";
 import { Training } from "../models/Training.js";
-import { requireAuth } from "../middleware/auth.js";
-import { requireStaff } from "../middleware/roles.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// ✅ must be AFTER router is created
-router.use(requireAuth, requireStaff);
+// ✅ must be AFTER router is created — anyone holding the "trainings" area
+router.use(requireAuth, requirePermission("trainings"));
 
 router.get("/", async (_req, res) => {
   try {

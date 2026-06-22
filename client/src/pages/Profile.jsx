@@ -5,6 +5,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { isAdmin, isStaff } from "../utils/roles.js";
 import AccountActivity from "../features/account/AccountActivity.jsx";
+import AdminLauncher from "../features/admin/AdminLauncher.jsx";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -20,6 +21,10 @@ export default function Profile() {
   const [nameLocked, setNameLocked] = React.useState(false);
   const [msg, setMsg] = React.useState("");
   const [imgErr, setImgErr] = React.useState(false);
+
+  // Step-up (email-OTP) preference for sensitive actions.
+  const [stepUpEnabled, setStepUpEnabled] = React.useState(!!user?.stepUpEnabled);
+  const [savingStepUp, setSavingStepUp] = React.useState(false);
 
   const [zone, setZone] = React.useState("");
   const [zones, setZones] = React.useState([]); // from server labels
@@ -47,6 +52,7 @@ export default function Profile() {
         setNameLocked(!!res?.nameLockedForCertificate);
         setZone(res?.zone || "");
         setZones(Array.isArray(res?.zones) ? res.zones : []);
+        setStepUpEnabled(!!res?.stepUpEnabled);
       } catch (e) {
         setMsg(e?.message || "Failed to load profile.");
       }
@@ -200,6 +206,24 @@ export default function Profile() {
       setMsg("Profile updated.");
     } catch (e2) {
       setMsg(e2?.message || "Failed to update profile.");
+    }
+  }
+
+  async function toggleStepUp(next) {
+    setSavingStepUp(true);
+    setMsg("");
+    try {
+      await saveProfile({ stepUpEnabled: next });
+      setStepUpEnabled(next);
+      setMsg(
+        next
+          ? "Email verification is now required for deleting projects and locking contracts."
+          : "Email verification turned off.",
+      );
+    } catch (e) {
+      setMsg(e?.message || "Couldn't update the security setting.");
+    } finally {
+      setSavingStepUp(false);
     }
   }
 
@@ -385,6 +409,30 @@ export default function Profile() {
       <div className="card">
         <h2 className="font-semibold mb-3">Security & Admin</h2>
 
+        {/* Two-factor (email OTP) for destructive actions */}
+        <div className="mb-4 rounded-xl border bg-white dark:bg-adlm-dark-card p-3">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-adlm-blue-700"
+              checked={stepUpEnabled}
+              onChange={(e) => toggleStepUp(e.target.checked)}
+              disabled={savingStepUp || !accessToken}
+            />
+            <span className="min-w-0">
+              <span className="font-medium">
+                Require an email code for destructive actions
+              </span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                When on, we email a 6-digit code to{" "}
+                <span className="font-medium">{user?.email}</span> before you can
+                delete projects or lock/unlock a contract. One code stays valid
+                for about 10 minutes.{savingStepUp ? " Saving…" : ""}
+              </span>
+            </span>
+          </label>
+        </div>
+
         <div className="flex gap-2 flex-wrap">
           <Link to="/change-password" className="btn">
             Change password
@@ -393,99 +441,16 @@ export default function Profile() {
           <Link to="/login?reset=1" className="btn">
             Forgot password
           </Link>
-
-          {/* Full admin only */}
-          {admin && (
-            <>
-              <Link to="/admin" className="btn">
-                Admin dashboard
-              </Link>
-
-              <Link to="/admin/courses" className="btn">
-                Admin · Courses
-              </Link>
-              <Link to="/admin/ptrainings" className="btn">
-                Admin • Physical Trainings
-              </Link>
-            </>
-          )}
-
-          {/* Staff tools (admin + mini_admin) */}
-          {staff && (
-            <>
-              <Link to="/admin/trainings" className="btn">
-                Add / manage trainings & events
-              </Link>
-
-              <Link to="/admin/rategen/add-rate" className="btn">
-                Build / Add rates (Rate Library)
-              </Link>
-
-              <Link to="/admin/learn" className="btn">
-                Video upload / courses
-              </Link>
-
-              <Link to="/admin/rategen" className="btn">
-                Update material & labour prices
-              </Link>
-
-              <Link to="/admin/showcase" className="btn">
-                Add / manage testimonials
-              </Link>
-
-              <Link to="/admin/flyers" className="btn">
-                Flyer Engine
-              </Link>
-
-              {/* ✅ NEW BUTTON: Mini-admin Users View */}
-              <Link to="/admin/users-lite" className="btn">
-                Users (Mini Admin View)
-              </Link>
-            </>
-          )}
         </div>
-
-        {/* Optional quick tools panel */}
-        {staff && (
-          <div className="mt-4 rounded-xl border bg-white p-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <div className="font-semibold">Admin Tools</div>
-                <div className="text-xs text-slate-500">
-                  Quick access to admin management pages
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => navigate("/admin/freebies")}
-                >
-                  Add Freebies
-                </button>
-
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => navigate("/admin/coupons")}
-                >
-                  Coupons
-                </button>
-
-                {/* ✅ ALSO add it here if you want it grouped */}
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => navigate("/admin/users-lite")}
-                >
-                  Users Lite
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* ADMIN TOOLS — permission-aware launcher (replaces the old flat list).
+          Each card is gated by the user's role permissions via can(). */}
+      {staff && (
+        <div className="card">
+          <AdminLauncher title="Admin tools" />
+        </div>
+      )}
     </div>
   );
 }

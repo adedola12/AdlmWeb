@@ -6,7 +6,7 @@ import {
   Testimonial,
 } from "../models/Showcase.js";
 
-import { requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -15,7 +15,7 @@ const router = express.Router();
    ========================================================= */
 
 // POST /admin/showcase/industry-leaders
-router.post("/industry-leaders", requireAdmin, async (req, res) => {
+router.post("/industry-leaders", requireAuth, requirePermission("showcase"), async (req, res) => {
   try {
     const { name, code, logoUrl, website, featured } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
@@ -36,7 +36,7 @@ router.post("/industry-leaders", requireAdmin, async (req, res) => {
 });
 
 // DELETE /admin/showcase/industry-leaders/:id
-router.delete("/industry-leaders/:id", requireAdmin, async (req, res) => {
+router.delete("/industry-leaders/:id", requireAuth, requirePermission("showcase"), async (req, res) => {
   try {
     await IndustryLeader.findByIdAndDelete(req.params.id);
     res.json({ ok: true });

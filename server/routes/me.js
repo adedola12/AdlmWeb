@@ -4,6 +4,8 @@ import dayjs from "dayjs";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
+import { rolePermissionList, isSuperAdminRole } from "../util/rbac.js";
+import { ALL_AREA_KEYS } from "../config/permissions.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
@@ -186,6 +188,8 @@ router.get(
     const user = await User.findById(req.user._id, {
       entitlements: 1,
       refreshVersion: 1,
+      security: 1,
+      role: 1,
     });
 
     if (user) {
@@ -205,9 +209,13 @@ router.get(
       expiresAt: normalizeExpiry(e.expiresAt),
     }));
 
+    // Prefer the DB role over the (possibly stale) JWT role so a reassignment
+    // reflects on the next /me without a full re-login.
+    const effectiveRole = user?.role || role;
+
     return res.json({
       email,
-      role,
+      role: effectiveRole,
       username,
       avatarUrl,
       zone,
@@ -217,6 +225,9 @@ router.get(
       firstName: firstName || "",
       lastName: lastName || "",
       whatsapp: whatsapp || "",
+      stepUpEnabled: !!user?.security?.stepUpEnabled,
+      isSuperAdmin: isSuperAdminRole(effectiveRole),
+      permissions: rolePermissionList(effectiveRole, ALL_AREA_KEYS),
     });
   }),
 );
@@ -528,6 +539,7 @@ router.get(
       lastName: lastName || "",
       whatsapp: whatsapp || "",
       nameLockedForCertificate: !!u.certificateNameLockedAt,
+      stepUpEnabled: !!u.security?.stepUpEnabled,
     });
   }),
 );
@@ -536,7 +548,7 @@ router.post(
   "/profile",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { username, avatarUrl, zone, firstName, lastName, whatsapp } =
+    const { username, avatarUrl, zone, firstName, lastName, whatsapp, stepUpEnabled } =
       req.body || {};
     const u = await User.findById(req.user._id);
     if (!u) return res.status(404).json({ error: "User missing" });
@@ -575,6 +587,11 @@ router.post(
     if (whatsapp !== undefined)
       u.whatsapp = String(whatsapp || "").replace(/[^\d+]/g, "");
 
+    if (stepUpEnabled !== undefined) {
+      u.security = u.security || {};
+      u.security.stepUpEnabled = !!stepUpEnabled;
+    }
+
     await u.save();
 
     return res.json({
@@ -587,6 +604,7 @@ router.post(
         firstName: u.firstName || "",
         lastName: u.lastName || "",
         whatsapp: u.whatsapp || "",
+        stepUpEnabled: !!u.security?.stepUpEnabled,
       },
     });
   }),

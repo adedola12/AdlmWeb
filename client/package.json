@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "gen:changelog": "node scripts/gen-changelog.mjs",
+    "predev": "node scripts/gen-changelog.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/gen-changelog.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview --port 5173"

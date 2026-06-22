@@ -94,13 +94,24 @@ const UserSchema = new mongoose.Schema(
 
     passwordHash: { type: String, default: "" },
 
+    // Role key — references a Role.key (see server/models/Role.js). No enum so
+    // admins can create custom roles; validated against existing roles on
+    // assignment. "user" is the default no-admin-access role.
     role: {
       type: String,
-      enum: ["user", "mini_admin", "admin"],
       default: "user",
+      lowercase: true,
+      trim: true,
     },
 
     disabled: { type: Boolean, default: false },
+
+    // Per-user security preferences. stepUpEnabled = require an emailed OTP
+    // before sensitive actions (deleting projects, locking/unlocking a
+    // contract). Off by default — opt-in from the profile page.
+    security: {
+      stepUpEnabled: { type: Boolean, default: false },
+    },
 
     entitlements: { type: [EntitlementSchema], default: [] },
 
