@@ -34,7 +34,8 @@ import AdminProductEdit from "./pages/AdminProductEdit.jsx";
 import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
 import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 import AboutADLM from "./pages/About.jsx";
-import QuivWhatsNew from "./pages/QuivWhatsNew.jsx";
+import WhatsNew from "./pages/WhatsNew.jsx";
+import WhatsNewProduct from "./pages/WhatsNewProduct.jsx";
 import Trainings from "./pages/Trainings.jsx";
 import AdminTrainings from "./pages/AdminTrainings.jsx";
 import NotFound from "./pages/NotFound.jsx";
@@ -96,8 +97,11 @@ const router = createBrowserRouter([
 
       { path: "about", element: <AboutADLM /> },
 
-      // Public product changelog / "What's New" (content in src/data/quivChangelog.js)
-      { path: "whats-new", element: <QuivWhatsNew /> },
+      // Public product changelogs / "What's New".
+      // Hub lists every product; each links to its own detail page.
+      // Content lives in src/data/changelogs/*.md (one file per product).
+      { path: "whats-new", element: <WhatsNew /> },
+      { path: "whats-new/:slug", element: <WhatsNewProduct /> },
 
       // Online trainings
       { path: "trainings", element: <Trainings /> },

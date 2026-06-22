@@ -1,16 +1,31 @@
-# QUIV for Revit — What's New
-
-The latest features, improvements, and fixes for QUIV, ADLM's quantity takeoff and estimating plugin for Autodesk Revit. QUIV runs as a docked side panel or a pop-out window inside Revit.
-
-> **Compatibility:** Revit 2024, 2026 & 2027
+---
+slug: quiv
+name: QUIV
+tagline: Quantity takeoff & estimating for Autodesk Revit
+category: Revit Plugin
+accent: orange
+icon: cube
+status: live
+order: 1
+compatibility: Revit 2024, 2026 & 2027
+summary: Model-based quantity takeoff, priced budgets and a dockable workspace — right inside Revit.
+---
 
 <!--
   ────────────────────────────────────────────────────────────────────────
-  THIS IS THE ONLY FILE YOU EDIT TO UPDATE THE WEBSITE "What's New" PAGE.
-  A build step turns it into src/data/quivChangelog.js automatically
-  (npm run gen:changelog — also runs on every build & dev start).
+  THIS IS THE ONLY FILE YOU EDIT TO UPDATE QUIV'S "What's New" PAGE.
+  A build step turns every src/data/changelogs/*.md file into
+  src/data/changelogs.js automatically
+  (npm run gen:changelogs — also runs on every build & dev start).
 
-  FORMAT (keep it exactly like the releases below):
+  FRONT MATTER (the --- block at the very top) controls the product card:
+    slug / name / tagline / category / accent / icon / status / order /
+    compatibility / summary.
+    • accent: orange | blue | sky | emerald | violet | amber
+    • icon:   cube | map | layers | zap | dollar | play | trending | book
+    • status: live | coming-soon   (coming-soon shows a placeholder state)
+
+  RELEASE FORMAT (keep it exactly like the releases below):
     ## <version> — <Month YEAR> — <short title>
     <optional one–two sentence highlight paragraph>
     ### New          (also: Improved / Fixed)
@@ -23,8 +38,6 @@ The latest features, improvements, and fixes for QUIV, ADLM's quantity takeoff a
     are optional decoration.
   ────────────────────────────────────────────────────────────────────────
 -->
-
----
 
 ## 3.1.1 — June 2026 — Priced budgets, element-level detail & a dockable workspace
 
