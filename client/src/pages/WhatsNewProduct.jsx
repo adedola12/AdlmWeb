@@ -15,7 +15,7 @@ import {
   FiArrowLeft,
   FiClock,
 } from "react-icons/fi";
-import { bySlug } from "../data/changelogs.js";
+import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";
 import { Reveal } from "../components/effects.jsx";
 
@@ -174,6 +174,7 @@ function NotFound() {
 
 export default function WhatsNewProduct() {
   const { slug } = useParams();
+  const { bySlug, loading } = useChangelogs();
   const product = bySlug[String(slug || "").toLowerCase()];
 
   // Scroll to top when switching products (router doesn't do this on its own).
@@ -190,6 +191,16 @@ export default function WhatsNewProduct() {
       document.title = prev;
     };
   }, [product]);
+
+  // Still fetching live data and the slug isn't in the bundled seed — wait
+  // before deciding it's a 404 (it may be a product added via the admin UI).
+  if (!product && loading) {
+    return (
+      <div className="mx-auto max-w-3xl py-16 text-center text-slate-500 dark:text-adlm-dark-dim">
+        Loading…
+      </div>
+    );
+  }
 
   if (!product) return <NotFound />;
 

@@ -46,6 +46,8 @@ import trainingsPublic from "./routes/trainings.js";
 import adminTrainings from "./routes/admin.trainings.js";
 import showcasePublic from "./routes/showcase.js";
 import adminShowcase from "./routes/admin.showcase.js";
+import changelogsPublic from "./routes/changelogs.js";
+import adminChangelogs from "./routes/admin.changelogs.js";
 import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
@@ -228,6 +230,8 @@ app.use("/me/ptrainings", mePTrainingsRoutes);
 
 app.use("/trainings", trainingsPublic);
 app.use("/showcase", showcasePublic);
+// Public "What's New" product changelogs (read-only).
+app.use("/changelogs", changelogsPublic);
 app.use("/coupons", couponsPublic);
 app.use("/helpbot", helpbotRoutes);
 
@@ -268,6 +272,7 @@ app.use("/admin/media", adminMediaRoutes);
 
 app.use("/admin/trainings", adminTrainings);
 app.use("/admin/showcase", adminShowcase);
+app.use("/admin/changelogs", adminChangelogs);
 
 app.use("/admin/coupons", adminCoupons);
 app.use("/admin/products", adminProducts);

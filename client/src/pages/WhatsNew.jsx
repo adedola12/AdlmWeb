@@ -11,7 +11,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { FiArrowRight, FiClock, FiZap } from "react-icons/fi";
 import { Reveal, TiltCard } from "../components/effects.jsx";
-import { products } from "../data/changelogs.js";
+import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";
 
 function ProductCard({ product, index }) {
@@ -91,6 +91,8 @@ function ProductCard({ product, index }) {
 }
 
 export default function WhatsNew() {
+  const { products } = useChangelogs();
+
   React.useEffect(() => {
     const prev = document.title;
     document.title = "What's New | ADLM Studio";

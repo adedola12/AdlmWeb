@@ -41,6 +41,7 @@ import AdminTrainings from "./pages/AdminTrainings.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import Testimonials from "./pages/Testimonials.jsx";
 import AdminShowcase from "./pages/AdminShowcase.jsx";
+import AdminChangelogs from "./pages/AdminChangelogs.jsx";
 import TrainingDetail from "./pages/TrainingDetail.jsx";
 import AdminCoupons from "./pages/AdminCoupons.jsx";
 import AdminInvoices from "./pages/AdminInvoices.jsx";
@@ -345,6 +346,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="showcase">
             <AdminShowcase />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/changelogs",
+        element: (
+          <AdminRoute permission="changelogs">
+            <AdminChangelogs />
           </AdminRoute>
         ),
       },

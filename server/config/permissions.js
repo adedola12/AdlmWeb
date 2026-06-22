@@ -10,6 +10,7 @@ export const ADMIN_AREAS = [
   { key: "trainings", label: "Online Trainings", group: "Content", staffGrantable: true },
   { key: "learn", label: "Learn / Videos", group: "Content", staffGrantable: true },
   { key: "showcase", label: "Testimonials", group: "Content", staffGrantable: true },
+  { key: "changelogs", label: "What's New", group: "Content", staffGrantable: true },
   { key: "freebies", label: "Freebies", group: "Content", staffGrantable: true },
   { key: "flyers", label: "Flyer Engine", group: "Content", staffGrantable: true },
   { key: "rategen", label: "RateGen Prices", group: "Pricing", staffGrantable: true },

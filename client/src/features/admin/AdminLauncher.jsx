@@ -10,7 +10,7 @@ import { Reveal } from "../../components/effects.jsx";
 import {
   FiShoppingCart, FiShield, FiUsers, FiCalendar, FiMapPin, FiPlayCircle,
   FiBookOpen, FiCheckSquare, FiDollarSign, FiPlusSquare, FiFileText,
-  FiClipboard, FiBox, FiTag, FiStar, FiGift, FiImage,
+  FiClipboard, FiBox, FiTag, FiStar, FiGift, FiImage, FiBell,
 } from "react-icons/fi";
 
 // area = the permission key that gates the card (see server/config/permissions.js)
@@ -30,6 +30,7 @@ const TOOLS = [
   { area: "products", to: "/admin/products", label: "Products", desc: "Software catalogue & pricing", icon: FiBox },
   { area: "coupons", to: "/admin/coupons", label: "Coupons", desc: "Discount codes", icon: FiTag },
   { area: "showcase", to: "/admin/showcase", label: "Testimonials", desc: "Showcase & company logos", icon: FiStar },
+  { area: "changelogs", to: "/admin/changelogs", label: "What's New", desc: "Product release notes", icon: FiBell },
   { area: "freebies", to: "/admin/freebies", label: "Freebies", desc: "Free resources", icon: FiGift },
   { area: "flyers", to: "/admin/flyers", label: "Flyer Engine", desc: "Design flyers & thumbnails", icon: FiImage },
 ];
