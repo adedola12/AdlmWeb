@@ -47,11 +47,11 @@ router.delete("/industry-leaders/:id", requireAuth, requirePermission("showcase"
 });
 
 /* =========================================================
-   COMPANIES (OPEN - NO auth / NO admin key)
+   COMPANIES (PROTECTED - requires admin JWT)
    ========================================================= */
 
 // POST /admin/showcase/companies
-router.post("/companies", async (req, res) => {
+router.post("/companies", requireAuth, requirePermission("showcase"), async (req, res) => {
   try {
     const { name, code, location, logoUrl, website, featured } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
@@ -73,7 +73,7 @@ router.post("/companies", async (req, res) => {
 });
 
 // DELETE /admin/showcase/companies/:id
-router.delete("/companies/:id", async (req, res) => {
+router.delete("/companies/:id", requireAuth, requirePermission("showcase"), async (req, res) => {
   try {
     await TrainedCompany.findByIdAndDelete(req.params.id);
     res.json({ ok: true });
@@ -84,11 +84,11 @@ router.delete("/companies/:id", async (req, res) => {
 });
 
 /* =========================================================
-   TESTIMONIALS (OPEN - NO auth / NO admin key)
+   TESTIMONIALS (PROTECTED - requires admin JWT)
    ========================================================= */
 
 // POST /admin/showcase/testimonials
-router.post("/testimonials", async (req, res) => {
+router.post("/testimonials", requireAuth, requirePermission("showcase"), async (req, res) => {
   try {
     const {
       name,
@@ -130,7 +130,7 @@ router.post("/testimonials", async (req, res) => {
 });
 
 // PATCH /admin/showcase/testimonials/:id
-router.patch("/testimonials/:id", async (req, res) => {
+router.patch("/testimonials/:id", requireAuth, requirePermission("showcase"), async (req, res) => {
   try {
     const item = await Testimonial.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
@@ -143,7 +143,7 @@ router.patch("/testimonials/:id", async (req, res) => {
 });
 
 // DELETE /admin/showcase/testimonials/:id
-router.delete("/testimonials/:id", async (req, res) => {
+router.delete("/testimonials/:id", requireAuth, requirePermission("showcase"), async (req, res) => {
   try {
     await Testimonial.findByIdAndDelete(req.params.id);
     res.json({ ok: true });
