@@ -21,6 +21,19 @@ function indexBySlug(list) {
   return Object.fromEntries((list || []).map((p) => [p.slug, p]));
 }
 
+// Merge DB/API products OVER the bundled set, per slug. The bundled set (from
+// markdown) is the floor: every site product keeps rendering even if only some
+// are saved in the DB. This is the safety property that lets the admin editor
+// persist one product without blanking the others — DB wins for the slugs it
+// has, the bundle covers the rest.
+function mergeBySlug(base, overrides) {
+  const map = new Map((base || []).map((p) => [p.slug, p]));
+  for (const p of overrides || []) if (p?.slug) map.set(p.slug, p);
+  return [...map.values()].sort(
+    (a, b) => (a.order ?? 999) - (b.order ?? 999) || String(a.name).localeCompare(String(b.name)),
+  );
+}
+
 // Fetch the live product list from the API. Throws on network / HTTP error.
 export async function fetchChangelogs() {
   if (!API_BASE) throw new Error("API base not configured");
@@ -45,11 +58,12 @@ export function useChangelogs() {
     let cancelled = false;
     (async () => {
       try {
-        const { products, bySlug } = await fetchChangelogs();
-        // Only replace the bundled seed if the API actually returned products;
-        // an empty DB shouldn't blank out the page.
+        const { products } = await fetchChangelogs();
+        // Merge DB products OVER the bundled seed per slug (don't replace the
+        // whole set) so a partially-populated DB never hides bundled products.
         if (!cancelled && products.length) {
-          setState({ products, bySlug, loading: false, source: "api" });
+          const merged = mergeBySlug(seedProducts, products);
+          setState({ products: merged, bySlug: indexBySlug(merged), loading: false, source: "api" });
         } else if (!cancelled) {
           setState((s) => ({ ...s, loading: false }));
         }

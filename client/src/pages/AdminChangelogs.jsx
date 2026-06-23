@@ -28,6 +28,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { Reveal } from "../components/effects.jsx";
 import { ICONS, ACCENTS, iconOf, accentOf } from "../data/whatsNewTheme.js";
+import { seedProducts, seedBySlug } from "../data/changelogsSource.js";
 
 /* ----------------------------- shared styles ----------------------------- */
 
@@ -412,8 +413,8 @@ function MetaForm({ draft, onField }) {
 export default function AdminChangelogs() {
   const { accessToken } = useAuth();
 
-  const [products, setProducts] = React.useState([]);
-  const [selectedId, setSelectedId] = React.useState(null);
+  const [products, setProducts] = React.useState([]); // DB-backed changelog overrides
+  const [selectedSlug, setSelectedSlug] = React.useState(null);
   const [draft, setDraft] = React.useState(null);
   const [dirty, setDirty] = React.useState(false);
 
@@ -422,14 +423,22 @@ export default function AdminChangelogs() {
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
 
-  // "+ New product" inline form
-  const [creating, setCreating] = React.useState(false);
-  const [newName, setNewName] = React.useState("");
-  const [newSlug, setNewSlug] = React.useState("");
+  // The editor lists the website's real What's New products — the bundled set
+  // (generated from markdown) — with any DB-backed edits layered on top PER SLUG.
+  // DB wins for the slugs it has; the bundle covers the rest. So an empty DB
+  // still shows every product, and saving one product never hides the others.
+  const merged = React.useMemo(() => {
+    const bySlug = new Map();
+    for (const p of seedProducts) bySlug.set(p.slug, { ...p, _id: undefined, _saved: false });
+    for (const p of products) if (p?.slug) bySlug.set(p.slug, { ...p, _saved: true });
+    return [...bySlug.values()].sort(
+      (a, b) => (a.order ?? 999) - (b.order ?? 999) || String(a.name || "").localeCompare(String(b.name || "")),
+    );
+  }, [products]);
 
   const selected = React.useMemo(
-    () => products.find((p) => p._id === selectedId) || null,
-    [products, selectedId],
+    () => merged.find((p) => p.slug === selectedSlug) || null,
+    [merged, selectedSlug],
   );
 
   const load = React.useCallback(async () => {
@@ -460,10 +469,10 @@ export default function AdminChangelogs() {
     return !dirty || window.confirm("Discard unsaved changes?");
   }
 
-  function selectProduct(id) {
-    if (id === selectedId) return;
+  function selectProduct(slug) {
+    if (slug === selectedSlug) return;
     if (!confirmDiscard()) return;
-    setSelectedId(id);
+    setSelectedSlug(slug);
     setNotice("");
     setError("");
   }
@@ -501,43 +510,9 @@ export default function AdminChangelogs() {
   };
 
   /* ----- server actions ----- */
-  async function createProduct(e) {
-    e?.preventDefault?.();
-    const name = newName.trim();
-    const slug = (newSlug.trim() || name)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    if (!slug) {
-      setError("Enter a name or slug for the new product.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const res = await apiAuthed("/admin/changelogs", {
-        token: accessToken,
-        method: "POST",
-        body: { name: name || slug, slug, status: "coming-soon" },
-      });
-      const created = res?.product;
-      if (created) {
-        setProducts((prev) =>
-          [...prev, created].sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || (a.name || "").localeCompare(b.name || "")),
-        );
-        setSelectedId(created._id);
-      }
-      setCreating(false);
-      setNewName("");
-      setNewSlug("");
-      setNotice(`Created "${created?.name || slug}".`);
-    } catch (e) {
-      setError(e?.message || "Failed to create product");
-    } finally {
-      setSaving(false);
-    }
-  }
-
+  // Products come from markdown (the bundled set). There's no free-form "create"
+  // here — to add a product, add its markdown file. Saving persists a DB copy
+  // that overrides the markdown for that one slug on the public page.
   async function saveProduct() {
     if (!draft) return;
     if (!draft.slug.trim()) {
@@ -553,19 +528,26 @@ export default function AdminChangelogs() {
     setError("");
     setNotice("");
     try {
-      const res = await apiAuthed(`/admin/changelogs/${draft._id}`, {
-        token: accessToken,
-        method: "PUT",
-        body: toPayload(draft),
-      });
-      const saved = res?.product;
-      if (saved) {
-        setProducts((prev) =>
-          prev
-            .map((p) => (p._id === saved._id ? saved : p))
-            .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || (a.name || "").localeCompare(b.name || "")),
-        );
+      let saved;
+      if (draft._id) {
+        const res = await apiAuthed(`/admin/changelogs/${draft._id}`, {
+          token: accessToken,
+          method: "PUT",
+          body: toPayload(draft),
+        });
+        saved = res?.product;
+        if (saved) setProducts((prev) => prev.map((p) => (p._id === saved._id ? saved : p)));
+      } else {
+        // First save of a markdown product → create its DB override.
+        const res = await apiAuthed("/admin/changelogs", {
+          token: accessToken,
+          method: "POST",
+          body: toPayload(draft),
+        });
+        saved = res?.product;
+        if (saved) setProducts((prev) => [...prev.filter((p) => p.slug !== saved.slug), saved]);
       }
+      if (saved) setSelectedSlug(saved.slug);
       setDirty(false);
       setNotice("Saved. The public What's New page now reflects these changes.");
     } catch (e) {
@@ -575,23 +557,29 @@ export default function AdminChangelogs() {
     }
   }
 
-  async function deleteProduct() {
-    if (!selected) return;
-    if (!window.confirm(`Delete "${selected.name || selected.slug}" and all its releases? This cannot be undone.`)) {
-      return;
-    }
+  // Remove the DB override. If the product also exists in the bundled markdown
+  // (all current site products do), the public page reverts to the markdown
+  // version; otherwise the product is deleted outright.
+  async function resetToMarkdown() {
+    if (!selected || !draft?._id) return;
+    const inSeed = !!seedBySlug[draft.slug];
+    const msg = inSeed
+      ? `Reset "${selected.name || selected.slug}" to its bundled markdown? Saved edits for this product will be removed and the public page will show the markdown version again.`
+      : `Delete "${selected.name || selected.slug}" and all its releases? This cannot be undone.`;
+    if (!window.confirm(msg)) return;
     setSaving(true);
     setError("");
     try {
-      await apiAuthed(`/admin/changelogs/${selected._id}`, {
+      const removedId = draft._id;
+      await apiAuthed(`/admin/changelogs/${removedId}`, {
         token: accessToken,
         method: "DELETE",
       });
-      setProducts((prev) => prev.filter((p) => p._id !== selected._id));
-      setSelectedId(null);
-      setNotice("Product deleted.");
+      setProducts((prev) => prev.filter((p) => p._id !== removedId));
+      if (!inSeed) setSelectedSlug(null);
+      setNotice(inSeed ? "Reset to the bundled markdown version." : "Product deleted.");
     } catch (e) {
-      setError(e?.message || "Failed to delete");
+      setError(e?.message || "Failed to update");
     } finally {
       setSaving(false);
     }
@@ -650,97 +638,59 @@ export default function AdminChangelogs() {
           <aside className={`${CARD} h-max p-3`}>
             <div className="flex items-center justify-between px-1 pb-2">
               <h2 className="text-sm font-semibold text-slate-700 dark:text-adlm-dark-text">
-                Products ({products.length})
+                Products ({merged.length})
               </h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setCreating((v) => !v);
-                  setError("");
-                }}
-                className="inline-flex items-center gap-1 rounded-md bg-adlm-blue-700 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-[#0050c8]"
-              >
-                <FiPlus className="h-3.5 w-3.5" />
-                New
-              </button>
+              {loading ? <span className="text-[11px] text-slate-400">syncing…</span> : null}
             </div>
+            <p className="px-1 pb-2.5 text-[11px] leading-snug text-slate-400 dark:text-adlm-dark-dim">
+              The products on your website. Add one by creating its markdown file;
+              edits saved here override the markdown for the public page.
+            </p>
 
-            {creating ? (
-              <form onSubmit={createProduct} className="mb-3 space-y-2 rounded-lg bg-slate-50 p-3 dark:bg-adlm-dark-raised">
-                <input
-                  autoFocus
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Product name"
-                  className={INPUT}
-                />
-                <input
-                  value={newSlug}
-                  onChange={(e) => setNewSlug(e.target.value)}
-                  placeholder="slug (optional)"
-                  className={`${INPUT} font-mono`}
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex-1 rounded-md bg-adlm-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0050c8] disabled:opacity-60"
-                  >
-                    Create
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCreating(false)}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-adlm-dark-hover"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            ) : null}
-
-            {loading ? (
-              <p className="px-1 py-6 text-center text-sm text-slate-400">Loading…</p>
-            ) : products.length === 0 ? (
-              <p className="px-1 py-6 text-center text-sm text-slate-400">
-                No products yet. Create one, or run the seed script.
-              </p>
-            ) : (
-              <ul className="space-y-1.5">
-                {products.map((p) => {
-                  const Icon = iconOf(p.icon);
-                  const accent = accentOf(p.accent);
-                  const active = p._id === selectedId;
-                  const releaseCount = (p.releases || []).length;
-                  return (
-                    <li key={p._id}>
-                      <button
-                        type="button"
-                        onClick={() => selectProduct(p._id)}
-                        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
-                          active
-                            ? "border-adlm-blue-700 bg-adlm-blue-700/5 dark:border-adlm-blue-400 dark:bg-adlm-blue-400/10"
-                            : "border-transparent hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
+            <ul className="space-y-1.5">
+              {merged.map((p) => {
+                const Icon = iconOf(p.icon);
+                const accent = accentOf(p.accent);
+                const active = p.slug === selectedSlug;
+                const releaseCount = (p.releases || []).length;
+                return (
+                  <li key={p.slug}>
+                    <button
+                      type="button"
+                      onClick={() => selectProduct(p.slug)}
+                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
+                        active
+                          ? "border-adlm-blue-700 bg-adlm-blue-700/5 dark:border-adlm-blue-400 dark:bg-adlm-blue-400/10"
+                          : "border-transparent hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
+                      }`}
+                    >
+                      <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${accent.icon}`}>
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-slate-900 dark:text-adlm-dark-text">
+                          {p.name || p.slug}
+                        </span>
+                        <span className="block truncate text-xs text-slate-400 dark:text-adlm-dark-dim">
+                          {releaseCount} release{releaseCount === 1 ? "" : "s"}
+                          {p.status === "coming-soon" ? " · coming soon" : ""}
+                        </span>
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          p._saved
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                            : "bg-slate-100 text-slate-500 dark:bg-adlm-dark-raised dark:text-adlm-dark-muted"
                         }`}
+                        title={p._saved ? "Saved in the database (overrides markdown)" : "Served from bundled markdown"}
                       >
-                        <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${accent.icon}`}>
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-slate-900 dark:text-adlm-dark-text">
-                            {p.name || p.slug}
-                          </span>
-                          <span className="block truncate text-xs text-slate-400 dark:text-adlm-dark-dim">
-                            {releaseCount} release{releaseCount === 1 ? "" : "s"}
-                            {p.status === "coming-soon" ? " · coming soon" : ""}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                        {p._saved ? "Saved" : "Markdown"}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </aside>
 
           {/* ---------------- Editor ---------------- */}
@@ -749,10 +699,7 @@ export default function AdminChangelogs() {
               <div className={`${CARD} grid place-items-center px-6 py-20 text-center`}>
                 <div>
                   <p className="text-sm text-slate-500 dark:text-adlm-dark-muted">
-                    Select a product on the left to edit its release notes,
-                  </p>
-                  <p className="text-sm text-slate-500 dark:text-adlm-dark-muted">
-                    or create a new one.
+                    Select a product on the left to edit its release notes.
                   </p>
                 </div>
               </div>
@@ -765,15 +712,34 @@ export default function AdminChangelogs() {
                       <h2 className="text-base font-semibold text-slate-900 dark:text-adlm-dark-text">
                         Product details
                       </h2>
-                      <button
-                        type="button"
-                        onClick={deleteProduct}
-                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:hover:bg-red-500/10"
-                      >
-                        <FiTrash2 className="h-3.5 w-3.5" />
-                        Delete product
-                      </button>
+                      {draft._id ? (
+                        <button
+                          type="button"
+                          onClick={resetToMarkdown}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:hover:bg-red-500/10"
+                          title={
+                            seedBySlug[draft.slug]
+                              ? "Remove the saved edits and serve this product from its bundled markdown again"
+                              : "Delete this product and all its releases"
+                          }
+                        >
+                          <FiTrash2 className="h-3.5 w-3.5" />
+                          {seedBySlug[draft.slug] ? "Reset to markdown" : "Delete product"}
+                        </button>
+                      ) : null}
                     </div>
+
+                    <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500 dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-muted">
+                      {draft._id
+                        ? "Saved in the database — these notes override this product's bundled markdown on the public page."
+                        : "Currently served from bundled markdown. Saving creates a database copy that overrides the markdown for the public page."}
+                      {draft.slug === "heron" ? (
+                        <span className="mt-1 block text-amber-600 dark:text-amber-400">
+                          HERON&apos;s notes are auto-synced from the plugin changelog monthly — saving here takes over from that sync.
+                        </span>
+                      ) : null}
+                    </div>
+
                     <MetaForm draft={draft} onField={setField} />
                   </div>
 
