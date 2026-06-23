@@ -65,6 +65,7 @@ import adminRateGen from "./routes/admin.rategen.js";
 
 /* -------------------- RateGen (NEW / v2) -------------------- */
 import rategenLibraryPublic from "./routes/rategen.library.js";
+import servicesRouter from "./routes/services.js";
 import ratesCompute from "./routes/rates.compute.js";
 import adminRateGenLibrary from "./routes/admin.rategen.library.js";
 import adminRateGenRates from "./routes/admin.rategen.rates.js";
@@ -306,6 +307,7 @@ app.use("/admin/rategen", adminRateGen);
 
 app.use("/rategen-v2", rategenLibraryPublic);
 app.use("/rategen-v2", ratesCompute);
+app.use("/rategen-v2", servicesRouter);
 
 app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
