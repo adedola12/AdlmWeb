@@ -5,6 +5,7 @@ import express from "express";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { Role } from "../models/Role.js";
 import { User } from "../models/User.js";
+import { RoleAudit } from "../models/RoleAudit.js";
 import { ADMIN_AREAS, ALL_AREA_KEYS, sanitizePermissions } from "../config/permissions.js";
 import { refreshRoleCache } from "../util/rbac.js";
 
@@ -162,6 +163,41 @@ router.get("/users", async (req, res) => {
   }
 });
 
+// Recent role-change audit (newest first). Defined before "/:key/members" so the
+// literal "/audit" path is never captured as a role key.
+router.get("/audit", async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const entries = await RoleAudit.find({}).sort({ createdAt: -1 }).limit(limit).lean();
+    res.json({ entries });
+  } catch (e) {
+    console.error("[admin.roles] audit error:", e);
+    res.status(500).json({ error: "Failed to load audit" });
+  }
+});
+
+// List the users who currently hold a given role (capped — the default "user"
+// role can be large). Drives the per-role member list in the UAC screen.
+router.get("/:key/members", async (req, res) => {
+  try {
+    const key = String(req.params.key || "").toLowerCase();
+    const role = await Role.findOne({ key }).lean();
+    if (!role) return res.status(404).json({ error: "Role not found" });
+
+    const LIMIT = 200;
+    const total = await User.countDocuments({ role: key });
+    const members = await User.find({ role: key })
+      .select("email username firstName lastName createdAt")
+      .sort({ updatedAt: -1 })
+      .limit(LIMIT)
+      .lean();
+    res.json({ members, total, capped: total > LIMIT });
+  } catch (e) {
+    console.error("[admin.roles] members error:", e);
+    res.status(500).json({ error: "Failed to load members" });
+  }
+});
+
 // Assign a role to a user. Guards: target role must exist; can't strip the last
 // admin or demote yourself out of admin. Enforcement is DB-backed so the change
 // is live immediately; the user's UI catches up on its next token refresh.
@@ -188,8 +224,25 @@ router.patch("/users/:id", async (req, res) => {
       }
     }
 
+    const fromRole = target.role;
     target.role = newRole;
     await target.save();
+
+    // Best-effort audit — never block the role change on a logging failure.
+    try {
+      await RoleAudit.create({
+        actorId: actingId || undefined,
+        actorEmail: req.user?.email || "",
+        targetId: target._id,
+        targetEmail: target.email || target.username || "",
+        fromRole,
+        toRole: newRole,
+        action: newRole === "user" ? "revoke" : "assign",
+      });
+    } catch (logErr) {
+      console.error("[admin.roles] audit write failed:", logErr?.message || logErr);
+    }
+
     res.json({ ok: true, user: { _id: target._id, role: target.role } });
   } catch (e) {
     console.error("[admin.roles] assign error:", e);

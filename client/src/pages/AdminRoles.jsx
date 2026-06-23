@@ -8,10 +8,14 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { Reveal } from "../components/effects.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
-import { FiShield, FiPlus, FiTrash2, FiLock, FiUsers, FiSearch } from "react-icons/fi";
+import {
+  FiShield, FiPlus, FiTrash2, FiLock, FiUsers, FiSearch,
+  FiChevronDown, FiChevronRight, FiUserX, FiClock,
+} from "react-icons/fi";
 
 export default function AdminRoles() {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
+  const currentUserId = user?.id || user?._id || null;
 
   const [areas, setAreas] = React.useState([]); // full catalog
   const [roles, setRoles] = React.useState([]);
@@ -29,6 +33,11 @@ export default function AdminRoles() {
   const [users, setUsers] = React.useState([]);
   const [searching, setSearching] = React.useState(false);
 
+  // per-role members (lazy-loaded on expand) + role-change audit
+  const [expandedRole, setExpandedRole] = React.useState(null);
+  const [membersByRole, setMembersByRole] = React.useState({});
+  const [audit, setAudit] = React.useState([]);
+
   const staffAreas = React.useMemo(() => areas.filter((a) => a.staffGrantable), [areas]);
   const adminAreas = React.useMemo(() => areas.filter((a) => !a.staffGrantable), [areas]);
 
@@ -42,12 +51,14 @@ export default function AdminRoles() {
     (async () => {
       setLoading(true);
       try {
-        const [cat, list] = await Promise.all([
+        const [cat, list, aud] = await Promise.all([
           apiAuthed("/admin/roles/catalog", { token: accessToken }),
           apiAuthed("/admin/roles", { token: accessToken }),
+          apiAuthed("/admin/roles/audit", { token: accessToken }).catch(() => ({ entries: [] })),
         ]);
         setAreas(cat?.areas || []);
         setRoles(list?.roles || []);
+        setAudit(aud?.entries || []);
       } catch (e) {
         setErr(e?.message || "Failed to load roles.");
       } finally {
@@ -145,6 +156,78 @@ export default function AdminRoles() {
     }
   }
 
+  async function toggleMembers(roleKey) {
+    if (expandedRole === roleKey) {
+      setExpandedRole(null);
+      return;
+    }
+    setExpandedRole(roleKey);
+    if (!membersByRole[roleKey]) fetchMembers(roleKey);
+  }
+
+  async function fetchMembers(roleKey) {
+    setMembersByRole((m) => ({
+      ...m,
+      [roleKey]: { ...(m[roleKey] || {}), loading: true, error: "" },
+    }));
+    try {
+      const res = await apiAuthed(`/admin/roles/${roleKey}/members`, { token: accessToken });
+      setMembersByRole((m) => ({
+        ...m,
+        [roleKey]: {
+          members: res?.members || [],
+          total: res?.total || 0,
+          capped: !!res?.capped,
+          loading: false,
+          error: "",
+        },
+      }));
+    } catch (e) {
+      setMembersByRole((m) => ({
+        ...m,
+        [roleKey]: { ...(m[roleKey] || {}), loading: false, error: e?.message || "Failed to load members" },
+      }));
+    }
+  }
+
+  async function loadAudit() {
+    try {
+      const res = await apiAuthed("/admin/roles/audit", { token: accessToken });
+      setAudit(res?.entries || []);
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  async function revokeMember(role, member) {
+    const who = member.email || member.username || "this user";
+    if (!window.confirm(`Revoke the “${role.name}” role from ${who}? They'll be set back to a regular user.`))
+      return;
+    try {
+      await apiAuthed(`/admin/roles/users/${member._id}`, {
+        token: accessToken,
+        method: "PATCH",
+        body: { role: "user" },
+      });
+      setMembersByRole((m) => {
+        const cur = m[role.key] || {};
+        const members = (cur.members || []).filter((x) => x._id !== member._id);
+        return { ...m, [role.key]: { ...cur, members, total: Math.max((cur.total || 1) - 1, 0) } };
+      });
+      setRoles((rs) =>
+        rs.map((r) => {
+          if (r.key === role.key) return { ...r, userCount: Math.max((r.userCount || 1) - 1, 0) };
+          if (r.key === "user") return { ...r, userCount: (r.userCount || 0) + 1 };
+          return r;
+        }),
+      );
+      flash(`Revoked “${role.name}” from ${who}.`);
+      loadAudit();
+    } catch (e) {
+      setErr(e?.message || "Couldn't revoke the role.");
+    }
+  }
+
   const toggleNewPerm = (k) =>
     setNewPerms((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
 
@@ -216,9 +299,19 @@ export default function AdminRoles() {
                           </span>
                         ) : null}
                       </div>
-                      <div className="text-[11px] text-slate-400 dark:text-adlm-dark-dim">
+                      <button
+                        type="button"
+                        onClick={() => toggleMembers(role.key)}
+                        className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-adlm-blue-700 dark:text-adlm-dark-dim dark:hover:text-adlm-blue-400 transition"
+                        title="Show who holds this role"
+                      >
+                        {expandedRole === role.key ? (
+                          <FiChevronDown className="w-3 h-3" />
+                        ) : (
+                          <FiChevronRight className="w-3 h-3" />
+                        )}
                         {role.userCount || 0} {role.userCount === 1 ? "user" : "users"}
-                      </div>
+                      </button>
                     </td>
 
                     {staffAreas.map((a) => {
@@ -267,6 +360,95 @@ export default function AdminRoles() {
                 {adminAreas.map((a) => a.label).join(", ")}.
               </p>
             ) : null}
+
+            {/* Per-role member list — expanded from the count link in a role row. */}
+            {expandedRole
+              ? (() => {
+                  const role = roles.find((r) => r.key === expandedRole);
+                  if (!role) return null;
+                  const state = membersByRole[expandedRole] || {};
+                  const total = state.total ?? role.userCount ?? 0;
+                  const members = state.members || [];
+                  return (
+                    <div className="mt-5 rounded-xl border border-slate-200 dark:border-adlm-dark-border p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="flex items-center gap-2 text-sm font-semibold">
+                          <FiUsers className="h-4 w-4 text-adlm-blue-700" />
+                          Members of “{role.name}”
+                          <span className="text-xs font-normal text-slate-400">{total}</span>
+                        </h3>
+                        <button
+                          type="button"
+                          className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-adlm-dark-text"
+                          onClick={() => setExpandedRole(null)}
+                        >
+                          Close
+                        </button>
+                      </div>
+
+                      {state.loading ? (
+                        <div className="text-sm text-slate-500 dark:text-adlm-dark-muted">Loading members…</div>
+                      ) : state.error ? (
+                        <div className="text-sm text-red-600">{state.error}</div>
+                      ) : !members.length ? (
+                        <div className="text-sm text-slate-400">No users currently hold this role.</div>
+                      ) : (
+                        <>
+                          <ul className="divide-y divide-slate-100 dark:divide-adlm-dark-border">
+                            {members.map((m) => {
+                              const name =
+                                [m.firstName, m.lastName].filter(Boolean).join(" ") || m.username || "—";
+                              const isSelf = String(m._id) === String(currentUserId);
+                              const isLastAdmin = role.key === "admin" && total <= 1;
+                              const blockRevoke = isSelf || isLastAdmin;
+                              return (
+                                <li key={m._id} className="flex items-center justify-between gap-3 py-2">
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-medium">
+                                      {name}
+                                      {isSelf ? (
+                                        <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">
+                                          you
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <div className="truncate text-xs text-slate-500 dark:text-adlm-dark-muted">
+                                      {m.email}
+                                    </div>
+                                  </div>
+                                  {role.key !== "user" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => revokeMember(role, m)}
+                                      disabled={blockRevoke}
+                                      title={
+                                        isSelf
+                                          ? "You can't revoke your own role"
+                                          : isLastAdmin
+                                            ? "Can't revoke the last administrator"
+                                            : `Revoke ${role.name} from ${m.email || m.username}`
+                                      }
+                                      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-red-600 ring-1 ring-red-200 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:ring-red-900/40 dark:hover:bg-red-900/20"
+                                    >
+                                      <FiUserX className="h-3.5 w-3.5" />
+                                      Revoke
+                                    </button>
+                                  ) : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                          {state.capped ? (
+                            <div className="mt-2 text-xs text-slate-400">
+                              Showing the first 200. Use “Assign roles” below to find a specific user.
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()
+              : null}
           </Reveal>
 
           {/* ── Create role ── */}
@@ -370,6 +552,37 @@ export default function AdminRoles() {
               <p className="mt-3 text-xs text-slate-400 dark:text-adlm-dark-dim">
                 Search for a user to change their role.
               </p>
+            )}
+          </Reveal>
+
+          {/* ── Recent role changes (audit) ── */}
+          <Reveal as="div" className="card mt-6" delay={150}>
+            <h2 className="font-semibold mb-3 flex items-center gap-2">
+              <FiClock className="w-4 h-4 text-adlm-blue-700" /> Recent role changes
+            </h2>
+            {audit.length ? (
+              <ul className="space-y-2 text-sm">
+                {audit.map((a) => (
+                  <li
+                    key={a._id}
+                    className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-adlm-dark-border pb-2 last:border-0"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-medium">{a.targetEmail || "user"}</span>
+                      <span className="text-slate-500 dark:text-adlm-dark-muted">
+                        {" "}
+                        · {a.fromRole || "—"} → {a.toRole || "—"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400 whitespace-nowrap">
+                      {a.actorEmail ? `by ${a.actorEmail} · ` : ""}
+                      {a.createdAt ? new Date(a.createdAt).toLocaleString() : ""}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-slate-400">No role changes recorded yet.</p>
             )}
           </Reveal>
         </>
