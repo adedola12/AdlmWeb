@@ -38,33 +38,54 @@ $adminPwdPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
     [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($adminPwd))
 
 # ----------------------------------------------------------------------------
-# FILL IN THE SHARED SECRETS BELOW
+# SHARED SECRETS — read from ENVIRONMENT VARIABLES. Never hardcode real values
+# in this file: it is tracked in git, and committed secrets here were the cause
+# of a credential-exposure incident. Provide them one of two ways:
 #
-# These are production secrets — never commit this file with real values.
-# Get them from:
-#   JWT_LICENSE_SECRET  -> server/.env  (already rotated; copy from Render)
-#   JWT signing key     -> 32+ char random; can reuse JWT_ACCESS_SECRET
-#   MongoDB URIs        -> MongoDB Atlas dashboards (after you rotated pwd)
-#   Gmail app password  -> after revoking the old one and creating a new one
+#   (a) Export them in your shell before running:
+#         $env:ADLM_LICENSE_SECRET   = "..."
+#         $env:ADLM_JWT_SIGNING_KEY  = "..."
+#         $env:ADLM_MONGO_SRV        = "..."
+#         $env:ADLM_MONGO_PLANSWIFT  = "..."
+#         $env:ADLM_SMTP_PASSWORD    = "..."
+#       (optional) ADLM_MONGO_SIGNIN / ADLM_MONGO_SIGNUP / ADLM_MONGO_ADMIN
+#
+#   (b) Create scripts/setup-deployments.secrets.ps1 (GITIGNORED) that sets the
+#       above $env: vars. This file dot-sources it automatically if present.
 # ----------------------------------------------------------------------------
+$secretsFile = Join-Path $PSScriptRoot "setup-deployments.secrets.ps1"
+if (Test-Path $secretsFile) {
+    Write-Host "Loading local secrets from $secretsFile" -ForegroundColor DarkGray
+    . $secretsFile
+}
+
+function Require-Secret([string] $name) {
+    $val = [Environment]::GetEnvironmentVariable($name)
+    if (-not $val) {
+        Write-Host "Missing required secret env var: $name" -ForegroundColor Red
+        Write-Host "Set it in your shell, or in scripts/setup-deployments.secrets.ps1 (gitignored)." -ForegroundColor Yellow
+        exit 1
+    }
+    return $val
+}
+
 $Shared = @{
     # Must match the server's JWT_LICENSE_SECRET (server signs license JWTs,
     # plugins verify them with this value).
-    LicenseSecret     = "a49db115e2ed9fc503143ea4a3fac6321c106ce90dfffa0e8568c93d6af1a0681962cb8c78eb0ff083c0db1c375da95c"
+    LicenseSecret     = (Require-Secret "ADLM_LICENSE_SECRET")
 
     # JWT signing key for Planswift's local token cache (32+ chars).
-    # Can be any strong random value — does not have to match the server.
-    JwtSigningKey     = "ce915b5096142015b1469b41db577ae7bf53e4d2242b7a80b9b38224262f76ca3140aabeb97ecb4576063e2c30e0fe04"
+    JwtSigningKey     = (Require-Secret "ADLM_JWT_SIGNING_KEY")
 
     # MongoDB connection strings
-    MongoSrv          = "mongodb+srv://dolapo836:Hardeydol@adlmratedb.zeur8.mongodb.net/?retryWrites=true&w=majority&appName=ADLMRateDB"
-    MongoSignin       = "mongodb+srv://USER:PASSWORD@revitpluginusers.xxx.mongodb.net/?retryWrites=true&w=majority"
-    MongoSignup       = "mongodb+srv://USER:PASSWORD@revitcluster.xxx.mongodb.net/?retryWrites=true&w=majority"
-    MongoAdmin        = "mongodb+srv://USER:PASSWORD@cluster0.xxx.mongodb.net/PlanswiftUser?retryWrites=true&w=majority"
-    MongoPlanswift    = "mongodb+srv://adedolapo:Hardeydol@cluster0.jb4uj.mongodb.net/PlanswiftUser?retryWrites=true&w=majority"
+    MongoSrv          = (Require-Secret "ADLM_MONGO_SRV")
+    MongoSignin       = [Environment]::GetEnvironmentVariable("ADLM_MONGO_SIGNIN")
+    MongoSignup       = [Environment]::GetEnvironmentVariable("ADLM_MONGO_SIGNUP")
+    MongoAdmin        = [Environment]::GetEnvironmentVariable("ADLM_MONGO_ADMIN")
+    MongoPlanswift    = (Require-Secret "ADLM_MONGO_PLANSWIFT")
 
-    # New Gmail app password for admin@adlmstudio.net (after revoking old one)
-    SmtpPassword      = "cdetoqfbjyrleoxf"
+    # Gmail app password for admin@adlmstudio.net
+    SmtpPassword      = (Require-Secret "ADLM_SMTP_PASSWORD")
 }
 
 # ----------------------------------------------------------------------------

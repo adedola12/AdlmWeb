@@ -649,6 +649,45 @@ const ShareCodeSchema = new mongoose.Schema(
   { _id: true },
 );
 
+// ── Cross-project linking ─────────────────────────────────────────────────
+// Roll a whole other project's cost into THIS project's bill — e.g. an MEP
+// (services) project linked into a QUIV/HERON (architectural) project so the
+// services total appears as a line in the general bill. The live total is
+// resolved on read (pull model: variations/changes on the linked project
+// reflect immediately); `snapshot` freezes a baseline so the QS can see drift
+// and issued certificates can pin a value. Additive + optional → fully
+// backward compatible (legacy projects default to []).
+const LinkedProjectSnapshotSchema = new mongoose.Schema(
+  {
+    total: { type: Number, default: 0 },
+    measured: { type: Number, default: 0 },
+    provisional: { type: Number, default: 0 },
+    variations: { type: Number, default: 0 },
+    contractSum: { type: Number, default: 0 },
+    locked: { type: Boolean, default: false },
+    version: { type: Number, default: 0 },
+    takenAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
+const LinkedProjectSchema = new mongoose.Schema(
+  {
+    projectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TakeoffProject",
+      required: true,
+    },
+    productKey: { type: String, default: "" },
+    label: { type: String, default: "", trim: true },
+    linkType: { type: String, enum: ["sum"], default: "sum" },
+    snapshot: { type: LinkedProjectSnapshotSchema, default: () => ({}) },
+    addedAt: { type: Date, default: Date.now },
+    addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  },
+  { _id: true },
+);
+
 const TakeoffProjectSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -672,6 +711,9 @@ const TakeoffProjectSchema = new mongoose.Schema(
     // Distinct from publicToken/publicShareEnabled (anonymous read-only link).
     collaborators: { type: [CollaboratorSchema], default: [] },
     shareCodes: { type: [ShareCodeSchema], default: [] },
+    // Cross-project links (e.g. MEP services rolled into an architectural bill).
+    // Additive + optional: legacy projects default to []. See LinkedProjectSchema.
+    linkedProjects: { type: [LinkedProjectSchema], default: [] },
     checklistCompositeKeys: { type: [String], default: [] },
     // User-defined building-element categories for THIS project's bill
     // arrangement, on top of the canonical per-product list. Surfaced to the

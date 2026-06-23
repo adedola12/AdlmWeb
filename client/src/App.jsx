@@ -5,6 +5,7 @@ import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import HelpBot from "./components/HelpBot.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 
 import { API_BASE } from "./config";
 
@@ -50,7 +51,9 @@ export default function App() {
       <Nav />
 
       <main className="w-full flex-1 px-4 md:px-8 py-4">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       <Footer />

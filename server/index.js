@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
+import compression from "compression";
 import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
@@ -183,12 +184,24 @@ app.use(
   }),
 );
 
+// gzip/deflate all responses. Biggest single mobile-load win; desktop plugin
+// HTTP clients already negotiate decompression, so this is transparent to them.
+app.use(compression());
 app.use(cookieParser());
 // Raised from 2mb: a bill plus embedded materialItems (100s of lines, each with an
 // elementIds[] array) in one revit-project payload can exceed 2mb.
 app.use(express.json({ limit: "16mb" }));
 app.use(express.urlencoded({ extended: false, limit: "16mb" }));
-app.use(morgan("dev"));
+// Structured, parseable access logs in production; colourful logs locally.
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
+// Lightweight health/readiness probe for uptime checks & load balancers.
+// Public and dependency-free so it answers even while the DB is reconnecting.
+app.get(["/health", "/healthz"], (_req, res) => {
+  const states = ["disconnected", "connected", "connecting", "disconnecting"];
+  const dbState = states[mongoose.connection?.readyState] ?? "unknown";
+  res.json({ ok: true, db: dbState, uptime: Math.round(process.uptime()) });
+});
 
 /* =========================
    ✅ API ROUTES (FIRST)
@@ -390,10 +403,42 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: "Server error" });
 });
 
+/* -------- env validation -------- */
+// Fail fast on missing CRITICAL secrets (the app cannot function without these)
+// and warn on recommended ones, so a misconfigured deploy is visible at boot
+// instead of throwing 500s on first use. Intentionally conservative: only the
+// three hard-required vars abort startup (all are already set in prod, so this
+// adds no new outage surface — it only catches a broken future deploy).
+function validateEnv() {
+  const critical = ["MONGO_URI", "JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET"];
+  const recommended = [
+    "JWT_LICENSE_SECRET",
+    "PAYSTACK_SECRET_KEY",
+    "CLOUDINARY_API_SECRET",
+    "SMTP_PASS",
+  ];
+  const missingCritical = critical.filter((k) => !process.env[k]);
+  if (missingCritical.length) {
+    console.error(
+      "[env] FATAL: missing required env vars:",
+      missingCritical.join(", "),
+    );
+    process.exit(1);
+  }
+  const missingRecommended = recommended.filter((k) => !process.env[k]);
+  if (missingRecommended.length) {
+    console.warn(
+      "[env] WARNING: missing recommended env vars (some features degraded):",
+      missingRecommended.join(", "),
+    );
+  }
+}
+
 /* -------- boot -------- */
 const port = process.env.PORT || 4000;
 
 try {
+  validateEnv();
   await connectDB(process.env.MONGO_URI);
 
   // Seed built-in roles (admin / mini_admin / user) and warm the permission

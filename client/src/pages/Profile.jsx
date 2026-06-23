@@ -18,6 +18,8 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = React.useState(user?.avatarUrl || "");
   const [firstName, setFirstName] = React.useState(user?.firstName || "");
   const [lastName, setLastName] = React.useState(user?.lastName || "");
+  const [location, setLocation] = React.useState(user?.location || "");
+  const [firmName, setFirmName] = React.useState(user?.firmName || "");
   const [nameLocked, setNameLocked] = React.useState(false);
   const [msg, setMsg] = React.useState("");
   const [imgErr, setImgErr] = React.useState(false);
@@ -49,6 +51,8 @@ export default function Profile() {
         setAvatarUrl(res?.avatarUrl || user?.avatarUrl || "");
         setFirstName(res?.firstName || user?.firstName || "");
         setLastName(res?.lastName || user?.lastName || "");
+        setLocation(res?.location || user?.location || "");
+        setFirmName(res?.firmName || user?.firmName || "");
         setNameLocked(!!res?.nameLockedForCertificate);
         setZone(res?.zone || "");
         setZones(Array.isArray(res?.zones) ? res.zones : []);
@@ -61,7 +65,7 @@ export default function Profile() {
   }, [accessToken]);
 
   async function saveProfile(next = {}) {
-    const body = { username, avatarUrl, zone, firstName, lastName, ...next };
+    const body = { username, avatarUrl, zone, firstName, lastName, location, firmName, ...next };
 
     const res = await apiAuthed("/me/profile", {
       token: accessToken,
@@ -367,6 +371,35 @@ export default function Profile() {
               support if you need a correction.
             </p>
           )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="form-label" htmlFor="pf-firm">
+                Firm name
+              </label>
+              <input
+                id="pf-firm"
+                className="input"
+                value={firmName}
+                onChange={(e) => setFirmName(e.target.value)}
+                placeholder="e.g. ADLM Studio Ltd"
+                autoComplete="organization"
+              />
+            </div>
+            <div>
+              <label className="form-label" htmlFor="pf-location">
+                Location
+              </label>
+              <input
+                id="pf-location"
+                className="input"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Lagos, Nigeria"
+                autoComplete="address-level2"
+              />
+            </div>
+          </div>
 
           <div>
             <label className="form-label">Location (Geopolitical Zone)</label>

@@ -1,0 +1,22 @@
+# gitleaks config for the ADLM website repo.
+# Run a scan:        gitleaks detect --config .gitleaks.toml
+# Scan staged only:  gitleaks protect --staged --config .gitleaks.toml
+# Enable the pre-commit hook once:  git config core.hooksPath .githooks
+title = "ADLM gitleaks config"
+
+[extend]
+# Start from gitleaks' built-in rule set (AWS keys, generic high-entropy
+# secrets, private keys, Mongo URIs with embedded credentials, etc.)
+useDefault = true
+
+[allowlist]
+description = "Allow placeholder/example files — these contain no real secrets"
+paths = [
+  '''\.env\.example$''',
+]
+# Allow obvious placeholder tokens used in templates/docs.
+regexes = [
+  '''USER:PASSWORD@''',
+  '''replace-with''',
+  '''sk_test_or_live_xxx''',
+]

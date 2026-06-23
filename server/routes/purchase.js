@@ -220,6 +220,11 @@ router.post("/cart", requireAuth, async (req, res) => {
           .json({ error: `Invalid product: ${i.productKey}` });
 
       const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10) || 1, 1);
+      if (purchaseLicenseType === "organization" && seats < 2) {
+        return res.status(400).json({
+          error: "Organization licences require a minimum of 2 users.",
+        });
+      }
       const periods = Math.max(parseInt(i.periods ?? 1, 10) || 1, 1);
       const firstTime = !!i.firstTime;
 

@@ -21,6 +21,7 @@ import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
+import LinkedProjectsCard from "./LinkedProjectsCard.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
@@ -231,6 +232,9 @@ export default function ProjectOpenView({
     canSeeRates: true,
   },
   linkedGroupsCount = 0,
+  // Cross-project links (MEP services → this general bill). Feature P1.
+  linkedSummaries = [],
+  onLinkedChange,
   loadingValuations = false,
   onActualQtyChange,
   onActualRateChange,
@@ -712,6 +716,16 @@ export default function ProjectOpenView({
             statusPastLabel={statusPastLabel}
             valuedAmount={valuedAmount}
           />
+          {!String(productKey).endsWith("-materials") && (
+            <LinkedProjectsCard
+              productKey={productKey}
+              projectId={projectId}
+              accessToken={accessToken}
+              access={access}
+              linkedSummaries={linkedSummaries}
+              onChange={onLinkedChange}
+            />
+          )}
         </>
       ) : null}
 

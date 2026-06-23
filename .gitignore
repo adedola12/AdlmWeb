@@ -17,6 +17,14 @@ build/
 *.p12
 secrets.json
 
+# Local secret overrides for ops scripts (never commit real secrets)
+scripts/*.secrets.ps1
+
+# Stray error dumps (untrack existing ones with:
+#   git rm --cached client/err*.txt client/receipt-err.txt )
+err*.txt
+*-err.txt
+
 # Logs
 *.log
 logs/

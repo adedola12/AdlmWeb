@@ -177,6 +177,11 @@ function projectForClient(project, access) {
     delete obj.collaborators;
   }
 
+  // Raw cross-project links carry ObjectIds + snapshot money the client never
+  // needs — the client-facing shape is `linkedSummaries` (added by getProject,
+  // already rate-masked). Always strip the raw array.
+  delete obj.linkedProjects;
+
   if (!canSeeRates) {
     maskRates(obj);
     obj._ratesMasked = true;
@@ -275,6 +280,7 @@ function entitlementKeyFor(productKeyOriginal) {
   const key = normalizeProductKey(productKeyOriginal);
   if (key === "revit-materials") return "revit";
   if (key === "planswift-materials") return "planswift";
+  if (key === "mep-materials") return "mep";
   return key;
 }
 
@@ -352,9 +358,102 @@ async function resolveProjectAccess(req, project) {
   return out;
 }
 
+// ── Cross-project linking (e.g. MEP services → architectural bill) ─────────
+// The "general bill" roll-up of a project for linking into another project.
+// Mirrors the gross works-cost view: measured work + provisional sums +
+// variations. `contractSum`/`locked` are surfaced for reference, but `total`
+// stays a pure works-cost figure (it excludes the linked project's own
+// contingency/VAT, which belong to that project — not the parent bill line).
+function computeProjectRollup(project) {
+  const items = Array.isArray(project?.items) ? project.items : [];
+  let measured = 0;
+  for (const it of items) measured += safeNum(it?.qty) * safeNum(it?.rate);
+  let provisional = 0;
+  for (const p of project?.provisionalSums || []) provisional += safeNum(p?.amount);
+  let variations = 0;
+  for (const v of project?.variations || []) variations += safeNum(v?.qty) * safeNum(v?.rate);
+  return {
+    measured,
+    provisional,
+    variations,
+    total: measured + provisional + variations,
+    contractSum: safeNum(project?.contract?.contractSum),
+    locked: !!project?.contract?.locked,
+    version: Number(project?.version) || 0,
+  };
+}
+
+// Resolve a parent project's linkedProjects into client-facing summaries:
+// live total (auto-updating pull model) + the frozen snapshot + drift. Only
+// links the requester can READ are resolved; money is zeroed when the
+// requester can't see rates (same RateGen rule maskRates() enforces).
+async function resolveLinkedSummaries(parent, userId, access) {
+  const links = Array.isArray(parent?.linkedProjects) ? parent.linkedProjects : [];
+  if (!links.length) return [];
+  const canSeeRates = access ? !!access.canSeeRates : true;
+  const ids = links.map((l) => l.projectId).filter(Boolean);
+  const linked = ids.length
+    ? await TakeoffProject.find({
+        _id: { $in: ids },
+        $or: [{ userId }, { "collaborators.userId": userId }],
+      })
+        .select(
+          "name productKey version items provisionalSums variations contract.contractSum contract.locked",
+        )
+        .lean()
+    : [];
+  const byId = new Map(linked.map((p) => [String(p._id), p]));
+  const zero = { total: 0, measured: 0, provisional: 0, variations: 0, contractSum: 0 };
+
+  return links.map((l) => {
+    const lp = byId.get(String(l.projectId));
+    const snap = l.snapshot || {};
+    const live = lp ? computeProjectRollup(lp) : null;
+    const summary = {
+      id: String(l._id),
+      projectId: String(l.projectId),
+      productKey: l.productKey || lp?.productKey || "",
+      label: l.label || lp?.name || "Linked project",
+      name: lp?.name || "",
+      linkType: l.linkType || "sum",
+      accessible: !!lp,
+      addedAt: l.addedAt || null,
+      snapshot: {
+        total: safeNum(snap.total),
+        measured: safeNum(snap.measured),
+        provisional: safeNum(snap.provisional),
+        variations: safeNum(snap.variations),
+        contractSum: safeNum(snap.contractSum),
+        locked: !!snap.locked,
+        version: Number(snap.version) || 0,
+        takenAt: snap.takenAt || null,
+      },
+      live: live
+        ? {
+            total: live.total,
+            measured: live.measured,
+            provisional: live.provisional,
+            variations: live.variations,
+            contractSum: live.contractSum,
+            locked: live.locked,
+            version: live.version,
+          }
+        : null,
+      drift: live ? safeNum(live.total) - safeNum(snap.total) : 0,
+    };
+    if (!canSeeRates) {
+      summary.snapshot = { ...summary.snapshot, ...zero };
+      if (summary.live) summary.live = { ...summary.live, ...zero };
+      summary.drift = 0;
+    }
+    return summary;
+  });
+}
+
 const MAX_ITEMS = Number(process.env.PROJECT_MAX_ITEMS || 8000);
 const MATERIAL_PRODUCT_KEY = "revit-materials";
 const PS_MATERIAL_PRODUCT_KEY = "planswift-materials";
+const MEP_MATERIAL_PRODUCT_KEY = "mep-materials";
 
 // The materials/budget sibling productKey for a takeoff/bill productKey, or
 // null when the key is not a bill key (e.g. it is already a *-materials
@@ -364,6 +463,7 @@ function materialsSiblingKey(pk) {
   if (!k || k.endsWith("-materials")) return null;
   if (k === "revit") return MATERIAL_PRODUCT_KEY;
   if (k === "planswift") return PS_MATERIAL_PRODUCT_KEY;
+  if (k === "mep") return MEP_MATERIAL_PRODUCT_KEY;
   return null;
 }
 const VALUATION_TIME_ZONE =
@@ -428,10 +528,26 @@ function forcePsFullProductKey(req, _res, next) {
   next();
 }
 
+// MEP (building services) unified save: persists the services takeoff (bill) +
+// its derived material/labour build-up (budget) in one call, exactly like
+// revit/full & planswift/full. Entitlement is gated on the base "mep" product.
+function forceMepFullProductKey(req, _res, next) {
+  req.productKeyOriginal = "mep";
+  req.params.productKey = entitlementKeyFor("mep");
+  next();
+}
+
+function forceMepMaterialsProductKey(req, _res, next) {
+  req.productKeyOriginal = MEP_MATERIAL_PRODUCT_KEY;
+  req.params.productKey = entitlementKeyFor(MEP_MATERIAL_PRODUCT_KEY);
+  next();
+}
+
 function isMaterialsProductKey(productKey) {
   const key = normalizeProductKey(productKey);
   return key === "revit-materials" || key === "revit-material"
-      || key === "planswift-materials" || key === "planswift-material";
+      || key === "planswift-materials" || key === "planswift-material"
+      || key === "mep-materials" || key === "mep-material";
 }
 
 // Map a takeoff product key to its sibling derived-materials product key, so a
@@ -441,6 +557,7 @@ function materialsProductKeyFor(productKey) {
   const key = normalizeProductKey(productKey);
   if (key === "revit") return MATERIAL_PRODUCT_KEY;
   if (key === "planswift") return PS_MATERIAL_PRODUCT_KEY;
+  if (key === "mep") return MEP_MATERIAL_PRODUCT_KEY;
   return null;
 }
 
@@ -454,6 +571,43 @@ function statusDateFieldForProductKey(productKey) {
 
 function statusLabelForProductKey(productKey) {
   return isMaterialsProductKey(productKey) ? "Purchased" : "Completed";
+}
+
+// ── Project limits (cloud-storage management) ──────────────────────────────
+// Personal licences are capped lower than organization licences. A user counts
+// as "organization" if they hold ANY active entitlement with licenseType
+// "organization". Caps are env-overridable.
+const PERSONAL_PROJECT_LIMIT = Number(process.env.PERSONAL_PROJECT_LIMIT || 30);
+const ORG_PROJECT_LIMIT = Number(process.env.ORG_PROJECT_LIMIT || 100);
+
+async function projectLimitForUser(userId) {
+  const u = await User.findById(userId, { entitlements: 1 }).lean();
+  const isOrg = (u?.entitlements || []).some(
+    (e) => e?.licenseType === "organization" && e?.status === "active",
+  );
+  return isOrg ? ORG_PROJECT_LIMIT : PERSONAL_PROJECT_LIMIT;
+}
+
+// Throw a typed 403 when creating a NEW project would exceed the licence cap.
+// Auto-created *-materials siblings are never counted or blocked. Existing
+// over-limit users are grandfathered — only new creates are blocked, never
+// re-saves/updates of an existing project (so plugins can't be locked out of
+// saving work in progress).
+async function assertWithinProjectLimit(userId, productKey) {
+  if (isMaterialsProductKey(productKey)) return;
+  const limit = await projectLimitForUser(userId);
+  const count = await TakeoffProject.countDocuments({
+    userId,
+    productKey: { $not: /-materials$/ },
+  });
+  if (count >= limit) {
+    const err = new Error(
+      `Project limit reached (${limit}). Delete a project or upgrade your plan to add more.`,
+    );
+    err.statusCode = 403;
+    err.code = "PROJECT_LIMIT";
+    throw err;
+  }
 }
 
 function parseOptionalDate(value) {
@@ -1471,6 +1625,9 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
   }
 
   const created = !project;
+  // Enforce the cloud-storage cap only when this save would INSERT a new
+  // project (re-saves of existing work are never blocked).
+  if (created) await assertWithinProjectLimit(userId, productKey);
   if (!project) {
     const trimmedName = String(name || "Project").trim() || "Project";
     const baseSlug = generateSlug(trimmedName);
@@ -1600,6 +1757,8 @@ async function createProject(req, res) {
       return res.json(projectForClient(project));
     }
 
+    await assertWithinProjectLimit(userId, productKey);
+
     const tracked = applyValuationTracking({
       productKey,
       previousItems: [],
@@ -1640,6 +1799,9 @@ async function createProject(req, res) {
 
     res.json(projectForClient(project));
   } catch (err) {
+    if (err?.code === "PROJECT_LIMIT") {
+      return res.status(403).json({ error: err.message, code: "PROJECT_LIMIT" });
+    }
     console.error("POST project error:", err);
     res.status(500).json({ error: "Server error" });
   }
@@ -1771,6 +1933,9 @@ async function saveProjectFull(req, res) {
       margins,
     });
   } catch (err) {
+    if (err?.code === "PROJECT_LIMIT") {
+      return res.status(403).json({ error: err.message, code: "PROJECT_LIMIT" });
+    }
     console.error("POST/PUT project full save error:", err);
     res.status(500).json({ error: "Server error" });
   }
@@ -2119,7 +2284,9 @@ async function getProject(req, res) {
     }
 
     const access = await resolveProjectAccess(req, project);
-    res.json(projectForClient(project, access));
+    const out = projectForClient(project, access);
+    out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+    res.json(out);
   } catch (err) {
     console.error("GET project error:", err);
     res.status(500).json({ error: "Server error" });
@@ -4571,6 +4738,166 @@ async function claimProject(req, res) {
 
 // §6 unified save — must precede the generic "/:productKey" routes so
 // "/revit/full" isn't swallowed by a single-segment match.
+// ── Cross-project link handlers (MEP services → architectural bill) ────────
+async function addLinkedProject(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const userId = getUserObjectId(req);
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const targetId = String(req.body?.targetProjectId || "").trim();
+    if (!isValidObjectId(targetId))
+      return res.status(400).json({ error: "targetProjectId required" });
+    if (targetId === id)
+      return res.status(400).json({ error: "A project cannot be linked to itself" });
+
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit)
+      return res.status(403).json({ error: "You do not have edit access to this project" });
+
+    // Target must be readable by the requester (owner or collaborator).
+    const target = await TakeoffProject.findOne({
+      _id: targetId,
+      $or: [{ userId }, { "collaborators.userId": userId }],
+    });
+    if (!target)
+      return res.status(404).json({ error: "Linked project not found or not accessible" });
+
+    project.linkedProjects = Array.isArray(project.linkedProjects)
+      ? project.linkedProjects
+      : [];
+    if (project.linkedProjects.some((l) => String(l.projectId) === targetId))
+      return res.status(409).json({ error: "That project is already linked" });
+
+    project.linkedProjects.push({
+      projectId: target._id,
+      productKey: target.productKey || "",
+      label: String(req.body?.label || target.name || "").trim(),
+      linkType: "sum",
+      snapshot: { ...computeProjectRollup(target), takenAt: new Date() },
+      addedAt: new Date(),
+      addedBy: userId,
+    });
+    project.markModified("linkedProjects");
+    await project.save();
+
+    const out = projectForClient(project, access);
+    out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+    res.json(out);
+  } catch (err) {
+    console.error("addLinkedProject error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function removeLinkedProject(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const linkId = String(req.params.linkId || "").trim();
+    const userId = getUserObjectId(req);
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit)
+      return res.status(403).json({ error: "You do not have edit access to this project" });
+
+    const before = (project.linkedProjects || []).length;
+    project.linkedProjects = (project.linkedProjects || []).filter(
+      (l) => String(l._id) !== linkId && String(l.projectId) !== linkId,
+    );
+    if (project.linkedProjects.length === before)
+      return res.status(404).json({ error: "Link not found" });
+    project.markModified("linkedProjects");
+    await project.save();
+
+    const out = projectForClient(project, access);
+    out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+    res.json(out);
+  } catch (err) {
+    console.error("removeLinkedProject error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function refreshLinkedProjectSnapshot(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const linkId = String(req.params.linkId || "").trim();
+    const userId = getUserObjectId(req);
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit)
+      return res.status(403).json({ error: "You do not have edit access to this project" });
+
+    const link = (project.linkedProjects || []).find((l) => String(l._id) === linkId);
+    if (!link) return res.status(404).json({ error: "Link not found" });
+
+    const target = await TakeoffProject.findOne({
+      _id: link.projectId,
+      $or: [{ userId }, { "collaborators.userId": userId }],
+    });
+    if (!target)
+      return res.status(404).json({ error: "Linked project not accessible" });
+
+    link.snapshot = { ...computeProjectRollup(target), takenAt: new Date() };
+    project.markModified("linkedProjects");
+    await project.save();
+
+    const out = projectForClient(project, access);
+    out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+    res.json(out);
+  } catch (err) {
+    console.error("refreshLinkedProjectSnapshot error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// Candidates the requester can link INTO this project: other projects they
+// OWN (kept owner-only for P1 so no rate-masking concern), newest first,
+// excluding this project.
+async function listLinkCandidates(req, res) {
+  try {
+    const id = String(req.params.id || "").trim();
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const docs = await TakeoffProject.find({ userId })
+      .select(
+        "name productKey updatedAt items provisionalSums variations contract.contractSum contract.locked version",
+      )
+      .sort({ updatedAt: -1 })
+      .limit(200)
+      .lean();
+
+    const candidates = docs
+      .filter((d) => String(d._id) !== id)
+      .map((d) => ({
+        projectId: String(d._id),
+        name: d.name || "",
+        productKey: d.productKey || "",
+        total: computeProjectRollup(d).total,
+        updatedAt: d.updatedAt || null,
+      }));
+    res.json({ ok: true, candidates });
+  } catch (err) {
+    console.error("listLinkCandidates error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 router.post(
   "/revit/full",
   forceRevitFullProductKey,
@@ -4688,6 +5015,68 @@ router.delete(
   deleteProject,
 );
 
+/* ── MEP (building services) routes ── */
+// Unified save — mirrors revit/full & planswift/full. Backward-compatible: an
+// in-the-wild MEP plugin still sending rate:0 with no materialItems simply
+// saves a bill with no budget (deriveBillRates leaves unpriced lines untouched),
+// so existing MEP users never break.
+router.post(
+  "/mep/full",
+  forceMepFullProductKey,
+  requireEntitlementParam,
+  saveProjectFull,
+);
+
+router.put(
+  "/mep/full",
+  forceMepFullProductKey,
+  requireEntitlementParam,
+  saveProjectFull,
+);
+
+router.post(
+  "/mep/materials",
+  forceMepMaterialsProductKey,
+  requireEntitlementParam,
+  createProject,
+);
+
+router.get(
+  "/mep/materials",
+  forceMepMaterialsProductKey,
+  requireEntitlementParam,
+  listProjects,
+);
+
+router.get(
+  "/mep/materials/:id/valuations",
+  forceMepMaterialsProductKey,
+  requireEntitlementParam,
+  getProjectValuations,
+);
+
+router.get(
+  "/mep/materials/:id",
+  forceMepMaterialsProductKey,
+  requireEntitlementParam,
+  getProject,
+);
+
+router.put(
+  "/mep/materials/:id",
+  forceMepMaterialsProductKey,
+  requireEntitlementParam,
+  updateProject,
+);
+
+router.delete(
+  "/mep/materials/:id",
+  forceMepMaterialsProductKey,
+  requireEntitlementParam,
+  requireStepUp,
+  deleteProject,
+);
+
 // Claim a shared project by code. MUST precede "/:productKey" so "claim" is
 // not captured as a product key. Auth-only (router.use(requireAuth)); the
 // plugin entitlement is enforced inside claimProject (block-with-upsell).
@@ -4771,6 +5160,35 @@ router.put(
   mapEntitlementParam,
   requireEntitlementParam,
   markBudget,
+);
+
+// ── Cross-project links (MEP services → architectural bill) ──
+router.get(
+  "/:productKey/:id/linked-candidates",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  listLinkCandidates,
+);
+
+router.post(
+  "/:productKey/:id/linked-projects",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  addLinkedProject,
+);
+
+router.post(
+  "/:productKey/:id/linked-projects/:linkId/refresh",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  refreshLinkedProjectSnapshot,
+);
+
+router.delete(
+  "/:productKey/:id/linked-projects/:linkId",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  removeLinkedProject,
 );
 
 router.post(

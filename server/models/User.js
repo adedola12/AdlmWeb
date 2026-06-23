@@ -79,6 +79,10 @@ const UserSchema = new mongoose.Schema(
     certificateNameLockedAt: { type: Date, default: null },
     whatsapp: { type: String, default: "", trim: true },
 
+    // Optional user-supplied profile details.
+    location: { type: String, default: "", trim: true },
+    firmName: { type: String, default: "", trim: true },
+
     zone: {
       type: String,
       enum: [

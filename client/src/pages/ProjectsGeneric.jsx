@@ -5114,6 +5114,8 @@ export default function ProjectsGeneric() {
                 projectId={selectedId}
                 accessToken={accessToken}
                 access={sel?._access}
+                linkedSummaries={sel?.linkedSummaries || []}
+                onLinkedChange={(updated) => setSel(updated)}
                 onDeleteItem={deleteItem}
                 onMoveItem={moveItem}
                 boqUndoStack={boqUndoStack}

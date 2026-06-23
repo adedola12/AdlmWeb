@@ -273,6 +273,7 @@ export default function Purchase() {
       next.periods = Math.max(parseInt(next.periods || 1, 10), 1);
       next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
       if (licenseType !== "organization") next.seats = 1;
+      else if (next.seats < 2) next.seats = 2; // org licences: minimum 2 users
       return next;
     });
   }
@@ -286,7 +287,7 @@ export default function Purchase() {
         periods: Math.max(parseInt(draft.periods || 1, 10), 1),
         seats:
           licenseType === "organization"
-            ? Math.max(parseInt(draft.seats || 1, 10), 1)
+            ? Math.max(parseInt(draft.seats || 2, 10), 2)
             : 1,
         firstTime: !!draft.firstTime,
       },
@@ -469,6 +470,19 @@ export default function Purchase() {
     });
 
   }, [cart, licenseType, org]);
+
+  // Organization licences require a minimum of 2 users — bump any 1-seat items
+  // when the buyer switches to an organization licence.
+  React.useEffect(() => {
+    if (licenseType !== "organization") return;
+    setCart((c) => {
+      const next = {};
+      Object.entries(c).forEach(([k, v]) => {
+        next[k] = { ...v, seats: Math.max(parseInt(v.seats || 2, 10), 2) };
+      });
+      return next;
+    });
+  }, [licenseType]);
 
   React.useEffect(() => {
     if (licenseType === "organization") return;
@@ -994,13 +1008,14 @@ export default function Purchase() {
                         <button type="button" className={stepClass} onClick={() => patchDraft({ seats: Number(draft.seats || 1) - 1 })} aria-label="Decrease seats">−</button>
                         <input
                           type="number"
-                          min="1"
+                          min="2"
                           value={draft.seats}
                           onChange={(e) => patchDraft({ seats: e.target.value })}
                           className="w-12 text-center bg-transparent outline-none py-2"
                         />
                         <button type="button" className={stepClass} onClick={() => patchDraft({ seats: Number(draft.seats || 1) + 1 })} aria-label="Increase seats">+</button>
                       </div>
+                      <div className="mt-1 text-xs text-slate-500">Minimum 2 users for organization licences.</div>
                     </div>
                   ) : (
                     <div className="text-xs text-slate-500">

@@ -1,0 +1,25 @@
+#!/bin/sh
+# ADLM pre-commit hook — block accidental secret commits.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Requires gitleaks (https://github.com/gitleaks/gitleaks). If it isn't
+# installed the hook warns and lets the commit through, so it never blocks
+# work on machines without the tool.
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --config .gitleaks.toml
+  if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ gitleaks found a potential secret in your staged changes. Commit aborted."
+    echo "   Review the finding above. If it is a genuine false positive, add an"
+    echo "   allowlist rule to .gitleaks.toml — do NOT commit real secrets."
+    exit 1
+  fi
+else
+  echo "⚠️  gitleaks not installed — skipping secret scan."
+  echo "   Install it so this hook can protect you: https://github.com/gitleaks/gitleaks"
+fi
+
+exit 0

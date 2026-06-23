@@ -526,6 +526,8 @@ router.get(
       firstName,
       lastName,
       whatsapp,
+      location,
+      firmName,
     } = u;
 
     return res.json({
@@ -538,6 +540,8 @@ router.get(
       firstName: firstName || "",
       lastName: lastName || "",
       whatsapp: whatsapp || "",
+      location: location || "",
+      firmName: firmName || "",
       nameLockedForCertificate: !!u.certificateNameLockedAt,
       stepUpEnabled: !!u.security?.stepUpEnabled,
     });
@@ -548,8 +552,17 @@ router.post(
   "/profile",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { username, avatarUrl, zone, firstName, lastName, whatsapp, stepUpEnabled } =
-      req.body || {};
+    const {
+      username,
+      avatarUrl,
+      zone,
+      firstName,
+      lastName,
+      whatsapp,
+      location,
+      firmName,
+      stepUpEnabled,
+    } = req.body || {};
     const u = await User.findById(req.user._id);
     if (!u) return res.status(404).json({ error: "User missing" });
 
@@ -586,6 +599,8 @@ router.post(
     }
     if (whatsapp !== undefined)
       u.whatsapp = String(whatsapp || "").replace(/[^\d+]/g, "");
+    if (location !== undefined) u.location = String(location || "").trim();
+    if (firmName !== undefined) u.firmName = String(firmName || "").trim();
 
     if (stepUpEnabled !== undefined) {
       u.security = u.security || {};
@@ -604,6 +619,8 @@ router.post(
         firstName: u.firstName || "",
         lastName: u.lastName || "",
         whatsapp: u.whatsapp || "",
+        location: u.location || "",
+        firmName: u.firmName || "",
         stepUpEnabled: !!u.security?.stepUpEnabled,
       },
     });
