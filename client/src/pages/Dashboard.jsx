@@ -10,6 +10,7 @@ import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import { parseBunny, bunnyIframeSrc } from "../lib/video";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { TiltCard } from "../components/effects.jsx";
+import StorageBar from "../components/StorageBar.jsx";
 
 dayjs.extend(relativeTime);
 
@@ -200,6 +201,9 @@ export default function Dashboard() {
   const [loadingClassrooms, setLoadingClassrooms] = React.useState(false);
   const [classroomsErr, setClassroomsErr] = React.useState("");
 
+  // ── Cloud storage usage ──
+  const [storageData, setStorageData] = React.useState(null);
+
   const navigate = useNavigate();
 
   const displayName =
@@ -268,7 +272,11 @@ export default function Dashboard() {
     loadCourses();
     loadClassrooms();
     loadPTrainings();
-  }, [loadSummary, loadCourses, loadClassrooms, loadPTrainings]);
+    // Fetch cloud storage usage
+    apiAuthed("/me/storage", { token: accessToken })
+      .then((d) => setStorageData(d || null))
+      .catch(() => null);
+  }, [loadSummary, loadCourses, loadClassrooms, loadPTrainings, accessToken]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -561,6 +569,7 @@ export default function Dashboard() {
                   entitlements={summary?.entitlements || []}
                   onOpen={openProduct}
                   onManage={manageSubscription}
+                  storageData={storageData}
                 />
               )}
 
@@ -763,7 +772,7 @@ function ProductsTab({ products = [], loading }) {
   );
 }
 
-function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
+function SubscriptionsTab({ entitlements = [], onOpen, onManage, storageData = null }) {
   const subs = entitlements.filter((e) => !e.isCourse);
   if (!subs.length)
     return <div className="text-sm text-slate-600">No subscriptions yet.</div>;
@@ -776,6 +785,7 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
 
         const lt = String(s.licenseType || "personal").toLowerCase();
         const seats = lt === "organization" ? s.seats : null;
+        const productStorage = storageData?.usage?.[s.productKey] || null;
 
         return (
           <div
@@ -820,6 +830,17 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage }) {
                     </span>
                   </span>
                 </div>
+
+                {productStorage ? (
+                  <div className="mt-3">
+                    <StorageBar
+                      used={productStorage.used}
+                      limit={productStorage.limit}
+                      productKey={s.productKey}
+                      compact
+                    />
+                  </div>
+                ) : null}
 
                 <div className="mt-4 flex gap-2">
                   <button

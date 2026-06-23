@@ -4,6 +4,8 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
+import StorageBar from "../components/StorageBar.jsx";
+import { apiAuthed } from "../api.js";
 
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
 const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -121,12 +123,13 @@ async function findProductFromListFallback(key, signal) {
 
 export default function ProductDetail() {
   const { key } = useParams();
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const navigate = useNavigate();
 
   const [p, setP] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
+  const [productStorage, setProductStorage] = React.useState(null);
 
   React.useEffect(() => {
     const ctl = new AbortController();
@@ -211,6 +214,16 @@ export default function ProductDetail() {
       return true;
     });
   }, [p]);
+
+  // Fetch per-product storage for logged-in users
+  React.useEffect(() => {
+    if (!user || !accessToken || !key) return;
+    const safeKey = String(key).trim();
+    if (safeKey.endsWith("-materials")) return;
+    apiAuthed(`/projects/${encodeURIComponent(safeKey)}/storage`, { token: accessToken })
+      .then((d) => setProductStorage(d || null))
+      .catch(() => null);
+  }, [user, accessToken, key]);
 
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [zoom, setZoom] = React.useState(false);
@@ -520,6 +533,17 @@ export default function ProductDetail() {
             </p>
           </section>
         )}
+
+        {/* Cloud storage for licensed users */}
+        {productStorage && !productStorage.isMaterials ? (
+          <section>
+            <StorageBar
+              used={productStorage.used}
+              limit={productStorage.limit}
+              productKey={productStorage.productKey || key}
+            />
+          </section>
+        ) : null}
 
         {/* Related learning */}
         {related.length > 0 && (

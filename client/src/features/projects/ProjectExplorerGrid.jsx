@@ -1,6 +1,7 @@
 import React from "react";
 import { FaFolder, FaTrash } from "react-icons/fa";
 import ProjectSectionSummary from "./ProjectSectionSummary.jsx";
+import StorageBar from "../../components/StorageBar.jsx";
 
 function rowId(row) {
   return row?._id || row?.id || null;
@@ -26,6 +27,7 @@ export default function ProjectExplorerGrid({
   selectedIdsCount = 0,
   selectedMap = {},
   statusPastLabel = "Completed to date",
+  storageInfo = null,
 }) {
   return (
     <div className="mt-5">
@@ -33,6 +35,16 @@ export default function ProjectExplorerGrid({
         statusPastLabel={statusPastLabel}
         summary={sectionSummary}
       />
+
+      {storageInfo && !storageInfo.isMaterials ? (
+        <div className="mt-4">
+          <StorageBar
+            used={storageInfo.used}
+            limit={storageInfo.limit}
+            productKey={storageInfo.productKey}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="text-sm text-slate-600 dark:text-adlm-dark-muted">

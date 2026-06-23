@@ -1021,6 +1021,7 @@ export default function ProjectsGeneric() {
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
+  const [storageInfo, setStorageInfo] = React.useState(null);
 
   // explorer selection
   const [selectedMap, setSelectedMap] = React.useState({});
@@ -1845,8 +1846,14 @@ export default function ProjectsGeneric() {
     setNotice("");
 
     try {
-      const list = await apiAuthed(endpoints.list, { token: accessToken });
+      const [list, storage] = await Promise.all([
+        apiAuthed(endpoints.list, { token: accessToken }),
+        isMaterialsTool(tool)
+          ? Promise.resolve(null)
+          : apiAuthed(`/projects/${normTool(tool)}/storage`, { token: accessToken }).catch(() => null),
+      ]);
       const safeList = Array.isArray(list) ? list : [];
+      if (storage) setStorageInfo(storage);
       setRows(safeList);
 
       if (!keepSelection) setSelectedMap({});
@@ -4982,6 +4989,7 @@ export default function ProjectsGeneric() {
                 onDeleteProject={delProject}
                 sectionSummary={sectionSummary}
                 statusPastLabel={statusPastLabel}
+                storageInfo={storageInfo}
               />
             ) : (
               <ProjectOpenView

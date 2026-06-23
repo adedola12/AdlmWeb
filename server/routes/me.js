@@ -11,6 +11,7 @@ import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
 import { Setting } from "../models/Setting.js";
 import { Invoice } from "../models/Invoice.js";
+import { TakeoffProject } from "../models/TakeoffProject.js";
 
 const router = express.Router();
 
@@ -1081,6 +1082,76 @@ router.post(
     await purchase.save();
 
     return res.json({ ok: true, message: "Training date confirmed" });
+  }),
+);
+
+// ── Storage usage endpoint ────────────────────────────────────────────────
+// Returns per-product project counts and limits for the calling user.
+// Used by the dashboard and projects view to render storage bars.
+const PERSONAL_PROJECT_LIMIT = Number(process.env.PERSONAL_PROJECT_LIMIT || 30);
+const ORG_PROJECT_LIMIT = Number(process.env.ORG_PROJECT_LIMIT || 50);
+
+function isMaterialsKey(k) {
+  return String(k || "").endsWith("-materials");
+}
+
+router.get(
+  "/storage",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+    const user = await User.findById(userId, { entitlements: 1 }).lean();
+    const ents = user?.entitlements || [];
+
+    const isOrg = ents.some(
+      (e) => e?.licenseType === "organization" && e?.status === "active",
+    );
+    const baseLimit = isOrg ? ORG_PROJECT_LIMIT : PERSONAL_PROJECT_LIMIT;
+    const licenseType = isOrg ? "organization" : "personal";
+
+    // Active non-materials product keys the user is entitled to
+    const productKeys = [
+      ...new Set(
+        ents
+          .filter(
+            (e) =>
+              e?.status === "active" &&
+              e?.productKey &&
+              !isMaterialsKey(e.productKey),
+          )
+          .map((e) => e.productKey),
+      ),
+    ];
+
+    // Count projects per product in one aggregation
+    const counts = productKeys.length
+      ? await TakeoffProject.aggregate([
+          { $match: { userId: userId, productKey: { $in: productKeys } } },
+          { $group: { _id: "$productKey", count: { $sum: 1 } } },
+        ])
+      : [];
+
+    const countByKey = Object.fromEntries(
+      counts.map((c) => [c._id, c.count]),
+    );
+
+    // Build per-product usage, applying extraProjectSlots per entitlement
+    const usage = Object.fromEntries(
+      productKeys.map((k) => {
+        const ent = ents.find((e) => e?.productKey === k && e?.status === "active");
+        const extra = Number(ent?.extraProjectSlots || 0);
+        return [
+          k,
+          {
+            used: countByKey[k] || 0,
+            limit: baseLimit + extra,
+            extraSlots: extra,
+          },
+        ];
+      }),
+    );
+
+    return res.json({ licenseType, baseLimit, usage });
   }),
 );
 

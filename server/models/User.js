@@ -46,6 +46,10 @@ const EntitlementSchema = new mongoose.Schema(
       lastSentKind: { type: String, enum: ["pre", "post"], default: null },
       lastSentDays: { type: Number, default: null },
     },
+
+    // Extra project slots purchased by the user for this product.
+    // Admin sets this when approving a storage add-on purchase.
+    extraProjectSlots: { type: Number, default: 0, min: 0 },
   },
   { _id: false },
 );
