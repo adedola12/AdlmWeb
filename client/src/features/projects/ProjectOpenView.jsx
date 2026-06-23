@@ -717,7 +717,7 @@ export default function ProjectOpenView({
             statusPastLabel={statusPastLabel}
             valuedAmount={valuedAmount}
           />
-          {!String(productKey).endsWith("-materials") && (
+          {["revit", "planswift"].includes(String(productKey)) && (
             <LinkedProjectsCard
               productKey={productKey}
               projectId={projectId}

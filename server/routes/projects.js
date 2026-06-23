@@ -393,10 +393,13 @@ async function resolveLinkedSummaries(parent, userId, access) {
   if (!links.length) return [];
   const canSeeRates = access ? !!access.canSeeRates : true;
   const ids = links.map((l) => l.projectId).filter(Boolean);
+  // Owner-scoped: only the requester's OWN linked projects resolve live. A
+  // collaborator viewing the parent never queries another user's project — they
+  // see the frozen snapshot stored on the parent instead.
   const linked = ids.length
     ? await TakeoffProject.find({
         _id: { $in: ids },
-        $or: [{ userId }, { "collaborators.userId": userId }],
+        userId,
       })
         .select(
           "name productKey version items provisionalSums variations contract.contractSum contract.locked",
@@ -575,39 +578,60 @@ function statusLabelForProductKey(productKey) {
 }
 
 // ── Project limits (cloud-storage management) ──────────────────────────────
-// Personal licences are capped lower than organization licences. A user counts
-// as "organization" if they hold ANY active entitlement with licenseType
-// "organization". Caps are env-overridable.
+// Personal licences: 30 projects per product. Organization licences: 50 per
+// product. Extra slots can be purchased and stored on the entitlement's
+// extraProjectSlots field. Caps are env-overridable.
 const PERSONAL_PROJECT_LIMIT = Number(process.env.PERSONAL_PROJECT_LIMIT || 30);
-const ORG_PROJECT_LIMIT = Number(process.env.ORG_PROJECT_LIMIT || 100);
+const ORG_PROJECT_LIMIT = Number(process.env.ORG_PROJECT_LIMIT || 50);
 
-async function projectLimitForUser(userId) {
+async function projectLimitForProduct(userId, productKey) {
   const u = await User.findById(userId, { entitlements: 1 }).lean();
-  const isOrg = (u?.entitlements || []).some(
+  const ents = u?.entitlements || [];
+  const isOrg = ents.some(
     (e) => e?.licenseType === "organization" && e?.status === "active",
   );
-  return isOrg ? ORG_PROJECT_LIMIT : PERSONAL_PROJECT_LIMIT;
+  const baseLimit = isOrg ? ORG_PROJECT_LIMIT : PERSONAL_PROJECT_LIMIT;
+  // Add any extra slots purchased for this specific product
+  const ent = ents.find(
+    (e) => e?.productKey === productKey && e?.status === "active",
+  );
+  const extra = Number(ent?.extraProjectSlots || 0);
+  return baseLimit + extra;
 }
 
-// Throw a typed 403 when creating a NEW project would exceed the licence cap.
-// Auto-created *-materials siblings are never counted or blocked. Existing
-// over-limit users are grandfathered — only new creates are blocked, never
-// re-saves/updates of an existing project (so plugins can't be locked out of
-// saving work in progress).
+// Throw a typed 403 when creating a NEW project would exceed the per-product
+// licence cap. Auto-created *-materials siblings are never counted or blocked.
+// Existing projects are never blocked on re-save (plugins can always sync).
 async function assertWithinProjectLimit(userId, productKey) {
   if (isMaterialsProductKey(productKey)) return;
-  const limit = await projectLimitForUser(userId);
-  const count = await TakeoffProject.countDocuments({
-    userId,
-    productKey: { $not: /-materials$/ },
-  });
+  const limit = await projectLimitForProduct(userId, productKey);
+  const count = await TakeoffProject.countDocuments({ userId, productKey });
   if (count >= limit) {
     const err = new Error(
       `Project limit reached (${limit}). Delete a project or upgrade your plan to add more.`,
     );
     err.statusCode = 403;
     err.code = "PROJECT_LIMIT";
+    err.storageLimit = { used: count, limit, productKey };
     throw err;
+  }
+}
+
+// Return per-product usage and limit for the requesting user.
+async function getProjectStorageInfo(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id" });
+    if (isMaterialsProductKey(productKey)) {
+      return res.json({ used: 0, limit: null, productKey, isMaterials: true });
+    }
+    const limit = await projectLimitForProduct(userId, productKey);
+    const used = await TakeoffProject.countDocuments({ userId, productKey });
+    return res.json({ used, limit, productKey, isMaterials: false });
+  } catch (err) {
+    console.error("GET storage-info error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 }
 
@@ -1801,7 +1825,11 @@ async function createProject(req, res) {
     res.json(projectForClient(project));
   } catch (err) {
     if (err?.code === "PROJECT_LIMIT") {
-      return res.status(403).json({ error: err.message, code: "PROJECT_LIMIT" });
+      return res.status(403).json({
+        error: err.message,
+        code: "PROJECT_LIMIT",
+        storageLimit: err.storageLimit || null,
+      });
     }
     console.error("POST project error:", err);
     res.status(500).json({ error: "Server error" });
@@ -1935,7 +1963,11 @@ async function saveProjectFull(req, res) {
     });
   } catch (err) {
     if (err?.code === "PROJECT_LIMIT") {
-      return res.status(403).json({ error: err.message, code: "PROJECT_LIMIT" });
+      return res.status(403).json({
+        error: err.message,
+        code: "PROJECT_LIMIT",
+        storageLimit: err.storageLimit || null,
+      });
     }
     console.error("POST/PUT project full save error:", err);
     res.status(500).json({ error: "Server error" });
@@ -4834,6 +4866,12 @@ async function addLinkedProject(req, res) {
     const userId = getUserObjectId(req);
     if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
     if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+    // Only QUIV/HERON (architectural) projects can have services linked in.
+    if (!["revit", "planswift"].includes(productKey)) {
+      return res
+        .status(400)
+        .json({ error: "Linking is only available on QUIV/HERON projects" });
+    }
 
     const targetId = String(req.body?.targetProjectId || "").trim();
     if (!isValidObjectId(targetId))
@@ -4847,13 +4885,17 @@ async function addLinkedProject(req, res) {
     if (!access.canEdit)
       return res.status(403).json({ error: "You do not have edit access to this project" });
 
-    // Target must be readable by the requester (owner or collaborator).
+    // Only the user's OWN MEP project may be linked — never another user's, and
+    // only MEP (services) projects can be merged into a QUIV/HERON bill.
     const target = await TakeoffProject.findOne({
       _id: targetId,
-      $or: [{ userId }, { "collaborators.userId": userId }],
+      userId,
+      productKey: "mep",
     });
     if (!target)
-      return res.status(404).json({ error: "Linked project not found or not accessible" });
+      return res
+        .status(404)
+        .json({ error: "You can only link an MEP project that you own" });
 
     project.linkedProjects = Array.isArray(project.linkedProjects)
       ? project.linkedProjects
@@ -4935,7 +4977,8 @@ async function refreshLinkedProjectSnapshot(req, res) {
 
     const target = await TakeoffProject.findOne({
       _id: link.projectId,
-      $or: [{ userId }, { "collaborators.userId": userId }],
+      userId,
+      productKey: "mep",
     });
     if (!target)
       return res.status(404).json({ error: "Linked project not accessible" });
@@ -4953,16 +4996,15 @@ async function refreshLinkedProjectSnapshot(req, res) {
   }
 }
 
-// Candidates the requester can link INTO this project: other projects they
-// OWN (kept owner-only for P1 so no rate-masking concern), newest first,
-// excluding this project.
+// Candidates to link INTO a QUIV/HERON project: the requester's OWN MEP
+// projects only (never another user's), newest first, excluding this project.
 async function listLinkCandidates(req, res) {
   try {
     const id = String(req.params.id || "").trim();
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
 
-    const docs = await TakeoffProject.find({ userId })
+    const docs = await TakeoffProject.find({ userId, productKey: "mep" })
       .select(
         "name productKey updatedAt items provisionalSums variations contract.contractSum contract.locked version",
       )
@@ -5373,6 +5415,15 @@ router.get(
   mapEntitlementParam,
   requireEntitlementParam,
   streamProjectModel,
+);
+
+// Storage info for a product — must be before /:productKey/:id so "storage"
+// is not captured as an :id.
+router.get(
+  "/:productKey/storage",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  getProjectStorageInfo,
 );
 
 router.get(
