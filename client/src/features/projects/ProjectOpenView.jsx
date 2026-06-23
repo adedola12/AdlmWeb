@@ -22,6 +22,7 @@ import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";
 import ProjectDashboardSummary from "./ProjectDashboardSummary.jsx";
 import LinkedProjectsCard from "./LinkedProjectsCard.jsx";
+import ServicesPricingPanel from "./ServicesPricingPanel.jsx";
 import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
@@ -723,6 +724,15 @@ export default function ProjectOpenView({
               accessToken={accessToken}
               access={access}
               linkedSummaries={linkedSummaries}
+              onChange={onLinkedChange}
+            />
+          )}
+          {productKey === "mep" && (
+            <ServicesPricingPanel
+              productKey={productKey}
+              projectId={projectId}
+              accessToken={accessToken}
+              access={access}
               onChange={onLinkedChange}
             />
           )}

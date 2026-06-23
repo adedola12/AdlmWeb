@@ -234,6 +234,7 @@ import {
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
+import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
 // IFC files; we can raise this per-tier later via an entitlement flag.
@@ -4738,6 +4739,93 @@ async function claimProject(req, res) {
 
 // §6 unified save — must precede the generic "/:productKey" routes so
 // "/revit/full" isn't swallowed by a single-segment match.
+// Price every bill line of a (services) project from RateGen: resolve material
+// + labour rates, run the shared services build-up, write the result as
+// budgetItems, then derive each bill line's rate from that build-up. Makes the
+// MEP total real (and the P1 linked total show money) with no plugin release.
+async function priceServicesProject(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    const userId = getUserObjectId(req);
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({ error: "You do not have edit access to this project" });
+    }
+
+    const items = Array.isArray(project.items) ? project.items : [];
+    if (!items.length) return res.status(400).json({ error: "No items to price" });
+
+    const defOverhead = safeNum(req.body?.overheadPercent);
+    const defProfit = safeNum(req.body?.profitPercent);
+
+    // Map each bill line to a service-compute input (resolve rates by its
+    // description; infer the service type for the bundle/connector constants).
+    const inputs = items.map((it) => ({
+      type: mapServiceType(it),
+      description: it.description || it.takeoffLine || "",
+      qty: safeNum(it.qty),
+      unit: it.unit || "",
+      materialName: it.materialName || it.description || it.takeoffLine || "",
+      labourName: it.description || it.takeoffLine || "",
+      overheadPercent: safeNum(it.overheadPercent) || defOverhead,
+      profitPercent: safeNum(it.profitPercent) || defProfit,
+    }));
+
+    const { items: priced } = await priceServiceItems(userId, inputs);
+
+    // Build budgetItems from the per-item build-up lines, keyed to the bill line
+    // by code (billIdentity). deriveBillRatesFromBudget then sets each line's
+    // rate from the priced build-up.
+    const budgetItems = [];
+    let pricedLines = 0;
+    items.forEach((it, i) => {
+      const p = priced[i];
+      const lines = p?.buildup?.lines || [];
+      if (!lines.length) return;
+      const billIdentity = String(it.code || "").trim();
+      if (!billIdentity) return; // can't link without a stable code
+      const oh = safeNum(it.overheadPercent) || defOverhead;
+      const pr = safeNum(it.profitPercent) || defProfit;
+      for (const line of lines) {
+        budgetItems.push({
+          billIdentity,
+          sn: safeNum(it.sn),
+          description: line.description || "",
+          materialName: line.componentKind === "Material" ? line.description || "" : "",
+          componentKind: line.componentKind,
+          unit: line.unit || "",
+          qty: safeNum(line.qty),
+          rate: safeNum(line.rate),
+          overheadPercent: oh,
+          profitPercent: pr,
+        });
+        pricedLines += 1;
+      }
+    });
+
+    project.budgetItems = budgetItems;
+    const { updated } = deriveBillRatesFromBudget(project);
+    reconcileItemsFromBudget(project);
+    project.markModified("budgetItems");
+    project.markModified("items");
+    await project.save();
+
+    const out = projectForClient(project, access);
+    out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+    out._servicesPriced = { budgetLines: pricedLines, billLinesUpdated: updated };
+    res.json(out);
+  } catch (err) {
+    console.error("priceServicesProject error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── Cross-project link handlers (MEP services → architectural bill) ────────
 async function addLinkedProject(req, res) {
   try {
@@ -5160,6 +5248,14 @@ router.put(
   mapEntitlementParam,
   requireEntitlementParam,
   markBudget,
+);
+
+// Price all services bill lines from RateGen (MEP web Budget view).
+router.post(
+  "/:productKey/:id/services/price",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  priceServicesProject,
 );
 
 // ── Cross-project links (MEP services → architectural bill) ──
