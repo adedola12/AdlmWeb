@@ -56,6 +56,7 @@ import RateGenLibrary from "./pages/RateGenLibrary.jsx";
 import AdminRateGen from "./pages/AdminRateGen.jsx";
 import AdminAddRate from "./pages/AdminAddRate.jsx";
 import RateGenUpdates from "./pages/RateGenUpdates.jsx";
+import ServiceConstants from "./pages/ServiceConstants.jsx";
 import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import Receipt from "./pages/Receipt.jsx";
 import UserInvoice from "./pages/UserInvoice.jsx";
@@ -246,6 +247,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <RateGenUpdates />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "rategen/services-constants",
+        element: (
+          <ProtectedRoute>
+            <ServiceConstants />
           </ProtectedRoute>
         ),
       },

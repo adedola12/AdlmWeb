@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { apiAuthed } from "../../http";
 
 function money(v) {
@@ -69,6 +70,15 @@ export default function ServicesPricingPanel({
             {busy ? "Pricing…" : "Price services"}
           </button>
         )}
+      </div>
+
+      <div className="mt-2">
+        <Link
+          to="/rategen/services-constants"
+          className="text-xs underline text-slate-500 dark:text-slate-400"
+        >
+          Edit services constants →
+        </Link>
       </div>
 
       {error && <div className="mt-2 text-xs text-red-600">{error}</div>}
