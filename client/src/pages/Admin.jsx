@@ -1915,12 +1915,14 @@ export default function Admin() {
       <AdminLauncher title="Jump to a tool" />
 
       <div className="card">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-semibold">Admin</h1>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Hub controls only — every tool shortcut lives in the launcher grid
+              above, so we no longer duplicate them here. */}
+          <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
             <input
-              className="input"
+              className="input w-full sm:w-64"
               placeholder="Search email / username / product…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -1930,9 +1932,13 @@ export default function Admin() {
               Refresh
             </button>
 
-            {/* ✅ Expiry reminders button */}
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-600 flex items-center gap-2 select-none">
+            {/* ✅ Expiry reminders — grouped so the daily tool stays one click
+                away without crowding the toolbar. */}
+            <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-adlm-dark-border px-2.5 py-1.5">
+              <span className="text-xs font-medium text-slate-500 dark:text-adlm-dark-muted whitespace-nowrap">
+                Expiry reminders
+              </span>
+              <label className="text-xs text-slate-600 dark:text-adlm-dark-muted flex items-center gap-1.5 select-none">
                 <input
                   type="checkbox"
                   checked={expiryDryRun}
@@ -1942,7 +1948,7 @@ export default function Admin() {
               </label>
 
               <input
-                className="input w-[90px]"
+                className="input !h-8 w-[72px]"
                 type="number"
                 min="0"
                 step="1"
@@ -1958,61 +1964,9 @@ export default function Admin() {
                 onClick={runExpiryRemindersNow}
                 title="Manually trigger subscription expiry/reminder emails"
               >
-                {expiryJobBusy
-                  ? "Running…"
-                  : expiryDryRun
-                    ? "Run expiry (dry)"
-                    : "Send expiry emails"}
+                {expiryJobBusy ? "Running…" : expiryDryRun ? "Run (dry)" : "Send"}
               </button>
             </div>
-
-            <button
-              className="btn btn-sm"
-              onClick={() => navigate("/admin/coupons")}
-              title="Create / manage coupons"
-            >
-              AddCoupon
-            </button>
-
-            <button
-              className="btn btn-sm"
-              onClick={() => navigate("/admin/freebies")}
-              title="Create / manage freebies"
-            >
-              AddFreebie
-            </button>
-
-            <button
-              className="btn btn-sm"
-              onClick={() => navigate("/admin/flyers")}
-              title="Design & export ADLM flyers (announcements, countdowns, launches, events)"
-            >
-              Flyer Engine
-            </button>
-
-            <button
-              className="btn btn-sm"
-              onClick={() => navigate("/admin/course-grading")}
-              title="Grade submissions & mark course enrollments as complete"
-            >
-              Course Grading
-            </button>
-
-            <button
-              className="btn btn-sm"
-              onClick={() => navigate("/admin/invoices")}
-              title="Create and manage invoices"
-            >
-              Invoices
-            </button>
-
-            <button
-              className="btn btn-sm"
-              onClick={() => navigate("/admin/proposals")}
-              title="Build, send, and track client transformation proposals"
-            >
-              Proposals
-            </button>
           </div>
         </div>
 
