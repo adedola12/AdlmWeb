@@ -159,7 +159,16 @@ export default function ProjectDashboardSummary({
   statusLabel = "Completed",
   statusPastLabel = "Completed to date",
   valuedAmount = 0,
+  linkedSummaries = [],
 }) {
+  const linkedGrandTotal = React.useMemo(
+    () =>
+      (Array.isArray(linkedSummaries) ? linkedSummaries : []).reduce(
+        (s, l) => s + (Number(l?.live?.total ?? l?.snapshot?.total) || 0),
+        0,
+      ),
+    [linkedSummaries],
+  );
   const varianceTone =
     actualCoverageCount === 0
       ? "default"
@@ -181,8 +190,12 @@ export default function ProjectDashboardSummary({
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           label="Planned total"
-          value={grossAmount}
-          helper="Full project value (measured + PC + prelim + variations)"
+          value={grossAmount + linkedGrandTotal}
+          helper={
+            linkedGrandTotal > 0
+              ? `Own works + linked services (₦${grossAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })} own + ₦${linkedGrandTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })} linked)`
+              : "Full project value (measured + PC + prelim + variations)"
+          }
         />
         <MetricCard
           label={statusPastLabel}
@@ -191,7 +204,7 @@ export default function ProjectDashboardSummary({
         />
         <MetricCard
           label="Outstanding balance"
-          value={remainingAmount}
+          value={remainingAmount + linkedGrandTotal}
           helper="Project value still to earn or claim"
         />
         <MetricCard

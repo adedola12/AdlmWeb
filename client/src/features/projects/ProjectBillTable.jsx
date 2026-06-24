@@ -936,6 +936,8 @@ export default function ProjectBillTable({
   showMaterials = false,
   statusLabel = "Completed",
   valuedAmount = 0,
+  linkedSummaries = [],
+  onRemoveCategory,
 }) {
   const statusLabelLower = String(statusLabel || "Completed").toLowerCase();
   const statusActionText = showMaterials
@@ -2847,64 +2849,118 @@ export default function ProjectBillTable({
           </div>
         ) : null}
 
-        {computedShown.length && categoryTotals.length > 1 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth">
-            <div className="mb-2 text-sm font-semibold text-slate-900">
-              Summary by category
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-50 text-left text-slate-600">
-                  <tr>
-                    <th className="px-2 py-2">Category</th>
-                    <th className="px-2 py-2 text-right">Items</th>
-                    <th className="px-2 py-2 text-right">Gross</th>
-                    <th className="px-2 py-2 text-right">Deducted</th>
-                    <th className="px-2 py-2 text-right">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {categoryTotals.map((t) => (
-                    <tr key={`sum-${t.category}`} className="border-t">
-                      <td className="px-2 py-2 font-medium text-slate-800">
-                        {t.category}
+        {computedShown.length && categoryTotals.length > 1 ? (() => {
+          const activeSummaries = linkedSummaries.filter(
+            (l) => l && (l.live?.total || l.snapshot?.total),
+          );
+          const linkedGrandTotal = activeSummaries.reduce(
+            (s, l) => s + (Number(l.live?.total ?? l.snapshot?.total) || 0),
+            0,
+          );
+          const grandTotal = grossAmount + linkedGrandTotal;
+          return (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-depth">
+              <div className="mb-2 text-sm font-semibold text-slate-900">
+                Summary by category
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-left text-slate-600">
+                    <tr>
+                      <th className="px-2 py-2">Category</th>
+                      <th className="px-2 py-2 text-right">Items</th>
+                      <th className="px-2 py-2 text-right">Gross</th>
+                      <th className="px-2 py-2 text-right">Deducted</th>
+                      <th className="px-2 py-2 text-right">Balance</th>
+                      {onRemoveCategory && <th className="px-2 py-2" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categoryTotals.map((t) => (
+                      <tr key={`sum-${t.category}`} className="border-t group">
+                        <td className="px-2 py-2 font-medium text-slate-800">
+                          {t.category}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-700">
+                          {t.count}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-900">
+                          {money(t.fullAmount)}
+                        </td>
+                        <td className="px-2 py-2 text-right text-emerald-700">
+                          {money(t.valuedAmount)}
+                        </td>
+                        <td className="px-2 py-2 text-right text-slate-900">
+                          {money(t.balance)}
+                        </td>
+                        {onRemoveCategory && (
+                          <td className="px-2 py-2 text-right">
+                            {t.count === 0 && (
+                              <button
+                                type="button"
+                                title={`Remove category "${t.category}"`}
+                                className="hidden group-hover:inline text-[10px] text-red-500 hover:underline"
+                                onClick={() => onRemoveCategory(t.category)}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                    {activeSummaries.map((l) => {
+                      const liveTotal = Number(l.live?.total ?? l.snapshot?.total) || 0;
+                      const fromSnap = !l.live;
+                      return (
+                        <tr key={`linked-${l.id}`} className="border-t bg-adlm-blue-50/40">
+                          <td className="px-2 py-2 font-medium text-adlm-blue-800">
+                            {l.label || l.name || "Linked project"}
+                            <span className="ml-1.5 rounded bg-adlm-blue-100 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-adlm-blue-600">
+                              {l.productKey || "linked"}
+                            </span>
+                            {fromSnap && (
+                              <span className="ml-1 text-[9px] text-slate-400">(snapshot)</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 text-right text-slate-400">—</td>
+                          <td className="px-2 py-2 text-right text-adlm-blue-800 font-semibold">
+                            {money(liveTotal)}
+                          </td>
+                          <td className="px-2 py-2 text-right text-slate-400">—</td>
+                          <td className="px-2 py-2 text-right text-adlm-blue-800 font-semibold">
+                            {money(liveTotal)}
+                          </td>
+                          {onRemoveCategory && <td />}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-slate-50 font-semibold text-slate-900">
+                    <tr className="border-t">
+                      <td className="px-2 py-2">
+                        {activeSummaries.length > 0 ? "Grand Total (incl. linked)" : "Total"}
                       </td>
-                      <td className="px-2 py-2 text-right text-slate-700">
-                        {t.count}
+                      <td className="px-2 py-2 text-right">
+                        {categoryTotals.reduce((acc, t) => acc + t.count, 0)}
                       </td>
-                      <td className="px-2 py-2 text-right text-slate-900">
-                        {money(t.fullAmount)}
+                      <td className="px-2 py-2 text-right">
+                        {money(grandTotal)}
                       </td>
                       <td className="px-2 py-2 text-right text-emerald-700">
-                        {money(t.valuedAmount)}
+                        {money(valuedAmount)}
                       </td>
-                      <td className="px-2 py-2 text-right text-slate-900">
-                        {money(t.balance)}
+                      <td className="px-2 py-2 text-right">
+                        {money(remainingAmount + linkedGrandTotal)}
                       </td>
+                      {onRemoveCategory && <td />}
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-slate-50 font-semibold text-slate-900">
-                  <tr className="border-t">
-                    <td className="px-2 py-2">Total</td>
-                    <td className="px-2 py-2 text-right">
-                      {categoryTotals.reduce((acc, t) => acc + t.count, 0)}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {money(grossAmount)}
-                    </td>
-                    <td className="px-2 py-2 text-right text-emerald-700">
-                      {money(valuedAmount)}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {money(remainingAmount)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </tfoot>
+                </table>
+              </div>
             </div>
-          </div>
-        ) : null}
+          );
+        })() : null}
 
         {onAddVariation ? (
           <div

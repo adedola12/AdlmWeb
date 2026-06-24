@@ -4053,7 +4053,14 @@ export default function ProjectsGeneric() {
     // Canonical per-product list (…, "Uncategorized") + this project's custom
     // categories + the user's remembered categories, inserted before
     // "Uncategorized" so it stays last.
-    const base = allCategoriesForProductKey(toolNorm);
+    const excluded = new Set(
+      (Array.isArray(sel?.excludedCategories) ? sel.excludedCategories : []).map(
+        (c) => String(c).toLowerCase(),
+      ),
+    );
+    const base = allCategoriesForProductKey(toolNorm).filter(
+      (c) => !excluded.has(String(c).toLowerCase()),
+    );
     const custom = [
       ...(Array.isArray(sel?.customCategories) ? sel.customCategories : []),
       ...userCategories,
@@ -4062,7 +4069,7 @@ export default function ProjectsGeneric() {
     const extra = [];
     for (const c of custom) {
       const t = String(c || "").trim();
-      if (t && !seen.has(t.toLowerCase())) {
+      if (t && !seen.has(t.toLowerCase()) && !excluded.has(t.toLowerCase())) {
         seen.add(t.toLowerCase());
         extra.push(t);
       }
@@ -4070,7 +4077,7 @@ export default function ProjectsGeneric() {
     if (!extra.length) return base;
     const last = base[base.length - 1];
     return [...base.slice(0, -1), ...extra, last];
-  }, [toolNorm, sel?.customCategories, userCategories]);
+  }, [toolNorm, sel?.customCategories, sel?.excludedCategories, userCategories]);
 
   // Codes whose bill rate is derived from a priced material/labour build-up —
   // those BoQ rate cells become read-only (the Budget tab drives them).
@@ -4088,6 +4095,35 @@ export default function ProjectsGeneric() {
 
   // Add a user-defined category for this project's bill arrangement; persists
   // immediately (items untouched — only customCategories[] is sent).
+  async function handleRemoveCategory(name) {
+    const t = String(name || "").trim();
+    if (!t || !selectedId || !accessToken) return;
+    const existing = Array.isArray(sel?.customCategories) ? sel.customCategories : [];
+    // Remove from custom list; for canonical categories add to excludedCategories
+    const nextCustom = existing.filter((c) => String(c).toLowerCase() !== t.toLowerCase());
+    const nextExcluded = [
+      ...(Array.isArray(sel?.excludedCategories) ? sel.excludedCategories : []),
+    ];
+    if (!nextExcluded.some((c) => c.toLowerCase() === t.toLowerCase())) {
+      nextExcluded.push(t);
+    }
+    try {
+      const updated = await apiAuthed(endpoints.one(selectedId), {
+        token: accessToken,
+        method: "PUT",
+        body: {
+          baseVersion: sel?.version,
+          customCategories: nextCustom,
+          excludedCategories: nextExcluded,
+        },
+      });
+      setSel(updated);
+      setNotice(`Category "${t}" removed.`);
+    } catch (e) {
+      setErr(e?.message || "Couldn't remove the category.");
+    }
+  }
+
   async function handleAddCategory(name) {
     const t = String(name || "").trim();
     if (!t) return;
@@ -5142,6 +5178,7 @@ export default function ProjectsGeneric() {
                 budgetRateGenReady={canRateGen}
                 budgetDrivenCodes={budgetDrivenCodes}
                 onAddCategory={handleAddCategory}
+                onRemoveCategory={handleRemoveCategory}
                 onAddTrade={handleAddTrade}
                 onActualQtyChange={handleActualQtyChange}
                 onActualRateChange={handleActualRateChange}

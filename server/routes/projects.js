@@ -2582,6 +2582,19 @@ async function updateProject(req, res) {
         .slice(0, 200);
     }
 
+    if (Array.isArray(req.body?.excludedCategories)) {
+      const seen = new Set();
+      project.excludedCategories = req.body.excludedCategories
+        .map((c) => String(c || "").trim().slice(0, 200))
+        .filter((c) => {
+          const k = c.toLowerCase();
+          if (!c || seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        })
+        .slice(0, 200);
+    }
+
     if (Array.isArray(budgetItems)) {
       const budget = sanitizeBudgetItems(budgetItems);
       backfillBudgetLinks(project.items, budget);

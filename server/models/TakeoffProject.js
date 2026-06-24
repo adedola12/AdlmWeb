@@ -719,6 +719,11 @@ const TakeoffProjectSchema = new mongoose.Schema(
     // arrangement, on top of the canonical per-product list. Surfaced to the
     // Bill + Budget category pickers so the QS can organise their own way.
     customCategories: { type: [String], default: [] },
+    // Categories the user has explicitly removed from this project's bill view.
+    // Canonical (built-in) categories land here; custom ones are just removed
+    // from customCategories instead. Both result in the category disappearing
+    // from the Quick Jump sidebar and the Summary by category table.
+    excludedCategories: { type: [String], default: [] },
     items: { type: [ItemSchema], default: [] },
     // Derived material/labour lines (the budget) embedded alongside the bill, so ONE
     // revit project document holds both bill + budget. Reuses ItemSchema — it already

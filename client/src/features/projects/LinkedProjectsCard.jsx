@@ -78,6 +78,17 @@ export default function LinkedProjectsCard({
       setPicking(false);
       setPick("");
     } catch (e) {
+      // If already linked, the server returns 409. Refresh the parent project
+      // so the stale `linkedSummaries` (which caused the empty display) is
+      // replaced with the current server state, revealing the existing link.
+      if (e?.message?.includes("already linked")) {
+        try {
+          const fresh = await apiAuthed(base, { token: accessToken });
+          onChange?.(fresh);
+          setPicking(false);
+          setPick("");
+        } catch {/* ignore */}
+      }
       setError(e?.message || "Could not link project");
     } finally {
       setBusy(false);
@@ -151,63 +162,91 @@ export default function LinkedProjectsCard({
           {summaries.map((l) => {
             const live = Number(l?.live?.total ?? l?.snapshot?.total) || 0;
             const drift = Number(l?.drift) || 0;
+
+            // Build a breakdown of what changed between snapshot and live
+            const driftBreakdown = (() => {
+              if (!l.live || !l.snapshot || drift === 0) return [];
+              const parts = [];
+              const dMeasured = (l.live.measured || 0) - (l.snapshot.measured || 0);
+              const dProvisional = (l.live.provisional || 0) - (l.snapshot.provisional || 0);
+              const dVariations = (l.live.variations || 0) - (l.snapshot.variations || 0);
+              if (Math.abs(dMeasured) > 0.5) parts.push(`Measured: ${dMeasured > 0 ? "+" : ""}${money(dMeasured)}`);
+              if (Math.abs(dProvisional) > 0.5) parts.push(`PC sums: ${dProvisional > 0 ? "+" : ""}${money(dProvisional)}`);
+              if (Math.abs(dVariations) > 0.5) parts.push(`Variations: ${dVariations > 0 ? "+" : ""}${money(dVariations)}`);
+              return parts;
+            })();
+
             return (
               <li
                 key={l.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 dark:border-white/10 px-3 py-2"
+                className="rounded-xl border border-slate-100 dark:border-white/10 px-3 py-2"
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-slate-900 dark:text-adlm-dark-text">
-                      {l.label || l.name || "Linked project"}
-                    </span>
-                    {l.productKey && (
-                      <span className="shrink-0 rounded bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        {l.productKey}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-slate-900 dark:text-adlm-dark-text">
+                        {l.label || l.name || "Linked project"}
                       </span>
-                    )}
-                    {!l.accessible && (
-                      <span className="shrink-0 text-[10px] text-amber-600">
-                        no access
-                      </span>
-                    )}
-                  </div>
-                  {canSeeRates && drift !== 0 && (
-                    <div className="text-[11px] text-amber-600">
-                      Changed by {money(drift)} since snapshot
-                      {canEdit && (
-                        <>
-                          {" · "}
-                          <button
-                            type="button"
-                            className="underline"
-                            onClick={() => refreshLink(l.id)}
-                            disabled={busy}
-                          >
-                            rebaseline
-                          </button>
-                        </>
+                      {l.productKey && (
+                        <span className="shrink-0 rounded bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          {l.productKey}
+                        </span>
+                      )}
+                      {!l.accessible && (
+                        <span className="shrink-0 text-[10px] text-amber-600">
+                          no access
+                        </span>
                       )}
                     </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  {canSeeRates && (
-                    <span className="text-sm font-semibold text-slate-900 dark:text-adlm-dark-text">
-                      {money(live)}
-                    </span>
-                  )}
-                  {canEdit && (
-                    <button
-                      type="button"
-                      onClick={() => removeLink(l.id)}
-                      disabled={busy}
-                      className="text-xs text-red-600 hover:underline"
-                      aria-label={`Unlink ${l.label || "project"}`}
-                    >
-                      Unlink
-                    </button>
-                  )}
+                    {canSeeRates && drift !== 0 && (
+                      <div className="mt-1 text-[11px] text-amber-600">
+                        Total changed {drift > 0 ? "+" : ""}{money(drift)} since snapshot
+                        {driftBreakdown.length > 0 && (
+                          <span className="ml-1 text-amber-500">
+                            ({driftBreakdown.join(" · ")})
+                          </span>
+                        )}
+                        {canEdit && (
+                          <>
+                            {" · "}
+                            <button
+                              type="button"
+                              className="underline"
+                              onClick={() => refreshLink(l.id)}
+                              disabled={busy}
+                            >
+                              rebaseline
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {canSeeRates && l.live && (
+                      <div className="mt-1 flex gap-3 text-[10px] text-slate-400 dark:text-adlm-dark-dim">
+                        <span>Measured: {money(l.live.measured)}</span>
+                        {(l.live.provisional || 0) > 0 && <span>PC sums: {money(l.live.provisional)}</span>}
+                        {(l.live.variations || 0) > 0 && <span>Variations: {money(l.live.variations)}</span>}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {canSeeRates && (
+                      <span className="text-sm font-semibold text-slate-900 dark:text-adlm-dark-text">
+                        {money(live)}
+                      </span>
+                    )}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => removeLink(l.id)}
+                        disabled={busy}
+                        className="text-xs text-red-600 hover:underline"
+                        aria-label={`Unlink ${l.label || "project"}`}
+                      >
+                        Unlink
+                      </button>
+                    )}
+                  </div>
                 </div>
               </li>
             );

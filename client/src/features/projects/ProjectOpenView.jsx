@@ -268,6 +268,7 @@ export default function ProjectOpenView({
   budgetRateGenReady = false,
   budgetDrivenCodes,
   onAddCategory,
+  onRemoveCategory,
   onAddTrade,
   groupByMode = "category",
   onGroupByModeChange,
@@ -716,6 +717,7 @@ export default function ProjectOpenView({
             statusLabel={statusLabel}
             statusPastLabel={statusPastLabel}
             valuedAmount={valuedAmount}
+            linkedSummaries={linkedSummaries}
           />
           {["revit", "planswift"].includes(String(productKey)) && (
             <LinkedProjectsCard
@@ -1107,6 +1109,8 @@ export default function ProjectOpenView({
           onReloadRateGenPool={onReloadRateGenPool}
           canSeeRates={canSeeRates}
           readOnly={!canEdit}
+          linkedSummaries={linkedSummaries}
+          onRemoveCategory={onRemoveCategory}
         />
       ) : null}
 
