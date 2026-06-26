@@ -303,9 +303,12 @@ export default function ProductDetail() {
   const hasDiscount = discNGN != null && discNGN > 0 && discNGN < unitNGN;
   const pctOff = hasDiscount ? Math.round(((unitNGN - discNGN) / unitNGN) * 100) : 0;
 
-  // Storage upgrade: 3% of the active price (discounted if applicable) → +10 slots
+  // Storage upgrade price — admin-configured if set, otherwise 3% of active price
   const activePrice = hasDiscount ? discNGN : (unitNGN || 0);
-  const storageUpgradeNGN = Math.round(activePrice * 0.03);
+  const storageUpgradeNGN =
+    productStorage?.slotUpgradePrice != null
+      ? productStorage.slotUpgradePrice
+      : Math.round(activePrice * 0.03);
   const productKey = getProductKey(p) || key;
 
   const related = Array.isArray(p.relatedFreeVideoIds)

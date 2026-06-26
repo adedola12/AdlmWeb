@@ -334,6 +334,8 @@ export default function AdminProductEdit() {
     discountedYearlyUSD: "",
   });
 
+  const [storageSlotPriceNGN, setStorageSlotPriceNGN] = React.useState("");
+
   // ✅ NEW: discounts state for edit page
   const [discountsUi, setDiscountsUi] = React.useState({
     sixMonths: { type: "none", valueNGN: "", valueUSD: "" },
@@ -430,6 +432,7 @@ export default function AdminProductEdit() {
           oneYear: toUiDiscount(data.discounts?.oneYear),
         });
 
+        setStorageSlotPriceNGN(data.storageSlotPriceNGN ?? "");
         setPreviewUrl(data.previewUrl || "");
         setThumbnailUrl(data.thumbnailUrl || "");
         setIsPublished(!!data.isPublished);
@@ -482,6 +485,7 @@ export default function AdminProductEdit() {
         isComingSoon,
         sort: Number(sort || 0),
         relatedFreeVideoIds,
+        storageSlotPriceNGN: storageSlotPriceNGN !== "" ? Number(storageSlotPriceNGN) : null,
       };
 
       if (price.monthlyUSD !== "")
@@ -745,6 +749,26 @@ export default function AdminProductEdit() {
               <b>Checkout tier logic:</b> 1-5 months = monthly x months | 6 months = 6-month fee |
               7-11 months = 6-month fee + monthly x extra months | 12 months = yearly fee
             </div>
+          </div>
+
+          {/* Storage slot upgrade price */}
+          <div className="border rounded-lg p-3 space-y-2">
+            <div className="font-medium">Storage Slot Upgrade Price</div>
+            <div className="text-xs text-slate-500">
+              Price (₦) charged when a subscriber buys 10 extra project slots for this product.
+              Leave blank to auto-calculate as 3% of the active subscription price.
+            </div>
+            <label className="text-xs block max-w-xs">
+              Price per 10 slots — NGN (leave blank = 3% of subscription)
+              <input
+                className="input mt-1"
+                type="number"
+                min="0"
+                placeholder="e.g. 1500"
+                value={storageSlotPriceNGN}
+                onChange={(e) => setStorageSlotPriceNGN(e.target.value)}
+              />
+            </label>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">

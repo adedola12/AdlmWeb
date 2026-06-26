@@ -1135,6 +1135,17 @@ router.get(
       counts.map((c) => [c._id, c.count]),
     );
 
+    // Fetch per-product storage slot prices set by admin
+    const productDocs = productKeys.length
+      ? await Product.find(
+          { key: { $in: productKeys } },
+          { key: 1, storageSlotPriceNGN: 1 },
+        ).lean()
+      : [];
+    const slotPriceByKey = Object.fromEntries(
+      productDocs.map((p) => [p.key, p.storageSlotPriceNGN ?? null]),
+    );
+
     // Build per-product usage, applying extraProjectSlots per entitlement
     const usage = Object.fromEntries(
       productKeys.map((k) => {
@@ -1146,6 +1157,8 @@ router.get(
             used: countByKey[k] || 0,
             limit: baseLimit + extra,
             extraSlots: extra,
+            // null → client falls back to 3% of active subscription price
+            slotUpgradePrice: slotPriceByKey[k] ?? null,
           },
         ];
       }),

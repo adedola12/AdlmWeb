@@ -2,10 +2,12 @@
 import express from "express";
 import dayjs from "dayjs";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import mongoose from "mongoose";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js";
 import { Coupon } from "../models/Coupon.js";
 import { Product } from "../models/Product.js";
+import { TakeoffProject } from "../models/TakeoffProject.js";
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 import { sendMail } from "../util/mailer.js";
 import { runExpiryNotifier } from "../util/expiryNotifier.js";
@@ -858,6 +860,7 @@ router.post(
       seats,
       licenseType,
       organizationName,
+      extraProjectSlots,
     } = req.body || {};
 
     const u = await User.findOne({ email });
@@ -913,6 +916,12 @@ router.post(
         ent.seats = 1;
         ent.organizationName = undefined;
       }
+    }
+
+    // Update extra project slots if provided
+    if (extraProjectSlots !== undefined) {
+      const n = Number(extraProjectSlots);
+      if (Number.isFinite(n) && n >= 0) ent.extraProjectSlots = Math.floor(n);
     }
 
     applyExpiryToUser(u);
@@ -1189,6 +1198,114 @@ router.post(
     }
 
     return res.json({ ok: true, message: "Training date proposed and user notified" });
+  }),
+);
+
+// ── Admin storage overview ─────────────────────────────────────────────────
+// Returns per-user, per-product project usage so admins can monitor storage.
+const PERSONAL_LIMIT = Number(process.env.PERSONAL_PROJECT_LIMIT || 30);
+const ORG_LIMIT = Number(process.env.ORG_PROJECT_LIMIT || 50);
+
+router.get(
+  "/storage",
+  asyncHandler(async (req, res) => {
+    const users = await User.find(
+      { "entitlements.0": { $exists: true } },
+      { email: 1, username: 1, entitlements: 1 },
+    ).lean();
+
+    // Collect all (userId, productKey) pairs for active, non-materials entitlements
+    const pairs = [];
+    for (const u of users) {
+      for (const e of u.entitlements || []) {
+        if (
+          e?.status === "active" &&
+          e?.productKey &&
+          !e.productKey.endsWith("-materials")
+        ) {
+          pairs.push({ userId: u._id, productKey: e.productKey });
+        }
+      }
+    }
+
+    // Aggregate counts for all pairs in one query
+    const allKeys = [...new Set(pairs.map((p) => p.productKey))];
+    // _id values from lean() are already ObjectId instances
+    const allObjectIds = users.map((u) => u._id);
+
+    const counts =
+      allObjectIds.length && allKeys.length
+        ? await TakeoffProject.aggregate([
+            {
+              $match: {
+                userId: { $in: allObjectIds },
+                productKey: { $in: allKeys },
+              },
+            },
+            {
+              $group: {
+                _id: { userId: "$userId", productKey: "$productKey" },
+                count: { $sum: 1 },
+              },
+            },
+          ])
+        : [];
+
+    const countMap = {};
+    for (const c of counts) {
+      const key = `${c._id.userId}::${c._id.productKey}`;
+      countMap[key] = c.count;
+    }
+
+    // Fetch configured slot prices per product
+    const products = allKeys.length
+      ? await Product.find({ key: { $in: allKeys } }, { key: 1, storageSlotPriceNGN: 1 }).lean()
+      : [];
+    const slotPriceByKey = Object.fromEntries(
+      products.map((p) => [p.key, p.storageSlotPriceNGN ?? null]),
+    );
+
+    // Build rows
+    const rows = [];
+    for (const u of users) {
+      const isOrg = (u.entitlements || []).some(
+        (e) => e?.licenseType === "organization" && e?.status === "active",
+      );
+      const baseLimit = isOrg ? ORG_LIMIT : PERSONAL_LIMIT;
+
+      for (const e of u.entitlements || []) {
+        if (
+          e?.status !== "active" ||
+          !e?.productKey ||
+          e.productKey.endsWith("-materials")
+        )
+          continue;
+
+        const extra = Number(e.extraProjectSlots || 0);
+        const limit = baseLimit + extra;
+        const used = countMap[`${u._id}::${e.productKey}`] || 0;
+
+        rows.push({
+          userId: String(u._id),
+          email: u.email,
+          username: u.username || "",
+          productKey: e.productKey,
+          licenseType: e.licenseType || "personal",
+          used,
+          limit,
+          extraSlots: extra,
+          slotUpgradePrice: slotPriceByKey[e.productKey] ?? null,
+        });
+      }
+    }
+
+    rows.sort((a, b) => {
+      const ar = a.limit > 0 ? a.used / a.limit : 0;
+      const br = b.limit > 0 ? b.used / b.limit : 0;
+      return br - ar;
+    });
+
+    return res.json({ rows, slotPriceByKey });
   }),
 );
 

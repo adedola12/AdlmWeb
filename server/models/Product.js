@@ -76,6 +76,10 @@ const ProductSchema = new mongoose.Schema(
       oneYear: { type: DiscountSchema, default: undefined },
     },
 
+    // Price (NGN) to purchase 10 extra project slots for this product.
+    // If not set, the client falls back to 3% of the active subscription price.
+    storageSlotPriceNGN: { type: Number, default: undefined },
+
     previewUrl: { type: String, default: undefined },
     thumbnailUrl: { type: String, default: undefined },
 

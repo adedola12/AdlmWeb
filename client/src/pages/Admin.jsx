@@ -541,6 +541,11 @@ export default function Admin() {
   const [trainingDateVal, setTrainingDateVal] = React.useState("");
   const [trainingEndDateVal, setTrainingEndDateVal] = React.useState("");
 
+  // ── Storage overview state ──
+  const [storageOverview, setStorageOverview] = React.useState(null);
+  const [storageLoading, setStorageLoading] = React.useState(false);
+  const [slotsEditState, setSlotsEditState] = React.useState({}); // { "email::productKey": pendingValue }
+
   // ── Settings state ──
   const [settingsMobileAppUrl, setSettingsMobileAppUrl] = React.useState("");
   const [settingsMobileAppDraft, setSettingsMobileAppDraft] = React.useState("");
@@ -1273,6 +1278,39 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
+  async function loadStorageOverview() {
+    setStorageLoading(true);
+    try {
+      const data = await apiAuthed("/admin/storage", { token: accessToken });
+      setStorageOverview(data || null);
+    } catch {
+      setStorageOverview(null);
+    } finally {
+      setStorageLoading(false);
+    }
+  }
+
+  async function updateExtraSlots(email, productKey, slots) {
+    try {
+      await apiAuthed("/admin/users/entitlement", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, productKey, extraProjectSlots: Number(slots) }),
+      });
+      await load();
+      if (storageOverview) loadStorageOverview();
+      setSlotsEditState((s) => {
+        const n = { ...s };
+        delete n[`${email}::${productKey}`];
+        return n;
+      });
+      setMsg(`Extra slots updated for ${productKey}`);
+    } catch (e) {
+      setMsg(e?.message || "Failed to update extra slots");
+    }
+  }
+
   async function updateEntitlement(email, productKey, months = 0, status) {
     setMsg("");
     try {
@@ -1432,6 +1470,7 @@ export default function Admin() {
           licenseType: lt,
           organizationName: orgName,
           seatsUsed: countActiveDevices(e),
+          extraProjectSlots: Number(e.extraProjectSlots || 0),
 
           daysLeft,
         });
@@ -2031,6 +2070,18 @@ export default function Admin() {
               title="Shows Active + Expired + Disabled entitlements"
             >
               Subscriptions ({allRows.length})
+            </button>
+
+            <button
+              onClick={() => { setTab("storage"); loadStorageOverview(); }}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "storage"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+              title="Per-user project storage usage across all products"
+            >
+              Storage
             </button>
 
             <button
@@ -2731,6 +2782,7 @@ export default function Admin() {
                     <th className="py-2 pr-3">Expiry</th>
                     <th className="py-2 pr-3">Time left</th>
                     <th className="py-2 pr-3">Seats / Devices</th>
+                    <th className="py-2 pr-3">Extra Slots</th>
                     <th className="py-2 pr-3">Actions</th>
                   </tr>
                 </thead>
@@ -2827,6 +2879,72 @@ export default function Admin() {
                               Reset
                             </button>
                           </div>
+                        </td>
+
+                        {/* Extra project slots */}
+                        <td className="py-3 pr-3">
+                          {(() => {
+                            const slotKey = `${r.email}::${r.productKey}`;
+                            const pendingVal = slotsEditState[slotKey];
+                            const isEditing = pendingVal !== undefined;
+                            return (
+                              <div className="flex flex-col gap-1 min-w-[90px]">
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      className="input w-16 text-sm"
+                                      value={pendingVal}
+                                      onChange={(e) =>
+                                        setSlotsEditState((s) => ({
+                                          ...s,
+                                          [slotKey]: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                    <button
+                                      className="btn btn-sm"
+                                      onClick={() =>
+                                        updateExtraSlots(r.email, r.productKey, pendingVal)
+                                      }
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      className="btn btn-sm"
+                                      onClick={() =>
+                                        setSlotsEditState((s) => {
+                                          const n = { ...s };
+                                          delete n[slotKey];
+                                          return n;
+                                        })
+                                      }
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium">
+                                      +{r.extraProjectSlots}
+                                    </span>
+                                    <button
+                                      className="btn btn-sm"
+                                      onClick={() =>
+                                        setSlotsEditState((s) => ({
+                                          ...s,
+                                          [slotKey]: String(r.extraProjectSlots),
+                                        }))
+                                      }
+                                    >
+                                      Edit
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         <td className="py-3 pr-3">
@@ -2928,6 +3046,133 @@ export default function Admin() {
                 returns only after admin approval/renewal.
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ------------------ storage tab ------------------ */}
+      {tab === "storage" && (
+        <div className="card">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h2 className="font-semibold">Storage Usage</h2>
+              <div className="text-xs text-slate-500 mt-1">
+                Per-user, per-product project counts. Edit Extra Slots to grant more space.
+                Set per-product slot prices in{" "}
+                <a href="/admin/products" className="text-adlm-blue-700 underline">Admin → Products</a>.
+              </div>
+            </div>
+            <button className="btn btn-sm" onClick={loadStorageOverview} disabled={storageLoading}>
+              {storageLoading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+
+          {storageLoading && <div className="text-sm text-slate-600">Loading…</div>}
+
+          {!storageLoading && !storageOverview && (
+            <div className="text-sm text-slate-500">Click Refresh to load storage data.</div>
+          )}
+
+          {!storageLoading && storageOverview && (
+            <>
+              {/* Summary: slot prices per product */}
+              {storageOverview.slotPriceByKey && Object.keys(storageOverview.slotPriceByKey).length > 0 && (
+                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-2">Configured Storage Slot Prices</div>
+                  <div className="flex flex-wrap gap-3">
+                    {Object.entries(storageOverview.slotPriceByKey).map(([key, price]) => (
+                      <div key={key} className="text-xs text-blue-700 dark:text-blue-300">
+                        <span className="font-medium">{key}</span>:{" "}
+                        {price != null ? `₦${Number(price).toLocaleString()} / 10 slots` : <span className="text-slate-500">3% default</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Usage table */}
+              {storageOverview.rows?.length === 0 ? (
+                <div className="text-sm text-slate-600">No active subscriptions with project storage.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-slate-600">
+                      <tr className="border-b">
+                        <th className="py-2 pr-3">User</th>
+                        <th className="py-2 pr-3">Product</th>
+                        <th className="py-2 pr-3">Used / Limit</th>
+                        <th className="py-2 pr-3">Fill %</th>
+                        <th className="py-2 pr-3">Extra Slots</th>
+                        <th className="py-2 pr-3">Slot Price</th>
+                        <th className="py-2 pr-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {storageOverview.rows.map((r, i) => {
+                        const pct = r.limit > 0 ? Math.round((r.used / r.limit) * 100) : 0;
+                        const slotKey = `storage::${r.email}::${r.productKey}`;
+                        const pendingVal = slotsEditState[slotKey];
+                        const isEditing = pendingVal !== undefined;
+                        const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+                        return (
+                          <tr key={i} className="border-b hover:bg-slate-50 dark:hover:bg-white/5">
+                            <td className="py-3 pr-3">
+                              <div className="font-medium">{r.email}</div>
+                              {r.username && <div className="text-xs text-slate-500">@{r.username}</div>}
+                            </td>
+                            <td className="py-3 pr-3 text-xs font-mono">{r.productKey}</td>
+                            <td className="py-3 pr-3">
+                              <div className="text-sm font-semibold">{r.used} / {r.limit}</div>
+                              <div className="mt-1 h-1.5 w-24 rounded-full bg-slate-200 overflow-hidden">
+                                <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                              </div>
+                            </td>
+                            <td className="py-3 pr-3">
+                              <span className={`text-xs font-semibold ${pct >= 90 ? "text-red-600" : pct >= 70 ? "text-amber-600" : "text-emerald-600"}`}>
+                                {pct}%
+                              </span>
+                            </td>
+                            <td className="py-3 pr-3">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    className="input w-16 text-sm"
+                                    value={pendingVal}
+                                    onChange={(e) => setSlotsEditState((s) => ({ ...s, [slotKey]: e.target.value }))}
+                                  />
+                                  <button className="btn btn-sm" onClick={() => updateExtraSlots(r.email, r.productKey, pendingVal)}>Save</button>
+                                  <button className="btn btn-sm" onClick={() => setSlotsEditState((s) => { const n = { ...s }; delete n[slotKey]; return n; })}>✕</button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium">+{r.extraSlots}</span>
+                                  <button className="btn btn-sm" onClick={() => setSlotsEditState((s) => ({ ...s, [slotKey]: String(r.extraSlots) }))}>Edit</button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 pr-3 text-xs">
+                              {r.slotUpgradePrice != null
+                                ? `₦${Number(r.slotUpgradePrice).toLocaleString()}`
+                                : <span className="text-slate-400">3% default</span>}
+                            </td>
+                            <td className="py-3 pr-3">
+                              <a
+                                href={`/admin/products/${r.productKey}`}
+                                className="btn btn-sm text-xs"
+                              >
+                                Edit product
+                              </a>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
