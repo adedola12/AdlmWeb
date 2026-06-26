@@ -21,24 +21,36 @@ function indexBySlug(list) {
   return Object.fromEntries((list || []).map((p) => [p.slug, p]));
 }
 
-// Merge DB/API products OVER the bundled set, per slug. The bundled set (from
-// markdown) is the floor: every site product keeps rendering even if only some
-// are saved in the DB. This is the safety property that lets the admin editor
-// persist one product without blanking the others.
+// Merge DB/API products with the bundled set, per slug.
 //
-// Tie-breaking rule: prefer whichever source has MORE releases. This means:
-//   - DB wins when the admin has added releases the bundled file doesn't have yet.
-//   - Bundled wins when changelogs.js has been updated with new releases that
-//     haven't been pushed to the DB yet (e.g. a newly-live product or a new version
-//     added directly to the file). Equal counts → DB wins (preserves admin edits).
+// Strategy (two-tier):
+//   1. Product METADATA (name, tagline, category, status, summary, compatibility,
+//      accent, icon, order) — always taken from the BUNDLED file (changelogs.js).
+//      These are code-managed fields; the DB should never override them, which
+//      prevents stale DB records from e.g. showing a wrong category or keeping a
+//      product as "coming-soon" after it goes live in the codebase.
+//   2. RELEASES array — take whichever source has more entries. DB wins on a tie
+//      so that admin-edited release text is preserved. Bundled wins when the
+//      developer has added new releases that haven't been synced to the DB yet.
+//
+// Products that exist in the DB but not in the bundle are included as-is.
 function mergeBySlug(base, overrides) {
   const map = new Map((base || []).map((p) => [p.slug, p]));
   for (const p of overrides || []) {
     if (!p?.slug) continue;
     const bundled = map.get(p.slug);
-    // Only let the DB override if it has at least as many releases as the bundle.
-    if (bundled && (p.releases?.length || 0) < (bundled.releases?.length || 0)) continue;
-    map.set(p.slug, p);
+    if (bundled) {
+      const dbReleases = p.releases?.length || 0;
+      const bundledReleases = bundled.releases?.length || 0;
+      const releases = dbReleases >= bundledReleases ? p.releases : bundled.releases;
+      // Recompute derived display fields from the winning releases.
+      const latest = releases.length ? (releases.find((r) => r.latest)?.version ?? releases[0]?.version ?? bundled.latest) : bundled.latest;
+      const lastUpdated = releases.length ? (releases[0]?.date ?? bundled.lastUpdated) : bundled.lastUpdated;
+      const itemCount = releases.reduce((n, r) => n + r.changes.reduce((m, c) => m + (c.items?.length || 0), 0), 0) || bundled.itemCount;
+      map.set(p.slug, { ...bundled, releases, latest, lastUpdated, itemCount });
+    } else {
+      map.set(p.slug, p);
+    }
   }
   return [...map.values()].sort(
     (a, b) => (a.order ?? 999) - (b.order ?? 999) || String(a.name).localeCompare(String(b.name)),
