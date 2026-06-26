@@ -24,11 +24,22 @@ function indexBySlug(list) {
 // Merge DB/API products OVER the bundled set, per slug. The bundled set (from
 // markdown) is the floor: every site product keeps rendering even if only some
 // are saved in the DB. This is the safety property that lets the admin editor
-// persist one product without blanking the others — DB wins for the slugs it
-// has, the bundle covers the rest.
+// persist one product without blanking the others.
+//
+// Tie-breaking rule: prefer whichever source has MORE releases. This means:
+//   - DB wins when the admin has added releases the bundled file doesn't have yet.
+//   - Bundled wins when changelogs.js has been updated with new releases that
+//     haven't been pushed to the DB yet (e.g. a newly-live product or a new version
+//     added directly to the file). Equal counts → DB wins (preserves admin edits).
 function mergeBySlug(base, overrides) {
   const map = new Map((base || []).map((p) => [p.slug, p]));
-  for (const p of overrides || []) if (p?.slug) map.set(p.slug, p);
+  for (const p of overrides || []) {
+    if (!p?.slug) continue;
+    const bundled = map.get(p.slug);
+    // Only let the DB override if it has at least as many releases as the bundle.
+    if (bundled && (p.releases?.length || 0) < (bundled.releases?.length || 0)) continue;
+    map.set(p.slug, p);
+  }
   return [...map.values()].sort(
     (a, b) => (a.order ?? 999) - (b.order ?? 999) || String(a.name).localeCompare(String(b.name)),
   );

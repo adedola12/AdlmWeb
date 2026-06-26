@@ -97,13 +97,13 @@ export const products = [
   {
     "slug": "civiq",
     "name": "CIVIQ",
-    "tagline": "Civil & infrastructure quantity takeoff",
-    "category": "Revit Plugin",
+    "tagline": "Civil & infrastructure quantity takeoff for AutoCAD Civil 3D",
+    "category": "Civil 3D Plugin",
     "accent": "violet",
     "icon": "map",
     "status": "coming-soon",
     "compatibility": "",
-    "summary": "Model-based takeoff for civil and infrastructure works. In active development.",
+    "summary": "Model-based takeoff for civil and infrastructure works directly inside AutoCAD Civil 3D. In active development.",
     "order": 2,
     "latest": null,
     "lastUpdated": null,
@@ -254,14 +254,101 @@ export const products = [
     "category": "Revit Plugin",
     "accent": "sky",
     "icon": "zap",
-    "status": "coming-soon",
-    "compatibility": "",
-    "summary": "Mechanical, electrical & plumbing takeoff for Revit. Coming soon.",
+    "status": "live",
+    "compatibility": "Revit 2024, 2025, 2026 & 2027",
+    "summary": "Mechanical, electrical & plumbing quantity takeoff right inside Revit — covers ductwork, pipework, electrical and plumbing disciplines in a dockable, cloud-connected workspace.",
     "order": 4,
-    "latest": null,
-    "lastUpdated": null,
-    "itemCount": 0,
-    "releases": []
+    "latest": "1.2",
+    "lastUpdated": "June 2026",
+    "itemCount": 29,
+    "releases": [
+      {
+        "version": "1.2",
+        "date": "June 2026",
+        "latest": true,
+        "title": "Dockable workspace, dark mode & pricing engine",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Dockable side panel — all nine MEP disciplines now live inside a native Revit dock panel. Toggle between the dock and a full floating window from the ribbon without losing your work.",
+              "Dark mode — a full Revit-native dark theme (Revit 2025+) with a ThemeManager that follows Revit's own theme so the plugin always feels at home.",
+              "Revit 2024 – 2027 multi-target build — a single hub installer now covers Revit 2024 (net4.8), 2025 & 2026 (net8) and 2027 (net10) so you never need separate downloads.",
+              "Pricing engine & budget dashboard — turn any takeoff into a priced budget. Enter rates manually or pick from your RateGen library; a live Bill total and margin view show profitability per discipline.",
+              "Manual rate editing — every quantity row is editable in the plugin; rates are stored with provenance so you can see whether each figure came from RateGen, was entered manually, or was carried from a previous save.",
+              "Formula-linked Budget Summary Excel export — export a multi-sheet workbook with a per-discipline budget sheet and a master Budget Summary page, all linked by live Excel formulas.",
+              "GitHub Actions CI — automated build matrix covers all Revit targets on every push so broken builds are caught before they reach you."
+            ]
+          },
+          {
+            "type": "improved",
+            "items": [
+              "Compact icon sidebar rail — the left sidebar collapses to icon-only mode, giving more space to the takeoff grid on narrower panels."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "Duct takeoff now correctly filters by level, so quantities no longer bleed across floors.",
+              "Pipe self-comparison bug fixed — pipes were occasionally being matched against themselves, inflating takeoff counts.",
+              "Mouse-wheel scrolling restored in the takeoff items list."
+            ]
+          }
+        ],
+        "highlight": "ADLM MEP gets its dockable workspace, a Revit-native dark mode, full Revit 2024-2027 coverage, and a pricing/budget engine that turns raw quantities into a costed, exportable budget."
+      },
+      {
+        "version": "1.1",
+        "date": "April 2026",
+        "latest": false,
+        "title": "Cloud save, ADLM design system & Revit 2026",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Cloud save — takeoff results are pushed directly to your ADLM cloud project so quantities are accessible on the web portal the moment you save.",
+              "XLSX auto-save — takeoff data is also saved locally as an Excel file after every calculation, with a duplicate guard so re-runs don't create extra copies.",
+              "Recent projects panel — quickly reopen any of your last cloud projects from the home screen without searching.",
+              "Highlight in model — click any row in the results list to select and highlight the corresponding Revit element in the viewport.",
+              "RS256 / JWKS licence validation — licences are now signed with industry-standard RS256 and validated via JWKS, replacing the previous scheme.",
+              "Device-bound licensing — a hardware fingerprint ties each licence to the activated device; hardcoded secrets have been removed from the installer.",
+              "Revit 2026 support — sign-in and cloud save now work correctly in Revit 2026."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "Sign-in dialog now closes cleanly on any result and surfaces the actual error message instead of a generic failure.",
+              "TextBox and PasswordBox were silently dropping keyboard input — fixed.",
+              "DataGrid rows now auto-size and fill the window instead of being clipped to a fixed 160 px height."
+            ]
+          }
+        ],
+        "highlight": "The cloud foundation release: save quantities to your ADLM project, get live Excel backups, and work with a fully refreshed ADLM design system — now in Revit 2026."
+      },
+      {
+        "version": "1.0",
+        "date": "August 2025",
+        "latest": false,
+        "title": "ADLM MEP for Revit",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Ductwork & duct fittings takeoff — measure supply, return and exhaust ductwork by level, type and system with automatic fitting counts.",
+              "Pipework takeoff — quantity takeoff for mechanical and HVAC pipework, including pipe runs and connections.",
+              "Plumbing fixtures takeoff — count and schedule all plumbing fixtures from the Revit model.",
+              "Lighting takeoff — scheduled count and wattage summary for all lighting fixtures by level.",
+              "Power (electrical) takeoff — electrical device and panel counts extracted directly from the model.",
+              "Cable takeoff — cable tray and conduit lengths measured by level and system.",
+              "Air terminal takeoff — diffusers, grilles and terminal units counted and grouped by system.",
+              "Export to Excel — export any discipline's takeoff to a formatted Excel sheet in one click."
+            ]
+          }
+        ],
+        "highlight": "ADLM MEP launches with full quantity takeoff across seven MEP disciplines, all extracted live from your Revit model and exportable to Excel."
+      }
+    ]
   },
   {
     "slug": "rategen",
@@ -274,22 +361,80 @@ export const products = [
     "compatibility": "",
     "summary": "Defensible rate build-ups with location-based pricing and a cloud-synced rate library.",
     "order": 5,
-    "latest": "1.0",
-    "lastUpdated": "2025",
-    "itemCount": 3,
+    "latest": "1.3",
+    "lastUpdated": "May 2026",
+    "itemCount": 11,
     "releases": [
       {
-        "version": "1.0",
-        "date": "2025",
+        "version": "1.3",
+        "date": "May 2026",
         "latest": true,
+        "title": "Multi-device cloud sync",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Multi-device cloud sync — your custom rates, materials and labour prices are now synced to the cloud and available on any device you sign into, so your library follows you."
+            ]
+          }
+        ],
+        "highlight": "Your rate library now follows you — sign in on any device and your custom rates are ready to go."
+      },
+      {
+        "version": "1.2",
+        "date": "April 2026",
+        "latest": false,
+        "title": "Security hardening & hub installer",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "RS256 / JWKS licence validation — licences are now signed with industry-standard RS256 and validated via JWKS, replacing the previous scheme.",
+              "Encrypted credential storage — the encryption key is registered as an environment variable at install time and never stored in plain text.",
+              "Hub installer packaging — RateGen ships via a single hub installer that handles registration and environment setup automatically."
+            ]
+          },
+          {
+            "type": "improved",
+            "items": [
+              "Device-bound licensing — a hardware fingerprint ties each licence to the activated device; hardcoded secrets have been removed from the build."
+            ]
+          }
+        ],
+        "highlight": "A full security pass: RS256 licensing, encrypted credentials and a clean hub installer."
+      },
+      {
+        "version": "1.1",
+        "date": "November 2025",
+        "latest": false,
+        "title": "Cloud rate library & zone pricing",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Save materials & labour to cloud — your custom material and labour prices are pushed to your ADLM account so they're available across HERON and QUIV automatically.",
+              "Zone-based pricing — rates now reflect your selected regional pricing zone, with automatic conversion applied so figures are market-relevant wherever you are.",
+              "Online sign-in — sign in with your ADLM credentials directly from within RateGen; the session stays active across restarts."
+            ]
+          }
+        ],
+        "highlight": "Custom rates now live in the cloud and automatically flow into your takeoff plugins — no more manual syncing."
+      },
+      {
+        "version": "1.0",
+        "date": "May 2025",
+        "latest": false,
         "title": "RateGen launches",
         "changes": [
           {
             "type": "new",
             "items": [
-              "Instant rate build-ups for fast, accurate cost estimates.",
-              "Location-based pricing and vendor insights.",
-              "Cloud-synced Rate Library so your whole team works from the same numbers."
+              "Instant rate build-ups for fast, accurate cost estimates across all major construction trades.",
+              "Location-based pricing and vendor insights tuned for the Nigerian construction market.",
+              "Cloud-synced Rate Library so your whole team works from the same numbers.",
+              "Currency conversion — switch between NGN and other currencies with conversion applied live.",
+              "Dark mode — a full dark theme that's easy on the eyes during long estimating sessions.",
+              "Custom rates & global search — add your own rates to every trade category and search across the entire library in one keystroke."
             ]
           }
         ],
