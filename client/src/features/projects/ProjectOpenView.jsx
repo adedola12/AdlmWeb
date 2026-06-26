@@ -392,7 +392,13 @@ export default function ProjectOpenView({
   // Budget tab is available for every source (QUIV/Revit, Heron/PlanSwift,
   // MEP, CIVIQ). It shows whatever material/labour breakdown the plugin
   // pushed (and an empty-state prompt when none has been pushed yet).
-  const visibleTabs = TAB_OPTIONS;
+  // HERON (PlanSwift) projects are measured from 2D drawings, not a 3D/IFC
+  // model — so the "3D Model" (BIM) tab is always empty and only confuses
+  // users. Hide it for planswift (and its materials sibling). QUIV/Revit, MEP
+  // and Civil keep it.
+  const visibleTabs = TAB_OPTIONS.filter(
+    (t) => !(t.id === "model" && String(productKey).startsWith("planswift")),
+  );
 
   function copyProjectId() {
     if (!selectedId || !navigator?.clipboard) return;
