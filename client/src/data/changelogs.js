@@ -97,12 +97,12 @@ export const products = [
   {
     "slug": "civiq",
     "name": "CIVIQ",
-    "tagline": "Civil & infrastructure quantity takeoff for AutoCAD Civil 3D",
+    "tagline": "Civil & infrastructure quantity takeoff",
     "category": "Civil 3D Plugin",
     "accent": "violet",
     "icon": "map",
     "status": "coming-soon",
-    "compatibility": "",
+    "compatibility": "AutoCAD Civil 3D 2024+",
     "summary": "Model-based takeoff for civil and infrastructure works directly inside AutoCAD Civil 3D. In active development.",
     "order": 2,
     "latest": null,
@@ -273,10 +273,10 @@ export const products = [
             "items": [
               "Dockable side panel — all nine MEP disciplines now live inside a native Revit dock panel. Toggle between the dock and a full floating window from the ribbon without losing your work.",
               "Dark mode — a full Revit-native dark theme (Revit 2025+) with a ThemeManager that follows Revit's own theme so the plugin always feels at home.",
-              "Revit 2024 – 2027 multi-target build — a single hub installer now covers Revit 2024 (net4.8), 2025 & 2026 (net8) and 2027 (net10) so you never need separate downloads.",
+              "Revit 2024 – 2027 multi-target build — a single hub installer now covers Revit 2024, 2025, 2026 and 2027 so you never need separate downloads.",
               "Pricing engine & budget dashboard — turn any takeoff into a priced budget. Enter rates manually or pick from your RateGen library; a live Bill total and margin view show profitability per discipline.",
-              "Manual rate editing — every quantity row is editable in the plugin; rates are stored with provenance so you can see whether each figure came from RateGen, was entered manually, or was carried from a previous save.",
-              "Formula-linked Budget Summary Excel export — export a multi-sheet workbook with a per-discipline budget sheet and a master Budget Summary page, all linked by live Excel formulas.",
+              "Manual rate editing — every quantity row is editable; rates are stored with provenance so you can see whether each figure came from RateGen, was entered manually, or carried from a previous save.",
+              "Formula-linked Budget Summary Excel export — exports a multi-sheet workbook with per-discipline budget sheets and a master Budget Summary page, all linked by live Excel formulas.",
               "GitHub Actions CI — automated build matrix covers all Revit targets on every push so broken builds are caught before they reach you."
             ]
           },
@@ -290,12 +290,12 @@ export const products = [
             "type": "fixed",
             "items": [
               "Duct takeoff now correctly filters by level, so quantities no longer bleed across floors.",
-              "Pipe self-comparison bug fixed — pipes were occasionally being matched against themselves, inflating takeoff counts.",
+              "Pipe self-comparison bug fixed — pipes were occasionally matched against themselves, inflating takeoff counts.",
               "Mouse-wheel scrolling restored in the takeoff items list."
             ]
           }
         ],
-        "highlight": "ADLM MEP gets its dockable workspace, a Revit-native dark mode, full Revit 2024-2027 coverage, and a pricing/budget engine that turns raw quantities into a costed, exportable budget."
+        "highlight": "ADLM MEP gets its dockable workspace, a Revit-native dark mode, full Revit 2024–2027 coverage, and a pricing/budget engine that turns raw quantities into a costed, exportable budget."
       },
       {
         "version": "1.1",
@@ -363,7 +363,7 @@ export const products = [
     "order": 5,
     "latest": "1.3",
     "lastUpdated": "May 2026",
-    "itemCount": 11,
+    "itemCount": 14,
     "releases": [
       {
         "version": "1.3",
@@ -412,7 +412,7 @@ export const products = [
           {
             "type": "new",
             "items": [
-              "Save materials & labour to cloud — your custom material and labour prices are pushed to your ADLM account so they're available across HERON and QUIV automatically.",
+              "Save materials & labour to cloud — your custom material and labour prices are pushed to your ADLM account so they are available across HERON and QUIV automatically.",
               "Zone-based pricing — rates now reflect your selected regional pricing zone, with automatic conversion applied so figures are market-relevant wherever you are.",
               "Online sign-in — sign in with your ADLM credentials directly from within RateGen; the session stays active across restarts."
             ]
@@ -433,7 +433,7 @@ export const products = [
               "Location-based pricing and vendor insights tuned for the Nigerian construction market.",
               "Cloud-synced Rate Library so your whole team works from the same numbers.",
               "Currency conversion — switch between NGN and other currencies with conversion applied live.",
-              "Dark mode — a full dark theme that's easy on the eyes during long estimating sessions.",
+              "Dark mode — a full dark theme that is easy on the eyes during long estimating sessions.",
               "Custom rates & global search — add your own rates to every trade category and search across the entire library in one keystroke."
             ]
           }
