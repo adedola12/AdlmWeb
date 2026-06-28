@@ -53,6 +53,7 @@ import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
 import PmTracker from "./pages/PmTracker.jsx";
+import PortfolioDashboard from "./pages/PortfolioDashboard.jsx";
 import JoinProject from "./pages/JoinProject.jsx";
 import RateGenLibrary from "./pages/RateGenLibrary.jsx";
 import AdminRateGen from "./pages/AdminRateGen.jsx";
@@ -224,6 +225,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <PmTracker />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "portfolio-dashboard",
+        element: (
+          <ProtectedRoute>
+            <PortfolioDashboard />
           </ProtectedRoute>
         ),
       },

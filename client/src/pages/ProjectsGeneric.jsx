@@ -18,6 +18,8 @@ import {
   FaSyncAlt,
   FaUserPlus,
   FaKey,
+  FaChartBar,
+  FaTasks,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
@@ -4909,6 +4911,31 @@ export default function ProjectsGeneric() {
                     </span>
                     {bulkBusy ? "Refreshing…" : "Refresh projects"}
                   </button>
+                  <Link
+                    to="/portfolio-dashboard"
+                    title="Portfolio dashboard — all projects"
+                    className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
+                  >
+                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
+                      <FaChartBar className="text-[12px]" />
+                    </span>
+                    Portfolio Dashboard
+                  </Link>
+                  {toolNorm === "revit" && (
+                    <Link
+                      to="/pm-tracker"
+                      title="PM Tracker — standalone project schedules (QUIV)"
+                      className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
+                    >
+                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
+                        <FaTasks className="text-[12px]" />
+                      </span>
+                      <span className="flex-1">PM Tracker</span>
+                      <span className="rounded-full bg-adlm-blue-700/10 px-1.5 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-700/20 dark:text-adlm-blue-300">
+                        QUIV
+                      </span>
+                    </Link>
+                  )}
                 </div>
               </div>
 
