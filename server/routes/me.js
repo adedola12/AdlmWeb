@@ -1173,7 +1173,7 @@ router.get(
   "/portfolio",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
     const projects = await TakeoffProject.aggregate([
       { $match: { userId, pmTrackerOnly: { $ne: true } } },
       {
@@ -1211,7 +1211,7 @@ router.get(
   "/pm-tracker",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
     const projects = await TakeoffProject.aggregate([
       { $match: { userId, productKey: "revit", pmTrackerOnly: true } },
       {
@@ -1236,7 +1236,7 @@ router.post(
   "/pm-tracker",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
     const hasQuiv = await assertQuivEntitlement(userId);
     if (!hasQuiv) {
       return res.status(403).json({
@@ -1296,7 +1296,7 @@ router.delete(
   "/pm-tracker/:id",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
     const id = String(req.params.id || "").trim();
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: "Invalid project id." });
