@@ -1168,4 +1168,148 @@ router.get(
   }),
 );
 
+// GET /me/portfolio — all user projects across products (excluding PM tracker)
+router.get(
+  "/portfolio",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const projects = await TakeoffProject.aggregate([
+      { $match: { userId, pmTrackerOnly: { $ne: true } } },
+      {
+        $project: {
+          name: 1,
+          productKey: 1,
+          slug: 1,
+          updatedAt: 1,
+          publicShareEnabled: 1,
+          itemCount: { $size: { $ifNull: ["$items", []] } },
+        },
+      },
+      { $sort: { productKey: 1, updatedAt: -1 } },
+    ]);
+    return res.json({ projects });
+  }),
+);
+
+// ── PM Tracker (QUIV-exclusive standalone PM projects) ───────────────────────
+const PM_TRACKER_LIMIT = 10;
+
+async function assertQuivEntitlement(userId) {
+  const u = await User.findById(userId, { entitlements: 1 }).lean();
+  if (!u) return false;
+  const e = (u.entitlements || []).find(
+    (x) => x.productKey === "revit" && x.status === "active",
+  );
+  if (!e) return false;
+  if (e.expiresAt && new Date(e.expiresAt).getTime() < Date.now()) return false;
+  return true;
+}
+
+// GET /me/pm-tracker — list this user's PM tracker projects
+router.get(
+  "/pm-tracker",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const projects = await TakeoffProject.aggregate([
+      { $match: { userId, productKey: "revit", pmTrackerOnly: true } },
+      {
+        $project: {
+          name: 1,
+          slug: 1,
+          updatedAt: 1,
+          createdAt: 1,
+          taskCount: { $size: { $ifNull: ["$projectManagement.tasks", []] } },
+          riskCount: { $size: { $ifNull: ["$projectManagement.risks", []] } },
+          issueCount: { $size: { $ifNull: ["$projectManagement.issues", []] } },
+        },
+      },
+      { $sort: { updatedAt: -1 } },
+    ]);
+    return res.json({ projects, limit: PM_TRACKER_LIMIT, used: projects.length });
+  }),
+);
+
+// POST /me/pm-tracker — create a PM tracker project
+router.post(
+  "/pm-tracker",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const hasQuiv = await assertQuivEntitlement(userId);
+    if (!hasQuiv) {
+      return res.status(403).json({
+        error: "A QUIV (Revit) subscription is required to use the PM Tracker.",
+        code: "QUIV_REQUIRED",
+      });
+    }
+    const used = await TakeoffProject.countDocuments({
+      userId,
+      productKey: "revit",
+      pmTrackerOnly: true,
+    });
+    if (used >= PM_TRACKER_LIMIT) {
+      return res.status(403).json({
+        error: `PM Tracker project limit reached (${PM_TRACKER_LIMIT}). Delete a project to add more.`,
+        code: "PM_TRACKER_LIMIT",
+        storageLimit: { used, limit: PM_TRACKER_LIMIT },
+      });
+    }
+    const name = String(req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ error: "Project name is required." });
+
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+    let slug = base || "pm-project";
+    let suffix = 0;
+    while (await TakeoffProject.findOne({ userId, productKey: "revit", slug }).select("_id").lean()) {
+      suffix += 1;
+      slug = `${base}-${suffix}`;
+    }
+
+    const project = new TakeoffProject({
+      userId,
+      productKey: "revit",
+      pmTrackerOnly: true,
+      name,
+      slug,
+      projectManagement: {},
+    });
+    await project.save();
+    return res.status(201).json({
+      project: {
+        _id: project._id,
+        name: project.name,
+        slug: project.slug,
+        updatedAt: project.updatedAt,
+        createdAt: project.createdAt,
+        taskCount: 0,
+        riskCount: 0,
+        issueCount: 0,
+      },
+    });
+  }),
+);
+
+// DELETE /me/pm-tracker/:id — delete a PM tracker project (owner only)
+router.delete(
+  "/pm-tracker/:id",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const id = String(req.params.id || "").trim();
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: "Invalid project id." });
+    }
+    const deleted = await TakeoffProject.findOneAndDelete({
+      _id: id,
+      userId,
+      productKey: "revit",
+      pmTrackerOnly: true,
+    });
+    if (!deleted) return res.status(404).json({ error: "Project not found." });
+    return res.json({ ok: true });
+  }),
+);
+
 export default router;

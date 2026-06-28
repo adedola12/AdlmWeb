@@ -15,7 +15,7 @@ const laborTaskSchema = new mongoose.Schema(
     // WPF primary key — a guid string used for upserts
     taskKey: { type: String, required: true, unique: true, index: true },
 
-    // Owner — matches the user's _id or identifier from the ADLM auth system
+    // Owner — the authenticated user's _id from the ADLM auth system
     ownerKey: { type: String, index: true },
 
     // Audit timestamps (WPF sets these; Express preserves them on update)
@@ -39,25 +39,18 @@ const laborTaskSchema = new mongoose.Schema(
     weather: { type: weatherConditionSchema, default: null },
   },
   {
-    // Use the same collection the WPF app writes to
-    collection: process.env.TIMEMGT_COLLECTION || "LaborTasks",
-    // Don't add __v — WPF doesn't set it and it clutters documents
+    // Stored in the main adlmWeb DB alongside all other collections
+    collection: "timemgtTasks",
     versionKey: false,
   }
 );
 
-// Virtual: net hours (mirrors WPF computed property)
 laborTaskSchema.virtual("netHoursWorked").get(function () {
   return Math.max(0, (this.hoursWorked || 0) - (this.breakHours || 0));
 });
 
-/**
- * Returns the model bound to a specific mongoose Connection.
- * Called from routes with the TimeMgt connection so the model
- * targets the right cluster without polluting the main adlmWeb connection.
- */
-export function getLaborTaskModel(conn) {
-  // Reuse cached model if already registered on this connection
-  if (conn.models.LaborTask) return conn.models.LaborTask;
-  return conn.model("LaborTask", laborTaskSchema);
-}
+// Singleton model bound to the default mongoose connection (adlmWeb).
+// Guard against model re-registration during hot-reload in development.
+export const LaborTask =
+  mongoose.models.TimeMgtTask ||
+  mongoose.model("TimeMgtTask", laborTaskSchema);

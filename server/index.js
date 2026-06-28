@@ -89,6 +89,7 @@ import proposalsPublic from "./routes/proposals.public.js";
 import quoteRoutes from "./routes/quote.js";
 import settingsPublicRoutes from "./routes/settings.public.js";
 import taskRoutes from "./routes/tasks.js";
+import adminTimeMgtRoutes from "./routes/admin.timemgt.js";
 
 const app = express();
 
@@ -351,8 +352,9 @@ app.use("/model-checks", modelCheckRoutes);
 
 // ─── Time Management Tasks ───
 // Authenticated REST API for the ADLM Time Management app.
-// WPF desktop writes directly to the same Atlas cluster; web/mobile use this API.
+// WPF desktop syncs here after saving locally; web/mobile use this API directly.
 app.use("/api/tasks", taskRoutes);
+app.use("/admin/timemgt", adminTimeMgtRoutes);
 
 /* =========================
    ✅ OPTIONAL: serve frontend + dynamic meta
@@ -424,7 +426,6 @@ function validateEnv() {
     "PAYSTACK_SECRET_KEY",
     "CLOUDINARY_API_SECRET",
     "SMTP_PASS",
-    "TIMEMGT_MONGO_URI",
   ];
   const missingCritical = critical.filter((k) => !process.env[k]);
   if (missingCritical.length) {

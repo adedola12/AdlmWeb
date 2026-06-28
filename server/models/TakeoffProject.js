@@ -738,6 +738,7 @@ const TakeoffProjectSchema = new mongoose.Schema(
     certificates: { type: [CertificateSchema], default: [] },
     finalAccount: { type: FinalAccountSchema, default: () => ({}) },
     models: { type: ProjectModelsSchema, default: () => ({}) },
+    pmTrackerOnly: { type: Boolean, default: false },
     projectManagement: {
       type: ProjectManagementSchema,
       default: () => ({}),

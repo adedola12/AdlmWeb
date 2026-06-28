@@ -51,6 +51,8 @@ import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
+import Portfolio from "./pages/Portfolio.jsx";
+import PmTracker from "./pages/PmTracker.jsx";
 import JoinProject from "./pages/JoinProject.jsx";
 import RateGenLibrary from "./pages/RateGenLibrary.jsx";
 import AdminRateGen from "./pages/AdminRateGen.jsx";
@@ -75,6 +77,8 @@ import AdminUsersLite from "./pages/AdminUsersLite.jsx";
 import PTrainingDetail from "./pages/PTrainingDetail.jsx";
 import PTrainingEnrollment from "./pages/PTrainingEnrollment.jsx";
 
+import TimeManagement from "./pages/TimeManagement.jsx";
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -82,6 +86,15 @@ const router = createBrowserRouter([
     errorElement: <AppError />,
     children: [
       { index: true, element: <Home /> },
+
+      {
+        path: "time-management",
+        element: (
+          <ProtectedRoute>
+            <TimeManagement />
+          </ProtectedRoute>
+        ),
+      },
 
       { path: "products", element: <Products /> },
       { path: "quote", element: <Quote /> },
@@ -195,6 +208,22 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <RevitProjects />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "portfolio",
+        element: (
+          <ProtectedRoute>
+            <Portfolio />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "pm-tracker",
+        element: (
+          <ProtectedRoute>
+            <PmTracker />
           </ProtectedRoute>
         ),
       },

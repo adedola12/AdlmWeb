@@ -227,6 +227,7 @@ export default function Nav() {
               <>
                 <DesktopLink to="/purchase">Purchase</DesktopLink>
                 <DesktopLink to="/dashboard">Dashboard</DesktopLink>
+                <DesktopLink to="/time-management">Time Log</DesktopLink>
                 <DesktopLink to="/profile">Profile</DesktopLink>
                 {isStaff(user) && <DesktopLink to="/admin">Admin</DesktopLink>}
                 <button
@@ -330,6 +331,7 @@ export default function Nav() {
               </div>
               <MobileLink to="/purchase" onClick={() => setOpen(false)} icon={<FiShoppingCart />}>Purchase</MobileLink>
               <MobileLink to="/dashboard" onClick={() => setOpen(false)} icon={<FiGrid />}>Dashboard</MobileLink>
+              <MobileLink to="/time-management" onClick={() => setOpen(false)} icon={<FiCalendar />}>Time Log</MobileLink>
               <MobileLink to="/profile" onClick={() => setOpen(false)} icon={<FiUser />}>Profile</MobileLink>
               {isStaff(user) && (
                 <MobileLink to="/admin" onClick={() => setOpen(false)} icon={<FiShield />}>Admin</MobileLink>
