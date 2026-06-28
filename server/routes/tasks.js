@@ -91,6 +91,57 @@ router.get("/:taskKey", async (req, res) => {
 });
 
 /**
+ * POST /api/tasks/bulk
+ * Upserts multiple tasks in one request — used by the WPF app on first sign-in
+ * to migrate locally-stored tasks to the server.  Must be defined BEFORE /:taskKey.
+ */
+router.post("/bulk", async (req, res) => {
+  try {
+    const key = ownerKey(req);
+    if (!key) return res.status(401).json({ error: "Unauthorized" });
+
+    const tasks = Array.isArray(req.body?.tasks) ? req.body.tasks : [];
+    if (tasks.length === 0) return res.json({ upserted: 0 });
+
+    const ops = tasks
+      .filter((t) => t?.taskKey && t?.itemOfWork)
+      .map((body) => ({
+        updateOne: {
+          filter:  { taskKey: body.taskKey, ownerKey: key },
+          update: {
+            $setOnInsert: { createdAtUtc: body.createdAtUtc ? new Date(body.createdAtUtc) : new Date() },
+            $set: {
+              ownerKey:      key,
+              taskKey:       body.taskKey,
+              updatedAtUtc:  new Date(),
+              iD:            body.iD ?? 0,
+              itemOfWork:    body.itemOfWork ?? "",
+              trade:         body.trade ?? "",
+              skilledLabor:  body.skilledLabor ?? 0,
+              unskilledLabor: body.unskilledLabor ?? 0,
+              hoursWorked:   body.hoursWorked ?? 0,
+              breakHours:    body.breakHours ?? 0,
+              equipmentUsed: body.equipmentUsed ?? "",
+              output:        body.output ?? 0,
+              outputUnit:    body.outputUnit ?? "units",
+              taskStartDate: body.taskStartDate ? new Date(body.taskStartDate) : null,
+              taskEndDate:   body.taskEndDate   ? new Date(body.taskEndDate)   : null,
+              weather:       body.weather ?? null,
+            },
+          },
+          upsert: true,
+        },
+      }));
+
+    const result = await LaborTask.bulkWrite(ops, { ordered: false });
+    res.json({ upserted: result.upsertedCount + result.modifiedCount });
+  } catch (err) {
+    console.error("[tasks] POST /bulk error:", err?.message);
+    res.status(500).json({ error: "Bulk upload failed." });
+  }
+});
+
+/**
  * POST /api/tasks
  * Creates or upserts a task. taskKey (from WPF guid) is the idempotency key.
  */

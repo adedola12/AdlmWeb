@@ -865,10 +865,25 @@ router.post("/app/lookup", async (req, res) => {
     const user = await findByIdentifier(String(identifier).trim());
     if (!user) return res.json({ exists: false });
 
+    // Issue a long-lived device token so the WPF app can call /api/tasks
+    // without a password-based login.  We use the same JWT_ACCESS_SECRET as
+    // regular access tokens so requireAuth accepts it transparently.
+    const deviceToken = jwt.sign(
+      {
+        id:      String(user._id),
+        email:   user.email   || "",
+        role:    user.role    || "user",
+        aud:     "adlm-wpf",
+      },
+      process.env.JWT_ACCESS_SECRET,
+      { expiresIn: "90d" }
+    );
+
     return res.json({
       exists: true,
+      deviceToken,
       user: {
-        _id: String(user._id),
+        _id:       String(user._id),
         firstName: user.firstName || "",
         avatarUrl: user.avatarUrl || "",
       },
