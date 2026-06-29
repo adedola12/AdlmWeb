@@ -539,7 +539,7 @@ export default function PmTracker() {
     if (!selectedId) return;
     try {
       const res = await fetch(`${API_BASE}/projects/revit/${selectedId}/share`, {
-        method: "PATCH",
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
