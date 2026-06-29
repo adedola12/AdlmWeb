@@ -289,7 +289,7 @@ function TaskTable({
           </div>
         </div>
       ) : null}
-      <div className="overflow-x-auto">
+      <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
       <table className="w-full text-sm" style={{ minWidth: 1100 }}>
         <thead className="sticky top-0 bg-slate-50 text-slate-600 z-10">
           <tr className="text-left">
@@ -686,7 +686,7 @@ function RiskTable({ risks, onEditRisk, onDeleteRisk, onAddRisk }) {
     );
   }
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
+    <div className="overflow-auto rounded-xl border border-slate-200" style={{ maxHeight: "calc(100vh - 280px)" }}>
       <table className="w-full text-sm" style={{ minWidth: 900 }}>
         <thead className="sticky top-0 bg-slate-50 text-slate-600 z-10">
           <tr className="text-left">
@@ -771,7 +771,7 @@ function IssueTable({ issues, onEditIssue, onDeleteIssue, onAddIssue }) {
     );
   }
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
+    <div className="overflow-auto rounded-xl border border-slate-200" style={{ maxHeight: "calc(100vh - 280px)" }}>
       <table className="w-full text-sm" style={{ minWidth: 900 }}>
         <thead className="sticky top-0 bg-slate-50 text-slate-600 z-10">
           <tr className="text-left">

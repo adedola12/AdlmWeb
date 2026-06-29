@@ -17,6 +17,9 @@ import {
   FaArrowLeft,
   FaClock,
   FaSpinner,
+  FaShareAlt,
+  FaCopy,
+  FaCheck,
 } from "react-icons/fa";
 import PmDashboardView from "../features/projects/pm/PmDashboardView.jsx";
 import PmDetailsView from "../features/projects/pm/PmDetailsView.jsx";
@@ -303,6 +306,8 @@ export default function PmTracker() {
   const [pmImportStatus, setPmImportStatus] = React.useState("");
   const pmImportTimerRef = React.useRef(null);
   const [pmDirty, setPmDirty] = React.useState(false);
+  const [pmPublicShareEnabled, setPmPublicShareEnabled] = React.useState(false);
+  const [pmPublicToken, setPmPublicToken] = React.useState(null);
 
   // Optimistic local task/risk/issue lists (mirrors ProjectManagementTab pattern)
   const [localTasks, setLocalTasks] = React.useState([]);
@@ -506,6 +511,34 @@ export default function PmTracker() {
     } else {
       setPmImportProgress(0);
       setPmImportStatus("");
+    }
+  }
+
+  async function handleToggleShare(enable) {
+    if (!selectedId) return;
+    try {
+      const res = await fetch(`${API_BASE}/projects/revit/${selectedId}/share`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ enable }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPmPublicShareEnabled(Boolean(data.publicShareEnabled));
+        setPmPublicToken(data.publicToken || null);
+        setProjects(prev =>
+          prev.map(p =>
+            p._id === selectedId
+              ? { ...p, publicShareEnabled: data.publicShareEnabled, publicToken: data.publicToken }
+              : p
+          )
+        );
+      }
+    } catch (e) {
+      console.error("Share toggle failed", e);
     }
   }
 
@@ -839,6 +872,9 @@ export default function PmTracker() {
                     onOpen={(id) => {
                       setSelectedId(id);
                       setActiveView("dashboard");
+                      const proj = projects.find(p => p._id === id);
+                      setPmPublicShareEnabled(Boolean(proj?.publicShareEnabled));
+                      setPmPublicToken(proj?.publicToken || null);
                     }}
                     onDelete={(id) => setShowDeleteConfirm(id)}
                   />
@@ -870,25 +906,32 @@ export default function PmTracker() {
             </div>
 
             {/* Sub-tabs */}
-            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 gap-1 shadow-sm">
-              {[
-                { key: "dashboard", label: "Dashboard", icon: FaTasks },
-                { key: "details", label: "Details", icon: FaBug },
-              ].map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setActiveView(key)}
-                  className={`inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-                    activeView === key
-                      ? "bg-adlm-blue-700 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  <Icon className="text-xs" />
-                  {label}
-                </button>
-              ))}
+            <div className="flex items-center gap-3">
+              <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 gap-1 shadow-sm">
+                {[
+                  { key: "dashboard", label: "Dashboard", icon: FaTasks },
+                  { key: "details", label: "Details", icon: FaBug },
+                ].map(({ key, label, icon: Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setActiveView(key)}
+                    className={`inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+                      activeView === key
+                        ? "bg-adlm-blue-700 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Icon className="text-xs" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <PmShareButton
+                publicShareEnabled={pmPublicShareEnabled}
+                publicToken={pmPublicToken}
+                onToggle={handleToggleShare}
+              />
             </div>
 
             {/* PM content */}
@@ -1005,6 +1048,98 @@ export default function PmTracker() {
           handlePmImportFile(f);
         }}
       />
+    </div>
+  );
+}
+
+function PmShareButton({ publicShareEnabled, publicToken, onToggle }) {
+  const [open, setOpen] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+
+  const shareUrl = publicToken
+    ? `${window.location.origin}/projects/shared/${publicToken}`
+    : "";
+
+  async function handleToggle(enable) {
+    setBusy(true);
+    await onToggle?.(enable);
+    setBusy(false);
+  }
+
+  function copyUrl() {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+          publicShareEnabled
+            ? "border-blue-200 bg-blue-50 text-adlm-blue-700"
+            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+        }`}
+        onClick={() => setOpen(v => !v)}
+      >
+        <FaShareAlt className={publicShareEnabled ? "text-adlm-blue-700" : "text-slate-400"} />
+        {publicShareEnabled ? "Shared" : "Share"}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <div className="text-sm font-semibold text-slate-900 mb-1">Share Client Dashboard</div>
+            <p className="text-xs text-slate-500 mb-3">
+              Generate a read-only link so clients can view this project's PM dashboard — progress, budget, and schedule summary only. No editing access.
+            </p>
+
+            <label className="flex items-center gap-2 text-xs text-slate-700 mb-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={publicShareEnabled}
+                disabled={busy}
+                onChange={e => handleToggle(e.target.checked)}
+                className="rounded"
+              />
+              {busy ? "Updating…" : "Enable public link"}
+            </label>
+
+            {publicShareEnabled && shareUrl ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                  <input
+                    readOnly
+                    value={shareUrl}
+                    className="flex-1 bg-transparent text-xs text-slate-700 outline-none truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={copyUrl}
+                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-adlm-blue-700 hover:bg-blue-50"
+                  >
+                    {copied ? <><FaCheck /> Copied</> : <><FaCopy /> Copy</>}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Anyone with this link can view the dashboard (no sign-in required). Disable to revoke access.
+                </p>
+              </div>
+            ) : null}
+
+            <div className="mt-3 flex justify-end">
+              <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

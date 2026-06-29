@@ -1220,6 +1220,8 @@ router.get(
           slug: 1,
           updatedAt: 1,
           createdAt: 1,
+          publicShareEnabled: 1,
+          publicToken: 1,
           taskCount: { $size: { $ifNull: ["$projectManagement.tasks", []] } },
           riskCount: { $size: { $ifNull: ["$projectManagement.risks", []] } },
           issueCount: { $size: { $ifNull: ["$projectManagement.issues", []] } },
