@@ -423,9 +423,15 @@ export default function PmTracker() {
       });
       const dash = unwrapDash(data);
       setPmDashboard(dash);
-      setLocalTasks(dash?.tasks || []);
-      setLocalRisks(dash?.risks || []);
-      setLocalIssues(dash?.issues || []);
+      // Guard: only replace localTasks from the server if it returned at
+      // least as many tasks as we sent. A missing/empty response must not
+      // wipe the user's task list.
+      const serverTasks = dash?.tasks;
+      if (Array.isArray(serverTasks) && serverTasks.length >= payload.tasks.length) {
+        setLocalTasks(serverTasks);
+      }
+      if (Array.isArray(dash?.risks)) setLocalRisks(dash.risks);
+      if (Array.isArray(dash?.issues)) setLocalIssues(dash.issues);
       setPmDirty(false);
       // Update counts in the sidebar list
       setProjects((prev) =>
@@ -449,9 +455,15 @@ export default function PmTracker() {
     }
   }
 
+  function stripEnrichedFields(task) {
+    // eslint-disable-next-line no-unused-vars
+    const { computed, rollup, isSummary, wbsDepth, parentWbs, _computed, _rollup, _isSummary, _wbsDepth, _parentWbs, ...rest } = task;
+    return rest;
+  }
+
   function buildSavePayload() {
     return {
-      tasks: localTasks,
+      tasks: localTasks.map(stripEnrichedFields),
       risks: localRisks,
       issues: localIssues,
       header: pmDashboard?.header || {},
