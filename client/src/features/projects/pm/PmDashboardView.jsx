@@ -641,6 +641,11 @@ export default function PmDashboardView({
               {importing ? "Importing…" : "Import MS Project"}
             </button>
           </div>
+          {importError ? (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 max-w-md mx-auto">
+              {importError}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

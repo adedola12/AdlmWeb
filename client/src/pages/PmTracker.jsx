@@ -462,8 +462,9 @@ export default function PmTracker() {
       const data = await res.json();
       if (!res.ok) {
         setPmImportError(data?.error || "Import failed.");
-        setPmImportErrorCode(data?.code || "");
-        if (data?.code === "MPP_NOT_ENABLED") setShowMppHelper(true);
+        const errCode = data?.errorCode || data?.code || "";
+        setPmImportErrorCode(errCode);
+        if (errCode === "MPP_NOT_ENABLED") setShowMppHelper(true);
         return;
       }
       setPmDashboard(data);
