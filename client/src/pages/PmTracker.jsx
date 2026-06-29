@@ -43,6 +43,13 @@ function genId(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// Every PM endpoint returns { ok, dashboard: computePmDashboard(...) }.
+// This unwraps it so callers always get the dashboard object regardless
+// of whether the response was the bare dashboard or the wrapped form.
+function unwrapDash(data) {
+  return data?.dashboard ?? data;
+}
+
 // ── Small UI helpers ────────────────────────────────────────────────────────
 function Btn({ children, variant = "primary", className = "", ...props }) {
   const base =
@@ -380,10 +387,11 @@ export default function PmTracker() {
     apiAuthed(EP.pmDashboard(selectedId), { token: accessToken })
       .then((data) => {
         if (cancelled) return;
-        setPmDashboard(data);
-        setLocalTasks(data?.tasks || []);
-        setLocalRisks(data?.risks || []);
-        setLocalIssues(data?.issues || []);
+        const dash = unwrapDash(data);
+        setPmDashboard(dash);
+        setLocalTasks(dash?.tasks || []);
+        setLocalRisks(dash?.risks || []);
+        setLocalIssues(dash?.issues || []);
         setPmDirty(false);
       })
       .catch(() => {
@@ -413,10 +421,11 @@ export default function PmTracker() {
         method: "PATCH",
         body: payload,
       });
-      setPmDashboard(data);
-      setLocalTasks(data?.tasks || []);
-      setLocalRisks(data?.risks || []);
-      setLocalIssues(data?.issues || []);
+      const dash = unwrapDash(data);
+      setPmDashboard(dash);
+      setLocalTasks(dash?.tasks || []);
+      setLocalRisks(dash?.risks || []);
+      setLocalIssues(dash?.issues || []);
       setPmDirty(false);
       // Update counts in the sidebar list
       setProjects((prev) =>
@@ -424,9 +433,9 @@ export default function PmTracker() {
           String(p._id) === String(selectedId)
             ? {
                 ...p,
-                taskCount: (data?.tasks || []).length,
-                riskCount: (data?.risks || []).length,
-                issueCount: (data?.issues || []).length,
+                taskCount: (dash?.tasks || []).length,
+                riskCount: (dash?.risks || []).length,
+                issueCount: (dash?.issues || []).length,
                 updatedAt: new Date().toISOString(),
               }
             : p,
@@ -587,10 +596,11 @@ export default function PmTracker() {
         token: accessToken,
         method: "POST",
       });
-      setPmDashboard(data);
-      setLocalTasks(data?.tasks || []);
-      setLocalRisks(data?.risks || []);
-      setLocalIssues(data?.issues || []);
+      const dash = unwrapDash(data);
+      setPmDashboard(dash);
+      setLocalTasks(dash?.tasks || []);
+      setLocalRisks(dash?.risks || []);
+      setLocalIssues(dash?.issues || []);
       setPmDirty(false);
     } catch (e) {
       console.error("Clear imports failed:", e);
@@ -604,10 +614,11 @@ export default function PmTracker() {
         token: accessToken,
         method: "POST",
       });
-      setPmDashboard(data);
-      setLocalTasks(data?.tasks || []);
-      setLocalRisks(data?.risks || []);
-      setLocalIssues(data?.issues || []);
+      const dash = unwrapDash(data);
+      setPmDashboard(dash);
+      setLocalTasks(dash?.tasks || []);
+      setLocalRisks(dash?.risks || []);
+      setLocalIssues(dash?.issues || []);
       setPmDirty(false);
     } catch (e) {
       console.error("Reschedule failed:", e);
