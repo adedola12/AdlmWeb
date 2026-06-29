@@ -529,7 +529,7 @@ export default function PmTracker() {
         setPmImportError(data?.error || "Import failed.");
         const errCode = data?.errorCode || data?.code || "";
         setPmImportErrorCode(errCode);
-        if (errCode === "MPP_NOT_ENABLED") setShowMppHelper(true);
+        if (errCode === "MPP_NOT_ENABLED" || errCode === "MPP_SERVICE_UNREACHABLE" || errCode === "MPP_SERVICE_FAILED") setShowMppHelper(true);
         return;
       }
       stopImportProgress(true);

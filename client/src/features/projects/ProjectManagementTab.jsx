@@ -626,7 +626,7 @@ export default function ProjectManagementTab({
           disabled. The modal handles its own dismissal + lets the user
           retry the import directly with the .xml file. */}
       <PmMppHelperModal
-        open={importErrorCode === "MPP_NOT_ENABLED"}
+        open={importErrorCode === "MPP_NOT_ENABLED" || importErrorCode === "MPP_SERVICE_UNREACHABLE" || importErrorCode === "MPP_SERVICE_FAILED"}
         errorMessage={importError}
         onClose={onDismissImportError}
         onPickXml={(file) => {
