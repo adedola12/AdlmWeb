@@ -12,6 +12,7 @@ import { Purchase } from "../models/Purchase.js";
 import { Setting } from "../models/Setting.js";
 import { Invoice } from "../models/Invoice.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { sendMail } from "../util/mailer.js";
 
 const router = express.Router();
 
@@ -1311,6 +1312,62 @@ router.delete(
     });
     if (!deleted) return res.status(404).json({ error: "Project not found." });
     return res.json({ ok: true });
+  }),
+);
+
+// POST /me/pm-tracker/:id/invite — send a full-editor invite email.
+// The caller has already created a share code (POST /projects/revit/:id/collab/codes)
+// and passes the plain code here. We email the join link to the invitee.
+router.post(
+  "/pm-tracker/:id/invite",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const id = String(req.params.id || "").trim();
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: "Invalid project id." });
+    }
+    const { email, code } = req.body || {};
+    if (!email || !code) {
+      return res.status(400).json({ error: "email and code are required." });
+    }
+
+    // Verify the project belongs to this user
+    const project = await TakeoffProject.findOne({
+      _id: id,
+      userId,
+      productKey: "revit",
+      pmTrackerOnly: true,
+    }).lean();
+    if (!project) return res.status(404).json({ error: "Project not found." });
+
+    const inviter = await User.findById(userId, { name: 1, email: 1 }).lean();
+    const inviterName = inviter?.name || inviter?.email || "A QUIV user";
+    const projectName = project.name || "PM Project";
+    const joinUrl = `${process.env.CLIENT_URL || "https://www.adlmstudio.net"}/j/${code}`;
+
+    await sendMail({
+      to: email,
+      subject: `You've been invited to collaborate on "${projectName}" — ADLM Studio`,
+      html: `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+          <div style="background:linear-gradient(135deg,#1a56db,#1e3a8a);border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
+            <h1 style="color:#fff;font-size:20px;margin:0">ADLM Studio</h1>
+            <p style="color:#bfdbfe;font-size:13px;margin:8px 0 0">PM Tracker — Project Invitation</p>
+          </div>
+          <p style="color:#374151;font-size:14px"><strong>${inviterName}</strong> has invited you to collaborate on the PM project <strong>"${projectName}"</strong> as a full editor.</p>
+          <p style="color:#6b7280;font-size:13px">As a full editor you can add and update tasks, log risks and issues, and track project progress in real time.</p>
+          <div style="text-align:center;margin:28px 0">
+            <a href="${joinUrl}" style="background:#1a56db;color:#fff;border-radius:8px;padding:12px 28px;font-size:14px;font-weight:700;text-decoration:none;display:inline-block">
+              Accept Invitation →
+            </a>
+          </div>
+          <p style="color:#9ca3af;font-size:11px;text-align:center">This link is single-use and restricted to ${email}. If you weren't expecting this invite, you can safely ignore it.</p>
+        </div>
+      `,
+    });
+
+    return res.json({ ok: true, message: `Invitation sent to ${email}` });
   }),
 );
 

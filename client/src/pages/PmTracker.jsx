@@ -930,6 +930,8 @@ export default function PmTracker() {
               <PmShareButton
                 publicShareEnabled={pmPublicShareEnabled}
                 publicToken={pmPublicToken}
+                projectId={selectedId}
+                accessToken={accessToken}
                 onToggle={handleToggleShare}
               />
             </div>
@@ -1052,10 +1054,15 @@ export default function PmTracker() {
   );
 }
 
-function PmShareButton({ publicShareEnabled, publicToken, onToggle }) {
+function PmShareButton({ publicShareEnabled, publicToken, projectId, accessToken, onToggle }) {
   const [open, setOpen] = React.useState(false);
+  const [tab, setTab] = React.useState("view"); // "view" | "editor"
   const [copied, setCopied] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  // Editor invite state
+  const [inviteEmail, setInviteEmail] = React.useState("");
+  const [inviting, setInviting] = React.useState(false);
+  const [inviteResult, setInviteResult] = React.useState(null); // { ok, message }
 
   const shareUrl = publicToken
     ? `${window.location.origin}/projects/shared/${publicToken}`
@@ -1075,6 +1082,40 @@ function PmShareButton({ publicShareEnabled, publicToken, onToggle }) {
     });
   }
 
+  async function handleInviteEditor(e) {
+    e.preventDefault();
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email || !projectId) return;
+    setInviting(true);
+    setInviteResult(null);
+    try {
+      // 1. Generate a full-access share code restricted to this email
+      const codeRes = await fetch(`${API_BASE}/projects/revit/${projectId}/collab/codes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ accessLevel: "full", allowedEmails: email, label: `Invited: ${email}` }),
+      });
+      const codeData = await codeRes.json();
+      if (!codeRes.ok) throw new Error(codeData?.error || "Failed to create invite code");
+
+      // 2. Send invitation email via server
+      const mailRes = await fetch(`${API_BASE}/me/pm-tracker/${projectId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ email, code: codeData.code }),
+      });
+      const mailData = await mailRes.json();
+      if (!mailRes.ok) throw new Error(mailData?.error || "Failed to send invite email");
+
+      setInviteResult({ ok: true, message: `Invitation sent to ${email}` });
+      setInviteEmail("");
+    } catch (err) {
+      setInviteResult({ ok: false, message: err.message || "Invite failed" });
+    } finally {
+      setInviting(false);
+    }
+  }
+
   return (
     <div className="relative">
       <button
@@ -1084,7 +1125,7 @@ function PmShareButton({ publicShareEnabled, publicToken, onToggle }) {
             ? "border-blue-200 bg-blue-50 text-adlm-blue-700"
             : "border-slate-200 text-slate-600 hover:bg-slate-50"
         }`}
-        onClick={() => setOpen(v => !v)}
+        onClick={() => { setOpen(v => !v); setInviteResult(null); }}
       >
         <FaShareAlt className={publicShareEnabled ? "text-adlm-blue-700" : "text-slate-400"} />
         {publicShareEnabled ? "Shared" : "Share"}
@@ -1093,49 +1134,112 @@ function PmShareButton({ publicShareEnabled, publicToken, onToggle }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <div className="text-sm font-semibold text-slate-900 mb-1">Share Client Dashboard</div>
-            <p className="text-xs text-slate-500 mb-3">
-              Generate a read-only link so clients can view this project's PM dashboard — progress, budget, and schedule summary only. No editing access.
-            </p>
-
-            <label className="flex items-center gap-2 text-xs text-slate-700 mb-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={publicShareEnabled}
-                disabled={busy}
-                onChange={e => handleToggle(e.target.checked)}
-                className="rounded"
-              />
-              {busy ? "Updating…" : "Enable public link"}
-            </label>
-
-            {publicShareEnabled && shareUrl ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                  <input
-                    readOnly
-                    value={shareUrl}
-                    className="flex-1 bg-transparent text-xs text-slate-700 outline-none truncate"
-                  />
-                  <button
-                    type="button"
-                    onClick={copyUrl}
-                    className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-adlm-blue-700 hover:bg-blue-50"
-                  >
-                    {copied ? <><FaCheck /> Copied</> : <><FaCopy /> Copy</>}
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  Anyone with this link can view the dashboard (no sign-in required). Disable to revoke access.
-                </p>
+          <div className="absolute right-0 top-full z-50 mt-2 w-88 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden" style={{ width: 340 }}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-adlm-blue-700 to-blue-800 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-white text-sm font-semibold">
+                <FaShareAlt className="text-xs" />
+                Share Project
               </div>
-            ) : null}
-
-            <div className="mt-3 flex justify-end">
-              <button type="button" className="text-xs text-slate-500 hover:text-slate-700" onClick={() => setOpen(false)}>
-                Close
+              <button type="button" onClick={() => setOpen(false)} className="text-white/70 hover:text-white transition">
+                <FaTimes className="text-xs" />
               </button>
+            </div>
+
+            {/* Tab strip */}
+            <div className="flex border-b border-slate-100">
+              {[
+                { key: "view", label: "View Only" },
+                { key: "editor", label: "Invite Editor" },
+              ].map(t => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => { setTab(t.key); setInviteResult(null); }}
+                  className={`flex-1 py-2 text-xs font-medium transition border-b-2 ${
+                    tab === t.key
+                      ? "border-adlm-blue-700 text-adlm-blue-700"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="p-4 space-y-3">
+              {tab === "view" ? (
+                <>
+                  <p className="text-xs text-slate-500">
+                    Clients get a <strong>read-only</strong> dashboard link showing progress, budget tiles, task chart, burndown, and overdue summary. No login required.
+                  </p>
+                  <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={publicShareEnabled}
+                      disabled={busy}
+                      onChange={e => handleToggle(e.target.checked)}
+                      className="rounded"
+                    />
+                    {busy ? "Updating…" : "Enable public link"}
+                  </label>
+                  {publicShareEnabled && shareUrl ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                        <input
+                          readOnly
+                          value={shareUrl}
+                          className="flex-1 bg-transparent text-xs text-slate-600 outline-none truncate"
+                        />
+                        <button
+                          type="button"
+                          onClick={copyUrl}
+                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-adlm-blue-700 hover:bg-blue-50 whitespace-nowrap"
+                        >
+                          {copied ? <><FaCheck className="text-emerald-500" /> Copied</> : <><FaCopy /> Copy</>}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Disable the toggle to revoke this link at any time.
+                      </p>
+                    </div>
+                  ) : !publicShareEnabled ? (
+                    <p className="text-[10px] text-slate-400">Enable the link above to generate a shareable URL.</p>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-500">
+                    Invite a collaborator as a <strong>full editor</strong>. They'll receive an email with a secure join link and can edit tasks, risks, and issues.
+                  </p>
+                  <form onSubmit={handleInviteEditor} className="space-y-2">
+                    <input
+                      type="email"
+                      required
+                      placeholder="collaborator@email.com"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-adlm-blue-700 focus:ring-1 focus:ring-adlm-blue-700/20 placeholder:text-slate-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={inviting || !inviteEmail.trim()}
+                      className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-adlm-blue-700 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-800 transition disabled:opacity-50"
+                    >
+                      {inviting ? <><FaSpinner className="animate-spin" /> Sending…</> : "Send Invite Email"}
+                    </button>
+                  </form>
+                  {inviteResult ? (
+                    <div className={`rounded-lg border px-3 py-2 text-xs ${inviteResult.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+                      {inviteResult.ok ? <FaCheck className="inline mr-1" /> : null}
+                      {inviteResult.message}
+                    </div>
+                  ) : null}
+                  <p className="text-[10px] text-slate-400">
+                    The invite link is single-use and restricted to this email address.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </>
