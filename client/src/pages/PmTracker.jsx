@@ -533,10 +533,11 @@ export default function PmTracker() {
         return;
       }
       stopImportProgress(true);
-      setPmDashboard(data);
-      setLocalTasks(data?.tasks || []);
-      setLocalRisks(data?.risks || []);
-      setLocalIssues(data?.issues || []);
+      const dash = data?.dashboard ?? data;
+      setPmDashboard(dash);
+      setLocalTasks(dash?.tasks || []);
+      setLocalRisks(dash?.risks || []);
+      setLocalIssues(dash?.issues || []);
       setPmDirty(false);
     } catch (e) {
       stopImportProgress(false);
