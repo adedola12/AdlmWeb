@@ -299,6 +299,9 @@ export default function PmTracker() {
   const [pmImporting, setPmImporting] = React.useState(false);
   const [pmImportError, setPmImportError] = React.useState("");
   const [pmImportErrorCode, setPmImportErrorCode] = React.useState("");
+  const [pmImportProgress, setPmImportProgress] = React.useState(0);
+  const [pmImportStatus, setPmImportStatus] = React.useState("");
+  const pmImportTimerRef = React.useRef(null);
   const [pmDirty, setPmDirty] = React.useState(false);
 
   // Optimistic local task/risk/issue lists (mirrors ProjectManagementTab pattern)
@@ -446,11 +449,72 @@ export default function PmTracker() {
   }
 
   // ── PM import ──────────────────────────────────────────────────────
+  // Simulated progress phases: each entry is [targetPct, label, durationMs].
+  // The ticker advances toward the target over the given duration, then
+  // pauses at the ceiling waiting for the real response.
+  const IMPORT_PHASES = [
+    [15,  "Uploading file…",       800],
+    [40,  "Parsing schedule…",    1800],
+    [65,  "Extracting tasks…",    1500],
+    [82,  "Auto-linking BoQ…",    1200],
+    [92,  "Saving to project…",    900],
+    [97,  "Almost done…",         9999], // holds until server responds
+  ];
+
+  function startImportProgress() {
+    setPmImportProgress(0);
+    setPmImportStatus("Preparing…");
+    let phaseIdx = 0;
+    let current = 0;
+
+    function tick() {
+      if (phaseIdx >= IMPORT_PHASES.length) return;
+      const [target, label, duration] = IMPORT_PHASES[phaseIdx];
+      const steps = Math.max(1, Math.round(duration / 80));
+      const increment = (target - current) / steps;
+
+      setPmImportStatus(label);
+      let step = 0;
+
+      function advance() {
+        step++;
+        current = Math.min(target, current + increment);
+        setPmImportProgress(Math.round(current));
+        if (current < target) {
+          pmImportTimerRef.current = setTimeout(advance, 80);
+        } else {
+          phaseIdx++;
+          if (phaseIdx < IMPORT_PHASES.length) {
+            pmImportTimerRef.current = setTimeout(tick, 120);
+          }
+        }
+      }
+      advance();
+    }
+    tick();
+  }
+
+  function stopImportProgress(success) {
+    clearTimeout(pmImportTimerRef.current);
+    if (success) {
+      setPmImportProgress(100);
+      setPmImportStatus("Import complete!");
+      pmImportTimerRef.current = setTimeout(() => {
+        setPmImportProgress(0);
+        setPmImportStatus("");
+      }, 2000);
+    } else {
+      setPmImportProgress(0);
+      setPmImportStatus("");
+    }
+  }
+
   async function handlePmImportFile(file) {
     if (!selectedId || !file) return;
     setPmImporting(true);
     setPmImportError("");
     setPmImportErrorCode("");
+    startImportProgress();
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -461,18 +525,21 @@ export default function PmTracker() {
       });
       const data = await res.json();
       if (!res.ok) {
+        stopImportProgress(false);
         setPmImportError(data?.error || "Import failed.");
         const errCode = data?.errorCode || data?.code || "";
         setPmImportErrorCode(errCode);
         if (errCode === "MPP_NOT_ENABLED") setShowMppHelper(true);
         return;
       }
+      stopImportProgress(true);
       setPmDashboard(data);
       setLocalTasks(data?.tasks || []);
       setLocalRisks(data?.risks || []);
       setLocalIssues(data?.issues || []);
       setPmDirty(false);
     } catch (e) {
+      stopImportProgress(false);
       setPmImportError(e?.message || "Import failed.");
     } finally {
       setPmImporting(false);
@@ -840,6 +907,8 @@ export default function PmTracker() {
                 importing={pmImporting}
                 generating={false}
                 importError={pmImportError}
+                importProgress={pmImportProgress}
+                importStatus={pmImportStatus}
                 dirty={pmDirty}
                 onAddTask={() => setTaskModal({ open: true, mode: "add", task: null })}
                 onAddRisk={() => setRiskModal({ open: true, mode: "add", risk: null })}

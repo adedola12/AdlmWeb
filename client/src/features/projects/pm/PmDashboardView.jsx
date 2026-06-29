@@ -487,6 +487,8 @@ export default function PmDashboardView({
   importing = false,
   generating = false,
   importError = "",
+  importProgress = 0,
+  importStatus = "",
   onAddTask,
   onAddRisk,
   onAddIssue,
@@ -641,6 +643,20 @@ export default function PmDashboardView({
               {importing ? "Importing…" : "Import MS Project"}
             </button>
           </div>
+          {importing && importProgress > 0 ? (
+            <div className="mt-4 max-w-md mx-auto w-full space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                <span className="font-medium">{importStatus || "Importing…"}</span>
+                <span>{importProgress}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${importProgress === 100 ? "bg-emerald-500" : "bg-adlm-blue-700"}`}
+                  style={{ width: `${importProgress}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
           {importError ? (
             <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 max-w-md mx-auto">
               {importError}
@@ -716,6 +732,22 @@ export default function PmDashboardView({
         />
         <input ref={fileRef} type="file" accept=".xml,.mpp" className="hidden" onChange={onFile} />
       </div>
+
+      {/* Import progress bar — shown while an upload is in flight */}
+      {importing && importProgress > 0 ? (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="font-medium">{importStatus || "Importing…"}</span>
+            <span>{importProgress}%</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${importProgress === 100 ? "bg-emerald-500" : "bg-adlm-blue-700"}`}
+              style={{ width: `${importProgress}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {/* Clear-imports row — hidden once tasks are linked to BoQ so
           users can't accidentally nuke their wired-up WBS. They can
