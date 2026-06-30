@@ -92,6 +92,35 @@ export function verifyStepUp(token) {
   }
   return decoded;
 }
+// ── God-account login challenge ──
+// Issued by POST /auth/login when a God account passes the password check. It
+// is NOT an access token — it only proves "this person knows the God password
+// and we are mid-login". The second step (POST /auth/login/otp) requires this
+// challenge + a fresh email OTP + the password again before any real token is
+// minted. Namespaced by scope:"god_login" so it can never be used as an access
+// token. We carry the plugin context (so step 2 can mint the right license).
+export function signGodChallenge({ sub, plugin = false, productKey = "", fingerprint = "", fpVersion = 1 }) {
+  return jwt.sign(
+    {
+      sub: String(sub),
+      scope: "god_login",
+      plugin: !!plugin,
+      productKey: String(productKey || ""),
+      fingerprint: String(fingerprint || ""),
+      fpVersion: Number(fpVersion) || 1,
+    },
+    process.env.JWT_ACCESS_SECRET,
+    { expiresIn: "10m" },
+  );
+}
+export function verifyGodChallenge(token) {
+  const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+  if (!decoded || decoded.scope !== "god_login") {
+    throw new Error("Not a god-login challenge token");
+  }
+  return decoded;
+}
+
 export function verifyRefresh(token) {
   return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
 }

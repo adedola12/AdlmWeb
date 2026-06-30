@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import { User } from "../models/User.js";
+import { isGodUser } from "../util/godAccount.js";
 
 function entitlementKeyFor(productKey) {
   const k = String(productKey || "")
@@ -16,6 +17,8 @@ export function requireEntitlement(productKey) {
     if (!req.user?._id) {
       return res.status(401).json({ error: "Authentication required" });
     }
+    // Break-glass God account has every product on every machine.
+    if (isGodUser(req.user)) return next();
     const u = await User.findById(req.user._id, { entitlements: 1 });
     if (!u) {
       return res.status(401).json({ error: "User not found" });

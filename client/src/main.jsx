@@ -49,6 +49,9 @@ import AdminProposals from "./pages/AdminProposals.jsx";
 import AdminRoles from "./pages/AdminRoles.jsx";
 import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
+import RequestTechnicalHelp from "./pages/RequestTechnicalHelp.jsx";
+import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
+import AdminAuditLog from "./pages/AdminAuditLog.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
@@ -144,6 +147,14 @@ const router = createBrowserRouter([
 
       { path: "testimonials", element: <Testimonials /> },
       { path: "support", element: <Support /> },
+      {
+        path: "support/request",
+        element: (
+          <ProtectedRoute>
+            <RequestTechnicalHelp />
+          </ProtectedRoute>
+        ),
+      },
 
       { path: "checkout/thanks", element: <CheckoutThanks /> },
 
@@ -520,6 +531,26 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin"]}>
             <AdminRoles />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Support tickets — staff-grantable ("support" area)
+      {
+        path: "admin/support-tickets",
+        element: (
+          <AdminRoute permission="support">
+            <AdminSupportTickets />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Audit log & break-glass management — super-admin only ("audit" area)
+      {
+        path: "admin/audit-log",
+        element: (
+          <AdminRoute permission="audit">
+            <AdminAuditLog />
           </AdminRoute>
         ),
       },

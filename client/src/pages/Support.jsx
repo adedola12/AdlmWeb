@@ -74,11 +74,18 @@ export default function Support() {
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              to="/support/request"
+              className="inline-flex items-center gap-2 rounded-xl bg-white text-slate-900 px-4 py-2 text-sm font-semibold hover:bg-white/90 transition"
+            >
+              Raise a Technical Ticket <FaArrowRight />
+            </Link>
+
             <a
               href={waLink("Hi ADLM Support, I need help with...")}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl bg-white text-slate-900 px-4 py-2 text-sm font-semibold hover:bg-white/90 transition"
+              className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold ring-1 ring-white/15 hover:bg-white/15 transition"
             >
               WhatsApp Live Support <FaArrowRight />
             </a>

@@ -19,10 +19,14 @@ import {
   signRefresh,
   verifyRefresh,
   signStepUp,
+  signGodChallenge,
+  verifyGodChallenge,
   REFRESH_COOKIE,
   refreshCookieOpts,
 } from "../util/jwt.js";
 import { getPrivateKey, getKid } from "../util/jwks.js";
+import { isGodUser, isGodEmail } from "../util/godAccount.js";
+import { writeAudit, reqAuditContext } from "../util/audit.js";
 
 const router = express.Router();
 
@@ -54,6 +58,9 @@ function buildAuthPayload(user) {
     stepUpEnabled: !!user.security?.stepUpEnabled,
     isSuperAdmin: isSuperAdminRole(user.role),
     permissions: rolePermissionList(user.role, ALL_AREA_KEYS),
+    // Only true when BOTH the DB flag and the env allowlist agree. Carried in
+    // the token so middleware (requireEntitlement, auditGod) can recognise it.
+    isGod: isGodUser(user),
   };
 }
 
@@ -464,6 +471,89 @@ router.post("/signup", async (req, res) => {
   }
 });
 
+// Mask an email for display in the OTP challenge response ("ad***@gmail.com").
+function maskEmail(email) {
+  const s = String(email || "");
+  const at = s.indexOf("@");
+  if (at < 1) return s;
+  const name = s.slice(0, at);
+  const domain = s.slice(at);
+  const shown = name.slice(0, Math.min(2, name.length));
+  return `${shown}${"*".repeat(Math.max(1, name.length - shown.length))}${domain}`;
+}
+
+// Email a fresh 6-digit OTP for a God login (reuses the StepUpOtp store). If a
+// still-valid code was issued in the last 60s we keep it (no spam) — the user
+// already has a working code. Throws if the email send fails.
+async function issueGodLoginOtp(user, req) {
+  const recent = await StepUpOtp.findOne({
+    userId: user._id,
+    usedAt: null,
+    expiresAt: { $gt: new Date() },
+    createdAt: { $gt: new Date(Date.now() - 60 * 1000) },
+  });
+  if (recent) return;
+
+  const code = String(crypto.randomInt(100000, 999999));
+  await StepUpOtp.create({
+    userId: user._id,
+    code,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    requestedFromIp: req.ip,
+  });
+
+  const safeName = user.firstName || user.username || user.email.split("@")[0];
+  await sendMail({
+    to: user.email,
+    subject: "ADLM break-glass sign-in code",
+    html: `<p>Hi ${safeName},</p>
+           <p>Use this code to complete your secure (break-glass) sign-in:</p>
+           <p style="font-size:22px;font-weight:bold;letter-spacing:4px">${code}</p>
+           <p>This code expires in 10 minutes. If you did <b>not</b> just try to
+           sign in to a privileged ADLM support account, change your password
+           immediately and notify the team — this account can access any machine.</p>`,
+  });
+}
+
+// Mint a license token for a God account on ANY product / device, bypassing
+// entitlement existence and device/seat binding. In-memory only — it never
+// writes to the user's real entitlement/device records, so the bypass leaves
+// the production data untouched.
+function mintGodLicense(user, productKey, fingerprint, fpVersion) {
+  const key = String(productKey || "").toLowerCase();
+  if (!key) return null;
+
+  const farFuture = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000); // 15 days
+  const existing = Array.isArray(user.entitlements) ? [...user.entitlements] : [];
+  const hasProduct = existing.some(
+    (e) => String(e?.productKey || "").toLowerCase() === key,
+  );
+
+  const entitlements = hasProduct
+    ? existing
+    : [
+        ...existing,
+        {
+          productKey: key,
+          status: "active",
+          expiresAt: farFuture,
+          deviceFingerprint: fingerprint || "",
+        },
+      ];
+
+  // Note: fpVersion is intentionally unused here — God logins skip device
+  // binding entirely, so the fingerprint is recorded in the token but never
+  // validated against a seat list.
+  void fpVersion;
+
+  return signLicenseToken({
+    user: { _id: user._id, email: user.email, entitlements },
+    productKey: key,
+    deviceFingerprint: fingerprint || "god-device",
+    expiresAt: farFuture,
+  });
+}
+
 router.post("/login", async (req, res) => {
   try {
     await ensureDb();
@@ -486,6 +576,59 @@ router.post("/login", async (req, res) => {
       return res
         .status(403)
         .json({ error: "Account disabled. Please contact support." });
+    }
+
+    // ── Break-glass God account ──
+    // Never issue tokens directly. The password check passed, but a God login
+    // additionally requires an emailed OTP and the password re-entered, both
+    // verified by POST /auth/login/otp. We short-circuit BEFORE the plugin
+    // entitlement/device checks so the bypass + OTP flow is the only path in.
+    if (isGodUser(user)) {
+      const plugin = isPluginClient(req);
+      const productKey = String(req.body?.productKey || req.body?.product_key || "")
+        .trim()
+        .toLowerCase();
+      const fingerprint = String(req.body?.device_fingerprint || "").trim();
+      const fpVersion = Math.max(1, Number(req.get("x-adlm-fp-version")) || 1);
+
+      if (plugin && !productKey) {
+        return res.status(400).json({
+          error: "productKey required for plugin login",
+          code: "PRODUCT_REQUIRED",
+        });
+      }
+
+      try {
+        await issueGodLoginOtp(user, req);
+      } catch (mailErr) {
+        console.error("[/auth/login] god OTP mail error:", mailErr);
+        return res.status(500).json({ error: "Unable to send sign-in code" });
+      }
+
+      const challenge = signGodChallenge({
+        sub: user._id,
+        plugin,
+        productKey,
+        fingerprint,
+        fpVersion,
+      });
+
+      await writeAudit({
+        actorId: user._id,
+        actorEmail: user.email,
+        isGod: true,
+        action: "god.login.otp_sent",
+        status: 200,
+        ...reqAuditContext(req),
+        meta: { plugin },
+      });
+
+      return res.json({
+        otpRequired: true,
+        challenge,
+        method: "email",
+        hint: maskEmail(user.email),
+      });
     }
 
     let licenseToken = null;
@@ -593,6 +736,132 @@ router.post("/login", async (req, res) => {
     return res.json({ accessToken, user: payload, licenseToken });
   } catch (err) {
     console.error("[/auth/login] error:", err);
+    res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// ── Second step of the break-glass God login ──
+// Requires the challenge from POST /auth/login, the emailed OTP, AND the
+// password again. Only on success are real tokens minted. For plugin logins a
+// synthetic license is issued that bypasses device/seat/entitlement binding.
+router.post("/login/otp", authLimiter, async (req, res) => {
+  try {
+    await ensureDb();
+    const { challenge, code, password } = req.body || {};
+    if (!challenge || !code || !password) {
+      return res
+        .status(400)
+        .json({ error: "challenge, code and password are required" });
+    }
+
+    let decoded;
+    try {
+      decoded = verifyGodChallenge(challenge);
+    } catch {
+      return res.status(401).json({
+        error: "Sign-in session expired. Please start again.",
+        code: "CHALLENGE_EXPIRED",
+      });
+    }
+
+    const user = await User.findById(decoded.sub);
+    if (!user?.passwordHash) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    if (user.disabled) {
+      return res
+        .status(403)
+        .json({ error: "Account disabled. Please contact support." });
+    }
+    // Re-confirm God status — the env allowlist may have changed since step 1.
+    if (!isGodUser(user)) {
+      return res
+        .status(403)
+        .json({ error: "Break-glass access is not available for this account." });
+    }
+
+    // Final confirmation: the password, re-entered after the OTP.
+    const okPw = await bcrypt.compare(String(password), user.passwordHash);
+    if (!okPw) {
+      await writeAudit({
+        actorId: user._id, actorEmail: user.email, isGod: true,
+        action: "god.login.bad_password", status: 401, ...reqAuditContext(req),
+      });
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Verify the emailed OTP (latest unused, timing-safe, max 5 attempts).
+    const record = await StepUpOtp.findOne({
+      userId: user._id,
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+    if (!record) {
+      return res
+        .status(400)
+        .json({ error: "Invalid or expired code", code: "OTP_INVALID" });
+    }
+    if (record.attempts >= 5) {
+      return res.status(429).json({
+        error: "Too many attempts. Please start sign-in again.",
+        code: "OTP_LOCKED",
+      });
+    }
+    const a = Buffer.from(String(code));
+    const b = Buffer.from(String(record.code));
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      record.attempts += 1;
+      await record.save();
+      await writeAudit({
+        actorId: user._id, actorEmail: user.email, isGod: true,
+        action: "god.login.bad_otp", status: 400, ...reqAuditContext(req),
+      });
+      return res
+        .status(400)
+        .json({ error: "Invalid or expired code", code: "OTP_INVALID" });
+    }
+    record.usedAt = new Date();
+    await record.save();
+
+    // Plugin login → mint a synthetic license bypassing device/seat/entitlement.
+    let licenseToken = null;
+    if (decoded.plugin && decoded.productKey) {
+      licenseToken = mintGodLicense(
+        user,
+        decoded.productKey,
+        decoded.fingerprint,
+        decoded.fpVersion,
+      );
+      if (!licenseToken) {
+        return res.status(503).json({
+          error: "License token signing is unavailable. Please contact support.",
+          code: "LICENSE_TOKEN_UNAVAILABLE",
+        });
+      }
+    }
+
+    const payload = buildAuthPayload(user);
+    const accessToken = signAccess(payload);
+    const refreshToken = signRefresh({ sub: payload._id });
+    await Refresh.create({
+      userId: user._id,
+      token: refreshToken,
+      ua: req.headers["user-agent"] || "",
+      ip: req.ip,
+    });
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
+
+    await writeAudit({
+      actorId: user._id, actorEmail: user.email, isGod: true,
+      action: "god.login.success", status: 200,
+      productKey: decoded.productKey || "",
+      meta: { plugin: !!decoded.plugin },
+      ...reqAuditContext(req),
+    });
+
+    return res.json({ accessToken, user: payload, licenseToken });
+  } catch (err) {
+    console.error("[/auth/login/otp] error:", err);
     res.status(500).json({ error: "Login failed" });
   }
 });

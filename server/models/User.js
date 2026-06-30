@@ -114,6 +114,13 @@ const UserSchema = new mongoose.Schema(
 
     disabled: { type: Boolean, default: false },
 
+    // Break-glass "God" support account flag. On its own this does NOTHING —
+    // God powers only activate when this is true AND the email is also listed
+    // in the GOD_ACCOUNT_EMAILS deploy env var (see server/util/godAccount.js).
+    // Grants a fully-audited, OTP-gated super-admin that bypasses device/seat
+    // binding so the technical team can sign in on any machine to fix issues.
+    isGod: { type: Boolean, default: false },
+
     // Per-user security preferences. stepUpEnabled = require an emailed OTP
     // before sensitive actions (deleting projects, locking/unlocking a
     // contract). Off by default — opt-in from the profile page.

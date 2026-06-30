@@ -217,6 +217,12 @@ app.use("/webhooks", webhooksRouter);
 // meant to be reached anonymously from end-user machines.
 app.use("/.well-known", wellKnownRoutes);
 
+// Best-effort audit trail for the break-glass God support account. Mounted
+// before the routes so it observes every mutating request, but it never gates
+// (per-route auth still applies). See server/middleware/auditGod.js.
+import { auditGod } from "./middleware/auditGod.js";
+app.use(auditGod);
+
 // Apply rate limiting to auth and device endpoints
 app.use("/auth", authLimiter, authRoutes);
 app.use("/me", meRoutes);
@@ -329,6 +335,14 @@ app.use("/admin/proposals", adminProposals);
 // UAC / role management — mount BEFORE the catch-all "/admin" so it isn't swallowed.
 app.use("/admin/roles", adminRoles);
 
+// Support tickets + audit log / break-glass management — also BEFORE the
+// catch-all "/admin" so their staff-grantable ("support") and admin-exclusive
+// ("audit") gates apply instead of the catch-all's admin-only middleware.
+import adminSupport from "./routes/admin.support.js";
+import adminAudit from "./routes/admin.audit.js";
+app.use("/admin/support-tickets", adminSupport);
+app.use("/admin/audit-log", adminAudit);
+
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin
 // as router-level middleware, which rejects mini_admin with 403. If it
@@ -341,6 +355,10 @@ app.use("/quote", quoteRoutes);
 app.use("/proposals", proposalsPublic);
 app.use("/settings", settingsPublicRoutes);
 app.use("/api/entitlements", deviceLimiter, entitlementsRouter);
+
+// User-facing support ticket submission + "my tickets".
+import supportRoutes from "./routes/support.js";
+app.use("/api/support", supportRoutes);
 
 // app.use("/projectsboq", projectsBoqRoutes);
 app.use("/projectsboq", projectsBoqRoutes);

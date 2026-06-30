@@ -17,8 +17,10 @@ export const ADMIN_AREAS = [
   { key: "invoices", label: "Invoices", group: "Finance", staffGrantable: true },
   { key: "proposals", label: "Proposals", group: "Finance", staffGrantable: true },
   { key: "users", label: "Users", group: "People", staffGrantable: true },
+  { key: "support", label: "Support Tickets", group: "Support", staffGrantable: true },
 
   // ── Admin-exclusive (never grantable — always require the admin superuser) ──
+  { key: "audit", label: "Audit Log & Break-glass", group: "Core", staffGrantable: false },
   { key: "products", label: "Products", group: "Store", staffGrantable: false },
   { key: "courses", label: "Courses", group: "Store", staffGrantable: false },
   { key: "grading", label: "Course Grading", group: "Store", staffGrantable: false },
