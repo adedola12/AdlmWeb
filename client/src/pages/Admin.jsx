@@ -495,11 +495,41 @@ function ReceiptModal({ open, url, title, onClose }) {
 
 /* ------------------ main page ------------------ */
 
-export default function Admin() {
+// Admin Hub section metadata — used to label the section pages and to map each
+// internal tab key to its dedicated route.
+const SECTION_META = {
+  pending: { label: "Pending Purchases", slug: "pending" },
+  active: { label: "Active Subscriptions", slug: "active" },
+  ptrainings: { label: "Physical Training", slug: "physical-training" },
+  subscriptions: { label: "Subscriptions", slug: "subscriptions" },
+  storage: { label: "Storage", slug: "storage" },
+  installations: { label: "Installations", slug: "installations" },
+  tlocations: { label: "Training Locations", slug: "training-locations" },
+  classrooms: { label: "Classrooms", slug: "classrooms" },
+  settings: { label: "Settings", slug: "settings" },
+};
+
+export default function Admin({ section = null }) {
   const { accessToken } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = React.useState("pending");
+  // The active section is driven by the route (see SECTION_META + main.jsx).
+  // On the bare /admin hub, `section` is null so no content card renders — the
+  // page just shows the launcher grid + the section directory.
+  const tab = section;
+  const isHub = !section;
+
+  // Open a section page (scrolls to top, see effect below).
+  const openSection = React.useCallback(
+    (key) => navigate(`/admin/${SECTION_META[key]?.slug || key}`),
+    [navigate],
+  );
+
+  // Scroll to the top whenever the section changes so the content is in view
+  // instead of buried at the bottom of the page.
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [section]);
   const [users, setUsers] = React.useState([]);
   const [purchases, setPurchases] = React.useState([]);
   const [q, setQ] = React.useState("");
@@ -1290,6 +1320,13 @@ export default function Admin() {
     }
   }
 
+  // Load the storage overview when the Storage section opens (previously this
+  // fired from the tab button's onClick).
+  React.useEffect(() => {
+    if (tab === "storage" && accessToken) loadStorageOverview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, accessToken]);
+
   async function updateExtraSlots(email, productKey, slots) {
     try {
       await apiAuthed("/admin/users/entitlement", {
@@ -1947,11 +1984,25 @@ export default function Admin() {
     <div className="space-y-6">
       <AdminPageHeader
         icon={FiShield}
-        title="Admin Hub"
-        subtitle="Purchases, subscriptions, installations, trainings & settings."
+        title={isHub ? "Admin Hub" : SECTION_META[section]?.label || "Admin Hub"}
+        subtitle={
+          isHub
+            ? "Purchases, subscriptions, installations, trainings & settings."
+            : "Admin Hub section"
+        }
       />
 
-      <AdminLauncher title="Jump to a tool" />
+      {isHub ? (
+        <AdminLauncher title="Jump to a tool" />
+      ) : (
+        <button
+          type="button"
+          onClick={() => navigate("/admin")}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-adlm-blue-700 hover:underline"
+        >
+          <span aria-hidden>←</span> Back to Admin Hub
+        </button>
+      )}
 
       <div className="card">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2021,7 +2072,7 @@ export default function Admin() {
         <div className="mt-4 border-b">
           <nav className="flex gap-6 flex-wrap">
             <button
-              onClick={() => setTab("pending")}
+              onClick={() => openSection("pending")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "pending"
                   ? "border-adlm-blue-700 text-adlm-blue-700"
@@ -2032,7 +2083,7 @@ export default function Admin() {
             </button>
 
             <button
-              onClick={() => setTab("active")}
+              onClick={() => openSection("active")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "active"
                   ? "border-adlm-blue-700 text-adlm-blue-700"
@@ -2043,7 +2094,7 @@ export default function Admin() {
             </button>
 
             <button
-              onClick={() => setTab("ptrainings")}
+              onClick={() => openSection("ptrainings")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "ptrainings"
                   ? "border-adlm-blue-700 text-adlm-blue-700"
@@ -2061,7 +2112,7 @@ export default function Admin() {
             </button>
 
             <button
-              onClick={() => setTab("subscriptions")}
+              onClick={() => openSection("subscriptions")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "subscriptions"
                   ? "border-adlm-blue-700 text-adlm-blue-700"
@@ -2073,7 +2124,7 @@ export default function Admin() {
             </button>
 
             <button
-              onClick={() => { setTab("storage"); loadStorageOverview(); }}
+              onClick={() => openSection("storage")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "storage"
                   ? "border-adlm-blue-700 text-adlm-blue-700"
@@ -2085,7 +2136,7 @@ export default function Admin() {
             </button>
 
             <button
-              onClick={() => setTab("installations")}
+              onClick={() => openSection("installations")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "installations"
                   ? "border-adlm-blue-700 text-adlm-blue-700"
@@ -2096,7 +2147,7 @@ export default function Admin() {
             </button>
 
             <button
-              onClick={() => setTab("tlocations")}
+              onClick={() => openSection("tlocations")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "tlocations"
                   ? "border-adlm-blue-700 text-adlm-blue-700"
@@ -2107,7 +2158,7 @@ export default function Admin() {
             </button>
 
             <button
-              onClick={() => setTab("classrooms")}
+              onClick={() => openSection("classrooms")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "classrooms"
                   ? "border-adlm-blue-700 text-adlm-blue-700"
@@ -2118,7 +2169,7 @@ export default function Admin() {
             </button>
 
             <button
-              onClick={() => setTab("settings")}
+              onClick={() => openSection("settings")}
               className={`py-2 -mb-px border-b-2 transition ${
                 tab === "settings"
                   ? "border-adlm-blue-700 text-adlm-blue-700"

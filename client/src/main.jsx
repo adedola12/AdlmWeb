@@ -306,6 +306,81 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
+      // Admin Hub sections — each opens as its own page instead of rendering
+      // inline at the bottom of /admin. Same <Admin /> component, driven by the
+      // `section` prop so all existing data-loading/effects keep working.
+      {
+        path: "admin/pending",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="pending" />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/active",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="active" />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/physical-training",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="ptrainings" />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/subscriptions",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="subscriptions" />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/storage",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="storage" />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/installations",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="installations" />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/training-locations",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="tlocations" />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/classrooms",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="classrooms" />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/settings",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="settings" />
+          </AdminRoute>
+        ),
+      },
       {
         path: "admin/courses",
         element: (
