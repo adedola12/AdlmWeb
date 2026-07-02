@@ -52,7 +52,9 @@ export async function applyEntitlementsFromPurchase(purchase) {
 
     const prev = map.get(productKey) || { months: 0, seats: 1 };
     map.set(productKey, {
-      months: Math.max(prev.months, months), // safe default for renewals
+      // Sum durations for duplicate lines of the same product — each line was
+      // separately priced and paid (matches admin normalizeGrants behavior).
+      months: prev.months + months,
       seats: Math.max(prev.seats, seats),
     });
   }

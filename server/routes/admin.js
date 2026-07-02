@@ -302,7 +302,7 @@ function addStorageSlotsToUser(userDoc, productKey, slots) {
   ent.extraProjectSlots = Math.max(Number(ent.extraProjectSlots || 0), 0) + add;
 }
 
-function normalizeGrants(grants, defaults = {}) {
+export function normalizeGrants(grants, defaults = {}) {
   const map = new Map();
 
   const defOrg = String(defaults.organizationName || "").trim();
@@ -362,7 +362,7 @@ function normalizeGrants(grants, defaults = {}) {
   }));
 }
 
-function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
+export function buildGrantsFromPurchase(purchase, overrideMonths = 0) {
   const grants = [];
 
   const purchaseOrgName = String(purchase?.organization?.name || "").trim();
@@ -546,7 +546,12 @@ router.post(
 
     const overrideMonths = Number(req.body?.months || 0);
 
-    const grants = buildGrantsFromPurchase(purchase, overrideMonths);
+    // Grant math must run on a lean (raw) copy: on hydrated docs, schema
+    // fields live on the prototype, so hasOwnProperty("periods") is always
+    // false and line durations are ignored. Lean also skips schema defaults,
+    // so legacy lines genuinely lack `periods` and take the legacy branch.
+    const purchaseRaw = await Purchase.findById(req.params.id).lean();
+    const grants = buildGrantsFromPurchase(purchaseRaw, overrideMonths);
 
     const storageToApply = (purchase.storageAddons || []).filter(
       (s) => s && !s.applied && Number(s.slots) > 0,
@@ -567,29 +572,63 @@ router.post(
       else staged.push(g);
     }
 
-    if (immediate.length) {
-      immediate.forEach((g) =>
-        addMonthsToEntitlement(user, g.productKey, g.months, g.seats, {
-          licenseType: g.licenseType,
-          organizationName: g.organizationName,
-        }),
-      );
-      await user.save();
-    }
+    const decidedBy = req.user?.email || "admin";
+    const decidedAt = new Date();
 
-    // Apply purchased project-storage slots to the user's entitlement(s).
-    if (storageToApply.length > 0) {
-      for (const s of storageToApply) {
-        addStorageSlotsToUser(user, s.productKey, s.slots);
-        s.applied = true;
-        s.appliedAt = new Date();
+    // Atomically claim the pending purchase so a concurrent approval (double
+    // click / second admin tab) can't double-apply course grants or storage
+    // slots.
+    const claim = await Purchase.findOneAndUpdate(
+      { _id: purchase._id, status: "pending" },
+      { $set: { status: "approved", decidedBy, decidedAt } },
+    );
+    if (!claim) return res.status(400).json({ error: "Purchase not pending" });
+
+    let userMutated = false;
+    try {
+      if (immediate.length) {
+        immediate.forEach((g) =>
+          addMonthsToEntitlement(user, g.productKey, g.months, g.seats, {
+            licenseType: g.licenseType,
+            organizationName: g.organizationName,
+          }),
+        );
+        await user.save();
+        userMutated = true;
       }
-      await user.save();
+
+      // Apply purchased project-storage slots to the user's entitlement(s).
+      if (storageToApply.length > 0) {
+        for (const s of storageToApply) {
+          addStorageSlotsToUser(user, s.productKey, s.slots);
+          s.applied = true;
+          s.appliedAt = new Date();
+        }
+        await user.save();
+        userMutated = true;
+      }
+    } catch (e) {
+      if (!userMutated) {
+        // Nothing was credited yet — release the claim so admin can retry.
+        await Purchase.updateOne(
+          { _id: purchase._id, status: "approved" },
+          {
+            $set: { status: "pending" },
+            $unset: { decidedBy: "", decidedAt: "" },
+          },
+        ).catch(() => {});
+      } else {
+        console.error(
+          `[admin approve] PARTIAL FAILURE on purchase ${purchase._id}: entitlements were credited but approval bookkeeping failed. Investigate before retrying.`,
+        );
+      }
+      throw e;
     }
 
     purchase.status = "approved";
-    purchase.decidedBy = req.user?.email || "admin";
-    purchase.decidedAt = new Date();
+    purchase.decidedBy = decidedBy;
+    purchase.decidedAt = decidedAt;
+    if (overrideMonths > 0) purchase.approvedMonths = overrideMonths;
 
     purchase.installation = purchase.installation || {};
     purchase.installation.anydeskUrl =
@@ -734,6 +773,13 @@ router.post(
     const p = await Purchase.findById(req.params.id);
     if (!p) return res.status(404).json({ error: "Purchase not found" });
 
+    // Only approved (i.e. payment-verified) purchases may activate
+    // entitlements — pending/rejected orders must go through approve first.
+    if (p.status !== "approved")
+      return res
+        .status(400)
+        .json({ error: `Purchase is ${p.status}, not approved` });
+
     p.installation = p.installation || {};
     const wasComplete = p.installation.status === "complete";
 
@@ -751,7 +797,10 @@ router.post(
     });
 
     if (grants.length === 0) {
-      grants = buildGrantsFromPurchase(p, 0);
+      // Rebuild from a lean copy — grant math needs raw own-properties
+      // (see comment in the approve handler).
+      const pRaw = await Purchase.findById(req.params.id).lean();
+      grants = buildGrantsFromPurchase(pRaw, 0);
       p.installation.entitlementGrants = grants;
     }
 
@@ -767,23 +816,69 @@ router.post(
       p.installation.entitlementsApplied !== true &&
       installGrants.length > 0
     ) {
-      const user = await User.findById(p.userId);
-      if (!user) return res.status(404).json({ error: "User not found" });
-
-      applyExpiryToUser(user);
-
-      installGrants.forEach((g) =>
-        addMonthsToEntitlement(user, g.productKey, Number(g.months), g.seats, {
-          licenseType: g.licenseType || purchaseLt,
-          organizationName: g.organizationName || purchaseOrgName,
-        }),
+      // Atomically claim the "not yet applied" state so concurrent completes
+      // (double click / two admin tabs) can't add the months twice.
+      const claim = await Purchase.findOneAndUpdate(
+        {
+          _id: p._id,
+          status: "approved",
+          "installation.entitlementsApplied": { $ne: true },
+        },
+        {
+          $set: {
+            "installation.entitlementsApplied": true,
+            "installation.entitlementsAppliedAt": new Date(),
+          },
+        },
       );
 
-      await user.save();
+      if (claim) {
+        const rollbackClaim = () =>
+          Purchase.updateOne(
+            { _id: p._id },
+            {
+              $set: {
+                "installation.entitlementsApplied": false,
+                "installation.entitlementsAppliedAt": null,
+              },
+            },
+          ).catch(() => {});
 
-      p.installation.entitlementsApplied = true;
-      p.installation.entitlementsAppliedAt = new Date();
-      p.installation.entitlementGrants = grants;
+        const user = await User.findById(p.userId);
+        if (!user) {
+          await rollbackClaim();
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        try {
+          applyExpiryToUser(user);
+
+          installGrants.forEach((g) =>
+            addMonthsToEntitlement(
+              user,
+              g.productKey,
+              Number(g.months),
+              g.seats,
+              {
+                licenseType: g.licenseType || purchaseLt,
+                organizationName: g.organizationName || purchaseOrgName,
+              },
+            ),
+          );
+
+          await user.save();
+        } catch (e) {
+          await rollbackClaim();
+          throw e;
+        }
+
+        p.installation.entitlementsApplied = true;
+        p.installation.entitlementsAppliedAt = new Date();
+        p.installation.entitlementGrants = grants;
+      } else {
+        // Another request already applied — reflect that, don't re-apply.
+        p.installation.entitlementsApplied = true;
+      }
     } else if (
       p.installation.entitlementsApplied !== true &&
       installGrants.length === 0
@@ -819,6 +914,11 @@ router.post(
     const p = await Purchase.findById(req.params.id);
     if (!p) return res.status(404).json({ error: "Purchase not found" });
 
+    if (p.status !== "approved")
+      return res
+        .status(400)
+        .json({ error: `Purchase is ${p.status}, not approved` });
+
     p.installation = p.installation || {};
     const currentStatus = p.installation.status || "none";
 
@@ -835,14 +935,11 @@ router.post(
     }
 
     if (currentStatus === "pending") {
-      p.installation.status = "complete";
-      p.installation.markedBy = req.user?.email || "admin";
-      p.installation.markedAt = new Date();
-      await p.save();
-      return res.json({
-        ok: true,
-        purchase: p,
-        message: "Installation marked complete.",
+      // Completing an install must apply entitlements — that logic (with its
+      // atomic double-apply guard) lives in /installations/:id/complete.
+      return res.status(400).json({
+        error:
+          "Use POST /admin/installations/:id/complete to mark a pending installation complete.",
       });
     }
 
@@ -872,6 +969,11 @@ router.post(
   asyncHandler(async (req, res) => {
     const p = await Purchase.findById(req.params.id);
     if (!p) return res.status(404).json({ error: "Purchase not found" });
+
+    if (p.status !== "approved")
+      return res
+        .status(400)
+        .json({ error: `Purchase is ${p.status}, not approved` });
 
     p.installation = p.installation || {};
     p.installation.status = "uninstalled";

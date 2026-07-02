@@ -144,11 +144,19 @@ router.post("/", requireAuth, async (req, res) => {
       .json({ error: "This product is not available for purchase yet." });
   }
 
+  // Clamp the user-supplied duration — this legacy flow carries no price, so
+  // the requested months feed straight into the grant on approval and must
+  // not be attacker-controlled beyond sane plan lengths.
+  const requestedMonths = Math.min(
+    Math.max(parseInt(months, 10) || 1, 1),
+    12,
+  );
+
   const p = await Purchase.create({
     userId: req.user._id,
     email: req.user.email,
     productKey,
-    requestedMonths: Number(months) || 1,
+    requestedMonths,
     status: "pending",
   });
 
@@ -444,29 +452,68 @@ router.get("/verify", async (req, res) => {
     const paidOk = data?.data?.status === "success";
     if (!paidOk) return res.json({ ok: false, status: data?.data?.status });
 
-    const purchase = await Purchase.findOneAndUpdate(
-      { paystackRef: reference, paid: { $ne: true } },
-      { $set: { paid: true, status: "approved" } },
-      { new: true },
-    );
-
-    if (!purchase) {
-      // Either not found or already paid — check which
-      const existing = await Purchase.findOne({ paystackRef: reference });
-      if (!existing)
-        return res.json({ ok: false, message: "Purchase not found" });
+    const existing = await Purchase.findOne({ paystackRef: reference });
+    if (!existing) return res.json({ ok: false, message: "Purchase not found" });
+    if (existing.paid) {
       // Already paid — return success idempotently
       return res.json({ ok: true, status: "success", purchaseId: existing._id });
     }
 
-    {
+    // The charge must cover the order in the order's currency — otherwise a
+    // small self-initialized charge on the same reference would activate a
+    // large order.
+    const expectedMinor = Math.round(Number(existing.totalAmount || 0) * 100);
+    const paidMinor = Number(data?.data?.amount || 0);
+    const paidCurrency = String(data?.data?.currency || "").toUpperCase();
+    if (paidCurrency !== existing.currency || paidMinor < expectedMinor) {
+      console.error(
+        `[purchase verify] amount/currency mismatch on ${reference}: paid ${paidMinor} ${paidCurrency}, expected ${expectedMinor} ${existing.currency}`,
+      );
+      return res
+        .status(400)
+        .json({ error: "Payment does not match the order amount" });
+    }
 
+    const purchase = await Purchase.findOneAndUpdate(
+      { paystackRef: reference, paid: { $ne: true } },
+      {
+        $set: {
+          paid: true,
+          status: "approved",
+          // Entitlements are credited right below — mark them applied so a
+          // later "mark installation complete" can't add the months again.
+          "installation.entitlementsApplied": true,
+          "installation.entitlementsAppliedAt": new Date(),
+        },
+      },
+      { new: true },
+    );
+
+    if (!purchase) {
+      // Raced with the webhook — it already credited. Idempotent success.
+      return res.json({ ok: true, status: "success", purchaseId: existing._id });
+    }
+
+    try {
       const { applyEntitlementsFromPurchase } =
         await import("../util/applyEntitlements.js");
       await applyEntitlementsFromPurchase(purchase);
 
       const { autoEnrollFromPurchase } = await import("../util/autoEnroll.js");
       await autoEnrollFromPurchase(purchase);
+    } catch (e) {
+      // Crediting failed — clear the applied flag so admin can finish it via
+      // the installation-complete flow. Payment itself stays recorded.
+      await Purchase.updateOne(
+        { _id: purchase._id },
+        {
+          $set: {
+            "installation.entitlementsApplied": false,
+            "installation.entitlementsAppliedAt": null,
+          },
+        },
+      ).catch(() => {});
+      throw e;
     }
 
     return res.json({ ok: true, status: "success", purchaseId: purchase._id });
