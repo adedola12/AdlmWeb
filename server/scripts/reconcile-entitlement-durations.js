@@ -8,8 +8,13 @@
 // and credits users with the months they paid for but never received.
 //
 // Usage:
-//   node scripts/reconcile-entitlement-durations.js          # dry run (default)
-//   node scripts/reconcile-entitlement-durations.js --apply  # write changes
+//   node scripts/reconcile-entitlement-durations.js             # dry run (default)
+//   node scripts/reconcile-entitlement-durations.js --apply     # write everything
+//   node scripts/reconcile-entitlement-durations.js --baseline  # write everything
+//       EXCEPT entitlement extensions — use when current customer expiry
+//       dates have been manually verified/corrected and must not change.
+//       Still restages pending grants, backfills paystack applied flags, and
+//       stamps purchases reconciled so a later --apply won't touch them.
 //
 // What it does per approved, line-based purchase (skips ones already marked
 // installation.durationReconciledAt):
@@ -37,7 +42,11 @@ import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import { buildGrantsFromPurchase } from "../routes/admin.js";
 
-const APPLY = process.argv.includes("--apply");
+const BASELINE = process.argv.includes("--baseline");
+const APPLY = process.argv.includes("--apply") && !BASELINE;
+// WRITE covers the non-destructive bookkeeping shared by both modes:
+// restaging pending grants, paystack backfills, reconciled stamps.
+const WRITE = APPLY || BASELINE;
 
 // Reproduce the buggy grant math: on hydrated docs hasOwnProperty("periods")
 // was false for every line, which is equivalent to the lines having no
@@ -100,7 +109,7 @@ async function run() {
         console.log(
           `[backfill] ${id} (${p.email}): paystack-credited, setting entitlementsApplied=true`,
         );
-        if (APPLY) {
+        if (WRITE) {
           await Purchase.collection.updateOne(
             { _id: p._id },
             {
@@ -170,7 +179,7 @@ async function run() {
         .map((g) => `${g.productKey}=${g.months}mo`)
         .join(", ");
       console.log(`[restage]  ${id} (${p.email}): staged grants → ${summary}`);
-      if (APPLY) {
+      if (WRITE) {
         await Purchase.collection.updateOne(
           { _id: p._id },
           {
@@ -200,7 +209,16 @@ async function run() {
       );
     }
 
-    if (positive.length) {
+    if (positive.length && BASELINE) {
+      // Current expiry dates were manually verified as correct — record the
+      // deltas for the log but leave user entitlements untouched.
+      for (const d of positive) {
+        console.log(
+          `[baseline] ${id} (${p.email}): ${d.productKey} delta +${d.delta}mo ` +
+            `NOT applied (current expiry verified manually)`,
+        );
+      }
+    } else if (positive.length) {
       const user = await User.findById(p.userId);
       if (!user) {
         console.log(`[SKIP]     ${id}: user ${p.userId} not found`);
@@ -242,7 +260,7 @@ async function run() {
       }
     }
 
-    if (APPLY && (storedNonCourseWrong || positive.length || deltas.length)) {
+    if (WRITE && (storedNonCourseWrong || positive.length || deltas.length)) {
       await Purchase.collection.updateOne(
         { _id: p._id },
         { $set: { "installation.durationReconciledAt": now } },
@@ -259,7 +277,12 @@ async function run() {
   }
 
   console.log("");
-  console.log(`Mode:                ${APPLY ? "APPLY (changes written)" : "DRY RUN (no changes written — pass --apply to write)"}`);
+  const mode = APPLY
+    ? "APPLY (changes written)"
+    : BASELINE
+      ? "BASELINE (restage/backfill/stamp written; entitlement expiries untouched)"
+      : "DRY RUN (no changes written — pass --apply or --baseline to write)";
+  console.log(`Mode:                ${mode}`);
   console.log(`Purchases scanned:   ${scanned}`);
   console.log(`Already reconciled:  ${skippedReconciled}`);
   console.log(`Paystack backfills:  ${paystackBackfills}`);
