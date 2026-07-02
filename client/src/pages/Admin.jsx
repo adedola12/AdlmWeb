@@ -3209,12 +3209,24 @@ export default function Admin({ section = null }) {
                                 : <span className="text-slate-400">3% default</span>}
                             </td>
                             <td className="py-3 pr-3">
-                              <a
-                                href={`/admin/products/${r.productKey}`}
+                              <button
+                                type="button"
                                 className="btn btn-sm text-xs"
+                                onClick={() =>
+                                  navigate(
+                                    r.productId
+                                      ? `/admin/products/${r.productId}/edit`
+                                      : "/admin/products",
+                                  )
+                                }
+                                title={
+                                  r.productId
+                                    ? "Edit this product (set its storage slot price)"
+                                    : "Open products list"
+                                }
                               >
                                 Edit product
-                              </a>
+                              </button>
                             </td>
                           </tr>
                         );

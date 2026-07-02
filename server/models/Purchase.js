@@ -77,6 +77,23 @@ const PhysicalTrainingSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Extra project-storage slots add-on. Priced in NGN (storageSlotPriceNGN per
+// block of `slotsPerBlock` slots). Applied to the target product's entitlement
+// (extraProjectSlots) when the purchase is approved.
+const StorageAddonSchema = new mongoose.Schema(
+  {
+    productKey: { type: String, trim: true, lowercase: true },
+    blocks: { type: Number, default: 1, min: 1 }, // number of slot blocks bought
+    slotsPerBlock: { type: Number, default: 10, min: 1 },
+    slots: { type: Number, default: 0, min: 0 }, // total = blocks * slotsPerBlock
+    unitPrice: { type: Number, default: 0 }, // price per block (order currency)
+    subtotal: { type: Number, default: 0 }, // blocks * unitPrice
+    applied: { type: Boolean, default: false },
+    appliedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const PurchaseSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -144,6 +161,7 @@ const PurchaseSchema = new mongoose.Schema(
     },
 
     physicalTraining: { type: PhysicalTrainingSchema, default: undefined },
+    storageAddon: { type: StorageAddonSchema, default: undefined },
 
     userConfirmedAt: { type: Date },
 

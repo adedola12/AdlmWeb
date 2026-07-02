@@ -279,6 +279,29 @@ function addMonthsToEntitlement(
   }
 }
 
+// Add purchased project-storage slots to the user's entitlement for a product.
+// If the user doesn't own the product yet, create a minimal inactive entitlement
+// carrying the slots so they aren't lost (they take effect once it's active).
+function addStorageSlotsToUser(userDoc, productKey, slots) {
+  const add = Math.max(Number(slots || 0), 0);
+  const key = String(productKey || "").trim();
+  if (!key || add <= 0) return;
+
+  userDoc.entitlements = userDoc.entitlements || [];
+  const ent = userDoc.entitlements.find((e) => e.productKey === key);
+  if (!ent) {
+    userDoc.entitlements.push({
+      productKey: key,
+      status: "inactive",
+      seats: 1,
+      devices: [],
+      extraProjectSlots: add,
+    });
+    return;
+  }
+  ent.extraProjectSlots = Math.max(Number(ent.extraProjectSlots || 0), 0) + add;
+}
+
 function normalizeGrants(grants, defaults = {}) {
   const map = new Map();
 
@@ -524,7 +547,13 @@ router.post(
     const overrideMonths = Number(req.body?.months || 0);
 
     const grants = buildGrantsFromPurchase(purchase, overrideMonths);
-    if (grants.length === 0)
+
+    const storageToApply =
+      !!purchase.storageAddon &&
+      !purchase.storageAddon.applied &&
+      Number(purchase.storageAddon.slots) > 0;
+
+    if (grants.length === 0 && !storageToApply)
       return res
         .status(400)
         .json({ error: "Nothing to approve for this purchase" });
@@ -547,6 +576,18 @@ router.post(
         }),
       );
       await user.save();
+    }
+
+    // Apply purchased project-storage slots to the user's entitlement.
+    if (storageToApply) {
+      addStorageSlotsToUser(
+        user,
+        purchase.storageAddon.productKey,
+        purchase.storageAddon.slots,
+      );
+      await user.save();
+      purchase.storageAddon.applied = true;
+      purchase.storageAddon.appliedAt = new Date();
     }
 
     purchase.status = "approved";
@@ -1264,6 +1305,11 @@ router.get(
     const slotPriceByKey = Object.fromEntries(
       products.map((p) => [p.key, p.storageSlotPriceNGN ?? null]),
     );
+    // key → product _id, so the admin UI can deep-link to the product editor
+    // (the edit route is keyed by _id, not the product key).
+    const productIdByKey = Object.fromEntries(
+      products.map((p) => [p.key, String(p._id)]),
+    );
 
     // Build rows
     const rows = [];
@@ -1290,6 +1336,7 @@ router.get(
           email: u.email,
           username: u.username || "",
           productKey: e.productKey,
+          productId: productIdByKey[e.productKey] || null,
           licenseType: e.licenseType || "personal",
           used,
           limit,

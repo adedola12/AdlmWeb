@@ -205,6 +205,23 @@ export default function Purchase() {
 
   }, [qs]);
 
+  // Storage-slots add-on, prefilled from
+  // ?addon=storage-slots&for=KEY&slots=10&price=NGN (from ProductDetail/StorageBar).
+  const [storageAddon, setStorageAddon] = React.useState(null);
+  React.useEffect(() => {
+    if ((qs.get("addon") || "") !== "storage-slots") return;
+    const forKey = (qs.get("for") || "").trim();
+    if (!forKey) return;
+    setStorageAddon((s) => s || { productKey: forKey, blocks: 1 });
+    setCurrency("NGN"); // storage is billed in NGN only
+  }, [qs]);
+
+  // Keep the order in NGN while a storage add-on is in the cart (it has no USD
+  // price), so the mixed-currency total can never be wrong.
+  React.useEffect(() => {
+    if (storageAddon && currency !== "NGN") setCurrency("NGN");
+  }, [storageAddon, currency]);
+
   function updateItem(key, patch) {
     setCart((c) => {
       const cur = c[key] || { periods: 1, seats: 1, firstTime: false };
@@ -403,7 +420,35 @@ export default function Purchase() {
       0,
     ),
   );
-  const total = money(productsTotal + trainingCost + bimInstallCost);
+
+  // ── Storage slots add-on cost (NGN only) ──
+  const storageProduct = storageAddon
+    ? products.find((p) => getProductKey(p) === storageAddon.productKey)
+    : null;
+  // Per-block price: explicit ?price=, else product's storageSlotPriceNGN, else
+  // 3% of the active NGN price (mirrors the product page's fallback exactly).
+  function deriveStorageUnitNGN(p) {
+    if (!p) return 0;
+    const configured = Number(p?.storageSlotPriceNGN);
+    if (Number.isFinite(configured) && configured > 0) return Math.round(configured);
+    const pr = p?.price || {};
+    const yearly = Number(pr.discountedYearlyNGN || pr.yearlyNGN || 0);
+    const monthly = Number(pr.discountedMonthlyNGN || pr.monthlyNGN || 0);
+    const activeNGN = p.billingInterval === "yearly" ? yearly : monthly;
+    return Math.max(Math.round(activeNGN * 0.03), 0);
+  }
+  const storageUnit = storageAddon ? deriveStorageUnitNGN(storageProduct) : 0;
+  const storageBlocks = storageAddon
+    ? Math.max(parseInt(storageAddon.blocks || 1, 10) || 1, 1)
+    : 0;
+  const storageSlots = storageBlocks * 10;
+  // Only counts while the order is NGN (it's forced to NGN when present).
+  const storageCost =
+    storageAddon && currency === "NGN" ? money(storageBlocks * storageUnit) : 0;
+
+  const total = money(
+    productsTotal + trainingCost + bimInstallCost + storageCost,
+  );
 
   const subtotalAfterDiscount = money(Math.max(total - Number(discount || 0), 0));
   const vatAmount =
@@ -517,7 +562,7 @@ export default function Purchase() {
   }, [licenseType]);
 
   async function createPendingPurchaseAndShowModal() {
-    if (!chosen.length) return;
+    if (!chosen.length && !storageAddon) return;
 
     setSubmitting(true);
     setMsg("");
@@ -559,6 +604,15 @@ export default function Purchase() {
         licenseType,
         organization: licenseType === "organization" ? org : null,
       };
+
+      // Storage add-on is NGN-only; force the order currency to match.
+      if (storageAddon && storageUnit > 0) {
+        payload.currency = "NGN";
+        payload.storageAddon = {
+          productKey: storageAddon.productKey,
+          blocks: storageBlocks,
+        };
+      }
 
       // Include physical training if org + selected
       if (
@@ -847,6 +901,114 @@ export default function Purchase() {
         </div>
       )}
 
+      {/* Project storage slots add-on — optional, available on every purchase */}
+      <div className="card ring-1 ring-adlm-blue-700/20">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={!!storageAddon}
+            onChange={(e) => {
+              if (e.target.checked) {
+                const k =
+                  (chosen[0] && getProductKey(chosen[0])) ||
+                  (products[0] && getProductKey(products[0])) ||
+                  "";
+                setStorageAddon({ productKey: k, blocks: 1 });
+                setCurrency("NGN");
+              } else {
+                setStorageAddon(null);
+              }
+            }}
+          />
+          Add extra project storage slots
+        </label>
+        <div className="text-xs text-slate-500 mt-1">
+          Buy additional project storage for a product. Each block adds 10 slots.
+          Billed in ₦ (NGN).
+        </div>
+
+        {storageAddon && (
+          <div className="mt-3 flex flex-wrap items-end gap-5">
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Product</div>
+              <select
+                className="input"
+                value={storageAddon.productKey}
+                onChange={(e) =>
+                  setStorageAddon((s) => (s ? { ...s, productKey: e.target.value } : s))
+                }
+              >
+                {products.map((p) => {
+                  const k = getProductKey(p);
+                  return (
+                    <option key={k} value={k}>
+                      {p.name || k}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Blocks (10 slots each)</div>
+              <div className="inline-flex items-center gap-2">
+                <button
+                  type="button"
+                  className="w-9 h-9 rounded-lg border border-slate-300 dark:border-adlm-dark-border grid place-items-center text-lg leading-none hover:bg-slate-50"
+                  aria-label="Decrease"
+                  onClick={() =>
+                    setStorageAddon((s) =>
+                      s ? { ...s, blocks: Math.max((parseInt(s.blocks || 1, 10) || 1) - 1, 1) } : s,
+                    )
+                  }
+                >
+                  −
+                </button>
+                <input
+                  className="input w-16 text-center"
+                  inputMode="numeric"
+                  value={storageBlocks}
+                  onChange={(e) =>
+                    setStorageAddon((s) =>
+                      s ? { ...s, blocks: Math.max(parseInt(e.target.value || "1", 10) || 1, 1) } : s,
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  className="w-9 h-9 rounded-lg border border-slate-300 dark:border-adlm-dark-border grid place-items-center text-lg leading-none hover:bg-slate-50"
+                  aria-label="Increase"
+                  onClick={() =>
+                    setStorageAddon((s) =>
+                      s ? { ...s, blocks: (parseInt(s.blocks || 1, 10) || 1) + 1 } : s,
+                    )
+                  }
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Total slots</div>
+              <div className="font-semibold text-lg">{storageSlots}</div>
+            </div>
+
+            <div className="ml-auto text-right">
+              <div className="text-xs text-slate-500 mb-1">Price</div>
+              <div className="font-semibold text-lg">{fmt(storageCost, "NGN")}</div>
+            </div>
+
+            {storageUnit <= 0 && (
+              <div className="w-full text-xs text-rose-600">
+                Storage pricing isn't configured for this product yet — please
+                contact support.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Products (vertical list) · Configurator (middle) · Summary (right) */}
       <div className="grid lg:grid-cols-[260px_1fr_340px] gap-5 items-start">
         {/* LEFT — vertical product list */}
@@ -1079,7 +1241,7 @@ export default function Purchase() {
           <div className="card">
             <h2 className="font-semibold mb-2">Summary</h2>
 
-            {chosen.length === 0 ? (
+            {chosen.length === 0 && !storageAddon ? (
               <div className="text-sm text-slate-600 dark:text-adlm-dark-muted">
                 No items yet. Pick a product and tap <b>Add to order</b>.
               </div>
@@ -1144,6 +1306,23 @@ export default function Purchase() {
                   </div>
                 )}
 
+                {/* Storage slots line in summary */}
+                {storageAddon && storageUnit > 0 && (
+                  <div className="mt-3 space-y-2 text-sm border-t pt-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate">
+                          Project storage — {storageSlots} slots
+                        </div>
+                        <div className="text-xs text-slate-500 truncate">
+                          {storageProduct?.name || storageAddon.productKey}
+                        </div>
+                      </div>
+                      <div className="font-medium">{fmt(storageCost, "NGN")}</div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Coupon */}
                 <div className="mt-4 border-t pt-4">
                   <div className="text-sm font-medium mb-2">Discount coupon</div>
@@ -1195,7 +1374,7 @@ export default function Purchase() {
                 <button
                   className="btn w-full mt-4"
                   onClick={createPendingPurchaseAndShowModal}
-                  disabled={!chosen.length || submitting}
+                  disabled={(!chosen.length && !storageAddon) || submitting}
                 >
                   {submitting ? "Processing…" : "Pay"}
                 </button>
