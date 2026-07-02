@@ -235,7 +235,12 @@ router.post("/cart", requireAuth, async (req, res) => {
           error: "Organization licences require a minimum of 2 users.",
         });
       }
-      const periods = Math.max(parseInt(i.periods ?? 1, 10) || 1, 1);
+      let periods = Math.max(parseInt(i.periods ?? 1, 10) || 1, 1);
+      // Yearly-billed products (courses) are capped at one year. Buyers pick
+      // durations in months, so a client sending 12 here means "12 months" —
+      // without this clamp it would be charged as 12 yearly periods (12×
+      // the yearly price) and granted 144 months.
+      if (p.billingInterval === "yearly") periods = 1;
       const firstTime = !!i.firstTime;
 
       const eff = getEffectivePrices(p, currency, fx);

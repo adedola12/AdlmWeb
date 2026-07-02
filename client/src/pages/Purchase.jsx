@@ -228,12 +228,23 @@ export default function Purchase() {
     if (anyStorageInCart && currency !== "NGN") setCurrency("NGN");
   }, [anyStorageInCart, currency]);
 
+  const productByKey = (key) =>
+    products.find((x) => getProductKey(x) === key);
+
+  // Yearly-billed products (courses) are capped at one year — the duration a
+  // buyer picks means months, so 12 = 1 year and any value collapses to a
+  // single yearly period. The server enforces the same rule.
+  function clampPeriodsFor(p, n) {
+    const v = Math.max(parseInt(n || 1, 10) || 1, 1);
+    return p?.billingInterval === "yearly" ? 1 : v;
+  }
+
   function updateItem(key, patch) {
     setCart((c) => {
       const cur = c[key] || { periods: 1, seats: 1, firstTime: false };
       const next = { ...cur, ...patch };
 
-      next.periods = Math.max(parseInt(next.periods || 1, 10), 1);
+      next.periods = clampPeriodsFor(productByKey(key), next.periods);
       next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
 
       if (licenseType !== "organization") next.seats = 1;
@@ -307,7 +318,7 @@ export default function Purchase() {
     setCart((c) => ({
       ...c,
       [activeKey]: {
-        periods: Math.max(parseInt(draft.periods || 1, 10), 1),
+        periods: clampPeriodsFor(productByKey(activeKey), draft.periods),
         seats:
           licenseType === "organization"
             ? Math.max(parseInt(draft.seats || 2, 10), 2)
@@ -346,7 +357,7 @@ export default function Purchase() {
     if (!entry) return { recurring: 0, install: 0, total: 0 };
 
     const prices = getPrices(p);
-    const periods = Math.max(parseInt(entry.periods || 1, 10), 1);
+    const periods = clampPeriodsFor(p, entry.periods);
     const seats =
       licenseType === "organization"
         ? Math.max(parseInt(entry.seats || 1, 10), 1)
@@ -506,7 +517,7 @@ export default function Purchase() {
   React.useEffect(() => {
     const items = Object.entries(cart).map(([productKey, entry]) => ({
       productKey,
-      periods: Math.max(parseInt(entry?.periods || 1, 10), 1),
+      periods: clampPeriodsFor(productByKey(productKey), entry?.periods),
       seats:
         licenseType === "organization"
           ? Math.max(parseInt(entry?.seats || 1, 10), 1)
@@ -603,7 +614,7 @@ export default function Purchase() {
             licenseType === "organization"
               ? Math.max(parseInt(entry.seats || 1, 10), 1)
               : 1,
-          periods: Math.max(parseInt(entry.periods || 1, 10), 1),
+          periods: clampPeriodsFor(p, entry.periods),
           firstTime: !!entry.firstTime,
           // Per-product project-storage blocks (server prices; NGN only).
           storageBlocks: storageBlocksOf(entry),
@@ -989,7 +1000,7 @@ export default function Purchase() {
             const key = getProductKey(p);
             const prices = getPrices(p);
             const isYearly = p.billingInterval === "yearly";
-            const presets = isYearly ? [1, 2, 3] : [1, 6, 12];
+            const presets = [1, 6, 12];
             const unitWord = isYearly ? "year" : "month";
             const calc = lineCalc(p, draft);
             const inCart = !!cart[key];
@@ -1029,37 +1040,50 @@ export default function Purchase() {
                   {/* Duration */}
                   <div>
                     <div className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
-                      Duration ({isYearly ? "years" : "months"})
+                      Duration{isYearly ? "" : " (months)"}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      {presets.map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => patchDraft({ periods: n })}
-                          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ring-1 transition ${
-                            Number(draft.periods) === n
-                              ? "bg-adlm-blue-700 text-white ring-adlm-blue-700"
-                              : "ring-slate-200 dark:ring-adlm-dark-border hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
-                          }`}
-                        >
-                          {n} {isYearly ? (n > 1 ? "yrs" : "yr") : "mo"}
-                        </button>
-                      ))}
-                      <div className="inline-flex items-center rounded-lg ring-1 ring-slate-200 dark:ring-adlm-dark-border overflow-hidden">
-                        <button type="button" className={stepClass} onClick={() => patchDraft({ periods: Number(draft.periods || 1) - 1 })} aria-label="Decrease">−</button>
-                        <input
-                          type="number"
-                          min="1"
-                          value={draft.periods}
-                          onChange={(e) => patchDraft({ periods: e.target.value })}
-                          className="w-12 text-center bg-transparent outline-none py-2"
-                        />
-                        <button type="button" className={stepClass} onClick={() => patchDraft({ periods: Number(draft.periods || 1) + 1 })} aria-label="Increase">+</button>
-                      </div>
-                    </div>
-                    {!isYearly && (
-                      <p className="text-xs text-slate-500">Tip: 6 and 12 months unlock better pricing.</p>
+                    {isYearly ? (
+                      <>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="px-3.5 py-1.5 rounded-lg text-sm font-medium ring-1 bg-adlm-blue-700 text-white ring-adlm-blue-700">
+                            1 year
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          Course access runs for one year (12 months).
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          {presets.map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => patchDraft({ periods: n })}
+                              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ring-1 transition ${
+                                Number(draft.periods) === n
+                                  ? "bg-adlm-blue-700 text-white ring-adlm-blue-700"
+                                  : "ring-slate-200 dark:ring-adlm-dark-border hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
+                              }`}
+                            >
+                              {n} mo
+                            </button>
+                          ))}
+                          <div className="inline-flex items-center rounded-lg ring-1 ring-slate-200 dark:ring-adlm-dark-border overflow-hidden">
+                            <button type="button" className={stepClass} onClick={() => patchDraft({ periods: Number(draft.periods || 1) - 1 })} aria-label="Decrease">−</button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={draft.periods}
+                              onChange={(e) => patchDraft({ periods: e.target.value })}
+                              className="w-12 text-center bg-transparent outline-none py-2"
+                            />
+                            <button type="button" className={stepClass} onClick={() => patchDraft({ periods: Number(draft.periods || 1) + 1 })} aria-label="Increase">+</button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-500">Tip: 6 and 12 months unlock better pricing.</p>
+                      </>
                     )}
                   </div>
 
