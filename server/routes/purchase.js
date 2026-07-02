@@ -192,21 +192,13 @@ router.post("/cart", requireAuth, async (req, res) => {
       };
     }
 
-    // Storage-slots add-on can be bought on its own (no product subscription
-    // line), so the "items required" guards are relaxed when one is present.
-    const storageAddonInput = req.body?.storageAddon || null;
-
-    if (!items.length && !storageAddonInput) {
-      return res.status(400).json({ error: "items required" });
-    }
+    if (!items.length) return res.status(400).json({ error: "items required" });
     if (!["NGN", "USD"].includes(currency)) {
       return res.status(400).json({ error: "currency must be NGN or USD" });
     }
 
     const keys = [...new Set(items.map((i) => i.productKey).filter(Boolean))];
-    if (!keys.length && !storageAddonInput) {
-      return res.status(400).json({ error: "Invalid items" });
-    }
+    if (!keys.length) return res.status(400).json({ error: "Invalid items" });
 
     const products = await Product.find({
       key: { $in: keys },
@@ -218,6 +210,8 @@ router.post("/cart", requireAuth, async (req, res) => {
     const fx = await getFxRate();
 
     const lines = [];
+    const storageAddons = []; // per-product project-storage slots (NGN only)
+    const isNGN = currency === "NGN";
     let total = 0;
 
     for (const i of items) {
@@ -262,6 +256,33 @@ router.post("/cart", requireAuth, async (req, res) => {
       });
 
       total += lineTotal;
+
+      // Optional project-storage slots for this product (NGN only). Priced
+      // authoritatively: storageSlotPriceNGN per 10-slot block, else 3% of the
+      // active NGN price (mirrors the product page's displayed price).
+      const storageBlocks = Math.max(parseInt(i.storageBlocks ?? 0, 10) || 0, 0);
+      if (storageBlocks > 0 && isNGN) {
+        const configured = Number(p.storageSlotPriceNGN);
+        const activeNGN = p.billingInterval === "yearly" ? eff.yearly : eff.monthly;
+        const unitPrice =
+          Number.isFinite(configured) && configured > 0
+            ? Math.round(configured)
+            : Math.max(Math.round(Number(activeNGN || 0) * 0.03), 0);
+
+        if (unitPrice > 0) {
+          const storageSubtotal = Math.round(unitPrice * storageBlocks);
+          storageAddons.push({
+            productKey: p.key,
+            blocks: storageBlocks,
+            slotsPerBlock: 10,
+            slots: storageBlocks * 10,
+            unitPrice,
+            subtotal: storageSubtotal,
+            applied: false,
+          });
+          total += storageSubtotal;
+        }
+      }
     }
 
     total = currency === "USD" ? round2(total) : Math.max(Math.round(total), 0);
@@ -323,67 +344,6 @@ router.post("/cart", requireAuth, async (req, res) => {
         currency === "USD" ? round2(total) : Math.max(Math.round(total), 0);
     }
 
-    // ── Project storage slots add-on (NGN only) ──
-    // Like physical training, this is added after the product subtotal/discount
-    // and is not coupon-discounted. Priced authoritatively on the server.
-    let storageAddon = undefined;
-    if (storageAddonInput) {
-      if (currency !== "NGN") {
-        return res.status(400).json({
-          error: "Storage slots can only be purchased in NGN.",
-          code: "STORAGE_NGN_ONLY",
-        });
-      }
-
-      const sKey = String(storageAddonInput.productKey || "")
-        .trim()
-        .toLowerCase();
-      if (!sKey) {
-        return res.status(400).json({ error: "storageAddon.productKey required" });
-      }
-
-      const sProduct =
-        byKey[sKey] ||
-        (await Product.findOne({ key: sKey, isPublished: true }).lean());
-      if (!sProduct) {
-        return res.status(400).json({ error: `Invalid product: ${sKey}` });
-      }
-
-      const slotsPerBlock = 10;
-      const blocks = Math.max(parseInt(storageAddonInput.blocks ?? 1, 10) || 1, 1);
-
-      // Admin-set price per block, else 3% of the active NGN price (mirrors the
-      // product page's fallback so the displayed and charged prices match).
-      const sEff = getEffectivePrices(sProduct, "NGN", fx);
-      const activeNGN =
-        sProduct.billingInterval === "yearly" ? sEff.yearly : sEff.monthly;
-      const configured = Number(sProduct.storageSlotPriceNGN);
-      const unitPrice =
-        Number.isFinite(configured) && configured > 0
-          ? Math.round(configured)
-          : Math.max(Math.round(Number(activeNGN || 0) * 0.03), 0);
-
-      if (unitPrice <= 0) {
-        return res.status(400).json({
-          error: "Storage pricing is not configured for this product.",
-        });
-      }
-
-      const subtotal = Math.round(unitPrice * blocks);
-      storageAddon = {
-        productKey: sKey,
-        blocks,
-        slotsPerBlock,
-        slots: blocks * slotsPerBlock,
-        unitPrice,
-        subtotal,
-        applied: false,
-      };
-
-      total += subtotal;
-      total = Math.max(Math.round(total), 0);
-    }
-
     const subtotalAfterDiscount =
       currency === "USD"
         ? Math.max(round2(total - discount), 0)
@@ -422,7 +382,7 @@ router.post("/cart", requireAuth, async (req, res) => {
 
       lines,
       physicalTraining,
-      storageAddon,
+      storageAddons,
       status: "pending",
 
       coupon: couponRes.coupon

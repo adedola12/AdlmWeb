@@ -161,7 +161,7 @@ const PurchaseSchema = new mongoose.Schema(
     },
 
     physicalTraining: { type: PhysicalTrainingSchema, default: undefined },
-    storageAddon: { type: StorageAddonSchema, default: undefined },
+    storageAddons: { type: [StorageAddonSchema], default: [] },
 
     userConfirmedAt: { type: Date },
 

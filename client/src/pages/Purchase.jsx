@@ -82,7 +82,7 @@ export default function Purchase() {
   // Master-detail config: which product is open in the middle panel, plus a
   // local draft the user edits before clicking the 3D "Add to order" button.
   const [activeKey, setActiveKey] = React.useState(null);
-  const [draft, setDraft] = React.useState({ periods: 1, seats: 1, firstTime: false });
+  const [draft, setDraft] = React.useState({ periods: 1, seats: 1, firstTime: false, storageBlocks: 0 });
   const configRef = React.useRef(null);
   const summaryRef = React.useRef(null);
 
@@ -205,22 +205,28 @@ export default function Purchase() {
 
   }, [qs]);
 
-  // Storage-slots add-on, prefilled from
-  // ?addon=storage-slots&for=KEY&slots=10&price=NGN (from ProductDetail/StorageBar).
-  const [storageAddon, setStorageAddon] = React.useState(null);
+  // Deep link ?addon=storage-slots&for=KEY (from ProductDetail/StorageBar):
+  // add that product to the order with 1 storage block pre-selected, in NGN.
   React.useEffect(() => {
     if ((qs.get("addon") || "") !== "storage-slots") return;
     const forKey = (qs.get("for") || "").trim();
     if (!forKey) return;
-    setStorageAddon((s) => s || { productKey: forKey, blocks: 1 });
     setCurrency("NGN"); // storage is billed in NGN only
+    setCart((c) => {
+      const cur = c[forKey] || { periods: 1, seats: 1, firstTime: false };
+      if (cur.storageBlocks) return c; // already set — don't clobber
+      return { ...c, [forKey]: { ...cur, storageBlocks: 1 } };
+    });
   }, [qs]);
 
-  // Keep the order in NGN while a storage add-on is in the cart (it has no USD
-  // price), so the mixed-currency total can never be wrong.
+  // Storage is NGN-only: while any item carries storage blocks, keep the order
+  // in NGN so the total can never mix currencies.
+  const anyStorageInCart = Object.values(cart).some(
+    (e) => (parseInt(e?.storageBlocks || 0, 10) || 0) > 0,
+  );
   React.useEffect(() => {
-    if (storageAddon && currency !== "NGN") setCurrency("NGN");
-  }, [storageAddon, currency]);
+    if (anyStorageInCart && currency !== "NGN") setCurrency("NGN");
+  }, [anyStorageInCart, currency]);
 
   function updateItem(key, patch) {
     setCart((c) => {
@@ -277,8 +283,8 @@ export default function Purchase() {
     const e = cart[key];
     setDraft(
       e
-        ? { periods: e.periods, seats: e.seats, firstTime: !!e.firstTime }
-        : { periods: 1, seats: 1, firstTime: false },
+        ? { periods: e.periods, seats: e.seats, firstTime: !!e.firstTime, storageBlocks: e.storageBlocks || 0 }
+        : { periods: 1, seats: 1, firstTime: false, storageBlocks: 0 },
     );
     smoothScrollTo(configRef);
   }
@@ -307,6 +313,7 @@ export default function Purchase() {
             ? Math.max(parseInt(draft.seats || 2, 10), 2)
             : 1,
         firstTime: !!draft.firstTime,
+        storageBlocks: Math.max(parseInt(draft.storageBlocks || 0, 10) || 0, 0),
       },
     }));
     smoothScrollTo(summaryRef);
@@ -421,12 +428,9 @@ export default function Purchase() {
     ),
   );
 
-  // ── Storage slots add-on cost (NGN only) ──
-  const storageProduct = storageAddon
-    ? products.find((p) => getProductKey(p) === storageAddon.productKey)
-    : null;
-  // Per-block price: explicit ?price=, else product's storageSlotPriceNGN, else
-  // 3% of the active NGN price (mirrors the product page's fallback exactly).
+  // ── Per-product project-storage slots (NGN only) ──
+  // Per-block price: product's storageSlotPriceNGN, else 3% of the active NGN
+  // price (mirrors the product page's fallback exactly).
   function deriveStorageUnitNGN(p) {
     if (!p) return 0;
     const configured = Number(p?.storageSlotPriceNGN);
@@ -437,17 +441,24 @@ export default function Purchase() {
     const activeNGN = p.billingInterval === "yearly" ? yearly : monthly;
     return Math.max(Math.round(activeNGN * 0.03), 0);
   }
-  const storageUnit = storageAddon ? deriveStorageUnitNGN(storageProduct) : 0;
-  const storageBlocks = storageAddon
-    ? Math.max(parseInt(storageAddon.blocks || 1, 10) || 1, 1)
-    : 0;
-  const storageSlots = storageBlocks * 10;
-  // Only counts while the order is NGN (it's forced to NGN when present).
-  const storageCost =
-    storageAddon && currency === "NGN" ? money(storageBlocks * storageUnit) : 0;
+  // Storage cost for a cart entry (NGN only — hidden/ignored for USD orders).
+  function storageBlocksOf(entry) {
+    return Math.max(parseInt(entry?.storageBlocks || 0, 10) || 0, 0);
+  }
+  function storageCostForEntry(p, entry) {
+    const blocks = storageBlocksOf(entry);
+    if (blocks <= 0 || currency !== "NGN") return 0;
+    return money(blocks * deriveStorageUnitNGN(p));
+  }
+  const storageTotal = money(
+    chosen.reduce(
+      (sum, p) => sum + storageCostForEntry(p, cart[getProductKey(p)]),
+      0,
+    ),
+  );
 
   const total = money(
-    productsTotal + trainingCost + bimInstallCost + storageCost,
+    productsTotal + trainingCost + bimInstallCost + storageTotal,
   );
 
   const subtotalAfterDiscount = money(Math.max(total - Number(discount || 0), 0));
@@ -562,7 +573,7 @@ export default function Purchase() {
   }, [licenseType]);
 
   async function createPendingPurchaseAndShowModal() {
-    if (!chosen.length && !storageAddon) return;
+    if (!chosen.length) return;
 
     setSubmitting(true);
     setMsg("");
@@ -594,25 +605,19 @@ export default function Purchase() {
               : 1,
           periods: Math.max(parseInt(entry.periods || 1, 10), 1),
           firstTime: !!entry.firstTime,
+          // Per-product project-storage blocks (server prices; NGN only).
+          storageBlocks: storageBlocksOf(entry),
         };
       });
 
       const payload = {
-        currency,
+        // Storage is NGN-only, so an order carrying storage is forced to NGN.
+        currency: anyStorageInCart ? "NGN" : currency,
         items,
         couponCode: couponCode.trim(),
         licenseType,
         organization: licenseType === "organization" ? org : null,
       };
-
-      // Storage add-on is NGN-only; force the order currency to match.
-      if (storageAddon && storageUnit > 0) {
-        payload.currency = "NGN";
-        payload.storageAddon = {
-          productKey: storageAddon.productKey,
-          blocks: storageBlocks,
-        };
-      }
 
       // Include physical training if org + selected
       if (
@@ -901,114 +906,6 @@ export default function Purchase() {
         </div>
       )}
 
-      {/* Project storage slots add-on — optional, available on every purchase */}
-      <div className="card ring-1 ring-adlm-blue-700/20">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={!!storageAddon}
-            onChange={(e) => {
-              if (e.target.checked) {
-                const k =
-                  (chosen[0] && getProductKey(chosen[0])) ||
-                  (products[0] && getProductKey(products[0])) ||
-                  "";
-                setStorageAddon({ productKey: k, blocks: 1 });
-                setCurrency("NGN");
-              } else {
-                setStorageAddon(null);
-              }
-            }}
-          />
-          Add extra project storage slots
-        </label>
-        <div className="text-xs text-slate-500 mt-1">
-          Buy additional project storage for a product. Each block adds 10 slots.
-          Billed in ₦ (NGN).
-        </div>
-
-        {storageAddon && (
-          <div className="mt-3 flex flex-wrap items-end gap-5">
-            <div>
-              <div className="text-xs text-slate-500 mb-1">Product</div>
-              <select
-                className="input"
-                value={storageAddon.productKey}
-                onChange={(e) =>
-                  setStorageAddon((s) => (s ? { ...s, productKey: e.target.value } : s))
-                }
-              >
-                {products.map((p) => {
-                  const k = getProductKey(p);
-                  return (
-                    <option key={k} value={k}>
-                      {p.name || k}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div>
-              <div className="text-xs text-slate-500 mb-1">Blocks (10 slots each)</div>
-              <div className="inline-flex items-center gap-2">
-                <button
-                  type="button"
-                  className="w-9 h-9 rounded-lg border border-slate-300 dark:border-adlm-dark-border grid place-items-center text-lg leading-none hover:bg-slate-50"
-                  aria-label="Decrease"
-                  onClick={() =>
-                    setStorageAddon((s) =>
-                      s ? { ...s, blocks: Math.max((parseInt(s.blocks || 1, 10) || 1) - 1, 1) } : s,
-                    )
-                  }
-                >
-                  −
-                </button>
-                <input
-                  className="input w-16 text-center"
-                  inputMode="numeric"
-                  value={storageBlocks}
-                  onChange={(e) =>
-                    setStorageAddon((s) =>
-                      s ? { ...s, blocks: Math.max(parseInt(e.target.value || "1", 10) || 1, 1) } : s,
-                    )
-                  }
-                />
-                <button
-                  type="button"
-                  className="w-9 h-9 rounded-lg border border-slate-300 dark:border-adlm-dark-border grid place-items-center text-lg leading-none hover:bg-slate-50"
-                  aria-label="Increase"
-                  onClick={() =>
-                    setStorageAddon((s) =>
-                      s ? { ...s, blocks: (parseInt(s.blocks || 1, 10) || 1) + 1 } : s,
-                    )
-                  }
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs text-slate-500 mb-1">Total slots</div>
-              <div className="font-semibold text-lg">{storageSlots}</div>
-            </div>
-
-            <div className="ml-auto text-right">
-              <div className="text-xs text-slate-500 mb-1">Price</div>
-              <div className="font-semibold text-lg">{fmt(storageCost, "NGN")}</div>
-            </div>
-
-            {storageUnit <= 0 && (
-              <div className="w-full text-xs text-rose-600">
-                Storage pricing isn't configured for this product yet — please
-                contact support.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Products (vertical list) · Configurator (middle) · Summary (right) */}
       <div className="grid lg:grid-cols-[260px_1fr_340px] gap-5 items-start">
         {/* LEFT — vertical product list */}
@@ -1098,6 +995,10 @@ export default function Purchase() {
             const inCart = !!cart[key];
             const stepClass =
               "px-3.5 py-2 text-lg leading-none hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition select-none";
+            const storageUnitP = deriveStorageUnitNGN(p);
+            const draftBlocks = Math.max(parseInt(draft.storageBlocks || 0, 10) || 0, 0);
+            const draftStorageCost =
+              currency === "NGN" ? money(draftBlocks * storageUnitP) : 0;
             return (
               <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth-lg overflow-hidden">
                 {/* header */}
@@ -1199,15 +1100,63 @@ export default function Purchase() {
                     </label>
                   )}
 
+                  {/* Project storage (NGN only) */}
+                  {currency === "NGN" && storageUnitP > 0 && (
+                    <div className="rounded-xl ring-1 ring-slate-200 dark:ring-adlm-dark-border p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm">
+                          <span className="font-medium text-slate-800 dark:text-white">
+                            Extra project storage
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            {fmt(storageUnitP, "NGN")} per block of 10 slots
+                          </span>
+                        </div>
+                        <div className="inline-flex items-center rounded-lg ring-1 ring-slate-200 dark:ring-adlm-dark-border overflow-hidden">
+                          <button
+                            type="button"
+                            className={stepClass}
+                            aria-label="Decrease storage"
+                            onClick={() => patchDraft({ storageBlocks: Math.max(draftBlocks - 1, 0) })}
+                          >
+                            −
+                          </button>
+                          <input
+                            className="w-14 text-center border-x border-slate-200 dark:border-adlm-dark-border py-2 bg-transparent"
+                            inputMode="numeric"
+                            value={draftBlocks}
+                            onChange={(e) =>
+                              patchDraft({ storageBlocks: Math.max(parseInt(e.target.value || "0", 10) || 0, 0) })
+                            }
+                          />
+                          <button
+                            type="button"
+                            className={stepClass}
+                            aria-label="Increase storage"
+                            onClick={() => patchDraft({ storageBlocks: draftBlocks + 1 })}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      {draftBlocks > 0 && (
+                        <div className="mt-2 text-xs text-slate-500">
+                          {draftBlocks * 10} extra slots · <b>{fmt(draftStorageCost, "NGN")}</b>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Live total + 3D Add button */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-1">
                     <div className="sm:flex-1">
                       <div className="text-xs text-slate-500">
                         {fmt(calc.unit, currency)} × {calc.seats} seat(s) × {calc.periods} {unitWord}(s)
                         {draft.firstTime ? " + install" : ""}
+                        {draftStorageCost > 0 ? " + storage" : ""}
                       </div>
                       <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
-                        {fmt(calc.total, currency)}
+                        {fmt(money(calc.total + draftStorageCost), currency)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1241,7 +1190,7 @@ export default function Purchase() {
           <div className="card">
             <h2 className="font-semibold mb-2">Summary</h2>
 
-            {chosen.length === 0 && !storageAddon ? (
+            {chosen.length === 0 ? (
               <div className="text-sm text-slate-600 dark:text-adlm-dark-muted">
                 No items yet. Pick a product and tap <b>Add to order</b>.
               </div>
@@ -1259,23 +1208,34 @@ export default function Purchase() {
                     const entry = cart[k];
                     const calc = lineCalc(p, entry);
                     const periodLabel = p.billingInterval === "yearly" ? "yr" : "mo";
+                    const blocks = storageBlocksOf(entry);
+                    const stgCost = storageCostForEntry(p, entry);
 
                     return (
-                      <button
-                        type="button"
-                        key={k}
-                        onClick={() => selectProduct(k)}
-                        className="w-full flex items-center justify-between gap-3 text-left rounded-lg px-2 py-1.5 -mx-2 hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate">
-                            {p.name} · {calc.periods} {periodLabel} · {calc.seats} seat(s)
-                            {entry.firstTime ? " + install" : ""}
+                      <React.Fragment key={k}>
+                        <button
+                          type="button"
+                          onClick={() => selectProduct(k)}
+                          className="w-full flex items-center justify-between gap-3 text-left rounded-lg px-2 py-1.5 -mx-2 hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate">
+                              {p.name} · {calc.periods} {periodLabel} · {calc.seats} seat(s)
+                              {entry.firstTime ? " + install" : ""}
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">{k}</div>
                           </div>
-                          <div className="text-xs text-slate-500 truncate">{k}</div>
-                        </div>
-                        <div className="font-medium shrink-0">{fmt(calc.total, currency)}</div>
-                      </button>
+                          <div className="font-medium shrink-0">{fmt(calc.total, currency)}</div>
+                        </button>
+                        {blocks > 0 && stgCost > 0 && (
+                          <div className="flex items-center justify-between gap-3 px-2 -mx-2 text-xs text-slate-500">
+                            <div className="truncate">
+                              ↳ Project storage · {blocks * 10} slots
+                            </div>
+                            <div className="font-medium shrink-0">{fmt(stgCost, "NGN")}</div>
+                          </div>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -1303,23 +1263,6 @@ export default function Purchase() {
                         <div className="font-medium">{fmt(bimInstallCost, currency)}</div>
                       </div>
                     )}
-                  </div>
-                )}
-
-                {/* Storage slots line in summary */}
-                {storageAddon && storageUnit > 0 && (
-                  <div className="mt-3 space-y-2 text-sm border-t pt-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate">
-                          Project storage — {storageSlots} slots
-                        </div>
-                        <div className="text-xs text-slate-500 truncate">
-                          {storageProduct?.name || storageAddon.productKey}
-                        </div>
-                      </div>
-                      <div className="font-medium">{fmt(storageCost, "NGN")}</div>
-                    </div>
                   </div>
                 )}
 
@@ -1374,7 +1317,7 @@ export default function Purchase() {
                 <button
                   className="btn w-full mt-4"
                   onClick={createPendingPurchaseAndShowModal}
-                  disabled={(!chosen.length && !storageAddon) || submitting}
+                  disabled={!chosen.length || submitting}
                 >
                   {submitting ? "Processing…" : "Pay"}
                 </button>

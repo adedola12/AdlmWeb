@@ -548,12 +548,11 @@ router.post(
 
     const grants = buildGrantsFromPurchase(purchase, overrideMonths);
 
-    const storageToApply =
-      !!purchase.storageAddon &&
-      !purchase.storageAddon.applied &&
-      Number(purchase.storageAddon.slots) > 0;
+    const storageToApply = (purchase.storageAddons || []).filter(
+      (s) => s && !s.applied && Number(s.slots) > 0,
+    );
 
-    if (grants.length === 0 && !storageToApply)
+    if (grants.length === 0 && storageToApply.length === 0)
       return res
         .status(400)
         .json({ error: "Nothing to approve for this purchase" });
@@ -578,16 +577,14 @@ router.post(
       await user.save();
     }
 
-    // Apply purchased project-storage slots to the user's entitlement.
-    if (storageToApply) {
-      addStorageSlotsToUser(
-        user,
-        purchase.storageAddon.productKey,
-        purchase.storageAddon.slots,
-      );
+    // Apply purchased project-storage slots to the user's entitlement(s).
+    if (storageToApply.length > 0) {
+      for (const s of storageToApply) {
+        addStorageSlotsToUser(user, s.productKey, s.slots);
+        s.applied = true;
+        s.appliedAt = new Date();
+      }
       await user.save();
-      purchase.storageAddon.applied = true;
-      purchase.storageAddon.appliedAt = new Date();
     }
 
     purchase.status = "approved";
