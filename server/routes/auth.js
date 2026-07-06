@@ -688,18 +688,24 @@ router.post("/login", async (req, res) => {
         1,
         Number(req.get("x-adlm-fp-version")) || 1,
       );
-      const binding = enforceDeviceBinding(
-        entitlement,
-        chosenFingerprint,
-        fpVersion,
-      );
-      if (!binding.ok) {
-        return res.status(binding.status).json({
-          error: binding.error,
-          code: binding.code,
-        });
+      // The main admin account bypasses device binding entirely (and is not
+      // recorded as a device) so support can activate on customer machines
+      // without consuming seats or tripping single-device licenses.
+      const isAdminUser = String(user.role || "").toLowerCase() === "admin";
+      if (!isAdminUser) {
+        const binding = enforceDeviceBinding(
+          entitlement,
+          chosenFingerprint,
+          fpVersion,
+        );
+        if (!binding.ok) {
+          return res.status(binding.status).json({
+            error: binding.error,
+            code: binding.code,
+          });
+        }
+        changed ||= !!binding.changed;
       }
-      changed ||= !!binding.changed;
 
       const chosenExpiresAt = offlineLicenseExpiryFor(entitlement);
       licenseToken = signLicenseToken({

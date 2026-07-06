@@ -39,6 +39,7 @@ import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
 import projectsPmRoutes from "./routes/projects.pm.js";
+import archicadRoutes from "./routes/archicad.routes.js";
 
 import meMediaRoutes from "./routes/me-media.js";
 import webhooksRouter from "./routes/webhooks.js";
@@ -242,6 +243,8 @@ app.use("/api/projects", projectRoutes);
 
 app.use("/projects", projectsPmRoutes);
 app.use("/api/projects", projectsPmRoutes);
+
+app.use("/api/archicad", archicadRoutes);
 
 app.use("/me/media", meMediaRoutes);
 app.use("/me/orders", meOrdersRoutes);

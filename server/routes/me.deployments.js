@@ -51,6 +51,12 @@ router.post(
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    // The main admin account bypasses device binding — support installs on
+    // customer machines must not consume seats or pollute the device list.
+    if (String(user.role || "").toLowerCase() === "admin") {
+      return res.json({ ok: true, adminBypass: true });
+    }
+
     const ent = (user.entitlements || []).find(
       (e) => String(e.productKey || "").toLowerCase() === key,
     );

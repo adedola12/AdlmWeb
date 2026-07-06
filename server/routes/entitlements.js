@@ -80,6 +80,12 @@ router.post("/activate", requireAuth, async (req, res) => {
   const user = await User.findById(req.user._id);
   if (!user) return res.status(404).json({ error: "User not found" });
 
+  // The main admin account bypasses device binding — support activations on
+  // customer machines must not consume seats or pollute the device list.
+  if (String(user.role || "").toLowerCase() === "admin") {
+    return res.json({ ok: true, adminBypass: true, message: "Admin bypass" });
+  }
+
   const ent = user.entitlements?.find((e) => e.productKey === productKey);
   if (!ent)
     return res.status(403).json({ error: "No entitlement for product" });

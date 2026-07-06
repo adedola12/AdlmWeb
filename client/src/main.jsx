@@ -67,6 +67,12 @@ import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import Receipt from "./pages/Receipt.jsx";
 import UserInvoice from "./pages/UserInvoice.jsx";
 
+// ✅ QUIV for ArchiCAD
+import ArchiCADLanding from "./pages/ArchiCADLanding.jsx";
+import ArchiCADBoQ from "./pages/ArchiCADBoQ.jsx";
+import ArchiCADDashboard from "./pages/ArchiCADDashboard.jsx";
+import ArchiCADElement from "./pages/ArchiCADElement.jsx";
+
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 
@@ -279,6 +285,40 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <JoinProject />
+          </ProtectedRoute>
+        ),
+      },
+
+      // ✅ QUIV for ArchiCAD
+      {
+        path: "archicad",
+        element: (
+          <ProtectedRoute>
+            <ArchiCADLanding />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "archicad/:projectId/boq",
+        element: (
+          <ProtectedRoute>
+            <ArchiCADBoQ />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "archicad/:projectId/dashboard",
+        element: (
+          <ProtectedRoute>
+            <ArchiCADDashboard />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "archicad/:projectId/element/:guid",
+        element: (
+          <ProtectedRoute>
+            <ArchiCADElement />
           </ProtectedRoute>
         ),
       },
