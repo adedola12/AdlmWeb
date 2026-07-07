@@ -548,6 +548,10 @@ const ItemSchema = new mongoose.Schema(
     qty: { type: Number, default: 0 },
     unit: { type: String, default: "" },
     rate: { type: Number, default: 0 },
+    // Exact RateGen library description that priced this line (sent by the
+    // Revit plugin). Round-trips so the plugin can re-resolve the rate without
+    // parsing the "RateGen (…)" rateSource label.
+    appliedRateKey: { type: String, default: "" },
     actualQty: { type: Number, default: null },
     actualRate: { type: Number, default: null },
     actualRecordedAt: { type: Date, default: null },

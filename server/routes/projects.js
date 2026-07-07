@@ -844,6 +844,8 @@ function sanitizeItems(items, productKey = "") {
       qty: Number.isFinite(Number(item.qty)) ? Number(item.qty) : 0,
       unit: item.unit != null ? String(item.unit) : "",
       rate: parsedRate,
+      // RateGen library description that priced this line (plugin provenance).
+      appliedRateKey: item.appliedRateKey != null ? String(item.appliedRateKey) : "",
       actualQty: parseOptionalNumber(item.actualQty),
       actualRate: parsedActualRate,
       actualRecordedAt: parsedActualRecordedAt,
