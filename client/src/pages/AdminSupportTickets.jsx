@@ -22,6 +22,69 @@ function fmtDate(d) {
   return d ? new Date(d).toLocaleDateString() : "—";
 }
 
+// Format a Date for <input type="datetime-local"> in the admin's local time.
+function toLocalInputValue(d) {
+  const dt = new Date(d);
+  const off = dt.getTimezoneOffset();
+  return new Date(dt.getTime() - off * 60000).toISOString().slice(0, 16);
+}
+
+// Calendar helpers for the scheduled fix — 1-hour slot from the scheduled time.
+function calendarEvent(t) {
+  const start = new Date(t.scheduledForFixingAt);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const title = `ADLM support: ${t.title}`;
+  const details = [
+    `Support session for ${t.userFullName || t.userEmail}`,
+    t.userEmail ? `Email: ${t.userEmail}` : "",
+    t.whatsapp ? `WhatsApp: ${t.whatsapp}` : "",
+    t.anyDeskAddress ? `AnyDesk: ${t.anyDeskAddress}` : "",
+    `Ticket: ${t._id}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return { start, end, title, details };
+}
+
+function googleCalendarUrl(t) {
+  const { start, end, title, details } = calendarEvent(t);
+  const fmt = (d) => d.toISOString().replace(/[-:]|\.\d{3}/g, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function downloadIcs(t) {
+  const { start, end, title, details } = calendarEvent(t);
+  const fmt = (d) => d.toISOString().replace(/[-:]|\.\d{3}/g, "");
+  const esc = (s) => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//ADLM Studio//Support//EN",
+    "BEGIN:VEVENT",
+    `UID:adlm-support-${t._id}@adlmstudio.net`,
+    `DTSTAMP:${fmt(new Date())}`,
+    `DTSTART:${fmt(start)}`,
+    `DTEND:${fmt(end)}`,
+    `SUMMARY:${esc(title)}`,
+    `DESCRIPTION:${esc(details)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const blob = new Blob([ics], { type: "text/calendar" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `adlm-support-${t._id}.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AdminSupportTickets() {
   const { accessToken } = useAuth();
 
@@ -61,7 +124,7 @@ export default function AdminSupportTickets() {
     setEdit({
       status: t.status,
       scheduledForFixingAt: t.scheduledForFixingAt
-        ? new Date(t.scheduledForFixingAt).toISOString().slice(0, 10)
+        ? toLocalInputValue(t.scheduledForFixingAt)
         : "",
       adminNotes: t.adminNotes || "",
     });
@@ -144,6 +207,25 @@ export default function AdminSupportTickets() {
             <p className="text-sm whitespace-pre-wrap">{sel.description}</p>
           </div>
 
+          {Array.isArray(sel.images) && sel.images.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase mb-1">
+                Screenshots ({sel.images.length})
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {sel.images.map((im, i) => (
+                  <a key={im.url} href={im.url} target="_blank" rel="noreferrer" title="Open full size">
+                    <img
+                      src={im.url}
+                      alt={`Screenshot ${i + 1}`}
+                      className="h-24 w-24 object-cover rounded-lg border border-slate-200 hover:opacity-80"
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid sm:grid-cols-3 gap-4">
             <div>
               <div className="text-xs font-semibold text-slate-500 uppercase mb-1">AnyDesk</div>
@@ -181,11 +263,30 @@ export default function AdminSupportTickets() {
             <div>
               <label className="block text-sm font-semibold mb-1">Scheduled for fixing</label>
               <input
-                type="date"
+                type="datetime-local"
                 className="input"
                 value={edit.scheduledForFixingAt}
                 onChange={(e) => setEdit((s) => ({ ...s, scheduledForFixingAt: e.target.value }))}
               />
+              {sel.scheduledForFixingAt && (
+                <div className="flex items-center gap-3 mt-1.5">
+                  <a
+                    className="text-xs text-adlm-blue-700 hover:underline"
+                    href={googleCalendarUrl(sel)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    ➕ Google Calendar
+                  </a>
+                  <button
+                    type="button"
+                    className="text-xs text-adlm-blue-700 hover:underline"
+                    onClick={() => downloadIcs(sel)}
+                  >
+                    ⬇ Download .ics
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -245,6 +346,7 @@ export default function AdminSupportTickets() {
                   <tr className="text-left text-slate-500 border-b">
                     <th className="py-2 pr-3">Title</th>
                     <th className="py-2 pr-3">From</th>
+                    <th className="py-2 pr-3">Product</th>
                     <th className="py-2 pr-3">Status</th>
                     <th className="py-2 pr-3">Scheduled</th>
                     <th className="py-2 pr-3">Created</th>
@@ -254,8 +356,16 @@ export default function AdminSupportTickets() {
                 <tbody>
                   {tickets.map((t) => (
                     <tr key={t._id} className="border-b border-slate-100">
-                      <td className="py-2 pr-3 font-medium">{t.title}</td>
+                      <td className="py-2 pr-3 font-medium">
+                        {t.title}
+                        {Array.isArray(t.images) && t.images.length > 0 && (
+                          <span className="ml-1 text-xs text-slate-400" title={`${t.images.length} screenshot(s)`}>
+                            📎{t.images.length}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 pr-3 text-slate-600">{t.userEmail}</td>
+                      <td className="py-2 pr-3 text-slate-600">{t.productKey || t.source || "—"}</td>
                       <td className="py-2 pr-3">
                         <span className={`text-[11px] px-2 py-0.5 rounded-full capitalize ${statusTone[t.status] || "bg-slate-100"}`}>
                           {t.status}

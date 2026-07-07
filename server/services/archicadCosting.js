@@ -17,6 +17,8 @@ import { RateGenRate } from "../models/RateGenRate.js";
 import { RateGenComputeItem } from "../models/RateGenComputeItem.js";
 import { RateGenMaterial } from "../models/RateGenMaterial.js";
 import { RateGenLabour } from "../models/RateGenLabour.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { fetchMasterLabour } from "../util/rategenMaster.js";
 
 /* ────────────────────────────── constants ────────────────────────────── */
 
@@ -363,7 +365,8 @@ export function tokenize(text) {
   return String(text || "")
     .toLowerCase()
     .split(/[^a-z0-9:]+/)
-    .filter((t) => t.length > 2 && !STOP_TOKENS.has(t));
+    // Pure numbers / mm sizes are matched via sizeTokens, not token overlap.
+    .filter((t) => t.length > 2 && !STOP_TOKENS.has(t) && !/^\d+(mm)?$/.test(t));
 }
 
 // Size tokens like "y12", "r10", "225mm", "150", mix ratios "1:2:4".
@@ -377,6 +380,19 @@ function sizeTokens(text) {
 }
 
 const WORK_KINDS = [
+  // Element kinds first: whole-element BoQ lines ("Beam 225 x 450mm",
+  // "Reinforced concrete in slab") must key on the element, not on activity
+  // words like "reinforced"/"formwork" that appear inside the build-up text.
+  ["curtainwall", ["curtain wall", "curtain walling", "cladding"]],
+  ["window", ["window", "louvre", "casement"]],
+  ["door", ["door"]],
+  ["footing", ["footing", "foundation"]],
+  ["slab", ["slab", "oversite", "suspended floor"]],
+  ["beam", ["beam", "lintel"]],
+  ["column", ["column"]],
+  ["roofing", ["roof", "rafter", "purlin", "truss", "longspan"]],
+  ["wall", ["wall", "walling", "blockwork", "sandcrete", "masonry", "brick"]],
+  // Activity kinds (original Revit-ported list) as fallback.
   ["formwork", ["formwork", "shutter", "shuttering", "soffit", "falsework"]],
   ["rebar", ["rebar", "reinforcement", "reinforc", "brc", "mesh", "bar", "y12", "y16", "y10", "r10", "binding"]],
   ["concrete", ["concrete", "rcc", "blinding", "insitu", "in-situ", "grade"]],
@@ -809,13 +825,23 @@ function resolveLinePrice(l, materialsBySn, laboursBySn, materialsByName, labour
  * matcher stays pure. Compute-item lines are priced at CURRENT library prices
  * (the models are the source of truth), with unitPriceAtBuild as fallback.
  */
-export async function loadRateCandidates() {
-  const [rates, computeItems, materials, labours] = await Promise.all([
-    RateGenRate.find({}).lean(),
-    RateGenComputeItem.find({ enabled: true }).lean(),
-    RateGenMaterial.find({ enabled: true }).lean(),
-    RateGenLabour.find({ enabled: true }).lean(),
-  ]);
+export async function loadRateCandidates(userId = null) {
+  const [rates, computeItems, materials, labours, userLibrary, masterLabour] =
+    await Promise.all([
+      RateGenRate.find({}).lean(),
+      RateGenComputeItem.find({ enabled: true }).lean(),
+      RateGenMaterial.find({ enabled: true }).lean(),
+      RateGenLabour.find({ enabled: true }).lean(),
+      // The user's own RateGen library: priced custom rates with build-ups —
+      // in production this is where most usable rates live (the curated
+      // RateGenRate/ComputeItem collections are sparsely populated).
+      userId
+        ? RateGenLibrary.findOne({ userId }).lean().catch(() => null)
+        : Promise.resolve(null),
+      // Master labour price list (separate ADLMRateDB connection) for the
+      // labour-library fallback tier: [{ sn, description, unit, price }].
+      fetchMasterLabour().catch(() => []),
+    ]);
 
   const materialsBySn = new Map(materials.map((m) => [m.sn, m]));
   const laboursBySn = new Map(labours.map((m) => [m.sn, m]));
@@ -884,17 +910,71 @@ export async function loadRateCandidates() {
     });
   }
 
-  return { candidates, labourLibrary: labours, currency: DEFAULT_CURRENCY };
+  // User-library custom rates (the QUIV Revit "CustomRate" shape: parallel
+  // materials[]/labour[] arrays or a breakdown[], plus net/OH%/profit%).
+  for (const cr of userLibrary?.customRates || []) {
+    const comp = parseComposition(cr);
+    if (!comp) continue;
+    const text = `${cr.sectionLabel || cr.sectionKey || ""} ${cr.title || ""} ${cr.description || ""}`;
+    const plantHeavy = comp.netCost > 0 && compPlantCost(comp) / comp.netCost > 0.6;
+    candidates.push({
+      id: String(cr.customRateId || cr._id || ""),
+      groupKey: `custom:${cr.customRateId || cr._id}`,
+      source: "custom",
+      section: cr.sectionKey || "",
+      description: cr.title || cr.description || "",
+      unit: cr.unit || "",
+      tokens: tokenize(text),
+      // Kind from the rate's own wording only — a section label like
+      // "Doors & Windows" must not stamp every rate in it as "door".
+      workKind: detectWorkKind(`${cr.title || ""} ${cr.description || ""}`),
+      sizes: sizeTokens(text),
+      plantHeavy,
+      composition: comp,
+    });
+  }
+
+  // Labour library = enabled RateGenLabour docs + the master price list
+  // (mapped to the {name, unit, price} shape matchLabourLibrary expects).
+  const labourLibrary = [
+    ...labours,
+    ...masterLabour.map((l) => ({
+      _id: `master:${l.sn}`,
+      name: l.description,
+      unit: l.unit,
+      price: l.price,
+    })),
+  ];
+
+  return { candidates, labourLibrary, currency: DEFAULT_CURRENCY };
 }
 
 /**
  * Costs a whole extraction: matches + prices each line, returning the costed
  * lines plus categories and totals. Pure given the loaded candidates.
  */
+// Trade-vocabulary hints per element type: connector descriptions are
+// dimension-speak ("240mm thick slab") while rates are trade-speak
+// ("Reinforced concrete in slab"). The hints join the matcher input only —
+// the displayed line description is untouched.
+const MATCH_HINTS = {
+  slab: "concrete suspended floor slab",
+  padFooting: "concrete pad foundation footing base",
+  stripFooting: "concrete strip foundation footing",
+  column: "reinforced concrete column",
+  beam: "reinforced concrete beam",
+  wall: "blockwork wall",
+  roof: "roof construction roofing",
+  curtainWall: "curtain walling glazed aluminium",
+  door: "door",
+  window: "window",
+};
+
 export function costBoqLines(rawLines, { candidates, labourLibrary }) {
   const lines = (rawLines || []).map((raw) => {
+    const hint = MATCH_HINTS[raw.quivType] || "";
     const match = selectBestRate(
-      { description: raw.description, unit: raw.unit },
+      { description: `${raw.description} ${hint}`.trim(), unit: raw.unit },
       candidates,
     );
     return costLine(raw, match, labourLibrary);

@@ -5,7 +5,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { apiAuthed } from "../http.js";
+import { api, apiAuthed } from "../http.js";
 
 const CATEGORIES = [
   { value: "technical", label: "Technical issue" },
@@ -13,6 +13,16 @@ const CATEGORIES = [
   { value: "billing", label: "Billing / subscription" },
   { value: "feature-request", label: "Feature request" },
   { value: "general", label: "General question" },
+];
+
+// Attachment limits — mirrored server-side (support.js), keep in sync.
+const MAX_IMAGES = 5;
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+// Always-available choices; published products are prepended once loaded.
+const FALLBACK_PRODUCTS = [
+  { key: "website", name: "ADLM Website" },
+  { key: "other", name: "Other / not sure" },
 ];
 
 export default function RequestTechnicalHelp() {
@@ -29,9 +39,77 @@ export default function RequestTechnicalHelp() {
   const [err, setErr] = React.useState("");
   const [done, setDone] = React.useState(false);
 
+  // Screenshot attachments (File objects) + generated preview URLs.
+  const [images, setImages] = React.useState([]);
+  const fileInputRef = React.useRef(null);
+
+  // Published ADLM products for the "which product?" picker.
+  const [products, setProducts] = React.useState(FALLBACK_PRODUCTS);
+
   // Past tickets so the user can see status / schedule.
   const [mine, setMine] = React.useState([]);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  React.useEffect(() => {
+    let alive = true;
+    api("/products", { params: { pageSize: 50 } })
+      .then((res) => {
+        if (!alive) return;
+        const items = (Array.isArray(res?.items) ? res.items : [])
+          .filter((p) => p?.key && !p.isCourse)
+          .map((p) => ({ key: p.key, name: p.name || p.key }));
+        if (items.length) setProducts([...items, ...FALLBACK_PRODUCTS]);
+      })
+      .catch(() => {
+        /* fallback options remain */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Revoke any remaining object URLs on unmount to avoid leaks (removal and
+  // submit-reset paths revoke their own URLs individually).
+  const imagesRef = React.useRef(images);
+  imagesRef.current = images;
+  React.useEffect(
+    () => () =>
+      imagesRef.current.forEach((im) => URL.revokeObjectURL(im.preview)),
+    [],
+  );
+
+  function addImages(fileList) {
+    setErr("");
+    const incoming = Array.from(fileList || []);
+    setImages((prev) => {
+      const next = [...prev];
+      for (const f of incoming) {
+        if (next.length >= MAX_IMAGES) {
+          setErr(`You can attach at most ${MAX_IMAGES} images.`);
+          break;
+        }
+        if (!f.type.startsWith("image/")) {
+          setErr(`"${f.name}" isn't an image.`);
+          continue;
+        }
+        if (f.size > MAX_IMAGE_BYTES) {
+          setErr(`"${f.name}" is larger than 2MB — please compress or crop it.`);
+          continue;
+        }
+        next.push({ file: f, preview: URL.createObjectURL(f) });
+      }
+      return next;
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removeImage(idx) {
+    setImages((prev) => {
+      const removed = prev[idx];
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== idx);
+    });
+  }
 
   const loadMine = React.useCallback(async () => {
     try {
@@ -54,21 +132,29 @@ export default function RequestTechnicalHelp() {
       setErr("Please add a title and a description.");
       return;
     }
+    if (!form.productKey) {
+      setErr("Please select which product or software you're having issues with.");
+      return;
+    }
     setBusy(true);
     try {
+      const fd = new FormData();
+      fd.append("title", form.title.trim());
+      fd.append("description", form.description.trim());
+      fd.append("anyDeskAddress", form.anyDeskAddress.trim());
+      fd.append("category", form.category);
+      fd.append("productKey", form.productKey);
+      images.forEach((im) => fd.append("images", im.file));
+
       await apiAuthed("/api/support/tickets", {
         token: accessToken,
         method: "POST",
-        body: {
-          title: form.title.trim(),
-          description: form.description.trim(),
-          anyDeskAddress: form.anyDeskAddress.trim(),
-          category: form.category,
-          productKey: form.productKey.trim(),
-        },
+        body: fd,
       });
       setDone(true);
       setForm({ title: "", description: "", anyDeskAddress: "", category: "technical", productKey: "" });
+      images.forEach((im) => URL.revokeObjectURL(im.preview));
+      setImages([]);
       loadMine();
     } catch (e) {
       setErr(e?.message || "Could not submit your request.");
@@ -141,15 +227,69 @@ export default function RequestTechnicalHelp() {
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">
-                Product <span className="text-slate-400 font-normal">(optional)</span>
+                Which product / software?
               </label>
-              <input
+              <select
                 className="input"
-                placeholder="e.g. revit, planswift, rategen"
                 value={form.productKey}
                 onChange={(e) => set("productKey", e.target.value)}
-              />
+                required
+              >
+                <option value="">Select a product…</option>
+                {products.map((p) => (
+                  <option key={p.key} value={p.key}>{p.name}</option>
+                ))}
+              </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-1">
+              Screenshots{" "}
+              <span className="text-slate-400 font-normal">
+                (optional — up to {MAX_IMAGES} images, 2MB each)
+              </span>
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => addImages(e.target.files)}
+            />
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={images.length >= MAX_IMAGES}
+            >
+              {images.length ? "Add more images" : "Add images"}
+            </button>
+            {images.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {images.map((im, i) => (
+                  <div key={im.preview} className="relative">
+                    <img
+                      src={im.preview}
+                      alt={`Screenshot ${i + 1}`}
+                      className="h-20 w-20 object-cover rounded-lg border border-slate-200"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Remove image ${i + 1}`}
+                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-600 text-white text-xs leading-none"
+                      onClick={() => removeImage(i)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-slate-500 mt-1">
+              A screenshot of the error message helps us fix things much faster.
+            </p>
           </div>
 
           <div>

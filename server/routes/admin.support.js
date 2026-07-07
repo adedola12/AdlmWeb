@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { SupportTicket } from "../models/SupportTicket.js";
 import { sendMail } from "../util/mailer.js";
+import cloudinary from "../utils/cloudinaryConfig.js";
 
 const router = express.Router();
 const gate = requirePermission("support");
@@ -17,6 +18,27 @@ const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
 const STATUSES = ["open", "scheduled", "in-progress", "resolved", "closed"];
+
+// Google Calendar "add event" link for a scheduled fix — included in the
+// user's "scheduled" email so they can put the session on their own calendar.
+// Defaults to a 1-hour slot starting at the scheduled time.
+function googleCalendarLink(ticket) {
+  if (!ticket.scheduledForFixingAt) return "";
+  const start = new Date(ticket.scheduledForFixingAt);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const fmt = (d) => d.toISOString().replace(/[-:]|\.\d{3}/g, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `ADLM support session: ${ticket.title}`,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details:
+      `ADLM Studio technical support session for your ticket "${ticket.title}".` +
+      (ticket.anyDeskAddress
+        ? ` We'll connect via AnyDesk (${ticket.anyDeskAddress}) — please be at your machine.`
+        : ""),
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
 
 // GET /admin/support-tickets?status=&search=
 router.get(
@@ -103,7 +125,7 @@ router.patch(
       ticket.userEmail &&
       req.body.status &&
       req.body.status !== prevStatus &&
-      ["scheduled", "in-progress", "resolved"].includes(ticket.status)
+      ["scheduled", "in-progress", "resolved", "closed"].includes(ticket.status)
     ) {
       const when = ticket.scheduledForFixingAt
         ? new Date(ticket.scheduledForFixingAt).toDateString()
@@ -114,12 +136,19 @@ router.patch(
         }.`,
         "in-progress": `We're now working on your support request "${ticket.title}".`,
         resolved: `Your support request "${ticket.title}" has been marked resolved.`,
+        closed: `Your support request "${ticket.title}" has been closed. If you still need help, just raise a new request.`,
       };
+      const calLink =
+        ticket.status === "scheduled" ? googleCalendarLink(ticket) : "";
       sendMail({
         to: ticket.userEmail,
         subject: "Update on your ADLM support request",
         html: `<p>Hi ${ticket.userFullName || "there"},</p>
-               <p>${lines[ticket.status]}</p>
+               <p>${lines[ticket.status]}</p>${
+                 calLink
+                   ? `<p><a href="${calLink}">➕ Add this session to your Google Calendar</a></p>`
+                   : ""
+               }
                <p>— The ADLM Team</p>`,
       }).catch((e) => console.error("[admin.support] status mail:", e?.message));
     }
@@ -141,6 +170,16 @@ router.delete(
       return res.status(400).json({ ok: false, error: "Invalid ticket id" });
     const deleted = await SupportTicket.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ ok: false, error: "Not found" });
+
+    // Clean up screenshots on Cloudinary (best-effort).
+    for (const im of deleted.images || []) {
+      if (!im.publicId) continue;
+      cloudinary.uploader
+        .destroy(im.publicId, { resource_type: "image" })
+        .catch((e) =>
+          console.error("[admin.support] image cleanup:", e?.message),
+        );
+    }
     return res.json({ ok: true });
   }),
 );

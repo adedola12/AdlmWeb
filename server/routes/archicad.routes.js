@@ -194,7 +194,7 @@ async function findCurrentVersion(projectId, res) {
 
 // Costs raw lines and writes a new current version snapshot.
 async function createVersion({ project, rawLines, modelVersion, extractedAt, issues, userId }) {
-  const priced = await loadRateCandidates();
+  const priced = await loadRateCandidates(userId);
   const { lines, categories, totals } = costBoqLines(rawLines, priced);
 
   const prevCurrent = await ArchicadBoqVersion.findOne({

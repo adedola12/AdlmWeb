@@ -31,6 +31,20 @@ const SupportTicketSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Screenshots of the issue (Cloudinary). Route enforces max 5 files of
+    // 2MB each; publicId kept so images can be cleaned up on ticket delete.
+    images: {
+      type: [
+        {
+          _id: false,
+          url: { type: String, required: true },
+          publicId: { type: String, default: "" },
+          bytes: { type: Number, default: 0 },
+        },
+      ],
+      default: [],
+    },
+
     // Remote support
     anyDeskAddress: { type: String, trim: true, default: "" },
 
