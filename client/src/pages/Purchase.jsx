@@ -643,7 +643,12 @@ export default function Purchase() {
     })();
   }, [licenseType]);
 
-  async function createPendingPurchaseAndShowModal() {
+  // currencyOverride lets the pay modal re-create a USD order in NGN so the
+  // customer can pay by card (cards charge NGN only). Guarded because the Pay
+  // button passes the click event as the first argument.
+  async function createPendingPurchaseAndShowModal(currencyOverride) {
+    const override =
+      typeof currencyOverride === "string" ? currencyOverride : null;
     if (!chosen.length) return;
 
     setSubmitting(true);
@@ -683,7 +688,7 @@ export default function Purchase() {
 
       const payload = {
         // Storage is NGN-only, so an order carrying storage is forced to NGN.
-        currency: anyStorageInCart ? "NGN" : currency,
+        currency: override || (anyStorageInCart ? "NGN" : currency),
         items,
         couponCode: couponCode.trim(),
         licenseType,
@@ -1467,7 +1472,7 @@ export default function Purchase() {
           <div className="relative bg-white rounded-2xl shadow-depth-lg p-6 max-w-lg w-full z-10">
             <h3 className="text-lg font-semibold mb-2">Complete your payment</h3>
 
-            {pendingCurrency === "NGN" && (
+            {pendingCurrency === "NGN" ? (
               <div className="mb-4">
                 <button
                   className="btn w-full"
@@ -1482,6 +1487,28 @@ export default function Purchase() {
                 </div>
                 <div className="text-center text-xs text-slate-400 my-3">
                   — or pay by bank transfer —
+                </div>
+              </div>
+            ) : (
+              <div className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-slate-700">
+                <div className="font-medium mb-1">
+                  Paying by card from outside Nigeria?
+                </div>
+                Card payments are charged in Nigerian Naira (NGN) — your bank
+                converts to your local currency automatically. Switch your
+                order to NGN to pay by card.
+                <button
+                  className="btn w-full mt-3"
+                  onClick={() => {
+                    setCurrency("NGN");
+                    createPendingPurchaseAndShowModal("NGN");
+                  }}
+                  disabled={submitting}
+                >
+                  {submitting ? "Switching…" : "Switch to NGN & pay by card"}
+                </button>
+                <div className="text-center text-xs text-slate-400 my-3">
+                  — or pay by bank transfer below —
                 </div>
               </div>
             )}
