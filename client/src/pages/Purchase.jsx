@@ -337,14 +337,33 @@ export default function Purchase() {
 
   // Patch the draft (clamped; seats locked to 1 for personal licenses).
   function patchDraft(patch) {
-    setDraft((d) => {
-      const next = { ...d, ...patch };
-      next.periods = Math.max(parseInt(next.periods || 1, 10), 1);
-      next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
-      if (licenseType !== "organization") next.seats = 1;
-      else if (next.seats < 2) next.seats = 2; // org licences: minimum 2 users
-      return next;
-    });
+    const next = { ...draft, ...patch };
+    next.periods = Math.max(parseInt(next.periods || 1, 10), 1);
+    next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
+    if (licenseType !== "organization") next.seats = 1;
+    else if (next.seats < 2) next.seats = 2; // org licences: minimum 2 users
+    setDraft(next);
+
+    // Live-sync: when the product is already in the order, config edits apply
+    // to the order immediately. Otherwise a buyer can tick "First-time
+    // install", skip "Update order", and pay without the install fee.
+    if (activeKey && cart[activeKey]) {
+      setCart((c) => ({
+        ...c,
+        [activeKey]: {
+          periods: clampPeriodsFor(productByKey(activeKey), next.periods),
+          seats:
+            licenseType === "organization"
+              ? Math.max(parseInt(next.seats || 2, 10), 2)
+              : 1,
+          firstTime: !!next.firstTime,
+          storageBlocks: Math.max(
+            parseInt(next.storageBlocks || 0, 10) || 0,
+            0,
+          ),
+        },
+      }));
+    }
   }
 
   // Auto-open the configurator when landing with a restored cart or a
