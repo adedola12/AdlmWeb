@@ -91,6 +91,11 @@ export default function Purchase() {
   const configRef = React.useRef(null);
   const summaryRef = React.useRef(null);
 
+  // Auto-renew opt-in (NGN card payments only). Sent with the order; applied
+  // to the granted entitlements once the card payment is confirmed. The server
+  // recomputes the price at each renewal — this flag never fixes a price.
+  const [autoRenew, setAutoRenew] = React.useState(false);
+
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
   // Card payments run in NGN only — the pay modal uses the order's actual
@@ -712,6 +717,7 @@ export default function Purchase() {
         couponCode: couponCode.trim(),
         licenseType,
         organization: licenseType === "organization" ? org : null,
+        autoRenew,
       };
 
       // Include physical training if org + selected
@@ -1466,6 +1472,26 @@ export default function Purchase() {
                   </div>
                 </div>
 
+                {/* Auto-renew opt-in — card payments only, so NGN orders only */}
+                {(anyStorageInCart ? "NGN" : currency) === "NGN" && (
+                  <label className="mt-4 flex items-start gap-2 cursor-pointer rounded-xl border p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-adlm-blue-700"
+                      checked={autoRenew}
+                      onChange={(e) => setAutoRenew(e.target.checked)}
+                    />
+                    <span className="min-w-0">
+                      <span className="font-medium">Auto-renew my subscription</span>
+                      <span className="block text-xs text-slate-500 mt-0.5">
+                        Only applies when you pay by card. We'll charge the same
+                        card at the then-current price shortly before expiry.
+                        Turn it off anytime from your profile.
+                      </span>
+                    </span>
+                  </label>
+                )}
+
                 <button
                   className="btn w-full mt-4"
                   onClick={createPendingPurchaseAndShowModal}
@@ -1504,6 +1530,12 @@ export default function Purchase() {
                   Foreign cards are charged in Naira — your bank converts the
                   amount. You may be asked for an OTP by your bank.
                 </div>
+                {autoRenew && (
+                  <div className="text-xs text-emerald-700 text-center mt-1">
+                    Auto-renew is on — this card will be saved for future
+                    renewals (you can remove it from your profile).
+                  </div>
+                )}
                 <div className="text-center text-xs text-slate-400 my-3">
                   — or pay by bank transfer —
                 </div>

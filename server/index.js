@@ -12,6 +12,7 @@ import { fileURLToPath } from "url";
 import { connectDB } from "./db.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
+import { runAutoRenewals } from "./util/autoRenew.js";
 import { ensureRolesSeeded } from "./util/rbac.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
 
@@ -21,6 +22,7 @@ import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
 import wellKnownRoutes from "./routes/wellKnown.js";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
+import meBillingRoutes from "./routes/me.billing.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import adminRoutes from "./routes/admin.js";
@@ -228,6 +230,8 @@ app.use(auditGod);
 
 // Apply rate limiting to auth and device endpoints
 app.use("/auth", authLimiter, authRoutes);
+// Billing must mount before the broad /me router so its paths win.
+app.use("/me/billing", meBillingRoutes);
 app.use("/me", meRoutes);
 app.use("/me/deployments", deviceLimiter, meDeploymentsRoutes);
 app.use("/me/courses", meCourses);
@@ -504,6 +508,30 @@ try {
     );
 
     console.log("[expiry-notifier] cron scheduled:", EXPIRY_CRON);
+  }
+
+  // Auto-renewal charges run BEFORE the 9am expiry notifier so a user whose
+  // card renews successfully never gets a same-day "expiring soon" email.
+  const ENABLE_RENEWAL_CRON =
+    String(process.env.ENABLE_RENEWAL_CRON || "true") !== "false";
+
+  const RENEWAL_CRON = String(process.env.RENEWAL_CRON || "0 8 * * *"); // 8am Lagos daily
+
+  if (ENABLE_RENEWAL_CRON) {
+    cron.schedule(
+      RENEWAL_CRON,
+      async () => {
+        try {
+          const out = await runAutoRenewals();
+          console.log("[auto-renew] done:", out);
+        } catch (e) {
+          console.error("[auto-renew] failed:", e?.message || e);
+        }
+      },
+      { timezone: "Africa/Lagos" },
+    );
+
+    console.log("[auto-renew] cron scheduled:", RENEWAL_CRON);
   }
 } catch (err) {
   console.error("DB error", err);

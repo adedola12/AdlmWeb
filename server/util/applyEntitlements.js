@@ -69,6 +69,8 @@ export async function applyEntitlementsFromPurchase(purchase) {
     map.set(pk, { months, seats: 1 });
   }
 
+  const wantsAutoRenew = purchase.autoRenewRequested === true;
+
   for (const [productKey, { months, seats }] of map.entries()) {
     let ent = user.entitlements.find((e) => e.productKey === productKey);
 
@@ -80,13 +82,29 @@ export async function applyEntitlementsFromPurchase(purchase) {
         expiresAt: extendExpiry(null, months),
         devices: [],
       });
-      continue;
+      ent = user.entitlements[user.entitlements.length - 1];
+    } else {
+      normalizeLegacy(ent);
+      ent.status = "active";
+      ent.expiresAt = extendExpiry(ent.expiresAt, months);
+      ent.seats = Math.max(parseInt(ent.seats || 1, 10), seats);
     }
 
-    normalizeLegacy(ent);
-    ent.status = "active";
-    ent.expiresAt = extendExpiry(ent.expiresAt, months);
-    ent.seats = Math.max(parseInt(ent.seats || 1, 10), seats);
+    if (wantsAutoRenew) {
+      ent.autoRenew = true;
+      // Renewal term = what was just bought, capped at a year. The cron
+      // recomputes the actual price from current product pricing.
+      ent.autoRenewMonths = Math.min(Math.max(months, 1), 12);
+    }
+
+    // New expiry ⇒ new renewal cycle: clear failed-attempt bookkeeping so the
+    // cron gets a fresh set of retries next time the product nears expiry.
+    ent.renewal = {
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: "",
+      cycleExpiryAt: ent.expiresAt,
+    };
   }
 
   await user.save();
