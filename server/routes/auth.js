@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 import { ensureDb } from "../db.js";
 import { User } from "../models/User.js";
 import { Refresh } from "../models/Refresh.js";
@@ -26,6 +27,7 @@ import {
 } from "../util/jwt.js";
 import { getPrivateKey, getKid } from "../util/jwks.js";
 import { isGodUser, isGodEmail } from "../util/godAccount.js";
+import { validatePasswordStrength } from "../util/passwordPolicy.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
 
 const router = express.Router();
@@ -112,19 +114,6 @@ function normalizeLegacyEnt(entitlement) {
 
 function activeDevices(entitlement) {
   return (entitlement?.devices || []).filter((device) => !device.revokedAt);
-}
-
-// Password complexity policy — enforced on signup and password reset.
-// Minimum 8 chars, at least one letter and one number.
-function validatePasswordStrength(password) {
-  const pw = String(password || "");
-  if (pw.length < 8) {
-    return "Password must be at least 8 characters.";
-  }
-  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
-    return "Password must contain at least one letter and one number.";
-  }
-  return null;
 }
 
 // Fingerprint migration window: clients sending x-adlm-fp-version >= 2 that
@@ -468,6 +457,164 @@ router.post("/signup", async (req, res) => {
   } catch (err) {
     console.error("[/auth/signup] error:", err);
     res.status(500).json({ error: "Signup failed" });
+  }
+});
+
+// ── Social login: Google ──
+// The client obtains a Google ID token via Google Identity Services and posts
+// it here. We verify it server-side against GOOGLE_CLIENT_ID, then find-or-
+// create the user by the provider-verified email and issue the exact same
+// JWT pair as a password login. Plugin logins are NOT possible through this
+// route (no device binding / license token) — the email+password contract the
+// desktop plugins rely on is untouched.
+let googleClient = null;
+function getGoogleClient() {
+  const clientId = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+  if (!clientId) return null;
+  if (!googleClient) googleClient = new OAuth2Client(clientId);
+  return googleClient;
+}
+
+// Derive a unique username from the email prefix, mirroring /signup's
+// default. On collision, append random digits rather than failing signup.
+async function uniqueUsernameFromEmail(email) {
+  const base =
+    String(email).split("@")[0].replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 30) ||
+    "user";
+  let candidate = base;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const exists = await User.findOne({ username: candidate }).select("_id");
+    if (!exists) return candidate;
+    candidate = `${base}${crypto.randomInt(1000, 9999)}`;
+  }
+  return `${base}${Date.now().toString(36)}`;
+}
+
+router.post("/google", async (req, res) => {
+  try {
+    await ensureDb();
+
+    const client = getGoogleClient();
+    if (!client) {
+      return res.status(503).json({
+        error: "Google sign-in is not configured.",
+        code: "GOOGLE_NOT_CONFIGURED",
+      });
+    }
+
+    const credential = String(req.body?.credential || "").trim();
+    if (!credential) {
+      return res.status(400).json({ error: "credential required" });
+    }
+
+    let payload;
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      return res.status(401).json({ error: "Invalid Google credential" });
+    }
+
+    const email = String(payload?.email || "").trim().toLowerCase();
+    if (!email || !payload?.email_verified) {
+      return res
+        .status(401)
+        .json({ error: "Google account email is not verified" });
+    }
+
+    // Account-linking rule: a social email that matches an existing account
+    // signs into THAT account (Google has verified ownership of the email).
+    // The existing password, if any, is kept untouched.
+    let user = await User.findOne({ email });
+    let isNewUser = false;
+
+    if (user) {
+      if (user.disabled) {
+        return res
+          .status(403)
+          .json({ error: "Account disabled. Please contact support." });
+      }
+      // Break-glass accounts must go through the password + OTP flow only.
+      if (isGodUser(user) || isGodEmail(user.email)) {
+        return res.status(403).json({
+          error: "This account requires password sign-in.",
+          code: "PASSWORD_SIGNIN_REQUIRED",
+        });
+      }
+      if (!user.googleId && payload.sub) {
+        user.googleId = String(payload.sub);
+        await user.save();
+      }
+    } else {
+      isNewUser = true;
+      user = await User.create({
+        email,
+        username: await uniqueUsernameFromEmail(email),
+        passwordHash: "",
+        provider: "google",
+        googleId: payload.sub ? String(payload.sub) : undefined,
+        role: "user",
+        firstName: String(payload.given_name || "").trim(),
+        lastName: String(payload.family_name || "").trim(),
+        avatarUrl: String(payload.picture || ""),
+        whatsapp: "",
+        entitlements: [],
+      });
+
+      try {
+        const { subject, html } = buildWelcomeEmail({
+          firstName: user.firstName,
+          lastName: user.lastName,
+        });
+        await sendMail({ to: user.email, subject, html });
+        user.welcomeEmailSentAt = new Date();
+        await user.save();
+      } catch (mailErr) {
+        console.error("[/auth/google] welcome mail error:", mailErr);
+      }
+
+      // Auto-link any invoices sent to this email address (same as /signup).
+      try {
+        await Invoice.updateMany(
+          { clientEmail: email, clientUserId: { $exists: false } },
+          { $set: { clientUserId: user._id } },
+        );
+        await Invoice.updateMany(
+          { clientEmail: email, clientUserId: null },
+          { $set: { clientUserId: user._id } },
+        );
+      } catch (linkErr) {
+        console.error("[/auth/google] invoice link error:", linkErr);
+      }
+    }
+
+    const authPayload = buildAuthPayload(user);
+    const accessToken = signAccess(authPayload);
+    const refreshToken = signRefresh({ sub: authPayload._id });
+
+    await Refresh.create({
+      userId: user._id,
+      token: refreshToken,
+      ua: req.headers["user-agent"] || "",
+      ip: req.ip,
+    });
+
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
+    return res.json({
+      accessToken,
+      user: authPayload,
+      licenseToken: null,
+      isNewUser,
+      // Lets the client prompt social users to set a password so they can
+      // also sign into the ADLM desktop plugins (email+password only).
+      hasPassword: !!user.passwordHash,
+    });
+  } catch (err) {
+    console.error("[/auth/google] error:", err);
+    res.status(500).json({ error: "Google sign-in failed" });
   }
 });
 

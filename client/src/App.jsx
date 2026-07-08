@@ -6,6 +6,7 @@ import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import HelpBot from "./components/HelpBot.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import SetPasswordPrompt from "./components/SetPasswordPrompt.jsx";
 
 import { API_BASE } from "./config";
 
@@ -58,6 +59,7 @@ export default function App() {
 
       <Footer />
       <HelpBot />
+      <SetPasswordPrompt />
 
       <YoutubeWelcomeModal
         open={showVideo}

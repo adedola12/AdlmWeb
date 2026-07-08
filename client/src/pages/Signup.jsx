@@ -2,6 +2,8 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
+import GoogleSignInButton from "../components/GoogleSignInButton.jsx";
+import { requestSetPasswordPrompt } from "../components/SetPasswordPrompt.jsx";
 
 export default function Signup() {
   const nav = useNavigate();
@@ -104,6 +106,17 @@ export default function Signup() {
           {busy ? "Creating…" : "Sign up"}
         </button>
       </form>
+
+      <div className="mt-4">
+        <GoogleSignInButton
+          text="signup_with"
+          onSuccess={(res) => {
+            if (!res?.hasPassword) requestSetPasswordPrompt();
+            nav("/");
+          }}
+          onError={(message) => setErr(message)}
+        />
+      </div>
     </div>
   );
 }

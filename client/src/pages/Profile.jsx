@@ -28,6 +28,10 @@ export default function Profile() {
   const [stepUpEnabled, setStepUpEnabled] = React.useState(!!user?.stepUpEnabled);
   const [savingStepUp, setSavingStepUp] = React.useState(false);
 
+  // Social-login accounts have no password until they set one (needed for
+  // the desktop plugins). null = still loading.
+  const [hasPassword, setHasPassword] = React.useState(null);
+
   const [zone, setZone] = React.useState("");
   const [zones, setZones] = React.useState([]); // from server labels
 
@@ -57,6 +61,7 @@ export default function Profile() {
         setZone(res?.zone || "");
         setZones(Array.isArray(res?.zones) ? res.zones : []);
         setStepUpEnabled(!!res?.stepUpEnabled);
+        setHasPassword(res?.hasPassword === undefined ? null : !!res.hasPassword);
       } catch (e) {
         setMsg(e?.message || "Failed to load profile.");
       }
@@ -466,9 +471,21 @@ export default function Profile() {
           </label>
         </div>
 
+        {hasPassword === false && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-3 text-sm">
+            <div className="font-medium">No password set</div>
+            <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
+              You signed up with Google. The ADLM desktop apps (QUIV, Heron,
+              MEP…) sign in with email + password, so you won't be able to log
+              into them until you set a password below. Web sign-in with
+              Google keeps working either way.
+            </p>
+          </div>
+        )}
+
         <div className="flex gap-2 flex-wrap">
           <Link to="/change-password" className="btn">
-            Change password
+            {hasPassword === false ? "Set password" : "Change password"}
           </Link>
 
           <Link to="/login?reset=1" className="btn">

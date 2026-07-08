@@ -2,8 +2,12 @@
 import express from "express";
 import dayjs from "dayjs";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
+import { Refresh } from "../models/Refresh.js";
+import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import { REFRESH_COOKIE } from "../util/jwt.js";
 import { rolePermissionList, isSuperAdminRole } from "../util/rbac.js";
 import { ALL_AREA_KEYS } from "../config/permissions.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
@@ -546,7 +550,62 @@ router.get(
       firmName: firmName || "",
       nameLockedForCertificate: !!u.certificateNameLockedAt,
       stepUpEnabled: !!u.security?.stepUpEnabled,
+      // Social-created accounts have no password until they set one; the
+      // profile page uses these to show the "set a password for desktop
+      // apps" section vs the regular change-password form.
+      hasPassword: !!u.passwordHash,
+      provider: u.provider || "local",
     });
+  }),
+);
+
+// Set or change the account password. Social-login accounts start without a
+// password and can't sign into the ADLM desktop plugins (which authenticate
+// with email+password) until they set one here. If a password already exists,
+// the current one must be supplied.
+router.post(
+  "/password",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!newPassword) {
+      return res.status(400).json({ error: "newPassword required" });
+    }
+
+    const pwError = validatePasswordStrength(newPassword);
+    if (pwError) {
+      return res.status(400).json({ error: pwError, code: "WEAK_PASSWORD" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User missing" });
+
+    if (user.passwordHash) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          error: "Current password is required.",
+          code: "CURRENT_PASSWORD_REQUIRED",
+        });
+      }
+      const ok = await bcrypt.compare(String(currentPassword), user.passwordHash);
+      if (!ok) {
+        return res
+          .status(401)
+          .json({ error: "Current password is incorrect." });
+      }
+    }
+
+    user.passwordHash = await bcrypt.hash(String(newPassword), 10);
+    await user.save();
+
+    // Sign out every other device/session, but keep this one alive.
+    const ownToken = req.cookies?.[REFRESH_COOKIE];
+    await Refresh.deleteMany({
+      userId: user._id,
+      ...(ownToken ? { token: { $ne: ownToken } } : {}),
+    });
+
+    return res.json({ ok: true, hasPassword: true });
   }),
 );
 

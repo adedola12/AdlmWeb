@@ -102,6 +102,21 @@ const UserSchema = new mongoose.Schema(
 
     passwordHash: { type: String, default: "" },
 
+    // How the account was created: "local" (email+password signup) or a
+    // social identity provider. Social-created accounts start with an empty
+    // passwordHash — they can't sign into the desktop plugins until they set
+    // one from the profile page (POST /me/password). Linking a social login
+    // to an existing local account does NOT change this field or the password.
+    provider: {
+      type: String,
+      enum: ["local", "google", "apple"],
+      default: "local",
+    },
+
+    // Stable Google subject id, recorded on first Google sign-in so we can
+    // recognise the account even if Google ever reports a changed email.
+    googleId: { type: String, index: true, sparse: true, default: undefined },
+
     // Role key — references a Role.key (see server/models/Role.js). No enum so
     // admins can create custom roles; validated against existing roles on
     // assignment. "user" is the default no-admin-access role.

@@ -3,6 +3,8 @@ import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
+import GoogleSignInButton from "../components/GoogleSignInButton.jsx";
+import { requestSetPasswordPrompt } from "../components/SetPasswordPrompt.jsx";
 
 // Password field with a show/hide eye toggle. The toggle is a type="button"
 // (so it never submits the form) and is kept out of the tab order, so Enter
@@ -345,6 +347,17 @@ export default function Login() {
           </button>
         </div>
       </form>
+
+      <div className="mt-4">
+        <GoogleSignInButton
+          text="signin_with"
+          onSuccess={(res) => {
+            if (!res?.hasPassword) requestSetPasswordPrompt();
+            nav(next, { replace: true });
+          }}
+          onError={(message) => setErr(message)}
+        />
+      </div>
 
       {/* forgot password panel */}
       {showForgot && (

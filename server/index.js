@@ -155,6 +155,8 @@ app.use(
           "https://js.paystack.co",
           "https://checkout.flutterwave.com",
           "https://www.googletagmanager.com",
+          // Google Identity Services (Sign in with Google button)
+          "https://accounts.google.com/gsi/client",
         ],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
@@ -168,8 +170,10 @@ app.use(
           "https://www.google-analytics.com",
           "https://region1.google-analytics.com",
           "https://stats.g.doubleclick.net",
+          "https://accounts.google.com/gsi/",
         ],
         frameSrc: [
+          "https://accounts.google.com/gsi/",
           "https://js.paystack.co",
           "https://checkout.flutterwave.com",
           "https://www.googletagmanager.com",
