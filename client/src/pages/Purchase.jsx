@@ -51,6 +51,10 @@ export default function Purchase() {
   const [products, setProducts] = React.useState([]);
 
   const [cart, setCart] = React.useState({});
+  // The persist effect must not run before the restore effect has read
+  // localStorage — otherwise the initial empty cart state wipes the items
+  // the Products page just added, and nothing shows preselected.
+  const cartHydratedRef = React.useRef(false);
   const [currency, setCurrency] = React.useState("NGN");
 
   const [licenseType, setLicenseType] = React.useState("personal");
@@ -179,6 +183,7 @@ export default function Purchase() {
   // ---------- restore cart + meta ----------
   React.useEffect(() => {
     if (!products.length) return;
+    cartHydratedRef.current = true;
 
     const meta = readCartMeta();
     const lt =
@@ -545,6 +550,7 @@ export default function Purchase() {
 
   // Persist cart + meta
   React.useEffect(() => {
+    if (!cartHydratedRef.current) return;
     const items = Object.entries(cart).map(([productKey, entry]) => ({
       productKey,
       periods: clampPeriodsFor(productByKey(productKey), entry?.periods),
