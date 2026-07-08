@@ -347,6 +347,30 @@ export default function Purchase() {
     });
   }
 
+  // Auto-open the configurator when landing with a restored cart or a
+  // ?product= deep link — otherwise the middle panel sits on its placeholder
+  // even though the Summary already shows items. One-shot: never fights a
+  // selection the user has made.
+  const autoOpenedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (autoOpenedRef.current) return;
+    if (!products.length) return;
+    if (activeKey) {
+      autoOpenedRef.current = true;
+      return;
+    }
+    const preferred = (qs.get("product") || "").trim();
+    const keys = Object.keys(cart);
+    const k =
+      preferred && (cart[preferred] || productByKey(preferred))
+        ? preferred
+        : keys[0];
+    if (!k) return;
+    autoOpenedRef.current = true;
+    selectProduct(k);
+    // eslint-disable-next-line
+  }, [products.length, cart, activeKey]);
+
   // Commit the current draft to the cart (add or update the active product).
   function commitActive() {
     if (!activeKey) return;
