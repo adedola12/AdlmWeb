@@ -2,6 +2,7 @@ import React from "react";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { payWithPaystack, verifyPaystack } from "../lib/paystack.js";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import LicenseScene from "../components/LicenseScene.jsx";
 
@@ -88,7 +89,36 @@ export default function Purchase() {
 
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
+  // Card payments run in NGN only — the pay modal uses the order's actual
+  // currency (storage in the cart forces NGN even when the picker says USD).
+  const [pendingCurrency, setPendingCurrency] = React.useState("NGN");
   const [bankDetails, setBankDetails] = React.useState(null);
+
+  // If Paystack redirected back here (hosted-page fallback, or the popup
+  // ended in a redirect), confirm the charge server-side before treating it
+  // as paid. Verify is idempotent, so a re-run or webhook race is harmless.
+  const paystackReturnRef = qs.get("reference") || qs.get("trxref");
+  React.useEffect(() => {
+    if (!paystackReturnRef || !accessToken) return;
+    (async () => {
+      setMsg("Confirming your payment…");
+      try {
+        const out = await verifyPaystack(paystackReturnRef, accessToken);
+        if (out?.ok) {
+          setCart({});
+          clearCartStorage();
+          navigate(`/receipt/${out.purchaseId}`, { replace: true });
+        } else {
+          setMsg(
+            "We couldn't confirm the payment yet. If you were debited, it will be confirmed automatically — check your dashboard shortly.",
+          );
+        }
+      } catch (e) {
+        setMsg(e.message || "Payment confirmation failed");
+      }
+    })();
+    // eslint-disable-next-line
+  }, [paystackReturnRef, accessToken]);
 
   // Physical training (org only)
   const [trainingLocations, setTrainingLocations] = React.useState([]);
@@ -651,6 +681,7 @@ export default function Purchase() {
       });
 
       setPendingPurchaseId(out.purchaseId || null);
+      setPendingCurrency(out.currency || payload.currency);
 
       // Fetch bank details from server (not hardcoded in frontend)
       try {
@@ -666,6 +697,49 @@ export default function Purchase() {
       setMsg(out.message || "Order created. Please pay manually and confirm.");
     } catch (e) {
       setMsg(e.message || "Failed to create order");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function payWithCard() {
+    if (!pendingPurchaseId) {
+      setMsg("No pending purchase found.");
+      return;
+    }
+
+    setSubmitting(true);
+    setMsg("");
+
+    try {
+      await payWithPaystack({
+        purchaseId: pendingPurchaseId,
+        accessToken,
+        onSuccess: async (reference) => {
+          // Never trust the popup alone — the server confirms the charge
+          // with Paystack before the order is marked paid.
+          try {
+            setMsg("Confirming your payment…");
+            const out = await verifyPaystack(reference, accessToken);
+            if (out?.ok) {
+              setCart({});
+              clearCartStorage();
+              setShowManualPayModal(false);
+              setPendingPurchaseId(null);
+              navigate(`/receipt/${out.purchaseId || pendingPurchaseId}`);
+            } else {
+              setMsg(
+                "We couldn't confirm the payment yet. If you were debited, it will be confirmed automatically — check your dashboard shortly.",
+              );
+            }
+          } catch (e) {
+            setMsg(e.message || "Payment confirmation failed");
+          }
+        },
+        onCancel: () => setMsg("Payment cancelled — you have not been charged."),
+      });
+    } catch (e) {
+      setMsg(e.message || "Could not start card payment");
     } finally {
       setSubmitting(false);
     }
@@ -1361,7 +1435,27 @@ export default function Purchase() {
             onClick={() => setShowManualPayModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-depth-lg p-6 max-w-lg w-full z-10">
-            <h3 className="text-lg font-semibold mb-2">Pay to account</h3>
+            <h3 className="text-lg font-semibold mb-2">Complete your payment</h3>
+
+            {pendingCurrency === "NGN" && (
+              <div className="mb-4">
+                <button
+                  className="btn w-full"
+                  onClick={payWithCard}
+                  disabled={submitting}
+                >
+                  {submitting ? "Starting…" : "Pay with Card (Paystack)"}
+                </button>
+                <div className="text-xs text-slate-500 text-center mt-2">
+                  Foreign cards are charged in Naira — your bank converts the
+                  amount. You may be asked for an OTP by your bank.
+                </div>
+                <div className="text-center text-xs text-slate-400 my-3">
+                  — or pay by bank transfer —
+                </div>
+              </div>
+            )}
+
             <p className="text-sm text-slate-700 mb-4">
               Use the following account details to make payment, then click "I
               have paid".

@@ -192,6 +192,10 @@ app.use(
 // HTTP clients already negotiate decompression, so this is transparent to them.
 app.use(compression());
 app.use(cookieParser());
+// Webhooks MUST be mounted before express.json — Paystack signature
+// verification hashes the raw body, and once express.json has consumed the
+// stream, express.raw inside the router is skipped and the HMAC check breaks.
+app.use("/webhooks", webhooksRouter);
 // Raised from 2mb: a bill plus embedded materialItems (100s of lines, each with an
 // elementIds[] array) in one revit-project payload can exceed 2mb.
 app.use(express.json({ limit: "16mb" }));
@@ -210,8 +214,6 @@ app.get(["/health", "/healthz"], (_req, res) => {
 /* =========================
    ✅ API ROUTES (FIRST)
    ========================= */
-
-app.use("/webhooks", webhooksRouter);
 
 // Public JWKS endpoint so plugins can fetch the RS256 public key for
 // license token validation. Must come BEFORE any auth middleware — it is

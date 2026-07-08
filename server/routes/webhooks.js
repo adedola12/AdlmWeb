@@ -6,7 +6,9 @@ import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 
 const router = express.Router();
 
-// Must receive raw body (index mounts this router BEFORE express.json)
+// Must receive raw body — index.js mounts this router BEFORE express.json;
+// if that ordering ever breaks, req.body arrives pre-parsed and the HMAC
+// check below throws on every event.
 router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const secret = process.env.PAYSTACK_SECRET_KEY;

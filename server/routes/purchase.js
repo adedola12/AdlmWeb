@@ -528,6 +528,85 @@ router.get("/verify", async (req, res) => {
   }
 });
 
+// Start a Paystack card charge for a pending purchase. Amount and email come
+// from the server-side Purchase record — the client only supplies the id, so
+// a tampered frontend can never change what gets charged. Foreign cards pay
+// in NGN too (their bank handles FX); 3DS runs inside the Paystack popup.
+router.post("/:id/paystack/init", requireAuth, async (req, res) => {
+  try {
+    if (!PAYSTACK_SECRET)
+      return res.status(400).json({ error: "Paystack not configured" });
+
+    const p = await Purchase.findById(req.params.id);
+    if (!p) return res.status(404).json({ error: "Purchase not found" });
+    if (String(p.userId) !== String(req.user._id))
+      return res.status(403).json({ error: "Not allowed" });
+    if (p.paid) return res.status(400).json({ error: "Already paid" });
+    if (p.status !== "pending")
+      return res.status(400).json({ error: "Purchase is not pending" });
+
+    // Card charges run in NGN only until the domiciliary account is set up.
+    // USD-priced orders keep using manual transfer.
+    if (p.currency !== "NGN")
+      return res.status(400).json({
+        error: "Card payment is available for NGN orders only",
+      });
+
+    const amountKobo = Math.round(Number(p.totalAmount || 0) * 100);
+    if (!(amountKobo > 0))
+      return res.status(400).json({ error: "Invalid order amount" });
+
+    const webUrl = (
+      process.env.PUBLIC_WEB_URL || "https://www.adlmstudio.net"
+    ).replace(/\/$/, "");
+
+    const psRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: p.email || req.user.email,
+        amount: amountKobo,
+        currency: "NGN",
+        channels: ["card"],
+        // Paystack appends ?trxref=..&reference=.. — Purchase.jsx verifies on
+        // mount when it sees a reference (covers the hosted-page fallback and
+        // popup flows that end in a redirect).
+        callback_url: `${webUrl}/purchase`,
+        metadata: { purchaseId: String(p._id) },
+      }),
+    });
+
+    const data = await psRes.json().catch(() => ({}));
+    if (!psRes.ok || !data?.status || !data?.data?.reference) {
+      console.error(
+        "[paystack init] failed:",
+        data?.message || `HTTP ${psRes.status}`,
+      );
+      return res
+        .status(502)
+        .json({ error: data?.message || "Could not start card payment" });
+    }
+
+    // Store the reference before the user pays — /purchase/verify and the
+    // webhook both look the purchase up by it.
+    p.paystackRef = data.data.reference;
+    await p.save();
+
+    return res.json({
+      ok: true,
+      reference: data.data.reference,
+      access_code: data.data.access_code,
+      authorization_url: data.data.authorization_url,
+    });
+  } catch (e) {
+    console.error("Paystack init error:", e);
+    return res.status(500).json({ error: "Could not start card payment" });
+  }
+});
+
 // Bank details served from env — keeps sensitive data out of frontend source
 router.get("/bank-details", requireAuth, (_req, res) => {
   res.json({
