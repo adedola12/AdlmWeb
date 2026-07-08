@@ -3,6 +3,7 @@ import express from "express";
 import crypto from "crypto";
 import { Purchase } from "../models/Purchase.js";
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
+import { saveCardAuthorization } from "../util/paymentMethods.js";
 
 const router = express.Router();
 
@@ -26,8 +27,21 @@ router.post("/paystack", express.raw({ type: "*/*" }), async (req, res) => {
     if (!ref) return res.json({ ok: true });
 
     const existing = await Purchase.findOne({ paystackRef: ref });
-    if (!existing || existing.paid) {
-      // Already paid or not found — idempotent success
+    if (!existing) {
+      // Not found — idempotent success
+      return res.json({ ok: true });
+    }
+
+    // Persist the reusable card token for auto-renewals (also on replayed
+    // events for already-paid purchases — the upsert is idempotent, and
+    // renewal charges refresh the stored expiry metadata this way).
+    // Best-effort: a failure must never block crediting the payment.
+    await saveCardAuthorization(existing.userId, event.data).catch((err) =>
+      console.error("[webhook/paystack] save card failed:", err?.message || err),
+    );
+
+    if (existing.paid) {
+      // Already paid — idempotent success
       return res.json({ ok: true });
     }
 

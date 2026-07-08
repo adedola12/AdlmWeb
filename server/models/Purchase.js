@@ -136,6 +136,12 @@ const PurchaseSchema = new mongoose.Schema(
     paystackRef: { type: String, trim: true },
     paid: { type: Boolean, default: false },
 
+    // Buyer ticked "auto-renew" at checkout — applyEntitlements copies the
+    // flag onto the granted entitlements once the purchase is paid.
+    autoRenewRequested: { type: Boolean, default: false },
+    // Created by the auto-renewal cron (charge_authorization), not checkout.
+    isRenewal: { type: Boolean, default: false },
+
     // legacy compatibility
     productKey: { type: String, trim: true },
     requestedMonths: { type: Number },

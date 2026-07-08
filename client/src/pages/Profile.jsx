@@ -5,6 +5,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { isAdmin, isStaff } from "../utils/roles.js";
 import AccountActivity from "../features/account/AccountActivity.jsx";
+import Billing from "../features/account/Billing.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
 
 export default function Profile() {
@@ -437,6 +438,9 @@ export default function Profile() {
 
       {/* ORDERS · INVOICES · INSTALLATIONS (moved here from the dashboard) */}
       <AccountActivity />
+
+      {/* SAVED CARD + PER-PRODUCT AUTO-RENEW */}
+      <Billing />
 
       {/* SECURITY + ADMIN CARD */}
       <div className="card">

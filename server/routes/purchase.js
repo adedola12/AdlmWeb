@@ -6,128 +6,16 @@ import { Setting } from "../models/Setting.js";
 import { getFxRate } from "../util/fx.js";
 import { validateAndComputeDiscount } from "../util/coupons.js";
 import { TrainingLocation } from "../models/TrainingLocation.js";
+import {
+  round2,
+  toMoney,
+  getEffectivePrices,
+  computeRecurring,
+} from "../util/pricing.js";
+import { saveCardAuthorization } from "../util/paymentMethods.js";
 
 const router = express.Router();
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
-
-const round2 = (x) => Math.round((Number(x || 0) + Number.EPSILON) * 100) / 100;
-
-function toMoney(x, currency) {
-  return currency === "USD" ? round2(x) : Math.round(Number(x || 0));
-}
-
-// Mirror of client/src/pages/Purchase.jsx getPrices() + resolve().
-// For USD, prefers the explicit USD field; otherwise converts NGN via fx.
-// Discounted variant wins when set and strictly less than actual.
-function getEffectivePrices(p, currency, fx) {
-  const isUSD = currency === "USD";
-  const pr = p?.price || {};
-
-  const inCur = (usd, ngn) => {
-    if (!isUSD) return Math.round(Number(ngn || 0));
-    const n = usd != null ? Number(usd || 0) : Number(ngn || 0) * fx;
-    return round2(n);
-  };
-
-  const monthlyActual = inCur(pr.monthlyUSD, pr.monthlyNGN);
-  const sixActual = inCur(pr.sixMonthUSD, pr.sixMonthNGN);
-  const yearlyActual = inCur(pr.yearlyUSD, pr.yearlyNGN);
-  const installFee = inCur(pr.installUSD, pr.installNGN);
-
-  const monthlyDisc = inCur(pr.discountedMonthlyUSD, pr.discountedMonthlyNGN);
-  const sixDisc = inCur(pr.discountedSixMonthUSD, pr.discountedSixMonthNGN);
-  const yearlyDisc = inCur(pr.discountedYearlyUSD, pr.discountedYearlyNGN);
-
-  const pick = (actual, discounted) =>
-    discounted > 0 && discounted < actual ? discounted : actual;
-
-  return {
-    monthly: pick(monthlyActual, monthlyDisc),
-    sixMonth: pick(sixActual, sixDisc),
-    yearly: pick(yearlyActual, yearlyDisc),
-    install: installFee,
-  };
-}
-
-// Legacy product.discounts.{sixMonths,oneYear} — applied only as a fallback
-// when the corresponding new tier price (sixMonthNGN/yearlyNGN) is unset,
-// to preserve behavior for older products that haven't migrated.
-function applyLegacyBundleDiscount(baseRecurring, disc, seats, currency, fx) {
-  if (!disc) return baseRecurring;
-
-  if (disc.type === "percent") {
-    const pct = Number(disc.valueNGN || 0);
-    const factor = Math.max(0, 1 - pct / 100);
-    return toMoney(baseRecurring * factor, currency);
-  }
-
-  if (disc.type === "fixed") {
-    let fixedPerSeat = 0;
-    if (currency === "USD") {
-      fixedPerSeat =
-        disc.valueUSD != null
-          ? Number(disc.valueUSD || 0)
-          : Number(disc.valueNGN || 0) * fx;
-      fixedPerSeat = round2(fixedPerSeat);
-    } else {
-      fixedPerSeat = Math.round(Number(disc.valueNGN || 0));
-    }
-    if (fixedPerSeat > 0) return toMoney(fixedPerSeat * seats, currency);
-  }
-
-  return baseRecurring;
-}
-
-// Tier logic mirroring client/src/pages/Purchase.jsx lineCalc().
-// 1-5 mo  → monthly × periods × seats
-// 6 mo    → sixMonth (or fallback monthly × 6 + legacy sixMonths discount) × seats
-// 7-11 mo → sixMonth + monthly × (periods - 6), all × seats
-// 12 mo   → yearly  (or fallback monthly × 12 + legacy oneYear discount) × seats
-// 13+ mo  → yearly + monthly × (periods - 12), all × seats
-// Yearly-billed products skip tier logic and use yearly × periods × seats.
-function computeRecurring({ p, eff, periods, seats, currency, fx }) {
-  const m = (n) => toMoney(n, currency);
-
-  if (p.billingInterval === "yearly") {
-    return m(eff.yearly * periods * seats);
-  }
-
-  if (periods < 6) {
-    return m(eff.monthly * periods * seats);
-  }
-
-  if (periods === 6) {
-    if (eff.sixMonth > 0) return m(eff.sixMonth * seats);
-    return applyLegacyBundleDiscount(
-      m(eff.monthly * 6 * seats),
-      p?.discounts?.sixMonths,
-      seats,
-      currency,
-      fx,
-    );
-  }
-
-  if (periods > 6 && periods < 12) {
-    const sixBase = eff.sixMonth > 0 ? eff.sixMonth : eff.monthly * 6;
-    const extra = eff.monthly * (periods - 6);
-    return m((sixBase + extra) * seats);
-  }
-
-  if (periods === 12) {
-    if (eff.yearly > 0) return m(eff.yearly * seats);
-    return applyLegacyBundleDiscount(
-      m(eff.monthly * 12 * seats),
-      p?.discounts?.oneYear,
-      seats,
-      currency,
-      fx,
-    );
-  }
-
-  const yearBase = eff.yearly > 0 ? eff.yearly : eff.monthly * 12;
-  const extra = eff.monthly * (periods - 12);
-  return m((yearBase + extra) * seats);
-}
 
 // If you are on Node < 18, uncomment:
 // import fetch from "node-fetch";
@@ -172,6 +60,10 @@ router.post("/cart", requireAuth, async (req, res) => {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
     const currency = String(req.body?.currency || "NGN").toUpperCase();
     const couponCode = String(req.body?.couponCode || "").trim();
+    // Opt-in flag only — it never changes what is charged now. It marks the
+    // entitlements granted by this purchase for the auto-renewal cron, which
+    // recomputes the price server-side at renewal time.
+    const autoRenewRequested = req.body?.autoRenew === true;
 
     const purchaseLicenseType =
       String(req.body?.licenseType || "personal").toLowerCase() ===
@@ -397,6 +289,7 @@ router.post("/cart", requireAuth, async (req, res) => {
       physicalTraining,
       storageAddons,
       status: "pending",
+      autoRenewRequested,
 
       coupon: couponRes.coupon
         ? {
@@ -478,6 +371,12 @@ router.get("/verify", async (req, res) => {
         .status(400)
         .json({ error: "Payment does not match the order amount" });
     }
+
+    // Persist the reusable card token for auto-renewals. Best-effort: a
+    // failure here must never block crediting a confirmed payment.
+    await saveCardAuthorization(existing.userId, data?.data).catch((err) =>
+      console.error("[purchase verify] save card failed:", err?.message || err),
+    );
 
     const purchase = await Purchase.findOneAndUpdate(
       { paystackRef: reference, paid: { $ne: true } },

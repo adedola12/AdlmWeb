@@ -47,6 +47,22 @@ const EntitlementSchema = new mongoose.Schema(
       lastSentDays: { type: Number, default: null },
     },
 
+    // ── Auto-renewal (opt-in, NGN card charges via stored Paystack token) ──
+    // All fields are additive so desktop plugins (which read productKey /
+    // status / expiresAt / seats / devices) are unaffected.
+    autoRenew: { type: Boolean, default: false },
+    // Renewal term in months, seeded from the original purchase line
+    // (periods × interval, capped at 12). Price is recomputed at charge time.
+    autoRenewMonths: { type: Number, default: 1, min: 1, max: 12 },
+    renewal: {
+      attempts: { type: Number, default: 0 },
+      lastAttemptAt: { type: Date, default: null },
+      lastError: { type: String, default: "" },
+      // Expiry the current attempt-cycle belongs to — when expiresAt moves
+      // (successful renewal or manual purchase) the counter resets.
+      cycleExpiryAt: { type: Date, default: null },
+    },
+
     // Extra project slots purchased by the user for this product.
     // Admin sets this when approving a storage add-on purchase.
     extraProjectSlots: { type: Number, default: 0, min: 0 },
@@ -129,6 +145,25 @@ const UserSchema = new mongoose.Schema(
     },
 
     entitlements: { type: [EntitlementSchema], default: [] },
+
+    // Saved card for auto-renewals — Paystack's reusable authorization token
+    // plus display metadata. NEVER the PAN/CVV (see util/paymentMethods.js).
+    // The sensitive paths are select:false so ordinary user queries (and any
+    // route that echoes the user document) can't leak them; the renewal cron
+    // opts in with .select("+paymentMethod.authorizationCode").
+    paymentMethod: {
+      provider: { type: String, default: "paystack" },
+      authorizationCode: { type: String, select: false },
+      signature: { type: String, select: false },
+      last4: { type: String, default: "" },
+      expMonth: { type: String, default: "" },
+      expYear: { type: String, default: "" },
+      cardType: { type: String, default: "" },
+      bank: { type: String, default: "" },
+      countryCode: { type: String, default: "" },
+      reusable: { type: Boolean, default: false },
+      savedAt: { type: Date },
+    },
 
     refreshVersion: { type: Number, default: 1 },
     welcomeEmailSentAt: { type: Date, default: null },
