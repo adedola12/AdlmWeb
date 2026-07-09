@@ -36,13 +36,63 @@ function money(v, compact = false) {
   return safeNum(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+// Every product bucket a takeoff project can live in, including the derived
+// "-materials" siblings. HERON (planswift) and Civil projects mostly live in
+// the materials buckets, so they must all be represented for the portfolio to
+// be complete. Order here sets the display order; colours group each family.
 const PRODUCTS = [
-  { key: "revit",     label: "QUIV",  color: "#3b82f6" },
-  { key: "planswift", label: "HERON", color: "#8b5cf6" },
-  { key: "mep",       label: "MEP",   color: "#10b981" },
-  { key: "civil3d",   label: "Civil", color: "#f59e0b" },
+  { key: "revit",                label: "QUIV",              color: "#3b82f6" },
+  { key: "revit-materials",      label: "QUIV Materials",    color: "#60a5fa" },
+  { key: "planswift",            label: "HERON",             color: "#8b5cf6" },
+  { key: "planswift-materials",  label: "HERON Materials",   color: "#a78bfa" },
+  { key: "mep",                  label: "MEP",               color: "#10b981" },
+  { key: "mep-materials",        label: "MEP Materials",     color: "#34d399" },
+  { key: "revitmep",             label: "Revit MEP",         color: "#14b8a6" },
+  { key: "revitmep-materials",   label: "Revit MEP Materials", color: "#2dd4bf" },
+  { key: "civil3d",              label: "Civil 3D",          color: "#f59e0b" },
+  { key: "civil3d-materials",    label: "Civil 3D Materials", color: "#fbbf24" },
 ];
+const PRODUCT_META = Object.fromEntries(
+  PRODUCTS.map((p) => [p.key, { label: p.label, color: p.color }]),
+);
 const COLOR_MAP = Object.fromEntries(PRODUCTS.map((p) => [p.key, p.color]));
+
+// Product buckets ProjectsGeneric can open a single project for. Materials-only
+// products without a client project route (mep-materials, civil3d-materials,
+// revitmep-materials) still appear in the portfolio with full stats, but their
+// rows aren't click-through (no detail view exists yet).
+const OPENABLE_KEYS = new Set([
+  "revit",
+  "revit-materials",
+  "planswift",
+  "planswift-materials",
+  "mep",
+  "civil3d",
+]);
+
+// Label/colour for any product key, including unknown future buckets.
+function labelFor(key) {
+  if (PRODUCT_META[key]) return PRODUCT_META[key].label;
+  return String(key || "other")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function colorFor(key) {
+  return PRODUCT_META[key]?.color || "#64748b";
+}
+
+// The ordered set of products actually present in the loaded rows, so the
+// UI renders exactly the buckets that hold projects (known ones first, in
+// PRODUCTS order, then any unrecognised keys).
+function productsPresent(rows) {
+  const present = new Set(rows.map((r) => r.productKey));
+  const known = PRODUCTS.filter((p) => present.has(p.key));
+  const knownKeys = new Set(known.map((p) => p.key));
+  const extra = [...present]
+    .filter((k) => k && !knownKeys.has(k))
+    .map((k) => ({ key: k, label: labelFor(k), color: colorFor(k) }));
+  return [...known, ...extra];
+}
 
 function projectStatus(row) {
   const pct =
@@ -90,9 +140,9 @@ function ProgressRing({ pct, size = 120, stroke = 10 }) {
 }
 
 // Dual horizontal bar chart: BoQ total vs completed, one row per product
-function ProductBarChart({ grouped }) {
+function ProductBarChart({ grouped, products }) {
   const W = 440, H_ROW = 44, PAD = 100, INNER = W - PAD - 12;
-  const entries = PRODUCTS.map((p) => {
+  const entries = products.map((p) => {
     const rows = grouped[p.key] || [];
     const total  = rows.reduce((s, r) => s + safeNum(r.totalCost), 0);
     const valued = rows.reduce((s, r) => s + safeNum(r.valuedAmount), 0);
@@ -128,9 +178,9 @@ function ProductBarChart({ grouped }) {
 }
 
 // Vertical bar chart: project count per product
-function ProductCountChart({ grouped }) {
+function ProductCountChart({ grouped, products }) {
   const W = 260, H = 160, PAD_B = 28, PAD_L = 28;
-  const entries = PRODUCTS.map((p) => ({
+  const entries = products.map((p) => ({
     ...p,
     projects: (grouped[p.key] || []).length,
     items: (grouped[p.key] || []).reduce((s, r) => s + safeNum(r.itemCount), 0),
@@ -194,7 +244,7 @@ function exportExcel(rows, totals) {
   XLSX.utils.book_append_sheet(wb, wsProjects, "Projects");
 
   const productHeaders = ["Product","Projects","Total Items","Completed Items","Progress (%)","BoQ Total (₦)","Completed (₦)","Outstanding (₦)"];
-  const productData = PRODUCTS.map(({ key, label }) => {
+  const productData = productsPresent(rows).map(({ key, label }) => {
     const g = rows.filter((r) => r.productKey === key);
     if (!g.length) return null;
     const agg = aggregateRows(g);
@@ -247,13 +297,17 @@ export default function PortfolioDashboard() {
     setLoading(true);
     setErr("");
     try {
-      const settled = await Promise.allSettled(
-        PRODUCTS.map(async ({ key, label }) => {
-          const data = await apiAuthed(`/projects/${key}`, { token: accessToken });
-          return (Array.isArray(data) ? data : []).map((r) => ({ ...r, productKey: key, productLabel: label }));
-        }),
+      // Single rollup across ALL products (incl. HERON, Civil and every
+      // -materials bucket) so nothing owned or shared is missed.
+      const data = await apiAuthed(`/me/projects-rollup`, { token: accessToken });
+      const list = Array.isArray(data?.projects) ? data.projects : [];
+      setRows(
+        list.map((r) => ({
+          ...r,
+          productKey: r.productKey,
+          productLabel: labelFor(r.productKey),
+        })),
       );
-      setRows(settled.filter((r) => r.status === "fulfilled").flatMap((r) => r.value));
     } catch (e) {
       setErr(e.message || "Failed to load portfolio.");
     } finally {
@@ -269,6 +323,8 @@ export default function PortfolioDashboard() {
     for (const r of rows) { if (!m[r.productKey]) m[r.productKey] = []; m[r.productKey].push(r); }
     return m;
   }, [rows]);
+  // Products actually present in the data — drives every per-product render.
+  const present = React.useMemo(() => productsPresent(rows), [rows]);
 
   const pct = totals.progressPercent;
 
@@ -377,7 +433,7 @@ export default function PortfolioDashboard() {
                     {!loading && rows.length === 0 && (
                       <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400 text-xs">No projects found. Open a project from your ADLM plugin to get started.</td></tr>
                     )}
-                    {!loading && PRODUCTS.map(({ key }) => {
+                    {!loading && present.map(({ key }) => {
                       const group = grouped[key] || [];
                       if (!group.length) return null;
                       return (
@@ -391,10 +447,11 @@ export default function PortfolioDashboard() {
                           {group.map((row) => {
                             const rowPct = safeNum(row.itemCount) ? (safeNum(row.markedCount) / safeNum(row.itemCount)) * 100 : 0;
                             const st = projectStatus(row);
+                            const openable = OPENABLE_KEYS.has(key);
                             return (
                               <tr key={row.id || row._id}
-                                className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                                onClick={() => navigate(`/projects/${key}?project=${encodeURIComponent(row.slug || row.id)}`)}>
+                                className={`transition-colors ${openable ? "hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer" : ""}`}
+                                onClick={openable ? () => navigate(`/projects/${key}?project=${encodeURIComponent(row.slug || row.id)}`) : undefined}>
                                 <td className="px-4 py-3 font-medium text-slate-800 dark:text-adlm-dark-text max-w-[180px] truncate">{row.name}</td>
                                 <td className="px-4 py-3 text-xs text-slate-500 dark:text-adlm-dark-muted">{row.productLabel}</td>
                                 <td className="px-4 py-3">
@@ -411,7 +468,7 @@ export default function PortfolioDashboard() {
                                     <span className="text-xs text-slate-500 w-9 text-right">{rowPct.toFixed(0)}%</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-slate-400"><FaExternalLinkAlt className="text-[10px]" /></td>
+                                <td className="px-4 py-3 text-slate-400">{openable ? <FaExternalLinkAlt className="text-[10px]" /> : null}</td>
                               </tr>
                             );
                           })}
@@ -436,10 +493,10 @@ export default function PortfolioDashboard() {
                 ? <div className="h-32 animate-pulse rounded-xl bg-slate-100 dark:bg-white/10" />
                 : rows.length === 0
                   ? <p className="text-xs text-slate-400 py-8 text-center">No project data yet.</p>
-                  : <ProductBarChart grouped={grouped} />
+                  : <ProductBarChart grouped={grouped} products={present} />
               }
               <div className="mt-4 flex flex-wrap gap-4">
-                {PRODUCTS.filter((p) => (grouped[p.key] || []).length > 0).map((p) => (
+                {present.filter((p) => (grouped[p.key] || []).length > 0).map((p) => (
                   <div key={p.key} className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-sm" style={{ background: p.color }} />
                     <span className="text-xs text-slate-500 dark:text-adlm-dark-muted">{p.label}</span>
@@ -456,7 +513,7 @@ export default function PortfolioDashboard() {
                 ? <div className="h-40 animate-pulse rounded-xl bg-slate-100 dark:bg-white/10" />
                 : rows.length === 0
                   ? <p className="text-xs text-slate-400 py-8 text-center">No data.</p>
-                  : <ProductCountChart grouped={grouped} />
+                  : <ProductCountChart grouped={grouped} products={present} />
               }
             </div>
 
@@ -479,7 +536,7 @@ export default function PortfolioDashboard() {
             <div className="lg:col-span-2 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-sm p-5">
               <div className="text-sm font-semibold text-slate-700 dark:text-adlm-dark-text mb-4">Progress by Product</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {PRODUCTS.map((p) => {
+                {present.map((p) => {
                   const g = grouped[p.key] || [];
                   if (!g.length) return null;
                   const agg = aggregateRows(g);
@@ -560,7 +617,7 @@ export default function PortfolioDashboard() {
                   <tbody className="divide-y divide-slate-100 dark:divide-adlm-dark-border">
                     {loading
                       ? <tr><td colSpan={7} className="px-4 py-4 text-center text-slate-400 text-xs animate-pulse">Loading…</td></tr>
-                      : PRODUCTS.map(({ key, label, color }) => {
+                      : present.map(({ key, label, color }) => {
                           const g = grouped[key] || [];
                           if (!g.length) return null;
                           const agg = aggregateRows(g);

@@ -1193,6 +1193,119 @@ router.get(
   }),
 );
 
+// GET /me/projects-rollup — every project the user owns OR collaborates on,
+// across ALL products (QUIV/HERON/MEP/Civil + their -materials siblings),
+// each with the same cost/valuation rollup the per-product /projects/:key
+// list produces. Powers the Portfolio Dashboard so materials-only products
+// (HERON, Civil, Revit-MEP) that have no dedicated list route still appear.
+//
+// The "marked" status field differs by product: materials projects track
+// `purchased`, everything else tracks `completed`. We compute an isMaterials
+// flag per document and branch the item-level condition on it, so a single
+// pipeline can span every product correctly.
+router.get(
+  "/projects-rollup",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+
+    const num = (path) => ({
+      $convert: { input: path, to: "double", onError: 0, onNull: 0 },
+    });
+    const markedFlag = {
+      $eq: [
+        {
+          $ifNull: [
+            { $cond: ["$isMaterials", "$$item.purchased", "$$item.completed"] },
+            false,
+          ],
+        },
+        true,
+      ],
+    };
+    const lineAmount = { $multiply: [num("$$item.qty"), num("$$item.rate")] };
+    const valuationFactor = {
+      $cond: [
+        markedFlag,
+        1,
+        { $divide: [{ $max: [0, { $min: [100, num("$$item.percentComplete")] }] }, 100] },
+      ],
+    };
+
+    const list = await TakeoffProject.aggregate([
+      {
+        $match: {
+          pmTrackerOnly: { $ne: true },
+          $or: [{ userId }, { "collaborators.userId": userId }],
+        },
+      },
+      {
+        $addFields: {
+          safeItems: { $ifNull: ["$items", []] },
+          // Materials buckets end in "-materials" / "-material".
+          isMaterials: {
+            $regexMatch: {
+              input: { $toLower: { $ifNull: ["$productKey", ""] } },
+              regex: "-material",
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          id: "$_id",
+          name: 1,
+          slug: 1,
+          productKey: 1,
+          publicShareEnabled: 1,
+          updatedAt: 1,
+          version: 1,
+          shared: { $ne: ["$userId", userId] },
+          itemCount: { $size: "$safeItems" },
+          markedCount: {
+            $size: {
+              $filter: { input: "$safeItems", as: "item", cond: markedFlag },
+            },
+          },
+          totalCost: {
+            $sum: { $map: { input: "$safeItems", as: "item", in: lineAmount } },
+          },
+          valuedAmount: {
+            $sum: {
+              $map: {
+                input: "$safeItems",
+                as: "item",
+                in: { $multiply: [lineAmount, valuationFactor] },
+              },
+            },
+          },
+          progressShare: {
+            $sum: {
+              $map: { input: "$safeItems", as: "item", in: valuationFactor },
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          remainingAmount: { $subtract: ["$totalCost", "$valuedAmount"] },
+          progressPercent: {
+            $cond: [
+              { $gt: ["$itemCount", 0] },
+              { $multiply: [{ $divide: ["$progressShare", "$itemCount"] }, 100] },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { updatedAt: -1 } },
+    ]);
+
+    return res.json({ projects: list });
+  }),
+);
+
 // ── PM Tracker (QUIV-exclusive standalone PM projects) ───────────────────────
 const PM_TRACKER_LIMIT = 10;
 
