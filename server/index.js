@@ -41,6 +41,7 @@ import adminProducts from "./routes/admin.products.js";
 import adminSettings from "./routes/admin.settings.js";
 import projectRoutes from "./routes/projects.js";
 import projectsPmRoutes from "./routes/projects.pm.js";
+import reportsRoutes from "./routes/reports.js";
 import archicadRoutes from "./routes/archicad.routes.js";
 
 import meMediaRoutes from "./routes/me-media.js";
@@ -249,6 +250,10 @@ app.use("/api/projects", projectRoutes);
 
 app.use("/projects", projectsPmRoutes);
 app.use("/api/projects", projectsPmRoutes);
+
+// Report export payloads (Project / PM / Management) — see routes/reports.js.
+app.use("/reports", reportsRoutes);
+app.use("/api/reports", reportsRoutes);
 
 app.use("/api/archicad", archicadRoutes);
 

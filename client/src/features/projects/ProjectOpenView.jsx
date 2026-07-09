@@ -27,6 +27,9 @@ import ProjectManagementTab from "./ProjectManagementTab.jsx";
 import ProjectValuationSummary from "./ProjectValuationSummary.jsx";
 import CollaboratorsModal from "./CollaboratorsModal.jsx";
 
+// Lazy — the report preview pulls in the chart/PDF stack only when opened.
+const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
+
 // Lazy — pulls in three.js + the web-ifc wasm; only loads when the 3D tab opens.
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
 
@@ -374,6 +377,8 @@ export default function ProjectOpenView({
   const [activeTab, setActiveTab] = React.useState("dashboard");
   const [copiedId, setCopiedId] = React.useState(false);
   const [collabOpen, setCollabOpen] = React.useState(false);
+  // null | "project" | "pm" — which report preview is open.
+  const [reportOpen, setReportOpen] = React.useState(null);
 
   // Access flags (server-resolved). canEdit/canExport/canManage gate the action
   // buttons; canSeeRates drives the "rates hidden" notice. The server is the
@@ -535,6 +540,22 @@ export default function ProjectOpenView({
             >
               <FaSave className="text-[12px]" />
               {saving ? "Saving…" : isDirty ? "Save changes" : "Saved"}
+            </button>
+          ) : null}
+
+          {canExport ? (
+            <button
+              type="button"
+              onClick={() => setReportOpen(activeTab === "pm" ? "pm" : "project")}
+              title={
+                activeTab === "pm"
+                  ? "Preview and download the Project Management (schedule & earned-value) report as PDF"
+                  : "Preview and download the Project Progress report as PDF"
+              }
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
+            >
+              <FaFileInvoiceDollar className="text-[12px]" />
+              {activeTab === "pm" ? "PM report" : "Project report"}
             </button>
           ) : null}
 
@@ -1128,6 +1149,18 @@ export default function ProjectOpenView({
           projectId={projectId || selectedId}
           accessToken={accessToken}
         />
+      ) : null}
+
+      {reportOpen ? (
+        <React.Suspense fallback={null}>
+          <ReportModal
+            open
+            onClose={() => setReportOpen(null)}
+            type={reportOpen}
+            productKey={productKey}
+            projectId={projectId || selectedId}
+          />
+        </React.Suspense>
       ) : null}
     </div>
   );
