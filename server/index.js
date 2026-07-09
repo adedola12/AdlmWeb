@@ -57,6 +57,7 @@ import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
+import geoRoutes from "./routes/geo.js";
 
 import meTrainingsRoutes from "./routes/me-trainings.js";
 import ptrainingsPublic from "./routes/ptrainings.js";
@@ -270,6 +271,7 @@ app.use("/showcase", showcasePublic);
 app.use("/changelogs", changelogsPublic);
 app.use("/coupons", couponsPublic);
 app.use("/helpbot", helpbotRoutes);
+app.use("/geo", geoRoutes);
 
 // Public settings (no auth) — mobile app URL etc.
 import { Setting } from "./models/Setting.js";

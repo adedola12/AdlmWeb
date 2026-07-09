@@ -3,6 +3,7 @@ import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { payWithPaystack, verifyPaystack } from "../lib/paystack.js";
+import { useCountry, isForeignBuyer } from "../lib/geo.js";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import LicenseScene from "../components/LicenseScene.jsx";
 
@@ -47,8 +48,18 @@ function clearCartStorage() {
 }
 
 export default function Purchase() {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [products, setProducts] = React.useState([]);
+
+  // Auto-detected buyer location (IP → country, timezone fallback). Used only
+  // to nudge checkout: foreign buyers default to USD pricing and see bank
+  // transfer instead of the NGN-only card wall (Paystack declines most
+  // non-Nigerian cards on an NGN charge). Never hard-blocks a payment.
+  const geo = useCountry();
+  const foreignBuyer = React.useMemo(
+    () => isForeignBuyer(geo, user?.whatsapp),
+    [geo, user?.whatsapp],
+  );
 
   const [cart, setCart] = React.useState({});
   // The persist effect must not run before the restore effect has read
@@ -56,6 +67,8 @@ export default function Purchase() {
   // the Products page just added, and nothing shows preselected.
   const cartHydratedRef = React.useRef(false);
   const [currency, setCurrency] = React.useState("NGN");
+  // Once the buyer picks a currency by hand we never auto-override it.
+  const currencyTouchedRef = React.useRef(false);
 
   const [licenseType, setLicenseType] = React.useState("personal");
   const [org, setOrg] = React.useState({ name: "", email: "", phone: "" });
@@ -97,6 +110,9 @@ export default function Purchase() {
   const [autoRenew, setAutoRenew] = React.useState(false);
 
   const [showManualPayModal, setShowManualPayModal] = React.useState(false);
+  // Foreign buyers see bank transfer first; this reveals the card button only
+  // if they say they hold a Nigerian card.
+  const [showForeignCard, setShowForeignCard] = React.useState(false);
   const [pendingPurchaseId, setPendingPurchaseId] = React.useState(null);
   // Card payments run in NGN only — the pay modal uses the order's actual
   // currency (storage in the cart forces NGN even when the picker says USD).
@@ -267,6 +283,21 @@ export default function Purchase() {
   React.useEffect(() => {
     if (anyStorageInCart && currency !== "NGN") setCurrency("NGN");
   }, [anyStorageInCart, currency]);
+
+  // Auto-detected foreign buyers see USD pricing by default — but only as a
+  // one-time nudge: we never override a currency the buyer picked by hand, and
+  // storage in the cart still forces NGN. USD orders route to bank transfer,
+  // sidestepping the NGN-only card wall that fails most foreign cards.
+  React.useEffect(() => {
+    if (
+      foreignBuyer &&
+      !currencyTouchedRef.current &&
+      !anyStorageInCart &&
+      currency === "NGN"
+    ) {
+      setCurrency("USD");
+    }
+  }, [foreignBuyer, anyStorageInCart, currency]);
 
   const productByKey = (key) =>
     products.find((x) => getProductKey(x) === key);
@@ -753,6 +784,7 @@ export default function Purchase() {
         setBankDetails(null);
       }
 
+      setShowForeignCard(false);
       setShowManualPayModal(true);
       setMsg(out.message || "Order created. Please pay manually and confirm.");
     } catch (e) {
@@ -868,7 +900,10 @@ export default function Purchase() {
                 <select
                   className="input"
                   value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
+                  onChange={(e) => {
+                    currencyTouchedRef.current = true;
+                    setCurrency(e.target.value);
+                  }}
                 >
                   <option value="NGN">NGN (₦)</option>
                   <option value="USD">USD ($)</option>
@@ -1519,22 +1554,47 @@ export default function Purchase() {
 
             {pendingCurrency === "NGN" ? (
               <div className="mb-4">
-                <button
-                  className="btn w-full"
-                  onClick={payWithCard}
-                  disabled={submitting}
-                >
-                  {submitting ? "Starting…" : "Pay with Card (Paystack)"}
-                </button>
-                <div className="text-xs text-slate-500 text-center mt-2">
-                  Foreign cards are charged in Naira — your bank converts the
-                  amount. You may be asked for an OTP by your bank.
-                </div>
-                {autoRenew && (
-                  <div className="text-xs text-emerald-700 text-center mt-1">
-                    Auto-renew is on — this card will be saved for future
-                    renewals (you can remove it from your profile).
+                {foreignBuyer && !showForeignCard ? (
+                  // Detected foreign buyer on an NGN order: lead with bank
+                  // transfer. Card charges here only clear reliably on
+                  // Nigerian-issued cards, so we keep the card path behind an
+                  // explicit opt-in rather than letting them hit a failed charge.
+                  <div className="rounded-lg bg-amber-50 p-3 text-sm text-slate-700">
+                    <div className="font-medium mb-1">
+                      Paying from outside Nigeria?
+                    </div>
+                    Card payments here clear reliably only with{" "}
+                    <b>Nigerian-issued cards</b>, so we recommend paying by bank
+                    transfer (details below) to avoid a declined charge.
+                    <button
+                      type="button"
+                      className="block underline text-xs text-slate-500 mt-2"
+                      onClick={() => setShowForeignCard(true)}
+                    >
+                      I have a Nigerian card — let me pay by card anyway
+                    </button>
                   </div>
+                ) : (
+                  <>
+                    <button
+                      className="btn w-full"
+                      onClick={payWithCard}
+                      disabled={submitting}
+                    >
+                      {submitting ? "Starting…" : "Pay with Card (Paystack)"}
+                    </button>
+                    <div className="text-xs text-slate-500 text-center mt-2">
+                      {foreignBuyer
+                        ? "Only Nigerian-issued cards clear reliably here. If yours is declined, use bank transfer below."
+                        : "Foreign cards are charged in Naira — your bank converts the amount. You may be asked for an OTP by your bank."}
+                    </div>
+                    {autoRenew && (
+                      <div className="text-xs text-emerald-700 text-center mt-1">
+                        Auto-renew is on — this card will be saved for future
+                        renewals (you can remove it from your profile).
+                      </div>
+                    )}
+                  </>
                 )}
                 <div className="text-center text-xs text-slate-400 my-3">
                   — or pay by bank transfer —
@@ -1542,22 +1602,51 @@ export default function Purchase() {
               </div>
             ) : (
               <div className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-slate-700">
-                <div className="font-medium mb-1">
-                  Paying by card from outside Nigeria?
-                </div>
-                Card payments are charged in Nigerian Naira (NGN) — your bank
-                converts to your local currency automatically. Switch your
-                order to NGN to pay by card.
-                <button
-                  className="btn w-full mt-3"
-                  onClick={() => {
-                    setCurrency("NGN");
-                    createPendingPurchaseAndShowModal("NGN");
-                  }}
-                  disabled={submitting}
-                >
-                  {submitting ? "Switching…" : "Switch to NGN & pay by card"}
-                </button>
+                {foreignBuyer ? (
+                  // USD order + detected foreign buyer: bank transfer is the
+                  // reliable path. Card-in-NGN is offered only as a labelled
+                  // fallback (works just for Nigerian-issued cards).
+                  <>
+                    <div className="font-medium mb-1">
+                      Recommended: pay by bank transfer
+                    </div>
+                    Card payments here are processed in Nigerian Naira and clear
+                    reliably only with a Nigerian-issued card. Please use the
+                    bank transfer details below.
+                    <button
+                      type="button"
+                      className="block underline text-xs text-slate-500 mt-3"
+                      onClick={() => {
+                        setCurrency("NGN");
+                        createPendingPurchaseAndShowModal("NGN");
+                      }}
+                      disabled={submitting}
+                    >
+                      {submitting
+                        ? "Switching…"
+                        : "I have a Nigerian card — switch to NGN & pay by card"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-medium mb-1">
+                      Paying by card from outside Nigeria?
+                    </div>
+                    Card payments are charged in Nigerian Naira (NGN) — your bank
+                    converts to your local currency automatically. Switch your
+                    order to NGN to pay by card.
+                    <button
+                      className="btn w-full mt-3"
+                      onClick={() => {
+                        setCurrency("NGN");
+                        createPendingPurchaseAndShowModal("NGN");
+                      }}
+                      disabled={submitting}
+                    >
+                      {submitting ? "Switching…" : "Switch to NGN & pay by card"}
+                    </button>
+                  </>
+                )}
                 <div className="text-center text-xs text-slate-400 my-3">
                   — or pay by bank transfer below —
                 </div>
