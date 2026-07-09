@@ -12,8 +12,12 @@ import {
   FaArrowLeft,
   FaSyncAlt,
   FaFileExcel,
+  FaFilePdf,
   FaExternalLinkAlt,
 } from "react-icons/fa";
+
+// Lazy — the report preview pulls in the chart/PDF stack only when opened.
+const ReportModal = React.lazy(() => import("../features/reports/ReportModal.jsx"));
 
 dayjs.extend(relativeTime);
 
@@ -237,6 +241,7 @@ export default function PortfolioDashboard() {
   const [loading, setLoading] = React.useState(true);
   const [err, setErr]         = React.useState("");
   const [tab, setTab]         = React.useState("overview");
+  const [reportOpen, setReportOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -294,6 +299,11 @@ export default function PortfolioDashboard() {
               disabled={loading || rows.length === 0}
               className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:shadow-md transition disabled:opacity-50">
               <FaFileExcel className="text-xs" /> Export Excel
+            </button>
+            <button type="button" onClick={() => setReportOpen(true)}
+              title="Preview and download the organization-wide Management report as PDF"
+              className="inline-flex items-center gap-2 rounded-xl bg-adlm-blue-700 hover:bg-adlm-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:shadow-md transition disabled:opacity-50">
+              <FaFilePdf className="text-xs" /> Management report
             </button>
           </div>
         </div>
@@ -594,6 +604,16 @@ export default function PortfolioDashboard() {
         </div>
 
       </div>
+
+      {reportOpen ? (
+        <React.Suspense fallback={null}>
+          <ReportModal
+            open
+            onClose={() => setReportOpen(false)}
+            type="management"
+          />
+        </React.Suspense>
+      ) : null}
     </div>
   );
 }

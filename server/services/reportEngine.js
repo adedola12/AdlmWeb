@@ -37,7 +37,10 @@ export const PRODUCT_LABELS = {
   "planswift-materials": "HERON Materials",
   mep: "MEP",
   "mep-materials": "MEP Materials",
+  revitmep: "Revit MEP",
+  "revitmep-materials": "Revit MEP Materials",
   civil3d: "Civil 3D",
+  "civil3d-materials": "Civil 3D Materials",
 };
 
 export function productLabel(key) {
