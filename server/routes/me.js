@@ -1096,11 +1096,25 @@ function isMaterialsKey(k) {
   return String(k || "").endsWith("-materials");
 }
 
+// Products that hold takeoff projects (and therefore have a project/storage
+// cap). Everything else the user might be entitled to — RateGen, courses,
+// etc. — has no project bucket and must not render a storage bar.
+const PROJECT_PRODUCT_KEYS = new Set([
+  "revit",
+  "planswift",
+  "mep",
+  "civil3d",
+  "revitmep",
+]);
+
 router.get(
   "/storage",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const userId = req.user._id;
+    // req.user._id is a JWT string — aggregation does NOT auto-cast to
+    // ObjectId (unlike Mongoose queries), so the $match must use a real
+    // ObjectId or every count silently comes back 0.
+    const userId = new mongoose.Types.ObjectId(req.user._id || req.user.id);
     const user = await User.findById(userId, { entitlements: 1 }).lean();
     const ents = user?.entitlements || [];
 
@@ -1110,7 +1124,9 @@ router.get(
     const baseLimit = isOrg ? ORG_PROJECT_LIMIT : PERSONAL_PROJECT_LIMIT;
     const licenseType = isOrg ? "organization" : "personal";
 
-    // Active non-materials product keys the user is entitled to
+    // Active, project-bearing product keys the user is entitled to. Excludes
+    // materials siblings (no own bucket) and non-project products like
+    // RateGen (which shouldn't show a projects bar at all).
     const productKeys = [
       ...new Set(
         ents
@@ -1118,16 +1134,25 @@ router.get(
             (e) =>
               e?.status === "active" &&
               e?.productKey &&
-              !isMaterialsKey(e.productKey),
+              !isMaterialsKey(e.productKey) &&
+              PROJECT_PRODUCT_KEYS.has(e.productKey),
           )
           .map((e) => e.productKey),
       ),
     ];
 
-    // Count projects per product in one aggregation
+    // Count projects per product in one aggregation. Excludes PM-tracker-only
+    // projects — those live in a separate bucket with their own limit and
+    // aren't shown in the takeoffs list, so they must not inflate the count.
     const counts = productKeys.length
       ? await TakeoffProject.aggregate([
-          { $match: { userId: userId, productKey: { $in: productKeys } } },
+          {
+            $match: {
+              userId,
+              productKey: { $in: productKeys },
+              pmTrackerOnly: { $ne: true },
+            },
+          },
           { $group: { _id: "$productKey", count: { $sum: 1 } } },
         ])
       : [];

@@ -605,7 +605,13 @@ async function projectLimitForProduct(userId, productKey) {
 async function assertWithinProjectLimit(userId, productKey) {
   if (isMaterialsProductKey(productKey)) return;
   const limit = await projectLimitForProduct(userId, productKey);
-  const count = await TakeoffProject.countDocuments({ userId, productKey });
+  // PM-tracker projects live in their own bucket with a separate cap, so they
+  // must not consume takeoff slots (would double-count against the 30 limit).
+  const count = await TakeoffProject.countDocuments({
+    userId,
+    productKey,
+    pmTrackerOnly: { $ne: true },
+  });
   if (count >= limit) {
     const err = new Error(
       `Project limit reached (${limit}). Delete a project or upgrade your plan to add more.`,
@@ -627,7 +633,13 @@ async function getProjectStorageInfo(req, res) {
       return res.json({ used: 0, limit: null, productKey, isMaterials: true });
     }
     const limit = await projectLimitForProduct(userId, productKey);
-    const used = await TakeoffProject.countDocuments({ userId, productKey });
+    // Match the takeoffs list + create-limit: PM-tracker projects are counted
+    // in their own bucket, not here.
+    const used = await TakeoffProject.countDocuments({
+      userId,
+      productKey,
+      pmTrackerOnly: { $ne: true },
+    });
     return res.json({ used, limit, productKey, isMaterials: false });
   } catch (err) {
     console.error("GET storage-info error:", err);
