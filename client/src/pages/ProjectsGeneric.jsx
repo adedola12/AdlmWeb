@@ -4911,16 +4911,6 @@ export default function ProjectsGeneric() {
                     </span>
                     {bulkBusy ? "Refreshing…" : "Refresh projects"}
                   </button>
-                  <Link
-                    to="/portfolio-dashboard"
-                    title="Portfolio dashboard — all projects"
-                    className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                  >
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                      <FaChartBar className="text-[12px]" />
-                    </span>
-                    Portfolio Dashboard
-                  </Link>
                   {toolNorm === "revit" && (
                     <Link
                       to="/pm-tracker"
@@ -4936,6 +4926,18 @@ export default function ProjectsGeneric() {
                       </span>
                     </Link>
                   )}
+                  {/* Portfolio Dashboard sits last — it's the cross-product
+                      roll-up you leave the tool for, so it anchors the group. */}
+                  <Link
+                    to="/portfolio-dashboard"
+                    title="Portfolio dashboard — all projects"
+                    className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
+                  >
+                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
+                      <FaChartBar className="text-[12px]" />
+                    </span>
+                    Portfolio Dashboard
+                  </Link>
                 </div>
               </div>
 

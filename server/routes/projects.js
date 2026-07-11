@@ -2042,10 +2042,14 @@ async function listProjects(req, res) {
     };
 
     const list = await TakeoffProject.aggregate([
-      // Owner's own projects OR projects shared with this user.
+      // Owner's own projects OR projects shared with this user. Exclude
+      // PM-tracker-only projects: they carry no bill of quantities and are
+      // managed on the dedicated PM Tracker page, so they must not clutter
+      // the takeoffs file-explorer (they'd show as 0-item folders here).
       {
         $match: {
           productKey,
+          pmTrackerOnly: { $ne: true },
           $or: [{ userId }, { "collaborators.userId": userId }],
         },
       },
