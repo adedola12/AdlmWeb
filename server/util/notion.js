@@ -182,3 +182,82 @@ export async function syncProposalToNotion(proposal) {
 
   return result;
 }
+
+/**
+ * Upsert a warm lead captured by the AI Agent into the same CRM database.
+ * Idempotent by email. Never throws — returns a `notion` sub-document to
+ * persist on the Lead, with `lastError` populated on failure. Dormant until
+ * NOTION_API_KEY is configured.
+ */
+export async function syncLeadToNotion(lead) {
+  const result = {
+    contactPageId: lead?.notion?.contactPageId || "",
+    lastSyncedAt: lead?.notion?.lastSyncedAt || null,
+    lastError: "",
+  };
+
+  if (!notionEnabled()) return result; // dormant
+
+  try {
+    const summaryParts = [
+      lead.interest ? `Interested in: ${lead.interest}.` : "",
+      lead.productKeys?.length ? `Products: ${lead.productKeys.join(", ")}.` : "",
+      lead.note || "",
+    ].filter(Boolean);
+    const summary =
+      `AI Agent lead${lead.name ? ` — ${lead.name}` : ""}. ` +
+      (summaryParts.join(" ") || "Captured from website chat.");
+
+    let contactId = result.contactPageId;
+    if (!contactId && lead.email) {
+      const q = await notionApi(`/databases/${crmDbId()}/query`, {
+        method: "POST",
+        body: {
+          page_size: 1,
+          filter: { property: "Email", email: { equals: lead.email } },
+        },
+      });
+      contactId = q?.results?.[0]?.id || "";
+    }
+
+    if (contactId) {
+      await notionApi(`/pages/${contactId}`, {
+        method: "PATCH",
+        body: {
+          properties: {
+            Stage: select("Lead"),
+            "Activity Type": select("Chat"),
+            "Last Contacted": dateOnly(new Date()),
+          },
+        },
+      });
+    } else {
+      const props = {
+        Name: title(lead.name || lead.email || "AI Agent Lead"),
+        Stage: select("Lead"),
+        "Activity Type": select("Chat"),
+        "Follow-Up Status": select("Scheduled"),
+        "Follow-Up Channel": select(lead.phone ? "WhatsApp" : "Email"),
+        "Last Contacted": dateOnly(new Date()),
+        Notes: richText(summary),
+      };
+      if (lead.email) props.Email = { email: lead.email };
+      if (lead.phone) props["Phone / WhatsApp"] = { phone_number: lead.phone };
+
+      const created = await notionApi(`/pages`, {
+        method: "POST",
+        body: { parent: { database_id: crmDbId() }, properties: props },
+      });
+      contactId = created?.id || "";
+    }
+
+    result.contactPageId = contactId;
+    result.lastSyncedAt = new Date();
+    result.lastError = "";
+  } catch (e) {
+    result.lastError = String(e?.message || e).slice(0, 500);
+    console.error("[notion] lead sync failed:", result.lastError);
+  }
+
+  return result;
+}
