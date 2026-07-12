@@ -145,6 +145,11 @@ export default function ProjectBudgetTab({
         description: (it?.description || it?.takeoffLine || "").toString().trim(),
         qty: safeNum(it?.qty),
         unit: (it?.unit || "").toString().trim(),
+        // The BoQ line's own completion — marking a bill item done on the
+        // Bill of Quantity should show its budget build-up as done here too,
+        // independent of (and even when locked out of) per-line procurement.
+        billCompleted: Boolean(it?.completed) || safeNum(it?.percentComplete) >= 100,
+        billPercent: Boolean(it?.completed) ? 100 : safeNum(it?.percentComplete),
       });
     });
     return m;
@@ -220,6 +225,10 @@ export default function ProjectBudgetTab({
           order: meta ? meta.order : 1e6 + seen,
           billQty: meta ? meta.qty : 0,
           billUnit: meta ? meta.unit : (it?.unit || "").toString().trim(),
+          // Parent BoQ line completion — drives the group's done status so a
+          // bill item ticked complete shows as done in the budget breakdown.
+          billCompleted: meta ? Boolean(meta.billCompleted) : false,
+          billPercent: meta ? safeNum(meta.billPercent) : 0,
           lines: [],
         });
         seen += 1;
@@ -235,10 +244,6 @@ export default function ProjectBudgetTab({
           (a, l) => a + safeNum(l.qty) * safeNum(l.rate),
           0,
         );
-        const procuredCost = lines.reduce(
-          (a, l) => a + (lineDone(l) ? safeNum(l.qty) * safeNum(l.rate) : 0),
-          0,
-        );
         const overheadPercent = lines.reduce(
           (a, l) => Math.max(a, safeNum(l.overheadPercent)),
           0,
@@ -247,7 +252,19 @@ export default function ProjectBudgetTab({
           (a, l) => Math.max(a, safeNum(l.profitPercent)),
           0,
         );
-        const doneCount = lines.filter(lineDone).length;
+        // When the parent BoQ line is complete, the whole build-up counts as
+        // done — the work is done regardless of per-line procurement ticks
+        // (which may be frozen by a locked contract). Otherwise fall back to
+        // the per-line procured/done count.
+        const billDone = Boolean(g.billCompleted);
+        const lineDoneCount = lines.filter(lineDone).length;
+        const doneCount = billDone ? lines.length : lineDoneCount;
+        const procuredCost = billDone
+          ? net
+          : lines.reduce(
+              (a, l) => a + (lineDone(l) ? safeNum(l.qty) * safeNum(l.rate) : 0),
+              0,
+            );
         return {
           ...g,
           lines,
@@ -257,7 +274,7 @@ export default function ProjectBudgetTab({
           profitPercent,
           doneCount,
           total: lines.length,
-          allDone: lines.length > 0 && doneCount === lines.length,
+          allDone: lines.length > 0 && (billDone || lineDoneCount === lines.length),
         };
       })
       .sort((a, b) => a.order - b.order);
@@ -598,7 +615,11 @@ export default function ProjectBudgetTab({
           labour is done too.{" "}
           {canEdit
             ? "Tick a line to mark it procured, or use “Mark all” for a whole bill item."
-            : "Re-save this project from the plugin to enable procurement marking here."}
+            : contractLocked
+              ? "The contract is locked, so per-line procurement marking is frozen — but bill items you mark complete on the Bill of Quantity now show as done here."
+              : sourceLines.length === 0
+                ? "Re-save this project from the plugin to load its material & labour breakdown."
+                : "You have view-only access, so procurement marking is disabled."}
         </div>
       </div>
 
@@ -1145,6 +1166,10 @@ export default function ProjectBudgetTab({
                               const Icon = meta.icon;
                               const amount = safeNum(l.qty) * safeNum(l.rate);
                               const done = lineDone(l);
+                              // Read-only indicator also reflects the parent
+                              // BoQ line's completion (the checkbox stays tied
+                              // to the actual procurement flag the user edits).
+                              const displayDone = done || Boolean(g.billCompleted);
                               return (
                                 <tr
                                   key={`${g.key}-${keyOf(l)}`}
@@ -1211,7 +1236,7 @@ export default function ProjectBudgetTab({
                                             : "Mark procured"
                                         }
                                       />
-                                    ) : done ? (
+                                    ) : displayDone ? (
                                       <span
                                         className={`font-semibold ${doneTone}`}
                                       >
