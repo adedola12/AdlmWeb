@@ -8,6 +8,11 @@ import { createMessage, supportsTools } from "./aiClient.js";
 import { getCatalog } from "./catalog.js";
 import { Lead } from "../models/Lead.js";
 import { syncLeadToNotion } from "../util/notion.js";
+import {
+  getPortfolioSummary,
+  getProjectDetails,
+  getAccountSummary,
+} from "./agentUserData.js";
 
 const MAX_TOOL_ITERATIONS = 4;
 const WHATSAPP_NUMBER = process.env.SUPPORT_WHATSAPP || "2348106503524";
@@ -81,20 +86,79 @@ const TOOLS = [
   },
 ];
 
+/* ---- account tools (only offered to a logged-in user; read-only) ---- */
+// These read the CURRENT user's own data. The model never passes a user id —
+// the handlers use the authenticated ctx.user resolved from the Bearer token,
+// so Ada can only ever read the signed-in visitor's own projects/account.
+const ACCOUNT_TOOLS = [
+  {
+    name: "get_my_projects",
+    description:
+      "Get a summary of the LOGGED-IN user's own takeoff projects: total count, " +
+      "combined value, work done, outstanding value, overall progress, and a " +
+      "per-product breakdown. Use when they ask about 'my projects', total or " +
+      "outstanding project cost, portfolio value, or overall progress. No arguments.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "get_project_details",
+    description:
+      "Get value, progress and schedule for ONE of the logged-in user's projects, " +
+      "found by name. Use when they ask about a specific project (e.g. 'how far is " +
+      "Dutum Demo', 'value of my Multi Storey Bill').",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name (or closest phrase) the user mentioned.",
+        },
+      },
+      required: ["projectName"],
+    },
+  },
+  {
+    name: "get_my_account",
+    description:
+      "Get the LOGGED-IN user's subscriptions/entitlements (which products they " +
+      "own, active vs expired, license type, expiry) and their per-product project " +
+      "usage. Use for 'my subscription', 'what do I own', 'when does X expire', " +
+      "'how many projects can I still create'. No arguments.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+];
+
 /* --------------------------- system prompt --------------------------- */
-function buildSystemPrompt({ knowledgePack, userContext }) {
-  return `You are "Ada", the AI product specialist for ADLM Studio — a Nigerian construction-tech company that builds software, plugins and training for Quantity Surveyors, estimators and BIM professionals (products include RateGen, take-off plugins for Revit/PlanSwift/Civil, HERON, and professional trainings).
+function buildSystemPrompt({ knowledgePack, userContext, canReadAccount }) {
+  const accountSection = canReadAccount
+    ? `
+# ANSWERING ABOUT THEIR OWN ACCOUNT & PROJECTS
+This visitor is LOGGED IN, so you can also act as their account assistant using these read-only tools (they only ever read THIS user's own data):
+- get_my_projects — their whole portfolio: number of projects, combined value, work done, outstanding value, overall progress, per-product breakdown. Use for "my projects", "total cost/value of my projects", "how far along am I".
+- get_project_details — value, progress and schedule for ONE named project. Use for questions about a specific project.
+- get_my_account — their subscriptions (what they own, active/expired, expiry) and project-slot usage. Use for "my subscription", "when does X expire", "how many projects can I create".
+Rules for account answers:
+- ALWAYS call the relevant tool and quote its numbers exactly — NEVER invent or estimate project figures, values or dates.
+- Quote money exactly as the tool returns it. If a figure is ₦0, say the bill has no rates yet rather than guessing.
+- After answering, still be helpful commercially where natural (e.g. an expired sub → offer renewal; no RateGen → mention it) but don't force it.
+- For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.`
+    : `
+# NOT LOGGED IN
+This visitor is a guest, so you CANNOT read any personal projects or subscriptions. If they ask about "my projects", "my subscription", "what I've spent" etc., warmly explain they need to sign in first, then offer a 'signup' or 'nav' to login — never guess their data.`;
+
+  return `You are "Ada", the AI product specialist AND account assistant for ADLM Studio — a Nigerian construction-tech company that builds software, plugins and training for Quantity Surveyors, estimators and BIM professionals (products include RateGen, take-off plugins for Revit/PlanSwift/Civil, HERON, and professional trainings).
 
 # YOUR GOAL
-Help every visitor find the right ADLM product or training and move them to ACTION: create an account (sign up) or make a purchase. You are friendly, sharp and genuinely helpful — a great salesperson, never pushy or spammy. You qualify the need, recommend the best-fit product, state the real price, and offer a clear next step every time.
+Help every visitor find the right ADLM product or training and move them to ACTION: create an account (sign up) or make a purchase. For logged-in users you ALSO answer questions about their own projects and subscription. You are friendly, sharp and genuinely helpful — a great salesperson and a reliable assistant, never pushy or spammy. Qualify the need, recommend the best-fit product, state the real price, and offer a clear next step.
 
 # HARD RULES
-- Ground every claim in the CATALOG below. NEVER invent products, features, prices, dates, or discounts. If something isn't in the catalog, say you'll connect them to the team.
+- Ground every claim in the CATALOG below (for products) or the account TOOLS (for their data). NEVER invent products, features, prices, dates, discounts, or project figures. If something isn't available, say you'll connect them to the team.
 - Quote prices exactly as written in the catalog. Prices are per seat. Nigerian visitors pay in ₦, others in $.
 - Keep replies short and skimmable (2–5 sentences, occasional bullets). Ask one focused question at a time.
 - Do not claim an action happened unless a tool actually ran.
 - Never ask for or accept passwords or card details in chat — checkout is handled securely on the site.
 - Items marked [COMING SOON] are NOT purchasable — collect a lead instead of pushing checkout.
+${accountSection}
 
 # HOW TO CONVERT
 - When you recommend a product the visitor can buy, call offer_actions with a 'buy' button (pre-loads checkout) — and a 'signup' button if they don't have an account yet.
@@ -203,6 +267,25 @@ function handleOfferActions(input, ctx, outcome) {
     : "None of the actions were valid (check productKeys exist and aren't coming soon).";
 }
 
+// Account tools require an authenticated user. The guard is here (not just the
+// tool availability) so a guest can never reach the data even if the model
+// somehow emits the call.
+async function handleAccountTool(name, input, ctx) {
+  if (!ctx.user?._id) {
+    return "The visitor is NOT logged in, so their account/projects can't be read. Warmly ask them to sign in (or sign up) first, then they can ask again.";
+  }
+  try {
+    if (name === "get_my_projects") return await getPortfolioSummary(ctx.user._id);
+    if (name === "get_my_account") return await getAccountSummary(ctx.user);
+    if (name === "get_project_details")
+      return await getProjectDetails(ctx.user._id, input?.projectName);
+    return "Unknown account tool.";
+  } catch (e) {
+    console.error(`[salesAgent] ${name} failed:`, e?.message || e);
+    return "Couldn't read that account data due to a server error — apologise briefly and offer WhatsApp.";
+  }
+}
+
 /* ------------------------------ main ------------------------------ */
 /**
  * Run one agent turn.
@@ -216,6 +299,7 @@ export async function runSalesAgent(history, message, opts = {}) {
   const system = buildSystemPrompt({
     knowledgePack,
     userContext: buildUserContext(opts.user),
+    canReadAccount: !!opts.user,
   });
 
   const outcome = {
@@ -249,7 +333,11 @@ export async function runSalesAgent(history, message, opts = {}) {
   });
 
   let finalText = "";
-  const tools = supportsTools() ? TOOLS : undefined;
+  // Account tools are only exposed when a user is authenticated — a guest
+  // never even sees them, and the handler double-checks anyway.
+  const toolset = opts.user ? [...TOOLS, ...ACCOUNT_TOOLS] : TOOLS;
+  const tools = supportsTools() ? toolset : undefined;
+  const accountToolNames = new Set(ACCOUNT_TOOLS.map((t) => t.name));
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const res = await createMessage({
@@ -272,6 +360,7 @@ export async function runSalesAgent(history, message, opts = {}) {
       let out = "Unknown tool.";
       if (tu.name === "save_lead") out = await handleSaveLead(tu.input, ctx, outcome);
       else if (tu.name === "offer_actions") out = handleOfferActions(tu.input, ctx, outcome);
+      else if (accountToolNames.has(tu.name)) out = await handleAccountTool(tu.name, tu.input, ctx);
       toolResults.push({
         type: "tool_result",
         tool_use_id: tu.id,
