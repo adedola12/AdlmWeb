@@ -2,13 +2,18 @@
 // Provider-agnostic chat transport for the ADLM AI Agent.
 //
 //   AGENT_PROVIDER=anthropic (default) → Claude via REST (native tool use).
-//   AGENT_PROVIDER=openai              → OpenAI SDK, TEXT ONLY (degraded
-//                                        fallback; no tool calls / buttons).
+//   AGENT_PROVIDER=openai              → OpenAI SDK (function-calling).
+//
+// BOTH providers support tools, so the full agent (Buy/Sign-up buttons + lead
+// capture) works either way. The canonical message/tool format used across the
+// agent loop is Anthropic-style content blocks; the OpenAI adapter translates
+// that to/from OpenAI's chat format on each call, so salesAgent.js never needs
+// to know which provider is active.
 //
 // The agent loop (services/salesAgent.js) owns the tools and the multi-turn
 // tool-result exchange; this module only normalizes one model round-trip into:
 //   { text, toolUses:[{id,name,input}], assistantContent, stopReason }
-// where `assistantContent` is the provider-native assistant turn to echo back.
+// where `assistantContent` is the assistant turn (canonical blocks) to echo back.
 
 import fetch from "node-fetch";
 import OpenAI from "openai";
@@ -21,6 +26,10 @@ const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MS || 30000);
 const DEFAULT_MODEL =
   process.env.AGENT_MODEL ||
   (PROVIDER === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001");
+
+// Output-token cap per model round-trip. Bounds spend on a public key; the
+// caller may pass a smaller value but never a larger one.
+const DEFAULT_MAX_TOKENS = Number(process.env.AGENT_MAX_TOKENS || 700);
 
 let _openai = null;
 function openai() {
@@ -53,7 +62,7 @@ async function anthropicCreate({ system, messages, tools, maxTokens }) {
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
-        max_tokens: maxTokens || 700,
+        max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
         system,
         messages,
         ...(tools && tools.length ? { tools } : {}),
@@ -88,33 +97,113 @@ async function anthropicCreate({ system, messages, tools, maxTokens }) {
   }
 }
 
-/* ------------------------- OpenAI (text only) ------------------------- */
-async function openaiCreate({ system, messages, maxTokens }) {
-  // Flatten our content-block messages down to plain text for the fallback.
-  const flat = messages.map((m) => {
-    if (typeof m.content === "string") return { role: m.role, content: m.content };
-    const text = (Array.isArray(m.content) ? m.content : [])
-      .map((b) =>
-        b.type === "text"
-          ? b.text
-          : b.type === "tool_result"
-            ? String(b.content || "")
-            : "",
-      )
-      .filter(Boolean)
-      .join("\n");
-    return { role: m.role === "assistant" ? "assistant" : "user", content: text };
-  });
+/* ------------------------- OpenAI (function-calling) ------------------------- */
 
+// Anthropic tool defs → OpenAI function-tool defs.
+function toOpenAiTools(tools) {
+  if (!tools || !tools.length) return undefined;
+  return tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema,
+    },
+  }));
+}
+
+// Canonical (Anthropic content-block) messages → OpenAI chat messages.
+// - assistant text + tool_use blocks → assistant message with tool_calls
+// - user tool_result blocks          → separate `tool` role messages
+// - user/assistant text              → plain messages
+function toOpenAiMessages(system, messages) {
+  const out = [{ role: "system", content: system }];
+
+  for (const m of messages) {
+    const blocks = Array.isArray(m.content)
+      ? m.content
+      : [{ type: "text", text: String(m.content || "") }];
+
+    if (m.role === "assistant") {
+      const text = blocks
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("\n");
+      const toolCalls = blocks
+        .filter((b) => b.type === "tool_use")
+        .map((b) => ({
+          id: b.id,
+          type: "function",
+          function: { name: b.name, arguments: JSON.stringify(b.input || {}) },
+        }));
+      const msg = { role: "assistant", content: text || null };
+      if (toolCalls.length) msg.tool_calls = toolCalls;
+      out.push(msg);
+    } else {
+      // A tool_result-carrying user turn must translate to `tool` messages,
+      // which OpenAI requires to directly follow the assistant tool_calls.
+      const toolResults = blocks.filter((b) => b.type === "tool_result");
+      for (const b of toolResults) {
+        out.push({
+          role: "tool",
+          tool_call_id: b.tool_use_id,
+          content: String(b.content ?? ""),
+        });
+      }
+      const text = blocks
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("\n");
+      if (text) out.push({ role: "user", content: text });
+    }
+  }
+  return out;
+}
+
+async function openaiCreate({ system, messages, tools, maxTokens }) {
   const res = await openai().chat.completions.create({
     model: DEFAULT_MODEL,
     max_tokens: maxTokens || 700,
     temperature: 0.3,
-    messages: [{ role: "system", content: system }, ...flat],
+    messages: toOpenAiMessages(system, messages),
+    ...(tools && tools.length
+      ? { tools: toOpenAiTools(tools), tool_choice: "auto" }
+      : {}),
   });
 
-  const text = res.choices?.[0]?.message?.content?.trim() || "";
-  return { text, toolUses: [], assistantContent: text, stopReason: "end_turn" };
+  const msg = res.choices?.[0]?.message || {};
+  const text = (msg.content || "").trim();
+  const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+
+  const toolUses = calls.map((c) => {
+    let input = {};
+    try {
+      input = JSON.parse(c.function?.arguments || "{}");
+    } catch {
+      input = {};
+    }
+    return { id: c.id, name: c.function?.name, input };
+  });
+
+  // Rebuild canonical assistant content blocks so the agent loop can echo it
+  // back verbatim next turn — identical shape to the Anthropic path.
+  const assistantContent = [];
+  if (text) assistantContent.push({ type: "text", text });
+  for (const tu of toolUses) {
+    assistantContent.push({
+      type: "tool_use",
+      id: tu.id,
+      name: tu.name,
+      input: tu.input,
+    });
+  }
+
+  return {
+    text,
+    toolUses,
+    assistantContent,
+    stopReason: toolUses.length ? "tool_use" : "end_turn",
+  };
 }
 
 /**
@@ -122,10 +211,11 @@ async function openaiCreate({ system, messages, maxTokens }) {
  * (strings are also accepted). Returns the normalized shape above.
  */
 export async function createMessage({ system, messages, tools, maxTokens }) {
-  if (PROVIDER === "openai") return openaiCreate({ system, messages, maxTokens });
+  if (PROVIDER === "openai")
+    return openaiCreate({ system, messages, tools, maxTokens });
   return anthropicCreate({ system, messages, tools, maxTokens });
 }
 
 export function supportsTools() {
-  return PROVIDER !== "openai";
+  return true; // both providers support tools now
 }
