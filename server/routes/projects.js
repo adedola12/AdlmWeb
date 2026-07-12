@@ -1266,6 +1266,7 @@ function applyValuationTracking({ productKey, previousItems = [], nextItems = []
 
 function buildValuationLogs(project, productKey) {
   const statusField = statusFieldForProductKey(productKey);
+  const statusDateField = statusDateFieldForProductKey(productKey);
   const logsByDay = new Map();
   const events = Array.isArray(project?.valuationEvents) ? [...project.valuationEvents] : [];
 
@@ -1355,6 +1356,63 @@ function buildValuationLogs(project, productKey) {
         markedAt: eventMarkedAtIso,
       });
     }
+    logsByDay.set(day, byItem);
+  }
+
+  // ── Reconstruct MEASURED entries from item state ─────────────────
+  //
+  // The event trail (applyValuationTracking) is the finest-grained source,
+  // but it can be empty for items marked before events existed, or if the
+  // events were ever lost on a re-sync. The source of truth for "what is
+  // ticked complete and when" is the item itself (completed/percentComplete +
+  // completedAt). So for any completed / in-progress measured line NOT already
+  // represented by a real event, synthesise an entry on its completion day —
+  // mirroring how prelims / PC sums / variations are handled below. This makes
+  // the Daily valuation log reflect actual progress even with no event trail.
+  const loggedKeys = new Set();
+  for (const byItem of logsByDay.values()) {
+    for (const k of byItem.keys()) loggedKeys.add(k);
+  }
+  for (let i = 0; i < projectItems.length; i += 1) {
+    const it = projectItems[i];
+    const ident = itemIdentity(it, i);
+    if (loggedKeys.has(ident)) continue; // already covered by an event
+
+    const ratified = Boolean(it?.[statusField]);
+    const pct = ratified
+      ? 100
+      : Math.max(0, Math.min(100, safeNum(it?.percentComplete)));
+    if (!ratified && pct <= 0) continue; // nothing earned on this line
+
+    const amount = safeNum(it?.qty) * safeNum(it?.rate) * (pct / 100);
+    if (amount <= 0) continue;
+
+    const when =
+      parseOptionalDate(ratified ? it?.[statusDateField] : it?.percentCompleteUpdatedAt) ||
+      parseOptionalDate(it?.statusUpdatedAt) ||
+      parseOptionalDate(it?.actualUpdatedAt) ||
+      parseOptionalDate(project?.updatedAt) ||
+      new Date();
+    const day = isoDay(when);
+    if (!day) continue;
+
+    const byItem = logsByDay.get(day) || new Map();
+    byItem.set(ident, {
+      itemKey: ident,
+      sn: safeNum(it?.sn) || i + 1,
+      description: String(
+        it?.description || it?.materialName || it?.takeoffLine || "",
+      ),
+      qty: safeNum(it?.qty),
+      unit: String(it?.unit || ""),
+      rate: safeNum(it?.rate),
+      amount,
+      previousPercent: 0,
+      nextPercent: pct,
+      eventType: ratified ? "binary" : "partial",
+      markedValue: ratified,
+      markedAt: when.toISOString(),
+    });
     logsByDay.set(day, byItem);
   }
 
