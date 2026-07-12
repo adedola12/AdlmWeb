@@ -12,6 +12,7 @@ import multer from "multer";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { recordActivity, ACT } from "../util/activityLog.js";
 import { User } from "../models/User.js";
 import { computePmDashboard, rescheduleTasks, computeProjectScope, _itemIdentity } from "../services/pmCompute.js";
 import { parseMsProjectFile } from "../util/msProjectParser.js";
@@ -658,6 +659,11 @@ async function updatePm(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(req, project, ACT.PM_UPDATED, "Updated the project schedule", {
+      tasks: (project.projectManagement?.tasks || []).length,
+      risks: (project.projectManagement?.risks || []).length,
+      issues: (project.projectManagement?.issues || []).length,
+    });
     res.json({
       ok: true,
       dashboard: computePmDashboard(project),
@@ -704,6 +710,9 @@ async function reschedulePm(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(req, project, ACT.PM_RESCHEDULED, "Rescheduled the project tasks", {
+      changed: result.changed,
+    });
     res.json({
       ok: true,
       reschedule: {
@@ -833,6 +842,13 @@ async function generateFromBoq(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.PM_GENERATED,
+      `Generated ${updated.length} task(s) from the bill of quantities`,
+      { generated: updated.length },
+    );
     res.json({
       ok: true,
       generated: updated.length,
@@ -1117,6 +1133,13 @@ async function importPm(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.PM_IMPORTED,
+      `Imported ${sanitized.length} task(s) from ${file.originalname || "an MS Project file"}`,
+      { imported: sanitized.length, format: parsed.format },
+    );
     res.json({
       ok: true,
       imported: sanitized.length,
@@ -1174,6 +1197,9 @@ async function clearImports(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(req, project, ACT.PM_UPDATED, `Cleared ${removed} imported task(s)`, {
+      removed,
+    });
     res.json({
       ok: true,
       removed,
@@ -1263,6 +1289,7 @@ async function resetPm(req, res) {
     project.markModified("projectManagement");
     project.version += 1;
     await project.save();
+    recordActivity(req, project, ACT.PM_RESET, "Reset the project schedule");
     res.json({ ok: true, dashboard: computePmDashboard(project), version: project.version });
   } catch (err) {
     console.error("DELETE PM error:", err);

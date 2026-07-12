@@ -12,6 +12,7 @@ import { Purchase } from "../models/Purchase.js";
 import { Setting } from "../models/Setting.js";
 import { Invoice } from "../models/Invoice.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { ActivityLog } from "../models/ActivityLog.js";
 import { sendMail } from "../util/mailer.js";
 
 const router = express.Router();
@@ -1328,6 +1329,98 @@ router.get(
     ]);
 
     return res.json({ projects: list });
+  }),
+);
+
+// ── Project activity log ─────────────────────────────────────────────────────
+// The signed-in user's activity feed: every logged event on projects they OWN
+// (including actions by their collaborators) plus their own actions on projects
+// shared with them. Powers the Profile "Project Activity" tab + its report.
+function activityScope(uid) {
+  return { $or: [{ ownerId: uid }, { actorId: uid }] };
+}
+
+// GET /me/activity — paginated feed with optional category / project filters.
+router.get(
+  "/activity",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const uid = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const filter = { ...activityScope(uid) };
+    if (req.query.category) filter.category = String(req.query.category).toLowerCase();
+    if (req.query.projectId && mongoose.Types.ObjectId.isValid(String(req.query.projectId))) {
+      filter.projectId = new mongoose.Types.ObjectId(String(req.query.projectId));
+    }
+
+    const [items, total] = await Promise.all([
+      ActivityLog.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      ActivityLog.countDocuments(filter),
+    ]);
+
+    return res.json({
+      items,
+      pagination: {
+        page,
+        pages: Math.max(1, Math.ceil(total / limit)),
+        total,
+        limit,
+        hasPrev: page > 1,
+        hasNext: page * limit < total,
+      },
+    });
+  }),
+);
+
+// GET /me/activity/report — bounded payload for the printable activity report:
+// counts by category + up to 1000 recent entries.
+router.get(
+  "/activity/report",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const uid = new mongoose.Types.ObjectId(req.user._id || req.user.id);
+    const scope = activityScope(uid);
+
+    const [items, byCategory, total] = await Promise.all([
+      ActivityLog.find(scope).sort({ createdAt: -1 }).limit(1000).lean(),
+      ActivityLog.aggregate([
+        { $match: scope },
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
+      ActivityLog.countDocuments(scope),
+    ]);
+
+    const me = await User.findById(uid, {
+      firstName: 1,
+      lastName: 1,
+      username: 1,
+      email: 1,
+      firmName: 1,
+    }).lean();
+
+    return res.json({
+      report: {
+        type: "activity",
+        generatedAt: new Date().toISOString(),
+        user: {
+          name:
+            [me?.firstName, me?.lastName].filter(Boolean).join(" ") ||
+            me?.username ||
+            "",
+          email: me?.email || "",
+          firm: me?.firmName || "",
+        },
+        total,
+        byCategory: byCategory.map((c) => ({ category: c._id || "other", count: c.count })),
+        items,
+      },
+    });
   }),
 );
 

@@ -17,15 +17,18 @@ import { downloadReportPdf, reportFilename } from "./reportPdf.js";
 import ProjectReport from "./ProjectReport.jsx";
 import PmReport from "./PmReport.jsx";
 import ManagementReport from "./ManagementReport.jsx";
+import ActivityReport from "./ActivityReport.jsx";
 
 const TITLES = {
   project: "Project Progress Report",
   pm: "Project Management Report",
   management: "Management Report",
+  activity: "Project Activity Report",
 };
 
 function endpointFor(type, productKey, projectId) {
   if (type === "management") return "/reports/management";
+  if (type === "activity") return "/me/activity/report";
   return `/reports/${type}/${productKey}/${projectId}`;
 }
 
@@ -66,7 +69,9 @@ export default function ReportModal({ open, onClose, type, productKey, projectId
   const nameForFile =
     type === "management"
       ? report?.organization?.name || "portfolio"
-      : report?.meta?.name || "project";
+      : type === "activity"
+        ? report?.user?.firm || report?.user?.name || "activity"
+        : report?.meta?.name || "project";
 
   async function handleDownload() {
     if (!previewRef.current || downloading) return;
@@ -126,6 +131,7 @@ export default function ReportModal({ open, onClose, type, productKey, projectId
             {type === "project" && <ProjectReport report={report} />}
             {type === "pm" && <PmReport report={report} />}
             {type === "management" && <ManagementReport report={report} />}
+            {type === "activity" && <ActivityReport report={report} />}
           </ReportShell>
         )}
       </div>

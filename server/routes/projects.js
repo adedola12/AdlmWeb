@@ -209,6 +209,7 @@ function projectForClient(project, access) {
 import { requireAuth, requireStepUp } from "../middleware/auth.js";
 import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { recordActivity, ACT } from "../util/activityLog.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import {
@@ -1836,6 +1837,9 @@ async function createProject(req, res) {
       valuationSettings: normalizeValuationSettings(valuationSettings),
     });
 
+    recordActivity(req, project, ACT.PROJECT_CREATED, "Created the project", {
+      itemCount: (project.items || []).length,
+    });
     res.json(projectForClient(project));
   } catch (err) {
     if (err?.code === "PROJECT_LIMIT") {
@@ -1955,6 +1959,15 @@ async function saveProjectFull(req, res) {
       } catch (e) {
         console.error("[full] budget consolidation failed:", e?.message || e);
       }
+    }
+
+    // Log the creation of a genuinely NEW project only — a re-sync of existing
+    // work upserts (created=false) and must not spam the activity feed.
+    if (takeoffRes.created) {
+      recordActivity(req, takeoffRes.project, ACT.PROJECT_CREATED, "Created the project", {
+        itemCount: (takeoffRes.project.items || []).length,
+        via: "plugin",
+      });
     }
 
     // 3) Proposed-vs-actual margin across the saved pair (§5).
@@ -2400,6 +2413,14 @@ async function updateProject(req, res) {
       });
     }
 
+    // Activity snapshot: variation count before mutation, so we can tell
+    // whether this save added or removed variations.
+    const prevVarCount = (project.variations || []).length;
+    const bodyTouchesRates =
+      req.body?.items !== undefined ||
+      req.body?.budgetItems !== undefined ||
+      req.body?.materialItems !== undefined;
+
     // Snapshot bill quantities (by code) BEFORE any mutation — used by the
     // Bill → Budget cascade after save to compute which lines changed.
     const prevBillSnapshot = (project.items || []).map((it) => ({
@@ -2735,6 +2756,29 @@ async function updateProject(req, res) {
       console.warn("Bill→Budget cascade skipped:", cascadeErr?.message || cascadeErr);
     }
 
+    // Activity: report variation add/remove (by count delta) and rate edits.
+    const nextVarCount = (project.variations || []).length;
+    if (nextVarCount > prevVarCount) {
+      recordActivity(
+        req,
+        project,
+        ACT.VARIATION_ADDED,
+        `Added ${nextVarCount - prevVarCount} variation(s)`,
+        { added: nextVarCount - prevVarCount, total: nextVarCount },
+      );
+    } else if (nextVarCount < prevVarCount) {
+      recordActivity(
+        req,
+        project,
+        ACT.VARIATION_REMOVED,
+        `Removed ${prevVarCount - nextVarCount} variation(s)`,
+        { removed: prevVarCount - nextVarCount, total: nextVarCount },
+      );
+    }
+    if (bodyTouchesRates) {
+      recordActivity(req, project, ACT.RATES_UPDATED, "Updated rates & valuation");
+    }
+
     res.json({ ...projectForClient(project, access), budgetCascade });
   } catch (err) {
     console.error("PUT project error:", err);
@@ -2763,6 +2807,7 @@ async function deleteProject(req, res) {
 
     if (!deleted) return res.status(404).json({ error: "Not found" });
 
+    recordActivity(req, deleted, ACT.PROJECT_DELETED, "Deleted the project");
     res.json({ ok: true, id });
   } catch (err) {
     console.error("DELETE project error:", err);
@@ -2899,6 +2944,13 @@ async function toggleShare(req, res) {
     project.publicShareEnabled = enable;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.SHARE_TOGGLED,
+      enable ? "Enabled the public dashboard link" : "Disabled the public dashboard link",
+      { enabled: enable },
+    );
     res.json({
       ok: true,
       publicShareEnabled: project.publicShareEnabled,
@@ -3026,6 +3078,9 @@ async function lockContract(req, res) {
       ? project.contract.toObject()
       : { ...project.contract };
     delete contractOut.lockPinHash;
+    recordActivity(req, project, ACT.CONTRACT_LOCKED, "Locked the contract", {
+      contractSum,
+    });
     res.json({ ok: true, contract: contractOut, version: project.version });
   } catch (err) {
     console.error("POST lock error:", err);
@@ -3095,6 +3150,7 @@ async function unlockContract(req, res) {
       ? project.contract.toObject()
       : { ...project.contract };
     delete contractOut.lockPinHash;
+    recordActivity(req, project, ACT.CONTRACT_UNLOCKED, "Unlocked the contract");
     res.json({ ok: true, contract: contractOut, version: project.version });
   } catch (err) {
     console.error("POST unlock error:", err);
@@ -3306,6 +3362,13 @@ async function issueCertificate(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.CERTIFICATE_ISSUED,
+      `Issued payment certificate #${cert.number}`,
+      { number: cert.number, netPayable: cert.netPayable },
+    );
     res.json({
       ok: true,
       certificate: access.canSeeRates ? cert : maskCertForClient(cert),
@@ -3367,6 +3430,13 @@ async function updateCertificate(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.CERTIFICATE_UPDATED,
+      `Updated payment certificate #${number}`,
+      { number, status: cert.status },
+    );
     res.json({
       ok: true,
       certificate: access.canSeeRates ? cert : maskCertForClient(cert),
@@ -3419,6 +3489,13 @@ async function deleteCertificate(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.CERTIFICATE_DELETED,
+      `Deleted payment certificate #${number}`,
+      { number },
+    );
     res.json({ ok: true, version: project.version });
   } catch (err) {
     console.error("DELETE certificate error:", err);
@@ -3495,6 +3572,13 @@ async function finalizeAccount(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.FINAL_ACCOUNT_FINALIZED,
+      "Finalized the final account",
+      { finalContractValue, savings },
+    );
     res.json({
       ok: true,
       finalAccount: access.canSeeRates
@@ -3810,6 +3894,13 @@ async function uploadProjectModel(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.MODEL_UPLOADED,
+      `Uploaded the ${discipline} model (${safeOriginal})`,
+      { discipline, sourceFile: safeOriginal, validation: validation?.status },
+    );
     res.json({
       ok: true,
       discipline,
@@ -3869,6 +3960,13 @@ async function deleteProjectModel(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(
+      req,
+      project,
+      ACT.MODEL_DELETED,
+      `Removed the ${discipline} model`,
+      { discipline },
+    );
     res.json({ ok: true, version: project.version });
   } catch (err) {
     console.error("DELETE model error:", err);
@@ -3956,6 +4054,7 @@ async function reopenFinalAccount(req, res) {
     project.version += 1;
     await project.save();
 
+    recordActivity(req, project, ACT.FINAL_ACCOUNT_REOPENED, "Reopened the final account");
     res.json({
       ok: true,
       finalAccount: access.canSeeRates
@@ -4467,6 +4566,9 @@ async function markBudget(req, res) {
     reconcileItemsFromBudget(project);
     project.version = (Number(project.version) || 0) + 1;
     await project.save();
+    recordActivity(req, project, ACT.BUDGET_UPDATED, "Updated the budget & procurement", {
+      lineCount: budget.length,
+    });
     return res.json(projectForClient(project, access));
   } catch (err) {
     console.error("markBudget error:", err);
@@ -4568,6 +4670,10 @@ async function createShareCode(req, res) {
     });
     await project.save();
 
+    recordActivity(req, project, ACT.SHARE_TOGGLED, `Created a ${accessLevel} share code`, {
+      accessLevel,
+      label,
+    });
     const created = project.shareCodes[project.shareCodes.length - 1];
     return res.json({
       ok: true,
@@ -4638,6 +4744,13 @@ async function updateCollabLevel(req, res) {
     if (!collab) return res.status(404).json({ error: "Collaborator not found" });
     collab.accessLevel = accessLevel;
     await project.save();
+    recordActivity(
+      req,
+      project,
+      ACT.COLLABORATOR_ADDED,
+      `Changed ${collab.email || "a collaborator"}'s access to ${accessLevel}`,
+      { email: collab.email || "", accessLevel },
+    );
     return res.json({ ok: true, userId: targetUserId, accessLevel });
   } catch (err) {
     console.error("update collab level error:", err);
@@ -4657,6 +4770,9 @@ async function removeCollab(req, res) {
     const { project } = owned;
 
     const before = (project.collaborators || []).length;
+    const removed = (project.collaborators || []).find(
+      (c) => String(c.userId) === targetUserId,
+    );
     project.collaborators = (project.collaborators || []).filter(
       (c) => String(c.userId) !== targetUserId,
     );
@@ -4664,6 +4780,13 @@ async function removeCollab(req, res) {
       return res.status(404).json({ error: "Collaborator not found" });
     }
     await project.save();
+    recordActivity(
+      req,
+      project,
+      ACT.COLLABORATOR_REMOVED,
+      `Removed ${removed?.email || "a collaborator"} from the project`,
+      { email: removed?.email || "" },
+    );
     return res.json({ ok: true, userId: targetUserId });
   } catch (err) {
     console.error("remove collab error:", err);
@@ -4787,6 +4910,15 @@ async function claimProject(req, res) {
     sc.uses = (sc.uses || 0) + 1;
     await project.save();
 
+    // Actor = the joining colleague; owner = project.userId. Surfaces on the
+    // owner's feed as "<email> joined … (full/view)".
+    recordActivity(
+      req,
+      project,
+      ACT.COLLABORATOR_CLAIMED,
+      `${myEmail || "A collaborator"} joined the project (${level} access)`,
+      { email: myEmail || "", accessLevel: level },
+    );
     return res.json({
       ok: true,
       projectId: String(project._id),

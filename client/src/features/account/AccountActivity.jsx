@@ -13,6 +13,134 @@ import { apiAuthed } from "../../http.js";
 import { API_BASE } from "../../config";
 import { OrdersTab, InstallationsTab } from "../../pages/Dashboard.jsx";
 
+const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
+
+// Category display metadata for the activity timeline.
+const ACT_CATS = [
+  { key: "", label: "All" },
+  { key: "project", label: "Projects" },
+  { key: "contract", label: "Contract" },
+  { key: "commercial", label: "Rates & Variations" },
+  { key: "valuation", label: "Valuation" },
+  { key: "collaboration", label: "Collaboration" },
+  { key: "model", label: "3D Models" },
+  { key: "pm", label: "Schedule" },
+];
+const ACT_DOT = {
+  project: "bg-adlm-blue-700",
+  contract: "bg-purple-500",
+  commercial: "bg-amber-500",
+  valuation: "bg-emerald-500",
+  collaboration: "bg-pink-500",
+  model: "bg-cyan-500",
+  pm: "bg-indigo-500",
+  other: "bg-slate-400",
+};
+
+function ActivityTab({
+  items,
+  loading,
+  pagination,
+  category,
+  onCategory,
+  onPage,
+  onDownload,
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div className="flex flex-wrap gap-1.5">
+          {ACT_CATS.map((c) => (
+            <button
+              key={c.key || "all"}
+              type="button"
+              onClick={() => onCategory(c.key)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                category === c.key
+                  ? "bg-adlm-navy text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-white/5 dark:text-adlm-dark-muted dark:hover:bg-white/10"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onDownload}
+          disabled={loading || !items.length}
+          className="inline-flex items-center gap-2 rounded-lg bg-adlm-orange px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40"
+        >
+          Download report
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-sm text-slate-500 py-6">Loading activity…</div>
+      ) : !items.length ? (
+        <div className="text-sm text-slate-500 py-6">
+          No activity yet. Actions on your projects — creating them, locking contracts,
+          variations, rate edits, collaborators, models and schedule changes — will appear here.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((a) => (
+            <li
+              key={a._id}
+              className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-3"
+            >
+              <span
+                className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${ACT_DOT[a.category] || ACT_DOT.other}`}
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-slate-800 dark:text-adlm-dark-text">
+                  {a.summary}
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500 dark:text-adlm-dark-muted">
+                  {a.projectName ? (
+                    <span className="font-medium text-slate-600 dark:text-adlm-dark-text">
+                      {a.projectName}
+                    </span>
+                  ) : null}
+                  {a.projectName ? " · " : ""}
+                  {dayjs(a.createdAt).format("DD MMM YYYY, HH:mm")}
+                  {" · "}
+                  {a.byCollaborator ? (a.actorName || a.actorEmail || "Collaborator") + " (collaborator)" : "You"}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {pagination && pagination.pages > 1 ? (
+        <div className="mt-4 flex items-center justify-between text-sm">
+          <button
+            type="button"
+            disabled={!pagination.hasPrev}
+            onClick={() => onPage(pagination.page - 1)}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-adlm-dark-border disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span className="text-slate-500">
+            Page {pagination.page} of {pagination.pages} · {pagination.total} events
+          </span>
+          <button
+            type="button"
+            disabled={!pagination.hasNext}
+            onClick={() => onPage(pagination.page + 1)}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-adlm-dark-border disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SubTab({ label, active, onClick, count }) {
   return (
     <button
@@ -161,6 +289,33 @@ export default function AccountActivity() {
   const [loadingPEnrollments, setLoadingPEnrollments] = React.useState(false);
   const [pEnrollmentsErr, setPEnrollmentsErr] = React.useState("");
 
+  // Project activity log
+  const [activity, setActivity] = React.useState([]);
+  const [activityPage, setActivityPage] = React.useState(1);
+  const [activityCat, setActivityCat] = React.useState("");
+  const [activityPag, setActivityPag] = React.useState(null);
+  const [loadingActivity, setLoadingActivity] = React.useState(false);
+  const [reportOpen, setReportOpen] = React.useState(false);
+
+  const loadActivity = React.useCallback(
+    async (page, category) => {
+      setLoadingActivity(true);
+      try {
+        const q = new URLSearchParams({ page: String(page), limit: "20" });
+        if (category) q.set("category", category);
+        const data = await apiAuthed(`/me/activity?${q.toString()}`, { token: accessToken });
+        setActivity(Array.isArray(data?.items) ? data.items : []);
+        setActivityPag(data?.pagination || null);
+      } catch {
+        setActivity([]);
+        setActivityPag(null);
+      } finally {
+        setLoadingActivity(false);
+      }
+    },
+    [accessToken],
+  );
+
   const loadOrders = React.useCallback(
     async (page) => {
       setLoadingOrders(true);
@@ -236,6 +391,11 @@ export default function AccountActivity() {
     if (tab === "orders") loadOrders(ordersPage);
   }, [accessToken, tab, ordersPage, loadOrders]);
 
+  React.useEffect(() => {
+    if (!accessToken) return;
+    if (tab === "activity") loadActivity(activityPage, activityCat);
+  }, [accessToken, tab, activityPage, activityCat, loadActivity]);
+
   return (
     <div className="card">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
@@ -247,6 +407,7 @@ export default function AccountActivity() {
           <SubTab label="Orders" active={tab === "orders"} onClick={() => setTab("orders")} />
           <SubTab label="Invoices" active={tab === "invoices"} onClick={() => setTab("invoices")} count={invoices.length} />
           <SubTab label="Installations" active={tab === "installations"} onClick={() => setTab("installations")} />
+          <SubTab label="Project Activity" active={tab === "activity"} onClick={() => setTab("activity")} />
         </div>
       </div>
 
@@ -287,6 +448,27 @@ export default function AccountActivity() {
           onRefreshPTrainings={loadPTrainings}
         />
       )}
+
+      {tab === "activity" && (
+        <ActivityTab
+          items={activity}
+          loading={loadingActivity}
+          pagination={activityPag}
+          category={activityCat}
+          onCategory={(c) => {
+            setActivityCat(c);
+            setActivityPage(1);
+          }}
+          onPage={(p) => setActivityPage(p)}
+          onDownload={() => setReportOpen(true)}
+        />
+      )}
+
+      {reportOpen ? (
+        <React.Suspense fallback={null}>
+          <ReportModal open type="activity" onClose={() => setReportOpen(false)} />
+        </React.Suspense>
+      ) : null}
     </div>
   );
 }
