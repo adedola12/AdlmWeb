@@ -127,16 +127,15 @@ function validatePasswordStrength(password) {
   return null;
 }
 
-// Fingerprint migration window: clients sending x-adlm-fp-version >= 2 that
+// Fingerprint v1→v2 migration: clients sending x-adlm-fp-version >= 2 that
 // don't match any existing device may transparently replace the user's
-// single legacy (v1) device for up to this many days after we ship v2.
-// Keep this stable once set so migration behavior is predictable.
-const FP_V2_LAUNCHED_AT = Date.parse("2026-04-17T00:00:00Z");
-const FP_MIGRATION_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
-
-function inFingerprintMigrationWindow() {
-  return Date.now() - FP_V2_LAUNCHED_AT < FP_MIGRATION_WINDOW_MS;
-}
+// single legacy (v1) device. There is deliberately NO calendar deadline:
+// v1 fingerprints are MAC-based and drift whenever the user switches
+// network adapters, so a v1-bound user can show up needing migration at
+// any time (the original fixed 90-day window expired 2026-07-16 and
+// permanently locked such users out with DEVICE_MISMATCH). The migration
+// self-closes per entitlement: once its devices are v2, tryMigrate finds
+// no legacy device and normal binding enforcement applies.
 
 // enforceDeviceBinding enforces seat limits and, for personal (1-seat)
 // licenses, single-device binding. The `fpVersion` (from the
@@ -162,11 +161,10 @@ function enforceDeviceBinding(entitlement, incomingFingerprint, fpVersion = 1) {
     seats > 1;
 
   // Helper: try to migrate an existing v1 device to the new v2 fingerprint.
-  // Only runs within the migration window and only when there is exactly
-  // one active v1 device (prevents accidental swaps on org licenses).
+  // Only runs when there is exactly one active v1 device (prevents
+  // accidental swaps on org licenses).
   function tryMigrate(v2Fp) {
     if (fpVersion < 2) return false;
-    if (!inFingerprintMigrationWindow()) return false;
 
     const active = activeDevices(entitlement);
     const legacy = active.filter((d) => (d.fpVersion || 1) < 2);
