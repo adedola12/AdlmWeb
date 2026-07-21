@@ -35,7 +35,9 @@ const transports = [
 
 // attachments: optional array of { filename, content } where `content` is a
 // base64-encoded string. Passed through to both Resend and SMTP transports.
-export async function sendMail({ to, subject, html, text, attachments }) {
+// bcc: optional — Resend sends bypass the Gmail mailbox entirely (nothing in
+// Sent), so callers that need an internal record BCC the admin mailbox.
+export async function sendMail({ to, subject, html, text, attachments, bcc }) {
   const primaryFrom =
     process.env.EMAIL_FROM ||
     `ADLM Services <${process.env.SMTP_USER || "noreply@adlmstudio.net"}>`;
@@ -47,6 +49,7 @@ export async function sendMail({ to, subject, html, text, attachments }) {
     text: text || toText(html),
     to: Array.isArray(to) ? to : [to],
   };
+  if (bcc) body.bcc = Array.isArray(bcc) ? bcc : [bcc];
 
   const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 

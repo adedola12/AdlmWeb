@@ -119,10 +119,15 @@ export async function sendBoqImportGrantEmail({ user, entitlement }) {
         )?.organizationName || "",
       expiresAt: entitlement?.expiresAt || null,
     });
+    // BCC the admin mailbox: Resend sends never appear in the Gmail Sent
+    // folder, so this keeps an internal copy of every grant notification.
+    const adminCopy =
+      process.env.ADMIN_NOTIFY_EMAIL || process.env.SMTP_USER || "";
     await sendMail({
       to: user.email,
       subject: "Quiv BoQ Import is now active on your ADLM account",
       html,
+      bcc: adminCopy || undefined,
     });
     return { ok: true };
   } catch (e) {
