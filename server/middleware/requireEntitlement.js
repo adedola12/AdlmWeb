@@ -11,13 +11,12 @@ function entitlementKeyFor(productKey) {
   return k;
 }
 
-// Feature grants that stand in for a product licence. The admin-granted
-// quiv-boq-import entitlement (Excel BoQ import projects) unlocks the Quiv
-// (revit) projects area on the website, so a user who was granted the feature
-// but never bought the plugin can still open/manage their imported projects.
-const SATISFIED_BY = {
-  revit: ["revit", "quiv-boq-import"],
-};
+// Feature grants that stand in for a product licence. Currently empty:
+// quiv-boq-import deliberately does NOT satisfy "revit" — BoQ Import access
+// is tied to the org's live Quiv subscription, so when the Quiv licence
+// lapses the projects area (and the import feature with it) closes until
+// renewal.
+const SATISFIED_BY = {};
 
 function acceptableKeysFor(productKey) {
   return SATISFIED_BY[productKey] || [productKey];

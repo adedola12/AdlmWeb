@@ -59,22 +59,27 @@ function isMaterialsTool(tool) {
 }
 
 // ── BoQ Import (admin-granted Quiv feature) ──
-// Users holding the quiv-boq-import entitlement (granted only by an admin)
-// can create Quiv projects from an Excel Bill of Quantities. Imported
-// projects are ordinary revit projects (origin "boq-import") — they live in
-// this list, count toward storage, and carry every tab except 3D Model and
-// linking.
+// Organization accounts holding the quiv-boq-import entitlement (granted only
+// by an admin) can create Quiv projects from an Excel Bill of Quantities.
+// Access requires BOTH the grant AND a live Quiv (revit) subscription — the
+// feature lapses with the licence. Imported projects are ordinary revit
+// projects (origin "boq-import") — they live in this list, count toward
+// storage, and carry every tab except 3D Model and linking.
 const BOQ_IMPORT_PRODUCT_KEY = "quiv-boq-import";
 const BOQ_IMPORT_ORIGIN = "boq-import";
 
-function hasBoqImportAccess(user) {
-  const ents = Array.isArray(user?.entitlements) ? user.entitlements : [];
+function entActive(ents, productKey) {
   return ents.some(
     (e) =>
-      e?.productKey === BOQ_IMPORT_PRODUCT_KEY &&
+      e?.productKey === productKey &&
       String(e?.status || "").toLowerCase() === "active" &&
       (!e?.expiresAt || new Date(e.expiresAt).getTime() > Date.now()),
   );
+}
+
+function hasBoqImportAccess(user) {
+  const ents = Array.isArray(user?.entitlements) ? user.entitlements : [];
+  return entActive(ents, BOQ_IMPORT_PRODUCT_KEY) && entActive(ents, "revit");
 }
 
 function getSidebarMeta(tool) {

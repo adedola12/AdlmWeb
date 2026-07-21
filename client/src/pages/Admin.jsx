@@ -2842,7 +2842,8 @@ export default function Admin({ section = null }) {
                 linking). Imported projects appear on the user's main projects
                 page and count toward their storage limit. Only{" "}
                 <b>Organization accounts with an active Quiv subscription</b>{" "}
-                are eligible — other accounts are rejected by the server.
+                are eligible — other accounts are rejected by the server, and
+                access pauses automatically if the Quiv subscription lapses.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">

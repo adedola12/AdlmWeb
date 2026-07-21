@@ -265,13 +265,14 @@ const uploadModelFile = multer({
 });
 
 // ── Admin-granted BoQ Import (Quiv) ─────────────────────────────────────────
-// Users holding the quiv-boq-import entitlement (granted only by an admin via
-// the UAC entitlement panel) can create revit projects from an Excel BoQ.
-// Imported projects are ordinary revit projects (origin "boq-import"): they
-// appear on the main projects page, count toward the storage/project limit and
-// ride the full budget/valuation/variation pipeline. Only the 3D-model and
-// project-linking surfaces are withheld (no model exists to view or link by
-// element).
+// Organization accounts holding the quiv-boq-import entitlement (granted only
+// by an admin via the UAC entitlement panel, org+active-Quiv only) can create
+// revit projects from an Excel BoQ. Access requires BOTH the grant and a live
+// Quiv (revit) subscription — it lapses with the licence. Imported projects
+// are ordinary revit projects (origin "boq-import"): they appear on the main
+// projects page, count toward the storage/project limit and ride the full
+// budget/valuation/variation pipeline. Only the 3D-model and project-linking
+// surfaces are withheld (no model exists to view or link by element).
 const BOQ_IMPORT_ORIGIN = "boq-import";
 const BOQ_IMPORT_ENTITLEMENT = "quiv-boq-import";
 const BOQ_IMPORT_MAX_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -5540,18 +5541,22 @@ async function listLinkCandidates(req, res) {
 }
 
 // ── BoQ Import (Quiv) routes ──
-// Gated on the admin-granted quiv-boq-import entitlement (NOT the revit
-// licence) — the grant IS the feature. Registered before the generic
-// /:productKey routes so "import-boq" is never captured as an :id.
+// Double-gated: the admin-granted quiv-boq-import entitlement AND a live
+// Quiv (revit) subscription — the feature is reserved for organization
+// accounts and dies with the Quiv licence until renewal. Registered before
+// the generic /:productKey routes so "import-boq" is never captured as
+// an :id.
 router.get(
   "/revit/import-boq/template",
   requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
+  requireEntitlement("revit"),
   downloadBoqImportTemplate,
 );
 
 router.post(
   "/revit/import-boq",
   requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
+  requireEntitlement("revit"),
   boqImportUpload.single("file"),
   importBoqCreate,
 );
@@ -5559,6 +5564,7 @@ router.post(
 router.put(
   "/revit/:id/import-boq",
   requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
+  requireEntitlement("revit"),
   boqImportUpload.single("file"),
   importBoqUpdate,
 );

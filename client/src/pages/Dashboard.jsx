@@ -338,20 +338,22 @@ export default function Dashboard() {
     navigate(`/product/${e.productKey}`);
   }
 
-  // Admin-granted Excel BoQ import feature (Quiv). Surfaces a quick link to
-  // the Quiv projects area — the grant opens that area even for users
-  // without a Quiv licence.
+  // Admin-granted Excel BoQ import feature (Quiv, organization accounts).
+  // Requires BOTH the grant and a live Quiv (revit) subscription — the quick
+  // link disappears when either lapses.
   const boqImportGranted = React.useMemo(() => {
     const ents = [
       ...(Array.isArray(user?.entitlements) ? user.entitlements : []),
       ...(Array.isArray(summary?.entitlements) ? summary.entitlements : []),
     ];
-    return ents.some(
-      (e) =>
-        e?.productKey === "quiv-boq-import" &&
-        String(e?.status || "").toLowerCase() === "active" &&
-        (!e?.expiresAt || new Date(e.expiresAt).getTime() > Date.now()),
-    );
+    const active = (key) =>
+      ents.some(
+        (e) =>
+          e?.productKey === key &&
+          String(e?.status || "").toLowerCase() === "active" &&
+          (!e?.expiresAt || new Date(e.expiresAt).getTime() > Date.now()),
+      );
+    return active("quiv-boq-import") && active("revit");
   }, [user, summary]);
 
   function manageSubscription(s) {
