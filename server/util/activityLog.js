@@ -14,6 +14,7 @@ import { ActivityLog } from "../models/ActivityLog.js";
 export const ACT = {
   PROJECT_CREATED: "project.created",
   PROJECT_DELETED: "project.deleted",
+  BOQ_REIMPORTED: "project.boq-reimported",
   CONTRACT_LOCKED: "contract.locked",
   CONTRACT_UNLOCKED: "contract.unlocked",
   VARIATION_ADDED: "variation.added",

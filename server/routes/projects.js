@@ -207,7 +207,10 @@ function projectForClient(project, access) {
   return obj;
 }
 import { requireAuth, requireStepUp } from "../middleware/auth.js";
-import { requireEntitlementParam } from "../middleware/requireEntitlement.js";
+import {
+  requireEntitlementParam,
+  requireEntitlement,
+} from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
 import { User } from "../models/User.js";
@@ -235,6 +238,10 @@ import {
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";
 import { deriveBillRatesFromBudget } from "../util/deriveBillRates.js";
 import { ensureBillItemCoverage } from "../util/budgetCoverage.js";
+import {
+  parseBoqWorkbook,
+  buildBoqTemplateWorkbook,
+} from "../util/boqExcelImport.js";
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
@@ -254,6 +261,28 @@ const uploadModelFile = multer({
       return cb(null, true);
     }
     cb(new Error("Only .ifc, .ifczip or .frag files are accepted."));
+  },
+});
+
+// ── Admin-granted BoQ Import (Quiv) ─────────────────────────────────────────
+// Users holding the quiv-boq-import entitlement (granted only by an admin via
+// the UAC entitlement panel) can create revit projects from an Excel BoQ.
+// Imported projects are ordinary revit projects (origin "boq-import"): they
+// appear on the main projects page, count toward the storage/project limit and
+// ride the full budget/valuation/variation pipeline. Only the 3D-model and
+// project-linking surfaces are withheld (no model exists to view or link by
+// element).
+const BOQ_IMPORT_ORIGIN = "boq-import";
+const BOQ_IMPORT_ENTITLEMENT = "quiv-boq-import";
+const BOQ_IMPORT_MAX_BYTES = 15 * 1024 * 1024; // 15 MB
+
+const boqImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: BOQ_IMPORT_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const name = String(file.originalname || "").toLowerCase();
+    if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) return cb(null, true);
+    cb(new Error("Only Excel .xlsx workbooks are accepted."));
   },
 });
 
@@ -3798,6 +3827,16 @@ async function uploadProjectModel(req, res) {
     );
     if (!project) return res.status(404).json({ error: "Not found" });
 
+    // BoQ-imported projects have no BIM model behind them — the 3D-model
+    // surface is withheld for this project type (the client hides the tab;
+    // this is the server-side boundary).
+    if (project.origin === BOQ_IMPORT_ORIGIN) {
+      return res.status(403).json({
+        error: "3D models are not available on BoQ-imported projects.",
+        code: "BOQ_IMPORT_NO_MODEL",
+      });
+    }
+
     const access = await resolveProjectAccess(req, project);
     if (!access.canEdit) {
       return res.status(403).json({
@@ -4634,6 +4673,249 @@ async function markBudget(req, res) {
   }
 }
 
+// ── BoQ Import (Quiv) handlers ───────────────────────────────────────────
+
+// Imported actuals must carry provenance dates, otherwise sanitizeItems'
+// plugin quirk-detection (rate 0 + actualRate set + no actualRecordedAt →
+// promote actualRate to rate) would eat genuine actual-vs-planned data.
+function stampImportedActuals(items) {
+  const now = new Date();
+  for (const it of items) {
+    if (it.actualQty != null || it.actualRate != null) {
+      it.actualRecordedAt = now;
+      it.actualUpdatedAt = now;
+    }
+  }
+}
+
+// Link the imported Material & Labour schedule to the bill, guarantee every
+// bill line has budget coverage (the coverage engine auto-generates rows when
+// the workbook came without a schedule), then derive live bill rates from the
+// build-up and reconcile progress — the same pipeline plugin saves run.
+function runBoqImportBudgetPipeline(project, budget) {
+  backfillBudgetLinks(project.items, budget);
+  project.budgetItems = ensureBillItemCoverage(project.items, budget);
+  deriveBillRatesFromBudget(project);
+  reconcileItemsFromBudget(project);
+}
+
+async function importBoqCreate(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid user id in token" });
+    }
+    if (!req.file?.buffer) {
+      return res
+        .status(400)
+        .json({ error: "Excel file required (multipart field: file)" });
+    }
+
+    const parsed = await parseBoqWorkbook(req.file.buffer);
+    const fallbackName = String(req.file.originalname || "")
+      .replace(/\.[^.]+$/, "")
+      .trim();
+    const name =
+      String(req.body?.name || "").trim() || fallbackName || "Imported BoQ";
+
+    const productKey = "revit";
+    await assertWithinProjectLimit(userId, productKey);
+
+    stampImportedActuals(parsed.items);
+    const tracked = applyValuationTracking({
+      productKey,
+      previousItems: [],
+      nextItems: sanitizeItems(parsed.items, productKey),
+      previousEvents: [],
+    });
+
+    const baseSlug = generateSlug(name);
+    const slug = await uniqueSlug(userId, productKey, baseSlug);
+
+    const project = await TakeoffProject.create({
+      userId,
+      productKey,
+      name,
+      slug,
+      origin: BOQ_IMPORT_ORIGIN,
+      items: tracked.items,
+      valuationEvents: tracked.valuationEvents,
+      customCategories: parsed.categories,
+    });
+
+    runBoqImportBudgetPipeline(project, sanitizeBudgetItems(parsed.budgetItems));
+    await project.save();
+
+    recordActivity(
+      req,
+      project,
+      ACT.PROJECT_CREATED,
+      "Created the project from an Excel BoQ import",
+      {
+        itemCount: (project.items || []).length,
+        budgetLineCount: (project.budgetItems || []).length,
+        source: BOQ_IMPORT_ORIGIN,
+      },
+    );
+
+    return res.json({
+      ...projectForClient(project),
+      _importWarnings: parsed.warnings || [],
+    });
+  } catch (err) {
+    if (err?.code === "PROJECT_LIMIT") {
+      return res.status(403).json({
+        error: err.message,
+        code: "PROJECT_LIMIT",
+        storageLimit: err.storageLimit || null,
+      });
+    }
+    if (err?.statusCode === 400) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
+    console.error("importBoqCreate error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// Re-import: refresh a BoQ-imported project from a newer copy of the workbook
+// (updated actual columns, added lines/categories). The bill is replaced
+// through applyValuationTracking so completion/actual history and the daily
+// valuation log stay coherent; procurement marks on matching budget rows are
+// preserved.
+async function importBoqUpdate(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid user id in token" });
+    }
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    if (!req.file?.buffer) {
+      return res
+        .status(400)
+        .json({ error: "Excel file required (multipart field: file)" });
+    }
+
+    const project = await TakeoffProject.findOne(
+      accessFilter(id, userId, "revit"),
+    );
+    if (!project) return res.status(404).json({ error: "Not found" });
+    if (project.origin !== BOQ_IMPORT_ORIGIN) {
+      return res.status(400).json({
+        error: "Only BoQ-imported projects can be updated from Excel.",
+        code: "NOT_BOQ_IMPORT",
+      });
+    }
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res.status(403).json({
+        error: "View-only access cannot edit this project.",
+        code: "VIEW_ONLY",
+      });
+    }
+
+    const parsed = await parseBoqWorkbook(req.file.buffer);
+    stampImportedActuals(parsed.items);
+
+    const tracked = applyValuationTracking({
+      productKey: "revit",
+      previousItems: project.items,
+      nextItems: sanitizeItems(parsed.items, "revit"),
+      previousEvents: project.valuationEvents,
+    });
+    project.items = tracked.items;
+    project.valuationEvents = tracked.valuationEvents;
+
+    // Merge any newly-named categories into the project's custom list.
+    const haveCategories = new Set(
+      (project.customCategories || []).map((c) => String(c).toLowerCase()),
+    );
+    for (const c of parsed.categories || []) {
+      if (!haveCategories.has(c.toLowerCase())) {
+        project.customCategories.push(c);
+        haveCategories.add(c.toLowerCase());
+      }
+    }
+
+    let budget;
+    if ((parsed.budgetItems || []).length) {
+      budget = sanitizeBudgetItems(parsed.budgetItems);
+      // Carry procurement state over from the existing plan so a re-import
+      // never un-buys material the QS already marked procured.
+      const budgetKey = (b) =>
+        [b.billIdentity, b.description, b.componentKind, b.unit]
+          .map((v) => String(v || "").trim().toLowerCase())
+          .join("|");
+      const prevByKey = new Map(
+        (project.budgetItems || []).map((b) => [budgetKey(b), b]),
+      );
+      for (const b of budget) {
+        const prev = prevByKey.get(budgetKey(b));
+        if (!prev) continue;
+        b.procured = prev.procured;
+        b.procuredAt = prev.procuredAt;
+        b.procuredPercent = prev.procuredPercent;
+        b.targetDate = prev.targetDate;
+        b.supplier = prev.supplier;
+        if (!b.notes) b.notes = prev.notes;
+      }
+    } else {
+      // Workbook came without a Material & Labour sheet — keep the current
+      // budget plan and just re-link/heal it against the refreshed bill.
+      budget = project.budgetItems;
+    }
+
+    runBoqImportBudgetPipeline(project, budget);
+    project.version = (Number(project.version) || 0) + 1;
+    await project.save();
+
+    recordActivity(
+      req,
+      project,
+      ACT.BOQ_REIMPORTED,
+      "Updated the project from an Excel BoQ re-import",
+      {
+        itemCount: (project.items || []).length,
+        budgetLineCount: (project.budgetItems || []).length,
+        source: BOQ_IMPORT_ORIGIN,
+      },
+    );
+
+    return res.json({
+      ...projectForClient(project, access),
+      _importWarnings: parsed.warnings || [],
+    });
+  } catch (err) {
+    if (err?.statusCode === 400) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
+    console.error("importBoqUpdate error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+async function downloadBoqImportTemplate(_req, res) {
+  try {
+    const wb = buildBoqTemplateWorkbook();
+    const buf = await wb.xlsx.writeBuffer();
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="adlm-boq-import-template.xlsx"',
+    );
+    return res.send(Buffer.from(buf));
+  } catch (err) {
+    console.error("downloadBoqImportTemplate error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
 // ── Collaborator share codes ─────────────────────────────────────────────
 // Crockford-ish alphabet (no I/L/O/0/1/U) — readable + typeable. The code is
 // shown grouped (XXXXX-XXXXX); the stored hash is over the normalized form
@@ -5102,6 +5384,14 @@ async function addLinkedProject(req, res) {
 
     const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
     if (!project) return res.status(404).json({ error: "Not found" });
+    // Linking merges by model elements — meaningless for BoQ-imported
+    // projects, which have no model behind them. Feature is withheld.
+    if (project.origin === BOQ_IMPORT_ORIGIN) {
+      return res.status(403).json({
+        error: "Project linking is not available on BoQ-imported projects.",
+        code: "BOQ_IMPORT_NO_LINKING",
+      });
+    }
     const access = await resolveProjectAccess(req, project);
     if (!access.canEdit)
       return res.status(403).json({ error: "You do not have edit access to this project" });
@@ -5248,6 +5538,30 @@ async function listLinkCandidates(req, res) {
     res.status(500).json({ error: "Server error" });
   }
 }
+
+// ── BoQ Import (Quiv) routes ──
+// Gated on the admin-granted quiv-boq-import entitlement (NOT the revit
+// licence) — the grant IS the feature. Registered before the generic
+// /:productKey routes so "import-boq" is never captured as an :id.
+router.get(
+  "/revit/import-boq/template",
+  requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
+  downloadBoqImportTemplate,
+);
+
+router.post(
+  "/revit/import-boq",
+  requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
+  boqImportUpload.single("file"),
+  importBoqCreate,
+);
+
+router.put(
+  "/revit/:id/import-boq",
+  requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
+  boqImportUpload.single("file"),
+  importBoqUpdate,
+);
 
 router.post(
   "/revit/full",

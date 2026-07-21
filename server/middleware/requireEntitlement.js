@@ -11,6 +11,24 @@ function entitlementKeyFor(productKey) {
   return k;
 }
 
+// Feature grants that stand in for a product licence. The admin-granted
+// quiv-boq-import entitlement (Excel BoQ import projects) unlocks the Quiv
+// (revit) projects area on the website, so a user who was granted the feature
+// but never bought the plugin can still open/manage their imported projects.
+const SATISFIED_BY = {
+  revit: ["revit", "quiv-boq-import"],
+};
+
+function acceptableKeysFor(productKey) {
+  return SATISFIED_BY[productKey] || [productKey];
+}
+
+function isEntActive(e) {
+  if (!e || e.status !== "active") return false;
+  if (e.expiresAt && dayjs(e.expiresAt).isBefore(dayjs())) return false;
+  return true;
+}
+
 /** requireEntitlement("revit" | "revitmep" | "planswift" | "rategen") */
 export function requireEntitlement(productKey) {
   return async (req, res, next) => {
@@ -23,12 +41,19 @@ export function requireEntitlement(productKey) {
     if (!u) {
       return res.status(401).json({ error: "User not found" });
     }
-    const e = (u.entitlements || []).find(
-      (x) => x.productKey === productKey && x.status === "active"
+    const keys = acceptableKeysFor(productKey);
+    const ents = (u.entitlements || []).filter((x) =>
+      keys.includes(x.productKey)
     );
-    if (!e) return res.status(403).json({ error: "No active subscription" });
-    if (e.expiresAt && dayjs(e.expiresAt).isBefore(dayjs())) {
-      return res.status(403).json({ error: "Subscription expired" });
+    if (!ents.length) {
+      return res.status(403).json({ error: "No active subscription" });
+    }
+    if (!ents.some(isEntActive)) {
+      // Distinguish "expired" from "never had it" like the original check.
+      const anyActiveStatus = ents.some((x) => x.status === "active");
+      return res.status(403).json({
+        error: anyActiveStatus ? "Subscription expired" : "No active subscription",
+      });
     }
     next();
   };

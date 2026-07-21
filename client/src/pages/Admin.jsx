@@ -18,6 +18,11 @@ const MONTH_CHOICES = [
 // ✅ Route to your detailed Physical Training admin page
 const PTRAININGS_ADMIN_ROUTE = "/admin/ptrainings";
 
+// Admin-granted feature entitlement: Excel BoQ import projects on the Quiv
+// projects page. Granted/revoked ONLY from this panel (never sold), reusing
+// the standard entitlement endpoints.
+const BOQ_IMPORT_PRODUCT_KEY = "quiv-boq-import";
+
 function Badge({ label, tone = "slate" }) {
   const toneClass =
     tone === "yellow"
@@ -575,6 +580,11 @@ export default function Admin({ section = null }) {
   const [storageOverview, setStorageOverview] = React.useState(null);
   const [storageLoading, setStorageLoading] = React.useState(false);
   const [slotsEditState, setSlotsEditState] = React.useState({}); // { "email::productKey": pendingValue }
+
+  // ── Quiv BoQ Import feature-access (UAC) state ──
+  const [boqGrantEmail, setBoqGrantEmail] = React.useState("");
+  const [boqGrantMonths, setBoqGrantMonths] = React.useState(12);
+  const [boqGrantBusy, setBoqGrantBusy] = React.useState(false);
 
   // ── Settings state ──
   const [settingsMobileAppUrl, setSettingsMobileAppUrl] = React.useState("");
@@ -1361,6 +1371,36 @@ export default function Admin({ section = null }) {
       setMsg("Entitlement updated");
     } catch (e) {
       setMsg(e?.message || "Failed to update entitlement");
+    }
+  }
+
+  async function grantBoqImport() {
+    const email = boqGrantEmail.trim().toLowerCase();
+    if (!email) {
+      setMsg("Enter the user's email to grant BoQ Import access.");
+      return;
+    }
+    setBoqGrantBusy(true);
+    setMsg("");
+    try {
+      await apiAuthed(`/admin/users/entitlement`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          productKey: BOQ_IMPORT_PRODUCT_KEY,
+          months: Number(boqGrantMonths) || 12,
+          status: "active",
+        }),
+      });
+      await load();
+      setBoqGrantEmail("");
+      setMsg(`BoQ Import access granted to ${email}`);
+    } catch (e) {
+      setMsg(e?.message || "Failed to grant BoQ Import access");
+    } finally {
+      setBoqGrantBusy(false);
     }
   }
 
@@ -2761,6 +2801,173 @@ export default function Admin({ section = null }) {
 
       {/* ------------------ active tab ------------------ */}
       {tab === "active" && (
+        <>
+        {/* Quiv BoQ Import — admin-granted feature access (UAC). Not a
+            purchasable product: this panel is the only way users get it. */}
+        <div className="card mb-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-[260px]">
+              <h2 className="font-semibold">Quiv BoQ Import — Feature Access</h2>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
+                Unlocks the Excel Bill-of-Quantities import section on the Quiv
+                projects page (all project features except 3D models &
+                linking). Imported projects appear on the user's main projects
+                page and count toward their storage limit. The grant also opens
+                the Quiv projects area for users without a Quiv licence.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                className="input"
+                type="email"
+                placeholder="user@email.com"
+                value={boqGrantEmail}
+                onChange={(e) => setBoqGrantEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") grantBoqImport();
+                }}
+              />
+              <select
+                className="input max-w-[130px]"
+                value={boqGrantMonths}
+                onChange={(e) => setBoqGrantMonths(e.target.value)}
+                title="Grant duration"
+              >
+                <option value={1}>1 month</option>
+                <option value={3}>3 months</option>
+                <option value={6}>6 months</option>
+                <option value={12}>12 months</option>
+                <option value={24}>24 months</option>
+              </select>
+              <button
+                className="btn btn-sm"
+                disabled={boqGrantBusy}
+                onClick={grantBoqImport}
+              >
+                {boqGrantBusy ? "Granting…" : "Grant access"}
+              </button>
+            </div>
+          </div>
+
+          {(() => {
+            const grants = [];
+            (users || []).forEach((u) => {
+              (u.entitlements || []).forEach((e) => {
+                if (e.productKey === BOQ_IMPORT_PRODUCT_KEY) {
+                  grants.push({
+                    email: u.email,
+                    status: e.status,
+                    expiresAt: e.expiresAt,
+                  });
+                }
+              });
+            });
+            if (!grants.length) {
+              return (
+                <div className="text-sm text-slate-600 mt-3">
+                  No users have BoQ Import access yet.
+                </div>
+              );
+            }
+            grants.sort((a, b) =>
+              String(a.email).localeCompare(String(b.email)),
+            );
+            return (
+              <div className="overflow-x-auto mt-3">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-slate-600">
+                    <tr className="border-b">
+                      <th className="py-2 pr-3">User</th>
+                      <th className="py-2 pr-3">Status</th>
+                      <th className="py-2 pr-3">Expiry</th>
+                      <th className="py-2 pr-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grants.map((g) => {
+                      const expired =
+                        g.expiresAt && dayjs(g.expiresAt).isBefore(dayjs());
+                      const active = g.status === "active" && !expired;
+                      return (
+                        <tr key={g.email} className="border-b">
+                          <td className="py-2 pr-3">{g.email}</td>
+                          <td className="py-2 pr-3">
+                            <Badge
+                              label={
+                                active
+                                  ? "Active"
+                                  : expired
+                                    ? "Expired"
+                                    : g.status || "—"
+                              }
+                              tone={active ? "green" : expired ? "yellow" : "red"}
+                            />
+                          </td>
+                          <td className="py-2 pr-3">
+                            {g.expiresAt
+                              ? dayjs(g.expiresAt).format("YYYY-MM-DD")
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <div className="flex gap-2">
+                              {g.status === "active" ? (
+                                <button
+                                  className="btn btn-sm"
+                                  title="Disable without removing"
+                                  onClick={() =>
+                                    updateEntitlement(
+                                      g.email,
+                                      BOQ_IMPORT_PRODUCT_KEY,
+                                      0,
+                                      "disabled",
+                                    )
+                                  }
+                                >
+                                  Disable
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-sm"
+                                  onClick={() =>
+                                    updateEntitlement(
+                                      g.email,
+                                      BOQ_IMPORT_PRODUCT_KEY,
+                                      0,
+                                      "active",
+                                    )
+                                  }
+                                >
+                                  Enable
+                                </button>
+                              )}
+                              <button
+                                className="btn btn-sm"
+                                title="Remove the grant entirely"
+                                onClick={() => {
+                                  const ok = window.confirm(
+                                    `Revoke BoQ Import access for ${g.email}? This cannot be undone.`,
+                                  );
+                                  if (ok)
+                                    deleteEntitlement(
+                                      g.email,
+                                      BOQ_IMPORT_PRODUCT_KEY,
+                                    );
+                                }}
+                              >
+                                Revoke
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </div>
+
         <div className="card">
           <h2 className="font-semibold mb-3">Active Subscriptions</h2>
 
@@ -2802,6 +3009,7 @@ export default function Admin({ section = null }) {
             })()
           )}
         </div>
+        </>
       )}
 
       {/* ------------------ subscriptions tab ------------------ */}

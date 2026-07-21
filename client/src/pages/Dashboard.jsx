@@ -328,12 +328,31 @@ export default function Dashboard() {
 
     const key = (e.productKey || "").toLowerCase();
     if (key === "revit") return navigate("/projects/revit");
+    // Feature grant, not a product page — opens the Quiv projects area where
+    // the Import Excel BoQ action lives.
+    if (key === "quiv-boq-import") return navigate("/projects/revit");
     if (key === "mep") return navigate("/projects/mep");
     if (key === "planswift") return navigate("/projects/planswift");
     if (key === "civil3d") return navigate("/projects/civil3d");
     if (key === "rategen") return navigate("/rategen");
     navigate(`/product/${e.productKey}`);
   }
+
+  // Admin-granted Excel BoQ import feature (Quiv). Surfaces a quick link to
+  // the Quiv projects area — the grant opens that area even for users
+  // without a Quiv licence.
+  const boqImportGranted = React.useMemo(() => {
+    const ents = [
+      ...(Array.isArray(user?.entitlements) ? user.entitlements : []),
+      ...(Array.isArray(summary?.entitlements) ? summary.entitlements : []),
+    ];
+    return ents.some(
+      (e) =>
+        e?.productKey === "quiv-boq-import" &&
+        String(e?.status || "").toLowerCase() === "active" &&
+        (!e?.expiresAt || new Date(e.expiresAt).getTime() > Date.now()),
+    );
+  }, [user, summary]);
 
   function manageSubscription(s) {
     if (!s?.productKey) return;
@@ -640,6 +659,9 @@ export default function Dashboard() {
               <div className="mt-3 grid grid-cols-1 gap-1.5">
                 {[
                   { label: "Your Projects (Revit)", to: "/projects/revit", icon: <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /> },
+                  ...(boqImportGranted
+                    ? [{ label: "Import Excel BoQ (QUIV)", to: "/projects/revit", icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 3v18" /></> }]
+                    : []),
                   { label: "Learning Center", to: "/learn", icon: <><path d="M22 10L12 5 2 10l10 5 10-5z" /><path d="M6 12v5c0 1 2.5 2.5 6 2.5s6-1.5 6-2.5v-5" /></> },
                   { label: "Contact Support", to: "/support", icon: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z" /> },
                 ].map((q) => (

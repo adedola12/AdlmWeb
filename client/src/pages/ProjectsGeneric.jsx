@@ -20,6 +20,7 @@ import {
   FaKey,
   FaChartBar,
   FaTasks,
+  FaFileExcel,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
@@ -55,6 +56,25 @@ function isMaterialsTool(tool) {
   const t = normTool(tool);
   return t === "revit-materials" || t === "revit-material"
       || t === "planswift-materials" || t === "planswift-material";
+}
+
+// ── BoQ Import (admin-granted Quiv feature) ──
+// Users holding the quiv-boq-import entitlement (granted only by an admin)
+// can create Quiv projects from an Excel Bill of Quantities. Imported
+// projects are ordinary revit projects (origin "boq-import") — they live in
+// this list, count toward storage, and carry every tab except 3D Model and
+// linking.
+const BOQ_IMPORT_PRODUCT_KEY = "quiv-boq-import";
+const BOQ_IMPORT_ORIGIN = "boq-import";
+
+function hasBoqImportAccess(user) {
+  const ents = Array.isArray(user?.entitlements) ? user.entitlements : [];
+  return ents.some(
+    (e) =>
+      e?.productKey === BOQ_IMPORT_PRODUCT_KEY &&
+      String(e?.status || "").toLowerCase() === "active" &&
+      (!e?.expiresAt || new Date(e.expiresAt).getTime() > Date.now()),
+  );
 }
 
 function getSidebarMeta(tool) {
@@ -1135,6 +1155,15 @@ export default function ProjectsGeneric() {
   const [saving, setSaving] = React.useState(false);
   const [notice, setNotice] = React.useState("");
 
+  // ── BoQ Import (admin-granted Quiv feature) state ──
+  const canBoqImport = toolNorm === "revit" && hasBoqImportAccess(authUser);
+  const [boqImportOpen, setBoqImportOpen] = React.useState(false);
+  const [boqImportBusy, setBoqImportBusy] = React.useState(false);
+  const [boqImportFile, setBoqImportFile] = React.useState(null);
+  const [boqImportName, setBoqImportName] = React.useState("");
+  const [boqImportErr, setBoqImportErr] = React.useState("");
+  const boqReimportInputRef = React.useRef(null);
+
   // "Add shared project" (claim a project shared with me by code)
   const [claimOpen, setClaimOpen] = React.useState(false);
   const [claimCode, setClaimCode] = React.useState("");
@@ -1840,6 +1869,100 @@ export default function ProjectsGeneric() {
       }
     } finally {
       setClaimBusy(false);
+    }
+  }
+
+  // ── BoQ Import (admin-granted Quiv feature) actions ──
+
+  async function downloadBoqTemplate() {
+    try {
+      const res = await fetch(`${API_BASE}/projects/revit/import-boq/template`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error(`Template download failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "adlm-boq-import-template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setBoqImportErr(e?.message || "Failed to download the template");
+    }
+  }
+
+  function importWarningsText(data) {
+    const warnings = Array.isArray(data?._importWarnings)
+      ? data._importWarnings
+      : [];
+    return warnings.length ? ` ${warnings.join(" ")}` : "";
+  }
+
+  async function submitBoqImport() {
+    if (!boqImportFile) {
+      setBoqImportErr("Choose an Excel .xlsx workbook to import.");
+      return;
+    }
+    setBoqImportBusy(true);
+    setBoqImportErr("");
+    try {
+      const form = new FormData();
+      form.append("file", boqImportFile);
+      if (boqImportName.trim()) form.append("name", boqImportName.trim());
+      const res = await fetch(`${API_BASE}/projects/revit/import-boq`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Import failed (${res.status})`);
+      setBoqImportOpen(false);
+      setBoqImportFile(null);
+      setBoqImportName("");
+      await load({ keepSelection: false });
+      const newId = data?._id || data?.id;
+      if (newId) await view(newId);
+      setNotice(
+        `Imported "${data?.name || "project"}" from the Excel BoQ.${importWarningsText(data)}`,
+      );
+    } catch (e) {
+      setBoqImportErr(e?.message || "Import failed");
+    } finally {
+      setBoqImportBusy(false);
+    }
+  }
+
+  // Refresh an imported project from a newer copy of its workbook (updated
+  // actual columns, added lines/categories). Server preserves completion
+  // history and procurement marks.
+  async function reimportBoq(file) {
+    if (!file || !selectedId) return;
+    setBoqImportBusy(true);
+    setErr("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(
+        `${API_BASE}/projects/revit/${selectedId}/import-boq`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: form,
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok)
+        throw new Error(data?.error || `Re-import failed (${res.status})`);
+      await view(selectedId);
+      setNotice(`Bill updated from the Excel re-import.${importWarningsText(data)}`);
+    } catch (e) {
+      setErr(e?.message || "Re-import failed");
+    } finally {
+      setBoqImportBusy(false);
+      if (boqReimportInputRef.current) boqReimportInputRef.current.value = "";
     }
   }
 
@@ -4802,6 +4925,34 @@ export default function ProjectsGeneric() {
                     <FaSyncAlt className={`text-[12px] ${bulkBusy ? "animate-spin" : ""}`} />
                     <span className="hidden sm:inline">{bulkBusy ? "Refreshing…" : "Refresh"}</span>
                   </button>
+                  {canBoqImport &&
+                    sel?.origin === BOQ_IMPORT_ORIGIN &&
+                    sel?._access?.canEdit !== false && (
+                      <>
+                        <input
+                          ref={boqReimportInputRef}
+                          type="file"
+                          accept=".xlsx,.xlsm"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) reimportBoq(f);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => boqReimportInputRef.current?.click()}
+                          disabled={boqImportBusy}
+                          title="Update this project from a newer copy of its Excel BoQ"
+                          className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                        >
+                          <FaFileExcel className="text-[12px]" />
+                          <span className="hidden sm:inline">
+                            {boqImportBusy ? "Updating…" : "Update from Excel"}
+                          </span>
+                        </button>
+                      </>
+                    )}
                 </div>
               </div>
 
@@ -4925,6 +5076,25 @@ export default function ProjectsGeneric() {
                         QUIV
                       </span>
                     </Link>
+                  )}
+                  {canBoqImport && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBoqImportErr("");
+                        setBoqImportOpen(true);
+                      }}
+                      title="Create a project from an Excel Bill of Quantities (admin-granted feature)"
+                      className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
+                    >
+                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
+                        <FaFileExcel className="text-[12px]" />
+                      </span>
+                      <span className="flex-1 text-left">Import Excel BoQ</span>
+                      <span className="rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        QUIV
+                      </span>
+                    </button>
                   )}
                   {/* Portfolio Dashboard sits last — it's the cross-product
                       roll-up you leave the tool for, so it anchors the group. */}
@@ -5184,6 +5354,7 @@ export default function ProjectsGeneric() {
                 materialItems={sel?.materialItems || []}
                 onSaveBudget={saveBudgetProcurement}
                 productKey={toolNorm}
+                projectOrigin={sel?.origin || ""}
                 projectId={selectedId}
                 accessToken={accessToken}
                 access={sel?._access}
@@ -5363,6 +5534,97 @@ export default function ProjectsGeneric() {
                   {claimBusy ? "Adding…" : "Add project"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Import Excel BoQ modal (admin-granted Quiv feature) ── */}
+      {boqImportOpen ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+          onClick={() => {
+            if (!boqImportBusy) setBoqImportOpen(false);
+          }}
+        >
+          <div
+            className="card w-full max-w-md !p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
+                  <FaFileExcel className="text-emerald-600" />
+                  Import Excel BoQ
+                </h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
+                  Creates a Quiv project from an Excel Bill of Quantities.
+                  Categories, planned-vs-actual columns and an optional
+                  Material &amp; Labour sheet are read from the workbook — the
+                  budget is generated automatically and stays live across the
+                  Dashboard, BoQ, Budget and Valuation tabs.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="text-slate-400 transition hover:text-slate-600"
+                onClick={() => setBoqImportOpen(false)}
+                title="Close"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <label className="block text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
+                Project name (optional)
+                <input
+                  className="input mt-1 w-full"
+                  placeholder="Defaults to the file name"
+                  value={boqImportName}
+                  onChange={(e) => setBoqImportName(e.target.value)}
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
+                Excel workbook (.xlsx)
+                <input
+                  type="file"
+                  accept=".xlsx,.xlsm"
+                  className="input mt-1 w-full"
+                  onChange={(e) => setBoqImportFile(e.target.files?.[0] || null)}
+                />
+              </label>
+              <button
+                type="button"
+                className="text-xs font-semibold text-adlm-blue-700 hover:underline dark:text-adlm-blue-300"
+                onClick={downloadBoqTemplate}
+              >
+                Download the import template
+              </button>
+              {boqImportErr ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {boqImportErr}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBoqImportOpen(false)}
+                disabled={boqImportBusy}
+                className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitBoqImport}
+                disabled={boqImportBusy || !boqImportFile}
+                className="btn-3d inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {boqImportBusy ? "Importing…" : "Import project"}
+              </button>
             </div>
           </div>
         </div>

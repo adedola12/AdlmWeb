@@ -224,6 +224,10 @@ export default function ProjectOpenView({
   materialItems = [],
   onSaveBudget,
   productKey = "",
+  // "boq-import" marks a project created from an Excel BoQ (admin-granted
+  // Quiv feature): no BIM model exists, so the 3D Model tab and linking
+  // surfaces are withheld. "" for plugin-synced projects.
+  projectOrigin = "",
   projectId = "",
   accessToken = "",
   // Collaborator access descriptor from the server (project._access). Defaults
@@ -401,8 +405,15 @@ export default function ProjectOpenView({
   // model — so the "3D Model" (BIM) tab is always empty and only confuses
   // users. Hide it for planswift (and its materials sibling). QUIV/Revit, MEP
   // and Civil keep it.
+  // BoQ-imported projects (Excel import, admin-granted feature) have no BIM
+  // model either — hide the 3D Model tab for them too.
+  const isBoqImport = projectOrigin === "boq-import";
   const visibleTabs = TAB_OPTIONS.filter(
-    (t) => !(t.id === "model" && String(productKey).startsWith("planswift")),
+    (t) =>
+      !(
+        t.id === "model" &&
+        (String(productKey).startsWith("planswift") || isBoqImport)
+      ),
   );
 
   function copyProjectId() {
@@ -746,7 +757,7 @@ export default function ProjectOpenView({
             valuedAmount={valuedAmount}
             linkedSummaries={linkedSummaries}
           />
-          {["revit", "planswift"].includes(String(productKey)) && (
+          {["revit", "planswift"].includes(String(productKey)) && !isBoqImport && (
             <LinkedProjectsCard
               productKey={productKey}
               projectId={projectId}
@@ -939,6 +950,7 @@ export default function ProjectOpenView({
           onDeleteModel={onDeleteModel}
           items={items}
           productKey={productKey}
+          hideModels={isBoqImport}
           contractLocked={Boolean(contract?.locked)}
           contractSum={Number(contract?.contractSum) || 0}
           measured={grossAmount}

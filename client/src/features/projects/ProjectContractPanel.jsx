@@ -773,6 +773,9 @@ export default function ProjectContractPanel({
   onDeleteModel,
   items = [],
   productKey = "",
+  // BoQ-imported projects have no BIM model behind them — hide the models
+  // sub-tab entirely (the server also rejects uploads for that origin).
+  hideModels = false,
   contractLocked,
   contractSum,
   measured,
@@ -841,7 +844,9 @@ export default function ProjectContractPanel({
           <div className="text-[11px] text-slate-500">
             {collapsed && collapsedSummary
               ? collapsedSummary
-              : "Certificates, final account and BIM models — everything a QS needs after contract award."}
+              : hideModels
+                ? "Certificates and final account — everything a QS needs after contract award."
+                : "Certificates, final account and BIM models — everything a QS needs after contract award."}
           </div>
         </div>
         {/* Collapse / expand toggle. Persists in localStorage so the
@@ -879,13 +884,15 @@ export default function ProjectContractPanel({
           onClick={() => setTab("final")}
           label="Final account"
         />
-        <SubTab
-          id="models"
-          active={tab === "models"}
-          onClick={() => setTab("models")}
-          label="BIM models"
-          count={modelCount}
-        />
+        {hideModels ? null : (
+          <SubTab
+            id="models"
+            active={tab === "models"}
+            onClick={() => setTab("models")}
+            label="BIM models"
+            count={modelCount}
+          />
+        )}
       </div>
       )}
 
@@ -934,7 +941,7 @@ export default function ProjectContractPanel({
         />
       ) : null}
 
-      {!collapsed && tab === "models" ? (
+      {!collapsed && !hideModels && tab === "models" ? (
         <ModelsPanel
           projectModels={projectModels}
           modelUploadBusy={modelUploadBusy}
