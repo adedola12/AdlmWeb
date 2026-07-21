@@ -586,6 +586,32 @@ export default function Admin({ section = null }) {
   const [boqGrantMonths, setBoqGrantMonths] = React.useState(12);
   const [boqGrantBusy, setBoqGrantBusy] = React.useState(false);
 
+  // Only Organization accounts holding an ACTIVE Quiv (revit) subscription
+  // are eligible for the BoQ Import grant. The server enforces the same rule
+  // — this list just keeps the picker honest.
+  const boqEligibleUsers = React.useMemo(() => {
+    const out = [];
+    (users || []).forEach((u) => {
+      const revitEnt = (u.entitlements || []).find(
+        (e) =>
+          e.productKey === "revit" &&
+          e.status === "active" &&
+          e.licenseType === "organization" &&
+          (!e.expiresAt || dayjs(e.expiresAt).isAfter(dayjs())),
+      );
+      if (revitEnt) {
+        out.push({
+          email: u.email,
+          organizationName: revitEnt.organizationName || "",
+          alreadyGranted: (u.entitlements || []).some(
+            (e) => e.productKey === BOQ_IMPORT_PRODUCT_KEY,
+          ),
+        });
+      }
+    });
+    return out.sort((a, b) => String(a.email).localeCompare(String(b.email)));
+  }, [users]);
+
   // ── Settings state ──
   const [settingsMobileAppUrl, setSettingsMobileAppUrl] = React.useState("");
   const [settingsMobileAppDraft, setSettingsMobileAppDraft] = React.useState("");
@@ -1377,7 +1403,9 @@ export default function Admin({ section = null }) {
   async function grantBoqImport() {
     const email = boqGrantEmail.trim().toLowerCase();
     if (!email) {
-      setMsg("Enter the user's email to grant BoQ Import access.");
+      setMsg(
+        "Select an eligible organization account to grant BoQ Import access.",
+      );
       return;
     }
     setBoqGrantBusy(true);
@@ -2812,21 +2840,31 @@ export default function Admin({ section = null }) {
                 Unlocks the Excel Bill-of-Quantities import section on the Quiv
                 projects page (all project features except 3D models &
                 linking). Imported projects appear on the user's main projects
-                page and count toward their storage limit. The grant also opens
-                the Quiv projects area for users without a Quiv licence.
+                page and count toward their storage limit. Only{" "}
+                <b>Organization accounts with an active Quiv subscription</b>{" "}
+                are eligible — other accounts are rejected by the server.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <input
-                className="input"
-                type="email"
-                placeholder="user@email.com"
+              <select
+                className="input min-w-[260px]"
                 value={boqGrantEmail}
                 onChange={(e) => setBoqGrantEmail(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") grantBoqImport();
-                }}
-              />
+                title="Organization accounts with an active Quiv subscription"
+              >
+                <option value="">
+                  {boqEligibleUsers.length
+                    ? "Select an eligible organization…"
+                    : "No eligible accounts (needs active Quiv org licence)"}
+                </option>
+                {boqEligibleUsers.map((u) => (
+                  <option key={u.email} value={u.email}>
+                    {u.email}
+                    {u.organizationName ? ` — ${u.organizationName}` : ""}
+                    {u.alreadyGranted ? " (granted)" : ""}
+                  </option>
+                ))}
+              </select>
               <select
                 className="input max-w-[130px]"
                 value={boqGrantMonths}
@@ -2841,7 +2879,7 @@ export default function Admin({ section = null }) {
               </select>
               <button
                 className="btn btn-sm"
-                disabled={boqGrantBusy}
+                disabled={boqGrantBusy || !boqGrantEmail}
                 onClick={grantBoqImport}
               >
                 {boqGrantBusy ? "Granting…" : "Grant access"}

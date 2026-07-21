@@ -1011,6 +1011,25 @@ router.post(
     u.entitlements = u.entitlements || [];
     const now = dayjs();
 
+    // BoQ Import is an admin-granted feature reserved for Organization
+    // accounts that hold an active Quiv (revit) subscription. Enforced here
+    // (not just in the panel UI) so no other grant path can bypass it.
+    if (productKey === "quiv-boq-import") {
+      const revitEnt = u.entitlements.find(
+        (e) =>
+          e.productKey === "revit" &&
+          e.status === "active" &&
+          (!e.expiresAt || dayjs(e.expiresAt).isAfter(now)),
+      );
+      if (!revitEnt || revitEnt.licenseType !== "organization") {
+        return res.status(400).json({
+          error:
+            "BoQ Import can only be granted to Organization accounts with an active Quiv subscription.",
+          code: "BOQ_IMPORT_NOT_ELIGIBLE",
+        });
+      }
+    }
+
     let ent = u.entitlements.find((e) => e.productKey === productKey);
 
     const org = String(organizationName || "").trim();
