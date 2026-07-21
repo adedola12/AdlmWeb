@@ -11,6 +11,7 @@ import { TakeoffProject } from "../models/TakeoffProject.js";
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 import { sendMail } from "../util/mailer.js";
 import { runExpiryNotifier } from "../util/expiryNotifier.js";
+import { sendBoqImportGrantEmail } from "../util/boqImportGrantEmail.js";
 
 const router = express.Router();
 
@@ -1086,6 +1087,15 @@ router.post(
     applyExpiryToUser(u);
 
     await u.save();
+
+    // Notify the organization when BoQ Import is switched on: what the tool
+    // is for, how long the access runs, and how to start migrating their
+    // existing bills. Fire-and-forget — a mail hiccup must not fail the
+    // grant (sendBoqImportGrantEmail never throws).
+    if (productKey === "quiv-boq-import" && ent.status === "active") {
+      sendBoqImportGrantEmail({ user: u, entitlement: ent });
+    }
+
     return res.json({ ok: true, entitlements: u.entitlements });
   }),
 );
