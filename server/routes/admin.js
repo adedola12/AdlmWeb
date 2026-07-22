@@ -513,7 +513,7 @@ router.get(
   asyncHandler(async (_req, res) => {
     const users = await User.find(
       { "entitlements.licenseType": "organization" },
-      { email: 1, username: 1, disabled: 1, entitlements: 1 },
+      { email: 1, username: 1, disabled: 1, entitlements: 1, whatsapp: 1 },
     ).lean();
 
     // Latest approved purchase per (user, product) → subscription duration in
@@ -526,11 +526,27 @@ router.get(
             userId: { $in: userIds },
             $or: [{ status: "approved" }, { paid: true }],
           },
-          { userId: 1, productKey: 1, lines: 1, decidedAt: 1, createdAt: 1 },
+          {
+            userId: 1,
+            productKey: 1,
+            lines: 1,
+            decidedAt: 1,
+            createdAt: 1,
+            organization: 1,
+          },
         )
           .sort({ decidedAt: -1, createdAt: -1 })
           .lean()
       : [];
+    // Contact number per account: profile WhatsApp first, else the phone
+    // captured on their most recent organization purchase.
+    const phoneByUser = new Map();
+    for (const p of purchases) {
+      const key = String(p.userId);
+      const orgPhone = String(p.organization?.phone || "").trim();
+      if (orgPhone && !phoneByUser.has(key)) phoneByUser.set(key, orgPhone); // newest first
+    }
+
     const durationByUserProduct = new Map(); // "userId::productKey" -> months
     for (const p of purchases) {
       const lines =
@@ -561,11 +577,21 @@ router.get(
           orgs.set(orgKey, {
             organizationName,
             accounts: new Set(),
+            contactsByEmail: new Map(),
             products: [],
           });
         }
         const org = orgs.get(orgKey);
         org.accounts.add(u.email);
+        if (!org.contactsByEmail.has(u.email)) {
+          org.contactsByEmail.set(u.email, {
+            email: u.email,
+            phone:
+              String(u.whatsapp || "").trim() ||
+              phoneByUser.get(String(u._id)) ||
+              "",
+          });
+        }
 
         const devices = Array.isArray(e.devices) ? e.devices : [];
         const expiresAt = e.expiresAt || null;
@@ -601,6 +627,9 @@ router.get(
         return {
           organizationName: o.organizationName,
           accounts: [...o.accounts].sort(),
+          contacts: [...o.contactsByEmail.values()].sort((a, b) =>
+            a.email.localeCompare(b.email),
+          ),
           productCount: new Set(products.map((p) => p.productKey)).size,
           activeProductCount: new Set(activeProducts.map((p) => p.productKey))
             .size,

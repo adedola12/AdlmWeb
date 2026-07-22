@@ -23,6 +23,18 @@ const PTRAININGS_ADMIN_ROUTE = "/admin/ptrainings";
 // the standard entitlement endpoints.
 const BOQ_IMPORT_PRODUCT_KEY = "quiv-boq-import";
 
+// "0803…" → "+234803…" (numbers are stored the way users typed them; Nigerian
+// national format is the norm) so tel:/wa.me links dial correctly. Display
+// keeps the raw text.
+function normalizePhone(raw) {
+  const s = String(raw || "").replace(/[^\d+]/g, "");
+  if (!s) return "";
+  if (s.startsWith("+")) return s;
+  if (s.startsWith("0")) return "+234" + s.slice(1);
+  if (s.startsWith("234")) return "+" + s;
+  return "+" + s;
+}
+
 function Badge({ label, tone = "slate" }) {
   const toneClass =
     tone === "yellow"
@@ -3134,6 +3146,7 @@ export default function Admin({ section = null }) {
                   <tr className="border-b">
                     <th className="py-2 pr-3">Organization</th>
                     <th className="py-2 pr-3">Account</th>
+                    <th className="py-2 pr-3">Contact</th>
                     <th className="py-2 pr-3">Software</th>
                     <th className="py-2 pr-3">Devices</th>
                     <th className="py-2 pr-3">Next expiry</th>
@@ -3168,6 +3181,35 @@ export default function Admin({ section = null }) {
                             {org.accounts.length > 1
                               ? ` +${org.accounts.length - 1}`
                               : ""}
+                          </td>
+                          <td className="py-3 pr-3 whitespace-nowrap">
+                            {(() => {
+                              const c = (org.contacts || []).find(
+                                (x) => x.phone,
+                              );
+                              if (!c) return "—";
+                              const intl = normalizePhone(c.phone);
+                              return (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <a
+                                    href={`tel:${intl}`}
+                                    className="text-adlm-blue-700 hover:underline"
+                                    title={`Call ${c.email}`}
+                                  >
+                                    {c.phone}
+                                  </a>
+                                  <a
+                                    href={`https://wa.me/${intl.replace("+", "")}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={`WhatsApp ${c.email}`}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100"
+                                  >
+                                    WA
+                                  </a>
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="py-3 pr-3">
                             <span
@@ -3235,10 +3277,35 @@ export default function Admin({ section = null }) {
                         </tr>
                         {open && (
                           <tr className="border-b bg-slate-50/60 dark:bg-white/5">
-                            <td colSpan={7} className="py-3 px-3">
-                              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                            <td colSpan={8} className="py-3 px-3">
+                              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
                                 Software — {org.organizationName}
                               </div>
+                              {(org.contacts || []).length ? (
+                                <div className="mb-2 text-xs text-slate-600 dark:text-adlm-dark-muted">
+                                  {org.contacts.map((c) => (
+                                    <span
+                                      key={c.email}
+                                      className="mr-4 inline-flex items-center gap-1"
+                                    >
+                                      {c.email}
+                                      {c.phone ? (
+                                        <>
+                                          {" · "}
+                                          <a
+                                            href={`tel:${normalizePhone(c.phone)}`}
+                                            className="text-adlm-blue-700 hover:underline"
+                                          >
+                                            {c.phone}
+                                          </a>
+                                        </>
+                                      ) : (
+                                        " · no phone on file"
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
                               <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                   <thead className="text-left text-slate-600">
