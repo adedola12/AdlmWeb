@@ -16,7 +16,7 @@ import {
 
 // area = the permission key that gates the card (see server/config/permissions.js)
 const TOOLS = [
-  { area: "purchases", to: "/admin", label: "Admin Hub", desc: "Purchases, subscriptions & installs", icon: FiShoppingCart },
+  { area: "adminhub", to: "/admin", label: "Admin Hub", desc: "Purchases, subscriptions & installs", icon: FiShoppingCart },
   { area: "roles", to: "/admin/roles", label: "Roles & Access", desc: "Manage roles & permissions (UAC)", icon: FiShield },
   { area: "users", to: "/admin/users-lite", label: "Users", desc: "Directory & subscriptions", icon: FiUsers },
   { area: "trainings", to: "/admin/trainings", label: "Trainings", desc: "Online trainings & events", icon: FiCalendar },

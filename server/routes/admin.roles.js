@@ -1,8 +1,10 @@
 // server/routes/admin.roles.js
-// UAC / role management. Mounted at /admin/roles. Gated by the "roles" area,
-// which is admin-exclusive — so only the super-admin can manage roles.
+// UAC / role management. Mounted at /admin/roles. Handled ONLY by the main
+// admin (role "admin") — hard-gated by requireAdmin rather than the "roles"
+// permission area, so no role edit (or direct DB tweak) can ever open the UAC
+// to staff.
 import express from "express";
-import { requireAuth, requirePermission } from "../middleware/auth.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { Role } from "../models/Role.js";
 import { User } from "../models/User.js";
 import { RoleAudit } from "../models/RoleAudit.js";
@@ -11,7 +13,7 @@ import { refreshRoleCache } from "../util/rbac.js";
 
 const router = express.Router();
 
-router.use(requireAuth, requirePermission("roles"));
+router.use(requireAuth, requireAdmin);
 
 const RESERVED_KEYS = new Set(["admin", "mini_admin", "user"]);
 
@@ -160,6 +162,43 @@ router.get("/users", async (req, res) => {
   } catch (e) {
     console.error("[admin.roles] users error:", e);
     res.status(500).json({ error: "Failed to search users" });
+  }
+});
+
+// Users under each admin area/section: for every area, who currently holds it
+// (via their role). Staff roles only — the huge default "user" role never
+// grants areas. Super-admin roles hold every area. Drives the per-section
+// user list on the UAC screen. Defined before "/:key/members" so the literal
+// "/area-users" path is never captured as a role key.
+router.get("/area-users", async (_req, res) => {
+  try {
+    const roles = await Role.find({}).lean();
+    const staffRoles = roles.filter(
+      (r) => r.isSuperAdmin || (r.permissions || []).length > 0,
+    );
+    const holders = await User.find({
+      role: { $in: staffRoles.map((r) => r.key) },
+    })
+      .select("email username role")
+      .sort({ email: 1 })
+      .limit(500)
+      .lean();
+
+    const byRole = new Map(staffRoles.map((r) => [r.key, r]));
+    const areaUsers = {}; // areaKey -> [{ email, role }]
+    for (const a of ADMIN_AREAS) areaUsers[a.key] = [];
+    for (const u of holders) {
+      const r = byRole.get(u.role);
+      if (!r) continue;
+      const keys = r.isSuperAdmin ? ALL_AREA_KEYS : r.permissions || [];
+      for (const k of keys) {
+        if (areaUsers[k]) areaUsers[k].push({ email: u.email, role: u.role });
+      }
+    }
+    res.json({ areaUsers });
+  } catch (e) {
+    console.error("[admin.roles] area-users error:", e);
+    res.status(500).json({ error: "Failed to load area users" });
   }
 });
 

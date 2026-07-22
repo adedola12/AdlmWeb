@@ -37,6 +37,8 @@ export default function AdminRoles() {
   const [expandedRole, setExpandedRole] = React.useState(null);
   const [membersByRole, setMembersByRole] = React.useState({});
   const [audit, setAudit] = React.useState([]);
+  // areaKey -> [{ email, role }] — who holds each admin section (via role)
+  const [areaUsers, setAreaUsers] = React.useState({});
 
   const staffAreas = React.useMemo(() => areas.filter((a) => a.staffGrantable), [areas]);
   const adminAreas = React.useMemo(() => areas.filter((a) => !a.staffGrantable), [areas]);
@@ -51,13 +53,15 @@ export default function AdminRoles() {
     (async () => {
       setLoading(true);
       try {
-        const [cat, list, aud] = await Promise.all([
+        const [cat, list, aud, au] = await Promise.all([
           apiAuthed("/admin/roles/catalog", { token: accessToken }),
           apiAuthed("/admin/roles", { token: accessToken }),
           apiAuthed("/admin/roles/audit", { token: accessToken }).catch(() => ({ entries: [] })),
+          apiAuthed("/admin/roles/area-users", { token: accessToken }).catch(() => ({ areaUsers: {} })),
         ]);
         setAreas(cat?.areas || []);
         setRoles(list?.roles || []);
+        setAreaUsers(au?.areaUsers || {});
         setAudit(aud?.entries || []);
       } catch (e) {
         setErr(e?.message || "Failed to load roles.");
@@ -449,6 +453,61 @@ export default function AdminRoles() {
                   );
                 })()
               : null}
+          </Reveal>
+
+          {/* ── Access by section — who holds each admin area (via role) ── */}
+          <Reveal as="div" className="card mt-6" delay={40}>
+            <h2 className="font-semibold mb-1 flex items-center gap-2">
+              <FiUsers className="w-4 h-4 text-adlm-blue-700" /> Access by
+              section
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-adlm-dark-muted mb-3">
+              The users who currently hold each admin section, through their
+              role. Super-admins hold every section.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {areas.map((a) => {
+                const holders = areaUsers[a.key] || [];
+                return (
+                  <div
+                    key={a.key}
+                    className="rounded-xl border border-slate-200 dark:border-adlm-dark-border p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-slate-800 dark:text-white truncate">
+                        {a.label}
+                      </div>
+                      <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-adlm-dark-muted">
+                        {holders.length}
+                      </span>
+                    </div>
+                    {holders.length ? (
+                      <ul className="mt-1.5 space-y-0.5">
+                        {holders.slice(0, 6).map((h) => (
+                          <li
+                            key={`${a.key}-${h.email}`}
+                            className="text-xs text-slate-600 dark:text-adlm-dark-muted truncate"
+                            title={`${h.email} (${h.role})`}
+                          >
+                            {h.email}{" "}
+                            <span className="text-slate-400">· {h.role}</span>
+                          </li>
+                        ))}
+                        {holders.length > 6 ? (
+                          <li className="text-xs text-slate-400">
+                            +{holders.length - 6} more
+                          </li>
+                        ) : null}
+                      </ul>
+                    ) : (
+                      <div className="mt-1.5 text-xs text-slate-400">
+                        No one holds this section.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </Reveal>
 
           {/* ── Create role ── */}

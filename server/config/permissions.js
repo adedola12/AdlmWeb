@@ -18,6 +18,10 @@ export const ADMIN_AREAS = [
   { key: "proposals", label: "Proposals", group: "Finance", staffGrantable: true },
   { key: "users", label: "Users", group: "People", staffGrantable: true },
   { key: "support", label: "Support Tickets", group: "Support", staffGrantable: true },
+  // The main Admin Hub section pages (Pending, Active subscriptions,
+  // Organizations, Storage, Installations, Settings …) and their API. Grant
+  // deliberately — it includes purchase approval and entitlement management.
+  { key: "adminhub", label: "Admin Hub (purchases & subscriptions)", group: "Core", staffGrantable: true },
 
   // ── Admin-exclusive (never grantable — always require the admin superuser) ──
   { key: "audit", label: "Audit Log & Break-glass", group: "Core", staffGrantable: false },

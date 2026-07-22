@@ -1,7 +1,7 @@
 // server/routes/admin.js
 import express from "express";
 import dayjs from "dayjs";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import mongoose from "mongoose";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js";
@@ -16,7 +16,11 @@ import { sendBoqImportGrantEmail } from "../util/boqImportGrantEmail.js";
 const router = express.Router();
 
 // ✅ all endpoints here require admin
-router.use(requireAuth, requireAdmin);
+// Gated by the "adminhub" UAC area (super-admin always passes). Grantable to
+// staff roles from Roles & Access so a trusted user can run the main Admin
+// Hub (purchases, subscriptions, organizations, storage …) without holding
+// the full admin role.
+router.use(requireAuth, requirePermission("adminhub"));
 
 /* -------------------- helpers -------------------- */
 const asyncHandler = (fn) => (req, res, next) =>

@@ -352,7 +352,7 @@ const router = createBrowserRouter([
       {
         path: "admin",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin />
           </AdminRoute>
         ),
@@ -363,7 +363,7 @@ const router = createBrowserRouter([
       {
         path: "admin/pending",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="pending" />
           </AdminRoute>
         ),
@@ -371,7 +371,7 @@ const router = createBrowserRouter([
       {
         path: "admin/active",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="active" />
           </AdminRoute>
         ),
@@ -379,7 +379,7 @@ const router = createBrowserRouter([
       {
         path: "admin/organizations",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="organizations" />
           </AdminRoute>
         ),
@@ -387,7 +387,7 @@ const router = createBrowserRouter([
       {
         path: "admin/physical-training",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="ptrainings" />
           </AdminRoute>
         ),
@@ -395,7 +395,7 @@ const router = createBrowserRouter([
       {
         path: "admin/subscriptions",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="subscriptions" />
           </AdminRoute>
         ),
@@ -403,7 +403,7 @@ const router = createBrowserRouter([
       {
         path: "admin/storage",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="storage" />
           </AdminRoute>
         ),
@@ -411,7 +411,7 @@ const router = createBrowserRouter([
       {
         path: "admin/installations",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="installations" />
           </AdminRoute>
         ),
@@ -419,7 +419,7 @@ const router = createBrowserRouter([
       {
         path: "admin/training-locations",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="tlocations" />
           </AdminRoute>
         ),
@@ -427,7 +427,7 @@ const router = createBrowserRouter([
       {
         path: "admin/classrooms",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="classrooms" />
           </AdminRoute>
         ),
@@ -435,7 +435,7 @@ const router = createBrowserRouter([
       {
         path: "admin/settings",
         element: (
-          <AdminRoute roles={["admin"]}>
+          <AdminRoute permission="adminhub">
             <Admin section="settings" />
           </AdminRoute>
         ),
