@@ -499,6 +499,119 @@ router.get(
   }),
 );
 
+// ── Organizations overview ─────────────────────────────────────────────────
+// One row per organization (grouped by entitlement organizationName across
+// all accounts): which software they hold, seats vs actively bound devices,
+// the subscription duration (from the latest approved purchase) and when
+// each subscription ends.
+router.get(
+  "/organizations",
+  asyncHandler(async (_req, res) => {
+    const users = await User.find(
+      { "entitlements.licenseType": "organization" },
+      { email: 1, username: 1, disabled: 1, entitlements: 1 },
+    ).lean();
+
+    // Latest approved purchase per (user, product) → subscription duration in
+    // months (periods × 12 for yearly lines). Best-effort: older grants made
+    // manually have no purchase and show no duration.
+    const userIds = users.map((u) => u._id);
+    const purchases = userIds.length
+      ? await Purchase.find(
+          {
+            userId: { $in: userIds },
+            $or: [{ status: "approved" }, { paid: true }],
+          },
+          { userId: 1, productKey: 1, lines: 1, decidedAt: 1, createdAt: 1 },
+        )
+          .sort({ decidedAt: -1, createdAt: -1 })
+          .lean()
+      : [];
+    const durationByUserProduct = new Map(); // "userId::productKey" -> months
+    for (const p of purchases) {
+      const lines =
+        Array.isArray(p.lines) && p.lines.length
+          ? p.lines
+          : [{ productKey: p.productKey, billingInterval: "", periods: 1 }];
+      for (const ln of lines) {
+        const productKey = String(ln?.productKey || "").trim().toLowerCase();
+        if (!productKey) continue;
+        const key = `${p.userId}::${productKey}`;
+        if (durationByUserProduct.has(key)) continue; // newest first — keep it
+        const periods = Math.max(1, Number(ln?.periods) || 1);
+        const per =
+          String(ln?.billingInterval || "").toLowerCase() === "yearly" ? 12 : 1;
+        durationByUserProduct.set(key, periods * per);
+      }
+    }
+
+    const now = Date.now();
+    const orgs = new Map(); // lowercased name -> aggregate
+    for (const u of users) {
+      for (const e of u.entitlements || []) {
+        if (e.licenseType !== "organization") continue;
+        const organizationName =
+          String(e.organizationName || "").trim() || `(unnamed) ${u.email}`;
+        const orgKey = organizationName.toLowerCase();
+        if (!orgs.has(orgKey)) {
+          orgs.set(orgKey, {
+            organizationName,
+            accounts: new Set(),
+            products: [],
+          });
+        }
+        const org = orgs.get(orgKey);
+        org.accounts.add(u.email);
+
+        const devices = Array.isArray(e.devices) ? e.devices : [];
+        const expiresAt = e.expiresAt || null;
+        const daysLeft = expiresAt
+          ? Math.ceil((new Date(expiresAt).getTime() - now) / 86400000)
+          : null;
+        org.products.push({
+          email: u.email,
+          productKey: e.productKey,
+          status: e.status,
+          seats: Math.max(1, Number(e.seats) || 1),
+          activeDevices: devices.filter((d) => d && !d.revokedAt).length,
+          totalDevices: devices.length,
+          durationMonths:
+            durationByUserProduct.get(`${u._id}::${e.productKey}`) || null,
+          expiresAt,
+          daysLeft,
+        });
+      }
+    }
+
+    const organizations = [...orgs.values()]
+      .map((o) => {
+        const products = o.products.sort((a, b) =>
+          a.productKey.localeCompare(b.productKey),
+        );
+        const activeProducts = products.filter(
+          (p) => p.status === "active" && (p.daysLeft == null || p.daysLeft >= 0),
+        );
+        const withExpiry = products
+          .filter((p) => p.expiresAt)
+          .sort((a, b) => new Date(a.expiresAt) - new Date(b.expiresAt));
+        return {
+          organizationName: o.organizationName,
+          accounts: [...o.accounts].sort(),
+          productCount: new Set(products.map((p) => p.productKey)).size,
+          activeProductCount: new Set(activeProducts.map((p) => p.productKey))
+            .size,
+          totalSeats: products.reduce((a, p) => a + p.seats, 0),
+          activeDevices: products.reduce((a, p) => a + p.activeDevices, 0),
+          soonestExpiry: withExpiry[0]?.expiresAt || null,
+          products,
+        };
+      })
+      .sort((a, b) => a.organizationName.localeCompare(b.organizationName));
+
+    return res.json({ ok: true, organizations });
+  }),
+);
+
 router.post(
   "/users/disable",
   asyncHandler(async (req, res) => {

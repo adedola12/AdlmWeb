@@ -377,6 +377,14 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: "admin/organizations",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <Admin section="organizations" />
+          </AdminRoute>
+        ),
+      },
+      {
         path: "admin/physical-training",
         element: (
           <AdminRoute roles={["admin"]}>

@@ -505,6 +505,7 @@ function ReceiptModal({ open, url, title, onClose }) {
 const SECTION_META = {
   pending: { label: "Pending Purchases", slug: "pending" },
   active: { label: "Active Subscriptions", slug: "active" },
+  organizations: { label: "Organizations", slug: "organizations" },
   ptrainings: { label: "Physical Training", slug: "physical-training" },
   subscriptions: { label: "Subscriptions", slug: "subscriptions" },
   storage: { label: "Storage", slug: "storage" },
@@ -579,6 +580,10 @@ export default function Admin({ section = null }) {
   // ── Storage overview state ──
   const [storageOverview, setStorageOverview] = React.useState(null);
   const [storageLoading, setStorageLoading] = React.useState(false);
+
+  // ── Organizations overview state ──
+  const [orgOverview, setOrgOverview] = React.useState(null);
+  const [orgLoading, setOrgLoading] = React.useState(false);
   const [slotsEditState, setSlotsEditState] = React.useState({}); // { "email::productKey": pendingValue }
 
   // ── Quiv BoQ Import feature-access (UAC) state ──
@@ -1355,6 +1360,25 @@ export default function Admin({ section = null }) {
       setStorageLoading(false);
     }
   }
+
+  async function loadOrganizations() {
+    setOrgLoading(true);
+    try {
+      const data = await apiAuthed("/admin/organizations", {
+        token: accessToken,
+      });
+      setOrgOverview(Array.isArray(data?.organizations) ? data.organizations : []);
+    } catch {
+      setOrgOverview([]);
+    } finally {
+      setOrgLoading(false);
+    }
+  }
+
+  React.useEffect(() => {
+    if (tab === "organizations" && accessToken) loadOrganizations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, accessToken]);
 
   // Load the storage overview when the Storage section opens (previously this
   // fired from the tab button's onClick).
@@ -2159,6 +2183,18 @@ export default function Admin({ section = null }) {
               }`}
             >
               Active subscriptions ({activeRows.length})
+            </button>
+
+            <button
+              onClick={() => openSection("organizations")}
+              className={`py-2 -mb-px border-b-2 transition ${
+                tab === "organizations"
+                  ? "border-adlm-blue-700 text-adlm-blue-700"
+                  : "border-transparent text-slate-600 hover:text-slate-800"
+              }`}
+              title="Organization accounts — software held, devices in use, subscription durations & expiries"
+            >
+              Organizations
             </button>
 
             <button
@@ -3049,6 +3085,177 @@ export default function Admin({ section = null }) {
           )}
         </div>
         </>
+      )}
+
+      {/* ------------------ organizations tab ------------------ */}
+      {tab === "organizations" && (
+        <div className="card">
+          <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+            <h2 className="font-semibold">Organizations</h2>
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-slate-500">
+                Software held, seats vs bound devices, subscription duration &
+                expiry — grouped by organization.
+              </div>
+              <button className="btn btn-sm" onClick={loadOrganizations}>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {orgLoading ? (
+            <div className="text-sm text-slate-600 mt-3">Loading…</div>
+          ) : !orgOverview || orgOverview.length === 0 ? (
+            <div className="text-sm text-slate-600 mt-3">
+              No organization accounts found.
+            </div>
+          ) : (
+            <div className="mt-3 space-y-4">
+              {orgOverview.map((org) => {
+                const soonest = org.soonestExpiry
+                  ? dayjs(org.soonestExpiry)
+                  : null;
+                const soonestDays = soonest
+                  ? soonest.startOf("day").diff(dayjs().startOf("day"), "day")
+                  : null;
+                return (
+                  <div
+                    key={org.organizationName}
+                    className="border rounded-xl p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                          <OrganizationBadge
+                            licenseType="organization"
+                            organizationName={org.organizationName}
+                          />
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {org.accounts.join(" · ")}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap text-xs">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-50 text-adlm-navy-mid border border-blue-200 font-semibold">
+                          {org.activeProductCount}/{org.productCount} software
+                          active
+                        </span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                          {org.activeDevices} device
+                          {org.activeDevices === 1 ? "" : "s"} active ·{" "}
+                          {org.totalSeats} seat{org.totalSeats === 1 ? "" : "s"}
+                        </span>
+                        {soonest && (
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded-full border font-semibold ${
+                              soonestDays < 0
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : soonestDays <= 30
+                                  ? "bg-yellow-50 text-yellow-800 border-yellow-200"
+                                  : "bg-green-50 text-green-700 border-green-200"
+                            }`}
+                            title="Nearest subscription expiry across this organization"
+                          >
+                            {soonestDays < 0
+                              ? `expired ${Math.abs(soonestDays)}d ago`
+                              : `next expiry in ${soonestDays}d`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto mt-3">
+                      <table className="w-full text-sm">
+                        <thead className="text-left text-slate-600">
+                          <tr className="border-b">
+                            <th className="py-2 pr-3">Software</th>
+                            <th className="py-2 pr-3">Account</th>
+                            <th className="py-2 pr-3">Status</th>
+                            <th className="py-2 pr-3">Devices</th>
+                            <th className="py-2 pr-3">Duration</th>
+                            <th className="py-2 pr-3">Expires</th>
+                            <th className="py-2 pr-3">Time left</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {org.products.map((p, i) => {
+                            const expired =
+                              p.daysLeft != null && p.daysLeft < 0;
+                            const active = p.status === "active" && !expired;
+                            return (
+                              <tr
+                                key={`${p.email}-${p.productKey}-${i}`}
+                                className="border-b"
+                              >
+                                <td className="py-2 pr-3 font-medium">
+                                  {p.productKey}
+                                </td>
+                                <td className="py-2 pr-3 text-slate-600">
+                                  {p.email}
+                                </td>
+                                <td className="py-2 pr-3">
+                                  <Badge
+                                    label={
+                                      active
+                                        ? "Active"
+                                        : expired
+                                          ? "Expired"
+                                          : p.status || "—"
+                                    }
+                                    tone={
+                                      active
+                                        ? "green"
+                                        : expired
+                                          ? "yellow"
+                                          : "red"
+                                    }
+                                  />
+                                </td>
+                                <td className="py-2 pr-3">
+                                  {p.activeDevices} / {p.seats} seat
+                                  {p.seats === 1 ? "" : "s"}
+                                </td>
+                                <td className="py-2 pr-3">
+                                  {p.durationMonths
+                                    ? `${p.durationMonths} month${p.durationMonths === 1 ? "" : "s"}`
+                                    : "—"}
+                                </td>
+                                <td className="py-2 pr-3">
+                                  {p.expiresAt
+                                    ? dayjs(p.expiresAt).format("YYYY-MM-DD")
+                                    : "—"}
+                                </td>
+                                <td className="py-2 pr-3">
+                                  {p.daysLeft == null ? (
+                                    "—"
+                                  ) : (
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                        p.daysLeft < 0
+                                          ? "bg-red-50 text-red-700"
+                                          : p.daysLeft <= 30
+                                            ? "bg-yellow-50 text-yellow-800"
+                                            : "bg-green-50 text-green-700"
+                                      }`}
+                                    >
+                                      {p.daysLeft < 0
+                                        ? `${Math.abs(p.daysLeft)}d ago`
+                                        : `${p.daysLeft}d left`}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ------------------ subscriptions tab ------------------ */}
