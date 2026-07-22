@@ -1,5 +1,5 @@
 import React from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, ScrollRestoration } from "react-router-dom";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
@@ -58,6 +58,12 @@ export default function App() {
 
       <Footer />
       <AiAgent />
+
+      {/* New-page navigations start at the top; the browser back/forward
+          buttons still restore the previous scroll position. Without this,
+          React Router keeps the old scroll offset so every new page opened
+          mid-scroll appeared "starting from the bottom". */}
+      <ScrollRestoration />
 
       <YoutubeWelcomeModal
         open={showVideo}

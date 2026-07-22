@@ -584,6 +584,24 @@ export default function Admin({ section = null }) {
   // ── Organizations overview state ──
   const [orgOverview, setOrgOverview] = React.useState(null);
   const [orgLoading, setOrgLoading] = React.useState(false);
+  // Which organization row has its per-product detail panel open (⋮ menu).
+  const [openOrgKey, setOpenOrgKey] = React.useState(null);
+
+  // Distinct organization count for the tab label — derived from the already
+  // loaded users list so it shows before the Organizations tab is opened.
+  const organizationsCount = React.useMemo(() => {
+    const names = new Set();
+    (users || []).forEach((u) => {
+      (u.entitlements || []).forEach((e) => {
+        if (e?.licenseType === "organization") {
+          names.add(
+            (String(e.organizationName || "").trim() || `(unnamed) ${u.email}`).toLowerCase(),
+          );
+        }
+      });
+    });
+    return names.size;
+  }, [users]);
   const [slotsEditState, setSlotsEditState] = React.useState({}); // { "email::productKey": pendingValue }
 
   // ── Quiv BoQ Import feature-access (UAC) state ──
@@ -2194,7 +2212,7 @@ export default function Admin({ section = null }) {
               }`}
               title="Organization accounts — software held, devices in use, subscription durations & expiries"
             >
-              Organizations
+              Organizations ({organizationsCount})
             </button>
 
             <button
@@ -3110,149 +3128,214 @@ export default function Admin({ section = null }) {
               No organization accounts found.
             </div>
           ) : (
-            <div className="mt-3 space-y-4">
-              {orgOverview.map((org) => {
-                const soonest = org.soonestExpiry
-                  ? dayjs(org.soonestExpiry)
-                  : null;
-                const soonestDays = soonest
-                  ? soonest.startOf("day").diff(dayjs().startOf("day"), "day")
-                  : null;
-                return (
-                  <div
-                    key={org.organizationName}
-                    className="border rounded-xl p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
-                          <OrganizationBadge
-                            licenseType="organization"
-                            organizationName={org.organizationName}
-                          />
-                        </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          {org.accounts.join(" · ")}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap text-xs">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-50 text-adlm-navy-mid border border-blue-200 font-semibold">
-                          {org.activeProductCount}/{org.productCount} software
-                          active
-                        </span>
-                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
-                          {org.activeDevices} device
-                          {org.activeDevices === 1 ? "" : "s"} active ·{" "}
-                          {org.totalSeats} seat{org.totalSeats === 1 ? "" : "s"}
-                        </span>
-                        {soonest && (
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full border font-semibold ${
-                              soonestDays < 0
-                                ? "bg-red-50 text-red-700 border-red-200"
-                                : soonestDays <= 30
-                                  ? "bg-yellow-50 text-yellow-800 border-yellow-200"
-                                  : "bg-green-50 text-green-700 border-green-200"
-                            }`}
-                            title="Nearest subscription expiry across this organization"
-                          >
-                            {soonestDays < 0
-                              ? `expired ${Math.abs(soonestDays)}d ago`
-                              : `next expiry in ${soonestDays}d`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto mt-3">
-                      <table className="w-full text-sm">
-                        <thead className="text-left text-slate-600">
-                          <tr className="border-b">
-                            <th className="py-2 pr-3">Software</th>
-                            <th className="py-2 pr-3">Account</th>
-                            <th className="py-2 pr-3">Status</th>
-                            <th className="py-2 pr-3">Devices</th>
-                            <th className="py-2 pr-3">Duration</th>
-                            <th className="py-2 pr-3">Expires</th>
-                            <th className="py-2 pr-3">Time left</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {org.products.map((p, i) => {
-                            const expired =
-                              p.daysLeft != null && p.daysLeft < 0;
-                            const active = p.status === "active" && !expired;
-                            return (
-                              <tr
-                                key={`${p.email}-${p.productKey}-${i}`}
-                                className="border-b"
+            <div className="overflow-x-auto mt-3">
+              <table className="w-full text-sm">
+                <thead className="text-left text-slate-600">
+                  <tr className="border-b">
+                    <th className="py-2 pr-3">Organization</th>
+                    <th className="py-2 pr-3">Account</th>
+                    <th className="py-2 pr-3">Software</th>
+                    <th className="py-2 pr-3">Devices</th>
+                    <th className="py-2 pr-3">Next expiry</th>
+                    <th className="py-2 pr-3">Time left</th>
+                    <th className="py-2 pr-0 text-right"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orgOverview.map((org) => {
+                    const orgKey = org.organizationName.toLowerCase();
+                    const open = openOrgKey === orgKey;
+                    const soonest = org.soonestExpiry
+                      ? dayjs(org.soonestExpiry)
+                      : null;
+                    const soonestDays = soonest
+                      ? soonest
+                          .startOf("day")
+                          .diff(dayjs().startOf("day"), "day")
+                      : null;
+                    return (
+                      <React.Fragment key={orgKey}>
+                        <tr
+                          className={`border-b align-middle ${open ? "bg-slate-50/60 dark:bg-white/5" : ""}`}
+                        >
+                          <td className="py-3 pr-3">
+                            <div className="font-semibold text-slate-900 dark:text-white">
+                              {org.organizationName}
+                            </div>
+                          </td>
+                          <td className="py-3 pr-3 text-slate-600">
+                            {org.accounts[0]}
+                            {org.accounts.length > 1
+                              ? ` +${org.accounts.length - 1}`
+                              : ""}
+                          </td>
+                          <td className="py-3 pr-3">
+                            <span
+                              className="font-semibold"
+                              title={org.products
+                                .map((p) => p.productKey)
+                                .join(", ")}
+                            >
+                              {org.activeProductCount}/{org.productCount}
+                            </span>{" "}
+                            <span className="text-slate-500 text-xs">
+                              active
+                            </span>
+                          </td>
+                          <td className="py-3 pr-3">
+                            {org.activeDevices}{" "}
+                            <span className="text-slate-500 text-xs">
+                              of {org.totalSeats} seat
+                              {org.totalSeats === 1 ? "" : "s"}
+                            </span>
+                          </td>
+                          <td className="py-3 pr-3">
+                            {soonest ? soonest.format("YYYY-MM-DD") : "—"}
+                          </td>
+                          <td className="py-3 pr-3">
+                            {soonestDays == null ? (
+                              "—"
+                            ) : (
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                  soonestDays < 0
+                                    ? "bg-red-50 text-red-700"
+                                    : soonestDays <= 30
+                                      ? "bg-yellow-50 text-yellow-800"
+                                      : "bg-green-50 text-green-700"
+                                }`}
                               >
-                                <td className="py-2 pr-3 font-medium">
-                                  {p.productKey}
-                                </td>
-                                <td className="py-2 pr-3 text-slate-600">
-                                  {p.email}
-                                </td>
-                                <td className="py-2 pr-3">
-                                  <Badge
-                                    label={
-                                      active
-                                        ? "Active"
-                                        : expired
-                                          ? "Expired"
-                                          : p.status || "—"
-                                    }
-                                    tone={
-                                      active
-                                        ? "green"
-                                        : expired
-                                          ? "yellow"
-                                          : "red"
-                                    }
-                                  />
-                                </td>
-                                <td className="py-2 pr-3">
-                                  {p.activeDevices} / {p.seats} seat
-                                  {p.seats === 1 ? "" : "s"}
-                                </td>
-                                <td className="py-2 pr-3">
-                                  {p.durationMonths
-                                    ? `${p.durationMonths} month${p.durationMonths === 1 ? "" : "s"}`
-                                    : "—"}
-                                </td>
-                                <td className="py-2 pr-3">
-                                  {p.expiresAt
-                                    ? dayjs(p.expiresAt).format("YYYY-MM-DD")
-                                    : "—"}
-                                </td>
-                                <td className="py-2 pr-3">
-                                  {p.daysLeft == null ? (
-                                    "—"
-                                  ) : (
-                                    <span
-                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                        p.daysLeft < 0
-                                          ? "bg-red-50 text-red-700"
-                                          : p.daysLeft <= 30
-                                            ? "bg-yellow-50 text-yellow-800"
-                                            : "bg-green-50 text-green-700"
-                                      }`}
-                                    >
-                                      {p.daysLeft < 0
-                                        ? `${Math.abs(p.daysLeft)}d ago`
-                                        : `${p.daysLeft}d left`}
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })}
+                                {soonestDays < 0
+                                  ? `expired ${Math.abs(soonestDays)}d ago`
+                                  : `${soonestDays}d left`}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 pr-0 text-right">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenOrgKey(open ? null : orgKey)
+                              }
+                              title={
+                                open
+                                  ? "Hide software details"
+                                  : "View software details"
+                              }
+                              aria-expanded={open}
+                              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border text-lg leading-none transition ${
+                                open
+                                  ? "border-adlm-blue-700 text-adlm-blue-700 bg-blue-50"
+                                  : "border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                              }`}
+                            >
+                              ⋮
+                            </button>
+                          </td>
+                        </tr>
+                        {open && (
+                          <tr className="border-b bg-slate-50/60 dark:bg-white/5">
+                            <td colSpan={7} className="py-3 px-3">
+                              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                                Software — {org.organizationName}
+                              </div>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead className="text-left text-slate-600">
+                                    <tr className="border-b">
+                                      <th className="py-2 pr-3">Software</th>
+                                      <th className="py-2 pr-3">Account</th>
+                                      <th className="py-2 pr-3">Status</th>
+                                      <th className="py-2 pr-3">Devices</th>
+                                      <th className="py-2 pr-3">Duration</th>
+                                      <th className="py-2 pr-3">Expires</th>
+                                      <th className="py-2 pr-3">Time left</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {org.products.map((p, i) => {
+                                      const expired =
+                                        p.daysLeft != null && p.daysLeft < 0;
+                                      const active =
+                                        p.status === "active" && !expired;
+                                      return (
+                                        <tr
+                                          key={`${p.email}-${p.productKey}-${i}`}
+                                          className="border-b last:border-b-0"
+                                        >
+                                          <td className="py-2 pr-3 font-medium">
+                                            {p.productKey}
+                                          </td>
+                                          <td className="py-2 pr-3 text-slate-600">
+                                            {p.email}
+                                          </td>
+                                          <td className="py-2 pr-3">
+                                            <Badge
+                                              label={
+                                                active
+                                                  ? "Active"
+                                                  : expired
+                                                    ? "Expired"
+                                                    : p.status || "—"
+                                              }
+                                              tone={
+                                                active
+                                                  ? "green"
+                                                  : expired
+                                                    ? "yellow"
+                                                    : "red"
+                                              }
+                                            />
+                                          </td>
+                                          <td className="py-2 pr-3">
+                                            {p.activeDevices} / {p.seats} seat
+                                            {p.seats === 1 ? "" : "s"}
+                                          </td>
+                                          <td className="py-2 pr-3">
+                                            {p.durationMonths
+                                              ? `${p.durationMonths} month${p.durationMonths === 1 ? "" : "s"}`
+                                              : "—"}
+                                          </td>
+                                          <td className="py-2 pr-3">
+                                            {p.expiresAt
+                                              ? dayjs(p.expiresAt).format(
+                                                  "YYYY-MM-DD",
+                                                )
+                                              : "—"}
+                                          </td>
+                                          <td className="py-2 pr-3">
+                                            {p.daysLeft == null ? (
+                                              "—"
+                                            ) : (
+                                              <span
+                                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                  p.daysLeft < 0
+                                                    ? "bg-red-50 text-red-700"
+                                                    : p.daysLeft <= 30
+                                                      ? "bg-yellow-50 text-yellow-800"
+                                                      : "bg-green-50 text-green-700"
+                                                }`}
+                                              >
+                                                {p.daysLeft < 0
+                                                  ? `${Math.abs(p.daysLeft)}d ago`
+                                                  : `${p.daysLeft}d left`}
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
