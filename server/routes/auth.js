@@ -697,10 +697,36 @@ router.post("/login", async (req, res) => {
           fpVersion,
         );
         if (!binding.ok) {
+          // Structured mismatch diagnostics: enough to triage a lockout from
+          // logs alone (which scheme the client used, what it sent vs what is
+          // bound, and the device list state) without customer screenshots.
+          const devs = (entitlement.devices || [])
+            .filter((d) => !d.revokedAt)
+            .map(
+              (d) =>
+                `v${d.fpVersion || 1}:${String(d.fingerprint || "").slice(0, 10)}…` +
+                `@${d.lastSeenAt ? new Date(d.lastSeenAt).toISOString().slice(0, 10) : "?"}`,
+            )
+            .join(", ");
+          console.warn(
+            `[/auth/login] device binding rejected: user=${user.email} ` +
+              `product=${chosenProductKey} code=${binding.code} ` +
+              `clientFpVersion=${fpVersion} ` +
+              `incoming=${chosenFingerprint.slice(0, 10)}… ` +
+              `bound=${String(entitlement.deviceFingerprint || "").slice(0, 10)}… ` +
+              `devices=[${devs}]`,
+          );
           return res.status(binding.status).json({
             error: binding.error,
             code: binding.code,
           });
+        }
+        if (binding.migrated) {
+          console.log(
+            `[/auth/login] device fingerprint migrated v1→v2: ` +
+              `user=${user.email} product=${chosenProductKey} ` +
+              `new=${chosenFingerprint.slice(0, 10)}…`,
+          );
         }
         changed ||= !!binding.changed;
       }

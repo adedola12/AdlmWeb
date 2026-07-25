@@ -112,6 +112,23 @@ function countActiveDevices(ent) {
   return ent?.deviceFingerprint ? 1 : 0;
 }
 
+// Most recent lastSeenAt across an entitlement's active devices. Fallback for
+// "Last seen" when the user's client predates the usage heartbeat.
+function entLastSeen(ent) {
+  const devs = Array.isArray(ent?.devices) ? ent.devices : [];
+  let max = null;
+  for (const d of devs) {
+    if (d?.revokedAt || !d?.lastSeenAt) continue;
+    const t = new Date(d.lastSeenAt).getTime();
+    if (Number.isFinite(t) && (max === null || t > max)) max = t;
+  }
+  return max ? new Date(max).toISOString() : null;
+}
+
+function usageKey(email, productKey) {
+  return `${String(email || "").toLowerCase()}|${String(productKey || "").toLowerCase()}`;
+}
+
 function isEntExpired(ent) {
   if (!ent?.expiresAt) return false;
   const end = dayjs(ent.expiresAt).endOf("day");
@@ -549,6 +566,9 @@ export default function Admin({ section = null }) {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [section]);
   const [users, setUsers] = React.useState([]);
+  // "email|productKey" → { lastActiveAt, minutes, sessions, appVersion } from
+  // /admin/usage/summary (30-day window built from plugin heartbeats).
+  const [usage, setUsage] = React.useState({});
   const [purchases, setPurchases] = React.useState([]);
   const [q, setQ] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -1235,6 +1255,20 @@ export default function Admin({ section = null }) {
 
       setPTrainings(Array.isArray(tRes) ? tRes : tRes?.data || []);
       setTrainingEnrollments(teRes || []);
+
+      // Usage summary is additive — never let it break the main admin load.
+      try {
+        const uu = await apiAuthed(`/admin/usage/summary?days=30`, {
+          token: accessToken,
+        });
+        const m = {};
+        (uu?.rows || []).forEach((r) => {
+          m[usageKey(r.email, r.productKey)] = r;
+        });
+        setUsage(m);
+      } catch {
+        setUsage({});
+      }
     } catch (e) {
       setMsg(e?.message || "Failed to load admin data");
     } finally {
@@ -1587,6 +1621,7 @@ export default function Admin({ section = null }) {
           licenseType: lt,
           organizationName: orgName,
           seatsUsed: countActiveDevices(e),
+          lastSeenAt: entLastSeen(e),
         });
       });
     });
@@ -1708,6 +1743,7 @@ export default function Admin({ section = null }) {
     productKeys,
     productMap,
     users,
+    usage,
     setDisabled,
     updateEntitlement,
     accessToken,
@@ -1799,6 +1835,7 @@ export default function Admin({ section = null }) {
                 <th className="py-2 pr-3">Subscription</th>
                 <th className="py-2 pr-3">Expiry</th>
                 <th className="py-2 pr-3">Time left</th>
+                <th className="py-2 pr-3">Last seen · Usage (30d)</th>
                 <th className="py-2 pr-3">Devices</th>
                 <th className="py-2 pr-3">Renewal</th>
                 <th className="py-2 pr-3">Entitlement</th>
@@ -1842,6 +1879,33 @@ export default function Admin({ section = null }) {
                     </td>
 
                     <td className="py-3 pr-3">{timeLeftBadge(r.expiresAt)}</td>
+
+                    <td className="py-3 pr-3">
+                      {(() => {
+                        const uRow =
+                          (usage || {})[usageKey(r.email, r.productKey)];
+                        const last = uRow?.lastActiveAt || r.lastSeenAt;
+                        return (
+                          <div className="text-xs">
+                            <div className="text-slate-700">
+                              {last
+                                ? dayjs(last).format("YYYY-MM-DD HH:mm")
+                                : "—"}
+                            </div>
+                            <div className="text-slate-500">
+                              {uRow
+                                ? `${(Number(uRow.minutes || 0) / 60).toFixed(1)}h · ${uRow.sessions} session${Number(uRow.sessions) === 1 ? "" : "s"}`
+                                : "no usage data"}
+                            </div>
+                            {uRow?.appVersion ? (
+                              <div className="text-slate-400">
+                                v{uRow.appVersion}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
+                    </td>
 
                     <td className="py-3 pr-3">
                       <div className="text-xs text-slate-700">
@@ -3100,6 +3164,7 @@ export default function Admin({ section = null }) {
                   productKeys={productKeys}
                   productMap={productMap}
                   users={users}
+                  usage={usage}
                   setDisabled={setDisabled}
                   updateEntitlement={updateEntitlement}
                   accessToken={accessToken}

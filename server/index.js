@@ -85,6 +85,8 @@ import entitlementsRouter from "./routes/entitlements.js";
 import adminUsersLite from "./routes/admin.usersLite.js";
 import projectsBoqRoutes from "./routes/projects.boq.js";
 import modelCheckRoutes from "./routes/model-checks.js";
+import usageRoutes from "./routes/usage.js";
+import adminUsage from "./routes/admin.usage.js";
 
 import trainingLocationsPublic from "./routes/training-locations.js";
 import adminTrainingLocations from "./routes/admin.training-locations.js";
@@ -343,6 +345,10 @@ app.use("/admin/rategen-compute", adminRateGenCompute);
 app.use("/api/rates", ratesCompute);
 
 app.use("/admin/users-lite", adminUsersLite);
+
+// Plugin/app usage heartbeats + admin usage summary (last seen, hours used)
+app.use("/usage", usageRoutes);
+app.use("/admin/usage", adminUsage);
 
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
