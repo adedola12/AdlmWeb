@@ -316,12 +316,18 @@ router.get(
     const prodByKey = Object.fromEntries((prods || []).map((p) => [p.key, p]));
 
     // 3) Attach isCourse + productName to entitlements (so Dashboard tabs render properly)
+    // Feature grants have no Product doc — give them a readable display name.
+    const FEATURE_GRANT_NAMES = {
+      "quiv-boq-import": "QUIV BoQ Import (feature access)",
+      ai: "ADLM AI Add-on (cost intelligence)",
+    };
     let entitlements = entsBase.map((e) => {
       const p = prodByKey[e.productKey] || null;
       return {
         ...e,
         isCourse: !!p?.isCourse,
-        productName: p?.name || e.productKey,
+        productName:
+          p?.name || FEATURE_GRANT_NAMES[e.productKey] || e.productKey,
       };
     });
 
@@ -1053,6 +1059,52 @@ router.get(
       doc.end();
     } catch (e) {
       console.error("/me/invoices/:id/pdf error:", e);
+      if (!res.headersSent) return res.status(500).json({ error: "PDF generation failed" });
+    }
+  }),
+);
+
+// Client receipt PDF — only for the client's own paid invoices.
+router.get(
+  "/invoices/:id/receipt/pdf",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    try {
+      const or = await buildInvoiceOrQuery(req.user);
+      if (!or.length) return res.status(404).json({ error: "Invoice not found" });
+
+      const inv = await Invoice.findOne({
+        _id: req.params.id,
+        $or: or,
+        status: "paid",
+      });
+
+      if (!inv) {
+        return res
+          .status(404)
+          .json({ error: "Paid invoice not found" });
+      }
+
+      // Backfill receipt metadata if this invoice was marked paid before the
+      // receipt feature existed (or before an admin first opened its receipt).
+      await inv.applyPaidMetadata();
+      if (inv.isModified()) await inv.save();
+
+      const { renderReceipt, receiptQrDataUrl } = await import("../util/receiptPdf.js");
+      const PDFDocument = (await import("pdfkit")).default;
+      const qrDataUrl = await receiptQrDataUrl();
+
+      const doc = new PDFDocument({ size: "A4", margin: 40 });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${inv.receiptNumber || "receipt"}.pdf"`,
+      );
+      doc.pipe(res);
+      renderReceipt(doc, inv.toObject(), qrDataUrl);
+      doc.end();
+    } catch (e) {
+      console.error("/me/invoices/:id/receipt/pdf error:", e);
       if (!res.headersSent) return res.status(500).json({ error: "PDF generation failed" });
     }
   }),
