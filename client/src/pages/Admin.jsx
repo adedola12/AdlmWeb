@@ -678,6 +678,8 @@ export default function Admin({ section = null }) {
   const [ihUrlDraft, setIhUrlDraft] = React.useState("");
   const [ihVideoUrl, setIhVideoUrl] = React.useState("");
   const [ihVideoDraft, setIhVideoDraft] = React.useState("");
+  const [ihGuideUrl, setIhGuideUrl] = React.useState("");
+  const [ihGuideDraft, setIhGuideDraft] = React.useState("");
   const [ihBusy, setIhBusy] = React.useState(false);
   const [ihMsg, setIhMsg] = React.useState("");
   const [ihUploadProg, setIhUploadProg] = React.useState(0);
@@ -918,6 +920,8 @@ export default function Admin({ section = null }) {
       setIhUrlDraft(ihData?.installerHubUrl || "");
       setIhVideoUrl(ihData?.installerHubVideoUrl || "");
       setIhVideoDraft(ihData?.installerHubVideoUrl || "");
+      setIhGuideUrl(ihData?.installerHubGuideUrl || "");
+      setIhGuideDraft(ihData?.installerHubGuideUrl || "");
 
       setFrActive(!!frData?.active);
       setFrMessage(frData?.message || "");
@@ -1079,10 +1083,12 @@ export default function Admin({ section = null }) {
         body: JSON.stringify({
           installerHubUrl: ihUrlDraft,
           installerHubVideoUrl: ihVideoDraft,
+          installerHubGuideUrl: ihGuideDraft,
         }),
       });
       setIhUrl(ihUrlDraft);
       setIhVideoUrl(ihVideoDraft);
+      setIhGuideUrl(ihGuideDraft);
       setIhMsg("Installer Hub settings saved!");
     } catch (e) {
       setIhMsg(e?.message || "Failed to save");
@@ -5063,10 +5069,50 @@ export default function Admin({ section = null }) {
                   )}
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    User Guide URL (PDF)
+                  </label>
+                  <p className="text-xs text-slate-500 mb-2">
+                    Leave blank to use the guide bundled with the site
+                    (<code>/docs/ADLM-Installer-Hub-User-Guide.pdf</code>). Set a URL
+                    here only to point at a different copy. This link appears on the
+                    user dashboard, in the purchase-approved email, and on the
+                    "Download User Guide" button inside the Installer Hub.
+                  </p>
+                  <input
+                    type="url"
+                    className="w-full border rounded px-3 py-2 text-sm"
+                    placeholder="https://... (blank = use bundled guide)"
+                    value={ihGuideDraft}
+                    onChange={(e) => setIhGuideDraft(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Current:{" "}
+                    <a
+                      href={ihGuideUrl || "/docs/ADLM-Installer-Hub-User-Guide.pdf"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-adlm-blue-700 underline break-all"
+                    >
+                      {ihGuideUrl
+                        ? ihGuideUrl.length > 80
+                          ? ihGuideUrl.slice(0, 80) + "..."
+                          : ihGuideUrl
+                        : "/docs/ADLM-Installer-Hub-User-Guide.pdf (bundled)"}
+                    </a>
+                  </p>
+                </div>
+
                 <div className="flex items-center gap-3">
                   <button
                     onClick={saveInstallerHub}
-                    disabled={ihBusy || (ihUrlDraft === ihUrl && ihVideoDraft === ihVideoUrl)}
+                    disabled={
+                      ihBusy ||
+                      (ihUrlDraft === ihUrl &&
+                        ihVideoDraft === ihVideoUrl &&
+                        ihGuideDraft === ihGuideUrl)
+                    }
                     className="px-4 py-2 rounded bg-adlm-blue-700 text-white text-sm font-medium hover:bg-[#0050c8] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {ihBusy ? "Saving..." : "Save Installer Hub Settings"}

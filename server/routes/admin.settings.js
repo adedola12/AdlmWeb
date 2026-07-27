@@ -64,10 +64,12 @@ router.get("/installer-hub", async (_req, res) => {
   res.json({
     installerHubUrl: s?.installerHubUrl || "",
     installerHubVideoUrl: s?.installerHubVideoUrl || "",
+    installerHubGuideUrl: s?.installerHubGuideUrl || "",
   });
 });
 
-// POST set installer hub settings { installerHubUrl?, installerHubVideoUrl? }
+// POST set installer hub settings
+// { installerHubUrl?, installerHubVideoUrl?, installerHubGuideUrl? }
 router.post("/installer-hub", async (req, res) => {
   const update = {};
   if (typeof req.body?.installerHubUrl === "string") {
@@ -76,8 +78,14 @@ router.post("/installer-hub", async (req, res) => {
   if (typeof req.body?.installerHubVideoUrl === "string") {
     update.installerHubVideoUrl = req.body.installerHubVideoUrl.trim();
   }
+  if (typeof req.body?.installerHubGuideUrl === "string") {
+    update.installerHubGuideUrl = req.body.installerHubGuideUrl.trim();
+  }
   if (!Object.keys(update).length) {
-    return res.status(400).json({ error: "Provide installerHubUrl or installerHubVideoUrl" });
+    return res.status(400).json({
+      error:
+        "Provide installerHubUrl, installerHubVideoUrl or installerHubGuideUrl",
+    });
   }
 
   const s = await Setting.findOneAndUpdate(
@@ -89,6 +97,7 @@ router.post("/installer-hub", async (req, res) => {
     ok: true,
     installerHubUrl: s.installerHubUrl,
     installerHubVideoUrl: s.installerHubVideoUrl,
+    installerHubGuideUrl: s.installerHubGuideUrl,
   });
 });
 
@@ -101,6 +110,7 @@ router.get("/force-reinstall", async (_req, res) => {
     triggeredAt: s?.forceReinstallAt || null,
     installerHubUrl: s?.installerHubUrl || "",
     installerHubVideoUrl: s?.installerHubVideoUrl || "",
+    installerHubGuideUrl: s?.installerHubGuideUrl || "",
   });
 });
 

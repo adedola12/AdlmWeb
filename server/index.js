@@ -14,6 +14,7 @@ import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
 import { ensureRolesSeeded } from "./util/rbac.js";
+import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
 
 import { registerDynamicMetaRoutes } from "./routes/meta.dynamic.js";
@@ -300,6 +301,7 @@ app.get("/settings/force-reinstall", async (_req, res) => {
       triggeredAt: s.forceReinstallAt || null,
       installerHubUrl: s.installerHubUrl || "",
       installerHubVideoUrl: s.installerHubVideoUrl || "",
+      installerHubGuideUrl: resolveUserGuideUrl(s.installerHubGuideUrl),
     });
   } catch {
     res.json({ active: false });

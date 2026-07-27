@@ -14,6 +14,7 @@ import { Invoice } from "../models/Invoice.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { ActivityLog } from "../models/ActivityLog.js";
 import { sendMail } from "../util/mailer.js";
+import { resolveUserGuideUrl } from "../util/userGuide.js";
 
 const router = express.Router();
 
@@ -489,7 +490,9 @@ router.get(
     // 7) Counts/stats used on Dashboard
     const [ordersCount, globalSettings] = await Promise.all([
       Purchase.countDocuments({ userId: req.user._id }),
-      Setting.findOne({ key: "global" }).select("installerHubUrl installerHubVideoUrl").lean(),
+      Setting.findOne({ key: "global" })
+        .select("installerHubUrl installerHubVideoUrl installerHubGuideUrl")
+        .lean(),
     ]);
 
     return res.json({
@@ -505,6 +508,8 @@ router.get(
       installerHub: {
         downloadUrl: globalSettings?.installerHubUrl || "",
         videoUrl: globalSettings?.installerHubVideoUrl || "",
+        // Always present — falls back to the copy bundled with the site.
+        guideUrl: resolveUserGuideUrl(globalSettings?.installerHubGuideUrl),
       },
 
       ordersCount, // used by Dashboard total orders stat

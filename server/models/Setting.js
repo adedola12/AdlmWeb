@@ -7,6 +7,7 @@ const SettingSchema = new mongoose.Schema(
     mobileAppUrl: { type: String, default: "" }, // APK / mobile app download link
     installerHubUrl: { type: String, default: "" }, // Installer Hub setup file download link
     installerHubVideoUrl: { type: String, default: "" }, // Setup guide video URL
+    installerHubGuideUrl: { type: String, default: "" }, // Installer Hub user guide PDF link
 
     // Force-reinstall broadcast: when set, all clients show a banner instructing
     // users to redownload the Installer Hub, watch the setup video, reinstall, and

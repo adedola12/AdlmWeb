@@ -12,6 +12,11 @@ import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 import { sendMail } from "../util/mailer.js";
 import { runExpiryNotifier } from "../util/expiryNotifier.js";
 import { sendBoqImportGrantEmail } from "../util/boqImportGrantEmail.js";
+import { Setting } from "../models/Setting.js";
+import {
+  resolveUserGuideUrl,
+  getUserGuideAttachment,
+} from "../util/userGuide.js";
 
 const router = express.Router();
 
@@ -428,6 +433,9 @@ function buildApproveEmailHtml({
   receiptLink,
   anydeskLink,
   isPendingInstall,
+  installerHubLink,
+  userGuideLink,
+  guideAttached,
 }) {
   const name = String(firstName || "").trim() || "there";
 
@@ -458,8 +466,26 @@ function buildApproveEmailHtml({
 
       <div style="margin:10px 0 18px 0">
         ${btn(receiptLink, "Open Receipt (Print / PDF)", "#2563eb")}
+        ${installerHubLink ? btn(installerHubLink, "Download Installer Hub", "#005be3") : ""}
+        ${userGuideLink ? btn(userGuideLink, "Download User Guide (PDF)", "#e86a27") : ""}
         ${btn(anydeskLink, "Download AnyDesk (Windows)", "#0f172a")}
       </div>
+
+      ${
+        userGuideLink
+          ? `<div style="margin:0 0 16px 0;padding:12px 14px;border-left:3px solid #005be3;
+                         background:#eef4ff;border-radius:8px;color:#0f172a;font-size:14px">
+               <b style="display:block;margin-bottom:4px">New to the Installer Hub?</b>
+               The user guide walks you through signing in, installing your products,
+               choosing your Revit version, and keeping everything up to date —
+               with pictures of every screen.${
+                 guideAttached
+                   ? " It is attached to this email as a PDF, and you can also download it above."
+                   : ""
+               }
+             </div>`
+          : ""
+      }
 
       <p style="margin:0 0 6px 0;color:#475569;font-size:13px">
         Tip: If you cannot download PDF, click <b>Print</b> and choose “Save as PDF”.
@@ -824,6 +850,15 @@ router.post(
       const firstName =
         purchase.firstName || user.firstName || user.username || "";
 
+      // Installer Hub download + user guide links, so a new subscriber gets the
+      // app and the walkthrough in the same email as their receipt.
+      const hubSettings = await Setting.findOne({ key: "global" })
+        .select("installerHubUrl installerHubGuideUrl")
+        .lean()
+        .catch(() => null);
+
+      const guideAttachment = getUserGuideAttachment();
+
       await sendMail({
         to: purchase.email || user.email,
         subject: isPendingInstall
@@ -834,7 +869,11 @@ router.post(
           receiptLink,
           anydeskLink,
           isPendingInstall,
+          installerHubLink: hubSettings?.installerHubUrl || "",
+          userGuideLink: resolveUserGuideUrl(hubSettings?.installerHubGuideUrl),
+          guideAttached: !!guideAttachment,
         }),
+        attachments: guideAttachment ? [guideAttachment] : undefined,
       });
     } catch (e) {
       console.error("[admin approve] sendMail failed:", e?.message || e);

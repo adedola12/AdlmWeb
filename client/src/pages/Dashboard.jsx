@@ -471,6 +471,16 @@ export default function Dashboard() {
                       Watch setup video
                     </a>
                   ) : null}
+                  {reinstall.installerHubGuideUrl ? (
+                    <a
+                      href={reinstall.installerHubGuideUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white border border-red-300 text-red-700 text-xs font-semibold hover:bg-red-50 transition"
+                    >
+                      Download user guide
+                    </a>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -514,6 +524,30 @@ export default function Dashboard() {
                 </svg>
                 Download Installer Hub
               </a>
+              {summary.installerHub.guideUrl ? (
+                <a
+                  href={summary.installerHub.guideUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-white/10 ring-1 ring-white/40 text-white text-sm font-semibold hover:bg-white/20 transition"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                    />
+                  </svg>
+                  Download User Guide
+                </a>
+              ) : null}
               {summary.installerHub.videoUrl ? (
                 <a
                   href={summary.installerHub.videoUrl}
@@ -1922,6 +1956,20 @@ export function InstallationsTab({
                           </a>
                         ) : null}
 
+                        {installerHub?.guideUrl ? (
+                          <a
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-[#e86a27] text-white text-sm font-medium hover:bg-[#cf5b1d] transition"
+                            href={installerHub.guideUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
+                            Download User Guide
+                          </a>
+                        ) : null}
+
                         {installerHub?.videoUrl ? (
                           <button
                             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition"
@@ -1939,6 +1987,20 @@ export function InstallationsTab({
                       <ul className="list-disc pl-5 space-y-1 text-slate-600">
                         {installerHub?.downloadUrl ? (
                           <li>Download and run the Installer Hub to set up your software</li>
+                        ) : null}
+                        {installerHub?.guideUrl ? (
+                          <li>
+                            Follow the{" "}
+                            <a
+                              className="text-adlm-blue-700 underline"
+                              href={installerHub.guideUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Installer Hub user guide
+                            </a>{" "}
+                            — sign-in to first install, with pictures of every screen
+                          </li>
                         ) : null}
                         <li>
                           Or use AnyDesk for remote installation:{" "}
