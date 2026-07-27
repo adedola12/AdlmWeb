@@ -24,6 +24,33 @@ summary: 2D takeoff with automatic material + labour budgets, RateGen pricing an
   items from the plugin changelog are folded into Improved here.
 -->
 
+## 2.4 — 13 July 2026 — The Excel Link & Steel Release
+
+A live two-way Excel Takeoff Link, a new Steel Tonnage tool that turns measured lengths into weights, and a batch of reliability fixes.
+
+### ✨ New
+
+- **Rates in Excel.** A new Rates tab in the Excel Takeoff Link pane lists every BoQ item's Description, Unit, Rate and Amount straight from your Budget — pick a row and drop it into your sheet to fill a rate column. It stays linked, so refreshing re-pulls updated rates.
+- **Material & Labour in Excel.** The Material Takeoff tab now shows your Budget's full material + labour breakdown (with unit rate and amount), instead of the old stored-breakdown view.
+- **Build a cell from several quantities.** Link multiple takeoff items into one Excel cell as a running sum with Add to Cell, and pull individual items back out with Remove from Cell — the cell re-totals automatically.
+- **Steel Tonnage tab.** A new tool that scans your job for steel sections (Universal Beams/Columns, channels, angles, hollow sections) in item names and converts each measured length to net / allowance / gross tonnage, with editable connection and waste allowances.
+- **Roof & truss steel.** Steel Tonnage also reads the computed roof/truss members — rafters, purlins, tie beams, king posts, struts, chords, bracing — even when their names carry no section size. Assign a section from the searchable catalogue (or type a kg/m) and the tonnage fills in; your choice locks in and survives a re-scan.
+- **Live link tally.** The Takeoff Link pane shows how many cells and items are currently linked in the workbook, updating as you link, add, remove or unlink.
+
+### 🔧 Improved
+
+- **Auto-refresh on return to Excel.** Change a quantity or rate in HERON, switch back to your workbook, and the linked cells update automatically — no need to press Refresh (and unchanged cells are left untouched, so your Undo history is preserved).
+- **Findable takeoff items.** Items that HERON renames to a full BoQ description (e.g. "DPM" → "…waterproof sheeting…") now keep their original name in front, so you can still search the pane for DPM, Topsoil, etc.
+- **Readable, resizable pane.** Descriptions wrap to show in full, columns are drag-resizable, and hovering any cell shows its complete text.
+- **Works offline.** The Rates and Material Takeoff lists appear even before you sign in to load prices — the figures read zero until prices load, then refresh in place.
+- **Professional bill export.** The Excel Save / Export now writes a proper Bill of Quantities layout — ITEM · DESCRIPTION · QTY · UNIT · RATE · AMOUNT columns, QS item lettering (A, B, C … skipping I and O), a bold work-section header, wrapped descriptions and accounting number format (unpriced lines read "-"), with the Rate column left blank for pricing.
+
+### 🐛 Fixed
+
+- **Takeoff Link pane now always opens.** Previously, if Excel started on its Start screen with no workbook, clicking Takeoff Link did nothing. The pane is now created against the workbook you're actually in, and any error is shown instead of failing silently.
+- **Budget "No take-off folders found."** The Budget view now re-checks PlanSwift for the open job, so it loads your folders even when the plugin started before a job was open.
+- **Steel Tonnage startup crash** fixed (a theme styling error that stopped the tab from loading).
+
 ## 2.3 — 8 June 2026 — The Budget Release
 
 Turn any takeoff into a costed budget automatically. HERON now builds a full Material & Labour schedule for every BoQ item, prices it from your RateGen library, works out your overhead & profit per item, and exports it all as a linked Excel workbook.
