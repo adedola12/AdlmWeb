@@ -251,6 +251,35 @@ function InvoicesTab({ invoices = [], loading, error, navigate, accessToken }) {
               >
                 Download PDF
               </button>
+              {inv.status === "paid" && (
+                <button
+                  className="text-xs px-3 py-1.5 rounded-md font-medium text-white"
+                  style={{ backgroundColor: "#0f766e" }}
+                  onClick={async () => {
+                    try {
+                      const resp = await fetch(
+                        `${API_BASE}/me/invoices/${inv._id}/receipt/pdf`,
+                        {
+                          headers: { Authorization: `Bearer ${accessToken}` },
+                          credentials: "include",
+                        },
+                      );
+                      if (!resp.ok) throw new Error("Download failed");
+                      const blob = await resp.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${inv.receiptNumber || inv.invoiceNumber + "-receipt"}.pdf`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch {
+                      alert("Receipt download failed");
+                    }
+                  }}
+                >
+                  Download Receipt
+                </button>
+              )}
             </div>
           </div>
         );

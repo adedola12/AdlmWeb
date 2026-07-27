@@ -85,6 +85,28 @@ export default function UserInvoice() {
     }
   }
 
+  async function handleDownloadReceipt() {
+    try {
+      const resp = await fetch(
+        `${API_BASE}/me/invoices/${id}/receipt/pdf`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          credentials: "include",
+        },
+      );
+      if (!resp.ok) throw new Error("Receipt download failed");
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${invoice?.receiptNumber || (invoice?.invoiceNumber || "invoice") + "-receipt"}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e.message || "Receipt download failed");
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto py-12 text-center text-slate-500">
@@ -140,6 +162,15 @@ export default function UserInvoice() {
           >
             {pdfBusy ? "Generating…" : "Download PDF"}
           </button>
+          {invoice.status === "paid" && (
+            <button
+              className="text-sm px-3 py-1.5 rounded-md font-medium text-white"
+              style={{ backgroundColor: "#0f766e" }}
+              onClick={handleDownloadReceipt}
+            >
+              Download Receipt
+            </button>
+          )}
         </div>
       </div>
 

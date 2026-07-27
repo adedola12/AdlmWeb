@@ -338,6 +338,8 @@ export default function AdminInvoices() {
         })),
         discountPercent: Number(form.discountPercent || 0),
         taxPercent: Number(form.taxPercent || 0),
+        paymentMethod: form.paymentMethod || "",
+        paymentReference: form.paymentReference || "",
       };
 
       if (editId) {
@@ -402,6 +404,29 @@ export default function AdminInvoices() {
       `${API_BASE}/admin/invoices/${id}/pdf?token=${accessToken}`,
       "_blank",
     );
+  }
+
+  function downloadReceipt(id) {
+    window.open(
+      `${API_BASE}/admin/invoices/${id}/receipt/pdf?token=${accessToken}`,
+      "_blank",
+    );
+  }
+
+  async function sendReceipt(id) {
+    setBusy(true);
+    try {
+      const result = await apiAuthed(`/admin/invoices/${id}/receipt/send`, {
+        token: accessToken,
+        method: "POST",
+      });
+      load();
+      setMsg(result?.message || "Receipt sent to client");
+    } catch (e) {
+      setMsg(e.message || "Send receipt failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // ── LIST MODE ──
@@ -520,6 +545,27 @@ export default function AdminInvoices() {
                         >
                           Send
                         </button>
+                      )}
+                      {inv.status === "paid" && (
+                        <>
+                          <button
+                            className="text-emerald-700 font-medium hover:underline"
+                            onClick={() => downloadReceipt(inv._id)}
+                            title="Download the paid receipt PDF"
+                          >
+                            Receipt
+                          </button>
+                          {inv.clientEmail && (
+                            <button
+                              className="text-emerald-700 font-medium hover:underline"
+                              onClick={() => sendReceipt(inv._id)}
+                              disabled={busy}
+                              title="Email the receipt PDF to the client"
+                            >
+                              Send Receipt
+                            </button>
+                          )}
+                        </>
                       )}
                       <button
                         className="text-rose-600 hover:underline"
@@ -921,6 +967,53 @@ export default function AdminInvoices() {
                   <option value="cancelled">Cancelled</option>
                 </select>
               </label>
+
+              {/* Payment details — used on the receipt once marked paid */}
+              {form.status === "paid" && (
+                <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 p-3 space-y-3">
+                  <div className="text-xs font-semibold text-emerald-800">
+                    Payment details (shown on receipt)
+                  </div>
+                  <label className="block">
+                    Payment Method
+                    <select
+                      className="input mt-1"
+                      value={form.paymentMethod || ""}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, paymentMethod: e.target.value }))
+                      }
+                    >
+                      <option value="">— Select —</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Card">Card</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Paystack">Paystack</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    Payment Reference{" "}
+                    <span className="text-slate-400">(optional)</span>
+                    <input
+                      className="input mt-1"
+                      value={form.paymentReference || ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          paymentReference: e.target.value,
+                        }))
+                      }
+                      placeholder="Transaction ref / teller no."
+                    />
+                  </label>
+                  {form.receiptNumber && (
+                    <div className="text-xs text-emerald-700">
+                      Receipt #: {form.receiptNumber}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="text-right space-y-1 text-sm">
               <div>

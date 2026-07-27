@@ -10,6 +10,7 @@ import { Invoice } from "../models/Invoice.js";
 import { User } from "../models/User.js";
 import { Setting } from "../models/Setting.js";
 import { sendMail } from "../util/mailer.js";
+import { renderReceipt, receiptToBuffer, receiptQrDataUrl } from "../util/receiptPdf.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -239,9 +240,15 @@ router.post(
       terms: (req.body.terms || "").trim(),
       notes: (req.body.notes || "").trim(),
       status: req.body.status || "draft",
+      paymentMethod: (req.body.paymentMethod || "").trim(),
+      paymentReference: (req.body.paymentReference || "").trim(),
       createdBy: req.user._id,
       purchaseId: req.body.purchaseId || undefined,
     });
+
+    // Invoices created directly as "paid" get receipt metadata immediately.
+    await inv.applyPaidMetadata();
+    if (inv.isModified()) await inv.save();
 
     return res.json({ ok: true, invoice: inv });
   }),
@@ -261,6 +268,7 @@ router.put(
       "invoiceDate", "dueDate",
       "clientName", "clientEmail", "clientPhone", "clientAddress", "clientOrganization",
       "currency", "discountPercent", "taxPercent", "terms", "notes", "status",
+      "paymentMethod", "paymentReference",
     ];
 
     for (const f of fields) {
@@ -296,6 +304,9 @@ router.put(
       const uid = await resolveUserId(inv.clientEmail);
       inv.clientUserId = uid || inv.clientUserId || undefined;
     }
+
+    // Stamp paidAt / receipt number the first time it flips to "paid".
+    await inv.applyPaidMetadata();
 
     await inv.save();
     return res.json({ ok: true, invoice: inv });
@@ -534,6 +545,116 @@ router.get(
     }
 
     doc.end();
+  }),
+);
+
+// Generate the receipt PDF — only available once the invoice is marked paid.
+// Mini_admin can only download their own.
+router.get(
+  "/:id/receipt/pdf",
+  asyncHandler(async (req, res) => {
+    const inv = await Invoice.findOne({
+      _id: req.params.id,
+      ...ownershipFilter(req),
+    });
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+
+    if (String(inv.status).toLowerCase() !== "paid") {
+      return res
+        .status(409)
+        .json({ error: "Receipt is only available for paid invoices." });
+    }
+
+    // Backfill receipt metadata for invoices marked paid before this feature existed.
+    await inv.applyPaidMetadata();
+    if (inv.isModified()) await inv.save();
+
+    const qrDataUrl = await receiptQrDataUrl();
+
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${inv.receiptNumber || "receipt"}.pdf"`,
+    );
+    doc.pipe(res);
+    renderReceipt(doc, inv.toObject(), qrDataUrl);
+    doc.end();
+  }),
+);
+
+// Email the receipt (PDF attached) to the client — paid invoices only.
+router.post(
+  "/:id/receipt/send",
+  asyncHandler(async (req, res) => {
+    const inv = await Invoice.findOne({
+      _id: req.params.id,
+      ...ownershipFilter(req),
+    });
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+
+    if (String(inv.status).toLowerCase() !== "paid") {
+      return res
+        .status(409)
+        .json({ error: "Receipt is only available for paid invoices." });
+    }
+    if (!inv.clientEmail) {
+      return res
+        .status(400)
+        .json({ error: "Client email is required to send the receipt." });
+    }
+
+    await inv.applyPaidMetadata();
+    if (inv.isModified()) await inv.save();
+
+    const curr = inv.currency === "USD" ? "$" : "N";
+    const clientGreeting = inv.clientName || inv.clientOrganization || "Client";
+    const amountPaid = Number(inv.amountPaid || inv.total || 0);
+    const payDate = inv.paidAt ? dayjs(inv.paidAt).format("MMMM D, YYYY") : "—";
+
+    const pdfBuffer = await receiptToBuffer(inv.toObject());
+
+    await sendMail({
+      to: inv.clientEmail,
+      subject: `Receipt ${inv.receiptNumber} from ADLM Studio`,
+      html: `
+        <div style="max-width:600px;margin:0 auto;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#262626">
+          <div style="background:#091E39;padding:20px 24px;border-radius:8px 8px 0 0">
+            <span style="color:#fff;font-size:18px;font-weight:700">ADLM Studio</span>
+            <span style="color:#0f766e;font-size:18px;font-weight:700;float:right">Receipt</span>
+          </div>
+          <div style="padding:24px;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 8px 8px">
+            <p>Dear ${clientGreeting},</p>
+            <p>Thank you for your payment. This confirms we have received your payment in full. Your receipt is attached as a PDF.</p>
+            <div style="margin:16px 0;padding:16px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px">
+              <div style="font-size:13px;color:#065f46">Amount Paid</div>
+              <div style="font-size:24px;font-weight:700;color:#0f766e">${curr}${amountPaid.toLocaleString()}</div>
+            </div>
+            <div style="padding:12px;background:#f9f9f9;border-radius:6px;font-size:13px;line-height:1.8">
+              <b>Receipt #:</b> ${inv.receiptNumber}<br/>
+              <b>Invoice #:</b> ${inv.invoiceNumber}<br/>
+              <b>Payment date:</b> ${payDate}<br/>
+              ${inv.paymentMethod ? `<b>Method:</b> ${inv.paymentMethod}<br/>` : ""}
+              ${inv.paymentReference ? `<b>Reference:</b> ${inv.paymentReference}<br/>` : ""}
+            </div>
+          </div>
+          <div style="text-align:center;padding:12px;font-size:11px;color:#999">
+            &copy; ${new Date().getFullYear()} ADLM Studio &mdash; www.adlmstudio.net
+          </div>
+        </div>
+      `,
+      attachments: [
+        {
+          filename: `${inv.receiptNumber || "receipt"}.pdf`,
+          content: pdfBuffer.toString("base64"),
+        },
+      ],
+    });
+
+    inv.receiptSentAt = new Date();
+    await inv.save();
+
+    return res.json({ ok: true, message: "Receipt sent to client." });
   }),
 );
 
