@@ -60,10 +60,61 @@ function codeOrdinal(code) {
   return 900000000 + h * 2; // material = base, labour = base + 1
 }
 
+// Aggregate summary bill lines ("Steelwork – Total Weight" when the
+// per-profile Weight lines are also in the bill) must not get coverage rows —
+// pricing both the total and its parts double counts. A lone total with no
+// constituents keeps coverage. Mirrors the plugin's IsAggregateSummaryLine.
+const TOTAL_WORD_RE = /\btotal\b/i;
+const SURFACE_AREA_RE = /\bsurface\s*area\b/i;
+
+function billLineName(it) {
+  return String(it?.description || it?.takeoffLine || "");
+}
+
+function isAggregateSummaryLine(it, allItems) {
+  const name = billLineName(it);
+  const m = TOTAL_WORD_RE.exec(name);
+  if (!m) return false;
+  const prefix = name
+    .slice(0, m.index)
+    .replace(/[\s–\-:(]+$/, "");
+  if (prefix.length < 3) return false;
+  return allItems.some((other) => {
+    if (!other || other === it) return false;
+    const otherName = billLineName(other);
+    return (
+      otherName.toLowerCase().startsWith(prefix.toLowerCase()) &&
+      !TOTAL_WORD_RE.test(otherName)
+    );
+  });
+}
+
 export function ensureBillItemCoverage(items, budgetItems) {
-  const list = Array.isArray(budgetItems) ? budgetItems.slice() : [];
+  let list = Array.isArray(budgetItems) ? budgetItems.slice() : [];
   const billItems = Array.isArray(items) ? items : [];
   if (!billItems.length) return list;
+
+  // Heal pass: drop coverage rows synthesised for aggregate lines (or labour
+  // synthesised for surface-area lines) by earlier versions. Only rows with
+  // this function's own deterministic sn are touched — real breakdowns and
+  // user rows never match.
+  const synthSnByCode = new Map();
+  for (const it of billItems) {
+    const code = String(it?.code || "").trim();
+    if (!code) continue;
+    const aggregate = isAggregateSummaryLine(it, billItems);
+    const surfaceArea = SURFACE_AREA_RE.test(billLineName(it));
+    if (!aggregate && !surfaceArea) continue;
+    const base = codeOrdinal(code);
+    if (aggregate) synthSnByCode.set(`${code.toLowerCase()}|${base}`, true); // material
+    synthSnByCode.set(`${code.toLowerCase()}|${base + 1}`, true); // labour
+  }
+  if (synthSnByCode.size) {
+    list = list.filter((b) => {
+      const code = String(b?.billIdentity || "").trim().toLowerCase();
+      return !code || !synthSnByCode.has(`${code}|${num(b?.sn)}`);
+    });
+  }
 
   const byCode = new Map();
   for (const b of list) {
@@ -112,9 +163,14 @@ export function ensureBillItemCoverage(items, budgetItems) {
   for (const it of billItems) {
     const code = String(it?.code || "").trim();
     if (!code || num(it?.qty) <= 0) continue;
+    if (isAggregateSummaryLine(it, billItems)) continue;
     const lines = byCode.get(code.toLowerCase()) || [];
     if (!lines.some(isLabour)) {
-      list.push(synth(it, code, "Labour", "Labour", 1));
+      // Steel surface-area lines are a coating basis; erection labour is
+      // priced on the Weight lines. No labour synth for them.
+      if (!SURFACE_AREA_RE.test(billLineName(it))) {
+        list.push(synth(it, code, "Labour", "Labour", 1));
+      }
     }
     // Material only for items that actually carry material — labour-only items
     // (excavation, disposal, compaction, earthwork support, backfill…) stay
