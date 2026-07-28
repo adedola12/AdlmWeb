@@ -2507,22 +2507,35 @@ async function getProject(req, res) {
 // Returns { ok, applied } or { error, status } — never partially reports
 // success, because a silent half-write on a bill is worse than a refusal.
 async function applyMergedLineWrite({ req, container, userId, body }) {
-  // The container owns the contract (that is the merge model), so a locked
-  // container freezes every discipline. Post-lock edits on a normal project are
-  // diverted into actualQty/variations; doing that across federated sources
-  // needs a decision about which document the variation lands on, so until
-  // that exists a locked merged project refuses measurement writes outright
-  // rather than guessing.
-  if (container?.contract?.locked) {
-    return {
-      error:
-        "This merged project's contract is locked. Unlock it to edit measurements, or edit the individual discipline project directly.",
-      code: "MERGED_CONTRACT_LOCKED",
-      status: 409,
-    };
+  // ── Post-lock enforcement on a merged contract ──
+  // The container owns the contract, so when it is locked the baseline covers
+  // every discipline at once and enforcement has to happen HERE, against the
+  // combined scope — not per source. A source's own pre-merge baseline would
+  // be the wrong yardstick and would fight this one.
+  //
+  // enforceContractLock is fed a synthetic project carrying the container's
+  // contract and the RESOLVED items, so identities match the namespaced form
+  // that was snapshotted at lock time. What comes back is:
+  //   lockedItems     — qty/rate snapped to the baseline, re-measurement
+  //                     diverted to actualQty/actualRate, omitted base items
+  //                     restored. Still namespaced, so it splits per source.
+  //   extraVariations — post-lock scope that did not exist at lock.
+  let workingBody = body;
+  let postLockVariations = [];
+  const containerLocked = !!container?.contract?.locked;
+
+  if (containerLocked && Array.isArray(body.items)) {
+    const resolved = await resolveMergedProject(container, userId);
+    const sanitizedNext = sanitizeItems(body.items, container.productKey);
+    const { lockedItems, extraVariations } = enforceContractLock({
+      project: { contract: container.contract, items: resolved.items },
+      sanitizedNext,
+    });
+    workingBody = { ...body, items: lockedItems };
+    postLockVariations = extraVariations;
   }
 
-  const { bySource, unroutable } = splitMergedWrite(container, body);
+  const { bySource, unroutable } = splitMergedWrite(container, workingBody);
 
   if (unroutable.length) {
     return {
@@ -2552,13 +2565,15 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
 
     if (Array.isArray(bucket.items)) {
       const sanitizedNext = sanitizeItems(bucket.items, pk);
-      // A source may still carry its own lock from before the merge. Honour it:
-      // the container's contract governs commercially, but a locked source's
-      // baseline quantities are still frozen data we must not overwrite.
-      const { lockedItems, extraVariations } = enforceContractLock({
-        project: source,
-        sanitizedNext,
-      });
+      // When the CONTAINER is locked, enforcement already happened above
+      // against the combined baseline and these lines are the frozen result —
+      // running a source's own (pre-merge) lock over them again would measure
+      // against the wrong baseline and could re-divert already-diverted
+      // quantities. Only fall back to per-source enforcement when the
+      // container is unlocked, where a source's own lock is still meaningful.
+      const { lockedItems, extraVariations } = containerLocked
+        ? { lockedItems: sanitizedNext, extraVariations: [] }
+        : enforceContractLock({ project: source, sanitizedNext });
       const tracked = applyValuationTracking({
         productKey: pk,
         previousItems: Array.isArray(source.items) ? source.items : [],
@@ -2611,10 +2626,27 @@ async function applyMergedLineWrite({ req, container, userId, body }) {
     });
   }
 
+  // Post-lock scope belongs to the CONTAINER, not to any one discipline: a
+  // variation is raised against the merged contract, and the container is what
+  // holds that contract, its certificates and its final account. Filing it on
+  // a source would post it to the wrong account and quietly distort that
+  // discipline's own history.
+  if (postLockVariations.length) {
+    container.variations = sanitizeVariations([
+      ...(Array.isArray(container.variations) ? container.variations : []),
+      ...postLockVariations,
+    ]);
+    container.markModified("variations");
+    await container.save();
+    recordActivity(req, container, ACT.VARIATION_ADDED, "Added post-lock scope as variations", {
+      count: postLockVariations.length,
+    });
+  }
+
   recordActivity(req, container, ACT.BILL_UPDATED, "Updated the merged bill & budget", {
     disciplines: applied.length,
   });
-  return { ok: true, applied };
+  return { ok: true, applied, variationsRaised: postLockVariations.length };
 }
 
 // POST /projects/:productKey/merge
@@ -3475,7 +3507,17 @@ async function lockContract(req, res) {
 
     // Snapshot current scope. Use itemIdentity as the stable key so later
     // edits can be matched back to the baseline.
-    const baseItems = (project.items || []).map((it, idx) => ({
+    //
+    // A merge container holds NO items of its own, so snapshotting
+    // project.items would freeze an empty bill and lock a contract sum of
+    // zero. Lock against the RESOLVED combined scope instead. The identities
+    // are computed on the namespaced lines, which is the same form later edits
+    // arrive in, so post-lock matching lines up.
+    const lockScope = isMergeContainer(project)
+      ? await resolveMergedProject(project, project.userId)
+      : project;
+
+    const baseItems = (lockScope.items || []).map((it, idx) => ({
       identity: itemIdentity(it, idx),
       description: String(it.description || ""),
       qty: safeNum(it.qty),
@@ -3487,7 +3529,7 @@ async function lockContract(req, res) {
       (acc, b) => acc + safeNum(b.qty) * safeNum(b.rate),
       0,
     );
-    const provisional = (project.provisionalSums || []).reduce(
+    const provisional = (lockScope.provisionalSums || []).reduce(
       (acc, p) => acc + safeNum(p.amount),
       0,
     );

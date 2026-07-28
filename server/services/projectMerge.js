@@ -150,8 +150,10 @@ export async function resolveMergedProject(container, userId) {
     items.push(...srcItems);
     budgetItems.push(...srcBudget);
     materialItems.push(...srcMaterial);
-    // Provisional sums and variations are measurements too, so they travel
-    // with their source. Contract/certificates deliberately do not.
+    // Provisional sums are measured allowances, so they travel with their
+    // source. Variations from BEFORE the merge also belong to the source that
+    // raised them; variations raised against the merged contract belong to the
+    // container and are added after this loop.
     provisionalSums.push(...tagLines(project.provisionalSums, meta, null));
     variations.push(...tagLines(project.variations, meta, null));
 
@@ -178,13 +180,21 @@ export async function resolveMergedProject(container, userId) {
 
   const plain = typeof container.toObject === "function" ? container.toObject() : { ...container };
 
+  // Variations raised against the MERGED contract live on the container: the
+  // container is the commercial entity, and a variation is a contract
+  // instrument rather than a measurement taken off a model. They are listed
+  // first so post-lock scope reads before the sources' own pre-merge history.
+  const containerVariations = (Array.isArray(plain.variations) ? plain.variations : []).map(
+    (v) => ({ ...v, sourceName: plain.name, sourceProjectId: String(plain._id || ""), merged: true }),
+  );
+
   return {
     ...plain,
     items,
     budgetItems,
     materialItems,
     provisionalSums,
-    variations,
+    variations: [...containerVariations, ...variations],
     // Merge-specific read-only metadata for the client.
     merge: {
       isContainer: true,
