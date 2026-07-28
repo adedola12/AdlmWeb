@@ -295,7 +295,7 @@ router.post("/search", rateLimit, async (req, res) => {
       question: message,
       context: `
 Available pages: Home, Products, Learn, Trainings, Checkout, Dashboard
-Products include: Revit Plugin, PlanSwift Plugin, RateGen
+Products include: QUIV (Revit plugin), ADLM Heron (PlanSwift plugin), RateGen
 If user needs human help, suggest WhatsApp support.
 `,
     });

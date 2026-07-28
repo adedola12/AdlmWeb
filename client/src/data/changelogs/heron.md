@@ -2,7 +2,7 @@
 slug: heron
 name: HERON
 tagline: Takeoff-to-budget estimating for PlanSwift
-category: PlanSwift Plugin
+category: ADLM Heron
 accent: emerald
 icon: layers
 status: live

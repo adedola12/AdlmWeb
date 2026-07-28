@@ -19,7 +19,7 @@ export function buildWelcomeEmail({ firstName = "", lastName = "" }) {
 
     <p><b>Over the next few weeks, you’ll hear from us occasionally — short emails to:</b></p>
     <ul>
-      <li>Explore our products (RateGen, Revit Plugin, PlanSwift Plugin)</li>
+      <li>Explore our products (RateGen, QUIV for Revit, ADLM Heron)</li>
       <li>Share tips on improving your workflow and productivity</li>
       <li>Learn more about how you work, so we can build better solutions for you
 </li>
@@ -34,7 +34,7 @@ export function buildWelcomeEmail({ firstName = "", lastName = "" }) {
 
     <p><b>Here’s what you can do next:</b></p>
     <ul>
-      <li>Explore our products (RateGen, Revit Plugin, PlanSwift Plugin)</li>
+      <li>Explore our products (RateGen, QUIV for Revit, ADLM Heron)</li>
       <li>Start learning with our trainings & tutorials</li>
       <li>Access your dashboard to manage purchases and subscriptions</li>
     </ul>

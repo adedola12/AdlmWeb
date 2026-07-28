@@ -155,8 +155,8 @@ export default function Footer() {
                 </SmartLink>
               </li>
               <li>
-                <SmartLink to="/product/planswift" label="PlanSwift Plugin">
-                  PlanSwift Plugin
+                <SmartLink to="/product/planswift" label="ADLM Heron">
+                  ADLM Heron
                 </SmartLink>
               </li>
               <li>

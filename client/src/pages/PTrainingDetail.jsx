@@ -107,11 +107,11 @@ const PRODUCT_CATALOG = {
     to: "/product/revit-mep",
   },
   planswift_plugin_building: {
-    name: "ADLM PlanSwift Plugin (Building Works & Services)",
+    name: "ADLM Heron (Building Works & Services)",
     to: "/product/planswift",
   },
   planswift_plugin_civil: {
-    name: "ADLM PlanSwift Plugin (Civil Works)",
+    name: "ADLM Heron (Civil Works)",
     to: "/product/planswift-civil",
   },
   rategen: { name: "ADLM RateGen", to: "/product/rategen" },
