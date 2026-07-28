@@ -76,7 +76,12 @@ const MATERIALS = [
       "TONNE, and granite is roughly 1.5 t/m3, so ~N24,000-45,000/m3 — N33,000 sits mid-range.",
   },
   {
-    name: "Steel reinforcement (high tensile)",
+    // Name kept SHORT on purpose. "Steel reinforcement (high tensile)" reads
+    // better but is unfindable: lookup penalises candidate words the query
+    // never mentioned, so a QS typing "reinforcement" scored it 1.0 - 3x0.25 =
+    // 0.25, under the 0.3 floor, and got nothing. The grade is already carried
+    // by MaterialCategory, so the parenthetical only cost recall.
+    name: "Steel reinforcement",
     unit: "Tonne",
     category: "High Tensile Steel Bar Reinforcement",
     // An alias must quote the SAME price as the rows it aliases, so its per-
@@ -94,7 +99,10 @@ const MATERIALS = [
       "(N1,189,132.98 and N1,528,885.26) and picking one would be a guess.",
   },
   {
-    name: "Sawn timber (hardwood, general)",
+    // Short for the same reason as the reinforcement row above — "Sawn timber
+    // (hardwood, general)" left a plain "timber" search with no match. The
+    // hardwood grade is carried by MaterialCategory.
+    name: "Sawn timber",
     unit: "m3",
     category: "Timber - Hardwood",
     priceSouthWest: 100000,
