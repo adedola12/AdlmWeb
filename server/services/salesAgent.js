@@ -15,7 +15,14 @@ import {
   getResourceQuantity,
   getProjectBudget,
   getProjectBill,
+  getBillItemsForAi,
 } from "./agentUserData.js";
+import {
+  aiServiceEnabled,
+  checkRatesAgainstMarket,
+  scanProjectForErrors,
+  buildUpRate,
+} from "./adlmAiService.js";
 
 const MAX_TOOL_ITERATIONS = 4;
 const WHATSAPP_NUMBER = process.env.SUPPORT_WHATSAPP || "2348106503524";
@@ -201,8 +208,134 @@ const ACCOUNT_TOOLS = [
   },
 ];
 
+/* ---- cost-intelligence tools (ADLM AI Service on AWS) ---- */
+// These call the separate serverless AI API (repo: adlm-ai-service), which is
+// grounded in the RateGen rate library and BESMM 4R. Ada supplies the user's
+// REAL bill lines — the model never retypes quantities or rates. Only offered
+// when ADLM_AI_URL is configured AND the visitor is authenticated (the call is
+// made with their own token and metered to their account).
+const AI_SERVICE_TOOLS = [
+  {
+    name: "check_my_rates",
+    description:
+      "Check the rates in ONE of the logged-in user's projects against ADLM's " +
+      "RateGen market benchmarks. Returns a per-line verdict (above market / " +
+      "below market / in range / unit mismatch) with the deviation %, the " +
+      "benchmark it was compared to and a reason. Use for 'are my rates " +
+      "right', 'am I overpriced', 'check my BoQ against the market', 'is this " +
+      "rate too high', 'benchmark my bill'. Pass `search` to check only part " +
+      "of a large bill (e.g. 'concrete').",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name (or closest phrase) the user mentioned.",
+        },
+        search: {
+          type: "string",
+          description: "Optional phrase to check only matching bill lines. Omit for the whole bill.",
+        },
+        zone: {
+          type: "string",
+          enum: [
+            "north_west",
+            "north_east",
+            "north_central",
+            "south_west",
+            "south_east",
+            "south_south",
+          ],
+          description:
+            "Optional Nigerian zone to benchmark against. Only pass it if the user names their location/region — never guess.",
+        },
+      },
+      required: ["projectName"],
+    },
+  },
+  {
+    name: "find_project_errors",
+    description:
+      "Scan ONE of the logged-in user's projects for mistakes: duplicated " +
+      "items, wrong units for the work type (BESMM 4R), implausible " +
+      "quantities, rate outliers, and descriptions that contradict their unit " +
+      "or rate. Every flag comes with a reason. Use for 'check my BoQ for " +
+      "errors', 'did I make a mistake', 'review my takeoff', 'anything wrong " +
+      "with my bill', 'find duplicates'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name (or closest phrase) the user mentioned.",
+        },
+        search: {
+          type: "string",
+          description: "Optional phrase to scan only matching bill lines. Omit for the whole bill.",
+        },
+      },
+      required: ["projectName"],
+    },
+  },
+  {
+    name: "suggest_rate",
+    description:
+      "Build up a unit rate for a described work item from ADLM's RateGen " +
+      "library — component by component (material, labour, plant), each marked " +
+      "as looked-up or inferred. Use for 'what should I charge for X', 'build " +
+      "me a rate for 150mm blockwork', 'what does concrete cost per m3', 'how " +
+      "is this rate made up'. This does NOT need one of their projects — it " +
+      "works for any described work item.",
+    input_schema: {
+      type: "object",
+      properties: {
+        description: {
+          type: "string",
+          description: "The work item to price, as the user described it.",
+        },
+        unit: {
+          type: "string",
+          description: "Optional unit of measure (m2, m3, m, nr, kg) if the user gave one.",
+        },
+        zone: {
+          type: "string",
+          enum: [
+            "north_west",
+            "north_east",
+            "north_central",
+            "south_west",
+            "south_east",
+            "south_south",
+          ],
+          description:
+            "Optional Nigerian zone to price for. Only pass it if the user names their location/region — never guess.",
+        },
+      },
+      required: ["description"],
+    },
+  },
+];
+
 /* --------------------------- system prompt --------------------------- */
-function buildSystemPrompt({ knowledgePack, userContext, canReadAccount }) {
+function buildSystemPrompt({ knowledgePack, userContext, canReadAccount, canUseAiService }) {
+  // Appended inside the logged-in account section: the ADLM AI Service (AWS)
+  // features, offered only when the endpoint is configured and we hold a
+  // forwardable token for this user.
+  const aiSection = canUseAiService
+    ? `
+
+# COST INTELLIGENCE (ADLM AI Service — grounded in the RateGen library + BESMM 4R)
+- check_my_rates — benchmarks the rates in their bill against the market: per line, above/below market or in range, with the deviation %, the benchmark it was compared to, and a reason. Use for "are my rates right", "am I overpriced", "benchmark my bill", "is this rate too high".
+- find_project_errors — scans their bill for duplicates, wrong units for the work type, implausible quantities, rate outliers and descriptions that contradict their unit or rate. Use for "check my BoQ for errors", "review my takeoff", "did I make a mistake".
+- suggest_rate — builds a unit rate up component by component from the RateGen library, each component marked as looked-up or inferred. Works for ANY described work item, not only their own projects.
+Rules for cost intelligence:
+- These run on the user's ACTUAL bill lines — you never retype quantities or rates into them, you just name the project.
+- Every verdict is ADVISORY for the QS to review. Report it as returned, with its reason. Never restate a flagged rate as "correct", and never present a suggestion as a change you have made.
+- Say which figures came from the RateGen library versus the model — the tool marks this, and it is the difference between a benchmark and an estimate.
+- Only pass a \`zone\` if the user names their region or location. Never guess it.
+- If a check reports the AI add-on isn't active on their account, explain what it does and offer it as a genuine next step.`
+    : "";
+
   const accountSection = canReadAccount
     ? `
 # ANSWERING ABOUT THEIR OWN ACCOUNT & PROJECTS
@@ -220,7 +353,7 @@ Rules for account answers:
 - Quote money exactly as the tool returns it. If a figure is ₦0, say the bill has no rates yet rather than guessing.
 - If a project has no Material & Labour breakdown, explain it comes from the desktop plugin on save (MEP projects don't send one) — don't estimate one.
 - After answering, still be helpful commercially where natural (e.g. an expired sub → offer renewal; no RateGen → mention it) but don't force it.
-- For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.`
+- For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.${aiSection}`
     : `
 # NOT LOGGED IN
 This visitor is a guest, so you CANNOT read any personal projects or subscriptions. If they ask about "my projects", "my subscription", "what I've spent" etc., warmly explain they need to sign in first, then offer a 'signup' or 'nav' to login — never guess their data.`;
@@ -364,6 +497,50 @@ async function handleAccountTool(name, input, ctx) {
       return await getProjectBudget(ctx.user._id, input?.projectName);
     if (name === "get_project_bill")
       return await getProjectBill(ctx.user._id, input?.projectName, input?.search);
+
+    // ── ADLM AI Service (AWS) — always fed the user's REAL bill lines ──
+    if (name === "check_my_rates" || name === "find_project_errors") {
+      const picked = await getBillItemsForAi(
+        ctx.user._id,
+        input?.projectName,
+        input?.search,
+        name === "check_my_rates" ? 150 : 300,
+      );
+      if (picked.error) return picked.error;
+
+      const out =
+        name === "check_my_rates"
+          ? await checkRatesAgainstMarket({
+              items: picked.items,
+              zone: input?.zone,
+              accessToken: ctx.accessToken,
+              projectName: picked.project.name,
+            })
+          : await scanProjectForErrors({
+              items: picked.items,
+              accessToken: ctx.accessToken,
+              projectName: picked.project.name,
+            });
+
+      const extra = [];
+      if (picked.truncated) {
+        extra.push(
+          `Only the ${picked.items.length} highest-value lines were checked; ${picked.truncated} smaller line(s) were not. Say so, and offer to check a specific section by name.`,
+        );
+      }
+      if (picked.note) extra.push(picked.note);
+      return extra.length ? `${out}\n${extra.join("\n")}` : out;
+    }
+
+    if (name === "suggest_rate") {
+      return await buildUpRate({
+        description: input?.description,
+        unit: input?.unit,
+        zone: input?.zone,
+        accessToken: ctx.accessToken,
+      });
+    }
+
     return "Unknown account tool.";
   } catch (e) {
     console.error(`[salesAgent] ${name} failed:`, e?.message || e);
@@ -385,6 +562,7 @@ export async function runSalesAgent(history, message, opts = {}) {
     knowledgePack,
     userContext: buildUserContext(opts.user),
     canReadAccount: !!opts.user,
+    canUseAiService: !!opts.user && !!opts.accessToken && aiServiceEnabled(),
   });
 
   const outcome = {
@@ -395,6 +573,9 @@ export async function runSalesAgent(history, message, opts = {}) {
   };
   const ctx = {
     user: opts.user || null,
+    // Forwarded to the ADLM AI Service so its calls are made, metered and
+    // entitlement-checked as THIS user. Never logged, never persisted.
+    accessToken: opts.accessToken || "",
     sessionId: opts.sessionId || "",
     ip: opts.ip || "",
     productIndex,
@@ -420,9 +601,16 @@ export async function runSalesAgent(history, message, opts = {}) {
   let finalText = "";
   // Account tools are only exposed when a user is authenticated — a guest
   // never even sees them, and the handler double-checks anyway.
-  const toolset = opts.user ? [...TOOLS, ...ACCOUNT_TOOLS] : TOOLS;
+  // The AI-service tools additionally need a forwardable token and a
+  // configured endpoint; without either they're never offered.
+  const canUseAiService = !!opts.user && !!opts.accessToken && aiServiceEnabled();
+  const toolset = opts.user
+    ? [...TOOLS, ...ACCOUNT_TOOLS, ...(canUseAiService ? AI_SERVICE_TOOLS : [])]
+    : TOOLS;
   const tools = supportsTools() ? toolset : undefined;
-  const accountToolNames = new Set(ACCOUNT_TOOLS.map((t) => t.name));
+  const accountToolNames = new Set(
+    [...ACCOUNT_TOOLS, ...AI_SERVICE_TOOLS].map((t) => t.name),
+  );
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const res = await createMessage({

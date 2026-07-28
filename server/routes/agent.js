@@ -26,12 +26,17 @@ async function optionalAuth(req, _res, next) {
   try {
     const auth = req.headers.authorization || "";
     if (auth.startsWith("Bearer ")) {
-      const decoded = verifyAccess(auth.slice(7).trim());
+      const raw = auth.slice(7).trim();
+      const decoded = verifyAccess(raw);
       const uid = decoded?._id || decoded?.id || decoded?.sub;
       if (uid) {
         req.agentUser = await User.findById(uid)
           .select("name email role entitlements")
           .lean();
+        // Kept so the agent can call the ADLM AI Service ON THIS USER'S BEHALF
+        // (it verifies the same token and meters the call to them). Only set
+        // once the token has verified and resolved to a real user.
+        if (req.agentUser) req.agentAccessToken = raw;
       }
     }
   } catch {
@@ -100,6 +105,7 @@ router.post("/chat", rateLimit, optionalAuth, async (req, res) => {
 
     const { reply, actions, outcome } = await runSalesAgent(history, message, {
       user: req.agentUser || null,
+      accessToken: req.agentAccessToken || "",
       sessionId,
       ip,
     });

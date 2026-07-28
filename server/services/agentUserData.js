@@ -646,6 +646,57 @@ export async function getProjectBill(userId, projectName, search) {
   return lines.join("\n");
 }
 
+// ── Bill lines shaped for the ADLM AI Service ──────────────────────────────
+// The AI service (/api/ai/boq-check, /api/ai/outliers) takes
+// [{ ref, description, unit, quantity, rate }]. This resolves the project the
+// same way every other tool does and hands back the raw rows, so Ada's
+// rate-check / error-scan tools run against the user's REAL bill rather than
+// anything the model retyped. `search` narrows a big bill; `limit` keeps the
+// request (and the AI service's per-call cost) bounded.
+export async function getBillItemsForAi(userId, projectName, search, limit = 200) {
+  const { project, error, note } = await resolveProject(userId, projectName);
+  if (error) return { error };
+
+  const all = billRows(project);
+  if (!all.length) return { error: `Project "${project.name}" has no bill lines to check yet.` };
+
+  const q = String(search || "").trim();
+  const rows = q
+    ? all.filter((r) =>
+        matchesResource(
+          `${r?.description || ""} ${r?.materialName || ""} ${r?.takeoffLine || ""} ${r?.category || ""} ${r?.trade || ""}`,
+          q,
+        ),
+      )
+    : all;
+
+  if (!rows.length) {
+    return { error: `No bill line in "${project.name}" matches "${q}". Ask the user to rephrase.` };
+  }
+
+  // Biggest-value lines first: if the bill is truncated, the money that
+  // matters is what got checked.
+  const ranked = [...rows].sort(
+    (a, b) => safeNum(b.qty) * safeNum(b.rate) - safeNum(a.qty) * safeNum(a.rate),
+  );
+  const capped = ranked.slice(0, Math.max(1, Math.min(500, limit)));
+
+  const items = capped.map((r, i) => ({
+    ref: String(i + 1),
+    description: String(r.description || r.takeoffLine || r.materialName || "").slice(0, 300),
+    unit: unitOf(r) === "no unit" ? "" : unitOf(r),
+    quantity: safeNum(r.qty),
+    rate: safeNum(r.rate),
+  }));
+
+  return {
+    project: { name: project.name, productKey: project.productKey },
+    items,
+    truncated: capped.length < rows.length ? rows.length - capped.length : 0,
+    note: note || "",
+  };
+}
+
 // ── Subscriptions / account ────────────────────────────────────────────────
 // Summarises the user's entitlements (already loaded on ctx.user) plus a live
 // per-product project-slot count. Owner-scoped; no cross-user reads.
