@@ -1163,6 +1163,12 @@ const PROJECT_PRODUCT_KEYS = new Set([
   "mep",
   "civil3d",
   "revitmep",
+  // ArchiCAD projects are ordinary TakeoffProject documents (productKey
+  // "archicad", listed by GET /api/archicad/projects), so they consume the
+  // same project cap. Omitting the key meant the dashboard rendered no
+  // projects bar for ArchiCAD at all — a user with real ArchiCAD projects saw
+  // nothing and concluded they had none.
+  "archicad",
 ]);
 
 router.get(

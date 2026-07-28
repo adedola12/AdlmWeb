@@ -336,6 +336,10 @@ export default function Dashboard() {
     if (key === "planswift") return navigate("/projects/planswift");
     if (key === "civil3d") return navigate("/projects/civil3d");
     if (key === "rategen") return navigate("/rategen");
+    // QUIV for ArchiCAD lives at /archicad, not under /projects/*. Without
+    // this it fell through to /product/archicad, for which no Product doc
+    // exists — so Open returned a 404 "Product not found".
+    if (key === "archicad") return navigate("/archicad");
     navigate(`/product/${e.productKey}`);
   }
 
