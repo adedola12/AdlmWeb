@@ -81,23 +81,33 @@ function DailyBars({ rows, metric }) {
   if (!rows.length)
     return <div className="text-sm text-slate-500 py-8 text-center">No usage in this window.</div>;
   return (
-    <div className="flex items-end gap-[3px] h-40 overflow-x-auto pb-1">
-      {rows.map((r) => {
-        const v = Number(r[metric]) || 0;
-        return (
-          <div
-            key={r.date}
-            className="flex-1 min-w-[6px] group relative"
-            title={`${r.date} · ${r.calls} calls · ${compact(r.tokens)} tokens · ${usd4(r.costUsd)}`}
-          >
+    <>
+      <div className="flex items-end gap-[3px] h-40 overflow-x-auto pb-1">
+        {rows.map((r) => {
+          const v = Number(r[metric]) || 0;
+          return (
+            // h-full + items-end on the column is load-bearing: the bar's
+            // height is a percentage, which resolves to zero against an
+            // auto-height parent (and renders an empty chart).
             <div
-              className="w-full rounded-t bg-adlm-blue-700/80 hover:bg-adlm-blue-700 transition-all"
-              style={{ height: `${Math.max(2, (v / max) * 100)}%` }}
-            />
-          </div>
-        );
-      })}
-    </div>
+              key={r.date}
+              className="flex-1 min-w-[6px] h-full flex items-end"
+              title={`${r.date} · ${r.calls} calls · ${compact(r.tokens)} tokens · ${usd4(r.costUsd)}`}
+            >
+              <div
+                className="w-full rounded-t bg-adlm-blue-700/80 hover:bg-adlm-blue-700 transition-all"
+                style={{ height: `${Math.max(2, (v / max) * 100)}%` }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[11px] text-slate-500 dark:text-adlm-dark-muted mt-1">
+        <span>{rows[0]?.date}</span>
+        <span>peak {usd4(max)}/day</span>
+        <span>{rows[rows.length - 1]?.date}</span>
+      </div>
+    </>
   );
 }
 
@@ -286,21 +296,21 @@ function CreditPanel({ credit, onSave, saving }) {
 /* --------------------------- allocation editor -------------------------- */
 // 0 = unlimited everywhere, which is why every field says so explicitly. An
 // admin reading "0" as "blocked" would be a costly misunderstanding.
-function LimitFields({ value, onChange, prefix = "" }) {
+function LimitFields({ value, onChange, disabled = false }) {
   const v = value || {};
   const set = (k) => (e) => onChange({ ...v, [k]: e.target.value });
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className={`grid grid-cols-3 gap-2 ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
       <label className="text-[11px]">
-        {prefix}Calls
+        Calls
         <input type="number" min="0" className={INPUT} value={v.calls ?? 0} onChange={set("calls")} />
       </label>
       <label className="text-[11px]">
-        {prefix}Tokens
+        Tokens
         <input type="number" min="0" className={INPUT} value={v.tokens ?? 0} onChange={set("tokens")} />
       </label>
       <label className="text-[11px]">
-        {prefix}Cost USD
+        Cost USD
         <input
           type="number"
           min="0"
@@ -314,15 +324,31 @@ function LimitFields({ value, onChange, prefix = "" }) {
   );
 }
 
-function AllocationForm({ title, subtitle, features, value, onSave, onReset, saving, showGuest }) {
+// Starting points sized off observed cost (~$0.0007 per Ada call, ~$0.002 per
+// AI-service call): generous enough that no real user notices, tight enough
+// that a runaway loop or a scripted abuser hits a wall the same day.
+const RECOMMENDED = {
+  enabled: true,
+  total: { enabled: true, calls: 400, tokens: 0, costUsd: 3 },
+  guestTotal: { enabled: true, calls: 600, tokens: 0, costUsd: 2 },
+  features: {
+    "ada-chat": { enabled: true, calls: 250, tokens: 0, costUsd: 0 },
+    "ai-boq-check": { enabled: true, calls: 40, tokens: 0, costUsd: 0 },
+    "ai-outliers": { enabled: true, calls: 40, tokens: 0, costUsd: 0 },
+    "ai-rate-buildup": { enabled: true, calls: 60, tokens: 0, costUsd: 0 },
+  },
+  notes: "Recommended starting allowance",
+};
+
+function AllocationForm({ title, subtitle, features, value, onSave, onReset, saving, isDefault }) {
   const [form, setForm] = React.useState(() => normalize(value));
   React.useEffect(() => setForm(normalize(value)), [value]);
 
   function normalize(a) {
     return {
       enabled: a?.enabled !== false,
-      total: a?.total || { calls: 0, tokens: 0, costUsd: 0 },
-      guestTotal: a?.guestTotal || { calls: 0, tokens: 0, costUsd: 0 },
+      total: a?.total || { enabled: true, calls: 0, tokens: 0, costUsd: 0 },
+      guestTotal: a?.guestTotal || { enabled: true, calls: 0, tokens: 0, costUsd: 0 },
       features: a?.features || {},
       notes: a?.notes || "",
     };
@@ -330,6 +356,11 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
 
   const setFeature = (key) => (limit) =>
     setForm({ ...form, features: { ...form.features, [key]: limit } });
+  const featureOn = (key) => form.features[key]?.enabled !== false;
+  const toggleFeature = (key) => (e) =>
+    setFeature(key)({ ...(form.features[key] || { calls: 0, tokens: 0, costUsd: 0 }), enabled: e.target.checked });
+
+  const off = !form.enabled;
 
   return (
     <div className={`${CARD} p-4 space-y-3`}>
@@ -340,17 +371,44 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
             <p className="text-xs text-slate-500 dark:text-adlm-dark-muted">{subtitle}</p>
           ) : null}
         </div>
-        <label className="flex items-center gap-2 text-sm">
+        {isDefault ? (
+          <button type="button" className={BTN} onClick={() => setForm(normalize(RECOMMENDED))}>
+            Use recommended
+          </button>
+        ) : null}
+      </div>
+
+      {/* Master switch — deliberately the loudest control on the card. */}
+      <div
+        className={`rounded-lg p-3 ring-1 ${
+          off
+            ? "bg-red-50 dark:bg-red-500/10 ring-red-500/30"
+            : "bg-emerald-50 dark:bg-emerald-500/10 ring-emerald-500/20"
+        }`}
+      >
+        <label className="flex items-center gap-2.5 text-sm font-semibold cursor-pointer">
           <input
             type="checkbox"
+            className="w-4 h-4"
             checked={form.enabled}
             onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
           />
-          AI enabled
+          {isDefault
+            ? off
+              ? "AI is OFF for the entire platform"
+              : "AI is ON for the entire platform"
+            : off
+              ? "AI is OFF for this account"
+              : "AI is ON for this account"}
         </label>
+        <p className="text-[11px] text-slate-600 dark:text-adlm-dark-muted mt-1 ml-6.5">
+          {isDefault
+            ? "Untick to stop every AI call instantly — guests, users, and anyone holding their own allowance. Tick to bring it all back. Nothing else needs changing."
+            : "Only affects this account. The platform switch overrides it."}
+        </p>
       </div>
 
-      <div>
+      <div className={off ? "opacity-40 pointer-events-none" : ""}>
         <div className="text-xs font-semibold mb-1">
           Monthly allowance — all features combined{" "}
           <span className="font-normal text-slate-500">(0 = unlimited)</span>
@@ -358,11 +416,11 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
         <LimitFields value={form.total} onChange={(t) => setForm({ ...form, total: t })} />
       </div>
 
-      {showGuest ? (
-        <div>
+      {isDefault ? (
+        <div className={off ? "opacity-40 pointer-events-none" : ""}>
           <div className="text-xs font-semibold mb-1">
             Anonymous visitors — shared monthly ceiling{" "}
-            <span className="font-normal text-slate-500">(all guests combined)</span>
+            <span className="font-normal text-slate-500">(all guests combined, not per guest)</span>
           </div>
           <LimitFields
             value={form.guestTotal}
@@ -371,17 +429,38 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
         </div>
       ) : null}
 
-      <div className="space-y-2">
-        <div className="text-xs font-semibold">Per-feature caps</div>
-        {features.map((f) => (
-          <div key={f.key} className="rounded-lg ring-1 ring-black/5 dark:ring-adlm-dark-border p-2.5">
-            <div className="text-xs font-medium">{f.label}</div>
-            <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted mb-1.5">
-              {f.desc}
+      <div className={`space-y-2 ${off ? "opacity-40 pointer-events-none" : ""}`}>
+        <div className="text-xs font-semibold">
+          Per-feature allowance{" "}
+          <span className="font-normal text-slate-500">
+            {isDefault
+              ? "— switching a feature off here kills it platform-wide, even for users with their own allowance"
+              : "— leave a feature untouched to inherit the platform default"}
+          </span>
+        </div>
+        {features.map((f) => {
+          const on = featureOn(f.key);
+          return (
+            <div
+              key={f.key}
+              className="rounded-lg ring-1 ring-black/5 dark:ring-adlm-dark-border p-2.5"
+            >
+              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                <input type="checkbox" checked={on} onChange={toggleFeature(f.key)} />
+                {f.label}
+                {!on ? <span className="text-red-600 font-semibold">· OFF</span> : null}
+              </label>
+              <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted mb-1.5 ml-6">
+                {f.desc}
+              </div>
+              <LimitFields
+                value={form.features[f.key]}
+                onChange={setFeature(f.key)}
+                disabled={!on}
+              />
             </div>
-            <LimitFields value={form.features[f.key]} onChange={setFeature(f.key)} />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <label className="block text-xs">
@@ -525,9 +604,12 @@ export default function AdminAiUsage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, range, feature, accessToken, errorsOnly]);
 
-  // The overview always loads once so the credit banner is present on every tab.
+  // Loaded once on mount regardless of tab, so the credit burn-down and the
+  // "AI is off" banner are visible from whichever tab you land on.
   React.useEffect(() => {
-    if (accessToken && !overview) loadOverview();
+    if (!accessToken) return;
+    if (!overview) loadOverview();
+    if (!defaultAlloc) loadAllocations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
@@ -611,6 +693,13 @@ export default function AdminAiUsage() {
 
   const t = overview?.totals;
   const credit = overview?.credit;
+  const offFeatures = React.useMemo(
+    () =>
+      Object.entries(defaultAlloc?.features || {})
+        .filter(([, lim]) => lim?.enabled === false)
+        .map(([key]) => features.find((f) => f.key === key)?.label || key),
+    [defaultAlloc, features],
+  );
 
   return (
     <div className="px-3 md:px-6 lg:px-10 py-6 space-y-4">
@@ -668,6 +757,32 @@ export default function AdminAiUsage() {
           <button type="button" className="underline text-slate-500" onClick={() => setMsg("")}>
             dismiss
           </button>
+        </div>
+      ) : null}
+
+      {/* An off switch nobody can see is an outage waiting to be misdiagnosed. */}
+      {defaultAlloc && defaultAlloc.enabled === false ? (
+        <div className="rounded-2xl px-4 py-3 bg-red-50 dark:bg-red-500/10 ring-1 ring-red-500/30 text-sm flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <b className="text-red-700 dark:text-red-400">AI is switched off platform-wide.</b>{" "}
+            Ada, HelpBot and the QS cost-intelligence tools are all refusing calls right now.
+          </div>
+          <button
+            type="button"
+            className={BTN_PRIMARY}
+            disabled={saving}
+            onClick={() => saveDefaultAllocation({ ...defaultAlloc, enabled: true })}
+          >
+            Turn AI back on
+          </button>
+        </div>
+      ) : null}
+
+      {offFeatures.length ? (
+        <div className="rounded-2xl px-4 py-3 bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-500/20 text-sm">
+          <b className="text-amber-800 dark:text-amber-300">Switched off platform-wide:</b>{" "}
+          {offFeatures.join(", ")} — these refuse calls for every user, including anyone with their
+          own allowance.
         </div>
       ) : null}
 
@@ -982,13 +1097,13 @@ export default function AdminAiUsage() {
       {tab === "allocations" ? (
         <div className="space-y-4">
           <AllocationForm
-            title="Platform default"
-            subtitle="Applies to every signed-in user without their own allowance, plus the shared ceiling for anonymous visitors. 0 means unlimited."
+            title="Platform default & master switch"
+            subtitle="The allowance every signed-in user gets unless they have their own, the shared ceiling for anonymous visitors, and the switches that turn AI off everywhere."
             features={features}
             value={defaultAlloc}
             onSave={saveDefaultAllocation}
             saving={saving}
-            showGuest
+            isDefault
           />
 
           <div className={`${CARD} p-4`}>
@@ -1020,14 +1135,19 @@ export default function AdminAiUsage() {
                 },
                 {
                   key: "features",
-                  label: "Per-feature caps",
+                  label: "Per-feature",
                   render: (a) => {
-                    const keys = Object.keys(a.features || {});
-                    return keys.length
-                      ? keys
-                          .map((k) => features.find((f) => f.key === k)?.label || k)
-                          .join(", ")
-                      : "—";
+                    const entries = Object.entries(a.features || {});
+                    if (!entries.length) return "—";
+                    return entries.map(([k, lim], i) => (
+                      <span key={k}>
+                        {i ? ", " : ""}
+                        <span className={lim?.enabled === false ? "text-red-600 font-semibold" : ""}>
+                          {features.find((f) => f.key === k)?.label || k}
+                          {lim?.enabled === false ? " (off)" : ""}
+                        </span>
+                      </span>
+                    ));
                   },
                 },
                 { key: "notes", label: "Notes" },

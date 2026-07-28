@@ -207,6 +207,14 @@ async function loadUsedThisMonth(userId) {
   return used;
 }
 
+// `features` is a Mongoose Map on a hydrated doc but a plain object once
+// .lean() has been through it — both shapes reach here.
+function featureLimitOf(allocation, feature) {
+  const f = allocation?.features;
+  if (!f) return null;
+  return (f instanceof Map ? f.get(feature) : f[feature]) || null;
+}
+
 function limitOf(limit) {
   return {
     calls: Math.max(0, Number(limit?.calls) || 0),
@@ -250,15 +258,43 @@ export async function checkAiAllowance({ user = null, feature = "", ip = "" } = 
         const own = await AiAllocation.findOne({ userId }).lean();
         if (own) allocation = own;
       }
-      snap = { at: Date.now(), allocation, isDefault: allocation === def, used };
+      snap = { at: Date.now(), allocation, def, hasOwn: allocation !== def, used };
       allowCache.set(cacheKey, snap);
       if (allowCache.size > 5000) {
         for (const [k, v] of allowCache) if (Date.now() - v.at > CACHE_MS) allowCache.delete(k);
       }
     }
 
-    const { allocation, used } = snap;
+    const { allocation, def, used } = snap;
 
+    // ── 1. Platform kill switch ──────────────────────────────────────────
+    // Deliberately checked before the per-user allocation: "turn AI off" has
+    // to mean everyone, or the users most worth stopping (the ones important
+    // enough to have their own allowance) would sail straight through it.
+    if (def?.enabled === false) {
+      return {
+        allowed: false,
+        code: "AI_OFF",
+        reason:
+          "Our AI assistant is switched off at the moment. You can browse products or reach us on WhatsApp and we'll help right away.",
+        used,
+        limits: null,
+      };
+    }
+
+    // ── 2. Platform kill switch for ONE feature ──────────────────────────
+    const defFeature = featureLimitOf(def, feature);
+    if (defFeature?.enabled === false) {
+      return {
+        allowed: false,
+        code: "AI_FEATURE_OFF",
+        reason: `${featureLabel(feature)} is switched off at the moment. Say so plainly and offer to connect them to the team.`,
+        used,
+        limits: null,
+      };
+    }
+
+    // ── 3. This account switched off individually ────────────────────────
     if (allocation?.enabled === false) {
       return {
         allowed: false,
@@ -269,10 +305,9 @@ export async function checkAiAllowance({ user = null, feature = "", ip = "" } = 
       };
     }
 
-    // Guests share one pool — they can't be metered individually but they can
-    // still spend real money.
+    // ── 4. Guests share one pool ─────────────────────────────────────────
+    // They can't be metered individually but they can still spend real money.
     if (!userId) {
-      const def = await getDefaultAllocation();
       const hit = exceeded(used.total, def?.guestTotal);
       if (hit) {
         return {
@@ -287,6 +322,7 @@ export async function checkAiAllowance({ user = null, feature = "", ip = "" } = 
       return { ...ok, used };
     }
 
+    // ── 5. Combined monthly cap ──────────────────────────────────────────
     const totalHit = exceeded(used.total, allocation?.total);
     if (totalHit) {
       return {
@@ -298,10 +334,11 @@ export async function checkAiAllowance({ user = null, feature = "", ip = "" } = 
       };
     }
 
-    const featureLimit =
-      allocation?.features instanceof Map
-        ? allocation.features.get(feature)
-        : allocation?.features?.[feature];
+    // ── 6. Per-feature cap ───────────────────────────────────────────────
+    // A user's own allocation only overrides the features it actually names;
+    // anything it leaves out still falls back to the platform default, so
+    // adding one override doesn't silently uncap every other feature.
+    const featureLimit = featureLimitOf(allocation, feature) || defFeature;
     const featHit = exceeded(used.byFeature[feature] || emptyBucket(), featureLimit);
     if (featHit) {
       return {

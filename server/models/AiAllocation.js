@@ -15,6 +15,10 @@ import mongoose from "mongoose";
 
 const LimitSchema = new mongoose.Schema(
   {
+    // A cap of 0 is UNLIMITED, so it cannot express "off" — hence this flag.
+    // On the default row, enabled:false is a PLATFORM-WIDE kill for that
+    // feature: it applies even to users who hold their own allocation.
+    enabled: { type: Boolean, default: true },
     calls: { type: Number, default: 0, min: 0 }, // model round-trips / requests
     tokens: { type: Number, default: 0, min: 0 },
     costUsd: { type: Number, default: 0, min: 0 },
@@ -34,7 +38,9 @@ const AiAllocationSchema = new mongoose.Schema(
     },
     email: { type: String, default: "", lowercase: true, trim: true, index: true },
 
-    // Master switch for this user's AI access.
+    // Master switch. On the DEFAULT row this is the platform-wide kill switch:
+    // false turns AI off for everyone, including users with their own
+    // allocation. On a user row it only affects that user.
     enabled: { type: Boolean, default: true },
 
     // Applies across every feature combined.

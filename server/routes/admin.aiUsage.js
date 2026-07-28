@@ -96,6 +96,7 @@ function shapeTotals(r = {}) {
 
 function limitOut(l) {
   return {
+    enabled: l?.enabled !== false,
     calls: Number(l?.calls) || 0,
     tokens: Number(l?.tokens) || 0,
     costUsd: Number(l?.costUsd) || 0,
@@ -104,6 +105,7 @@ function limitOut(l) {
 
 function sanitizeLimit(body) {
   return {
+    enabled: body?.enabled !== false,
     calls: Math.max(0, Math.floor(Number(body?.calls) || 0)),
     tokens: Math.max(0, Math.floor(Number(body?.tokens) || 0)),
     costUsd: Math.max(0, Number(Number(body?.costUsd || 0).toFixed(2))),
@@ -111,16 +113,17 @@ function sanitizeLimit(body) {
 }
 
 // Only known feature keys make it into the stored map — an admin typo can't
-// create a limit that silently never applies to anything. All-zero entries are
-// dropped rather than stored: zero means unlimited, so keeping them would list
-// every feature as "capped" in the UI while capping nothing.
+// create a limit that silently never applies to anything. An all-zero entry is
+// dropped (zero means unlimited, so storing it would list the feature as
+// "capped" while capping nothing) UNLESS it is switched off, which is the one
+// case where an all-zero entry carries meaning.
 function sanitizeFeatures(obj) {
   const out = {};
   if (!obj || typeof obj !== "object") return out;
   for (const key of AI_FEATURE_KEYS) {
     if (!obj[key]) continue;
     const lim = sanitizeLimit(obj[key]);
-    if (lim.calls || lim.tokens || lim.costUsd) out[key] = lim;
+    if (lim.calls || lim.tokens || lim.costUsd || !lim.enabled) out[key] = lim;
   }
   return out;
 }
