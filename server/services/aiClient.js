@@ -17,6 +17,7 @@
 
 import fetch from "node-fetch";
 import OpenAI from "openai";
+import { recordAiUsage, normalizeUsage } from "./aiUsage.js";
 
 const PROVIDER = (process.env.AGENT_PROVIDER || "anthropic").toLowerCase();
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -91,6 +92,8 @@ async function anthropicCreate({ system, messages, tools, maxTokens }) {
       toolUses,
       assistantContent: content, // echo back verbatim on the next turn
       stopReason: data.stop_reason || "end_turn",
+      model: data.model || DEFAULT_MODEL,
+      usage: normalizeUsage(data.usage),
     };
   } finally {
     clearTimeout(timer);
@@ -203,17 +206,60 @@ async function openaiCreate({ system, messages, tools, maxTokens }) {
     toolUses,
     assistantContent,
     stopReason: toolUses.length ? "tool_use" : "end_turn",
+    model: res.model || DEFAULT_MODEL,
+    usage: normalizeUsage(res.usage),
   };
 }
 
 /**
  * One model round-trip. `messages` uses Anthropic-style content blocks
  * (strings are also accepted). Returns the normalized shape above.
+ *
+ * `meta` ({ feature, user, sessionId, ip }) is what gets the call onto the
+ * admin AI-usage dashboard. This is the single choke point for every direct
+ * model call the website makes, so metering lives here rather than in each
+ * caller — a new agent feature is metered the moment it calls createMessage().
  */
-export async function createMessage({ system, messages, tools, maxTokens }) {
-  if (PROVIDER === "openai")
-    return openaiCreate({ system, messages, tools, maxTokens });
-  return anthropicCreate({ system, messages, tools, maxTokens });
+export async function createMessage({ system, messages, tools, maxTokens, meta }) {
+  const started = Date.now();
+  try {
+    const out =
+      PROVIDER === "openai"
+        ? await openaiCreate({ system, messages, tools, maxTokens })
+        : await anthropicCreate({ system, messages, tools, maxTokens });
+
+    recordAiUsage({
+      feature: meta?.feature || "ada-chat",
+      user: meta?.user || null,
+      provider: PROVIDER,
+      model: out.model || DEFAULT_MODEL,
+      usage: out.usage || undefined,
+      tokenSource: out.usage ? "reported" : "none",
+      ms: Date.now() - started,
+      ok: true,
+      sessionId: meta?.sessionId,
+      ip: meta?.ip,
+      product: meta?.product,
+    });
+
+    return out;
+  } catch (err) {
+    // Failed calls still cost input tokens on most providers and, more
+    // usefully, a spike of them is the signal that something is wrong.
+    recordAiUsage({
+      feature: meta?.feature || "ada-chat",
+      user: meta?.user || null,
+      provider: PROVIDER,
+      model: DEFAULT_MODEL,
+      ms: Date.now() - started,
+      ok: false,
+      errorCode: String(err?.message || "error").slice(0, 120),
+      sessionId: meta?.sessionId,
+      ip: meta?.ip,
+      product: meta?.product,
+    });
+    throw err;
+  }
 }
 
 export function supportsTools() {

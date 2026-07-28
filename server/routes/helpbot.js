@@ -292,6 +292,7 @@ router.post("/search", rateLimit, async (req, res) => {
     }
 
     const aiReply = await askAI({
+      meta: { user: req.user || null, ip },
       question: message,
       context: `
 Available pages: Home, Products, Learn, Trainings, Checkout, Dashboard

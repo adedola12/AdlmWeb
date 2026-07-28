@@ -14,33 +14,72 @@
 //      never this server, and never another user;
 //   2. we never mint or hold a service-wide credential that could read or
 //      spend on someone else's behalf.
-// Consequently these tools only work for a logged-in visitor, and only when
-// their account has the active `ai` add-on entitlement (403 AI_NOT_ENTITLED
-// otherwise, which Ada turns into an upsell rather than an error).
+// Consequently these tools only work for a logged-in visitor whose account
+// passes the AI service's access gate. That gate is AI_ACCESS_MODE over there:
+// today "any-subscription", so ANY active ADLM subscription unlocks AI while
+// it is being built out. A 403 AI_NOT_ENTITLED therefore means the account has
+// no active subscription (usually lapsed), which Ada turns into a renewal
+// offer rather than an error.
 //
 // Disabled by default: with ADLM_AI_URL unset, aiServiceEnabled() is false and
 // the tools are never offered, so nothing changes for existing deployments.
 
+import {
+  recordAiUsage,
+  normalizeUsage,
+  checkAiAllowance,
+  estimateTokensFromText,
+} from "./aiUsage.js";
+
 const BASE = String(process.env.ADLM_AI_URL || "").trim().replace(/\/+$/, "");
 const TIMEOUT_MS = Number(process.env.ADLM_AI_TIMEOUT_MS || 25000);
+// Only used to price the call when the service doesn't say which model it ran.
+const ASSUMED_MODEL = process.env.ADLM_AI_MODEL || "claude-haiku-4-5";
 
 export function aiServiceEnabled() {
   return !!BASE;
 }
 
+// The AI service is free to report usage under any of these; we take the first
+// that parses. When it reports none, we fall back to a payload-size estimate so
+// the AWS credit burn still has a (clearly-labelled) number behind it rather
+// than a silent zero.
+function extractUsage(data) {
+  return (
+    normalizeUsage(data?.usage) ||
+    normalizeUsage(data?.audit?.usage) ||
+    normalizeUsage(data?.meta?.usage) ||
+    null
+  );
+}
+
 /**
- * POST to the AI service on the caller's behalf.
+ * POST to the AI service on the caller's behalf, metering the call locally.
  * @param {string} path   e.g. "/api/ai/boq-check"
  * @param {object} body
  * @param {string} accessToken  the visitor's own Bearer token
- * @returns {Promise<{ok:boolean, status:number, data:any, code?:string}>}
+ * @param {{feature:string, meta?:object}} track  what to log this spend as
+ * @returns {Promise<{ok:boolean, status:number, data:any, code?:string, reason?:string}>}
  */
-async function post(path, body, accessToken) {
+async function post(path, body, accessToken, track = {}) {
   if (!BASE) return { ok: false, status: 0, code: "NOT_CONFIGURED", data: null };
   if (!accessToken) return { ok: false, status: 401, code: "NO_TOKEN", data: null };
 
+  const feature = track.feature || "ai-service";
+  const meta = track.meta || {};
+
+  // ADLM Cloud's own allocation is checked BEFORE the request goes out: the AI
+  // service meters its own quota too, but only this side knows the per-user
+  // allowance an admin set on the AI-usage page.
+  const gate = await checkAiAllowance({ user: meta.user, feature, ip: meta.ip });
+  if (!gate.allowed) {
+    return { ok: false, status: 429, code: "LOCAL_QUOTA", reason: gate.reason, data: null };
+  }
+
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const started = Date.now();
+  const requestChars = JSON.stringify(body || {});
   try {
     const res = await fetch(`${BASE}${path}`, {
       method: "POST",
@@ -50,7 +89,7 @@ async function post(path, body, accessToken) {
         // Attributes AI usage to the web product in the service's reporting.
         "x-adlm-product": "cloud",
       },
-      body: JSON.stringify(body),
+      body: requestChars,
       signal: ctrl.signal,
     });
     let data = null;
@@ -59,10 +98,44 @@ async function post(path, body, accessToken) {
     } catch {
       data = null;
     }
+
+    const reported = extractUsage(data);
+    recordAiUsage({
+      feature,
+      user: meta.user || null,
+      provider: "adlm-ai-service",
+      billedTo: "aws",
+      model: data?.model || data?.audit?.model || ASSUMED_MODEL,
+      usage:
+        reported || {
+          inputTokens: estimateTokensFromText(requestChars),
+          outputTokens: estimateTokensFromText(data?.result || data || ""),
+        },
+      tokenSource: reported ? "reported" : "estimated",
+      costUsd: Number(data?.audit?.costUsd ?? data?.usage?.costUsd ?? NaN) || undefined,
+      ms: Date.now() - started,
+      ok: res.ok,
+      errorCode: res.ok ? "" : String(data?.code || res.status),
+      sessionId: meta.sessionId,
+      ip: meta.ip,
+    });
+
     return { ok: res.ok, status: res.status, code: data?.code || "", data };
   } catch (e) {
     const aborted = e?.name === "AbortError";
     console.error(`[adlmAiService] ${path} failed:`, aborted ? "timeout" : e?.message || e);
+    recordAiUsage({
+      feature,
+      user: meta.user || null,
+      provider: "adlm-ai-service",
+      billedTo: "aws",
+      model: ASSUMED_MODEL,
+      ms: Date.now() - started,
+      ok: false,
+      errorCode: aborted ? "TIMEOUT" : "NETWORK",
+      sessionId: meta.sessionId,
+      ip: meta.ip,
+    });
     return { ok: false, status: 0, code: aborted ? "TIMEOUT" : "NETWORK", data: null };
   } finally {
     clearTimeout(timer);
@@ -72,11 +145,19 @@ async function post(path, body, accessToken) {
 // One place to turn the service's failure codes into a sentence Ada can say.
 // The entitlement case is deliberately phrased as an offer — it is the honest
 // answer AND the natural upsell.
-function explainFailure({ status, code }) {
+function explainFailure({ status, code, reason }) {
+  // ADLM Cloud's own allocation (set on /admin/ai-usage) — the reason text is
+  // already written to be said out loud.
+  if (code === "LOCAL_QUOTA")
+    return `${reason || "This account has used its AI allowance."} Say so plainly and offer to connect them to the team about raising it.`;
   if (code === "NOT_CONFIGURED")
     return "The AI cost-intelligence service isn't configured on this server, so this check can't run. Tell the user this feature isn't available right now and offer WhatsApp.";
   if (status === 403 || code === "AI_NOT_ENTITLED")
-    return "The user does NOT have the ADLM AI add-on on their account, which is what powers rate benchmarking and error checking. Explain warmly what the add-on does (checks every BoQ rate against ADLM's RateGen market library, flags unit/quantity/duplicate errors, and builds up rates component by component) and offer it as a next step. Do NOT invent a price — if it isn't in the catalog, offer to have the team reach out.";
+    // Policy is "any active ADLM subscription unlocks AI" (AI_ACCESS_MODE on
+    // the AI service), so a 403 almost always means their subscriptions have
+    // LAPSED — not that they lack a separate paid add-on. Renewal is the
+    // honest next step.
+    return "The AI cost-intelligence features need an ACTIVE ADLM subscription, and this account does not currently have one — it has most likely expired. Use get_my_account to see which subscription lapsed, tell the user plainly, and offer a renewal as the next step. Do NOT invent a price; quote the catalog or offer to have the team reach out.";
   if (status === 429 || code === "QUOTA_EXCEEDED")
     return "The user's monthly AI quota is used up. Say so plainly and offer to connect them to the team about raising it.";
   if (code === "TIMEOUT")
@@ -100,8 +181,11 @@ function naira(v) {
 /* ─────────────────────────── BoQ market check ─────────────────────────── */
 // items: [{ ref, description, unit, quantity, rate }] — built from the user's
 // real bill by agentUserData.getBillItemsForAi.
-export async function checkRatesAgainstMarket({ items, zone, accessToken, projectName }) {
-  const r = await post("/api/ai/boq-check", { items, zone: zone || undefined }, accessToken);
+export async function checkRatesAgainstMarket({ items, zone, accessToken, projectName, meta }) {
+  const r = await post("/api/ai/boq-check", { items, zone: zone || undefined }, accessToken, {
+    feature: "ai-boq-check",
+    meta,
+  });
   if (!r.ok) return explainFailure(r);
 
   const result = r.data?.result || {};
@@ -153,8 +237,11 @@ export async function checkRatesAgainstMarket({ items, zone, accessToken, projec
 }
 
 /* ─────────────────────────── Error / outlier scan ─────────────────────── */
-export async function scanProjectForErrors({ items, accessToken, projectName }) {
-  const r = await post("/api/ai/outliers", { items }, accessToken);
+export async function scanProjectForErrors({ items, accessToken, projectName, meta }) {
+  const r = await post("/api/ai/outliers", { items }, accessToken, {
+    feature: "ai-outliers",
+    meta,
+  });
   if (!r.ok) return explainFailure(r);
 
   const result = r.data?.result || {};
@@ -195,8 +282,13 @@ export async function scanProjectForErrors({ items, accessToken, projectName }) 
 }
 
 /* ─────────────────────────── Rate build-up ────────────────────────────── */
-export async function buildUpRate({ description, unit, zone, accessToken }) {
-  const r = await post("/api/ai/rate-buildup", { description, unit: unit || undefined, zone: zone || undefined }, accessToken);
+export async function buildUpRate({ description, unit, zone, accessToken, meta }) {
+  const r = await post(
+    "/api/ai/rate-buildup",
+    { description, unit: unit || undefined, zone: zone || undefined },
+    accessToken,
+    { feature: "ai-rate-buildup", meta },
+  );
   if (!r.ok) return explainFailure(r);
 
   // Shape from rateBuildupService.totalize():

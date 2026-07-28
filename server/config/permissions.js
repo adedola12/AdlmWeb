@@ -32,6 +32,9 @@ export const ADMIN_AREAS = [
   { key: "ptrainings", label: "Physical Trainings", group: "Store", staffGrantable: false },
   { key: "purchases", label: "Purchases & Entitlements", group: "Core", staffGrantable: false },
   { key: "settings", label: "Settings", group: "Core", staffGrantable: false },
+  // AI spend, per-user allocations and the AWS credit burn-down. Admin-only:
+  // it exposes cost data and can throttle every AI feature on the platform.
+  { key: "aiusage", label: "AI Usage & Credit", group: "Core", staffGrantable: false },
   { key: "roles", label: "Roles & Access (UAC)", group: "Core", staffGrantable: false },
 ];
 

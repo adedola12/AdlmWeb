@@ -11,7 +11,7 @@ import {
   FiShoppingCart, FiShield, FiUsers, FiCalendar, FiMapPin, FiPlayCircle,
   FiBookOpen, FiCheckSquare, FiDollarSign, FiPlusSquare, FiFileText,
   FiClipboard, FiBox, FiTag, FiStar, FiGift, FiImage, FiBell,
-  FiLifeBuoy, FiActivity,
+  FiLifeBuoy, FiActivity, FiCpu,
 } from "react-icons/fi";
 
 // area = the permission key that gates the card (see server/config/permissions.js)
@@ -36,6 +36,7 @@ const TOOLS = [
   { area: "flyers", to: "/admin/flyers", label: "Flyer Engine", desc: "Design flyers & thumbnails", icon: FiImage },
   { area: "support", to: "/admin/support-tickets", label: "Support Tickets", desc: "User help requests & AnyDesk", icon: FiLifeBuoy },
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },
+  { area: "aiusage", to: "/admin/ai-usage", label: "AI Usage", desc: "AI spend, quotas & AWS credit", icon: FiCpu },
 ];
 
 export default function AdminLauncher({ title = "Admin tools", compact = false }) {

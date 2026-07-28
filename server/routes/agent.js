@@ -8,6 +8,7 @@ import { User } from "../models/User.js";
 import { AgentConversation } from "../models/AgentConversation.js";
 import { runSalesAgent } from "../services/salesAgent.js";
 import { agentEnabled, agentProvider } from "../services/aiClient.js";
+import { checkAiAllowance } from "../services/aiUsage.js";
 
 const router = express.Router();
 
@@ -102,6 +103,31 @@ router.post("/chat", rateLimit, optionalAuth, async (req, res) => {
     const history = Array.isArray(req.body?.history) ? req.body.history : [];
     const sessionId = String(req.body?.sessionId || "").slice(0, 80);
     const ip = getIP(req);
+
+    // Monthly AI allocation (admin-managed, see /admin/ai-usage). Checked here
+    // rather than inside the agent loop so a spent allowance costs nothing at
+    // all — one user message can otherwise trigger four model round-trips.
+    // Answered in-character with a WhatsApp escape hatch, never as an error.
+    const allowance = await checkAiAllowance({
+      user: req.agentUser || null,
+      feature: "ada-chat",
+      ip,
+    });
+    if (!allowance.allowed) {
+      return res.json({
+        reply: allowance.reason,
+        actions: [
+          ...(req.agentUser ? [] : [{ type: "signup", label: "Create a free account" }]),
+          {
+            type: "whatsapp",
+            label: "Chat on WhatsApp",
+            number: process.env.SUPPORT_WHATSAPP || "2348106503524",
+          },
+        ],
+        quota: allowance.code,
+        sessionId,
+      });
+    }
 
     const { reply, actions, outcome } = await runSalesAgent(history, message, {
       user: req.agentUser || null,

@@ -88,6 +88,7 @@ import projectsBoqRoutes from "./routes/projects.boq.js";
 import modelCheckRoutes from "./routes/model-checks.js";
 import usageRoutes from "./routes/usage.js";
 import adminUsage from "./routes/admin.usage.js";
+import adminAiUsage from "./routes/admin.aiUsage.js";
 
 import trainingLocationsPublic from "./routes/training-locations.js";
 import adminTrainingLocations from "./routes/admin.training-locations.js";
@@ -351,6 +352,9 @@ app.use("/admin/users-lite", adminUsersLite);
 // Plugin/app usage heartbeats + admin usage summary (last seen, hours used)
 app.use("/usage", usageRoutes);
 app.use("/admin/usage", adminUsage);
+
+// AI spend, per-user allocations & AWS credit burn-down
+app.use("/admin/ai-usage", adminAiUsage);
 
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);

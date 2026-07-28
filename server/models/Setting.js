@@ -27,6 +27,18 @@ const SettingSchema = new mongoose.Schema(
     vatApplyToQuotes: { type: Boolean, default: true },
     vatApplyToInvoices: { type: Boolean, default: true },
 
+    // ── AI credit pool (AWS) ──
+    // What the AI-usage dashboard burns down against. Kept here rather than in
+    // env so finance can update the grant without a deploy. Falls back to
+    // AWS_CREDIT_TOTAL_USD when unset.
+    aiCreditLabel: { type: String, default: "AWS credit" },
+    aiCreditTotalUsd: { type: Number, default: 0, min: 0 },
+    aiCreditStartAt: { type: Date, default: null },
+    aiCreditExpiresAt: { type: Date, default: null },
+    // Spend already consumed on AWS before this dashboard started metering
+    // (or outside it — e.g. plugin traffic hitting the AI service directly).
+    aiCreditOpeningSpendUsd: { type: Number, default: 0, min: 0 },
+
     // ── Proposal counter-sign ──
     // Stable, unique code for the ADLM founder / main account. Embedded in the
     // counter-sign QR on every proposal. Auto-generated once on first use.

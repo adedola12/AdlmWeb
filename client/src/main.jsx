@@ -82,6 +82,7 @@ import AdminPTrainings from "./pages/AdminPTrainings.jsx";
 import Freebies from "./pages/Freebies.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
+import AdminAiUsage from "./pages/AdminAiUsage.jsx";
 
 // ✅ Physical trainings pages
 import PTrainingDetail from "./pages/PTrainingDetail.jsx";
@@ -579,6 +580,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin"]}>
             <AdminRoles />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ AI spend, per-user allocations & AWS credit burn-down (admin-only)
+      {
+        path: "admin/ai-usage",
+        element: (
+          <AdminRoute permission="aiusage">
+            <AdminAiUsage />
           </AdminRoute>
         ),
       },
