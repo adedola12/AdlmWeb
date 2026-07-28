@@ -741,7 +741,7 @@ export default function ProjectBudgetTab({
       {!hasBreakdown ? (
         <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
           No material &amp; labour breakdown on this project yet. The breakdown
-          is generated when you save from the Revit plugin (QUIV / Heron) and
+          is generated when you save from QUIV or Heron and
           appears in the <span className="font-semibold">Materials</span> view.
         </div>
       ) : view === "schedule" ? (

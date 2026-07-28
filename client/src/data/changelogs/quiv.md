@@ -2,7 +2,7 @@
 slug: quiv
 name: QUIV
 tagline: Quantity takeoff & estimating for Autodesk Revit
-category: Revit Plugin
+category: QUIV
 accent: orange
 icon: cube
 status: live

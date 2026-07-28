@@ -99,7 +99,7 @@ function buildGoogleMapsEmbedUrl(embedUrl, address) {
 /** ------------------ Product catalog ------------------ */
 const PRODUCT_CATALOG = {
   revit_plugin_building: {
-    name: "ADLM Revit Plugin (Architecture & Structure)",
+    name: "QUIV (Architecture & Structure)",
     to: "/product/revit",
   },
   revit_plugin_services: {

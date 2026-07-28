@@ -105,7 +105,7 @@ function getSidebarMeta(tool) {
 
   if (t === "revit") {
     return {
-      app: "Revit Plugin",
+      app: "QUIV",
       section: "Takeoffs",
       hint: "Browse projects like a file explorer",
       Icon: FaFolder,
@@ -123,7 +123,7 @@ function getSidebarMeta(tool) {
 
   if (t === "revit-materials" || t === "revit-material") {
     return {
-      app: "Revit Plugin",
+      app: "QUIV",
       section: "Materials",
       hint: "Browse projects like a file explorer",
       Icon: FaCubes,

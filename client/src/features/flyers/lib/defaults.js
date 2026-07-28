@@ -132,7 +132,7 @@ const PRESETS = {
     eventCategory: "Training", registrationUrl: "adlmstudio.net/trainings",
     speakers: [{ id: "s1", name: "QS Adedolapo", role: "Lead Facilitator", topic: "BIM cost workflows", photo: null }],
   },
-  subscription: { style: "podium", title: "ADLM Revit Plugin", highlightWordIndex: 1, subtitle: "", badge: "PLUGIN", packagesHeading: "Subscription Packages", installation: "NGN 25,000", tierStyle: "ribbon", tiers: newTiers() },
+  subscription: { style: "podium", title: "QUIV for Revit", highlightWordIndex: 1, subtitle: "", badge: "PLUGIN", packagesHeading: "Subscription Packages", installation: "NGN 25,000", tierStyle: "ribbon", tiers: newTiers() },
   ticket: {
     style: "hex-light", title: "Missed the live classes?", highlightWordIndex: 1,
     subtitle: "The training is now available for you to go through at your own pace!", badge: "BIM TRAINING",
@@ -141,7 +141,7 @@ const PRESETS = {
 
   // thumbnails (landscape 1280×720)
   thumbBold: { format: "thumbnail", style: "navy-glow", title: "Revit MEP → Excel BoQ", highlightWordIndex: 3, subtitle: "1-click quantity takeoff for HVAC, plumbing & electrical", badge: "ADLM PLUGIN" },
-  thumbTutorial: { format: "thumbnail", style: "blue-tech", title: "Generate a BoQ in Minutes", highlightWordIndex: 3, subtitle: "Step-by-step with the ADLM Revit plugin", badge: "TUTORIAL", heroFrame: "browser" },
+  thumbTutorial: { format: "thumbnail", style: "blue-tech", title: "Generate a BoQ in Minutes", highlightWordIndex: 3, subtitle: "Step-by-step with QUIV", badge: "TUTORIAL", heroFrame: "browser" },
   thumbFeatures: { format: "thumbnail", style: "hex-light", title: "ADLM Rate Generator", highlightWordIndex: 1, subtitle: "Accurate construction rates in seconds", badge: "NEW", bullets: ["Auto rate calculation", "Customizable material prices", "Nigerian & Int'l market", "Real-time rate logic"] },
   thumbHook: { format: "thumbnail", style: "navy-glow", title: "10× Faster Takeoff", highlightWordIndex: 0, subtitle: "BIM-driven quantity surveying with ADLM", badge: "WATCH NOW" },
 };

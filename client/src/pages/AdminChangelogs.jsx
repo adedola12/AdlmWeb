@@ -316,7 +316,7 @@ function MetaForm({ draft, onField }) {
         <input
           value={draft.category}
           onChange={(e) => onField("category", e.target.value)}
-          placeholder="Revit Plugin"
+          placeholder="QUIV"
           className={INPUT}
         />
       </div>

@@ -150,8 +150,8 @@ export default function Footer() {
                 </SmartLink>
               </li>
               <li>
-                <SmartLink to="/product/revit" label="Revit Plugin">
-                  Revit Plugin
+                <SmartLink to="/product/revit" label="QUIV for Revit">
+                  QUIV for Revit
                 </SmartLink>
               </li>
               <li>

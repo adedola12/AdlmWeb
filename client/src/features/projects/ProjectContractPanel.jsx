@@ -611,7 +611,7 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
         </div>
       ) : (
         <div className="mt-2 text-[11px] text-slate-500">
-          Pushed automatically from the Revit plugin during save.
+          Pushed automatically from QUIV during save.
         </div>
       )}
 
@@ -681,7 +681,7 @@ function ModelsPanel({
     <div className="space-y-3">
       <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
         <b>Auto-attached from Revit.</b> When you save a project from the
-        Revit plugin, the model is exported to IFC (compressed to stay under
+        QUIV, the model is exported to IFC (compressed to stay under
         100 MB) and pushed here automatically. For large models the plugin
         asks first since saving takes longer. No manual upload needed.
       </div>
@@ -695,7 +695,7 @@ function ModelsPanel({
           across {unclassified.lines} BoQ line
           {unclassified.lines === 1 ? "" : "s"} aren’t classified into a
           discipline, so they’re <b>not covered</b> by model validation. Re-save
-          the project from the updated Revit plugin to tag them automatically.
+          the project from the updated QUIV to tag them automatically.
         </div>
       ) : null}
 
@@ -716,7 +716,7 @@ function ModelsPanel({
         </div>
       ) : (
         <div className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
-          No BIM models attached yet. Save the project from the Revit plugin
+          No BIM models attached yet. Save the project from QUIV
           to push the models automatically.
         </div>
       )}

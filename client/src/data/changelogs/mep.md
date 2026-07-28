@@ -2,7 +2,7 @@
 slug: mep
 name: ADLM MEP
 tagline: MEP quantity takeoff for Autodesk Revit
-category: Revit Plugin
+category: Revit MEP Plugin
 accent: sky
 icon: zap
 status: live

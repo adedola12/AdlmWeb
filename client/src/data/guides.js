@@ -40,7 +40,7 @@ export const GUIDES = [
     blurb:
       "The combined book: the Hub end to end, then Heron — scaling drawings, measuring with the ADLM templates, pricing and export.",
     file: "/docs/ADLM-Complete-User-Guide.pdf",
-    pages: 46,
+    pages: 48,
     productKeys: ["planswift", "heron"],
   },
 ];

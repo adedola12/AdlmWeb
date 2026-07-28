@@ -120,11 +120,11 @@ export default function RevitProjects() {
 
             <div className="text-xs text-slate-500 mt-3 space-y-1">
               <div>
-                Project ID: <code>{sel._id}</code> (use this in the Revit plugin
+                Project ID: <code>{sel._id}</code> (use this in QUIV
                 to open/update)
               </div>
               <div>
-                <b>Tip:</b> In the Revit plugin’s “Open from Cloud”, paste this
+                <b>Tip:</b> In QUIV’s “Open from Cloud”, paste this
                 ID to view the saved takeoff.
               </div>
             </div>
