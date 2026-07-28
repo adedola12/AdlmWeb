@@ -11,9 +11,16 @@
 // credit runway meaningless, so every usage row is tagged with its account.
 
 /* ───────────────────────────── features ───────────────────────────── */
-// key      — stored on every AiUsage row and on per-feature allocations
-// provider — who actually runs the model for this feature
-// billedTo — which bill/credit pool the spend lands on
+// key          — stored on every AiUsage row and on per-feature allocations
+// provider     — who actually runs the model for this feature
+// guestAllowed — may an anonymous visitor reach it AT ALL?
+//
+// guestAllowed is the secure-by-default half of the guest policy. Guests get
+// the features whose job is to SELL (Ada, HelpBot); the paid QS cost
+// intelligence — which is both the product people pay for and the thing
+// burning AWS credit — is signed-in only. An admin can loosen or tighten this
+// per feature on the AI-usage page, but an unconfigured install already
+// refuses, so the restriction can never be lost by forgetting to set it.
 export const AI_FEATURES = [
   {
     key: "ada-chat",
@@ -21,6 +28,7 @@ export const AI_FEATURES = [
     desc: "Every model round-trip of the website chat agent, tool calls included.",
     provider: "agent",
     metered: true,
+    guestAllowed: true, // this IS the conversion path — guests must have it
   },
   {
     key: "helpbot",
@@ -28,6 +36,7 @@ export const AI_FEATURES = [
     desc: "One-shot answer when the catalogue search finds nothing.",
     provider: "openai",
     metered: true,
+    guestAllowed: true,
   },
   {
     key: "ai-boq-check",
@@ -35,6 +44,7 @@ export const AI_FEATURES = [
     desc: "Per-line verdict vs the RateGen benchmarks (AWS AI service).",
     provider: "adlm-ai-service",
     metered: true,
+    guestAllowed: false, // paid capability, and AWS-credit-billed
   },
   {
     key: "ai-outliers",
@@ -42,6 +52,7 @@ export const AI_FEATURES = [
     desc: "Duplicate / unit / quantity / semantic flags (AWS AI service).",
     provider: "adlm-ai-service",
     metered: true,
+    guestAllowed: false,
   },
   {
     key: "ai-rate-buildup",
@@ -49,8 +60,15 @@ export const AI_FEATURES = [
     desc: "Component-level unit-rate build-up (AWS AI service).",
     provider: "adlm-ai-service",
     metered: true,
+    guestAllowed: false,
   },
 ];
+
+// Code-level default: is this feature open to anonymous visitors? An unknown
+// key answers "no" — a feature nobody has classified is not one to hand out
+// for free.
+export const featureAllowsGuests = (key) =>
+  AI_FEATURES.find((f) => f.key === key)?.guestAllowed === true;
 
 export const AI_FEATURE_KEYS = AI_FEATURES.map((f) => f.key);
 export const isAiFeature = (k) => AI_FEATURE_KEYS.includes(String(k));

@@ -117,25 +117,35 @@ function sanitizeLimit(body) {
 // dropped (zero means unlimited, so storing it would list the feature as
 // "capped" while capping nothing) UNLESS it is switched off, which is the one
 // case where an all-zero entry carries meaning.
-function sanitizeFeatures(obj) {
+// `keepAll` is used for the guest map, where an all-zero ENABLED entry is
+// meaningful: it is how an admin says "guests may use this" for a feature the
+// code defaults to signed-in-only. Dropping it would silently discard the
+// permission.
+function sanitizeFeatures(obj, { keepAll = false } = {}) {
   const out = {};
   if (!obj || typeof obj !== "object") return out;
   for (const key of AI_FEATURE_KEYS) {
     if (!obj[key]) continue;
     const lim = sanitizeLimit(obj[key]);
-    if (lim.calls || lim.tokens || lim.costUsd || !lim.enabled) out[key] = lim;
+    if (keepAll || lim.calls || lim.tokens || lim.costUsd || !lim.enabled) out[key] = lim;
   }
   return out;
 }
 
 const actorId = (req) => req.user?._id || req.user?.id || null;
 
+const mapOut = (m) => {
+  const raw = m instanceof Map ? Object.fromEntries(m) : m || {};
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) out[k] = limitOut(v);
+  return out;
+};
+
 function allocationOut(doc) {
   if (!doc) return null;
-  const features = {};
-  const raw = doc.features instanceof Map ? Object.fromEntries(doc.features) : doc.features || {};
-  for (const [k, v] of Object.entries(raw)) features[k] = limitOut(v);
+  const features = mapOut(doc.features);
   return {
+    guestFeatures: mapOut(doc.guestFeatures),
     _id: doc._id,
     scope: doc.scope,
     userId: doc.userId || null,
@@ -490,6 +500,7 @@ router.put("/allocations/default", async (req, res) => {
           total: sanitizeLimit(req.body?.total),
           guestTotal: sanitizeLimit(req.body?.guestTotal),
           features: sanitizeFeatures(req.body?.features),
+          guestFeatures: sanitizeFeatures(req.body?.guestFeatures, { keepAll: true }),
           notes: String(req.body?.notes || "").slice(0, 500),
           updatedBy: actorId(req),
           updatedByEmail: req.user?.email || "",

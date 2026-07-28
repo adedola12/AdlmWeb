@@ -492,7 +492,17 @@ function aiServiceMeta(ctx) {
 // somehow emits the call.
 async function handleAccountTool(name, input, ctx) {
   if (!ctx.user?._id) {
-    return "The visitor is NOT logged in, so their account/projects can't be read. Warmly ask them to sign in (or sign up) first, then they can ask again.";
+    // A guest reaching for these is showing real intent — they want something
+    // done with THEIR bill. Treat it as the strongest buying signal in the
+    // conversation, not an error to apologise for.
+    return (
+      "The visitor is NOT logged in, so their account/projects can't be read. " +
+      "This is a BUYING SIGNAL: they want ADLM working on their own data. " +
+      "Warmly explain what they'd get once signed in — their projects, budgets " +
+      "and subscription answered directly, plus rate benchmarking and BoQ error " +
+      "checking against ADLM's market library — then call offer_actions with a " +
+      "'signup' button. Frame it as the next step, never as a refusal."
+    );
   }
   try {
     if (name === "get_my_projects") return await getPortfolioSummary(ctx.user._id);

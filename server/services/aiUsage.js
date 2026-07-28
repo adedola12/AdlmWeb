@@ -20,6 +20,7 @@ import {
   estimateTokensFromText,
   billingAccountFor,
   featureLabel,
+  featureAllowsGuests,
 } from "../config/aiPricing.js";
 
 const ENFORCE = process.env.AI_ALLOCATION_ENFORCE !== "false"; // on by default
@@ -305,10 +306,35 @@ export async function checkAiAllowance({ user = null, feature = "", ip = "" } = 
       };
     }
 
-    // ── 4. Guests share one pool ─────────────────────────────────────────
-    // They can't be metered individually but they can still spend real money.
+    // ── 4. Guests ────────────────────────────────────────────────────────
+    // Anonymous visitors get the features whose job is to SELL, and nothing
+    // else. The paid QS cost intelligence is signed-in-only: it is the thing
+    // customers pay for AND the thing burning AWS credit, so giving it away
+    // to unidentified traffic would undercut the product and the budget at
+    // once. Ada's tool wiring already withholds those tools from guests —
+    // this is the second lock, enforced at the meter, so the guarantee holds
+    // even if a future caller wires them differently.
     if (!userId) {
-      const hit = exceeded(used.total, def?.guestTotal);
+      const guestPolicy = featureLimitOf({ features: def?.guestFeatures }, feature);
+      const allowedForGuests = guestPolicy
+        ? guestPolicy.enabled !== false
+        : featureAllowsGuests(feature);
+
+      if (!allowedForGuests) {
+        return {
+          allowed: false,
+          code: "GUEST_NOT_ALLOWED",
+          reason:
+            "That check works on a signed-in account's own projects, so it needs them to be logged in. Warmly explain what it does — it benchmarks every rate against ADLM's market library and flags errors in their bill — and offer a 'signup' button as the next step. This is a genuine reason to create an account, so make it sound like the opportunity it is, not a refusal.",
+          used,
+          limits: null,
+        };
+      }
+
+      // Guests can't be metered individually, so they share one budget.
+      const hit =
+        exceeded(used.total, def?.guestTotal) ||
+        exceeded(used.byFeature[feature] || emptyBucket(), guestPolicy);
       if (hit) {
         return {
           allowed: false,

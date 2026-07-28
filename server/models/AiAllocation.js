@@ -59,6 +59,15 @@ const AiAllocationSchema = new mongoose.Schema(
     // credit, so they get one shared budget.
     guestTotal: { type: LimitSchema, default: () => ({}) },
 
+    // Default row only: per-feature guest policy. A feature absent from this
+    // map falls back to `guestAllowed` in config/aiPricing.js, so the paid QS
+    // tools stay signed-in-only without anyone having to configure it.
+    guestFeatures: {
+      type: Map,
+      of: LimitSchema,
+      default: () => new Map(),
+    },
+
     notes: { type: String, default: "" },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     updatedByEmail: { type: String, default: "" },

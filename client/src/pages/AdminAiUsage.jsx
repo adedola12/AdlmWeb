@@ -342,7 +342,10 @@ const RECOMMENDED = {
 
 function AllocationForm({ title, subtitle, features, value, onSave, onReset, saving, isDefault }) {
   const [form, setForm] = React.useState(() => normalize(value));
-  React.useEffect(() => setForm(normalize(value)), [value]);
+  // `features` is a dep because the guest checkboxes are seeded from each
+  // feature's code-level policy, and the feature list can arrive after `value`.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => setForm(normalize(value)), [value, features]);
 
   function normalize(a) {
     return {
@@ -350,6 +353,20 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
       total: a?.total || { enabled: true, calls: 0, tokens: 0, costUsd: 0 },
       guestTotal: a?.guestTotal || { enabled: true, calls: 0, tokens: 0, costUsd: 0 },
       features: a?.features || {},
+      // Seeded from each feature's code-level guest policy when the map has no
+      // entry, so the checkboxes show what is actually being enforced rather
+      // than defaulting everything to ticked.
+      guestFeatures: Object.fromEntries(
+        (features || []).map((f) => [
+          f.key,
+          a?.guestFeatures?.[f.key] || {
+            enabled: !!f.guestAllowed,
+            calls: 0,
+            tokens: 0,
+            costUsd: 0,
+          },
+        ]),
+      ),
       notes: a?.notes || "",
     };
   }
@@ -359,6 +376,19 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
   const featureOn = (key) => form.features[key]?.enabled !== false;
   const toggleFeature = (key) => (e) =>
     setFeature(key)({ ...(form.features[key] || { calls: 0, tokens: 0, costUsd: 0 }), enabled: e.target.checked });
+
+  const guestFeatureOn = (key) => form.guestFeatures?.[key]?.enabled === true;
+  const toggleGuestFeature = (key) => (e) =>
+    setForm({
+      ...form,
+      guestFeatures: {
+        ...form.guestFeatures,
+        [key]: {
+          ...(form.guestFeatures?.[key] || { calls: 0, tokens: 0, costUsd: 0 }),
+          enabled: e.target.checked,
+        },
+      },
+    });
 
   const off = !form.enabled;
 
@@ -417,15 +447,39 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
       </div>
 
       {isDefault ? (
-        <div className={off ? "opacity-40 pointer-events-none" : ""}>
-          <div className="text-xs font-semibold mb-1">
-            Anonymous visitors — shared monthly ceiling{" "}
-            <span className="font-normal text-slate-500">(all guests combined, not per guest)</span>
+        <div
+          className={`rounded-lg ring-1 ring-black/5 dark:ring-adlm-dark-border p-3 space-y-2.5 ${
+            off ? "opacity-40 pointer-events-none" : ""
+          }`}
+        >
+          <div className="text-xs font-semibold">
+            Anonymous visitors{" "}
+            <span className="font-normal text-slate-500">
+              — one shared budget across all guests, not per guest
+            </span>
           </div>
           <LimitFields
             value={form.guestTotal}
             onChange={(t) => setForm({ ...form, guestTotal: t })}
           />
+          <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+            Which features a guest may reach at all. The paid QS tools are signed-in-only by
+            default — that restriction is what turns a curious visitor into an account.
+          </div>
+          {features.map((f) => {
+            const on = guestFeatureOn(f.key);
+            return (
+              <div key={f.key} className="flex items-center gap-2 text-[11px]">
+                <input type="checkbox" checked={on} onChange={toggleGuestFeature(f.key)} />
+                <span className={on ? "" : "text-slate-500"}>{f.label}</span>
+                {on ? (
+                  <span className="text-emerald-600">guests allowed</span>
+                ) : (
+                  <span className="text-slate-500">signed-in only</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : null}
 
