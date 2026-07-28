@@ -11,6 +11,7 @@ import { parseBunny, bunnyIframeSrc } from "../lib/video";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { TiltCard } from "../components/effects.jsx";
 import StorageBar from "../components/StorageBar.jsx";
+import { orderGuidesFor } from "../data/guides.js";
 
 dayjs.extend(relativeTime);
 
@@ -561,6 +562,61 @@ export default function Dashboard() {
             </div>
           </div>
         ) : null}
+
+        {/* Illustrated PDF guides, ordered so the ones covering what you own come first */}
+        <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-depth p-4 md:p-5">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 className="text-base md:text-lg font-bold text-slate-900">
+                User guides
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Illustrated, step-by-step PDFs — every screen, from sign-in to a
+                finished bill.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {orderGuidesFor(
+              (summary?.entitlements || []).map((e) => e.productKey),
+            ).map((g) => (
+              <a
+                key={g.id}
+                href={g.file}
+                target="_blank"
+                rel="noreferrer"
+                className="group flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:border-adlm-blue-700 hover:bg-blue-50/40 transition"
+              >
+                <span className="shrink-0 mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 text-adlm-blue-700">
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                    />
+                  </svg>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-slate-900 group-hover:text-adlm-blue-700">
+                    {g.title}
+                  </span>
+                  <span className="block text-xs text-slate-500 leading-snug mt-0.5">
+                    {g.blurb}
+                  </span>
+                  <span className="block text-[11px] text-slate-400 mt-1">
+                    PDF · {g.pages} pages
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
