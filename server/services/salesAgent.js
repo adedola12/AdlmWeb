@@ -12,6 +12,9 @@ import {
   getPortfolioSummary,
   getProjectDetails,
   getAccountSummary,
+  getResourceQuantity,
+  getProjectBudget,
+  getProjectBill,
 } from "./agentUserData.js";
 
 const MAX_TOOL_ITERATIONS = 4;
@@ -126,6 +129,76 @@ const ACCOUNT_TOOLS = [
       "'how many projects can I still create'. No arguments.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
+  {
+    name: "get_resource_quantity",
+    description:
+      "Get the TOTAL QUANTITY (and cost) of a specific material, labour trade or " +
+      "resource in the logged-in user's project(s) — read from the project's " +
+      "Material & Labour breakdown, falling back to its bill lines. This is THE " +
+      "tool for 'how many bags of cement do I need', 'total quantity of rebar', " +
+      "'how much sand / granite / blocks / concrete', 'how many masons', 'how much " +
+      "have I budgeted for formwork'. Totals are returned per unit of measure. " +
+      "Omit projectName to total the resource across ALL their projects.",
+    input_schema: {
+      type: "object",
+      properties: {
+        resource: {
+          type: "string",
+          description:
+            "The material/labour/resource to total, as the user said it (e.g. 'cement', '12mm rebar', 'mason').",
+        },
+        projectName: {
+          type: "string",
+          description:
+            "Optional. The project to limit the search to. Omit to search every project the user owns.",
+        },
+      },
+      required: ["resource"],
+    },
+  },
+  {
+    name: "get_project_budget",
+    description:
+      "Get the full Material & Labour (Budget) breakdown for ONE of the logged-in " +
+      "user's projects: total budgeted cost, Material vs Labour vs Plant split, how " +
+      "much has been procured/purchased vs still to buy, and the biggest resources " +
+      "by cost with their quantities. Use for 'what's my material budget', 'material " +
+      "vs labour cost', 'what do I still need to buy', 'procurement status'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name (or closest phrase) the user mentioned.",
+        },
+      },
+      required: ["projectName"],
+    },
+  },
+  {
+    name: "get_project_bill",
+    description:
+      "Get the BILL OF QUANTITIES work items for ONE of the logged-in user's " +
+      "projects — each line's quantity, unit, rate, amount and % complete, plus " +
+      "measured quantity totals per unit. Pass `search` to filter to matching lines " +
+      "(e.g. 'concrete', 'blockwork', 'excavation'). Use for 'what's in my bill', " +
+      "'how much concrete is measured', 'what are my biggest bill items', 'rate for X'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        projectName: {
+          type: "string",
+          description: "The project name (or closest phrase) the user mentioned.",
+        },
+        search: {
+          type: "string",
+          description:
+            "Optional phrase to filter bill lines by (matches description, category or trade). Omit for the whole bill.",
+        },
+      },
+      required: ["projectName"],
+    },
+  },
 ];
 
 /* --------------------------- system prompt --------------------------- */
@@ -137,9 +210,15 @@ This visitor is LOGGED IN, so you can also act as their account assistant using 
 - get_my_projects — their whole portfolio: number of projects, combined value, work done, outstanding value, overall progress, per-product breakdown. Use for "my projects", "total cost/value of my projects", "how far along am I".
 - get_project_details — value, progress and schedule for ONE named project. Use for questions about a specific project.
 - get_my_account — their subscriptions (what they own, active/expired, expiry) and project-slot usage. Use for "my subscription", "when does X expire", "how many projects can I create".
+- get_resource_quantity — the TOTAL QUANTITY and cost of one material, labour trade or resource (cement, sand, rebar, blocks, formwork, masons…) in one project or across all of them. This is the tool for ANY "how much / how many X do I need" question.
+- get_project_bill — the bill of quantities work items (qty, unit, rate, amount, % done), optionally filtered by a search phrase. Use for "what's in my bill", "rate for X", "biggest items".
+- get_project_budget — the whole Material & Labour breakdown for one project: total cost, Material vs Labour vs Plant split, procured vs still-to-buy, biggest resources. Use for "material budget", "what do I still need to buy".
 Rules for account answers:
-- ALWAYS call the relevant tool and quote its numbers exactly — NEVER invent or estimate project figures, values or dates.
+- ALWAYS call the relevant tool and quote its numbers exactly — NEVER invent or estimate project figures, values, quantities or dates.
+- You CAN read their bill lines and their material & labour lines — never tell a user you have no access to them. If a tool finds nothing, say what was searched and ask how the item is worded in their bill.
+- Quantities live per unit of measure (bags, m³, kg, m²). NEVER add different units together and never convert between them unless the user supplies the conversion factor.
 - Quote money exactly as the tool returns it. If a figure is ₦0, say the bill has no rates yet rather than guessing.
+- If a project has no Material & Labour breakdown, explain it comes from the desktop plugin on save (MEP projects don't send one) — don't estimate one.
 - After answering, still be helpful commercially where natural (e.g. an expired sub → offer renewal; no RateGen → mention it) but don't force it.
 - For deeper detail, point them to the Portfolio Dashboard or a project's Project/PM report.`
     : `
@@ -279,6 +358,12 @@ async function handleAccountTool(name, input, ctx) {
     if (name === "get_my_account") return await getAccountSummary(ctx.user);
     if (name === "get_project_details")
       return await getProjectDetails(ctx.user._id, input?.projectName);
+    if (name === "get_resource_quantity")
+      return await getResourceQuantity(ctx.user._id, input?.resource, input?.projectName);
+    if (name === "get_project_budget")
+      return await getProjectBudget(ctx.user._id, input?.projectName);
+    if (name === "get_project_bill")
+      return await getProjectBill(ctx.user._id, input?.projectName, input?.search);
     return "Unknown account tool.";
   } catch (e) {
     console.error(`[salesAgent] ${name} failed:`, e?.message || e);
