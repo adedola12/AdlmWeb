@@ -56,6 +56,10 @@ export function recordAiUsage(evt = {}) {
     const outputTokens = Math.max(0, Math.round(Number(usage.outputTokens) || 0));
     const cacheReadTokens = Math.max(0, Math.round(Number(usage.cacheReadTokens) || 0));
     const cacheWriteTokens = Math.max(0, Math.round(Number(usage.cacheWriteTokens) || 0));
+    const cacheWrite1hTokens = Math.min(
+      cacheWriteTokens,
+      Math.max(0, Math.round(Number(usage.cacheWrite1hTokens) || 0)),
+    );
     const totalTokens = inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens;
 
     const tokenSource = evt.tokenSource || (totalTokens > 0 ? "reported" : "none");
@@ -69,6 +73,7 @@ export function recordAiUsage(evt = {}) {
             outputTokens,
             cacheReadTokens,
             cacheWriteTokens,
+            cacheWrite1hTokens,
           });
 
     const doc = {
@@ -86,6 +91,7 @@ export function recordAiUsage(evt = {}) {
       outputTokens,
       cacheReadTokens,
       cacheWriteTokens,
+      cacheWrite1hTokens,
       totalTokens,
       tokenSource,
       costUsd,
@@ -121,12 +127,19 @@ export function normalizeUsage(raw) {
   const output = n("outputTokens", "output_tokens", "completionTokens", "completion_tokens");
   const cacheRead = n("cacheReadTokens", "cache_read_input_tokens", "cachedTokens");
   const cacheWrite = n("cacheWriteTokens", "cache_creation_input_tokens");
+  // With an extended TTL, Anthropic breaks the write down by lifetime — the
+  // 1h portion is billed at 2x rather than 1.25x, so it has to be tracked
+  // separately or every 1h write is under-costed by 60%.
+  const cc = raw.cache_creation || raw.cacheCreation || null;
+  const write1h =
+    Number(cc?.ephemeral_1h_input_tokens ?? raw.cacheWrite1hTokens ?? 0) || 0;
   if (!input && !output && !cacheRead && !cacheWrite) return null;
   return {
     inputTokens: input,
     outputTokens: output,
     cacheReadTokens: cacheRead,
     cacheWriteTokens: cacheWrite,
+    cacheWrite1hTokens: write1h,
   };
 }
 

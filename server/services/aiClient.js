@@ -62,6 +62,31 @@ export function agentProvider() {
 // anything per-visitor has to live in `dynamic`.
 const CACHE_ENABLED = process.env.AGENT_PROMPT_CACHE !== "false";
 
+// Cache lifetime. "1h" suits bursty, low-concurrency traffic: the default 5m
+// window expires between visitors, so almost every call pays the write premium
+// instead of the read discount. A 1h write costs 2x the input rate against
+// 1.25x for 5m, so it only wins if it converts misses into hits — which it
+// does here, where a whole quiet afternoon can pass between conversations.
+const CACHE_TTL = String(process.env.AGENT_CACHE_TTL || "1h").toLowerCase() === "5m" ? "5m" : "1h";
+const EXTENDED_TTL_BETA = "extended-cache-ttl-2025-04-11";
+
+// Set if the API ever rejects the extended TTL, so we degrade to 5m caching
+// for the rest of the process instead of failing every call. Ada breaking is
+// far worse than Ada being slightly more expensive.
+let extendedTtlUnavailable = false;
+
+const useExtendedTtl = () => CACHE_TTL === "1h" && !extendedTtlUnavailable;
+
+function looksLikeTtlRejection(msg) {
+  const s = String(msg || "").toLowerCase();
+  return (
+    s.includes("ttl") ||
+    s.includes("extended-cache") ||
+    s.includes("cache_control") ||
+    s.includes("beta")
+  );
+}
+
 function splitSystem(system) {
   if (system && typeof system === "object" && !Array.isArray(system)) {
     return { cacheable: String(system.cacheable || ""), dynamic: String(system.dynamic || "") };
@@ -75,19 +100,21 @@ function flattenSystem(system) {
   return [cacheable, dynamic].filter(Boolean).join("\n\n");
 }
 
-function anthropicSystem(system) {
+function anthropicSystem(system, { extendedTtl = false } = {}) {
   const { cacheable, dynamic } = splitSystem(system);
   if (!cacheable) return dynamic;
   if (!CACHE_ENABLED) return flattenSystem(system);
-  const blocks = [
-    { type: "text", text: cacheable, cache_control: { type: "ephemeral" } },
-  ];
+  const cacheControl = extendedTtl
+    ? { type: "ephemeral", ttl: "1h" }
+    : { type: "ephemeral" };
+  const blocks = [{ type: "text", text: cacheable, cache_control: cacheControl }];
   if (dynamic) blocks.push({ type: "text", text: dynamic });
   return blocks;
 }
 
 /* ------------------------- Anthropic ------------------------- */
-async function anthropicCreate({ system, messages, tools, maxTokens }) {
+async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}) {
+  const extendedTtl = opts.extendedTtl ?? useExtendedTtl();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
@@ -98,11 +125,13 @@ async function anthropicCreate({ system, messages, tools, maxTokens }) {
         "x-api-key": String(process.env.ANTHROPIC_API_KEY || "").trim(),
         "anthropic-version": ANTHROPIC_VERSION,
         "content-type": "application/json",
+        // Harmless once the feature is GA; required while it isn't.
+        ...(extendedTtl ? { "anthropic-beta": EXTENDED_TTL_BETA } : {}),
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
         max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
-        system: anthropicSystem(system),
+        system: anthropicSystem(system, { extendedTtl }),
         messages,
         ...(tools && tools.length ? { tools } : {}),
       }),
@@ -110,9 +139,19 @@ async function anthropicCreate({ system, messages, tools, maxTokens }) {
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(
-        data?.error?.message || `Anthropic API ${res.status}`,
-      );
+      const msg = data?.error?.message || `Anthropic API ${res.status}`;
+      // If the extended TTL is what it objected to, fall back to the standard
+      // 5m cache and remember not to ask again. A pricing optimisation must
+      // never be able to take the agent down.
+      if (extendedTtl && res.status === 400 && looksLikeTtlRejection(msg)) {
+        extendedTtlUnavailable = true;
+        console.warn(
+          `[aiClient] 1h prompt cache rejected (${msg}) — falling back to the 5m cache.`,
+        );
+        clearTimeout(timer);
+        return anthropicCreate({ system, messages, tools, maxTokens }, { extendedTtl: false });
+      }
+      throw new Error(msg);
     }
 
     const content = Array.isArray(data.content) ? data.content : [];

@@ -35,6 +35,10 @@ const AiUsageSchema = new mongoose.Schema(
     outputTokens: { type: Number, default: 0 },
     cacheReadTokens: { type: Number, default: 0 },
     cacheWriteTokens: { type: Number, default: 0 },
+    // Subset of cacheWriteTokens written with the 1-hour TTL, billed at 2x the
+    // input rate instead of 1.25x. Kept as a subset so rows written before the
+    // extended TTL existed still price correctly.
+    cacheWrite1hTokens: { type: Number, default: 0 },
     totalTokens: { type: Number, default: 0 },
 
     // "reported"  — the provider returned a usage block (trustworthy)

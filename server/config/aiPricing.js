@@ -156,8 +156,12 @@ export function priceForModel(model) {
 
 /**
  * Cost of one model round-trip, in USD.
- * Cache multipliers follow Anthropic's published ratios: a cache WRITE costs
- * 1.25× the input rate, a cache READ 0.1×.
+ * Cache multipliers follow Anthropic's published ratios: a cache READ costs
+ * 0.1× the input rate, a 5-minute WRITE 1.25×, and a 1-hour WRITE 2×.
+ *
+ * `cacheWriteTokens` is the TOTAL written; `cacheWrite1hTokens` is the subset
+ * written with the extended TTL. Keeping them nested this way means older rows
+ * (which predate the 1h option) still price correctly at 1.25×.
  */
 export function estimateCostUsd({
   model,
@@ -165,13 +169,17 @@ export function estimateCostUsd({
   outputTokens = 0,
   cacheReadTokens = 0,
   cacheWriteTokens = 0,
+  cacheWrite1hTokens = 0,
 } = {}) {
   const p = priceForModel(model);
   const perToken = (rate) => rate / 1_000_000;
+  const write1h = Math.min(Number(cacheWrite1hTokens || 0), Number(cacheWriteTokens || 0));
+  const write5m = Math.max(0, Number(cacheWriteTokens || 0) - write1h);
   const cost =
     Number(inputTokens || 0) * perToken(p.in) +
     Number(outputTokens || 0) * perToken(p.out) +
-    Number(cacheWriteTokens || 0) * perToken(p.in * 1.25) +
+    write5m * perToken(p.in * 1.25) +
+    write1h * perToken(p.in * 2) +
     Number(cacheReadTokens || 0) * perToken(p.in * 0.1);
   return Math.max(0, Number(cost.toFixed(6)));
 }
