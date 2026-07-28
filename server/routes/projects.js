@@ -426,7 +426,15 @@ function computeProjectRollup(project) {
 // links the requester can READ are resolved; money is zeroed when the
 // requester can't see rates (same RateGen rule maskRates() enforces).
 async function resolveLinkedSummaries(parent, userId, access) {
-  const links = Array.isArray(parent?.linkedProjects) ? parent.linkedProjects : [];
+  // ONLY "sum" links belong here. The two link types are mutually exclusive by
+  // definition: "sum" rolls a linked project's total in as a single line, while
+  // "merge" federates its whole bill into this project's items. Summarising a
+  // merge link as well would count the same project twice — once through its
+  // resolved items and again as "linked services" — which is exactly what a
+  // merged container's headline total did before this filter.
+  const links = (Array.isArray(parent?.linkedProjects) ? parent.linkedProjects : []).filter(
+    (l) => l && l.linkType !== "merge",
+  );
   if (!links.length) return [];
   const canSeeRates = access ? !!access.canSeeRates : true;
   const ids = links.map((l) => l.projectId).filter(Boolean);

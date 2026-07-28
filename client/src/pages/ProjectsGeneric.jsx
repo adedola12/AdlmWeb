@@ -1099,27 +1099,6 @@ export default function ProjectsGeneric() {
       /* ignore */
     }
   }, [groupByMode]);
-  // ── Merged (federated) project ──
-  // `sel.merge` is present only on a merge container and lists the discipline
-  // projects behind it, in merge order.
-  const mergeInfo = sel?.merge?.isContainer ? sel.merge : null;
-  const mergeSourceNames = React.useMemo(
-    () => (mergeInfo?.parts || []).map((p) => p.name).filter(Boolean),
-    [mergeInfo],
-  );
-  // A merged bill defaults to grouping by SOURCE PROJECT: the first thing a QS
-  // needs to see in a combined bill is where each section came from. The user
-  // can still switch to category/trade, and that choice is not persisted over
-  // their normal preference because it only makes sense on a merged project.
-  const [mergeGroupOverride, setMergeGroupOverride] = React.useState(null);
-  const effectiveGroupByMode = mergeInfo
-    ? mergeGroupOverride || "source"
-    : groupByMode;
-  React.useEffect(() => {
-    // Reset the override when moving between projects.
-    setMergeGroupOverride(null);
-  }, [selectedId]);
-
   // Set true when the user reorders bill items so the Save button activates
   // (item order isn't otherwise part of the dirty check). Reset on project
   // load — see the effect just after selectedId is defined.
@@ -1256,6 +1235,28 @@ export default function ProjectsGeneric() {
 
   const rowId = (r) => r?._id || r?.id || null;
   const selectedId = sel?._id || sel?.id;
+
+  // ── Merged (federated) project ──
+  // `sel.merge` is present only on a merge container and lists the discipline
+  // projects behind it, in merge order.
+  const mergeInfo = sel?.merge?.isContainer ? sel.merge : null;
+  const mergeSourceNames = React.useMemo(
+    () => (mergeInfo?.parts || []).map((p) => p.name).filter(Boolean),
+    [mergeInfo],
+  );
+  // A merged bill defaults to grouping by SOURCE PROJECT: the first thing a QS
+  // needs to see in a combined bill is where each section came from. The user
+  // can still switch to category/trade, and that choice is not persisted over
+  // their normal preference because it only makes sense on a merged project.
+  const [mergeGroupOverride, setMergeGroupOverride] = React.useState(null);
+  const effectiveGroupByMode = mergeInfo
+    ? mergeGroupOverride || "source"
+    : groupByMode;
+  React.useEffect(() => {
+    // Reset the override when moving between projects.
+    setMergeGroupOverride(null);
+  }, [selectedId]);
+
 
   function itemKey(it, i) {
     const sn = it?.sn ?? i + 1;
@@ -3996,6 +3997,12 @@ export default function ProjectsGeneric() {
       groupCount: groupCount(gid),
       category,
       trade,
+      // Carried through for merged (federated) projects: the Bill and Budget
+      // group by source project, and this row object — not the raw item — is
+      // what the table groups on. Undefined here silently files every line
+      // under "Unassigned" while the per-discipline sections render empty.
+      sourceName: it?.sourceName || "",
+      sourceProjectId: it?.sourceProjectId || "",
       rate,
       fullAmount,
       actualQty,
