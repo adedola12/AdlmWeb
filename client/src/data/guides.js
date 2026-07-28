@@ -4,6 +4,8 @@
 // (Scripts\build-<name>-guide.ps1), copy the PDF into client/public/docs, and
 // add a row here. `productKeys` lets a guide be matched to what a user owns —
 // the dashboard shows the ones relevant to their subscriptions first.
+// `changelogSlugs` maps a guide onto the What's New products it covers
+// (src/data/changelogs/<slug>.md), so each product page can offer its guide.
 
 export const GUIDES = [
   {
@@ -14,6 +16,7 @@ export const GUIDES = [
     file: "/docs/ADLM-Installer-Hub-User-Guide.pdf",
     pages: 21,
     productKeys: [],
+    changelogSlugs: ["hub"],
     alwaysShow: true,
   },
   {
@@ -24,6 +27,7 @@ export const GUIDES = [
     file: "/docs/ADLM-QUIV-Revit-User-Guide.pdf",
     pages: 22,
     productKeys: ["revit", "mep"],
+    changelogSlugs: ["quiv"],
   },
   {
     id: "rategen",
@@ -33,6 +37,7 @@ export const GUIDES = [
     file: "/docs/ADLM-RateGen-User-Guide.pdf",
     pages: 19,
     productKeys: ["rategen"],
+    changelogSlugs: ["rategen"],
   },
   {
     id: "complete",
@@ -42,8 +47,21 @@ export const GUIDES = [
     file: "/docs/ADLM-Complete-User-Guide.pdf",
     pages: 48,
     productKeys: ["planswift", "heron"],
+    changelogSlugs: ["heron"],
   },
 ];
+
+/**
+ * The guide covering a given What's New product slug, or null when that
+ * product has no published guide yet (CIVIQ, Courses, ADLM MEP, ADLM Cloud).
+ */
+export function guideForChangelogSlug(slug) {
+  const key = String(slug || "").toLowerCase();
+  if (!key) return null;
+  return (
+    GUIDES.find((g) => (g.changelogSlugs || []).includes(key)) || null
+  );
+}
 
 /**
  * Guides ordered for a given user: ones covering a product they own first,

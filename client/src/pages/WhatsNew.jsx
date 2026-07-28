@@ -9,10 +9,17 @@
 // Edit the markdown to publish — no edits needed here.
 import React from "react";
 import { Link } from "react-router-dom";
-import { FiArrowRight, FiClock, FiZap } from "react-icons/fi";
+import {
+  FiArrowRight,
+  FiClock,
+  FiZap,
+  FiDownload,
+  FiBookOpen,
+} from "react-icons/fi";
 import { Reveal, TiltCard } from "../components/effects.jsx";
 import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";
+import { GUIDES } from "../data/guides.js";
 
 function ProductCard({ product, index }) {
   const Icon = iconOf(product.icon);
@@ -151,6 +158,53 @@ export default function WhatsNew() {
           <ProductCard key={product.slug} product={product} index={index} />
         ))}
       </div>
+
+      {/* User guides — illustrated PDFs, free to download */}
+      <Reveal className="mt-12">
+        <section className="rounded-adlm-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7 dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-adlm-blue-700/10 text-adlm-blue-700 dark:text-adlm-blue-400">
+              <FiBookOpen className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-adlm-dark-text">
+                User guides
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
+                Illustrated, step-by-step PDFs for every ADLM product — free to
+                download, no sign-in needed.
+              </p>
+            </div>
+          </div>
+
+          <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+            {GUIDES.map((guide) => (
+              <li key={guide.id}>
+                <a
+                  href={guide.file}
+                  download
+                  className="group flex h-full items-start gap-3 rounded-adlm-lg border border-slate-200 p-4 transition hover:border-adlm-blue-700/40 hover:bg-slate-50 dark:border-adlm-dark-border dark:hover:bg-adlm-dark-hover"
+                >
+                  <span className="mt-0.5 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-adlm-blue-700 group-hover:text-white dark:bg-adlm-dark-raised dark:text-adlm-dark-muted">
+                    <FiDownload className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-slate-900 dark:text-adlm-dark-text">
+                      {guide.title}
+                      <span className="ml-2 text-xs font-medium text-slate-400 dark:text-adlm-dark-dim">
+                        {guide.pages} pages · PDF
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-sm leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
+                      {guide.blurb}
+                    </span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </Reveal>
 
       {/* Footer CTA */}
       <Reveal className="mb-4 mt-6">

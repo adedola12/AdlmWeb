@@ -24,6 +24,30 @@ summary: 2D takeoff with automatic material + labour budgets, RateGen pricing an
   items from the plugin changelog are folded into Improved here.
 -->
 
+## 2.5 — 25 July 2026 — The Specifications Release
+
+Write your own bill descriptions. Every measured takeoff item now carries a free-text Specification — leave it blank and the bill keeps HERON's default wording; fill it in and your specification is what prints, in the cloud review, the Excel BoQ export and the Excel Takeoff Link.
+
+### ✨ New
+
+- **Specification input on every measured template.** Finishes, walls (blockwork & openings), services (electrical, plumbing, HVAC, fire alarm, ELV), frame, roofing and substructure — every Area, Linear and Count template gains a "Specification" field on its record form. Existing installs are patched automatically on the next launch.
+- **Specifications tab.** A new sidebar view lists every takeoff item in the job at a glance — trade, item, quantity, unit, the default bill description and your specification side by side. Type or clear a specification right in the table and it is saved back onto the PlanSwift item immediately, so it survives reloads and flows into every export. Includes a search box and an "only items with a specification" filter.
+- **Blank means default.** Anywhere a description is produced, a non-blank Specification wins verbatim; blank falls back to the standard QS wording exactly as before.
+
+### 🐛 Fixed
+
+- **Steel Tonnage crash.** Clicking Steel Tonnage could take the whole app down. HERON now has an app-wide crash shield: unexpected errors show a friendly dialog and are written to a log file instead of closing the app. The steel scan also skips and reports unreadable items rather than aborting, and a theme file that fails to load no longer kills the session.
+- **Sidebar collapse** now also hides the Steel Tonnage and Specifications labels.
+
+## 2.4.1 — 21 July 2026 — Beam accuracy fix
+
+### 🐛 Fixed
+
+- **Concrete in beam section now measures correctly.** The beam depth never entered the volume calculation, so the result didn't match a manual check against the measured linear metres. It now measures length × width × (thickness − slab thickness), matching the beam floor-plan tool. Thanks to the customer who reported this.
+- **Beam formwork now includes the soffit.** Formwork on both beam tools was measured as the two sides only. It now measures both sides below the slab plus the soffit width, so the underside of the beam is priced.
+- **Slab Thickness on the beam section tool is now entered in metres**, consistent with every other beam dimension.
+- Note: existing drawn beam items keep their old formulas — redraw them, or re-create them from the template, to pick up the corrected calculation.
+
 ## 2.4 — 13 July 2026 — The Excel Link & Steel Release
 
 A live two-way Excel Takeoff Link, a new Steel Tonnage tool that turns measured lengths into weights, and a batch of reliability fixes.

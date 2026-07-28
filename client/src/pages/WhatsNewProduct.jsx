@@ -14,9 +14,12 @@ import {
   FiArrowRight,
   FiArrowLeft,
   FiClock,
+  FiDownload,
+  FiBookOpen,
 } from "react-icons/fi";
 import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";
+import { guideForChangelogSlug } from "../data/guides.js";
 import { Reveal } from "../components/effects.jsx";
 
 /* Visual treatment per change type — colour, icon and label. */
@@ -206,6 +209,7 @@ export default function WhatsNewProduct() {
 
   const accent = accentOf(product.accent);
   const Icon = iconOf(product.icon);
+  const guide = guideForChangelogSlug(product.slug);
   const releases = product.releases || [];
   const latest = releases.find((r) => r.latest) || releases[0];
   const hasReleases = releases.length > 0;
@@ -264,9 +268,51 @@ export default function WhatsNewProduct() {
                 Coming soon
               </span>
             )}
+            {guide && (
+              <a
+                href={guide.file}
+                download
+                className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 font-medium text-white ring-1 ring-white/15 transition hover:bg-white/20"
+              >
+                <FiDownload className="h-4 w-4" />
+                User guide (PDF)
+              </a>
+            )}
           </div>
         </div>
       </header>
+
+      {/* User guide — the illustrated PDF covering this product */}
+      {guide && (
+        <Reveal className="mt-6">
+          <div className="flex flex-col gap-4 rounded-adlm-lg border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
+            <span
+              className={`inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${accent.icon}`}
+            >
+              <FiBookOpen className="h-6 w-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-adlm-dark-text">
+                {guide.title} user guide
+                <span className="ml-2 text-xs font-medium text-slate-400 dark:text-adlm-dark-dim">
+                  {guide.pages} pages · PDF
+                </span>
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
+                {guide.blurb}
+              </p>
+            </div>
+            <a
+              href={guide.file}
+              download
+              className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-adlm-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0050c8]"
+            >
+              <FiDownload className="h-4 w-4" />
+              Download
+            </a>
+          </div>
+        </Reveal>
+      )}
 
       {hasReleases ? (
         <>

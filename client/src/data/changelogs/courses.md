@@ -6,7 +6,7 @@ category: Learning
 accent: amber
 icon: play
 status: live
-order: 6
+order: 8
 summary: Hands-on, BIM-focused training and certifications for QS professionals.
 ---
 

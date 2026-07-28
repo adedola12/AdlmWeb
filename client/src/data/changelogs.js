@@ -14,14 +14,49 @@ export const products = [
     "compatibility": "Revit 2024, 2026 & 2027",
     "summary": "Model-based quantity takeoff, priced budgets and a dockable workspace — right inside Revit.",
     "order": 1,
-    "latest": "3.1.1",
-    "lastUpdated": "June 2026",
-    "itemCount": 18,
+    "latest": "3.1.6",
+    "lastUpdated": "July 2026",
+    "itemCount": 29,
     "releases": [
+      {
+        "version": "3.1.6",
+        "date": "July 2026",
+        "latest": true,
+        "title": "The AI Assistant, budgets that balance & QS-format exports",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "QUIV AI Assistant. Type what you want measured — \"generate the entire beam and slab quantity for the first floor\" — and QUIV maps it onto the right module and the real level name, then measures it with the same engines you use by hand. The assistant never invents a quantity: every result reports the element count, the level and type it applied, and the key quantities it produced, and the measured elements are highlighted and zoomed in your Revit view so you can check them.",
+              "AI Match Labour. One button in the Budget sends every labour row still priced at zero — with its work description and unit — for matching against your real labour library and the labour portion of your rate build-ups. Only genuine library rates are ever applied, units must be compatible, and anything the match isn't confident about is offered as a suggestion for you to accept rather than applied silently.",
+              "Budgets that balance to your rate. RateGen rates are now decomposed into the named materials behind them, plus a single \"Other Materials\" balancing line for waste, loading and sundries, plus labour — so the build-up adds back up to the rate you priced. A rate cap makes sure the decomposed components can never imply a rate above the RateGen headline.",
+              "Finishes factor & labour-rate library. A full constants library transcribed from a reference QS schedule — rendering, POP screeding, wall and floor tiling, floor screed, emulsion painting, soil poisoning, filling density, roof sheeting — plus labour rates per bill unit for concrete, formwork, rebar, blockwork, rendering, POP, tiling, painting, screed, DPM, BRC, excavation, backfill and roof covering. Finishes items now derive real materials and labour instead of coming through unpriced, and every constant is editable.",
+              "Supply items priced as shares of the rate. Doors, windows, ceilings, sanitary ware, balustrades and railings, roof members, curtain walling, MEP, wardrobes and tanks now budget as an editable material / labour share of the bill rate, so the rebuilt BoQ re-prices to exactly the figure you entered.",
+              "QS-format Excel export. Revit names like \"Blockwork - Lintel Concrete [L:All Floors | T:150]\" become an SMM-style preamble plus a terse measured description with size and level qualifiers. Each trade group gets an unpriced italic preamble row, and a new General Summary sheet totals every element down to Estimated Construction Cost, with editable Preliminaries, Contingency and VAT percentages."
+            ]
+          },
+          {
+            "type": "improved",
+            "items": [
+              "The rate you picked is remembered. QUIV stores the exact rate you chose on the bill line, so its build-up re-resolves the same way on any device instead of relying on a fuzzy re-match — and picking a rate now auto-applies it to similar unpriced lines.",
+              "\"From Budget\" rates apply immediately. Bill rates driven from the budget now price the moment budget rows load or reprice, instead of staying at 0.00 until the first cloud save.",
+              "Labour matches count. Automatically matched labour rows now count toward the \"Auto matched\" tally so the unpriced figure reflects reality."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "Sign-in lockouts (DEVICE_MISMATCH) are gone. Your device used to be identified partly by whichever network adapter happened to be active, so switching between Wi-Fi, ethernet, a dock, a hotspot or a VPN could make the same laptop look like a brand-new machine and block sign-in. Device identity is now network-independent, and existing licences migrate themselves the first time you sign in.",
+              "The Budget price refresh no longer wipes rates. Refreshing prices blanked every labour row and every rate derived from a build-up, so they could never re-match. Existing rates are now kept, and labour rows are priced from the labour library instead."
+            ]
+          }
+        ],
+        "highlight": "Ask QUIV for a takeoff in plain English, let it match your unpriced labour, and get a budget that reconciles line-for-line with the rate you priced — exported in proper QS format."
+      },
       {
         "version": "3.1.1",
         "date": "June 2026",
-        "latest": true,
+        "latest": false,
         "title": "Priced budgets, element-level detail & a dockable workspace",
         "changes": [
           {
@@ -121,14 +156,55 @@ export const products = [
     "compatibility": "PlanSwift 10+",
     "summary": "2D takeoff with automatic material + labour budgets, RateGen pricing and a fully-linked Excel BoQ — right inside PlanSwift.",
     "order": 3,
-    "latest": "2.4",
-    "lastUpdated": "13 July 2026",
-    "itemCount": 53,
+    "latest": "2.5",
+    "lastUpdated": "25 July 2026",
+    "itemCount": 62,
     "releases": [
+      {
+        "version": "2.5",
+        "date": "25 July 2026",
+        "latest": true,
+        "title": "The Specifications Release",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Specification input on every measured template. Finishes, walls (blockwork & openings), services (electrical, plumbing, HVAC, fire alarm, ELV), frame, roofing and substructure — every Area, Linear and Count template gains a \"Specification\" field on its record form. Existing installs are patched automatically on the next launch.",
+              "Specifications tab. A new sidebar view lists every takeoff item in the job at a glance — trade, item, quantity, unit, the default bill description and your specification side by side. Type or clear a specification right in the table and it is saved back onto the PlanSwift item immediately, so it survives reloads and flows into every export. Includes a search box and an \"only items with a specification\" filter.",
+              "Blank means default. Anywhere a description is produced, a non-blank Specification wins verbatim; blank falls back to the standard QS wording exactly as before."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "Steel Tonnage crash. Clicking Steel Tonnage could take the whole app down. HERON now has an app-wide crash shield: unexpected errors show a friendly dialog and are written to a log file instead of closing the app. The steel scan also skips and reports unreadable items rather than aborting, and a theme file that fails to load no longer kills the session.",
+              "Sidebar collapse now also hides the Steel Tonnage and Specifications labels."
+            ]
+          }
+        ],
+        "highlight": "Write your own bill descriptions. Every measured takeoff item now carries a free-text Specification — leave it blank and the bill keeps HERON's default wording; fill it in and your specification is what prints, in the cloud review, the Excel BoQ export and the Excel Takeoff Link."
+      },
+      {
+        "version": "2.4.1",
+        "date": "21 July 2026",
+        "latest": false,
+        "title": "Beam accuracy fix",
+        "changes": [
+          {
+            "type": "fixed",
+            "items": [
+              "Concrete in beam section now measures correctly. The beam depth never entered the volume calculation, so the result didn't match a manual check against the measured linear metres. It now measures length × width × (thickness − slab thickness), matching the beam floor-plan tool. Thanks to the customer who reported this.",
+              "Beam formwork now includes the soffit. Formwork on both beam tools was measured as the two sides only. It now measures both sides below the slab plus the soffit width, so the underside of the beam is priced.",
+              "Slab Thickness on the beam section tool is now entered in metres, consistent with every other beam dimension.",
+              "Note: existing drawn beam items keep their old formulas — redraw them, or re-create them from the template, to pick up the corrected calculation."
+            ]
+          }
+        ]
+      },
       {
         "version": "2.4",
         "date": "13 July 2026",
-        "latest": true,
+        "latest": false,
         "title": "The Excel Link & Steel Release",
         "changes": [
           {
@@ -296,14 +372,28 @@ export const products = [
     "compatibility": "Revit 2024, 2025, 2026 & 2027",
     "summary": "Mechanical, electrical & plumbing quantity takeoff right inside Revit — covers ductwork, pipework, electrical and plumbing disciplines in a dockable, cloud-connected workspace.",
     "order": 4,
-    "latest": "1.2",
-    "lastUpdated": "June 2026",
-    "itemCount": 29,
+    "latest": "1.8.2",
+    "lastUpdated": "July 2026",
+    "itemCount": 30,
     "releases": [
+      {
+        "version": "1.8.2",
+        "date": "July 2026",
+        "latest": true,
+        "title": "Sign in from any network",
+        "changes": [
+          {
+            "type": "fixed",
+            "items": [
+              "Sign-in lockouts (DEVICE_MISMATCH) are gone. Your licence seat was tied to a device identity that included whichever network adapter happened to be active, so plugging into a dock, starting a VPN, or switching between Wi-Fi and ethernet could make the same machine look like a new device and get the login rejected. ADLM MEP now uses the stable hardware identity shared across every ADLM product, and an existing licence binding is migrated automatically the first time you sign in — nothing to do on your side."
+            ]
+          }
+        ]
+      },
       {
         "version": "1.2",
         "date": "June 2026",
-        "latest": true,
+        "latest": false,
         "title": "Dockable workspace, dark mode & pricing engine",
         "changes": [
           {
@@ -399,14 +489,43 @@ export const products = [
     "compatibility": "",
     "summary": "Defensible rate build-ups with location-based pricing and a cloud-synced rate library.",
     "order": 5,
-    "latest": "1.3",
-    "lastUpdated": "May 2026",
-    "itemCount": 14,
+    "latest": "2.5.0",
+    "lastUpdated": "July 2026",
+    "itemCount": 19,
     "releases": [
+      {
+        "version": "2.5.0",
+        "date": "July 2026",
+        "latest": true,
+        "title": "Build with AI & one master price library",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Build with AI. A new AI section on the Custom Rate form takes a plain-English description and fills in the entry form for you — components, quantities and prices, with inferred lines tagged so you can see what came from the AI. It shows a confidence figure and an advisory note, and nothing is saved automatically: you review, edit and save through the normal flow, exactly as with a rate you built by hand.",
+              "Master price library sync. \"Sync from Cloud\" — and every sign-in — now pulls the zone-priced master price library maintained by ADLM and merges it with your own rows, so RateGen, QUIV, HERON and ADLM MEP all price from the same single source of truth instead of drifting apart."
+            ]
+          },
+          {
+            "type": "improved",
+            "items": [
+              "Your zone follows your account. Refreshing your profile stores your account's pricing zone, so every sync prices against your real location. Signing in now refreshes prices silently even when your zone hasn't changed; the confirmation prompt is kept for an actual zone switch.",
+              "Diagnosable upgrades. Data-migration problems on startup are written to a timestamped log under your local app data instead of being discarded, so a support ticket can be resolved from the log. Migrations still never block RateGen from starting."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "Sign-in lockouts (DEVICE_MISMATCH) are gone. Your licence seat was bound to a fingerprint derived from whichever network adapter was fastest and active at that moment — so a dock, a USB ethernet adapter, a VPN, or simply switching between Wi-Fi and cable made the same machine look new and the server rejected the login. RateGen now identifies the machine by its hardware, existing bindings are migrated in place at sign-in, and cached offline licences issued under the old scheme keep working."
+            ]
+          }
+        ],
+        "highlight": "Describe a rate in plain English and let RateGen draft the build-up for you — and every ADLM product now prices from the same master library for your zone."
+      },
       {
         "version": "1.3",
         "date": "May 2026",
-        "latest": true,
+        "latest": false,
         "title": "Multi-device cloud sync",
         "changes": [
           {
@@ -481,6 +600,115 @@ export const products = [
     ]
   },
   {
+    "slug": "cloud",
+    "name": "ADLM Cloud",
+    "tagline": "Your projects, budgets, billing and reports on the web",
+    "category": "Web Platform",
+    "accent": "violet",
+    "icon": "trending",
+    "status": "live",
+    "compatibility": "Any modern browser",
+    "summary": "The web home for every ADLM product — projects and budgets from your plugins, valuations and reports, subscriptions, invoices and your AI assistant.",
+    "order": 6,
+    "latest": "2026.07",
+    "lastUpdated": "July 2026",
+    "itemCount": 19,
+    "releases": [
+      {
+        "version": "2026.07",
+        "date": "July 2026",
+        "latest": true,
+        "title": "Card payments, auto-renewal, reports & Ada",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Pay by card. Card checkout is live alongside bank transfer, so a subscription can be activated in minutes instead of waiting on a transfer to be confirmed.",
+              "Subscriptions that renew themselves. Tick auto-renew at checkout, or turn it on later in Profile → Billing. Your card is charged automatically before your licence expires and the entitlement is extended without a support ticket. You can see the saved card, switch auto-renew off, or remove the card at any time — and if a renewal is declined you get an email and it retries before your access lapses.",
+              "Downloadable receipts. Every paid invoice can now be downloaded as a receipt PDF from your invoices page or your account activity feed.",
+              "Project, PM & Management PDF reports. Generate a report from any open project — the project report, the PM report, or a management report across your whole portfolio — preview it in the app, then download the PDF.",
+              "Project activity log. Profile → Project Activity shows a full trail of everything that has happened on your projects: creations, contract locks, variations, rate and budget edits, certificates, final accounts, model uploads, collaborator changes and PM schedule updates. It exports as a branded, printable PDF.",
+              "Ada, your AI assistant. Ada replaces the old help bot: she answers questions about the products and pricing grounded in the real catalogue, and — once you are signed in — about your own projects and subscriptions. She can hand you over to a human on WhatsApp whenever you would rather talk to us.",
+              "Extra project storage slots. Buy additional project slots in blocks of ten for any product straight from the purchase page, with the price shown live before you pay.",
+              "Excel BoQ import for QUIV. Turn an existing Excel Bill of Quantities into a full QUIV project — it lands on your projects page with the whole budget, valuation, variation, PC-sum and dashboard pipeline behind it. The importer reads real-world QS workbooks (multiple bill sheets, section headings, preambles, lump-sum preliminaries) as well as the downloadable ADLM template, and re-importing a newer copy of the same workbook updates the project in place without losing your procurement marks or completion history. Available on request for accounts with a live QUIV subscription.",
+              "QUIV for ArchiCAD workspace. A new web workspace for ArchiCAD takeoffs — Bill of Quantities, element detail, budget dashboard, unit switching and versioned exports.",
+              "User guides on your dashboard. Four illustrated PDF guides — the Installer Hub, QUIV for Revit, ADLM Rate Gen, and the combined Installer Hub & ADLM Heron book — are now published on your dashboard and linked from your welcome email."
+            ]
+          },
+          {
+            "type": "improved",
+            "items": [
+              "The portfolio dashboard now shows all of your work. It was only reading four project types, so HERON, Civil and every materials project were invisible in the rollup. All of them are now included, with the same cost and valuation totals.",
+              "Buying from outside Nigeria. Card charges are processed in Naira, which most foreign cards decline — so buyers outside Nigeria are now detected automatically, shown USD pricing, and led with bank transfer instead of hitting a card error. The card route is still there behind an explicit opt-in for anyone holding a Nigerian card.",
+              "A tidier projects list. Schedule-only PM tracker projects no longer clutter the takeoffs list, and the sidebar has been reordered around how the products are actually used.",
+              "Faster help with sign-in problems. When a plugin sign-in is rejected for a device mismatch, the server now records exactly what happened, so support can resolve it without asking you for screenshots."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "Purchases now grant exactly the duration you paid for, and a yearly-billed course is capped at exactly one year.",
+              "Dashboard project counts were wrong for some products, and a storage bar was showing on products that hold no projects.",
+              "Your cart survives sign-in. A restored cart or a ?product= link now reopens the configurator with your selections intact instead of being wiped, and edits made in the configurator apply to items already in your order straight away.",
+              "Budgets reflect completed BoQ items, and the daily valuation log now rebuilds measured items from the project's own state, so valuations reconcile.",
+              "Nobody is locked out by the old device fingerprint. The migration that moves a licence from the old device identity to the new one no longer expires on a fixed date — it stays open until each licence has moved across."
+            ]
+          }
+        ],
+        "highlight": "A big month on the web: pay by card and let your subscription renew itself, download receipts and PDF reports, follow every change on a project, and ask Ada anything."
+      }
+    ]
+  },
+  {
+    "slug": "hub",
+    "name": "ADLM Installer Hub",
+    "tagline": "Install, update and licence every ADLM product from one app",
+    "category": "Desktop App",
+    "accent": "blue",
+    "icon": "book",
+    "status": "live",
+    "compatibility": "Windows 10 & 11",
+    "summary": "One signed-in desktop app that installs your ADLM products, keeps them updated, shows what your subscription covers, and gets you help when something goes wrong.",
+    "order": 7,
+    "latest": "1.0",
+    "lastUpdated": "July 2026",
+    "itemCount": 8,
+    "releases": [
+      {
+        "version": "1.0",
+        "date": "July 2026",
+        "latest": true,
+        "title": "Everything you own, installed from one place",
+        "changes": [
+          {
+            "type": "new",
+            "items": [
+              "Illustrated user guide, one click away. A 21-page guide walks a new user from signing in through their first install, their first update, and the things that commonly go wrong — with an annotated figure of every screen. A Download User Guide button now sits in the sidebar under \"Raise a ticket\".",
+              "PlanSwift import package for ADLM Heron. Heron now ships the ADLM TakeOff Package onto your desktop so PlanSwift can merge-import the types, scripts, estimating layouts and plugin tools that cannot safely be copied into storage over your existing data.",
+              "Product artwork on every card. Each product now shows its own icon in the Hub instead of a shared ADLM badge.",
+              "Latest builds for every product — ADLM Heron 2.9.0, QUIV for Revit 3.1.6, ADLM Rate Gen 2.5.0, ADLM Revit MEP 1.8.2, ADLM Time Pro 1.1.0 and QUIV for ArchiCAD 1.0.0 — all installed and updated from the same place."
+            ]
+          },
+          {
+            "type": "improved",
+            "items": [
+              "Support can install on your machine. The device-binding check is bypassed for the main ADLM admin account, so a support engineer can install and verify a product on a customer machine without disturbing what your licence is bound to.",
+              "Clearer product names. The PlanSwift plugin is now ADLM Heron and the Revit plugin is QUIV for Revit throughout the Hub, the catalogue notes and the guides — matching the names used on the website."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "\"Launch\" after an install now works. Ticking Launch at the end of setup failed with a Windows error because the app needs to start elevated. It now launches correctly.",
+              "Uninstall cleans up every profile — and asks first. Uninstalling only ever removed the Hub's data for the administrator who approved it, leaving other Windows users' settings behind. It now clears every profile, asks before deleting your settings (defaulting to keeping them), and a silent uninstall always keeps user data so an upgrade never wipes your setup."
+            ]
+          }
+        ],
+        "highlight": "Sign in once and the Hub shows every product your subscription covers, installs it, keeps it updated, and now ships with a full illustrated user guide."
+      }
+    ]
+  },
+  {
     "slug": "courses",
     "name": "Courses",
     "tagline": "Professional QS & BIM training",
@@ -490,7 +718,7 @@ export const products = [
     "status": "live",
     "compatibility": "",
     "summary": "Hands-on, BIM-focused training and certifications for QS professionals.",
-    "order": 6,
+    "order": 8,
     "latest": "1.0",
     "lastUpdated": "2020",
     "itemCount": 3,

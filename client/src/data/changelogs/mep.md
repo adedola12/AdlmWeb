@@ -11,6 +11,12 @@ order: 4
 summary: Mechanical, electrical & plumbing quantity takeoff right inside Revit — covers ductwork, pipework, electrical and plumbing disciplines in a dockable, cloud-connected workspace.
 ---
 
+## 1.8.2 — July 2026 — Sign in from any network
+
+### 🐛 Fixed
+
+- **Sign-in lockouts (DEVICE_MISMATCH) are gone.** Your licence seat was tied to a device identity that included whichever network adapter happened to be active, so plugging into a dock, starting a VPN, or switching between Wi-Fi and ethernet could make the same machine look like a new device and get the login rejected. ADLM MEP now uses the stable hardware identity shared across every ADLM product, and an existing licence binding is migrated automatically the first time you sign in — nothing to do on your side.
+
 ## 1.2 — June 2026 — Dockable workspace, dark mode & pricing engine
 
 ADLM MEP gets its dockable workspace, a Revit-native dark mode, full Revit 2024–2027 coverage, and a pricing/budget engine that turns raw quantities into a costed, exportable budget.

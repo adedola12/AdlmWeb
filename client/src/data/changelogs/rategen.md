@@ -10,6 +10,24 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
+## 2.5.0 — July 2026 — Build with AI & one master price library
+
+Describe a rate in plain English and let RateGen draft the build-up for you — and every ADLM product now prices from the same master library for your zone.
+
+### ✨ New
+
+- **Build with AI.** A new AI section on the Custom Rate form takes a plain-English description and fills in the entry form for you — components, quantities and prices, with inferred lines tagged so you can see what came from the AI. It shows a confidence figure and an advisory note, and nothing is saved automatically: you review, edit and save through the normal flow, exactly as with a rate you built by hand.
+- **Master price library sync.** "Sync from Cloud" — and every sign-in — now pulls the zone-priced master price library maintained by ADLM and merges it with your own rows, so RateGen, QUIV, HERON and ADLM MEP all price from the same single source of truth instead of drifting apart.
+
+### 🔧 Improved
+
+- **Your zone follows your account.** Refreshing your profile stores your account's pricing zone, so every sync prices against your real location. Signing in now refreshes prices silently even when your zone hasn't changed; the confirmation prompt is kept for an actual zone switch.
+- **Diagnosable upgrades.** Data-migration problems on startup are written to a timestamped log under your local app data instead of being discarded, so a support ticket can be resolved from the log. Migrations still never block RateGen from starting.
+
+### 🐛 Fixed
+
+- **Sign-in lockouts (DEVICE_MISMATCH) are gone.** Your licence seat was bound to a fingerprint derived from whichever network adapter was fastest and active at that moment — so a dock, a USB ethernet adapter, a VPN, or simply switching between Wi-Fi and cable made the same machine look new and the server rejected the login. RateGen now identifies the machine by its hardware, existing bindings are migrated in place at sign-in, and cached offline licences issued under the old scheme keep working.
+
 ## 1.3 — May 2026 — Multi-device cloud sync
 
 Your rate library now follows you — sign in on any device and your custom rates are ready to go.

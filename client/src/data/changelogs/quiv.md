@@ -39,6 +39,30 @@ summary: Model-based quantity takeoff, priced budgets and a dockable workspace �
   ────────────────────────────────────────────────────────────────────────
 -->
 
+## 3.1.6 — July 2026 — The AI Assistant, budgets that balance & QS-format exports
+
+Ask QUIV for a takeoff in plain English, let it match your unpriced labour, and get a budget that reconciles line-for-line with the rate you priced — exported in proper QS format.
+
+### ✨ New
+
+- **QUIV AI Assistant.** Type what you want measured — "generate the entire beam and slab quantity for the first floor" — and QUIV maps it onto the right module and the real level name, then measures it with the same engines you use by hand. The assistant never invents a quantity: every result reports the element count, the level and type it applied, and the key quantities it produced, and the measured elements are highlighted and zoomed in your Revit view so you can check them.
+- **AI Match Labour.** One button in the Budget sends every labour row still priced at zero — with its work description and unit — for matching against your real labour library and the labour portion of your rate build-ups. Only genuine library rates are ever applied, units must be compatible, and anything the match isn't confident about is offered as a suggestion for you to accept rather than applied silently.
+- **Budgets that balance to your rate.** RateGen rates are now decomposed into the named materials behind them, plus a single "Other Materials" balancing line for waste, loading and sundries, plus labour — so the build-up adds back up to the rate you priced. A rate cap makes sure the decomposed components can never imply a rate above the RateGen headline.
+- **Finishes factor & labour-rate library.** A full constants library transcribed from a reference QS schedule — rendering, POP screeding, wall and floor tiling, floor screed, emulsion painting, soil poisoning, filling density, roof sheeting — plus labour rates per bill unit for concrete, formwork, rebar, blockwork, rendering, POP, tiling, painting, screed, DPM, BRC, excavation, backfill and roof covering. Finishes items now derive real materials and labour instead of coming through unpriced, and every constant is editable.
+- **Supply items priced as shares of the rate.** Doors, windows, ceilings, sanitary ware, balustrades and railings, roof members, curtain walling, MEP, wardrobes and tanks now budget as an editable material / labour share of the bill rate, so the rebuilt BoQ re-prices to exactly the figure you entered.
+- **QS-format Excel export.** Revit names like "Blockwork - Lintel Concrete [L:All Floors | T:150]" become an SMM-style preamble plus a terse measured description with size and level qualifiers. Each trade group gets an unpriced italic preamble row, and a new **General Summary** sheet totals every element down to Estimated Construction Cost, with editable Preliminaries, Contingency and VAT percentages.
+
+### 🔧 Improved
+
+- **The rate you picked is remembered.** QUIV stores the exact rate you chose on the bill line, so its build-up re-resolves the same way on any device instead of relying on a fuzzy re-match — and picking a rate now auto-applies it to similar unpriced lines.
+- **"From Budget" rates apply immediately.** Bill rates driven from the budget now price the moment budget rows load or reprice, instead of staying at 0.00 until the first cloud save.
+- **Labour matches count.** Automatically matched labour rows now count toward the "Auto matched" tally so the unpriced figure reflects reality.
+
+### 🐛 Fixed
+
+- **Sign-in lockouts (DEVICE_MISMATCH) are gone.** Your device used to be identified partly by whichever network adapter happened to be active, so switching between Wi-Fi, ethernet, a dock, a hotspot or a VPN could make the same laptop look like a brand-new machine and block sign-in. Device identity is now network-independent, and existing licences migrate themselves the first time you sign in.
+- **The Budget price refresh no longer wipes rates.** Refreshing prices blanked every labour row and every rate derived from a build-up, so they could never re-match. Existing rates are now kept, and labour rows are priced from the labour library instead.
+
 ## 3.1.1 — June 2026 — Priced budgets, element-level detail & a dockable workspace
 
 Our biggest release yet — QUIV moves beyond quantities into full priced budgets, adds element-level detail, and ships a redesigned dockable workspace that lives right inside Revit.
