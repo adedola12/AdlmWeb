@@ -105,15 +105,19 @@ const MATERIALS = [
     name: "Sawn timber",
     unit: "m3",
     category: "Timber - Hardwood",
-    priceSouthWest: 100000,
+    priceSouthWest: 117460,
     why:
       "The catalogue prices timber only as specific sawn sizes per Length, so there is no generic timber to quote. " +
-      "Derived as the MEDIAN of the existing hardwood rows converted to m3: " +
-      "2x2\"x12' N1,600/0.009m3=N177,778 | 2x2\" hardwood N1,274/0.009=N141,556 | 2x4\"x12'(4200) N2,600/0.021=N123,810 | " +
-      "2x6\"x12' N3,000/0.027=N111,111 | 2x12\"x12' N4,800/0.054=N88,889 | 1x12\"x12'(3600) N1,000/0.027=N37,037 | " +
-      "1x12\"x12'(4200) N1,000/0.0315=N31,746 | 2x4\"x12'(3600) N170/0.018=N9,444 (an obvious data error in the " +
-      "existing row, kept in the sample but it only pulls the median down). Median of those eight = N100,000/m3. " +
-      "The spread is wide, so treat this as a starting point rather than a measured rate.",
+      "Derived as the MEDIAN of the existing hardwood rows converted to m3 (south_west): " +
+      "1x12\"x12'(4200) N1,000/0.0315=N31,746 | 1x12\"x12'(3600) N1,000/0.027=N37,037 | " +
+      "2x12\"x12' N4,800/0.054=N88,889 | 2x6\"x12' N3,000/0.027=N111,111 | " +
+      "2x4\"x12'(3600) N2,228.57/0.018=N123,809 | 2x4\"x12'(4200) N2,600/0.021=N123,810 | " +
+      "2x2\" hardwood N1,274/0.009=N141,556 | 2x2\"x12' N1,600/0.009=N177,778. Median of those eight = N117,460/m3. " +
+      "NOTE: this was N100,000 on the first run, because 2x4\"x12'(3600) was then priced at N170 — a data-entry " +
+      "error (its identical-section 4200mm twin was N2,600). That row has since been corrected to N2,228.57 " +
+      "(N2,600 x 3600/4200), which now yields N123,809/m3 against the twin's N123,810 — so the two agree and the " +
+      "median moved up. The two 1x12\" rows still look low (N1,000 for a 25mm board against N4,800 for the same " +
+      "board at 50mm) and are worth checking. The spread remains wide: treat this as a starting point.",
   },
 ];
 
