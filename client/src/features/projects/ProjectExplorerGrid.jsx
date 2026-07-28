@@ -1,5 +1,5 @@
 import React from "react";
-import { FaFolder, FaTrash } from "react-icons/fa";
+import { FaFolder, FaObjectGroup, FaTrash } from "react-icons/fa";
 import ProjectSectionSummary from "./ProjectSectionSummary.jsx";
 import StorageBar from "../../components/StorageBar.jsx";
 
@@ -19,6 +19,7 @@ export default function ProjectExplorerGrid({
   onDeleteAll,
   onDeleteProject,
   onDeleteSelected,
+  onMergeSelected,
   onOpenProject,
   onSelectAllShown,
   onToggleSelect,
@@ -76,6 +77,24 @@ export default function ProjectExplorerGrid({
           >
             Clear
           </button>
+
+          {onMergeSelected ? (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={onMergeSelected}
+              disabled={selectedIdsCount < 2 || bulkBusy}
+              title={
+                selectedIdsCount < 2
+                  ? "Select two or more projects to merge them into one"
+                  : `Merge ${selectedIdsCount} projects into a single project`
+              }
+            >
+              <span className="inline-flex items-center gap-2 text-adlm-blue-700 dark:text-adlm-blue-300">
+                <FaObjectGroup className="text-[13px]" /> Merge selected
+              </span>
+            </button>
+          ) : null}
 
           <button
             type="button"
@@ -180,7 +199,11 @@ export default function ProjectExplorerGrid({
 
               <div className="relative mt-2 flex items-center justify-center">
                 <div className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue transition-transform duration-300 group-hover:scale-105">
-                  <FaFolder className="text-2xl" />
+                  {row?.mergeContainer ? (
+                    <FaObjectGroup className="text-2xl" />
+                  ) : (
+                    <FaFolder className="text-2xl" />
+                  )}
                 </div>
               </div>
 
@@ -189,9 +212,26 @@ export default function ProjectExplorerGrid({
                   {row?.name || "Untitled"}
                 </div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
-                  {itemCount} item{itemCount === 1 ? "" : "s"}
-                  {markedCount ? ` · ${markedCount} done` : ""}
+                  {row?.mergeContainer
+                    ? `${safeNum(row?.mergedPartCount)} discipline${
+                        safeNum(row?.mergedPartCount) === 1 ? "" : "s"
+                      }`
+                    : `${itemCount} item${itemCount === 1 ? "" : "s"}${
+                        markedCount ? ` · ${markedCount} done` : ""
+                      }`}
                 </div>
+                {row?.mergeContainer ? (
+                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-adlm-blue-50 px-2 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-600/15 dark:text-adlm-blue-300">
+                    <FaObjectGroup className="text-[9px]" /> Merged project
+                  </div>
+                ) : row?.mergedInto ? (
+                  <div
+                    className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-white/10 dark:text-adlm-dark-muted"
+                    title="This project is part of a merged project. It still opens on its own in the plugin."
+                  >
+                    Part of a merge
+                  </div>
+                ) : null}
                 {row?.shared ? (
                   <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-600/15 dark:text-adlm-blue-300">
                     Shared · {row.accessLevel === "full" ? "Full" : "View"}

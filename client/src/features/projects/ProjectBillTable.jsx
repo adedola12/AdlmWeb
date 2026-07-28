@@ -873,6 +873,9 @@ export default function ProjectBillTable({
   tradeOptions = [],
   onTradeChange,
   groupByMode = "category",
+  // Ordered source-project names for a merged project, so the Bill sections
+  // appear in the order the disciplines were merged rather than alphabetically.
+  sourceOptions = [],
   onGroupByModeChange,
   contractLocked = false,
   contractLockedAt = null,
@@ -1192,21 +1195,32 @@ export default function ProjectBillTable({
 
   // Group rows by either category (building element) or trade (work section)
   // depending on groupByMode. Canonical order first, unknowns last.
-  const isTradeGrouping = String(groupByMode || "category") === "trade";
-  const activeCanonical = isTradeGrouping
-    ? Array.isArray(tradeOptions)
-      ? tradeOptions
+  const mode = String(groupByMode || "category");
+  const isTradeGrouping = mode === "trade";
+  // "source" groups a MERGED project by the discipline project each line came
+  // from — the default there, because a QS reading a combined bill wants to see
+  // architectural and structural as distinct sections before anything else.
+  const isSourceGrouping = mode === "source";
+  const activeCanonical = isSourceGrouping
+    ? Array.isArray(sourceOptions)
+      ? sourceOptions
       : []
-    : Array.isArray(categoryOptions)
-      ? categoryOptions
-      : [];
+    : isTradeGrouping
+      ? Array.isArray(tradeOptions)
+        ? tradeOptions
+        : []
+      : Array.isArray(categoryOptions)
+        ? categoryOptions
+        : [];
 
   const groupedRows = React.useMemo(() => {
     const map = new Map();
     for (const row of sortedShown) {
-      const key = isTradeGrouping
-        ? String(row.trade || "Other").trim() || "Other"
-        : String(row.category || "Uncategorized").trim() || "Uncategorized";
+      const key = isSourceGrouping
+        ? String(row.sourceName || "Unassigned").trim() || "Unassigned"
+        : isTradeGrouping
+          ? String(row.trade || "Other").trim() || "Other"
+          : String(row.category || "Uncategorized").trim() || "Uncategorized";
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(row);
     }
@@ -1219,7 +1233,7 @@ export default function ProjectBillTable({
         .map(([c, rows]) => ({ category: c, rows })),
     ];
     return ordered;
-  }, [sortedShown, activeCanonical, isTradeGrouping]);
+  }, [sortedShown, activeCanonical, isTradeGrouping, isSourceGrouping]);
 
   // Per-category totals for subtotal rows + summary card.
   const categoryTotals = React.useMemo(() => {

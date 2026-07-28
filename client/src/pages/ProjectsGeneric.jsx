@@ -195,7 +195,12 @@ function getEndpoints(tool) {
   }
 
   return {
-    list: "/projects/" + t,
+    // Merged projects are hidden from the default list because the desktop
+    // plugins parse that endpoint as a bare array and would try to open a
+    // project with no model behind it. The web asks for them explicitly.
+    list: "/projects/" + t + "?includeMerged=1",
+    merge: "/projects/" + t + "/merge",
+    mergeDelete: (id) => "/projects/" + t + "/merge/" + id,
     one: (id) => "/projects/" + t + "/" + id,
     bySlug: (slug) => "/projects/" + t + "/by-slug/" + slug,
     del: (id) => "/projects/" + t + "/" + id,
@@ -1094,6 +1099,27 @@ export default function ProjectsGeneric() {
       /* ignore */
     }
   }, [groupByMode]);
+  // ── Merged (federated) project ──
+  // `sel.merge` is present only on a merge container and lists the discipline
+  // projects behind it, in merge order.
+  const mergeInfo = sel?.merge?.isContainer ? sel.merge : null;
+  const mergeSourceNames = React.useMemo(
+    () => (mergeInfo?.parts || []).map((p) => p.name).filter(Boolean),
+    [mergeInfo],
+  );
+  // A merged bill defaults to grouping by SOURCE PROJECT: the first thing a QS
+  // needs to see in a combined bill is where each section came from. The user
+  // can still switch to category/trade, and that choice is not persisted over
+  // their normal preference because it only makes sense on a merged project.
+  const [mergeGroupOverride, setMergeGroupOverride] = React.useState(null);
+  const effectiveGroupByMode = mergeInfo
+    ? mergeGroupOverride || "source"
+    : groupByMode;
+  React.useEffect(() => {
+    // Reset the override when moving between projects.
+    setMergeGroupOverride(null);
+  }, [selectedId]);
+
   // Set true when the user reorders bill items so the Save button activates
   // (item order isn't otherwise part of the dirty check). Reset on project
   // load — see the effect just after selectedId is defined.
@@ -2063,6 +2089,59 @@ export default function ProjectsGeneric() {
     } catch (e) {
       setErr(e.message || "Failed to open project");
       closeProject();
+    }
+  }
+
+  // Federate the selected projects into one. The sources are NOT consumed:
+  // each keeps its own document and stays the plugin's save/open target, so
+  // the architectural model still opens as architectural in QUIV.
+  async function mergeSelected(ids) {
+    const uniq = Array.from(new Set((ids || []).filter(Boolean)));
+    if (uniq.length < 2) return;
+    const picked = rows.filter((r) => uniq.includes(rowId(r)));
+    const already = picked.find((r) => r?.mergeContainer || r?.mergedInto);
+    if (already) {
+      setErr(
+        `"${already.name}" is already ${
+          already.mergeContainer ? "a merged project" : "part of a merged project"
+        }. Remove it from that merge first.`,
+      );
+      return;
+    }
+    const suggested = `${picked[0]?.name || "Project"} (merged)`;
+    const summary = picked.map((r) => `• ${r?.name}`).join("\n");
+    const name = window.prompt(
+      [
+        `Merge ${uniq.length} projects into one?`,
+        "",
+        summary,
+        "",
+        "The originals are kept and still open on their own in the plugin.",
+        "",
+        "Name for the merged project:",
+      ].join("\n"),
+      suggested,
+    );
+    if (name === null) return;
+
+    setBulkBusy(true);
+    setErr("");
+    setNotice("");
+    try {
+      const res = await apiAuthed(endpoints.merge, {
+        token: accessToken,
+        method: "POST",
+        body: { name: String(name).trim() || suggested, sourceIds: uniq },
+      });
+      setSelectedMap({});
+      await load({ keepSelection: false });
+      setNotice(
+        `Merged ${uniq.length} projects into "${res?.name || name}". The originals are untouched and still open separately in the plugin.`,
+      );
+    } catch (e) {
+      setErr(e?.message || "Could not merge those projects.");
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -5216,6 +5295,7 @@ export default function ProjectsGeneric() {
                     confirmLabel: "Delete selected projects",
                   })
                 }
+                onMergeSelected={() => mergeSelected(selectedIds)}
                 onDeleteAll={() =>
                   deleteMany(
                     rows.map((row) => rowId(row)).filter(Boolean),
@@ -5394,7 +5474,12 @@ export default function ProjectsGeneric() {
                 categoryOptions={categoryOptions}
                 tradeOptions={tradeOptions}
                 onTradeChange={handleTradeChange}
-                groupByMode={groupByMode}
+                groupByMode={effectiveGroupByMode}
+                sourceOptions={mergeSourceNames}
+                mergeInfo={mergeInfo}
+                onGroupByModeChange={
+                  mergeInfo ? setMergeGroupOverride : setGroupByMode
+                }
                 onGroupByModeChange={setGroupByMode}
                 contract={contract}
                 contractBusy={contractBusy}

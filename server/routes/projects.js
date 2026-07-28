@@ -2195,6 +2195,21 @@ async function listProjects(req, res) {
           publicShareEnabled: 1,
           updatedAt: 1,
           version: 1,
+          // Merge state, so the explorer can badge a container and show that a
+          // discipline project already belongs to one. A container's own
+          // itemCount is always 0 (it holds no measurements) — the card reads
+          // mergedPartCount instead.
+          mergeContainer: 1,
+          mergedInto: 1,
+          mergedPartCount: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ["$linkedProjects", []] },
+                as: "l",
+                cond: { $eq: ["$$l.linkType", "merge"] },
+              },
+            },
+          },
           // Ownership badge: true when this row was shared with the requester.
           shared: { $ne: ["$userId", userId] },
           accessLevel: {

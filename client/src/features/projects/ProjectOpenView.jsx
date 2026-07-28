@@ -278,6 +278,8 @@ export default function ProjectOpenView({
   onRemoveCategory,
   onAddTrade,
   groupByMode = "category",
+  sourceOptions = [],
+  mergeInfo = null,
   onGroupByModeChange,
   contract,
   contractBusy = false,
@@ -790,6 +792,7 @@ export default function ProjectOpenView({
           categoryOptions={categoryOptions}
           tradeOptions={tradeOptions}
           groupByMode={groupByMode}
+          sourceOptions={sourceOptions}
           onSearchRateGen={onSearchBudgetRates}
           canRateGen={budgetRateGenReady}
           contractLocked={Boolean(contract?.locked)}
@@ -1087,6 +1090,7 @@ export default function ProjectOpenView({
           tradeOptions={tradeOptions}
           onTradeChange={onTradeChange}
           groupByMode={groupByMode}
+          sourceOptions={sourceOptions}
           onGroupByModeChange={onGroupByModeChange}
           contractLocked={Boolean(contract?.locked)}
           contractLockedAt={contract?.lockedAt || null}
