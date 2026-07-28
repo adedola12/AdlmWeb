@@ -653,7 +653,7 @@ export async function getProjectBill(userId, projectName, search) {
 // rate-check / error-scan tools run against the user's REAL bill rather than
 // anything the model retyped. `search` narrows a big bill; `limit` keeps the
 // request (and the AI service's per-call cost) bounded.
-export async function getBillItemsForAi(userId, projectName, search, limit = 200) {
+export async function getBillItemsForAi(userId, projectName, search, limit = 200, opts = {}) {
   const { project, error, note } = await resolveProject(userId, projectName);
   if (error) return { error };
 
@@ -661,7 +661,7 @@ export async function getBillItemsForAi(userId, projectName, search, limit = 200
   if (!all.length) return { error: `Project "${project.name}" has no bill lines to check yet.` };
 
   const q = String(search || "").trim();
-  const rows = q
+  let rows = q
     ? all.filter((r) =>
         matchesResource(
           `${r?.description || ""} ${r?.materialName || ""} ${r?.takeoffLine || ""} ${r?.category || ""} ${r?.trade || ""}`,
@@ -672,6 +672,22 @@ export async function getBillItemsForAi(userId, projectName, search, limit = 200
 
   if (!rows.length) {
     return { error: `No bill line in "${project.name}" matches "${q}". Ask the user to rephrase.` };
+  }
+
+  // A ₦0 line isn't cheap, it's UNPRICED. Sending it to the market check gets
+  // back "100% below market", which is noise, and (because the library can't
+  // benchmark it) burns a model call per line. The error scan still wants
+  // them — an unpriced line is worth flagging — so this is opt-in.
+  let unpriced = 0;
+  if (opts.requireRate) {
+    const priced = rows.filter((r) => safeNum(r.rate) > 0);
+    unpriced = rows.length - priced.length;
+    if (!priced.length) {
+      return {
+        error: `Every bill line in "${project.name}"${q ? ` matching "${q}"` : ""} has a ₦0 rate, so there is nothing to benchmark. Tell the user their bill isn't priced yet and offer to help them price it (suggest_rate can build a rate up for any work item).`,
+      };
+    }
+    rows = priced;
   }
 
   // Biggest-value lines first: if the bill is truncated, the money that
@@ -693,6 +709,7 @@ export async function getBillItemsForAi(userId, projectName, search, limit = 200
     project: { name: project.name, productKey: project.productKey },
     items,
     truncated: capped.length < rows.length ? rows.length - capped.length : 0,
+    unpriced,
     note: note || "",
   };
 }

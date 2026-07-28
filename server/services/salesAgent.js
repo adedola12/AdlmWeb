@@ -331,6 +331,7 @@ function buildSystemPrompt({ knowledgePack, userContext, canReadAccount, canUseA
 Rules for cost intelligence:
 - These run on the user's ACTUAL bill lines — you never retype quantities or rates into them, you just name the project.
 - Every verdict is ADVISORY for the QS to review. Report it as returned, with its reason. Never restate a flagged rate as "correct", and never present a suggestion as a change you have made.
+- Use the verdict label EXACTLY as the tool returns it — "above market", "below market", "in range", "unit mismatch". Never relabel one as another; "unit mismatch" specifically means the unit disagrees with the benchmark, nothing else.
 - Say which figures came from the RateGen library versus the model — the tool marks this, and it is the difference between a benchmark and an estimate.
 - Only pass a \`zone\` if the user names their region or location. Never guess it.
 - If a check reports the AI add-on isn't active on their account, explain what it does and offer it as a genuine next step.`
@@ -479,6 +480,13 @@ function handleOfferActions(input, ctx, outcome) {
     : "None of the actions were valid (check productKeys exist and aren't coming soon).";
 }
 
+// Identifies the caller to the AI-service client so its AWS spend lands on the
+// right user in the admin AI-usage dashboard (and so per-user allocations can
+// be enforced before the request is even sent).
+function aiServiceMeta(ctx) {
+  return { user: ctx.user, sessionId: ctx.sessionId, ip: ctx.ip };
+}
+
 // Account tools require an authenticated user. The guard is here (not just the
 // tool availability) so a guest can never reach the data even if the model
 // somehow emits the call.
@@ -505,6 +513,9 @@ async function handleAccountTool(name, input, ctx) {
         input?.projectName,
         input?.search,
         name === "check_my_rates" ? 150 : 300,
+        // A ₦0 line can't be benchmarked (it just returns "100% below
+        // market"), but IS worth flagging in an error scan.
+        { requireRate: name === "check_my_rates" },
       );
       if (picked.error) return picked.error;
 
@@ -515,17 +526,24 @@ async function handleAccountTool(name, input, ctx) {
               zone: input?.zone,
               accessToken: ctx.accessToken,
               projectName: picked.project.name,
+              meta: aiServiceMeta(ctx),
             })
           : await scanProjectForErrors({
               items: picked.items,
               accessToken: ctx.accessToken,
               projectName: picked.project.name,
+              meta: aiServiceMeta(ctx),
             });
 
       const extra = [];
       if (picked.truncated) {
         extra.push(
           `Only the ${picked.items.length} highest-value lines were checked; ${picked.truncated} smaller line(s) were not. Say so, and offer to check a specific section by name.`,
+        );
+      }
+      if (picked.unpriced) {
+        extra.push(
+          `${picked.unpriced} line(s) were SKIPPED because they have no rate yet (₦0) — they can't be benchmarked. Mention this and offer to build a rate up for them with suggest_rate.`,
         );
       }
       if (picked.note) extra.push(picked.note);
@@ -538,6 +556,7 @@ async function handleAccountTool(name, input, ctx) {
         unit: input?.unit,
         zone: input?.zone,
         accessToken: ctx.accessToken,
+        meta: aiServiceMeta(ctx),
       });
     }
 
@@ -618,6 +637,14 @@ export async function runSalesAgent(history, message, opts = {}) {
       messages,
       tools,
       maxTokens: 700,
+      // Meters this round-trip on the admin AI-usage dashboard. Note that one
+      // user message can produce up to MAX_TOOL_ITERATIONS of these.
+      meta: {
+        feature: "ada-chat",
+        user: ctx.user,
+        sessionId: ctx.sessionId,
+        ip: ctx.ip,
+      },
     });
 
     if (res.text) finalText = res.text;
