@@ -212,6 +212,11 @@ import {
   requireEntitlement,
 } from "../middleware/requireEntitlement.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import {
+  isMergeContainer,
+  mergeLinks,
+  resolveMergedProject,
+} from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
 import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
@@ -2163,6 +2168,15 @@ async function listProjects(req, res) {
         $match: {
           productKey,
           pmTrackerOnly: { $ne: true },
+          // Merge containers hold no measurements and have no model behind
+          // them, so a plugin that opened one would have nothing to re-save.
+          // The desktop plugins parse this endpoint as a bare array and cannot
+          // be taught to skip them without a rebuild, so containers are hidden
+          // by DEFAULT and the web opts in with ?includeMerged=1. Excluding by
+          // default is what keeps this change plugin-safe.
+          ...(String(req.query?.includeMerged || "") === "1"
+            ? {}
+            : { mergeContainer: { $ne: true } }),
           $or: [{ userId }, { "collaborators.userId": userId }],
         },
       },
@@ -2306,6 +2320,21 @@ async function getProject(req, res) {
     );
     if (!project) return res.status(404).json({ error: "Not found" });
 
+    // ── Federated merge container ──
+    // Resolve and return early. A container owns no items of its own, so every
+    // lazy heal below (category backfill, budget consolidation, rate
+    // derivation) would either no-op or, worse, persist an empty budget onto
+    // it. The healing still happens — on each SOURCE, when that source is
+    // opened or saved by its plugin — and the combined view simply reflects it.
+    if (isMergeContainer(project)) {
+      const access = await resolveProjectAccess(req, project);
+      const merged = await resolveMergedProject(project, project.userId);
+      const out = projectForClient(merged, access);
+      out.merge = merged.merge;
+      out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+      return res.json(out);
+    }
+
     // Lazy slug generation for existing projects without slugs. Scope
     // uniqueness to the OWNER's namespace (project.userId), not the requester —
     // a collaborator opening the project must not reslug it under their own id.
@@ -2441,6 +2470,133 @@ async function getProject(req, res) {
     res.json(out);
   } catch (err) {
     console.error("GET project error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+// POST /projects/:productKey/merge
+// Federate two or more of the caller's own projects into one container. The
+// sources are NOT modified beyond a back-pointer: they keep their items, their
+// clientProjectKey/modelFingerprint, and therefore their plugin round-trip.
+// Body: { name, sourceIds: [id], disciplines?: { [id]: "architectural" | ... } }
+async function createMergedProject(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const sourceIds = [
+      ...new Set(
+        (Array.isArray(req.body?.sourceIds) ? req.body.sourceIds : [])
+          .map((v) => String(v || "").trim())
+          .filter(isValidObjectId),
+      ),
+    ];
+    if (sourceIds.length < 2) {
+      return res.status(400).json({ error: "Pick at least two projects to merge." });
+    }
+
+    // Owner-only: merging federates whole bills, so a collaborator must not be
+    // able to pull someone else's project into a container they control.
+    const sources = await TakeoffProject.find({
+      _id: { $in: sourceIds },
+      userId,
+      pmTrackerOnly: { $ne: true },
+    }).select("name productKey mergeContainer mergedInto items");
+
+    if (sources.length !== sourceIds.length) {
+      return res.status(404).json({ error: "One or more projects were not found." });
+    }
+    const container = sources.find((p) => p.mergeContainer);
+    if (container) {
+      return res.status(400).json({ error: `"${container.name}" is already a merged project.` });
+    }
+    const taken = sources.find((p) => p.mergedInto);
+    if (taken) {
+      return res.status(409).json({
+        error: `"${taken.name}" already belongs to a merged project. Remove it from that one first.`,
+      });
+    }
+
+    await assertWithinProjectLimit(userId, productKey);
+
+    const name = String(req.body?.name || "").trim() || `${sources[0].name} (merged)`;
+    const slug = await uniqueSlug(userId, productKey, generateSlug(name));
+    const disciplines = req.body?.disciplines || {};
+
+    const merged = new TakeoffProject({
+      userId,
+      productKey,
+      name,
+      slug,
+      mergeContainer: true,
+      // Deliberately blank: a container is not a model, so it must never match
+      // a plugin's (clientProjectKey, modelFingerprint) upsert and steal a
+      // save that belongs to one of its sources.
+      clientProjectKey: "",
+      modelFingerprint: "",
+      items: [],
+      linkedProjects: sources.map((p) => ({
+        projectId: p._id,
+        productKey: p.productKey,
+        label: p.name,
+        linkType: "merge",
+        discipline: String(disciplines[String(p._id)] || "other").toLowerCase(),
+        addedBy: userId,
+      })),
+    });
+    await merged.save();
+
+    await TakeoffProject.updateMany(
+      { _id: { $in: sources.map((p) => p._id) }, userId },
+      { $set: { mergedInto: merged._id } },
+    );
+
+    res.status(201).json({
+      id: String(merged._id),
+      name: merged.name,
+      slug: merged.slug,
+      productKey: merged.productKey,
+      mergeContainer: true,
+      parts: sources.map((p) => ({
+        projectId: String(p._id),
+        name: p.name,
+        itemCount: (p.items || []).length,
+      })),
+    });
+  } catch (err) {
+    console.error("POST merge error:", err);
+    res.status(err?.status || 500).json({ error: err?.message || "Server error" });
+  }
+}
+
+// DELETE /projects/:productKey/merge/:id
+// Dissolve a container. The sources are released untouched — nothing measured
+// is ever lost, because the container never held any measurements.
+async function dissolveMergedProject(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const container = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!container) return res.status(404).json({ error: "Not found" });
+    if (!container.mergeContainer) {
+      return res.status(400).json({ error: "That project is not a merged project." });
+    }
+
+    const sourceIds = mergeLinks(container).map((l) => l.projectId);
+    await TakeoffProject.updateMany(
+      { _id: { $in: sourceIds }, userId },
+      { $set: { mergedInto: null } },
+    );
+    await TakeoffProject.deleteOne({ _id: container._id, userId });
+
+    res.json({ ok: true, released: sourceIds.map(String) });
+  } catch (err) {
+    console.error("DELETE merge error:", err);
     res.status(500).json({ error: "Server error" });
   }
 }
@@ -5751,6 +5907,22 @@ router.delete(
 // Claim a shared project by code. MUST precede "/:productKey" so "claim" is
 // not captured as a product key. Auth-only (router.use(requireAuth)); the
 // plugin entitlement is enforced inside claimProject (block-with-upsell).
+// Federated multi-discipline merge. MUST precede "/:productKey" so "merge" is
+// not captured as a product key.
+router.post(
+  "/:productKey/merge",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  createMergedProject,
+);
+
+router.delete(
+  "/:productKey/merge/:id",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  dissolveMergedProject,
+);
+
 router.post("/claim", claimProject);
 
 router.post(

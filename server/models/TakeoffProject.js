@@ -684,7 +684,21 @@ const LinkedProjectSchema = new mongoose.Schema(
     },
     productKey: { type: String, default: "" },
     label: { type: String, default: "", trim: true },
-    linkType: { type: String, enum: ["sum"], default: "sum" },
+    // "sum"   — roll only the linked project's TOTAL in as a single bill line
+    //           (the original behaviour: MEP services into an architectural bill).
+    // "merge" — federate the linked project's WHOLE bill and budget into this
+    //           container. The source keeps its own document and stays the
+    //           plugin's save/open target, so QUIV and HERON round-trip against
+    //           it untouched; only the web resolves the combined view.
+    linkType: { type: String, enum: ["sum", "merge"], default: "sum" },
+    // Which model this source was measured from, mirrored at merge time so the
+    // combined bill can be sectioned by discipline even when individual lines
+    // carry no discipline of their own.
+    discipline: {
+      type: String,
+      enum: ["architectural", "structural", "mep", "civil", "other"],
+      default: "other",
+    },
     snapshot: { type: LinkedProjectSnapshotSchema, default: () => ({}) },
     addedAt: { type: Date, default: Date.now },
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
@@ -718,6 +732,23 @@ const TakeoffProjectSchema = new mongoose.Schema(
     // Cross-project links (e.g. MEP services rolled into an architectural bill).
     // Additive + optional: legacy projects default to []. See LinkedProjectSchema.
     linkedProjects: { type: [LinkedProjectSchema], default: [] },
+    // ── Federated multi-discipline merge ──
+    // true ⇒ this document is a CONTAINER: it holds no measurements of its own,
+    // and its bill/budget are resolved live from the linkedProjects entries
+    // whose linkType is "merge". Containers are hidden from the default project
+    // list because the desktop plugins parse that list as a bare array and
+    // would otherwise try to open a project that has no model behind it; the
+    // web asks for them explicitly with ?includeMerged=1.
+    mergeContainer: { type: Boolean, default: false },
+    // Set on a SOURCE project pointing at the container it belongs to. Purely
+    // informational — the source stays fully functional and stays the plugin's
+    // save target — but it lets the UI badge the project and stops it being
+    // merged into two containers at once.
+    mergedInto: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TakeoffProject",
+      default: null,
+    },
     checklistCompositeKeys: { type: [String], default: [] },
     // User-defined building-element categories for THIS project's bill
     // arrangement, on top of the canonical per-product list. Surfaced to the
