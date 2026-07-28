@@ -857,10 +857,29 @@ export default function AdminAiUsage() {
           tone={t?.errors ? "text-red-600 dark:text-red-400" : ""}
           sub={t?.calls ? `${((t.errors / t.calls) * 100).toFixed(1)}% of calls` : ""}
         />
+        {/* Prompt caching only pays off when reads outweigh writes — a write
+            costs 1.25x the input rate, a read 0.1x. This is the tile that
+            says whether it's earning its keep. */}
         <Kpi
-          label="Estimated tokens"
-          value={num(t?.estimatedCalls)}
-          sub="calls where the provider reported no usage"
+          label="Prompt cache"
+          value={
+            (t?.cacheReadTokens || 0) + (t?.cacheWriteTokens || 0) === 0
+              ? "—"
+              : pct(
+                  (t.cacheReadTokens / (t.cacheReadTokens + t.cacheWriteTokens)) * 100,
+                )
+          }
+          tone={
+            t?.cacheReadTokens + t?.cacheWriteTokens > 0 &&
+            t.cacheReadTokens < t.cacheWriteTokens
+              ? "text-amber-600 dark:text-amber-400"
+              : ""
+          }
+          sub={
+            (t?.cacheReadTokens || 0) + (t?.cacheWriteTokens || 0) === 0
+              ? `no cached calls · ${num(t?.estimatedCalls)} est. tokens`
+              : `${compact(t.cacheReadTokens)} read (0.1x) · ${compact(t.cacheWriteTokens)} written (1.25x)`
+          }
         />
       </div>
 

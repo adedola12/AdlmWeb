@@ -48,6 +48,44 @@ export function agentProvider() {
   return PROVIDER;
 }
 
+/* ------------------------- prompt caching ------------------------- */
+// `system` may be a plain string, or { cacheable, dynamic } — the split form
+// tells us which half is identical across visitors and therefore worth
+// caching. Ada's catalogue + rules run to several thousand tokens and are
+// resent on every round-trip (up to 4 per user message), so caching them is
+// the single biggest lever on AI spend: a cache READ costs 0.1x the input
+// rate, against 1.25x to write it.
+//
+// The cached prefix spans tools + this first system block, because Anthropic
+// orders the prompt tools → system → messages and a cache_control marker ends
+// the cacheable prefix. Both must be byte-identical between calls to hit, so
+// anything per-visitor has to live in `dynamic`.
+const CACHE_ENABLED = process.env.AGENT_PROMPT_CACHE !== "false";
+
+function splitSystem(system) {
+  if (system && typeof system === "object" && !Array.isArray(system)) {
+    return { cacheable: String(system.cacheable || ""), dynamic: String(system.dynamic || "") };
+  }
+  return { cacheable: "", dynamic: String(system || "") };
+}
+
+// Flat string for providers that cache automatically (OpenAI) or not at all.
+function flattenSystem(system) {
+  const { cacheable, dynamic } = splitSystem(system);
+  return [cacheable, dynamic].filter(Boolean).join("\n\n");
+}
+
+function anthropicSystem(system) {
+  const { cacheable, dynamic } = splitSystem(system);
+  if (!cacheable) return dynamic;
+  if (!CACHE_ENABLED) return flattenSystem(system);
+  const blocks = [
+    { type: "text", text: cacheable, cache_control: { type: "ephemeral" } },
+  ];
+  if (dynamic) blocks.push({ type: "text", text: dynamic });
+  return blocks;
+}
+
 /* ------------------------- Anthropic ------------------------- */
 async function anthropicCreate({ system, messages, tools, maxTokens }) {
   const ctrl = new AbortController();
@@ -64,7 +102,7 @@ async function anthropicCreate({ system, messages, tools, maxTokens }) {
       body: JSON.stringify({
         model: DEFAULT_MODEL,
         max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
-        system,
+        system: anthropicSystem(system),
         messages,
         ...(tools && tools.length ? { tools } : {}),
       }),
@@ -120,7 +158,9 @@ function toOpenAiTools(tools) {
 // - user tool_result blocks          → separate `tool` role messages
 // - user/assistant text              → plain messages
 function toOpenAiMessages(system, messages) {
-  const out = [{ role: "system", content: system }];
+  // OpenAI caches long prefixes automatically, so the split form just gets
+  // flattened back into one system message.
+  const out = [{ role: "system", content: flattenSystem(system) }];
 
   for (const m of messages) {
     const blocks = Array.isArray(m.content)

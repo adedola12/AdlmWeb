@@ -359,7 +359,14 @@ Rules for account answers:
 # NOT LOGGED IN
 This visitor is a guest, so you CANNOT read any personal projects or subscriptions. If they ask about "my projects", "my subscription", "what I've spent" etc., warmly explain they need to sign in first, then offer a 'signup' or 'nav' to login — never guess their data.`;
 
-  return `You are "Ada", the AI product specialist AND account assistant for ADLM Studio — a Nigerian construction-tech company that builds software, plugins and training for Quantity Surveyors, estimators and BIM professionals (products include RateGen, take-off plugins for Revit/PlanSwift/Civil, HERON, and professional trainings).
+  // Returned in two parts so the transport can cache the first one.
+  // EVERYTHING here must be identical for every visitor sharing the same
+  // (canReadAccount, canUseAiService) combination — that is what makes it a
+  // stable cache prefix. Per-visitor text goes in the `dynamic` half below.
+  // The catalogue is the bulk of the tokens, so it must sit inside this half;
+  // it used to come AFTER the per-user context, which made the expensive part
+  // uncacheable.
+  const cacheable = `You are "Ada", the AI product specialist AND account assistant for ADLM Studio — a Nigerian construction-tech company that builds software, plugins and training for Quantity Surveyors, estimators and BIM professionals (products include RateGen, take-off plugins for Revit/PlanSwift/Civil, HERON, and professional trainings).
 
 # YOUR GOAL
 Help every visitor find the right ADLM product or training and move them to ACTION: create an account (sign up) or make a purchase. For logged-in users you ALSO answer questions about their own projects and subscription. You are friendly, sharp and genuinely helpful — a great salesperson and a reliable assistant, never pushy or spammy. Qualify the need, recommend the best-fit product, state the real price, and offer a clear next step.
@@ -380,10 +387,12 @@ ${accountSection}
 - Use the 'whatsapp' handoff only when they explicitly want a human or you truly can't help.
 - Always end with a next step.
 
-${userContext}
-
 # CATALOG (live data — the source of truth)
 ${knowledgePack}`;
+
+  // Per-visitor, so it can never be cached. Kept last, which also puts "who am
+  // I talking to" closest to the conversation itself.
+  return { cacheable, dynamic: userContext };
 }
 
 function buildUserContext(user) {
