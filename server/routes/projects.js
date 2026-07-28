@@ -216,6 +216,7 @@ import {
   isMergeContainer,
   mergeLinks,
   resolveMergedProject,
+  splitMergedWrite,
 } from "../services/projectMerge.js";
 import { recordActivity, ACT } from "../util/activityLog.js";
 import { User } from "../models/User.js";
@@ -2474,6 +2475,125 @@ async function getProject(req, res) {
   }
 }
 
+// Apply a measurement write made against a merged container to the SOURCE
+// documents that own each line. Every source goes through exactly the same
+// pipeline a direct save would use — sanitize → valuation tracking → budget
+// links → coverage → derived rates → reconcile — so a line behaves identically
+// whether it was edited on its own project or through the merged view.
+//
+// Returns { ok, applied } or { error, status } — never partially reports
+// success, because a silent half-write on a bill is worse than a refusal.
+async function applyMergedLineWrite({ req, container, userId, body }) {
+  // The container owns the contract (that is the merge model), so a locked
+  // container freezes every discipline. Post-lock edits on a normal project are
+  // diverted into actualQty/variations; doing that across federated sources
+  // needs a decision about which document the variation lands on, so until
+  // that exists a locked merged project refuses measurement writes outright
+  // rather than guessing.
+  if (container?.contract?.locked) {
+    return {
+      error:
+        "This merged project's contract is locked. Unlock it to edit measurements, or edit the individual discipline project directly.",
+      code: "MERGED_CONTRACT_LOCKED",
+      status: 409,
+    };
+  }
+
+  const { bySource, unroutable } = splitMergedWrite(container, body);
+
+  if (unroutable.length) {
+    return {
+      error:
+        "Some lines could not be matched to a discipline and were not saved. Reload the project and try again.",
+      code: "MERGE_UNROUTABLE_LINES",
+      status: 409,
+      details: { count: unroutable.length },
+    };
+  }
+
+  const ids = [...bySource.keys()];
+  const sources = await TakeoffProject.find({ _id: { $in: ids }, userId });
+  const byId = new Map(sources.map((p) => [String(p._id), p]));
+  if (sources.length !== ids.length) {
+    return {
+      error: "A discipline project behind this merge could not be loaded.",
+      code: "MERGE_SOURCE_MISSING",
+      status: 404,
+    };
+  }
+
+  const applied = [];
+  for (const [sourceId, bucket] of bySource) {
+    const source = byId.get(sourceId);
+    const pk = source.productKey;
+
+    if (Array.isArray(bucket.items)) {
+      const sanitizedNext = sanitizeItems(bucket.items, pk);
+      // A source may still carry its own lock from before the merge. Honour it:
+      // the container's contract governs commercially, but a locked source's
+      // baseline quantities are still frozen data we must not overwrite.
+      const { lockedItems, extraVariations } = enforceContractLock({
+        project: source,
+        sanitizedNext,
+      });
+      const tracked = applyValuationTracking({
+        productKey: pk,
+        previousItems: Array.isArray(source.items) ? source.items : [],
+        nextItems: lockedItems,
+        previousEvents: Array.isArray(source.valuationEvents) ? source.valuationEvents : [],
+      });
+      source.items = tracked.items;
+      source.valuationEvents = tracked.valuationEvents;
+      if (extraVariations.length) {
+        source.variations = sanitizeVariations([
+          ...(Array.isArray(source.variations) ? source.variations : []),
+          ...extraVariations,
+        ]);
+      }
+      source.markModified("items");
+    }
+
+    if (Array.isArray(bucket.provisionalSums)) {
+      source.provisionalSums = sanitizeProvisionalSums(bucket.provisionalSums);
+    }
+    if (Array.isArray(bucket.variations) && !Array.isArray(bucket.items)) {
+      source.variations = sanitizeVariations(bucket.variations);
+    }
+    if (Array.isArray(bucket.materialItems)) {
+      source.materialItems = sanitizeItems(bucket.materialItems, pk);
+      source.markModified("materialItems");
+    }
+    if (Array.isArray(bucket.budgetItems)) {
+      const budget = sanitizeBudgetItems(bucket.budgetItems);
+      backfillBudgetLinks(source.items, budget);
+      source.budgetItems = ensureBillItemCoverage(source.items, budget);
+      source.markModified("budgetItems");
+    }
+
+    // Keep the bill↔budget relationship consistent on the source, exactly as a
+    // direct save would.
+    if (Array.isArray(bucket.budgetItems) || Array.isArray(bucket.items)) {
+      deriveBillRatesFromBudget(source);
+      reconcileItemsFromBudget(source);
+      source.markModified("items");
+    }
+
+    source.version = (Number(source.version) || 0) + 1;
+    await source.save();
+    applied.push({
+      projectId: sourceId,
+      name: source.name,
+      items: Array.isArray(bucket.items) ? bucket.items.length : null,
+      budgetItems: Array.isArray(bucket.budgetItems) ? bucket.budgetItems.length : null,
+    });
+  }
+
+  recordActivity(req, container, ACT.BILL_UPDATED, "Updated the merged bill & budget", {
+    disciplines: applied.length,
+  });
+  return { ok: true, applied };
+}
+
 // POST /projects/:productKey/merge
 // Federate two or more of the caller's own projects into one container. The
 // sources are NOT modified beyond a back-pointer: they keep their items, their
@@ -2655,6 +2775,75 @@ async function updateProject(req, res) {
         error: "View-only access cannot edit this project.",
         code: "VIEW_ONLY",
       });
+    }
+
+    // ── Federated merge container ──
+    // The container owns no items, so a measurement write must be split and
+    // applied to the source that owns each line; writing it here would discard
+    // every edit silently. Commercial and presentational fields (name,
+    // valuation settings, preliminaries, contract percentages) DO belong to the
+    // container and are applied below by the normal path.
+    if (isMergeContainer(project)) {
+      const touchesLines =
+        req.body?.items !== undefined ||
+        req.body?.budgetItems !== undefined ||
+        req.body?.materialItems !== undefined ||
+        req.body?.provisionalSums !== undefined ||
+        req.body?.variations !== undefined;
+
+      if (touchesLines) {
+        const routed = await applyMergedLineWrite({
+          req,
+          container: project,
+          userId,
+          body: req.body || {},
+        });
+        if (routed.error) {
+          return res.status(routed.status || 400).json({
+            error: routed.error,
+            ...(routed.code ? { code: routed.code } : {}),
+            ...(routed.details ? { details: routed.details } : {}),
+          });
+        }
+      }
+
+      // Container-owned fields only — never items.
+      if (name !== undefined && String(name).trim()) project.name = String(name).trim();
+      if (valuationSettings !== undefined) {
+        project.valuationSettings = normalizeValuationSettings(
+          valuationSettings,
+          project.valuationSettings,
+        );
+      }
+      if (Array.isArray(preliminaryItems)) {
+        project.preliminaryItems = sanitizePreliminaryItems(preliminaryItems);
+      }
+      if (preliminaryPercent !== undefined) {
+        project.contract.preliminaryPercent = clampPercentage(
+          preliminaryPercent,
+          project.contract?.preliminaryPercent ?? 7.5,
+        );
+      }
+      if (contingencyPercent !== undefined) {
+        project.contract.contingencyPercent = clampPercentage(
+          contingencyPercent,
+          project.contract?.contingencyPercent ?? 5,
+        );
+      }
+      if (taxPercent !== undefined) {
+        project.contract.taxPercent = clampPercentage(
+          taxPercent,
+          project.contract?.taxPercent ?? 7.5,
+        );
+      }
+      project.version = (Number(project.version) || 0) + 1;
+      await project.save();
+
+      const merged = await resolveMergedProject(project, project.userId);
+      const out = projectForClient(merged, access);
+      out.merge = merged.merge;
+      out.linkedSummaries = await resolveLinkedSummaries(project, userId, access);
+      return res.json(out);
     }
 
     // Activity snapshot: variation count before mutation, so we can tell
@@ -4809,6 +4998,30 @@ async function markBudget(req, res) {
       return res
         .status(409)
         .json({ error: "Version conflict", version: project.version });
+    }
+
+    // Procurement marking on a merged project: split the budget lines back to
+    // the discipline that owns each one. The container has no budget of its
+    // own, so writing here would drop every procurement flag.
+    if (isMergeContainer(project)) {
+      const routed = await applyMergedLineWrite({
+        req,
+        container: project,
+        userId,
+        body: { budgetItems: body.budgetItems },
+      });
+      if (routed.error) {
+        return res.status(routed.status || 400).json({
+          error: routed.error,
+          ...(routed.code ? { code: routed.code } : {}),
+        });
+      }
+      project.version = (Number(project.version) || 0) + 1;
+      await project.save();
+      const merged = await resolveMergedProject(project, project.userId);
+      const out = projectForClient(merged, access);
+      out.merge = merged.merge;
+      return res.json(out);
     }
 
     const budget = sanitizeBudgetItems(body.budgetItems);

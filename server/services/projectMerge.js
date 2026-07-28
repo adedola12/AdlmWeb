@@ -198,6 +198,94 @@ export async function resolveMergedProject(container, userId) {
   };
 }
 
+// Strip the namespace a resolved line was tagged with on the way out, so the
+// source document gets its own code back exactly as it stored it.
+function denamespace(line, codeField) {
+  const out = { ...line };
+  if (codeField) {
+    // The original is preserved on read; prefer it, and fall back to splitting
+    // the namespaced value for clients that only echo `code` back.
+    if (out[`${codeField}Original`] !== undefined) {
+      out[codeField] = out[`${codeField}Original`];
+    } else {
+      const split = splitIdentity(out[codeField]);
+      if (split) out[codeField] = split.identity;
+    }
+  }
+  delete out[`${codeField}Original`];
+  delete out.sourceProjectId;
+  delete out.sourceName;
+  delete out.sourceProductKey;
+  return out;
+}
+
+// Which source a resolved line belongs to: the tag we added on read, else the
+// namespace still embedded in its code.
+function ownerOf(line, codeField) {
+  const tagged = String(line?.sourceProjectId || "").trim();
+  if (tagged) return tagged;
+  const split = codeField ? splitIdentity(line?.[codeField]) : null;
+  return split ? split.sourceProjectId : "";
+}
+
+/**
+ * Split an incoming write against a merged container into per-source payloads.
+ *
+ * A container holds no items, so applying a write to it directly would discard
+ * every edit silently. Each line is routed home by the source tag it was given
+ * on read, and de-namespaced back to the code its own document stores.
+ *
+ * Lines whose owner is unknown or is not one of this container's sources are
+ * returned as `unroutable` rather than being dropped or guessed at — a QS
+ * editing a merged bill must never have an edit vanish.
+ *
+ * @returns {{ bySource: Map<string, object>, unroutable: Array, counts: object }}
+ */
+export function splitMergedWrite(container, body = {}) {
+  const allowed = new Set(mergeLinks(container).map((l) => String(l.projectId)));
+  const bySource = new Map();
+  const unroutable = [];
+
+  const FIELDS = [
+    ["items", "code"],
+    ["budgetItems", "billIdentity"],
+    ["materialItems", "sourceTakeoffCode"],
+    ["provisionalSums", null],
+    ["variations", null],
+  ];
+
+  for (const [field, codeField] of FIELDS) {
+    if (!Array.isArray(body[field])) continue;
+    for (const line of body[field]) {
+      const owner = ownerOf(line, codeField);
+      if (!owner || !allowed.has(owner)) {
+        unroutable.push({ field, line });
+        continue;
+      }
+      if (!bySource.has(owner)) bySource.set(owner, {});
+      const bucket = bySource.get(owner);
+      if (!bucket[field]) bucket[field] = [];
+      bucket[field].push(denamespace(line, codeField));
+    }
+    // A source that had lines in this field before but has none now must still
+    // receive an empty array, or a deletion would look like "field untouched"
+    // and the removed line would come straight back on the next read.
+    for (const sourceId of allowed) {
+      if (!bySource.has(sourceId)) bySource.set(sourceId, {});
+      const bucket = bySource.get(sourceId);
+      if (!bucket[field]) bucket[field] = [];
+    }
+  }
+
+  const counts = {};
+  for (const [sourceId, bucket] of bySource) {
+    counts[sourceId] = Object.fromEntries(
+      Object.entries(bucket).map(([k, v]) => [k, v.length]),
+    );
+  }
+  return { bySource, unroutable, counts };
+}
+
 /**
  * Route a namespaced identity back to the source document that owns it.
  * Every write against a merged project must go through this — the container
