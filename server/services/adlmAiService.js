@@ -32,7 +32,12 @@ import {
 } from "./aiUsage.js";
 
 const BASE = String(process.env.ADLM_AI_URL || "").trim().replace(/\/+$/, "");
-const TIMEOUT_MS = Number(process.env.ADLM_AI_TIMEOUT_MS || 25000);
+// 45s, not 25s. Measured against the deployed stack (2026-07-28): a cache hit
+// is ~0.8s, but an uncached rate-buildup took 22.8s and a 12-line boq-check
+// 16.9s — 25s left almost no headroom and would have aborted real answers.
+// The service's own warm-p95 target is ~3s; until it gets there this has to
+// absorb the gap. Cached repeats are the fast path.
+const TIMEOUT_MS = Number(process.env.ADLM_AI_TIMEOUT_MS || 45000);
 // Only used to price the call when the service doesn't say which model it ran.
 const ASSUMED_MODEL = process.env.ADLM_AI_MODEL || "claude-haiku-4-5";
 
