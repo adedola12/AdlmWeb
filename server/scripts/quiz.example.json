@@ -1,0 +1,67 @@
+{
+  "_comment": "Starting point for the week 4 quiz. The questions below are drawn from what was actually taught in the week 4 sessions, but you should review and extend them before publishing — set isPublished to true when you are happy. Copy this file per module.",
+  "courseSku": "bim-bld-arch",
+  "moduleCode": "W4D2",
+  "title": "Understanding 5D BIM",
+  "intro": "Five questions on quantification. You can retake this as many times as you like — the explanations are the point.",
+  "passMark": 60,
+  "maxAttempts": 0,
+  "isPublished": false,
+  "questions": [
+    {
+      "prompt": "You are given two drawings at different scales on the same PDF sheet. What should you do before taking off?",
+      "options": [
+        "Scale to the larger drawing and measure both",
+        "Crop the sheet into separate pages and scale each one",
+        "Measure both and average the results",
+        "Scale to the smaller drawing and apply a correction factor"
+      ],
+      "correctIndex": 1,
+      "explanation": "Never measure two drawings at different scales on one page. Crop as New Page, then calibrate each separately — otherwise every quantity from one of them is wrong."
+    },
+    {
+      "prompt": "After calibrating a drawing, what is a quick way to sanity-check that the scale is right?",
+      "options": [
+        "Check that the sheet size matches the title block",
+        "Measure a wall and see whether its thickness matches the specified thickness",
+        "Compare the file size to the original",
+        "Re-run the calibration on a different line"
+      ],
+      "correctIndex": 1,
+      "explanation": "If a 225 mm wall measures 225 mm, the scale is right. It is the fastest check available and it costs nothing."
+    },
+    {
+      "prompt": "Which tool is the right choice for taking off from a 3D model rather than a 2D drawing?",
+      "options": [
+        "PlanSwift area tools",
+        "CostX dimension groups",
+        "Revit Schedules and Quantities",
+        "A manual dimension sheet"
+      ],
+      "correctIndex": 2,
+      "explanation": "Different software for different use cases. 2D drawings go to PlanSwift or CostX; a model already carries its quantities, and Schedules and Quantities reads them directly."
+    },
+    {
+      "prompt": "In a Revit schedule, what does adding a calculated parameter such as width × height × count give you?",
+      "options": [
+        "A new model element",
+        "A derived quantity such as total door area, without leaving the schedule",
+        "A change to the door family",
+        "A clash detection report"
+      ],
+      "correctIndex": 1,
+      "explanation": "Calculated parameters derive quantities from parameters the model already holds — no export, no spreadsheet, and it updates when the model does."
+    },
+    {
+      "prompt": "Why does grouping a Revit wall schedule by base constraint matter to a quantity surveyor?",
+      "options": [
+        "It makes the schedule shorter",
+        "It produces quantities floor by floor, which is how the bill is structured",
+        "It is required before exporting to Excel",
+        "It changes the wall type"
+      ],
+      "correctIndex": 1,
+      "explanation": "Base constraint is the level a wall sits on, so grouping by it splits the takeoff per floor — which is how a multi-storey bill has to be presented anyway."
+    }
+  ]
+}
