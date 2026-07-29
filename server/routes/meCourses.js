@@ -404,6 +404,20 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
   }).lean();
   if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
 
+  // Re-entering the SAME lecture is a reconnect, not a second stream. A page
+  // reload would otherwise claim a fresh seat while the previous one sat live
+  // for another 90 seconds, so two refreshes locked a student out of the
+  // lecture they were already watching.
+  await PlaybackSession.updateMany(
+    {
+      userId: req.user._id,
+      courseSku: sku,
+      moduleCode,
+      endedAt: null,
+    },
+    { $set: { endedAt: new Date() } },
+  );
+
   const live = await PlaybackSession.find({
     userId: req.user._id,
     endedAt: null,
