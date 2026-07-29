@@ -1,36 +1,41 @@
 /**
- * Streams the class recordings out of Google Drive and into Bunny Stream,
- * then writes the resulting `bunny:LIB:VIDEO` reference onto the matching
- * course module — so the platform, not Google Classroom, becomes where
- * students watch.
+ * Streams the class recordings out of Google Drive into the S3 archive, gives
+ * every file a canonical name on the way, and records the archive key on the
+ * matching course module.
  *
- * The Drive -> Bunny transfer is streamed, never buffered: the largest
- * recording is 6.25 GB and would blow the heap otherwise.
+ * This is the "move 29 GB once" step. S3 becomes the master copy: the delivery
+ * pipeline (MediaConvert -> CloudFront) reads from here, so re-encoding, adding
+ * a bitrate rung or turning on DRM later never touches Google Drive again.
+ *
+ * The transfer is streamed and multipart — the largest lecture is 6.25 GB and
+ * buffering it would blow the heap.
  *
  *   node scripts/ingest-drive-videos.mjs                 # dry run, plans the work
  *   node scripts/ingest-drive-videos.mjs --apply         # do it
  *   node scripts/ingest-drive-videos.mjs --apply --only W3D2,W3D3
- *   node scripts/ingest-drive-videos.mjs --apply --force # re-upload modules that already have video
+ *   node scripts/ingest-drive-videos.mjs --apply --force # re-upload even if archived
  *
- * Safe to stop and re-run: modules that already carry a videoUrl are skipped
- * unless --force, so an interrupted run picks up where it left off.
+ * Safe to stop and re-run. Before uploading, each object is checked in S3 and
+ * skipped when it is already there at the right size, so an interrupted run
+ * resumes instead of paying for the same gigabytes twice.
  *
  * Setup (one time):
- *   1. Create a Google Cloud service account, download its JSON key.
+ *   1. Create a Google Cloud service account and download its JSON key.
  *   2. Share the "Class video" Drive folder with the service account's email
  *      (viewer is enough).
- *   3. Put the key somewhere the server can read it and set
- *      GOOGLE_SERVICE_ACCOUNT_KEY=/path/to/key.json  (or paste the JSON
- *      itself into that variable).
- *   BUNNY_STREAM_API_KEY and BUNNY_STREAM_LIB_ID are already in .env.
+ *   3. GOOGLE_SERVICE_ACCOUNT_KEY=/path/to/key.json (or the JSON inline)
+ *   4. AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+ *      AWS_VIDEO_ARCHIVE_BUCKET
  */
 import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { JWT } from "google-auth-library";
 import { connectDB } from "../db.js";
 import { PaidCourse } from "../models/PaidCourse.js";
+import { objectSize, uploadStream, archiveBucket } from "../utils/awsS3.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const APPLY = process.argv.includes("--apply");
@@ -45,11 +50,39 @@ const ONLY = argValue("--only")
   .map((s) => s.trim())
   .filter(Boolean);
 
-const BUNNY_KEY = process.env.BUNNY_STREAM_API_KEY;
-const BUNNY_LIB = process.env.BUNNY_STREAM_LIB_ID;
-
 function gb(bytes) {
   return `${(Number(bytes || 0) / 1024 ** 3).toFixed(2)} GB`;
+}
+
+// ── canonical naming ────────────────────────────────────────────────────────
+/**
+ * Drive holds "Week 2 Day 1 Class.mp4" next to a bare "Day 3.mp4". Neither
+ * survives being moved out of its folder, so the archive gets one scheme
+ * driven by the module itself:
+ *
+ *   courses/bim-bld-arch/2025/w2d1-setting-up-a-cloud-based-cde.mp4
+ *
+ * Sortable, unique, and readable without opening the file.
+ */
+function slugify(text) {
+  return String(text || "")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    // Trim to a word boundary so a long title ends "…adlm" rather than "…adlm-plu".
+    .replace(/^(.{0,70})(-.*)?$/s, "$1")
+    .replace(/-+$/g, "");
+}
+
+function archiveKey({ courseSku, cohort, moduleCode, moduleTitle }) {
+  // Titles read "Week 1 · Day 1 — Introduction to BIM…"; the part after the
+  // em dash is the actual subject, which is what belongs in the filename.
+  const subject = String(moduleTitle || "").split("—").slice(1).join("—").trim();
+  const slug = slugify(subject || moduleTitle || moduleCode);
+  const name = `${moduleCode.toLowerCase()}${slug ? `-${slug}` : ""}.mp4`;
+  return `courses/${courseSku}/${cohort}/${name}`;
 }
 
 // ── Google Drive ────────────────────────────────────────────────────────────
@@ -80,38 +113,15 @@ async function openDriveFile(fileId, token) {
   if (!res.ok || !res.body) {
     throw new Error(`Drive read failed (${res.status}): ${await res.text()}`);
   }
-  return res.body;
+  // The SDK's multipart uploader wants a Node stream, not a web one.
+  return Readable.fromWeb(res.body);
 }
 
-// ── Bunny Stream ────────────────────────────────────────────────────────────
-async function bunnyCreate(title) {
-  const res = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIB}/videos`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", AccessKey: BUNNY_KEY },
-    body: JSON.stringify({ title }),
-  });
-  if (!res.ok) throw new Error(`Bunny create failed: ${await res.text()}`);
-  const json = await res.json();
-  return json.guid;
-}
-
-async function bunnyUpload(videoId, stream) {
-  const res = await fetch(
-    `https://video.bunnycdn.com/library/${BUNNY_LIB}/videos/${videoId}`,
-    {
-      method: "PUT",
-      headers: { AccessKey: BUNNY_KEY, "Content-Type": "application/octet-stream" },
-      body: stream,
-      duplex: "half", // required by undici when the body is a stream
-    },
-  );
-  if (!res.ok) throw new Error(`Bunny upload failed: ${await res.text()}`);
-}
-
-// ── main ────────────────────────────────────────────────────────────────────
+// ── plan ────────────────────────────────────────────────────────────────────
 const manifest = JSON.parse(
   fs.readFileSync(path.join(here, "drive-video-manifest.json"), "utf8"),
 );
+const cohort = manifest.cohort || "2025";
 
 await connectDB();
 const course = await PaidCourse.findOne({ sku: manifest.courseSku });
@@ -131,67 +141,94 @@ for (const item of manifest.items) {
     skipped.push(`${item.moduleCode}: no such module on the course`);
     continue;
   }
-  if (module.videoUrl && !FORCE) {
-    skipped.push(`${item.moduleCode}: already has video (${module.videoUrl})`);
+  if (module.sourceKey && !FORCE) {
+    skipped.push(`${item.moduleCode}: already archived (${module.sourceKey})`);
     continue;
   }
-  planned.push(item);
+  planned.push({
+    ...item,
+    key: archiveKey({
+      courseSku: manifest.courseSku,
+      cohort,
+      moduleCode: item.moduleCode,
+      moduleTitle: module.title,
+    }),
+  });
 }
 
 const totalBytes = planned.reduce((sum, i) => sum + Number(i.bytes || 0), 0);
 
 console.log(`course:   ${course.title} (${manifest.courseSku})`);
-console.log(`to move:  ${planned.length} recordings, ${gb(totalBytes)}`);
+console.log(`archive:  s3://${process.env.AWS_VIDEO_ARCHIVE_BUCKET || "<AWS_VIDEO_ARCHIVE_BUCKET unset>"}`);
+console.log(`to move:  ${planned.length} recordings, ${gb(totalBytes)}\n`);
 for (const item of planned) {
-  console.log(`  ${item.moduleCode}  ${gb(item.bytes).padStart(8)}  ${item.name}`);
+  console.log(`  ${gb(item.bytes).padStart(8)}  ${item.name}`);
+  console.log(`            -> ${item.key}`);
 }
 if (skipped.length) {
   console.log(`\nskipped (${skipped.length}):`);
   for (const line of skipped) console.log(`  ${line}`);
 }
 for (const decision of manifest.needsDecision || []) {
-  console.log(
-    `\n⚠ ${decision.moduleCode} has no file assigned — ${decision.issue}`,
-  );
+  console.log(`\n⚠ ${decision.moduleCode} has no file assigned — ${decision.issue}`);
   if (decision.candidate) {
     console.log(`  candidate: ${decision.candidate.name} — ${decision.candidate.question}`);
   }
 }
 
 if (!APPLY) {
-  console.log("\nDry run. Re-run with --apply to move these to Bunny.");
+  console.log("\nDry run. Re-run with --apply to move these into S3.");
   process.exit(0);
 }
-if (!BUNNY_KEY || !BUNNY_LIB) {
-  console.error("BUNNY_STREAM_API_KEY / BUNNY_STREAM_LIB_ID missing.");
-  process.exit(1);
-}
 
+// ── run ─────────────────────────────────────────────────────────────────────
+const bucket = archiveBucket();
 const token = await driveToken();
 let done = 0;
 
 for (const item of planned) {
   const label = `${item.moduleCode} (${gb(item.bytes)})`;
   try {
-    console.log(`\n→ ${label} creating container…`);
-    const videoId = await bunnyCreate(`${manifest.courseSku}-${item.moduleCode}`);
+    const existing = await objectSize(item.key, bucket);
+    if (existing !== null && existing === Number(item.bytes) && !FORCE) {
+      console.log(`= ${label} already in S3, recording key only`);
+    } else {
+      console.log(`\n→ ${label} ${item.name}`);
+      let lastPct = 0;
+      const body = await openDriveFile(item.fileId, token);
+      await uploadStream({
+        key: item.key,
+        body,
+        bucket,
+        metadata: {
+          "drive-file-id": String(item.fileId),
+          "drive-name": String(item.name),
+          "module-code": String(item.moduleCode),
+        },
+        onProgress: ({ loaded }) => {
+          const pct = Math.floor((Number(loaded || 0) / Number(item.bytes)) * 100);
+          if (pct >= lastPct + 10) {
+            lastPct = pct;
+            process.stdout.write(`  ${pct}%…`);
+          }
+        },
+      });
+      process.stdout.write("\n");
+    }
 
-    console.log(`  streaming ${item.name}…`);
-    const stream = await openDriveFile(item.fileId, token);
-    await bunnyUpload(videoId, stream);
-
-    const shorthand = `bunny:${BUNNY_LIB}:${videoId}`;
     const module = course.modules.find((m) => m.code === item.moduleCode);
-    module.videoUrl = shorthand;
+    module.sourceKey = item.key;
+    module.sourceName = item.name;
+    module.sourceBytes = Number(item.bytes) || 0;
     await course.save();
 
     done += 1;
-    console.log(`  ✓ ${label} → ${shorthand}`);
+    console.log(`  ✓ ${label} → ${item.key}`);
   } catch (err) {
     console.error(`  ✗ ${label} failed: ${err.message}`);
-    console.error("    (re-run to retry — finished modules are skipped)");
+    console.error("    (re-run to retry — archived modules are skipped)");
   }
 }
 
-console.log(`\n${done}/${planned.length} recordings ingested.`);
+console.log(`\n${done}/${planned.length} recordings archived to s3://${bucket}.`);
 process.exit(0);

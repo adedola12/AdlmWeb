@@ -19,10 +19,30 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 
 /* Identity shown in the watermark. Falls back to brand text for logged-out
-   viewers (e.g. free videos). */
-function useWatermarkLabel() {
+   viewers (e.g. free videos).
+
+   The label carries three things, and each one does a different job if a
+   recording leaks: WHO (the account), WHEN (a clock that reprints every 30s,
+   so a clip can be placed in time even after it is cropped or re-encoded) and
+   WHICH SESSION (the ref from /playback/start, which resolves to a row holding
+   the IP and device). */
+function useWatermarkLabel(sessionRef) {
   const { user } = useAuth();
-  return user?.email || user?.name || "ADLM Studio · adlmstudio.net";
+  const [stamp, setStamp] = React.useState(() => new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setStamp(new Date()), 30 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const identity = user?.email || user?.name || "ADLM Studio · adlmstudio.net";
+  const when = stamp
+    .toISOString()
+    .slice(0, 16)
+    .replace("T", " ");
+  return sessionRef
+    ? `${identity} · ${when}Z · ${sessionRef}`
+    : `${identity} · ${when}Z`;
 }
 
 /* Builds a faint, rotated, tiled SVG background of the label so the identity
@@ -53,19 +73,35 @@ function useScreenshotGuard() {
       }, 1000);
     };
     const onKey = (e) => {
-      if (e.key === "PrintScreen") {
+      const key = String(e.key || "");
+      // PrintScreen (Windows), Win+Shift+S (Snip & Sketch) and
+      // Cmd+Shift+3/4/5 (macOS capture). The OS swallows some of these before
+      // the page sees them — the ones that do arrive get blanked, the rest are
+      // covered by the watermark. There is no key handler that makes capture
+      // impossible; this only raises the effort.
+      const isSnip = e.shiftKey && (e.metaKey || e.ctrlKey) && /^[sS345]$/.test(key);
+      if (key === "PrintScreen" || isSnip) {
         flash();
         // Best-effort: clobber the clipboard so a captured frame isn't pasted.
         try { navigator.clipboard?.writeText(" "); } catch { /* ignore */ }
       }
     };
     const onVisibility = () => setGuarded(document.hidden);
+    // A capture tool taking focus blurs the window without hiding the tab.
+    const onBlur = () => setGuarded(true);
+    const onFocus = () => setGuarded(document.hidden);
 
+    window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       clearTimeout(timer);
+      window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
@@ -97,9 +133,10 @@ export function SecureVideo({
   poster,
   className = "",
   videoClassName = "",
+  sessionRef = "",
   ...rest
 }) {
-  const label = useWatermarkLabel();
+  const label = useWatermarkLabel(sessionRef);
   const guarded = useScreenshotGuard();
   const ref = React.useRef(null);
 
@@ -142,8 +179,9 @@ export function SecureEmbed({
   allowFullScreen = true,
   className = "",
   iframeClassName = "",
+  sessionRef = "",
 }) {
-  const label = useWatermarkLabel();
+  const label = useWatermarkLabel(sessionRef);
   const guarded = useScreenshotGuard();
 
   return (

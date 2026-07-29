@@ -722,6 +722,11 @@ const TakeoffProjectSchema = new mongoose.Schema(
     origin: { type: String, default: "" },
     mergeSameTypeLevel: { type: Boolean, default: true },
     name: { type: String, required: true, trim: true },
+    // The employer/client the bill is being prepared for. Purely descriptive —
+    // it titles the BoQ cover ("Proposed Development for <client>"), which is
+    // how ADLM's QSs word a bill, and appears on reports. Optional and
+    // additive, so plugin payloads that never send it are unaffected.
+    clientName: { type: String, default: "", trim: true, maxlength: 200 },
     slug: { type: String, trim: true, lowercase: true, default: "" },
     publicToken: { type: String, default: null, sparse: true },
     publicShareEnabled: { type: Boolean, default: false },

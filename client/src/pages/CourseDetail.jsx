@@ -24,6 +24,99 @@ function statCard(label, value, helper = "") {
   return { label, value, helper };
 }
 
+/**
+ * Claims a streaming seat for the module being watched, keeps it alive with a
+ * heartbeat, and hands back the session ref that gets burned into the video
+ * watermark.
+ *
+ * Returns `blocked` when the account already has the maximum number of streams
+ * running — the seat frees itself ~90s after the other device stops, so the
+ * message tells the student that rather than leaving them stuck.
+ */
+function usePlaybackSession(sku, moduleCode, token) {
+  const [session, setSession] = React.useState(null);
+  const [blocked, setBlocked] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!sku || !moduleCode || !token) return undefined;
+
+    let cancelled = false;
+    let timer = null;
+    let current = null;
+    const startedAt = Date.now();
+    let lastPingAt = startedAt;
+
+    const stop = () => {
+      if (!current) return;
+      const body = JSON.stringify({ sessionId: current });
+      // No sendBeacon here: it cannot carry the Authorization header this API
+      // requires, so it would always 401. If the tab dies before this request
+      // lands, the missing heartbeat frees the seat within 90s anyway.
+      apiAuthed(`/me/courses/${encodeURIComponent(sku)}/playback/stop`, {
+        token,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      }).catch(() => {});
+      current = null;
+    };
+
+    (async () => {
+      try {
+        const res = await apiAuthed(
+          `/me/courses/${encodeURIComponent(sku)}/playback/start`,
+          {
+            token,
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ moduleCode }),
+          },
+        );
+        if (cancelled) {
+          current = res.sessionId;
+          stop();
+          return;
+        }
+        current = res.sessionId;
+        setSession(res);
+        setBlocked(null);
+
+        timer = setInterval(() => {
+          const now = Date.now();
+          const deltaSec = Math.round((now - lastPingAt) / 1000);
+          lastPingAt = now;
+          apiAuthed(`/me/courses/${encodeURIComponent(sku)}/playback/ping`, {
+            token,
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sessionId: current,
+              watchedDeltaSec: deltaSec,
+              positionSec: Math.round((now - startedAt) / 1000),
+            }),
+          }).catch(() => {});
+        }, (res.heartbeatSec || 30) * 1000);
+      } catch (e) {
+        if (cancelled) return;
+        if (e?.status === 409) {
+          setSession(null);
+          setBlocked(e.data || { error: "Too many active streams" });
+        }
+      }
+    })();
+
+    window.addEventListener("pagehide", stop);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener("pagehide", stop);
+      stop();
+    };
+  }, [sku, moduleCode, token]);
+
+  return { session, blocked };
+}
+
 export default function CourseDetail() {
   const { sku } = useParams();
   const { accessToken } = useAuth();
@@ -50,6 +143,12 @@ export default function CourseDetail() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  const { session: playback, blocked: playbackBlocked } = usePlaybackSession(
+    sku,
+    activeCode,
+    accessToken,
+  );
 
   async function markComplete(moduleCode) {
     try {
@@ -324,18 +423,33 @@ export default function CourseDetail() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="card lg:col-span-2">
-          {playerSrc ? (
+          {playbackBlocked ? (
+            <div className="grid w-full aspect-video place-items-center rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+              <div>
+                <div className="font-semibold text-amber-900">
+                  This account is already watching on another device
+                </div>
+                <p className="mx-auto mt-2 max-w-md text-sm text-amber-800">
+                  Your plan allows {playbackBlocked.limit || 2} streams at a time.
+                  Close the lecture on the other device and reload this page — the
+                  seat frees itself about a minute and a half after playback stops.
+                </p>
+              </div>
+            </div>
+          ) : playerSrc ? (
             isBunny ? (
               <SecureEmbed
                 className="aspect-video w-full rounded-xl ring-1 ring-black/10 dark:ring-white/10 shadow-depth"
                 src={playerSrc}
                 title="course-player"
+                sessionRef={playback?.sessionRef || ""}
                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
               />
             ) : (
               <SecureVideo
                 className="aspect-video w-full rounded-xl ring-1 ring-black/10 dark:ring-white/10 shadow-depth"
                 src={playerSrc}
+                sessionRef={playback?.sessionRef || ""}
                 videoClassName="object-contain"
                 preload="metadata"
               />

@@ -6,9 +6,33 @@ import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { Software } from "../models/Software.js";
+import { PlaybackSession } from "../models/PlaybackSession.js";
 
 const router = express.Router();
 router.use(requireAuth);
+
+// A stream is "live" if we heard from it recently. Heartbeats land every 30s,
+// so 90s tolerates one dropped beat before the seat is released — otherwise a
+// student who closes the lid is locked out of their own account for minutes.
+const LIVE_WINDOW_MS = 90 * 1000;
+const MAX_CONCURRENT = Math.max(
+  1,
+  Number(process.env.COURSE_MAX_CONCURRENT_STREAMS || 2) || 2,
+);
+
+function liveSince() {
+  return new Date(Date.now() - LIVE_WINDOW_MS);
+}
+
+function clientIp(req) {
+  const fwd = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return fwd || req.ip || req.socket?.remoteAddress || "";
+}
+
+/** Short handle burned into the watermark and quotable in a takedown. */
+function makeSessionRef() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
 
 function toIso(value) {
   if (!value) return null;
@@ -350,6 +374,108 @@ router.get("/:sku/certificate-template", async (req, res) => {
       res.status(500).json({ error: e.message || "Certificate proxy failed" });
     }
   }
+});
+
+/**
+ * POST /me/courses/:sku/playback/start
+ *
+ * Claims a streaming seat. Returns the session ref that the player burns into
+ * the watermark, so any capture of the video carries a handle that resolves
+ * back to this row.
+ *
+ * 409 when the account already has MAX_CONCURRENT live streams — that is the
+ * lever against one login being shared, which is a far more common leak than
+ * screen recording.
+ */
+router.post("/:sku/playback/start", express.json(), async (req, res) => {
+  const sku = req.params.sku;
+  const moduleCode = String(req.body?.moduleCode || "").trim();
+
+  const enrollment = await CourseEnrollment.findOne({
+    userId: req.user._id,
+    courseSku: sku,
+  }).lean();
+  if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
+
+  const live = await PlaybackSession.find({
+    userId: req.user._id,
+    endedAt: null,
+    lastSeenAt: { $gte: liveSince() },
+  })
+    .sort({ lastSeenAt: -1 })
+    .lean();
+
+  if (live.length >= MAX_CONCURRENT) {
+    return res.status(409).json({
+      error: "Too many active streams",
+      limit: MAX_CONCURRENT,
+      active: live.map((s) => ({
+        sessionRef: s.sessionRef,
+        moduleCode: s.moduleCode,
+        startedAt: toIso(s.startedAt),
+        lastSeenAt: toIso(s.lastSeenAt),
+      })),
+    });
+  }
+
+  const session = await PlaybackSession.create({
+    userId: req.user._id,
+    email: req.user.email || "",
+    courseSku: sku,
+    moduleCode,
+    sessionRef: makeSessionRef(),
+    ip: clientIp(req),
+    userAgent: String(req.headers["user-agent"] || "").slice(0, 300),
+  });
+
+  res.json({
+    sessionId: String(session._id),
+    sessionRef: session.sessionRef,
+    heartbeatSec: 30,
+  });
+});
+
+/** Keeps the seat alive and records how far the student has actually watched. */
+router.post("/:sku/playback/ping", express.json(), async (req, res) => {
+  const sessionId = String(req.body?.sessionId || "");
+  if (!sessionId) return res.status(400).json({ error: "sessionId required" });
+
+  const positionSec = Math.max(0, Number(req.body?.positionSec || 0) || 0);
+  const watchedDeltaSec = Math.min(
+    120, // a heartbeat can never be worth more than two minutes of watching
+    Math.max(0, Number(req.body?.watchedDeltaSec || 0) || 0),
+  );
+
+  const session = await PlaybackSession.findOneAndUpdate(
+    { _id: sessionId, userId: req.user._id, endedAt: null },
+    {
+      $set: { lastSeenAt: new Date(), positionSec },
+      $inc: { watchedSec: watchedDeltaSec },
+    },
+    { new: true },
+  );
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  // Watching counts as progress on the enrollment, so the "last active" figure
+  // reflects actual viewing rather than only assignment uploads.
+  await CourseEnrollment.updateOne(
+    { userId: req.user._id, courseSku: req.params.sku },
+    { $set: { lastProgressAt: new Date() } },
+  );
+
+  res.json({ ok: true });
+});
+
+/** Releases the seat. Best-effort — a dropped heartbeat frees it anyway. */
+router.post("/:sku/playback/stop", express.json(), async (req, res) => {
+  const sessionId = String(req.body?.sessionId || "");
+  if (!sessionId) return res.status(400).json({ error: "sessionId required" });
+
+  await PlaybackSession.updateOne(
+    { _id: sessionId, userId: req.user._id, endedAt: null },
+    { $set: { endedAt: new Date(), lastSeenAt: new Date() } },
+  );
+  res.json({ ok: true });
 });
 
 export default router;

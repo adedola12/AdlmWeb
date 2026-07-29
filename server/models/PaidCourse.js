@@ -9,6 +9,13 @@ const ModuleSchema = new mongoose.Schema(
     videoUrl: { type: String },
     durationSec: { type: Number },
     assignmentPrompt: { type: String, default: "" },
+
+    // Archive of the original recording in S3. `videoUrl` is what the player
+    // streams; these describe the master the stream was produced from, so a
+    // re-encode never has to go back to Google Drive.
+    sourceKey: { type: String, default: "" },
+    sourceName: { type: String, default: "" },
+    sourceBytes: { type: Number, default: 0 },
   },
   { _id: false },
 );
