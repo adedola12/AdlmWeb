@@ -172,6 +172,18 @@ export default function CourseDetail() {
 
             <p className="mt-2 text-sm text-slate-600">{course.blurb}</p>
 
+            {course.description ? (
+              <details className="mt-2 group">
+                <summary className="cursor-pointer text-sm font-medium text-adlm-blue-700 marker:content-['']">
+                  <span className="group-open:hidden">What this course covers ▾</span>
+                  <span className="hidden group-open:inline">Hide course outline ▴</span>
+                </summary>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600 dark:text-adlm-dark-dim">
+                  {course.description}
+                </p>
+              </details>
+            ) : null}
+
             <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
               <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -361,6 +373,15 @@ export default function CourseDetail() {
               </label>
             )}
           </div>
+
+          {active?.instructions ? (
+            <div className="mt-4">
+              <div className="font-medium">What this session covers</div>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-adlm-dark-dim">
+                {active.instructions}
+              </p>
+            </div>
+          ) : null}
 
           {active?.requiresSubmission && (
             <div className="mt-4 space-y-3">

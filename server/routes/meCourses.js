@@ -73,6 +73,7 @@ function buildModuleSubmissions(course, enrollment, submissionsByKey) {
       latestSubmission: latest,
       completed: completed.has(module.code),
       videoUrl: module.videoUrl || "",
+      instructions: module.instructions || "",
       assignmentPrompt: module.assignmentPrompt || "",
       durationSec: Number(module.durationSec || 0) || 0,
     };
