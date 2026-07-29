@@ -163,7 +163,10 @@ async function driveToken() {
     key: key.private_key,
     scopes: ["https://www.googleapis.com/auth/drive.readonly"],
   });
-  const { access_token: token } = await client.getAccessToken();
+  // getAccessToken() resolves to { token }, not { access_token } — reading the
+  // wrong property looked exactly like an auth failure while the credential
+  // was fine all along.
+  const { token } = await client.getAccessToken();
   if (!token) throw new Error("Could not mint a Drive access token");
   return token;
 }
