@@ -11,6 +11,13 @@
       "bytes": 6248493405
     },
     {
+      "moduleCode": "W1D2",
+      "fileId": "1RfuecSc1GJvXzxa8tGIf4P9R5DHiPBIC",
+      "name": "Week 1 Day 1 Class 2.mp4",
+      "bytes": 955244649,
+      "note": "Named 'Week 1 Day 1 Class 2.mp4' in Drive but confirmed as the day 2 session. The archive name is derived from the module, so the mislabel does not follow it across."
+    },
+    {
       "moduleCode": "W1D3",
       "fileId": "1nZr4i79PxbCIQlCgRIq5wABjurlOUBLO",
       "name": "Week 1 Day 3.mp4",
@@ -107,19 +114,7 @@
       "bytes": 990516249
     }
   ],
-  "needsDecision": [
-    {
-      "moduleCode": "W1D2",
-      "fileId": null,
-      "issue": "No Week 1 Day 2 recording exists in the Drive folder. Week 1 Lecture holds four Day 1 files and one Day 3 file, and nothing else.",
-      "candidate": {
-        "fileId": "1RfuecSc1GJvXzxa8tGIf4P9R5DHiPBIC",
-        "name": "Week 1 Day 1 Class 2.mp4",
-        "bytes": 955244649,
-        "question": "Is this the day 2 session saved under the wrong name, or the second half of day 1? Watch the first minute to tell. If it is day 2, move it into items as W1D2."
-      }
-    }
-  ],
+  "needsDecision": [],
   "ignored": [
     {
       "fileId": "18eKlRD3BX1kV_6kqgOI9aqdGPIU8fXI0",

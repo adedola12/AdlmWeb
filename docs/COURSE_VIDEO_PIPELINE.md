@@ -188,18 +188,39 @@ AWS_CLOUDFRONT_PIN_IP=false
 
 ## 7. Running it
 
-```bash
-cd server
+Run these **one at a time** from the `server` directory. Do not chain them:
+the ingest moves 30 GB and takes hours, and you want to read its output before
+starting the transcode. (PowerShell also has no `&&` — chain with `;` if you
+must, but here you shouldn't.)
 
-# 1. Drive -> S3. Dry run first; it prints every file and its new name.
+```powershell
+cd C:\Users\ADLM\source\repos\ADLMWebsite\server
+```
+
+```powershell
 node scripts/ingest-drive-videos.mjs
+```
+
+Dry run — prints every file, its new archive name and the total. Then:
+
+```powershell
 node scripts/ingest-drive-videos.mjs --apply
+```
 
-# 2. S3 -> HLS.
+Once that finishes, plan and submit the transcodes:
+
+```powershell
 node scripts/transcode-course-videos.mjs
-node scripts/transcode-course-videos.mjs --apply
+```
 
-# 3. Poll until the jobs finish; this is what records the playable manifest.
+```powershell
+node scripts/transcode-course-videos.mjs --apply
+```
+
+MediaConvert is asynchronous, so poll until the jobs land. This is the step
+that records the playable manifest against each module:
+
+```powershell
 node scripts/transcode-course-videos.mjs --status --watch
 ```
 
