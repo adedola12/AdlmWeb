@@ -200,6 +200,19 @@ router.get(
       variations: project.variations || [],
       preliminaryItems: project.preliminaryItems || [],
       preliminaryPercent: Number(project.contract?.preliminaryPercent) || 0,
+      // A BUILDING merge becomes one sheet per structure. A discipline merge
+      // stays a single combined bill: architectural and structural are two
+      // views of the SAME structure, so splitting them into separate sheets
+      // would misrepresent the job as two buildings.
+      parts:
+        project.mergePartType === "building" && project.merge?.parts?.length
+          ? project.merge.parts.map((part) => ({
+              name: part.name,
+              items: (project.items || []).filter(
+                (it) => String(it.sourceProjectId || "") === String(part.projectId),
+              ),
+            }))
+          : [],
       format,
     });
 

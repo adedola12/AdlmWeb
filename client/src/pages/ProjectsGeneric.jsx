@@ -2118,6 +2118,20 @@ export default function ProjectsGeneric() {
     }
     const suggested = `${picked[0]?.name || "Project"} (merged)`;
     const summary = picked.map((r) => `• ${r?.name}`).join("\n");
+    // What the sources REPRESENT decides how the bill exports. Separate
+    // structures each get their own sheet in the workbook (Main Building /
+    // Warehouse / Gatehouse, the way a QS bills a site); disciplines are two
+    // views of ONE structure, so they stay a single combined bill.
+    const isBuildings = window.confirm(
+      [
+        `Are these ${uniq.length} projects separate BUILDINGS on one job?`,
+        "",
+        summary,
+        "",
+        "OK — separate buildings; each gets its own sheet in the exported bill",
+        "Cancel — disciplines of one structure (architectural + structural)",
+      ].join("\n"),
+    );
     const name = window.prompt(
       [
         `Merge ${uniq.length} projects into one?`,
@@ -2139,12 +2153,16 @@ export default function ProjectsGeneric() {
       const res = await apiAuthed(endpoints.merge, {
         token: accessToken,
         method: "POST",
-        body: { name: String(name).trim() || suggested, sourceIds: uniq },
+        body: {
+          name: String(name).trim() || suggested,
+          sourceIds: uniq,
+          partType: isBuildings ? "building" : "discipline",
+        },
       });
       setSelectedMap({});
       await load({ keepSelection: false });
       setNotice(
-        `Merged ${uniq.length} projects into "${res?.name || name}". The originals are untouched and still open separately in the plugin.`,
+        `Merged ${uniq.length} ${isBuildings ? "buildings" : "disciplines"} into "${res?.name || name}". The originals are untouched and still open separately in the plugin.`,
       );
     } catch (e) {
       setErr(e?.message || "Could not merge those projects.");

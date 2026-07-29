@@ -1400,6 +1400,14 @@ export async function exportElementalBoQ({
   // matching how ADLM's QSs title a bill; otherwise it falls back to the
   // project name.
   clientName = "",
+  // Multi-building job: [{ name, items }] — one entry per building or
+  // structure (Main Building, Warehouse, Gatehouse, Perimeter Fence, External
+  // Works). Each gets ONE sheet named after it with the elemental bills as
+  // sections inside, and one line in the General Summary. This is how ADLM's
+  // QSs lay a job out; the previous shape put each ELEMENT on its own sheet
+  // with no building identity anywhere in the workbook. Omit for a normal
+  // single-structure project.
+  parts = [],
   mappingPath,
   format = "elemental", // "elemental" | "trade"
 } = {}) {
@@ -1471,21 +1479,74 @@ export async function exportElementalBoQ({
       }
     }
   } else {
-    // Elemental format: one sheet per bill, as before.
+    // Elemental format: ONE SHEET PER BUILDING, with the elemental bills as
+    // sections inside it — the layout ADLM's QSs issue (FIRS has Main
+    // Building / Warehouse / Gatehouse / Perimeter Fence / External Works,
+    // each a sheet, all rolling into one General Summary; Ogbomogo has MAIN
+    // BUILDING and EXTERNAL WORKS the same way).
+    //
+    // A project with no explicit parts is a single structure, so it gets one
+    // sheet under its own heading rather than a tab per element. That is a
+    // deliberate change to single-project exports too: putting Substructure
+    // and Superstructure on separate tabs was never the format their bills use.
+    const buildings = Array.isArray(parts) && parts.length
+      ? parts
+      : [{ name: "MAIN BUILDING", items: projectItems }];
+
+    // planBill reports matches as indices into the array it was GIVEN, so a
+    // building's indices are local to that building. writeUnmappedSheet below
+    // works in project-level indices, so translate through the item's identity
+    // — without this, "Other items" would list the wrong lines (or claim
+    // matched ones were unmatched) on any multi-building job.
+    const projectIndexOf = new Map();
+    projectItems.forEach((it, i) => {
+      if (!projectIndexOf.has(it)) projectIndexOf.set(it, i);
+    });
+
+    // Preliminaries are a job-level bill, written once regardless of how many
+    // buildings the job contains.
     for (const billRaw of variant.bills || []) {
-      const billResolved = resolveBill(mapping, billRaw);
+      if (resolveBill(mapping, billRaw).kind !== "preliminaries") continue;
+      const ref = writePreliminariesSheet(workbook, projectName, prelimOpts);
+      billRefs.push({ name: resolveBill(mapping, billRaw).name, totalCellAddr: ref.totalCellAddr });
+      break;
+    }
 
-      if (billResolved.kind === "preliminaries") {
-        const ref = writePreliminariesSheet(workbook, projectName, prelimOpts);
-        billRefs.push({ name: billResolved.name, totalCellAddr: ref.totalCellAddr });
-        continue;
+    for (const building of buildings) {
+      const buildingItems = Array.isArray(building?.items) ? building.items : [];
+      if (!buildingItems.length) continue;
+
+      // Each building is matched against the mapping independently, with its
+      // OWN matchedSet — an item consumed by the Warehouse must not be
+      // unavailable to the Gatehouse.
+      const buildingMatched = new Set();
+      const plannedForBuilding = [];
+      for (const billRaw of variant.bills || []) {
+        const billResolved = resolveBill(mapping, billRaw);
+        if (billResolved.kind === "preliminaries") continue;
+        const planned = planBill(billResolved, buildingItems, buildingMatched);
+        if (planned) plannedForBuilding.push(planned);
       }
+      if (!plannedForBuilding.length) continue;
 
-      const planned = planBill(billResolved, projectItems, matchedSet);
-      if (!planned) continue;
+      const sheet = writeCombinedTradeSheet({
+        workbook,
+        plannedBills: plannedForBuilding,
+        sheetName: String(building?.name || "Building"),
+      });
+      if (!sheet) continue;
 
-      const ref = writeStandardBill({ workbook, plannedBill: planned });
-      billRefs.push({ name: planned.name, totalCellAddr: ref.totalCellAddr });
+      // One General Summary line per BUILDING, referencing that sheet's grand
+      // total — so the summary reads Main Building / Warehouse / Gatehouse,
+      // not Substructure / Superstructure.
+      billRefs.push({
+        name: String(building?.name || "Building").toUpperCase(),
+        totalCellAddr: sheet.totalCellAddr,
+      });
+      for (const localIdx of buildingMatched) {
+        const projIdx = projectIndexOf.get(buildingItems[localIdx]);
+        if (projIdx !== undefined) matchedSet.add(projIdx);
+      }
     }
   }
 

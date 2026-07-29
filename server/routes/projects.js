@@ -2705,6 +2705,10 @@ async function createMergedProject(req, res) {
       name,
       slug,
       mergeContainer: true,
+      mergePartType:
+        String(req.body?.partType || "").toLowerCase() === "building"
+          ? "building"
+          : "discipline",
       // Deliberately blank: a container is not a model, so it must never match
       // a plugin's (clientProjectKey, modelFingerprint) upsert and steal a
       // save that belongs to one of its sources.

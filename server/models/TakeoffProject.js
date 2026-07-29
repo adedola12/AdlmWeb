@@ -745,6 +745,17 @@ const TakeoffProjectSchema = new mongoose.Schema(
     // would otherwise try to open a project that has no model behind it; the
     // web asks for them explicitly with ?includeMerged=1.
     mergeContainer: { type: Boolean, default: false },
+    // What the linked sources REPRESENT. "discipline" combines the
+    // architectural and structural models of one structure; "building"
+    // combines separate structures in one job (Main Building, Warehouse,
+    // Gatehouse, Perimeter Fence, External Works) the way ADLM's QSs bill a
+    // site. It drives the export shape - a building merge gets one sheet per
+    // structure - and the wording in the UI.
+    mergePartType: {
+      type: String,
+      enum: ["discipline", "building"],
+      default: "discipline",
+    },
     // Set on a SOURCE project pointing at the container it belongs to. Purely
     // informational — the source stays fully functional and stays the plugin's
     // save target — but it lets the UI badge the project and stops it being
