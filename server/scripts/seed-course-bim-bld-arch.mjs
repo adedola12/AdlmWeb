@@ -24,6 +24,9 @@ import { PaidCourse } from "../models/PaidCourse.js";
 const SKU = "bim-bld-arch";
 const APPLY = process.argv.includes("--apply");
 
+// The previous blurb, kept here so it isn't lost with the overwrite:
+//   "Detailed training on the use of BIM tools for Architectural and
+//    Structural works"
 // Ada (the sales agent) clips course blurbs at 220 chars, so keep this short
 // enough to survive intact in the catalog prompt.
 const blurb =
