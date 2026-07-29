@@ -76,8 +76,16 @@ const REQUIRED = [
   ["AWS_VIDEO_ARCHIVE_BUCKET", "bucket the masters land in"],
 ];
 
+// Accepts either COURSE_-prefixed or bare names, matching utils/awsS3.js.
+function envValue(name) {
+  return (
+    String(process.env[`COURSE_${name}`] || "").trim() ||
+    String(process.env[name] || "").trim()
+  );
+}
+
 function preflight({ warnOnly = false } = {}) {
-  const missing = REQUIRED.filter(([name]) => !String(process.env[name] || "").trim());
+  const missing = REQUIRED.filter(([name]) => !envValue(name));
   if (!missing.length) {
     if (warnOnly) console.log("\nCredentials look complete — --apply is ready to run.");
     return;
@@ -86,6 +94,11 @@ function preflight({ warnOnly = false } = {}) {
   const label = warnOnly ? "Not ready to --apply yet" : "Cannot start";
   console.log(`\n${label} — ${missing.length} setting(s) missing from server/.env:\n`);
   for (const [name, hint] of missing) console.log(`  ${name.padEnd(28)} ${hint}`);
+  console.log(
+    "\nCOURSE_-prefixed names win over the bare ones (COURSE_AWS_REGION over" +
+      "\nAWS_REGION), which keeps this pipeline's IAM user separate from any" +
+      "\nother AWS credentials already set here.",
+  );
   console.log("\nSee docs/COURSE_VIDEO_PIPELINE.md for how to obtain each one.");
 
   if (!warnOnly) process.exit(1);
@@ -288,7 +301,7 @@ if (CHECK) {
   }
 
   const awsMissing = REQUIRED.filter(
-    ([name]) => name.startsWith("AWS_") && !String(process.env[name] || "").trim(),
+    ([name]) => name.startsWith("AWS_") && !envValue(name),
   );
   if (awsMissing.length) {
     preflight({ warnOnly: true });

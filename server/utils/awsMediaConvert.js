@@ -16,9 +16,15 @@ import {
   GetJobCommand,
 } from "@aws-sdk/client-mediaconvert";
 
+import { courseEnv } from "./awsS3.js";
+
+// Same COURSE_-prefixed lookup as the S3 helper, so the whole course pipeline
+// shares one credential namespace.
 function requiredEnv(name) {
-  const value = String(process.env[name] || "").trim();
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  const value = courseEnv(name);
+  if (!value) {
+    throw new Error(`Missing required environment variable: COURSE_${name} (or ${name})`);
+  }
   return value;
 }
 

@@ -44,8 +44,16 @@ const REQUIRED = [
   ["AWS_MEDIACONVERT_ROLE_ARN", "role MediaConvert assumes to read/write S3"],
 ];
 
+// Accepts either COURSE_-prefixed or bare names, matching utils/awsS3.js.
+function envValue(name) {
+  return (
+    String(process.env[`COURSE_${name}`] || "").trim() ||
+    String(process.env[name] || "").trim()
+  );
+}
+
 function preflight({ warnOnly = false } = {}) {
-  const missing = REQUIRED.filter(([name]) => !String(process.env[name] || "").trim());
+  const missing = REQUIRED.filter(([name]) => !envValue(name));
   if (!missing.length) {
     if (warnOnly) console.log("\nCredentials look complete — --apply is ready to run.");
     return;

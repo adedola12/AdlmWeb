@@ -14,9 +14,27 @@ import {
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 
+/**
+ * Course-pipeline credentials are read from COURSE_AWS_* first, falling back
+ * to the generic AWS_* names.
+ *
+ * The prefix exists so this pipeline can hold its own IAM user without
+ * colliding with whatever AWS_ACCESS_KEY_ID is already set for on the host —
+ * and so the SDK's default provider chain can never quietly pick up ambient
+ * credentials belonging to something else.
+ */
+export function courseEnv(name) {
+  return (
+    String(process.env[`COURSE_${name}`] || "").trim() ||
+    String(process.env[name] || "").trim()
+  );
+}
+
 function requiredEnv(name) {
-  const value = String(process.env[name] || "").trim();
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  const value = courseEnv(name);
+  if (!value) {
+    throw new Error(`Missing required environment variable: COURSE_${name} (or ${name})`);
+  }
   return value;
 }
 
