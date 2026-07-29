@@ -54,6 +54,35 @@ function gb(bytes) {
   return `${(Number(bytes || 0) / 1024 ** 3).toFixed(2)} GB`;
 }
 
+/**
+ * Check every credential up front and report them together.
+ *
+ * Discovering these one at a time, as a stack trace, three minutes into a
+ * 30 GB run is a miserable way to find out the bucket name is missing.
+ */
+const REQUIRED = [
+  ["GOOGLE_SERVICE_ACCOUNT_KEY", "Google service account JSON (path, or the JSON itself)"],
+  ["AWS_REGION", "e.g. us-east-1"],
+  ["AWS_ACCESS_KEY_ID", "app IAM user"],
+  ["AWS_SECRET_ACCESS_KEY", "app IAM user"],
+  ["AWS_VIDEO_ARCHIVE_BUCKET", "bucket the masters land in"],
+];
+
+function preflight({ warnOnly = false } = {}) {
+  const missing = REQUIRED.filter(([name]) => !String(process.env[name] || "").trim());
+  if (!missing.length) {
+    if (warnOnly) console.log("\nCredentials look complete — --apply is ready to run.");
+    return;
+  }
+
+  const label = warnOnly ? "Not ready to --apply yet" : "Cannot start";
+  console.log(`\n${label} — ${missing.length} setting(s) missing from server/.env:\n`);
+  for (const [name, hint] of missing) console.log(`  ${name.padEnd(28)} ${hint}`);
+  console.log("\nSee docs/COURSE_VIDEO_PIPELINE.md for how to obtain each one.");
+
+  if (!warnOnly) process.exit(1);
+}
+
 // ── canonical naming ────────────────────────────────────────────────────────
 /**
  * Drive holds "Week 2 Day 1 Class.mp4" next to a bare "Day 3.mp4". Neither
@@ -178,8 +207,11 @@ for (const decision of manifest.needsDecision || []) {
 
 if (!APPLY) {
   console.log("\nDry run. Re-run with --apply to move these into S3.");
+  preflight({ warnOnly: true });
   process.exit(0);
 }
+
+preflight();
 
 // ── run ─────────────────────────────────────────────────────────────────────
 const bucket = archiveBucket();

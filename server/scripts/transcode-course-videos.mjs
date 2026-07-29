@@ -33,6 +33,30 @@ function outPrefixFor(moduleCode) {
   return `hls/${SKU}/${COHORT}/${moduleCode.toLowerCase()}/`;
 }
 
+/** Same idea as the ingest: report every missing credential together. */
+const REQUIRED = [
+  ["AWS_REGION", "e.g. us-east-1"],
+  ["AWS_ACCESS_KEY_ID", "app IAM user"],
+  ["AWS_SECRET_ACCESS_KEY", "app IAM user"],
+  ["AWS_VIDEO_ARCHIVE_BUCKET", "where the masters are"],
+  ["AWS_VIDEO_DELIVERY_BUCKET", "where the HLS output goes"],
+  ["AWS_MEDIACONVERT_ENDPOINT", "aws mediaconvert describe-endpoints"],
+  ["AWS_MEDIACONVERT_ROLE_ARN", "role MediaConvert assumes to read/write S3"],
+];
+
+function preflight({ warnOnly = false } = {}) {
+  const missing = REQUIRED.filter(([name]) => !String(process.env[name] || "").trim());
+  if (!missing.length) {
+    if (warnOnly) console.log("\nCredentials look complete — --apply is ready to run.");
+    return;
+  }
+  const label = warnOnly ? "Not ready to --apply yet" : "Cannot start";
+  console.log(`\n${label} — ${missing.length} setting(s) missing from server/.env:\n`);
+  for (const [name, hint] of missing) console.log(`  ${name.padEnd(28)} ${hint}`);
+  console.log("\nSee docs/COURSE_VIDEO_PIPELINE.md for how to obtain each one.");
+  if (!warnOnly) process.exit(1);
+}
+
 await connectDB();
 const course = await PaidCourse.findOne({ sku: SKU });
 if (!course) {
@@ -42,6 +66,7 @@ if (!course) {
 
 // ── status ──────────────────────────────────────────────────────────────────
 if (STATUS) {
+  preflight();
   do {
     const pending = course.modules.filter(
       (m) => m.transcodeJobId && m.transcodeStatus !== "COMPLETE",
@@ -106,8 +131,11 @@ if (noSource.length) {
 
 if (!APPLY) {
   console.log("\nDry run. Re-run with --apply to submit these to MediaConvert.");
+  preflight({ warnOnly: true });
   process.exit(0);
 }
+
+preflight();
 
 let submitted = 0;
 for (const module of planned) {
