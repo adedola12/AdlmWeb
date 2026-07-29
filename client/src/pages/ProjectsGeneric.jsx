@@ -1254,6 +1254,9 @@ export default function ProjectsGeneric() {
   // can still switch to category/trade, and that choice is not persisted over
   // their normal preference because it only makes sense on a merged project.
   const [mergeGroupOverride, setMergeGroupOverride] = React.useState(null);
+  // True while a reorder round-trip is in flight; disables the arrows so a
+  // slow re-open cannot be mistaken for a click that did not register.
+  const [mergeReorderBusy, setMergeReorderBusy] = React.useState(false);
   const effectiveGroupByMode = mergeInfo
     ? mergeGroupOverride || "source"
     : groupByMode;
@@ -2178,10 +2181,17 @@ export default function ProjectsGeneric() {
   async function reorderMergeParts(from, to) {
     const parts = sel?.merge?.parts || [];
     if (!parts.length || to < 0 || to >= parts.length || from === to) return;
+    // Re-opening the project after a reorder re-fetches the bill, the
+    // valuations and the PM dashboard, so the list can take several seconds to
+    // re-render. Without a busy flag there is no feedback in that gap and a
+    // second click looks necessary — but every click is a real reorder, so the
+    // user would silently move the building twice.
+    if (mergeReorderBusy) return;
     const next = [...parts];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     setErr("");
+    setMergeReorderBusy(true);
     try {
       await apiAuthed(endpoints.mergeOrder(selectedId), {
         token: accessToken,
@@ -2193,6 +2203,8 @@ export default function ProjectsGeneric() {
       await view(selectedId);
     } catch (e) {
       setErr(e?.message || "Could not reorder.");
+    } finally {
+      setMergeReorderBusy(false);
     }
   }
 
@@ -5539,6 +5551,7 @@ export default function ProjectsGeneric() {
                 sourceOptions={mergeSourceNames}
                 mergeInfo={mergeInfo}
                 onReorderMergeParts={reorderMergeParts}
+                mergeReorderBusy={mergeReorderBusy}
                 // On a merged project the choice is held per-project and not
                 // written to the remembered preference, since grouping by
                 // discipline is meaningless anywhere else.

@@ -281,6 +281,7 @@ export default function ProjectOpenView({
   sourceOptions = [],
   mergeInfo = null,
   onReorderMergeParts,
+  mergeReorderBusy = false,
   onGroupByModeChange,
   contract,
   contractBusy = false,
@@ -1059,8 +1060,16 @@ export default function ProjectOpenView({
 
       {activeTab === "bill" && mergeInfo?.parts?.length > 1 ? (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-depth dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
-          <div className="font-medium">
-            {mergeInfo.partType === "building" ? "Buildings in this job" : "Disciplines in this project"}
+          <div className="flex items-center gap-2">
+            <div className="font-medium">
+              {mergeInfo.partType === "building" ? "Buildings in this job" : "Disciplines in this project"}
+            </div>
+            {mergeReorderBusy ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-adlm-blue-50 px-2 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-600/15 dark:text-adlm-blue-300">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-adlm-blue-600" />
+                Saving order…
+              </span>
+            ) : null}
           </div>
           <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
             {mergeInfo.partType === "building"
@@ -1071,7 +1080,10 @@ export default function ProjectOpenView({
             {mergeInfo.parts.map((part, i) => (
               <li
                 key={part.projectId}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-adlm-dark-border"
+                className={[
+                  "flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm transition dark:border-adlm-dark-border",
+                  mergeReorderBusy ? "opacity-60" : "",
+                ].join(" ")}
               >
                 <span className="w-5 text-center text-xs font-semibold text-slate-400">{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate">{part.name}</span>
@@ -1081,7 +1093,7 @@ export default function ProjectOpenView({
                 <button
                   type="button"
                   className="btn btn-sm"
-                  disabled={i === 0 || !onReorderMergeParts}
+                  disabled={i === 0 || !onReorderMergeParts || mergeReorderBusy}
                   title="Move up"
                   onClick={() => onReorderMergeParts?.(i, i - 1)}
                 >
@@ -1090,7 +1102,11 @@ export default function ProjectOpenView({
                 <button
                   type="button"
                   className="btn btn-sm"
-                  disabled={i === mergeInfo.parts.length - 1 || !onReorderMergeParts}
+                  disabled={
+                    i === mergeInfo.parts.length - 1 ||
+                    !onReorderMergeParts ||
+                    mergeReorderBusy
+                  }
                   title="Move down"
                   onClick={() => onReorderMergeParts?.(i, i + 1)}
                 >
