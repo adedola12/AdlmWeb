@@ -1433,8 +1433,6 @@ export async function exportElementalBoQ({
 
   const matchedSet = new Set();
   const billRefs = [];
-  const isTrade =
-    String(format || "elemental").toLowerCase() === "trade";
 
   // Pre-compute the preliminary pool (measured total + provisional) × %
   // so the Preliminaries sheet can render allocations with real numbers.
@@ -1450,40 +1448,19 @@ export async function exportElementalBoQ({
     ((measuredTotal + provisionalTotal) * safeNum(preliminaryPercent)) / 100;
   const prelimOpts = { preliminaryItems, preliminaryPool, preliminaryPercent };
 
-  if (isTrade) {
-    // Trade format: Preliminaries gets its own sheet (per convention), then
-    // every other planned bill is rendered as a section on a single sheet.
-    const plannedStandardBills = [];
-    for (const billRaw of variant.bills || []) {
-      const billResolved = resolveBill(mapping, billRaw);
-      if (billResolved.kind === "preliminaries") {
-        const ref = writePreliminariesSheet(workbook, projectName, prelimOpts);
-        billRefs.push({ name: billResolved.name, totalCellAddr: ref.totalCellAddr });
-        continue;
-      }
-      const planned = planBill(billResolved, projectItems, matchedSet);
-      if (planned) plannedStandardBills.push(planned);
-    }
-
-    const combined = writeCombinedTradeSheet({
-      workbook,
-      plannedBills: plannedStandardBills,
-      sheetName: "Trade BoQ",
-    });
-    if (combined) {
-      // In the General Summary, surface one line per trade referencing the
-      // trade's subtotal cell — keeps the same breakdown the contractor expects
-      // without cluttering the workbook with separate tabs.
-      for (const sub of combined.subtotalRefs) {
-        billRefs.push({ name: sub.name, totalCellAddr: sub.cellAddr });
-      }
-    }
-  } else {
-    // Elemental format: ONE SHEET PER BUILDING, with the elemental bills as
-    // sections inside it — the layout ADLM's QSs issue (FIRS has Main
-    // Building / Warehouse / Gatehouse / Perimeter Fence / External Works,
-    // each a sheet, all rolling into one General Summary; Ogbomogo has MAIN
-    // BUILDING and EXTERNAL WORKS the same way).
+  {
+    // ONE SHEET PER BUILDING, with the bills as sections inside it — the
+    // layout ADLM's QSs issue (FIRS has Main Building / Warehouse / Gatehouse /
+    // Perimeter Fence / External Works, each a sheet, all rolling into one
+    // General Summary; Ogbomogo has MAIN BUILDING and EXTERNAL WORKS the same
+    // way).
+    //
+    // Elemental and trade share this path. They only ever differed in WHICH
+    // mapping supplies the sections — elements or work sections — and that is
+    // already decided by resolveMappingPath, so the two branches that used to
+    // exist here were the same code twice. Trade previously wrote a single
+    // "Trade BoQ" sheet, which meant a multi-building job silently collapsed
+    // every structure into one sheet with no way to tell them apart.
     //
     // A project with no explicit parts is a single structure, so it gets one
     // sheet under its own heading rather than a tab per element. That is a
