@@ -72,6 +72,25 @@ export async function objectSize(key, bucket = archiveBucket()) {
 }
 
 /**
+ * A short-lived direct link to an archived master.
+ *
+ * This is a stopgap for the window between "the recording is in S3" and "the
+ * HLS ladder exists behind CloudFront". It streams the raw master, so there is
+ * no adaptive bitrate and a two-hour lecture is several gigabytes — fine for
+ * checking a file plays, wrong as a way to serve a cohort. `hlsKey` takes
+ * precedence the moment MediaConvert produces one, so this retires itself.
+ */
+export async function presignArchiveUrl(key, ttlSec = 2 * 60 * 60) {
+  const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+  return getSignedUrl(
+    s3Client(),
+    new GetObjectCommand({ Bucket: archiveBucket(), Key: key }),
+    { expiresIn: ttlSec },
+  );
+}
+
+/**
  * Proves the credentials can actually write to the archive bucket, without
  * leaving anything behind.
  *
