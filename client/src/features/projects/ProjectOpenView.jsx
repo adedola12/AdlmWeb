@@ -664,6 +664,33 @@ export default function ProjectOpenView({
                 >
                   Multi-storey (Trade format)
                 </button>
+
+                <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Milestone BoQ
+                  <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
+                    — one priceable bill per construction stage
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() =>
+                    onExportElementalBoQ?.("bungalow", undefined, "milestone")
+                  }
+                  title="Substructure, ground floor, roof — each a bill of its own that can be priced, valued and paid against"
+                >
+                  Bungalow (Milestone format)
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  onClick={() =>
+                    onExportElementalBoQ?.("multistorey", undefined, "milestone")
+                  }
+                  title="One bill per storey, in the order the building goes up — the basis for a payment schedule"
+                >
+                  Multi-storey (Milestone format)
+                </button>
               </div>
               ) : null}
             </div>

@@ -189,16 +189,63 @@ async function driveToken() {
   return token;
 }
 
-async function openDriveFile(fileId, token) {
-  const url =
+class DrivePermissionError extends Error {}
+
+function driveContentUrl(fileId) {
+  return (
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}` +
-    `?alt=media&supportsAllDrives=true`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok || !res.body) {
-    throw new Error(`Drive read failed (${res.status}): ${await res.text()}`);
+    `?alt=media&supportsAllDrives=true`
+  );
+}
+
+/**
+ * Turns Drive's content-read failures into something actionable.
+ *
+ * `cannotDownloadFile` is the one worth naming: it means the file carries
+ * "Viewers and commenters cannot download, print, or copy". Metadata still
+ * reads fine under that setting, so the account looks correctly shared right
+ * up until the first byte of content is requested.
+ */
+async function driveReadError(res, fileId) {
+  const body = await res.text();
+  if (res.status === 403 && body.includes("cannotDownloadFile")) {
+    return new DrivePermissionError(
+      `Drive is refusing to send the file contents (cannotDownloadFile).\n` +
+        `  The share is fine — metadata reads work — but these files are set to\n` +
+        `  "Viewers and commenters cannot download, print, or copy", and that\n` +
+        `  restriction only exempts writers.\n\n` +
+        `  Fix either way:\n` +
+        `    • Change the service account from Viewer to Editor on "BIM Training",\n` +
+        `      run the ingest, then set it back to Viewer. Nothing changes for\n` +
+        `      the people you actually share the folder with.\n` +
+        `    • Or turn the restriction off: folder → Share → gear icon → untick\n` +
+        `      "Viewers and commenters can see the option to download, print, and copy".`,
+    );
   }
+  if (res.status === 403 || res.status === 404) {
+    return new DrivePermissionError(
+      `Drive returned ${res.status} for file ${fileId}: ${body.slice(0, 300)}`,
+    );
+  }
+  return new Error(`Drive read failed (${res.status}): ${body.slice(0, 300)}`);
+}
+
+async function openDriveFile(fileId, token) {
+  const res = await fetch(driveContentUrl(fileId), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok || !res.body) throw await driveReadError(res, fileId);
   // The SDK's multipart uploader wants a Node stream, not a web one.
   return Readable.fromWeb(res.body);
+}
+
+/** Reads the first kilobyte, to prove content — not just metadata — is readable. */
+async function probeDriveDownload(fileId, token) {
+  const res = await fetch(driveContentUrl(fileId), {
+    headers: { Authorization: `Bearer ${token}`, Range: "bytes=0-1023" },
+  });
+  if (!res.ok) throw await driveReadError(res, fileId);
+  await res.arrayBuffer();
 }
 
 // ── plan ────────────────────────────────────────────────────────────────────

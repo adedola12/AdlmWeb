@@ -48,7 +48,15 @@ function resolveMappingPath(format, explicit) {
   if (f === "trade" || f === "work-section" || f === "worksection") {
     return TRADE_MAPPING_PATH;
   }
+  // Milestone bills are elemental in structure — each stage's bill reads
+  // REINFORCED CONCRETE / BLOCKWORK / FINISHES, exactly as an elemental bill
+  // does. Only the way the job is CUT differs.
   return DEFAULT_MAPPING_PATH;
+}
+
+function isMilestoneFormat(format) {
+  const f = String(format || "").toLowerCase();
+  return f === "milestone" || f === "milestones";
 }
 
 const HEADER_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FF091E39" } };
@@ -349,6 +357,131 @@ function stageSplitFromMatches(matches) {
 }
 
 /* =========================
+   Milestone bills — the job re-cut into one priceable bill per stage
+   ========================= */
+
+// Walk every planned row and collect the stages its money touches, in the
+// order the building goes up. Taken from the PLAN rather than from the raw
+// items so a stage can never appear as a milestone with nothing in it.
+function stagesInPlan(plannedBills) {
+  const seen = new Set();
+  for (const bill of plannedBills || []) {
+    for (const element of bill?.elements || []) {
+      for (const item of element?.items || []) {
+        for (const row of item.kind === "leveled"
+          ? item.levelRows
+          : item.kind === "expanded"
+            ? item.rows
+            : [item]) {
+          for (const s of row.stageSplit || []) {
+            if (s.weight > 0) seen.add(s.stage);
+          }
+        }
+      }
+    }
+  }
+  return [...seen].sort((a, b) => stageRank(a) - stageRank(b) || a.localeCompare(b));
+}
+
+function eachPlannedRow(plannedBills, fn) {
+  for (const bill of plannedBills || []) {
+    for (const element of bill?.elements || []) {
+      for (const item of element?.items || []) {
+        if (item.kind === "leveled") item.levelRows.forEach(fn);
+        else if (item.kind === "expanded") item.rows.forEach(fn);
+        else fn(item);
+      }
+    }
+  }
+}
+
+/**
+ * Fix each row's quantity per stage, once, before any slicing.
+ *
+ * Quantities are shown to two decimals, and rounding each stage's share
+ * independently leaves the shares not quite adding up to the row — ₦70 across a
+ * ₦274m job in testing. Small, but a contract sum that disagrees with the
+ * elemental export by any amount is a question a QS has to answer. The last
+ * stage absorbs the residual so the shares reconstruct the row exactly.
+ */
+function assignStageQuantities(plannedBills, stages) {
+  const rank = new Map(stages.map((s, i) => [s, i]));
+  eachPlannedRow(plannedBills, (row) => {
+    const split = (row.stageSplit || []).filter((s) => s.weight > 0);
+    if (!split.length) return;
+    const total = safeNum(row.qty);
+    const ordered = [...split].sort(
+      (a, b) => (rank.get(a.stage) ?? 1e9) - (rank.get(b.stage) ?? 1e9),
+    );
+    const qtyByStage = new Map();
+    let used = 0;
+    ordered.forEach((s, i) => {
+      const q =
+        i === ordered.length - 1 ? round2(total - used) : round2(total * s.weight);
+      used = round2(used + q);
+      qtyByStage.set(s.stage, q);
+    });
+    row.stageQty = qtyByStage;
+  });
+}
+
+function weightFor(row, stage) {
+  const hit = (row?.stageSplit || []).find((s) => s.stage === stage);
+  return hit ? hit.weight : 0;
+}
+
+// The balanced quantity for a stage, falling back to the raw apportionment if
+// balancing was not run.
+function stageQtyOf(row, stage) {
+  if (row?.stageQty instanceof Map) return row.stageQty.get(stage) ?? 0;
+  return round2(safeNum(row?.qty) * weightFor(row, stage));
+}
+
+/**
+ * One milestone's share of the planned bills.
+ *
+ * The QUANTITY is what gets divided, never the amount — the rate the QS priced
+ * is the same rate whichever stage the work happens on. A row's stage
+ * quantities therefore sum back to the quantity the whole-job bill carries,
+ * which is what makes the milestone bills add up to the contract sum exactly.
+ */
+function sliceBillsForStage(plannedBills, stage) {
+  const out = [];
+  for (const bill of plannedBills || []) {
+    const elements = [];
+    for (const element of bill?.elements || []) {
+      const items = [];
+      for (const item of element?.items || []) {
+        if (item.kind === "fixed") {
+          // A lump sum cannot be part-delivered by quantity, so it belongs
+          // whole to the stage that owns it (fixed lines carry a single
+          // catch-all stage) and is never repeated across milestones.
+          if (weightFor(item, stage) > 0) items.push({ ...item });
+          continue;
+        }
+        if (item.kind === "leveled" || item.kind === "expanded") {
+          const key = item.kind === "leveled" ? "levelRows" : "rows";
+          const rows = (item[key] || [])
+            .map((r) => {
+              if (!(weightFor(r, stage) > 0)) return null;
+              return { ...r, qty: stageQtyOf(r, stage) };
+            })
+            .filter(Boolean);
+          if (rows.length) items.push({ ...item, [key]: rows });
+          continue;
+        }
+        if (weightFor(item, stage) > 0) {
+          items.push({ ...item, qty: stageQtyOf(item, stage) });
+        }
+      }
+      if (items.length) elements.push({ ...element, items });
+    }
+    if (elements.length) out.push({ ...bill, elements });
+  }
+  return out;
+}
+
+/* =========================
    Pre-compute: which items / elements / bills will actually render
    ========================= */
 function planItem(boqItem, projectItems, matchedSet) {
@@ -537,7 +670,7 @@ function safeSheetName(name, workbook) {
   return base;
 }
 
-function writeBillHeader(ws, billName) {
+function writeBillHeader(ws, billName, subtitle = "") {
   const hdr = ws.getRow(1);
   hdr.values = ["Item", "Description", "Qty", "Unit", "Rate", "Amount"];
   hdr.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -548,6 +681,14 @@ function writeBillHeader(ws, billName) {
   const titleRow = ws.addRow([null, String(billName || "").toUpperCase()]);
   titleRow.font = { bold: true, size: 12 };
   ws.mergeCells(titleRow.number, 2, titleRow.number, 6);
+
+  // Milestone bills carry the stage they cover on a second title line, the way
+  // JABI reads "MILESTONE 2" then "GROUND FLOOR SLAB TO FIRST FLOOR".
+  if (subtitle) {
+    const subRow = ws.addRow([null, String(subtitle).toUpperCase()]);
+    subRow.font = { bold: true, size: 11, color: { argb: "FF1D4ED8" } };
+    ws.mergeCells(subRow.number, 2, subRow.number, 6);
+  }
 }
 
 function writeAmountRow(ws, { code, description, qty, unit, rate, fixedAmount }) {
@@ -1188,7 +1329,13 @@ function writeUnmappedSheet(workbook, projectItems, matchedSet) {
    Masonry, Finishes, etc.) rendered as a bold section with its own subtotal.
    The Prelim, Provisional Sums, Variations and "Other items" sheets remain
    separate and are referenced in the General Summary. */
-function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade BoQ" }) {
+function writeCombinedTradeSheet({
+  workbook,
+  plannedBills,
+  sheetName = "Trade BoQ",
+  subtitle = "",
+  totalLabel = "",
+}) {
   const billsWithContent = plannedBills.filter(
     (pb) => pb && pb.kind === "standard" && Array.isArray(pb.elements) && pb.elements.length,
   );
@@ -1203,7 +1350,7 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
     { header: "Rate", key: "rate", width: 14 },
     { header: "Amount", key: "amount", width: 16 },
   ];
-  writeBillHeader(ws, sheetName);
+  writeBillHeader(ws, sheetName, subtitle);
 
   const allAmountRows = [];
   const billSubtotalRows = [];
@@ -1345,7 +1492,7 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
   // all of them.
   const grand = ws.addRow([
     null,
-    `${sheetName.toUpperCase()} — GRAND TOTAL TO SUMMARY`,
+    `${(totalLabel || sheetName).toUpperCase()} — GRAND TOTAL TO SUMMARY`,
     null,
     null,
     null,
@@ -1710,7 +1857,96 @@ export async function exportElementalBoQ({
     ((measuredTotal + provisionalTotal) * safeNum(preliminaryPercent)) / 100;
   const prelimOpts = { preliminaryItems, preliminaryPool, preliminaryPercent };
 
-  {
+  if (isMilestoneFormat(format)) {
+    // MILESTONE-BASED BILL — the whole job re-cut into one priceable bill per
+    // construction stage, the way JABI issues it ("MILESTONE 2 / GROUND FLOOR
+    // SLAB TO FIRST FLOOR"). Each milestone is a real bill with its own
+    // quantities and rates, not a summary of another sheet, so it can be
+    // priced, valued and paid against on its own.
+    //
+    // Milestones are job-level even when the job has several buildings: a
+    // payment schedule runs across the whole site, so splitting it per
+    // structure would defeat the point.
+    for (const billRaw of variant.bills || []) {
+      if (resolveBill(mapping, billRaw).kind !== "preliminaries") continue;
+      const ref = writePreliminariesSheet(workbook, projectName, prelimOpts);
+      billRefs.push({ name: resolveBill(mapping, billRaw).name, totalCellAddr: ref.totalCellAddr });
+      break;
+    }
+
+    // The job is planned ONCE, then each milestone is a slice of that plan.
+    //
+    // Re-running the mapping over each stage's items separately looks more
+    // natural but does not reconcile: with lookupCombine "first" a lookup group
+    // that has hits across the whole job may have none within one stage, so the
+    // stage silently prices a different alternative. Measured against live
+    // takeoffs that lost ~₦2m on a ₦274m job. Slicing one plan cannot drift,
+    // because a row's stage quantities are shares of the quantity the bill
+    // already carries.
+    // Planned per BUILDING, exactly as the elemental path does — each
+    // structure matched against the mapping with its own matched-set. Planning
+    // the pooled items of a multi-building job instead gives a different (and
+    // larger) result than the elemental export of the same job, so the two
+    // formats would report different contract sums for one project.
+    const buildings = Array.isArray(parts) && parts.length
+      ? parts
+      : [{ name: "MAIN BUILDING", items: projectItems }];
+
+    const projectIndexOf = new Map();
+    projectItems.forEach((it, i) => {
+      if (!projectIndexOf.has(it)) projectIndexOf.set(it, i);
+    });
+
+    const plannedForJob = [];
+    for (const building of buildings) {
+      const buildingItems = Array.isArray(building?.items) ? building.items : [];
+      if (!buildingItems.length) continue;
+      const buildingMatched = new Set();
+      for (const billRaw of variant.bills || []) {
+        const billResolved = resolveBill(mapping, billRaw);
+        if (billResolved.kind === "preliminaries") continue;
+        const planned = planBill(billResolved, buildingItems, buildingMatched);
+        if (!planned) continue;
+        // On a multi-building job the section keeps its building's name, so a
+        // milestone sheet still says which structure the work is in.
+        plannedForJob.push(
+          buildings.length > 1
+            ? { ...planned, name: `${building.name} — ${planned.name}` }
+            : planned,
+        );
+      }
+      for (const localIdx of buildingMatched) {
+        const projIdx = projectIndexOf.get(buildingItems[localIdx]);
+        if (projIdx !== undefined) matchedSet.add(projIdx);
+      }
+    }
+
+    assignStageQuantities(plannedForJob, stagesInPlan(plannedForJob));
+
+    let n = 0;
+    for (const stage of stagesInPlan(plannedForJob)) {
+      const sliced = sliceBillsForStage(plannedForJob, stage);
+      if (!sliced.length) continue;
+
+      n += 1;
+      const sheet = writeCombinedTradeSheet({
+        workbook,
+        plannedBills: sliced,
+        sheetName: `Milestone ${n}`,
+        subtitle: stage,
+        totalLabel: `MILESTONE ${n} — ${stage}`,
+      });
+      if (!sheet) {
+        n -= 1;
+        continue;
+      }
+
+      billRefs.push({
+        name: `MILESTONE ${n} — ${stage}`,
+        totalCellAddr: sheet.totalCellAddr,
+      });
+    }
+  } else {
     // ONE SHEET PER BUILDING, with the bills as sections inside it — the
     // layout ADLM's QSs issue (FIRS has Main Building / Warehouse / Gatehouse /
     // Perimeter Fence / External Works, each a sheet, all rolling into one
@@ -1833,8 +2069,9 @@ export async function exportElementalBoQ({
       ? `Multi-Storey (${ft[0].toUpperCase() + ft.slice(1)})`
       : "Bungalow";
 
-  const formatLabel =
-    String(format || "elemental").toLowerCase() === "trade"
+  const formatLabel = isMilestoneFormat(format)
+    ? "Milestone"
+    : String(format || "elemental").toLowerCase() === "trade"
       ? "Trade"
       : "Elemental";
 
