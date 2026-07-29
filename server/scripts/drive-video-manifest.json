@@ -1,0 +1,70 @@
+{
+  "_comment": "Maps the 2025 cohort recordings in Google Drive to course modules. Built by listing BIM Training/Class video (folder 1E0oWpykfFGSXI3c9rf_mAiadTIinMpoI) on 2026-07-29. Two naming conventions are in play: weeks 1-3 use 'Week N Day M...', weeks 4-6 use bare 'Day M.mp4' with the week coming from the parent folder - so the file ids below are the source of truth, not the names. Review the 'needsDecision' block before running the ingest.",
+  "courseSku": "bim-bld-arch",
+  "driveFolderId": "1E0oWpykfFGSXI3c9rf_mAiadTIinMpoI",
+  "items": [
+    { "moduleCode": "W1D1", "fileId": "1UlPxZ4-9fR5VIc3EdLs-X_sethqTbCSZ", "name": "Week 1 Day 1 Class.mp4", "bytes": 6248493405 },
+    { "moduleCode": "W1D3", "fileId": "1nZr4i79PxbCIQlCgRIq5wABjurlOUBLO", "name": "Week 1 Day 3.mp4", "bytes": 487837151 },
+
+    { "moduleCode": "W2D1", "fileId": "1Fa0ShW6FUlxSU47FB4mbwBthKHUU1Ji8", "name": "Week 2 Day 1 Class.mp4", "bytes": 5267861986 },
+    { "moduleCode": "W2D2", "fileId": "10ulBqWEz1NXZO84guvEBZwz2fzC3M3bI", "name": "Week 2 Day 2.mp4", "bytes": 3517017776 },
+    { "moduleCode": "W2D3", "fileId": "1NkAnwXtDy4dAoxzlz-DkciR1kZh-06Kb", "name": "Week 2 Day 3.mp4", "bytes": 758869266 },
+
+    { "moduleCode": "W3D1", "fileId": "1jx_FErV9HEDJOdcJo1Dip3E01YWqPJ6S", "name": "Week 3 Day 1.mp4", "bytes": 488490801 },
+    { "moduleCode": "W3D2", "fileId": "1ocjADQ4kRdpokncsFDNejzG6ooorRXtJ", "name": "Week 3 Day 2.mp4", "bytes": 801202590 },
+    { "moduleCode": "W3D3", "fileId": "1CmLOhpn4l0eim-8swChd21RXHdwEprZX", "name": "Week 3 Day 3.mp4", "bytes": 1819293893 },
+
+    { "moduleCode": "W4D1", "fileId": "1v6SmoCI0uHpAViuCwLrQ9fPCuxBwqOxY", "name": "Week 4 Lecture/Day 1.mp4", "bytes": 757488815 },
+    { "moduleCode": "W4D2", "fileId": "1uDFGBH6ZXVaqabzC7kWKugqrqLHi39qd", "name": "Week 4 Lecture/Day 2.mp4", "bytes": 1019930809 },
+    { "moduleCode": "W4D3", "fileId": "1OzylTsXmxAv-xqcmu7_HHwRheZYKzmwl", "name": "Week 4 Lecture/Day 3.mp4", "bytes": 940000390 },
+
+    { "moduleCode": "W5D1", "fileId": "1FzBKFGuiRyEYnUhM6t8q7u6XOgYfR83J", "name": "Week 5 Lecture/Day 1.mp4", "bytes": 1123916250 },
+    { "moduleCode": "W5D2", "fileId": "1AxbyfAFFj1zcVtgcdTuKStnqxMESrWoR", "name": "Week 5 Lecture/Day 2.mp4", "bytes": 2974966277 },
+    { "moduleCode": "W5D3", "fileId": "14LkLqiwXtNvZH-KeBns1NjsWaAGlqyt9", "name": "Week 5 Lecture/Day 3.mp4", "bytes": 1103811639 },
+
+    { "moduleCode": "W6D1", "fileId": "1b0S3X7oqaMUXj3FiriRkWSI3He4kbfh5", "name": "Week 6 Lecture/Day 1.mp4", "bytes": 1754468292 },
+    { "moduleCode": "W6D2", "fileId": "1gR043FWR-6H-lWjXxUHN_PHNuaOR3SXu", "name": "Week 6 Lecture/Day 2.mp4", "bytes": 1382440246 },
+    { "moduleCode": "W6D3", "fileId": "1QFFazQrb9M4Vg_xK_hd1fuZBDIjkaZTs", "name": "Week 6 Lecture/Day 3.mp4", "bytes": 990516249 }
+  ],
+
+  "needsDecision": [
+    {
+      "moduleCode": "W1D2",
+      "fileId": null,
+      "issue": "No Week 1 Day 2 recording exists in the Drive folder. Week 1 Lecture holds four Day 1 files and one Day 3 file, and nothing else.",
+      "candidate": {
+        "fileId": "1RfuecSc1GJvXzxa8tGIf4P9R5DHiPBIC",
+        "name": "Week 1 Day 1 Class 2.mp4",
+        "bytes": 955244649,
+        "question": "Is this the day 2 session saved under the wrong name, or the second half of day 1? Watch the first minute to tell. If it is day 2, move it into items as W1D2."
+      }
+    }
+  ],
+
+  "ignored": [
+    {
+      "fileId": "18eKlRD3BX1kV_6kqgOI9aqdGPIU8fXI0",
+      "name": "Copy of Week 1 Day 1 Class.mp4",
+      "bytes": 6248493405,
+      "reason": "Byte-identical duplicate of Week 1 Day 1 Class.mp4. Uploading it would cost a second 6.25 GB transfer for nothing."
+    },
+    {
+      "fileId": "1RlR5hWMEdXqK9Kf4CLFqVLwXAbsRVkYa",
+      "name": "Week 1 Day 1 Class low.mp4",
+      "bytes": 585452185,
+      "reason": "Low-bitrate encode of the same session. The host builds its own bitrate ladder, so ingest the full-quality master instead."
+    },
+    {
+      "fileId": "18KnIUB2aex2QfeV-_CwXwFK9HJbaMVL5",
+      "name": "ADLM Class ads.mp4",
+      "bytes": 4145969640,
+      "reason": "Marketing asset, not course content."
+    }
+  ],
+
+  "onboardingCandidates": [
+    { "fileId": "1mrEnzBQm4ccfCXDUssvcbYILGUxFUua6", "name": "Class intro.mp4", "bytes": 36298806 },
+    { "fileId": "1SjjO5ZZcr_hYSKmwEApLjJpjGO1AqyAy", "name": "Classroom Overview.mp4", "bytes": 30183778 },
+    { "fileId": "1R21QtFEf7Kazj0jQr0taS6IZUjKbV8pj", "name": "Assignment Submission.mp4", "bytes": 50576593 }
+  ]
+}
