@@ -211,7 +211,12 @@ function CreditPanel({ credit, onSave, saving }) {
               <div className="font-semibold tabular-nums">{usd4(credit.perDayUsd)}/day</div>
             </div>
             <div>
-              <div className="text-[11px] uppercase text-slate-500">Runs out</div>
+              {/* At the current burn the credit usually expires with money left,
+                  so calling that "runs out" reads as runway when it is really
+                  unused credit about to be lost. Label what the figure is. */}
+              <div className="text-[11px] uppercase text-slate-500">
+                {credit.limitedBy === "expiry" ? "Expires unused" : "Runs out"}
+              </div>
               <div className="font-semibold tabular-nums">
                 {credit.daysRemaining === null
                   ? "—"
