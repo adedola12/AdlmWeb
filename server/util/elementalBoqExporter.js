@@ -484,27 +484,47 @@ function writePreliminariesSheet(workbook, projectName, opts = {}) {
   } = opts;
 
   const ws = workbook.addWorksheet(safeSheetName("Preliminaries", workbook));
+  // Laid out as a PRICEABLE preliminaries bill, matching the format ADLM's QSs
+  // issue: ITEM | DESCRIPTION | QTY | UNIT | RATE | AMOUNT, items lettered
+  // A B C … H J K (no "I"), one blank row between each, unit "Item".
+  //
+  // The previous layout (S/N | PRELIMINARY ITEM | ALLOC % | AMOUNT | DONE |
+  // DONE AMOUNT) exposed ADLM's internal percentage-allocation model. That is a
+  // valuation view, not a bill — a contractor receiving it cannot price the
+  // preliminaries, they are handed a pre-apportioned percentage. The allocation
+  // still drives the AMOUNT column, so no information is lost; it is simply
+  // presented as money against an item, which is what a bill is.
   ws.columns = [
-    { header: "S/N", key: "sn", width: 6 },
-    { header: "PRELIMINARY ITEM", key: "description", width: 48 },
-    { header: "ALLOC %", key: "alloc", width: 10 },
-    { header: "AMOUNT", key: "amount", width: 14 },
-    { header: "DONE", key: "done", width: 8 },
-    { header: "DONE AMOUNT", key: "doneAmount", width: 16 },
+    { header: "ITEM", key: "item", width: 8 },
+    { header: "DESCRIPTION", key: "description", width: 60 },
+    { header: "QTY", key: "qty", width: 10 },
+    { header: "UNIT", key: "unit", width: 10 },
+    { header: "RATE", key: "rate", width: 16 },
+    { header: "AMOUNT", key: "amount", width: 18 },
   ];
 
   const titleRow = ws.getRow(1);
-  titleRow.values = ["S/N", "PRELIMINARY ITEM", "ALLOC %", "AMOUNT", "DONE", "DONE AMOUNT"];
+  titleRow.values = ["ITEM", "DESCRIPTION", "QTY", "UNIT", "RATE", "AMOUNT"];
   titleRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
   titleRow.fill = HEADER_FILL;
   titleRow.alignment = { horizontal: "center" };
 
+  ws.addRow([]);
+  const billHeadRow = ws.addRow([null, "BILL NR. 1 - PRELIMINARIES"]);
+  billHeadRow.font = { bold: true, size: 12 };
+  billHeadRow.alignment = { horizontal: "center" };
+  ws.mergeCells(billHeadRow.number, 2, billHeadRow.number, 6);
+
+  ws.addRow([]);
   const sub = ws.addRow([
     null,
-    `BREAKDOWN OF PRELIMINARIES — ${projectName || "Project"}` +
-      (preliminaryPercent ? ` · ${safeNum(preliminaryPercent).toFixed(1)}% of measured + PC` : ""),
+    "Allow for the provision of the following preliminary items" +
+      (preliminaryPercent
+        ? ` (${safeNum(preliminaryPercent).toFixed(1)}% of measured work and provisional sums)`
+        : ""),
   ]);
-  sub.font = { bold: true };
+  sub.font = { italic: true };
+  sub.alignment = { wrapText: true };
   ws.mergeCells(sub.number, 2, sub.number, 6);
 
   // Use the project's actual items if present, otherwise fall back to the
@@ -527,53 +547,63 @@ function writePreliminariesSheet(workbook, projectName, opts = {}) {
   const amountRowNumbers = [];
   const doneAmountRowNumbers = [];
   rowsToRender.forEach((p, i) => {
+    // Blank line between items, as in a hand-written bill.
+    ws.addRow([]);
     const alloc = safeNum(p?.allocation);
     const amount = pool > 0 ? (pool * alloc) / allocBase : 0;
     const done = Boolean(p?.completed);
     const row = ws.addRow([
-      i + 1,
+      snLetter(i),
       String(p?.name || ""),
-      alloc,
+      null,
+      "Item",
+      null,
       round2(amount),
-      done ? "✓" : "",
-      done ? round2(amount) : 0,
     ]);
-    applyMoneyFormat(row.getCell(4));
+    row.getCell(1).alignment = { horizontal: "center" };
+    row.getCell(2).alignment = { wrapText: true, vertical: "top" };
     applyMoneyFormat(row.getCell(6));
-    if (done) {
-      row.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFD1FAE5" },
-      };
-    }
     amountRowNumbers.push(row.number);
-    doneAmountRowNumbers.push(row.number);
+    if (done) doneAmountRowNumbers.push(row.number);
   });
 
   ws.addRow([]);
-  // Pool total
+  // Carried-to-summary line, worded and placed as the QSs' bills do.
   const poolRow = ws.addRow([
     null,
-    "PRELIMINARIES — Pool (to Main Building Summary)",
+    "PRELIMINARIES CARRIED TO GENERAL SUMMARY",
     null,
     null,
-    null,
+    "₦",
     null,
   ]);
   poolRow.font = { bold: true };
   poolRow.fill = SUMMARY_TOTAL_FILL;
-  poolRow.getCell(4).value = {
+  poolRow.getCell(5).alignment = { horizontal: "right" };
+  // Items are on alternating rows now, so a SUM range would swallow the blank
+  // spacer rows. Harmless for a sum, but an explicit list keeps the formula
+  // readable and survives anyone inserting a row in the gaps.
+  poolRow.getCell(6).value = {
     formula: amountRowNumbers.length
-      ? `SUM(D${amountRowNumbers[0]}:D${amountRowNumbers[amountRowNumbers.length - 1]})`
+      ? amountRowNumbers.map((n) => `F${n}`).join("+")
       : "0",
   };
-  applyMoneyFormat(poolRow.getCell(4));
+  applyMoneyFormat(poolRow.getCell(6));
 
-  // Done total
+  // Valuation figures sit BELOW the carried-to-summary line and are labelled as
+  // such, so the bill above reads as a clean priceable document while the
+  // progress information a QS needs is still in the workbook.
+  ws.addRow([]);
+  const noteRow = ws.addRow([
+    null,
+    "For valuation only — not part of the bill above",
+  ]);
+  noteRow.font = { italic: true, color: { argb: "FF6B7280" } };
+  ws.mergeCells(noteRow.number, 2, noteRow.number, 6);
+
   const doneRow = ws.addRow([
     null,
-    "Preliminaries — Done to date",
+    "Preliminaries — done to date",
     null,
     null,
     null,
@@ -582,15 +612,14 @@ function writePreliminariesSheet(workbook, projectName, opts = {}) {
   doneRow.font = { bold: true, color: { argb: "FF065F46" } };
   doneRow.getCell(6).value = {
     formula: doneAmountRowNumbers.length
-      ? `SUM(F${doneAmountRowNumbers[0]}:F${doneAmountRowNumbers[doneAmountRowNumbers.length - 1]})`
+      ? doneAmountRowNumbers.map((n) => `F${n}`).join("+")
       : "0",
   };
   applyMoneyFormat(doneRow.getCell(6));
 
-  // Outstanding total
   const outRow = ws.addRow([
     null,
-    "Preliminaries — Outstanding",
+    "Preliminaries — outstanding",
     null,
     null,
     null,
@@ -598,13 +627,15 @@ function writePreliminariesSheet(workbook, projectName, opts = {}) {
   ]);
   outRow.font = { bold: true, color: { argb: "FF1E40AF" } };
   outRow.getCell(6).value = {
-    formula: `D${poolRow.number}-F${doneRow.number}`,
+    formula: `F${poolRow.number}-F${doneRow.number}`,
   };
   applyMoneyFormat(outRow.getCell(6));
 
   return {
     sheet: ws,
-    totalCellAddr: `Preliminaries!D${poolRow.number}`,
+    // AMOUNT moved from column D to F with the layout change; the General
+    // Summary reads these addresses, so they move with it.
+    totalCellAddr: `Preliminaries!F${poolRow.number}`,
     doneCellAddr: `Preliminaries!F${doneRow.number}`,
     outstandingCellAddr: `Preliminaries!F${outRow.number}`,
   };
@@ -855,20 +886,79 @@ function writeVariationsSheet(workbook, variations) {
 /* =========================
    Other sheets
    ========================= */
-function writeCoverSheet(workbook, { projectName, variantTitle, buildingType, foundationType }) {
+function writeCoverSheet(workbook, {
+  projectName,
+  variantTitle,
+  buildingType,
+  foundationType,
+  clientName,
+}) {
   const ws = workbook.addWorksheet("Cover");
-  ws.columns = [{ width: 24 }, { width: 60 }];
+  // One wide centred column band, as on a real BoQ title page. The previous
+  // cover was a four-row key/value block (Project / Building type / Foundation
+  // type / Generated) — useful as metadata, but not a page anyone could put in
+  // front of a client without retyping it.
+  ws.columns = [{ width: 4 }, ...Array.from({ length: 5 }, () => ({ width: 18 }))];
 
-  ws.addRow([]);
-  const titleRow = ws.addRow([null, variantTitle || "Bills of Quantities"]);
-  titleRow.font = { bold: true, size: 18 };
-  ws.addRow([]);
-  ws.addRow(["Project", projectName || "Project"]);
-  ws.addRow(["Building type", buildingType === "multistorey" ? "Multi-Storey" : "Bungalow"]);
-  if (buildingType === "multistorey" && foundationType) {
-    ws.addRow(["Foundation type", foundationType[0].toUpperCase() + foundationType.slice(1)]);
+  const centred = (text, opts = {}) => {
+    const row = ws.addRow([null, text]);
+    ws.mergeCells(row.number, 2, row.number, 6);
+    row.getCell(2).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    row.getCell(2).font = {
+      bold: opts.bold !== false,
+      size: opts.size || 12,
+      italic: !!opts.italic,
+      color: opts.color ? { argb: opts.color } : undefined,
+    };
+    if (opts.height) row.height = opts.height;
+    return row;
+  };
+  const gap = (n = 1) => {
+    for (let i = 0; i < n; i += 1) ws.addRow([]);
+  };
+
+  gap(6);
+  // Project title. Falls back to the project name when no client is recorded —
+  // "Proposed Development for <client>" is how the QSs word it.
+  centred(
+    clientName
+      ? `Proposed Development for ${clientName}`
+      : String(projectName || "Project"),
+    { size: 16, height: 24 },
+  );
+
+  gap(2);
+  centred("COMPLETE BILL OF QUANTITIES", { size: 18, height: 26 });
+
+  gap(3);
+  centred("MAIN CONTRACT", { size: 13 });
+  centred("BILLS OF QUANTITIES", { size: 13 });
+
+  gap(2);
+  centred("Confidential", { size: 11, bold: false, italic: true, color: "FF6B7280" });
+
+  gap(2);
+  // "NOVEMBER, 2025" — month and year, uppercase, as on the QSs' covers.
+  centred(dayjs().format("MMMM, YYYY").toUpperCase(), { size: 12 });
+
+  // Preparation detail kept, but demoted to the foot of the page where it does
+  // not intrude on the title block.
+  gap(6);
+  const meta = [
+    ["Project", projectName || "Project"],
+    ["Basis", variantTitle || "Bills of Quantities"],
+    ["Building type", buildingType === "multistorey" ? "Multi-Storey" : "Bungalow"],
+    ...(buildingType === "multistorey" && foundationType
+      ? [["Foundation type", foundationType[0].toUpperCase() + foundationType.slice(1)]]
+      : []),
+    ["Prepared", dayjs().format("D MMMM YYYY, HH:mm")],
+  ];
+  for (const [k, v] of meta) {
+    const row = ws.addRow([null, k, v]);
+    row.getCell(2).font = { size: 9, color: { argb: "FF6B7280" } };
+    row.getCell(3).font = { size: 9, color: { argb: "FF6B7280" } };
+    ws.mergeCells(row.number, 3, row.number, 6);
   }
-  ws.addRow(["Generated", dayjs().format("YYYY-MM-DD HH:mm")]);
 }
 
 function writeUnmappedSheet(workbook, projectItems, matchedSet) {
@@ -1306,6 +1396,10 @@ export async function exportElementalBoQ({
   variations = [],
   preliminaryItems = [],
   preliminaryPercent = 0,
+  // Optional. When supplied the cover reads "Proposed Development for <client>",
+  // matching how ADLM's QSs title a bill; otherwise it falls back to the
+  // project name.
+  clientName = "",
   mappingPath,
   format = "elemental", // "elemental" | "trade"
 } = {}) {
@@ -1326,6 +1420,7 @@ export async function exportElementalBoQ({
     variantTitle: variant.title,
     buildingType: bt,
     foundationType: ft,
+    clientName,
   });
 
   const matchedSet = new Set();
