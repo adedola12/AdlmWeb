@@ -201,6 +201,7 @@ function getEndpoints(tool) {
     list: "/projects/" + t + "?includeMerged=1",
     merge: "/projects/" + t + "/merge",
     mergeDelete: (id) => "/projects/" + t + "/merge/" + id,
+    mergeOrder: (id) => "/projects/" + t + "/merge/" + id + "/order",
     one: (id) => "/projects/" + t + "/" + id,
     bySlug: (slug) => "/projects/" + t + "/by-slug/" + slug,
     del: (id) => "/projects/" + t + "/" + id,
@@ -2168,6 +2169,30 @@ export default function ProjectsGeneric() {
       setErr(e?.message || "Could not merge those projects.");
     } finally {
       setBulkBusy(false);
+    }
+  }
+
+  // Reorder the buildings/disciplines of a merged project. The order of the
+  // parts is the order they appear as sheets in the exported bill, so this is
+  // how a QS puts Main Building first and External Works last.
+  async function reorderMergeParts(from, to) {
+    const parts = sel?.merge?.parts || [];
+    if (!parts.length || to < 0 || to >= parts.length || from === to) return;
+    const next = [...parts];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setErr("");
+    try {
+      await apiAuthed(endpoints.mergeOrder(selectedId), {
+        token: accessToken,
+        method: "PUT",
+        body: { order: next.map((p) => p.projectId) },
+      });
+      // Re-open so the combined bill, its sections and the export all pick the
+      // new order up together.
+      await view(selectedId);
+    } catch (e) {
+      setErr(e?.message || "Could not reorder.");
     }
   }
 
@@ -5513,6 +5538,7 @@ export default function ProjectsGeneric() {
                 groupByMode={effectiveGroupByMode}
                 sourceOptions={mergeSourceNames}
                 mergeInfo={mergeInfo}
+                onReorderMergeParts={reorderMergeParts}
                 // On a merged project the choice is held per-project and not
                 // written to the remembered preference, since grouping by
                 // discipline is meaningless anywhere else.

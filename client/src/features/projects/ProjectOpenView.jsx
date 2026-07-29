@@ -280,6 +280,7 @@ export default function ProjectOpenView({
   groupByMode = "category",
   sourceOptions = [],
   mergeInfo = null,
+  onReorderMergeParts,
   onGroupByModeChange,
   contract,
   contractBusy = false,
@@ -1054,6 +1055,51 @@ export default function ProjectOpenView({
             })()
           }
         />
+      ) : null}
+
+      {activeTab === "bill" && mergeInfo?.parts?.length > 1 ? (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-depth dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
+          <div className="font-medium">
+            {mergeInfo.partType === "building" ? "Buildings in this job" : "Disciplines in this project"}
+          </div>
+          <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
+            {mergeInfo.partType === "building"
+              ? "This order is the order the buildings appear as sheets in the exported bill — put Main Building first and External Works last."
+              : "This order is the order the disciplines appear in the combined bill."}
+          </div>
+          <ol className="mt-3 space-y-1.5">
+            {mergeInfo.parts.map((part, i) => (
+              <li
+                key={part.projectId}
+                className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm dark:border-adlm-dark-border"
+              >
+                <span className="w-5 text-center text-xs font-semibold text-slate-400">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{part.name}</span>
+                <span className="shrink-0 text-[11px] text-slate-500 dark:text-adlm-dark-dim">
+                  {part.itemCount} item{part.itemCount === 1 ? "" : "s"}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={i === 0 || !onReorderMergeParts}
+                  title="Move up"
+                  onClick={() => onReorderMergeParts?.(i, i - 1)}
+                >
+                  &uarr;
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={i === mergeInfo.parts.length - 1 || !onReorderMergeParts}
+                  title="Move down"
+                  onClick={() => onReorderMergeParts?.(i, i + 1)}
+                >
+                  &darr;
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
       ) : null}
 
       {activeTab === "bill" ? (

@@ -198,6 +198,10 @@ export async function resolveMergedProject(container, userId) {
     // Merge-specific read-only metadata for the client.
     merge: {
       isContainer: true,
+      // "building" (separate structures on one job) or "discipline" (arch +
+      // structural of the same structure). Drives the export shape and the
+      // wording the UI uses for the parts list.
+      partType: plain.mergePartType === "building" ? "building" : "discipline",
       parts,
       // A source the caller can't load (deleted, or owned by someone else).
       // Reported rather than silently dropped so the QS knows the combined

@@ -2673,15 +2673,23 @@ async function createMergedProject(req, res) {
 
     // Owner-only: merging federates whole bills, so a collaborator must not be
     // able to pull someone else's project into a container they control.
-    const sources = await TakeoffProject.find({
+    const found = await TakeoffProject.find({
       _id: { $in: sourceIds },
       userId,
       pmTrackerOnly: { $ne: true },
     }).select("name productKey mergeContainer mergedInto items");
 
-    if (sources.length !== sourceIds.length) {
+    if (found.length !== sourceIds.length) {
       return res.status(404).json({ error: "One or more projects were not found." });
     }
+
+    // $in returns documents in Mongo's natural order, NOT the order of the ids
+    // it was given — so the caller's ordering was being silently discarded and
+    // baked into linkedProjects. That order is the order the buildings appear
+    // as sheets in the exported bill, so a QS asking for Main Building first
+    // and External Works last was getting whatever Mongo felt like.
+    const foundById = new Map(found.map((p) => [String(p._id), p]));
+    const sources = sourceIds.map((id) => foundById.get(String(id))).filter(Boolean);
     const container = sources.find((p) => p.mergeContainer);
     if (container) {
       return res.status(400).json({ error: `"${container.name}" is already a merged project.` });
@@ -2752,6 +2760,67 @@ async function createMergedProject(req, res) {
 // DELETE /projects/:productKey/merge/:id
 // Dissolve a container. The sources are released untouched — nothing measured
 // is ever lost, because the container never held any measurements.
+// PUT /projects/:productKey/merge/:id/order
+// Reorder the buildings/disciplines in a merged project. The order of
+// linkedProjects IS the order the parts appear — as sheets in the exported
+// bill and as sections in the combined Bill — so this is how a QS puts Main
+// Building first and External Works last.
+// Body: { order: [projectId, ...] }
+async function reorderMergedParts(req, res) {
+  try {
+    const productKey = requestedProductKey(req);
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const container = await TakeoffProject.findOne({ _id: id, userId, productKey });
+    if (!container) return res.status(404).json({ error: "Not found" });
+    if (!container.mergeContainer) {
+      return res.status(400).json({ error: "That project is not a merged project." });
+    }
+
+    const requested = (Array.isArray(req.body?.order) ? req.body.order : []).map((v) =>
+      String(v || "").trim(),
+    );
+    const links = Array.isArray(container.linkedProjects) ? container.linkedProjects : [];
+    const merged = links.filter((l) => l.linkType === "merge");
+    const others = links.filter((l) => l.linkType !== "merge");
+
+    const byId = new Map(merged.map((l) => [String(l.projectId), l]));
+    const seen = new Set();
+    const ordered = [];
+    for (const pid of requested) {
+      const link = byId.get(pid);
+      if (!link || seen.has(pid)) continue;
+      seen.add(pid);
+      ordered.push(link);
+    }
+    // Anything the caller left out keeps its existing relative position at the
+    // end, so a partial or stale order can never drop a building from the bill.
+    for (const link of merged) {
+      if (!seen.has(String(link.projectId))) ordered.push(link);
+    }
+    if (ordered.length !== merged.length) {
+      return res.status(500).json({ error: "Reorder would have changed the parts." });
+    }
+
+    // "sum" links are a different concept and keep their own place.
+    container.linkedProjects = [...ordered, ...others];
+    container.markModified("linkedProjects");
+    container.version = (Number(container.version) || 0) + 1;
+    await container.save();
+
+    res.json({
+      ok: true,
+      order: ordered.map((l) => ({ projectId: String(l.projectId), label: l.label })),
+    });
+  } catch (err) {
+    console.error("PUT merge order error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
 async function dissolveMergedProject(req, res) {
   try {
     const productKey = requestedProductKey(req);
@@ -6204,6 +6273,13 @@ router.post(
   mapEntitlementParam,
   requireEntitlementParam,
   createMergedProject,
+);
+
+router.put(
+  "/:productKey/merge/:id/order",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  reorderMergedParts,
 );
 
 router.delete(
