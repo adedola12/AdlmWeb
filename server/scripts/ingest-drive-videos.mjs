@@ -10,6 +10,7 @@
  * The transfer is streamed and multipart — the largest lecture is 6.25 GB and
  * buffering it would blow the heap.
  *
+ *   node scripts/ingest-drive-videos.mjs --check         # verify credentials + Drive share
  *   node scripts/ingest-drive-videos.mjs                 # dry run, plans the work
  *   node scripts/ingest-drive-videos.mjs --apply         # do it
  *   node scripts/ingest-drive-videos.mjs --apply --only W3D2,W3D3
@@ -23,7 +24,8 @@
  *   1. Create a Google Cloud service account and download its JSON key.
  *   2. Share the "Class video" Drive folder with the service account's email
  *      (viewer is enough).
- *   3. GOOGLE_SERVICE_ACCOUNT_KEY=/path/to/key.json (or the JSON inline)
+ *   3. GOOGLE_SERVICE_ACCOUNT_KEY — the path to the JSON locally, or the JSON
+ *      itself / base64 of it on a host where you can only set env vars.
  *   4. AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
  *      AWS_VIDEO_ARCHIVE_BUCKET
  */
@@ -40,6 +42,7 @@ import { objectSize, uploadStream, archiveBucket } from "../utils/awsS3.js";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const APPLY = process.argv.includes("--apply");
 const FORCE = process.argv.includes("--force");
+const CHECK = process.argv.includes("--check");
 
 function argValue(flag) {
   const i = process.argv.indexOf(flag);
@@ -115,11 +118,42 @@ function archiveKey({ courseSku, cohort, moduleCode, moduleTitle }) {
 }
 
 // ── Google Drive ────────────────────────────────────────────────────────────
+/**
+ * Accepts the credential in whichever form the environment makes easy:
+ *
+ *   - a path to the downloaded JSON      (local development)
+ *   - the JSON itself, minified          (hosting dashboards that accept it)
+ *   - base64 of the JSON                 (dashboards that mangle quotes and
+ *                                         newlines — the safest for deploys)
+ */
 function loadServiceAccount() {
   const raw = String(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "").trim();
   if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not set");
-  const json = raw.startsWith("{") ? raw : fs.readFileSync(raw, "utf8");
-  return JSON.parse(json);
+
+  let json;
+  if (raw.startsWith("{")) {
+    json = raw;
+  } else if (/^[A-Za-z0-9+/=\s]+$/.test(raw) && raw.length > 200) {
+    json = Buffer.from(raw, "base64").toString("utf8");
+  } else {
+    if (!fs.existsSync(raw)) {
+      throw new Error(
+        `GOOGLE_SERVICE_ACCOUNT_KEY points at "${raw}", which does not exist. ` +
+          `Give it a path to the JSON key, the JSON itself, or base64 of it.`,
+      );
+    }
+    json = fs.readFileSync(raw, "utf8");
+  }
+
+  try {
+    const key = JSON.parse(json);
+    if (!key.client_email || !key.private_key) {
+      throw new Error("missing client_email / private_key");
+    }
+    return key;
+  } catch (err) {
+    throw new Error(`Service account key could not be parsed: ${err.message}`);
+  }
 }
 
 async function driveToken() {
@@ -203,6 +237,50 @@ for (const decision of manifest.needsDecision || []) {
   if (decision.candidate) {
     console.log(`  candidate: ${decision.candidate.name} — ${decision.candidate.question}`);
   }
+}
+
+// --check answers the two questions that actually block a run: is the
+// credential readable, and did the Drive share actually land? Both fail in
+// ways that are cheap to find now and expensive to find 20 GB in.
+if (CHECK) {
+  let key;
+  try {
+    key = loadServiceAccount();
+    console.log(`\nservice account: ${key.client_email}`);
+  } catch (err) {
+    console.error(`\n✗ ${err.message}`);
+    process.exit(1);
+  }
+
+  try {
+    const token = await driveToken();
+    const probe = manifest.items[0];
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${probe.fileId}` +
+        `?fields=id,name,size&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (res.status === 404 || res.status === 403) {
+      console.error(
+        `✗ Drive returned ${res.status} for "${probe.name}".\n` +
+          `  The credential works but this account cannot see the file.\n` +
+          `  Share the "Class video" folder with ${key.client_email} as Viewer.`,
+      );
+      process.exit(1);
+    }
+    if (!res.ok) {
+      console.error(`✗ Drive error ${res.status}: ${await res.text()}`);
+      process.exit(1);
+    }
+    const file = await res.json();
+    console.log(`✓ Drive access confirmed — read "${file.name}" (${gb(file.size)})`);
+  } catch (err) {
+    console.error(`✗ Could not reach Drive: ${err.message}`);
+    process.exit(1);
+  }
+
+  preflight({ warnOnly: true });
+  process.exit(0);
 }
 
 if (!APPLY) {

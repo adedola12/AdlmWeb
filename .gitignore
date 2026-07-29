@@ -44,3 +44,9 @@ temp/
 
 # Claude Code (local agent state & worktrees)
 .claude/
+
+# Google service account keys — never in the repo, and gitleaks would flag
+# them anyway. Keep them outside the working tree or in the host's env vars.
+*-service-account*.json
+*serviceaccount*.json
+adlm-ai-*.json
