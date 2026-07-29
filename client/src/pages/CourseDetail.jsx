@@ -223,11 +223,15 @@ export default function CourseDetail() {
     moduleSubmissions[0] ||
     {};
 
-  const parsed = parseBunny(active?.videoUrl || course?.onboardingVideoUrl || "");
+  // A signed CloudFront stream wins when the session hands one back: it is the
+  // only source that carries the concurrency seat and the audit row. Anything
+  // still on the old host keeps playing until its master has been transcoded.
+  const hlsSrc = playback?.playbackUrl || "";
+  const parsed = hlsSrc
+    ? null
+    : parseBunny(active?.videoUrl || course?.onboardingVideoUrl || "");
   const isBunny = parsed?.kind === "bunny";
-  const playerSrc = isBunny
-    ? bunnyIframeSrc(parsed.libId, parsed.videoId)
-    : parsed?.src;
+  const playerSrc = hlsSrc || (isBunny ? bunnyIframeSrc(parsed.libId, parsed.videoId) : parsed?.src);
 
   const stats = [
     statCard(

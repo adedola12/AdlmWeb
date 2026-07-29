@@ -3,6 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { exportElementalBoQ } from "../util/elementalBoqExporter.js";
+import { resolveMergedProject } from "../services/projectMerge.js";
 
 const router = express.Router();
 
@@ -130,6 +131,16 @@ async function findProjectDoc({ tool, id, userId }) {
 
         doc.name = doc.name || doc.title || "Project";
         doc.items = Array.isArray(doc.items) ? doc.items : [];
+
+        // A merge container holds NO items of its own — its bill lives on the
+        // linked source projects and is resolved on read. Without this the
+        // export produced a workbook with an empty bill and a zero General
+        // Summary, silently, because doc.items is legitimately [].
+        if (doc.mergeContainer) {
+          const merged = await resolveMergedProject(doc, doc.userId);
+          merged.name = doc.name;
+          return merged;
+        }
         return doc;
       }
     }

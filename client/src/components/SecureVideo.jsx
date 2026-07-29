@@ -127,7 +127,56 @@ function Overlays({ label, guarded }) {
   );
 }
 
-/* Self-hosted video (direct mp4 / Cloudinary / Bunny direct). */
+/**
+ * Attaches an HLS stream to a <video>.
+ *
+ * Safari plays .m3u8 natively; everywhere else needs hls.js, which is loaded
+ * lazily so the 100 kB parser isn't in the bundle for pages with no video.
+ *
+ * `withCredentials` matters: playback is authorised by CloudFront signed
+ * cookies, and without it the manifest and every segment come back 403.
+ */
+function useHlsSource(videoRef, src) {
+  const isHls = /\.m3u8(\?|$)/i.test(String(src || ""));
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src || !isHls) return undefined;
+
+    // Safari / iOS: native, and the only path that can also do FairPlay later.
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = src;
+      return undefined;
+    }
+
+    let hls = null;
+    let cancelled = false;
+
+    import("hls.js").then(({ default: Hls }) => {
+      if (cancelled || !Hls.isSupported()) return;
+      hls = new Hls({
+        xhrSetup: (xhr) => {
+          xhr.withCredentials = true;
+        },
+        // Keep the buffer modest: these lectures run two hours, and buffering
+        // far ahead on a metered Nigerian connection burns the student's data
+        // for footage they may never reach.
+        maxBufferLength: 30,
+      });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+    });
+
+    return () => {
+      cancelled = true;
+      try { hls?.destroy(); } catch { /* ignore */ }
+    };
+  }, [videoRef, src, isHls]);
+
+  return isHls;
+}
+
+/* Self-hosted video (direct mp4 / Cloudinary / HLS from CloudFront). */
 export function SecureVideo({
   src,
   poster,
@@ -139,6 +188,7 @@ export function SecureVideo({
   const label = useWatermarkLabel(sessionRef);
   const guarded = useScreenshotGuard();
   const ref = React.useRef(null);
+  const isHls = useHlsSource(ref, src);
 
   // Pause when guarded; harden the element imperatively (props not all standard).
   React.useEffect(() => {
@@ -155,7 +205,9 @@ export function SecureVideo({
     >
       <video
         ref={ref}
-        src={src}
+        // For HLS the source is attached by useHlsSource (hls.js or Safari
+        // native); setting src here as well would race it.
+        src={isHls ? undefined : src}
         poster={poster || undefined}
         controls
         controlsList="nodownload noremoteplayback noplaybackrate"

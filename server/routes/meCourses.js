@@ -7,6 +7,11 @@ import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { Software } from "../models/Software.js";
 import { PlaybackSession } from "../models/PlaybackSession.js";
+import {
+  signPlaybackCookies,
+  playbackCookieOptions,
+  cdnUrl,
+} from "../utils/cloudfrontSign.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -428,10 +433,38 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
     userAgent: String(req.headers["user-agent"] || "").slice(0, 300),
   });
 
+  // The playback URL is only ever handed out here, so a stream cannot be
+  // obtained without also claiming a concurrency seat and leaving an audit row.
+  let playbackUrl = "";
+  let playbackExpiresAt = null;
+  const course = await PaidCourse.findOne({ sku }).select("modules").lean();
+  const module = (course?.modules || []).find((m) => m.code === moduleCode);
+
+  if (module?.hlsKey) {
+    try {
+      const prefix = module.hlsKey.replace(/index\.m3u8$/, "");
+      const { cookies, expiresAt } = signPlaybackCookies({
+        keyPrefix: prefix,
+        ip: clientIp(req),
+      });
+      for (const [name, value] of Object.entries(cookies)) {
+        res.cookie(name, value, playbackCookieOptions(expiresAt));
+      }
+      playbackUrl = cdnUrl(module.hlsKey);
+      playbackExpiresAt = toIso(expiresAt);
+    } catch (err) {
+      // CloudFront not wired up yet — fall back to whatever videoUrl the
+      // module already carries rather than failing the whole request.
+      console.warn("[playback] could not sign cookies:", err.message);
+    }
+  }
+
   res.json({
     sessionId: String(session._id),
     sessionRef: session.sessionRef,
     heartbeatSec: 30,
+    playbackUrl,
+    playbackExpiresAt,
   });
 });
 

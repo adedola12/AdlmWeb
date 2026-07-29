@@ -16,6 +16,17 @@ const ModuleSchema = new mongoose.Schema(
     sourceKey: { type: String, default: "" },
     sourceName: { type: String, default: "" },
     sourceBytes: { type: Number, default: 0 },
+
+    // HLS output built from the master by MediaConvert. `hlsKey` is the master
+    // manifest; the player gets it as a CloudFront URL, never as a raw S3 one.
+    hlsKey: { type: String, default: "" },
+    transcodeJobId: { type: String, default: "" },
+    transcodeStatus: {
+      type: String,
+      enum: ["", "SUBMITTED", "PROGRESSING", "COMPLETE", "ERROR", "CANCELED"],
+      default: "",
+    },
+    transcodeError: { type: String, default: "" },
   },
   { _id: false },
 );
