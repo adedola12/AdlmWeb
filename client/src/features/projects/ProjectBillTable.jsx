@@ -1584,7 +1584,7 @@ export default function ProjectBillTable({
                         onClick={() => onGroupByModeChange?.("category")}
                         className={[
                           "px-2.5 py-1 transition",
-                          !isTradeGrouping
+                          !isTradeGrouping && !isSourceGrouping
                             ? "bg-adlm-blue-700 text-white"
                             : "text-slate-700 hover:bg-slate-100",
                         ].join(" ")}
@@ -1605,9 +1605,26 @@ export default function ProjectBillTable({
                       >
                         Trade
                       </button>
+                      {sourceOptions.length ? (
+                        <button
+                          type="button"
+                          onClick={() => onGroupByModeChange?.("source")}
+                          className={[
+                            "px-2.5 py-1 transition border-l border-slate-200",
+                            isSourceGrouping
+                              ? "bg-adlm-blue-700 text-white"
+                              : "text-slate-700 hover:bg-slate-100",
+                          ].join(" ")}
+                          title="Group by the discipline project each line was measured in (architectural, structural, ...)"
+                        >
+                          Discipline
+                        </button>
+                      ) : null}
                     </div>
                     <div className="text-[10px] text-slate-500 max-w-[180px] leading-tight">
-                      {isTradeGrouping
+                      {isSourceGrouping
+                        ? "Grouped by the discipline project each line came from. Switch to Category or Trade to arrange the combined bill the usual way."
+                        : isTradeGrouping
                         ? "Grouped by the work being done. Drag a row onto a section to re-file it — learned for next time."
                         : "Grouped by the element they belong to. Drag a row onto a category to re-file it — learned for next time."}
                     </div>

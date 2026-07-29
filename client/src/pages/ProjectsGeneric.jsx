@@ -5484,10 +5484,12 @@ export default function ProjectsGeneric() {
                 groupByMode={effectiveGroupByMode}
                 sourceOptions={mergeSourceNames}
                 mergeInfo={mergeInfo}
+                // On a merged project the choice is held per-project and not
+                // written to the remembered preference, since grouping by
+                // discipline is meaningless anywhere else.
                 onGroupByModeChange={
                   mergeInfo ? setMergeGroupOverride : setGroupByMode
                 }
-                onGroupByModeChange={setGroupByMode}
                 contract={contract}
                 contractBusy={contractBusy}
                 stepUpEnabled={stepUpEnabled}
