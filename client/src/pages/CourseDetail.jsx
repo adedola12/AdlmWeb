@@ -6,6 +6,7 @@ import { useAuth } from "../store.jsx";
 import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { SecureVideo, SecureEmbed } from "../components/SecureVideo.jsx";
+import ModuleQuiz from "../components/ModuleQuiz.jsx";
 
 function accessTone(access) {
   if (access?.isExpired) {
@@ -227,9 +228,13 @@ export default function CourseDetail() {
   // only source that carries the concurrency seat and the audit row. Anything
   // still on the old host keeps playing until its master has been transcoded.
   const hlsSrc = playback?.playbackUrl || "";
-  const parsed = hlsSrc
-    ? null
-    : parseBunny(active?.videoUrl || course?.onboardingVideoUrl || "");
+  // Only fall back to the onboarding video when there are no modules at all.
+  // Playing it under every module made all 18 sessions look like the same
+  // recording while the real ones were still being migrated.
+  const fallbackSrc = active?.moduleCode
+    ? active?.videoUrl || ""
+    : course?.onboardingVideoUrl || "";
+  const parsed = hlsSrc ? null : parseBunny(fallbackSrc);
   const isBunny = parsed?.kind === "bunny";
   const playerSrc = hlsSrc || (isBunny ? bunnyIframeSrc(parsed.libId, parsed.videoId) : parsed?.src);
 
@@ -459,8 +464,16 @@ export default function CourseDetail() {
               />
             )
           ) : (
-            <div className="grid w-full aspect-video place-items-center rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-black text-white/70">
-              No video available
+            <div className="grid w-full aspect-video place-items-center rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-black px-6 text-center text-white/70">
+              <div>
+                <div className="font-medium text-white/90">
+                  Recording not available yet
+                </div>
+                <p className="mt-1 text-sm">
+                  The notes below cover this session. The recording appears here
+                  once it has been uploaded.
+                </p>
+              </div>
             </div>
           )}
           <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-adlm-dark-dim">
@@ -540,6 +553,7 @@ export default function CourseDetail() {
               </div>
             </div>
           )}
+          <ModuleQuiz sku={sku} moduleCode={active?.moduleCode || ""} />
         </div>
 
         <div className="card">

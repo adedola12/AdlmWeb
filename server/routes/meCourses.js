@@ -7,6 +7,7 @@ import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { Software } from "../models/Software.js";
 import { PlaybackSession } from "../models/PlaybackSession.js";
+import { Quiz, QuizAttempt } from "../models/Quiz.js";
 import {
   signPlaybackCookies,
   playbackCookieOptions,
@@ -509,6 +510,131 @@ router.post("/:sku/playback/stop", express.json(), async (req, res) => {
     { $set: { endedAt: new Date(), lastSeenAt: new Date() } },
   );
   res.json({ ok: true });
+});
+
+/**
+ * GET /me/courses/:sku/quiz/:moduleCode
+ *
+ * The quiz as the student may see it: correct answers and explanations are
+ * stripped, so the answer key never leaves the server.
+ */
+router.get("/:sku/quiz/:moduleCode", async (req, res) => {
+  const { sku, moduleCode } = req.params;
+
+  const enrollment = await CourseEnrollment.findOne({
+    userId: req.user._id,
+    courseSku: sku,
+  }).lean();
+  if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
+
+  const quiz = await Quiz.findOne({
+    courseSku: sku,
+    moduleCode,
+    isPublished: true,
+  }).lean();
+  if (!quiz) return res.status(404).json({ error: "No quiz for this module" });
+
+  const attempts = await QuizAttempt.find({
+    userId: req.user._id,
+    courseSku: sku,
+    moduleCode,
+  })
+    .sort({ submittedAt: -1 })
+    .lean();
+
+  res.json({
+    quiz: {
+      _id: quiz._id,
+      title: quiz.title,
+      intro: quiz.intro,
+      passMark: quiz.passMark,
+      maxAttempts: quiz.maxAttempts,
+      questions: (quiz.questions || []).map((q) => ({
+        _id: q._id,
+        prompt: q.prompt,
+        options: q.options,
+      })),
+    },
+    attempts: attempts.map((a) => ({
+      score: a.score,
+      passed: a.passed,
+      correctCount: a.correctCount,
+      totalQuestions: a.totalQuestions,
+      submittedAt: toIso(a.submittedAt),
+    })),
+    attemptsLeft: quiz.maxAttempts
+      ? Math.max(0, quiz.maxAttempts - attempts.length)
+      : null,
+    best: attempts.reduce((best, a) => Math.max(best, a.score || 0), 0),
+  });
+});
+
+/** POST /me/courses/:sku/quiz/:moduleCode — grade and record an attempt. */
+router.post("/:sku/quiz/:moduleCode", express.json(), async (req, res) => {
+  const { sku, moduleCode } = req.params;
+  const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+
+  const enrollment = await CourseEnrollment.findOne({
+    userId: req.user._id,
+    courseSku: sku,
+  }).lean();
+  if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
+
+  const quiz = await Quiz.findOne({
+    courseSku: sku,
+    moduleCode,
+    isPublished: true,
+  }).lean();
+  if (!quiz) return res.status(404).json({ error: "No quiz for this module" });
+
+  if (quiz.maxAttempts) {
+    const used = await QuizAttempt.countDocuments({
+      userId: req.user._id,
+      courseSku: sku,
+      moduleCode,
+    });
+    if (used >= quiz.maxAttempts) {
+      return res.status(409).json({ error: "No attempts remaining" });
+    }
+  }
+
+  const questions = quiz.questions || [];
+  const results = questions.map((q, i) => {
+    const given = Number(answers[i]);
+    const correct = Number.isInteger(given) && given === q.correctIndex;
+    return {
+      questionId: String(q._id),
+      correct,
+      correctIndex: q.correctIndex,
+      explanation: q.explanation || "",
+    };
+  });
+
+  const correctCount = results.filter((r) => r.correct).length;
+  const score = questions.length
+    ? Math.round((correctCount / questions.length) * 100)
+    : 0;
+  const passed = score >= (quiz.passMark || 0);
+
+  await QuizAttempt.create({
+    userId: req.user._id,
+    email: req.user.email || "",
+    quizId: quiz._id,
+    courseSku: sku,
+    moduleCode,
+    answers: answers.map((a) => Number(a)),
+    score,
+    correctCount,
+    totalQuestions: questions.length,
+    passed,
+  });
+
+  await CourseEnrollment.updateOne(
+    { userId: req.user._id, courseSku: sku },
+    { $set: { lastProgressAt: new Date() } },
+  );
+
+  res.json({ score, passed, correctCount, totalQuestions: questions.length, results });
 });
 
 export default router;

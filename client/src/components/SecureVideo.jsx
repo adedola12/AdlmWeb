@@ -59,9 +59,19 @@ function watermarkStyle(label) {
   };
 }
 
-/* Blanks the player on PrintScreen and when the tab/window is hidden. */
+/**
+ * Two different reactions, because they trade off differently.
+ *
+ *   guarded — blank the frame AND pause. For a capture attempt or a hidden
+ *             tab, where showing nothing is the point.
+ *   paused  — pause only, frame left visible. For losing window focus, which
+ *             on this course usually means the student alt-tabbed into Revit
+ *             to follow along. Blanking there would fight the lesson, and it
+ *             buys nothing: a screen recorder does not need focus to capture.
+ */
 function useScreenshotGuard() {
   const [guarded, setGuarded] = React.useState(false);
+  const [paused, setPaused] = React.useState(false);
 
   React.useEffect(() => {
     let timer;
@@ -87,9 +97,8 @@ function useScreenshotGuard() {
       }
     };
     const onVisibility = () => setGuarded(document.hidden);
-    // A capture tool taking focus blurs the window without hiding the tab.
-    const onBlur = () => setGuarded(true);
-    const onFocus = () => setGuarded(document.hidden);
+    const onBlur = () => setPaused(true);
+    const onFocus = () => setPaused(false);
 
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
@@ -106,7 +115,7 @@ function useScreenshotGuard() {
     };
   }, []);
 
-  return guarded;
+  return { guarded, paused };
 }
 
 function Overlays({ label, guarded }) {
@@ -186,7 +195,7 @@ export function SecureVideo({
   ...rest
 }) {
   const label = useWatermarkLabel(sessionRef);
-  const guarded = useScreenshotGuard();
+  const { guarded, paused } = useScreenshotGuard();
   const ref = React.useRef(null);
   const isHls = useHlsSource(ref, src);
 
@@ -195,8 +204,8 @@ export function SecureVideo({
     const v = ref.current;
     if (!v) return;
     try { v.disableRemotePlayback = true; } catch { /* ignore */ }
-    if (guarded) { try { v.pause(); } catch { /* ignore */ } }
-  }, [guarded]);
+    if (guarded || paused) { try { v.pause(); } catch { /* ignore */ } }
+  }, [guarded, paused]);
 
   return (
     <div
@@ -234,7 +243,7 @@ export function SecureEmbed({
   sessionRef = "",
 }) {
   const label = useWatermarkLabel(sessionRef);
-  const guarded = useScreenshotGuard();
+  const { guarded } = useScreenshotGuard();
 
   return (
     <div
