@@ -341,9 +341,13 @@ if (CHECK) {
       process.exit(1);
     }
     const file = await res.json();
-    console.log(`✓ Drive access confirmed — read "${file.name}" (${gb(file.size)})`);
+
+    // Metadata is not enough. A folder can be shared correctly and still refuse
+    // to hand over bytes, so pull the first kilobyte of real content.
+    await probeDriveDownload(probe.fileId, token);
+    console.log(`✓ Drive download confirmed — read "${file.name}" (${gb(file.size)})`);
   } catch (err) {
-    console.error(`✗ Could not reach Drive: ${err.message}`);
+    console.error(`✗ ${err.message}`);
     process.exit(1);
   }
 
@@ -420,6 +424,17 @@ for (const item of planned) {
     console.log(`  ✓ ${label} → ${item.key}`);
   } catch (err) {
     console.error(`  ✗ ${label} failed: ${err.message}`);
+
+    // A permission failure is not per-file — every remaining item will fail
+    // identically. Stop rather than printing the same wall of text 17 more
+    // times and leaving the real message scrolled off the top.
+    if (err instanceof DrivePermissionError) {
+      console.error(
+        `\nStopping: this affects every file, not just ${item.moduleCode}.` +
+          `\nFix the access above, then re-run — nothing has been uploaded.`,
+      );
+      break;
+    }
     console.error("    (re-run to retry — archived modules are skipped)");
   }
 }
