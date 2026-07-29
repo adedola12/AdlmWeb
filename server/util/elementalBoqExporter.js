@@ -256,6 +256,99 @@ function groupMatchesByLevel(matches) {
 }
 
 /* =========================
+   Work Breakdown Structure / milestone attribution
+   ========================= */
+// The stage a level belongs to. QUIV writes the Revit level name straight
+// through, so the same storey arrives as "00 - GROUND FLOOR", "01 GROUND
+// FLOOR" and "01 - GROUND FLOOR LVL." across projects; without folding those
+// together a WBS would list one storey three times.
+const STAGE_ORDER = [
+  [/\b(substruct|sub-struct|foundation|ngl|oversite|site\s*clear)/i, "SUBSTRUCTURE"],
+  [/\bbasement/i, "BASEMENT"],
+  [/\bground\b/i, "GROUND FLOOR"],
+  [/\b(first|1st)\b/i, "FIRST FLOOR"],
+  [/\b(second|2nd)\b/i, "SECOND FLOOR"],
+  [/\b(third|3rd)\b/i, "THIRD FLOOR"],
+  [/\b(fourth|4th)\b/i, "FOURTH FLOOR"],
+  [/\b(fifth|5th)\b/i, "FIFTH FLOOR"],
+  [/\b(sixth|6th)\b/i, "SIXTH FLOOR"],
+  [/\b(seventh|7th)\b/i, "SEVENTH FLOOR"],
+  [/\b(eighth|8th)\b/i, "EIGHTH FLOOR"],
+  [/\b(ninth|9th)\b/i, "NINTH FLOOR"],
+  [/\b(tenth|10th)\b/i, "TENTH FLOOR"],
+  [/\b(penthouse|pent)\b/i, "PENTHOUSE"],
+  [/\b(roof|parapet)\b/i, "ROOF LEVEL"],
+  [/\bceiling\b/i, "CEILING LEVEL"],
+];
+
+// Levels that deliberately mean "not one storey". These must not be invented
+// into a floor — the money genuinely spans the building.
+const GENERAL_STAGE = "GENERALLY (ALL FLOORS)";
+const GENERAL_RE = /^(all\s*floors?|multiple(\s*levels?)?|multiple\s*\/|various|generally|n\/?a)?$/i;
+
+function normalizeStage(level) {
+  const raw = String(level || "").trim();
+  // QUIV writes a placeholder like "< ALL / NO LEVEL >" when the takeoff was
+  // not level-scoped; that is an absence of a level, not a storey called "all".
+  if (!raw || GENERAL_RE.test(raw) || /^multiple\b/i.test(raw) || /no\s*level/i.test(raw)) {
+    return GENERAL_STAGE;
+  }
+  for (const [re, stage] of STAGE_ORDER) {
+    if (re.test(raw)) return stage;
+  }
+  // Not a storey we recognise. MEP takeoffs put the system here ("Cable",
+  // "Lighting", "DB"), which is still a legitimate breakdown axis, so keep the
+  // label rather than dumping it into GENERALLY.
+  return raw.toUpperCase();
+}
+
+function stageRank(stage) {
+  if (stage === GENERAL_STAGE) return 9999;
+  const i = STAGE_ORDER.findIndex(([, s]) => s === stage);
+  return i === -1 ? 5000 : i;
+}
+
+/**
+ * How one bill row's money divides across stages.
+ *
+ * Most bill rows aggregate several takeoff items — only the multistorey Frame
+ * bill splits by level — so a row rarely belongs to a single storey. Rather
+ * than dropping those rows (which would make the WBS total disagree with the
+ * bill) each row is apportioned across the stages its own matched items came
+ * from, weighted by their value. The weights always sum to 1, so the WBS
+ * reconciles to the bill exactly.
+ *
+ * @returns {Array<{stage: string, weight: number}>}
+ */
+function stageSplitFromMatches(matches) {
+  const list = Array.isArray(matches) ? matches : [];
+  if (!list.length) return [{ stage: GENERAL_STAGE, weight: 1 }];
+
+  const byStage = new Map();
+  let total = 0;
+  for (const m of list) {
+    const stage = normalizeStage(m?.item?.level);
+    // Value is the honest weight; fall back to quantity, then to presence, so
+    // an unrated or unmeasured line still lands somewhere.
+    const w = safeNum(m?.item?.qty) * safeNum(m?.item?.rate) || safeNum(m?.item?.qty) || 1;
+    byStage.set(stage, (byStage.get(stage) || 0) + w);
+    total += w;
+  }
+  if (!(total > 0)) return [{ stage: GENERAL_STAGE, weight: 1 }];
+
+  const out = [...byStage.entries()]
+    .map(([stage, w]) => ({ stage, weight: w / total }))
+    .sort((a, b) => stageRank(a.stage) - stageRank(b.stage) || a.stage.localeCompare(b.stage));
+
+  // Force the weights to sum to exactly 1 after rounding, so the WBS grand
+  // total cannot drift a naira from the bill it is built on.
+  const rounded = out.map((s) => ({ stage: s.stage, weight: Math.round(s.weight * 1e6) / 1e6 }));
+  const drift = 1 - rounded.reduce((a, s) => a + s.weight, 0);
+  if (rounded.length) rounded[0].weight = Math.round((rounded[0].weight + drift) * 1e6) / 1e6;
+  return rounded;
+}
+
+/* =========================
    Pre-compute: which items / elements / bills will actually render
    ========================= */
 function planItem(boqItem, projectItems, matchedSet) {
@@ -266,6 +359,8 @@ function planItem(boqItem, projectItems, matchedSet) {
       description: boqItem.description,
       unit: boqItem.unit || "Item",
       amount: round2(boqItem.fixedAmount),
+      // A fixed sum is not measured off any element, so it has no level.
+      stageSplit: [{ stage: GENERAL_STAGE, weight: 1 }],
     };
   }
 
@@ -282,6 +377,7 @@ function planItem(boqItem, projectItems, matchedSet) {
     qty: agg.qty,
     rate: agg.rate,
     matches,
+    stageSplit: stageSplitFromMatches(matches),
     qtyDivisor: boqItem.qtyDivisor,
   };
 }
@@ -327,6 +423,7 @@ function planExpandedItem(boqItem, projectItems, matchedSet) {
         unit: g.unit || boqItem.unit || "",
         qty: agg.qty,
         rate: agg.rate,
+        stageSplit: stageSplitFromMatches(g.matches),
       };
     })
     .filter(Boolean);
@@ -354,6 +451,9 @@ function planLevelSplitItem(boqItem, projectItems, matchedSet) {
         level,
         qty: agg.qty,
         rate: agg.rate,
+        // This bill already split by level, so the stage is known exactly and
+        // needs no apportioning.
+        stageSplit: [{ stage: normalizeStage(level), weight: 1 }],
       };
     })
     .filter(Boolean);
@@ -1107,6 +1207,21 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
 
   const allAmountRows = [];
   const billSubtotalRows = [];
+  // Every priced row on this sheet, tagged with the work section it sits under
+  // and how its money divides across construction stages. The WBS/milestone
+  // sheet is built from this, so it references the very rows written here
+  // rather than recomputing totals that could drift from the bill.
+  const wbsRows = [];
+  const noteRow = (rowNumber, activity, stageSplit) => {
+    wbsRows.push({
+      rowNumber,
+      activity: String(activity || "").toUpperCase(),
+      stageSplit:
+        Array.isArray(stageSplit) && stageSplit.length
+          ? stageSplit
+          : [{ stage: GENERAL_STAGE, weight: 1 }],
+    });
+  };
 
   for (const plannedBill of billsWithContent) {
     // Bill (trade) banner — bold navy header row.
@@ -1145,6 +1260,7 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
           });
           billAmountRows.push(r.number);
           allAmountRows.push(r.number);
+          noteRow(r.number, element.heading, item.stageSplit);
           continue;
         }
 
@@ -1163,6 +1279,7 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
             });
             billAmountRows.push(r.number);
             allAmountRows.push(r.number);
+            noteRow(r.number, element.heading, lr.stageSplit);
           }
           continue;
         }
@@ -1182,6 +1299,7 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
             });
             billAmountRows.push(r.number);
             allAmountRows.push(r.number);
+            noteRow(r.number, element.heading, er.stageSplit);
           }
           continue;
         }
@@ -1196,6 +1314,7 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
         });
         billAmountRows.push(r.number);
         allAmountRows.push(r.number);
+        noteRow(r.number, element.heading, item.stageSplit);
       }
     }
 
@@ -1221,7 +1340,17 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
 
   // Grand total row for the whole combined sheet.
   ws.addRow([]);
-  const grand = ws.addRow([null, "TRADE BoQ — Grand Total to Summary", null, null, null, null]);
+  // Named after the sheet, not "TRADE BoQ" — this path serves elemental
+  // exports and every building sheet too, so the hardcoded label was wrong on
+  // all of them.
+  const grand = ws.addRow([
+    null,
+    `${sheetName.toUpperCase()} — GRAND TOTAL TO SUMMARY`,
+    null,
+    null,
+    null,
+    null,
+  ]);
   grand.font = { bold: true, size: 12 };
   grand.fill = SUMMARY_TOTAL_FILL;
   grand.getCell(6).value = {
@@ -1234,11 +1363,141 @@ function writeCombinedTradeSheet({ workbook, plannedBills, sheetName = "Trade Bo
   return {
     sheet: ws,
     totalCellAddr: `'${ws.name}'!F${grand.number}`,
+    grandRowNumber: grand.number,
+    wbsRows,
     subtotalRefs: billSubtotalRows.map((b) => ({
       name: b.name,
       cellAddr: `'${ws.name}'!F${b.rowNumber}`,
     })),
   };
+}
+
+/**
+ * The milestone / work-breakdown sheet that pairs with a bill sheet.
+ *
+ * ADLM's QSs issue one of these beside every bill ("BLOCK B" → "BLOCK B
+ * MILESTONE"): the same money re-cut by construction stage instead of by
+ * element, so it can be used to value work as the building goes up and to
+ * agree a payment schedule. Column C is live formulas pointing back at the
+ * bill's own Amount cells, exactly as they build it by hand — reprice the bill
+ * and the milestone schedule follows.
+ */
+function writeWbsSheet(workbook, { billSheetName, sheetName, projectName, wbsRows, billGrandRow }) {
+  const rows = Array.isArray(wbsRows) ? wbsRows : [];
+  if (!rows.length) return null;
+
+  // stage -> activity -> [{rowNumber, weight}]
+  const stages = new Map();
+  for (const r of rows) {
+    for (const { stage, weight } of r.stageSplit) {
+      if (!(weight > 0)) continue;
+      if (!stages.has(stage)) stages.set(stage, new Map());
+      const acts = stages.get(stage);
+      const key = r.activity || "GENERAL";
+      if (!acts.has(key)) acts.set(key, []);
+      acts.get(key).push({ rowNumber: r.rowNumber, weight });
+    }
+  }
+  if (!stages.size) return null;
+
+  const ordered = [...stages.entries()].sort(
+    (a, b) => stageRank(a[0]) - stageRank(b[0]) || a[0].localeCompare(b[0]),
+  );
+
+  const ws = workbook.addWorksheet(safeSheetName(sheetName, workbook));
+  ws.columns = [
+    { header: "S/N", key: "sn", width: 6 },
+    { header: "WORK ITEM", key: "item", width: 62 },
+    { header: "BOQ BRKDOWN", key: "amount", width: 20 },
+  ];
+
+  const head = ws.getRow(1);
+  head.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  head.fill = HEADER_FILL;
+  head.height = 20;
+
+  const siteRow = ws.addRow([null, `SITE : ${String(projectName || "").toUpperCase()}`]);
+  siteRow.font = { bold: true };
+  const titleRow = ws.addRow([null, "WORK BREAKDOWN STRUCTURE", "BOQ BRKDOWN"]);
+  titleRow.font = { bold: true };
+  titleRow.fill = HEADING_FILL;
+
+  const basisRow = ws.addRow([
+    null,
+    "Stages are taken from the level each item was measured on. A bill item spanning " +
+      "more than one level is apportioned across them by value, so this schedule totals " +
+      "the same as the bill.",
+  ]);
+  basisRow.font = { italic: true, size: 9, color: { argb: "FF475569" } };
+  basisRow.alignment = { wrapText: true, vertical: "top" };
+  ws.mergeCells(basisRow.number, 2, basisRow.number, 3);
+
+  const stageSubtotalRows = [];
+
+  ordered.forEach(([stage, acts], stageIdx) => {
+    ws.addRow([]);
+    const stageRow = ws.addRow([snLetter(stageIdx), stage]);
+    stageRow.font = { bold: true };
+    stageRow.fill = HEADING_FILL;
+
+    const activityRows = [];
+    let n = 0;
+    for (const [activity, refs] of acts) {
+      const r = ws.addRow([++n, activity]);
+      // One term per contributing bill row. A whole row reads as a plain
+      // reference; an apportioned one carries its share, so the arithmetic is
+      // visible to whoever checks the schedule.
+      r.getCell(3).value = {
+        formula: refs
+          .map(({ rowNumber, weight }) =>
+            weight >= 0.999999
+              ? `'${billSheetName}'!F${rowNumber}`
+              : // Full precision. The weights were normalised to sum to exactly
+                // 1 at six decimals; rounding them again here would lose real
+                // money out of the schedule.
+                `'${billSheetName}'!F${rowNumber}*${Number(weight.toFixed(6))}`,
+          )
+          .join("+"),
+      };
+      applyMoneyFormat(r.getCell(3));
+      activityRows.push(r.number);
+    }
+
+    const sub = ws.addRow([null, `${stage} — TOTAL`]);
+    sub.font = { bold: true };
+    sub.fill = SUMMARY_TOTAL_FILL;
+    sub.getCell(3).value = {
+      formula: activityRows.length ? `SUM(C${activityRows[0]}:C${activityRows.at(-1)})` : "0",
+    };
+    applyMoneyFormat(sub.getCell(3));
+    stageSubtotalRows.push(sub.number);
+  });
+
+  ws.addRow([]);
+  // NOT "carried to General Summary" — this schedule re-cuts money the bill
+  // has already carried there. Labelling it as a carry-forward would invite
+  // whoever assembles the summary to add the contract sum twice.
+  const grand = ws.addRow([null, `TOTAL — SAME MONEY AS BILL "${billSheetName}"`]);
+  grand.font = { bold: true, size: 12 };
+  grand.fill = SUMMARY_TOTAL_FILL;
+  grand.getCell(3).value = {
+    formula: stageSubtotalRows.length ? stageSubtotalRows.map((n) => `C${n}`).join("+") : "0",
+  };
+  applyMoneyFormat(grand.getCell(3));
+
+  // A visible tie-back to the bill. If this ever prints anything but zero the
+  // apportioning has lost money, and whoever is pricing needs to see that
+  // rather than trust a total that silently disagrees with the bill.
+  if (billGrandRow) {
+    const check = ws.addRow([null, "Difference from bill total (must be nil)"]);
+    check.font = { italic: true, size: 9, color: { argb: "FF475569" } };
+    check.getCell(3).value = {
+      formula: `C${grand.number}-'${billSheetName}'!F${billGrandRow}`,
+    };
+    applyMoneyFormat(check.getCell(3));
+  }
+
+  return { sheet: ws, totalCellAddr: `'${ws.name}'!C${grand.number}` };
 }
 
 function writeSummarySheet(workbook, billRefs) {
@@ -1408,6 +1667,9 @@ export async function exportElementalBoQ({
   // with no building identity anywhere in the workbook. Omit for a normal
   // single-structure project.
   parts = [],
+  // Pair each bill sheet with a milestone / work-breakdown sheet, the way
+  // ADLM's QSs issue them ("BLOCK B" beside "BLOCK B MILESTONE").
+  includeWbs = true,
   mappingPath,
   format = "elemental", // "elemental" | "trade"
 } = {}) {
@@ -1520,6 +1782,19 @@ export async function exportElementalBoQ({
         name: String(building?.name || "Building").toUpperCase(),
         totalCellAddr: sheet.totalCellAddr,
       });
+
+      // The milestone sheet is the SAME money re-cut by stage, so it is
+      // written beside its bill but deliberately kept out of billRefs — adding
+      // it to the General Summary would double the contract sum.
+      if (includeWbs) {
+        writeWbsSheet(workbook, {
+          billSheetName: sheet.sheet.name,
+          sheetName: `${String(building?.name || "Building")} MILESTONE`,
+          projectName: clientName || projectName,
+          wbsRows: sheet.wbsRows,
+          billGrandRow: sheet.grandRowNumber,
+        });
+      }
       for (const localIdx of buildingMatched) {
         const projIdx = projectIndexOf.get(buildingItems[localIdx]);
         if (projIdx !== undefined) matchedSet.add(projIdx);

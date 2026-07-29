@@ -174,6 +174,11 @@ router.get(
     const format = String(req.query.format || "elemental")
       .trim()
       .toLowerCase();
+    // Milestone / WBS sheets ship with every export; ?wbs=0 leaves them out
+    // for anyone who wants the bill on its own.
+    const includeWbs = !["0", "false", "no"].includes(
+      String(req.query.wbs ?? "").trim().toLowerCase(),
+    );
 
     const project = await findProjectDoc({
       tool,
@@ -213,6 +218,7 @@ router.get(
               ),
             }))
           : [],
+      includeWbs,
       format,
     });
 
