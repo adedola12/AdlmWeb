@@ -6,10 +6,13 @@
  * The course record currently has a one-line blurb, no description and no
  * modules, so enrolled students see "No modules yet." on /courses/bim-bld-arch.
  *
- * Weeks 2, 3 and 4 below are taken straight from the class recordings.
- * Weeks 1, 5 and 6 are marked PROVISIONAL: they are reconstructed from what
- * was recapped or announced in the recorded sessions, not from the sessions
- * themselves. Review those before publishing.
+ * Weeks 2, 3 and 4 are taken straight from the class recordings. Weeks 1, 5
+ * and 6 follow the session titles and posted summaries in the Google
+ * Classroom (Week 1 -- Introduction to BIM + Data Analysis, Week 5 -- Data
+ * Analysis in Quantity Surveying, Week 6 -- Bringing it all Together), so the
+ * titles here match what students already see there; the coverage notes for
+ * those three weeks are written from the titles and summaries rather than
+ * from a full transcript.
  *
  *   node scripts/seed-course-bim-bld-arch.mjs            # dry run, prints diff
  *   node scripts/seed-course-bim-bld-arch.mjs --apply    # writes to the DB
@@ -56,33 +59,36 @@ Week 1 — BIM foundations and project documentation
 Week 2 — 3D BIM: modelling, the CDE, information-rich models and COBie
 Week 3 — 4D BIM: programming, resources, tracking and reporting
 Week 4 — 5D BIM: quantification, bills of quantities and cash flow
-Week 5 — Data analysis and Power BI dashboards
-Week 6 — Federated models, clash detection and 6D handover data
+Week 5 — Data analysis in quantity surveying: Power BI, cleaning and validation
+Week 6 — Bringing it all together: dashboards and EVMS, Navisworks clash
+         detection, and the capstone project
 
 You need a Windows PC able to run Revit 2024 (or newer), a Google account, and a
 reliable internet connection — installation support is available Monday to Friday.`;
 
 const modules = [
-  // ── Week 1 ──────────────────────────────────────────────── PROVISIONAL ──
+  // ── Week 1 — Introduction to BIM + Data Analysis ────────────────────────
   {
     code: "W1D1",
-    title: "Week 1 · Day 1 — What BIM really is: dimensions 3D to 7D and maturity levels 0–3",
+    title: "Week 1 · Day 1 — Introduction to BIM, AI and Data Analysis",
     instructions:
-      "PROVISIONAL — reconstructed from the week 2 recap, not from the week 1 recording. Covers BIM as a process rather than a software, the BIM dimensions, maturity levels 0 to 3, and where the Nigerian industry currently sits.",
+      "BIM as a process rather than a piece of software: the BIM dimensions from 3D through to 7D, maturity levels 0 to 3, and where AI and data analysis sit inside a quantity surveyor's workflow. Where the industry currently stands, and what changes for you across the six weeks.",
   },
   {
     code: "W1D2",
-    title:
-      "Week 1 · Day 2 — Project documents: EIR, BIM Execution Plan, LOD schedule and classification codes",
+    title: "Week 1 · Day 2 — BIM workflows, documentation and standards",
     instructions:
-      "PROVISIONAL — reconstructed from the week 2 recap and the assignment brief. Covers the Employer's Information Requirements, the BIM Execution Plan, the LOD schedule, Uniformat and OmniClass coding, and the common data environment defined by ISO 19650.",
+      "The documents that make a BIM project a BIM project: the Employer's Information Requirements, the BIM Execution Plan, and the LOD schedule — with Uniformat and OmniClass classification codes, which exist so anyone picking up your document anywhere in the world can trace an element back to its description. The common data environment as defined by ISO 19650, and the folder and file-naming discipline that follows from it. Sample BEP and LOD documents are in the week 1 resource materials in Classroom — read them and build your own; do not template them.",
   },
   {
     code: "W1D3",
-    title: "Week 1 · Day 3 — Data analysis for construction professionals",
+    title: "Week 1 · Day 3 — Introduction to data analytics in construction",
     requiresSubmission: true,
-    instructions:
-      "PROVISIONAL — delivered by the data analytics lead. Why the absence of construction data forces estimators into assumption, and what a usable project dataset looks like.",
+    instructions: `Why data matters in construction: the practical applications — reducing cost overruns, improving site safety, managing risk and optimising resources — and why the absence of local construction data leaves estimators working on assumption.
+
+Quantitative versus qualitative analysis: structured-data tools like Excel and Python against qualitative tools like Atlas.ti and NVivo, and when each is the right instrument.
+
+Building a career in analytics: start your portfolio now, practise consistently, and share the work publicly — visibility is what attracts collaboration and opportunity.`,
     assignmentPrompt: `Two parts, both submitted in Google Classroom.
 
 1. Post a reflective summary of the week 1 lectures on LinkedIn, tag ADLM Studio, and attach the link to your submission (use "Add → Link").
@@ -98,7 +104,7 @@ Build these from scratch using the sample documents in Classroom as a guide — 
   // ── Week 2 — 3D BIM ─────────────────────────────────────────────────────
   {
     code: "W2D1",
-    title: "Week 2 · Day 1 — 3D BIM and the Revit environment",
+    title: "Week 2 · Day 1 — 3D BIM fundamentals and Revit workflows",
     instructions: `What 3D BIM is: a model carrying the physical AND functional characteristics of the building, not just geometry. Why a clean 3D model is the prerequisite for early clash detection, better coordination and a data-rich life cycle.
 
 Revit vs traditional CAD — intelligent families instead of lines, and one change updating every view.
@@ -113,7 +119,7 @@ Also covered: how to submit assignments in Google Classroom.`,
   },
   {
     code: "W2D2",
-    title: "Week 2 · Day 2 — Building the CDE on Google Drive, and modelling the building",
+    title: "Week 2 · Day 2 — Setting up a cloud-based CDE, and modelling the building",
     instructions: `Standing up a working common data environment on Google Drive when Autodesk Construction Cloud is out of budget: install Drive for Desktop, create the CDE folder, then the ISO 19650 structure — Work in Progress / Approved (Shared) / Archive, with Architectural, Structural and Services folders under each, plus Cost Management and Project Management.
 
 Access control as the security layer: editor vs viewer, per-discipline access so the structural engineer never sees inside the architect's WIP folder, and a reviewer with view-only rights over everything. What you gain and lose against ACC (ACC previews Revit and CAD files in the browser; Drive does not).
@@ -124,7 +130,7 @@ Modelling: levels in elevation (architectural vs structural floor level, and why
   },
   {
     code: "W2D3",
-    title: "Week 2 · Day 3 — Information-rich models: parameters, AI, worksharing and COBie",
+    title: "Week 2 · Day 3 — Advanced 3D modelling, AI integration, worksharing and COBie",
     requiresSubmission: true,
     instructions: `Embedding data: type parameters on windows, doors and walls — keynote, manufacturer, model, cost, URL, description, type image, assembly code and the OmniClass number Revit already carries. Editing one instance updates every element of that type. Material identity data. Analytical properties and where the sustainability engineer takes over.
 
@@ -171,7 +177,7 @@ Linking to the model: export the Revit model to Navisworks, import the MS Projec
   },
   {
     code: "W3D3",
-    title: "Week 3 · Day 3 — Tracking and reporting: baselines, % planned vs % complete, dashboards",
+    title: "Week 3 · Day 3 — Advanced project reporting, KPIs and tracking",
     requiresSubmission: true,
     instructions: `MS Project will tell you what percentage complete you are. It will not tell you what percentage you were supposed to be — you have to build that.
 
@@ -195,13 +201,13 @@ Reporting: the Reports tab — building a dashboard from tables and charts, filt
   // ── Week 4 — 5D BIM ─────────────────────────────────────────────────────
   {
     code: "W4D1",
-    title: "Week 4 · Day 1 — 5D fundamentals: from Revit to a scaled drawing in PlanSwift",
+    title: "Week 4 · Day 1 — 5D BIM, quantity takeoff and PlanSwift",
     instructions:
       "Introduction to 5D BIM. Exporting 2D drawings out of the Revit model to PDF, loading them into PlanSwift, setting the scale, and a first area takeoff — building area, external and internal girth.",
   },
   {
     code: "W4D2",
-    title: "Week 4 · Day 2 — Quantification across PlanSwift, Revit schedules, CostX and the ADLM plugins",
+    title: "Week 4 · Day 2 — Quantity takeoff with PlanSwift, Revit schedules, CostX and the ADLM plugins",
     instructions: `The same substructure taken off three ways, so you can pick the right tool rather than defend one.
 
 PlanSwift with the stock tools: area, linear volume and wall area for site clearance, topsoil removal, trench excavation, concrete in foundation and block work in foundation. Page tools — rotate, batch rotate a whole PDF, and Crop as New Page (never measure two drawings at different scales on one sheet). The Pitch tool for roof slope. Zip / Unzip Swift Job for sending work to a reviewer who is not on your CDE. Estimating and report views, export to Excel, and what the PlanSwift plugin store sells.
@@ -216,10 +222,10 @@ Also previewed: the clash-detected architectural, structural and MEP models in C
   },
   {
     code: "W4D3",
-    title: "Week 4 · Day 3 — Bill of quantities, material schedule and cash-flow forecast",
+    title: "Week 4 · Day 3 — 5D BIM final session: cash-flow forecasting",
     requiresSubmission: true,
     instructions:
-      "Turning the takeoff into money: completing the bill of quantities, building the material schedule, rate build-up, and preparing the cash-flow forecast off the priced bill and the week 3 programme.",
+      "Turning the takeoff into money: completing the bill of quantities, building the material schedule, rate build-up, and preparing the cash-flow forecast off the priced bill and the week 3 programme. The Understanding 5D BIM quiz and the ADLM PlanSwift and Revit plugin video playlists are posted alongside this session in Classroom.",
     assignmentPrompt: `Using your own model and drawings:
 
 1. Take off your project — substructure through to finishes — using PlanSwift or CostX for the 2D work and Revit Schedules and Quantities for the model-based work.
@@ -229,50 +235,55 @@ Also previewed: the clash-detected architectural, structural and MEP models in C
 5. File all of it under Cost Management in your CDE and update your BEP.`,
   },
 
-  // ── Week 5 ──────────────────────────────────────────────── PROVISIONAL ──
+  // ── Week 5 — Data Analysis in Quantity Surveying ────────────────────────
   {
     code: "W5D1",
-    title: "Week 5 · Day 1 — Structuring construction data for analysis",
+    title: "Week 5 · Day 1 — Introduction to data analytics and Power BI for construction",
     instructions:
-      "PROVISIONAL — announced in class, content not yet transcribed. Cleaning and structuring project data: fields vs records, and getting cost and programme data into a shape a dashboard can read.",
+      "Picking up week 1's analytics session and putting it to work. What Power BI is for a quantity surveyor, how it differs from the reporting you already do in Excel and MS Project, and getting your project data connected.",
   },
   {
     code: "W5D2",
-    title: "Week 5 · Day 2 — Building the project dashboard in Power BI",
+    title: "Week 5 · Day 2 — Power BI for construction: data cleaning and modelling",
     instructions:
-      "PROVISIONAL — announced in class. Moving beyond the MS Project report tab to Power BI: KPIs, slicers, and cost and schedule visuals, using the KPIs submitted in week 3.",
+      "Getting construction data into a shape a dashboard can actually read — fields and records, cleaning, and structuring cost and programme data before a single visual is built. Most of the work in any dashboard happens here.",
   },
   {
     code: "W5D3",
-    title: "Week 5 · Day 3 — Earned value and reporting to stakeholders",
-    requiresSubmission: true,
+    title: "Week 5 · Day 3 — Data cleaning, validation and project updates",
     instructions:
-      "PROVISIONAL — announced in class. Earned value management in practice: planned value, earned value and actual cost; SPI and CPI, what values above and below 1 mean; executive-level reporting.",
-    assignmentPrompt:
-      "PROVISIONAL — confirm before publishing. Build a Power BI dashboard for your project covering schedule and cost performance, using the KPIs you proposed in week 3.",
+      "Validation: catching the errors that would otherwise flow straight through to a chart the board is looking at. Keeping the dashboard current as the project moves, so the numbers on screen are the numbers on site.",
   },
 
-  // ── Week 6 ──────────────────────────────────────────────── PROVISIONAL ──
+  // ── Week 6 — Bringing it all Together ───────────────────────────────────
   {
     code: "W6D1",
-    title: "Week 6 · Day 1 — Federating architectural, structural and MEP models",
+    title: "Week 6 · Day 1 — Dashboarding, KPI tracking and EVMS integration",
     instructions:
-      "PROVISIONAL — announced in class. Bringing the three discipline models together as one federated model, and why linking (never importing) is what makes it work.",
+      "Building the project dashboard proper against the KPIs you proposed in week 3. Earned value management in practice — planned value, earned value and actual cost — and reading SPI and CPI: what a value above 1 tells you, and what one below 1 tells you before anyone else notices.",
   },
   {
     code: "W6D2",
-    title: "Week 6 · Day 2 — Clash detection and the coordination workflow",
+    title: "Week 6 · Day 2 — Navisworks, clash detection, 4D and 5D",
     instructions:
-      "PROVISIONAL — announced in class. Running clash detection, issuing and tracking the results back to the design team, and the model edits that follow (wall top offsets, floor thicknesses, beam levels).",
+      "Federating the architectural, structural and MEP models into one, and why linking rather than importing is what keeps that federation live. Running clash detection, issuing results back to the responsible discipline, and the model edits that follow — wall top offsets, floor thicknesses, beam base levels. This is why the coordinated models in Classroom look 'wrong' until you know what was resolved out of them.",
   },
   {
     code: "W6D3",
-    title: "Week 6 · Day 3 — 6D: asset data, COBie handover and course wrap-up",
+    title: "Week 6 · Day 3 — Final live class: 4D/5D simulation and presentation",
     requiresSubmission: true,
     instructions:
-      "PROVISIONAL — announced in class. Energy and facility management data, the COBie handover deliverable, final portfolio review and certification.",
-    assignmentPrompt:
-      "PROVISIONAL — confirm before publishing. Submit your federated model, the clash detection report and the actions taken, and your completed COBie handover sheet.",
+      "The whole programme run end to end on one model: the 4D sequence, the 5D quantities and cost, and the dashboard on top. Presenting the result the way you would to a client or a board, then final portfolio review and certification.",
+    assignmentPrompt: `Capstone project — everything you have built over the six weeks, presented as one submission.
+
+1. Your Revit model, information-rich and filed correctly in your CDE.
+2. Your programme of works with resources, baseline and tracking configured.
+3. Your bill of quantities, material schedule and cash-flow forecast.
+4. Your Power BI dashboard, reporting against the KPIs you set.
+5. The federated model and your clash detection report, with the actions taken.
+6. Your BEP, updated to reflect how the project actually ran.
+
+Present it as you would to a client — this is the portfolio piece you defend in an interview.`,
   },
 ];
 
