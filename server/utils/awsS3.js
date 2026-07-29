@@ -141,7 +141,12 @@ export async function uploadStream({
       Metadata: metadata,
     },
     queueSize: 4,
-    partSize: 64 * 1024 * 1024,
+    // Progress is emitted once per completed part, so part size sets how often
+    // the caller hears anything. At 64 MB a slow uplink goes silent for many
+    // minutes before the first update, which reads as a hang. 16 MB keeps the
+    // request count sane (a 6 GB file is ~380 parts against a 10,000 limit)
+    // while reporting four times as often.
+    partSize: 16 * 1024 * 1024,
     leavePartsOnError: false,
   });
 
