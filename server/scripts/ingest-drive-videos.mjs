@@ -37,7 +37,12 @@ import { fileURLToPath } from "node:url";
 import { JWT } from "google-auth-library";
 import { connectDB } from "../db.js";
 import { PaidCourse } from "../models/PaidCourse.js";
-import { objectSize, uploadStream, archiveBucket } from "../utils/awsS3.js";
+import {
+  objectSize,
+  uploadStream,
+  archiveBucket,
+  verifyWriteAccess,
+} from "../utils/awsS3.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const APPLY = process.argv.includes("--apply");
@@ -279,6 +284,22 @@ if (CHECK) {
     console.log(`✓ Drive access confirmed — read "${file.name}" (${gb(file.size)})`);
   } catch (err) {
     console.error(`✗ Could not reach Drive: ${err.message}`);
+    process.exit(1);
+  }
+
+  const awsMissing = REQUIRED.filter(
+    ([name]) => name.startsWith("AWS_") && !String(process.env[name] || "").trim(),
+  );
+  if (awsMissing.length) {
+    preflight({ warnOnly: true });
+    process.exit(0);
+  }
+
+  try {
+    const bucket = await verifyWriteAccess();
+    console.log(`✓ S3 write access confirmed — s3://${bucket}`);
+  } catch (err) {
+    console.error(`✗ S3 check failed: ${err.message}`);
     process.exit(1);
   }
 

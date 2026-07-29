@@ -5,7 +5,13 @@
  * at Cloudflare R2 for product/flyer assets. This one is real AWS, because the
  * course pipeline (archive -> MediaConvert -> CloudFront) lives there.
  */
-import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  HeadObjectCommand,
+  HeadBucketCommand,
+  CreateMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+} from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 
 function requiredEnv(name) {
@@ -45,6 +51,53 @@ export async function objectSize(key, bucket = archiveBucket()) {
     }
     throw err;
   }
+}
+
+/**
+ * Proves the credentials can actually write to the archive bucket, without
+ * leaving anything behind.
+ *
+ * HeadBucket alone only proves the bucket exists and is reachable — it says
+ * nothing about write permission, which is the one that fails 20 GB in. So we
+ * also open a multipart upload and immediately abort it. That exercises
+ * PutObject and AbortMultipartUpload, which is exactly the permission set the
+ * real transfer needs, and needs no DeleteObject.
+ */
+export async function verifyWriteAccess(bucket = archiveBucket()) {
+  const client = s3Client();
+
+  try {
+    await client.send(new HeadBucketCommand({ Bucket: bucket }));
+  } catch (err) {
+    const code = err?.$metadata?.httpStatusCode;
+    if (code === 404) throw new Error(`Bucket "${bucket}" does not exist in this region.`);
+    if (code === 301) {
+      throw new Error(
+        `Bucket "${bucket}" exists but lives in a different region than AWS_REGION.`,
+      );
+    }
+    if (code === 403) {
+      throw new Error(
+        `Credentials rejected for "${bucket}" — check the key, and that the ` +
+          `policy is attached to the user and names this bucket.`,
+      );
+    }
+    throw err;
+  }
+
+  const probeKey = "_adlm-write-check/probe";
+  const started = await client.send(
+    new CreateMultipartUploadCommand({ Bucket: bucket, Key: probeKey }),
+  );
+  await client.send(
+    new AbortMultipartUploadCommand({
+      Bucket: bucket,
+      Key: probeKey,
+      UploadId: started.UploadId,
+    }),
+  );
+
+  return bucket;
 }
 
 /**
