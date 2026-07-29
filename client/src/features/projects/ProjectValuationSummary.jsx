@@ -383,6 +383,8 @@ export default function ProjectValuationSummary({
   selectedValuationDate = "",
   showDailyValuationLog = true,
   showValuationSettings = true,
+  clientName = "",
+  onClientNameChange,
   statusLabel = "Completed",
   valuationErr = "",
   valuationSettings,
@@ -506,6 +508,24 @@ export default function ProjectValuationSummary({
           <div className="mt-1 text-sm text-slate-600">
             Saved per project and reused for every valuation sheet.
           </div>
+
+          <label className="mt-4 block">
+            <div className="mb-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
+              Client / Employer
+            </div>
+            <input
+              type="text"
+              value={clientName}
+              onChange={(e) => onClientNameChange?.(e.target.value)}
+              placeholder="e.g. First World Communities Ltd"
+              maxLength={200}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-adlm-blue-700/30 focus:border-adlm-blue-700 dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-text"
+            />
+            <div className="mt-1 text-[11px] text-slate-500 dark:text-adlm-dark-dim">
+              Titles the exported bill: &ldquo;Proposed Development for
+              {clientName ? ` ${clientName}` : " …"}&rdquo;. Saved with the project.
+            </div>
+          </label>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <PercentageField

@@ -1150,6 +1150,10 @@ export default function ProjectsGeneric() {
       return next.slice(0, BOQ_UNDO_MAX);
     });
   }, []);
+  // Employer/client this bill is prepared for. Titles the BoQ cover sheet
+  // ("Proposed Development for <client>") and the project report.
+  const [clientName, setClientName] = React.useState("");
+  const [baseClientName, setBaseClientName] = React.useState("");
   const [valuationSettings, setValuationSettings] = React.useState(
     DEFAULT_VALUATION_SETTINGS,
   );
@@ -1476,6 +1480,9 @@ export default function ProjectsGeneric() {
     );
     setBaseValuationSettings(normalizedSettings);
     setValuationSettings(normalizedSettings);
+    const cn = String(project?.clientName || "");
+    setClientName(cn);
+    setBaseClientName(cn);
     const cached = project?._id ? readCache(tool, project._id) : null;
     if (cached && cached?.rates && typeof cached.rates === "object") {
       const nextUi = { ...ui };
@@ -2581,6 +2588,7 @@ export default function ProjectsGeneric() {
     !variationsEqual(variations, baseVariations) ||
     !preliminaryItemsEqual(preliminaryItems, basePreliminaryItems) ||
     !valuationSettingsEqual(valuationSettings, baseValuationSettings) ||
+    String(clientName || "") !== String(baseClientName || "") ||
     orderDirty;
 
   async function saveRatesToCloud() {
@@ -2637,6 +2645,7 @@ export default function ProjectsGeneric() {
         baseVersion: sel?.version,
         items: updatedItems,
         valuationSettings: normalizeValuationSettings(valuationSettings),
+        clientName: String(clientName || "").trim(),
         provisionalSums: provisionalSums
           .map((s) => ({
             description: String(s?.description || "").trim(),
@@ -5423,6 +5432,8 @@ export default function ProjectsGeneric() {
                 loadingValuations={loadingValuations}
                 valuationErr={valuationErr}
                 valuationSettings={valuationSettings}
+                clientName={clientName}
+                onClientNameChange={setClientName}
                 onValuationSettingChange={handleValuationSettingChange}
                 showDailyValuationLog={Boolean(valuationSettings?.showDailyLog)}
                 onToggleShowDailyValuationLog={(checked) =>

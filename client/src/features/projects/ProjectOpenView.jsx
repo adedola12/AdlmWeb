@@ -327,6 +327,8 @@ export default function ProjectOpenView({
   onToggleShowDailyValuationLog,
   onToggleShowValuationSettings,
   onValuationSettingChange,
+  clientName = "",
+  onClientNameChange,
   onlyFillEmpty = true,
   openPickKey = null,
   openBoqPickKey = null,
@@ -907,6 +909,8 @@ export default function ProjectOpenView({
             valuationErr={valuationErr}
             valuationSettings={valuationSettings}
             onValuationSettingChange={onValuationSettingChange}
+            clientName={clientName}
+            onClientNameChange={onClientNameChange}
             showDailyValuationLog={showDailyValuationLog}
             showValuationSettings={showValuationSettings}
             progressPercent={progressPercent}

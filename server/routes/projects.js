@@ -2793,6 +2793,7 @@ async function updateProject(req, res) {
       modelTitle,
       modelPath,
       origin,
+      clientName,
       mergeSameTypeLevel,
       mergeSameLine,
       checklistCompositeKeys,
@@ -2864,6 +2865,9 @@ async function updateProject(req, res) {
 
       // Container-owned fields only — never items.
       if (name !== undefined && String(name).trim()) project.name = String(name).trim();
+      if (clientName !== undefined) {
+        project.clientName = String(clientName || "").trim().slice(0, 200);
+      }
       if (valuationSettings !== undefined) {
         project.valuationSettings = normalizeValuationSettings(
           valuationSettings,
@@ -3068,6 +3072,10 @@ async function updateProject(req, res) {
     if (modelTitle !== undefined) project.modelTitle = modelTitle || "";
     if (modelPath !== undefined) project.modelPath = modelPath || "";
     if (origin !== undefined) project.origin = origin || "";
+    // Employer/client the bill is for — titles the BoQ cover.
+    if (clientName !== undefined) {
+      project.clientName = String(clientName || "").trim().slice(0, 200);
+    }
 
     if (typeof mergeSameTypeLevel === "boolean") {
       project.mergeSameTypeLevel = mergeSameTypeLevel;

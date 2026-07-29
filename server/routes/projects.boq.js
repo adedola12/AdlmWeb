@@ -179,6 +179,7 @@ router.get(
 
     const out = await exportElementalBoQ({
       projectName: project.name || "Project",
+      clientName: project.clientName || "",
       items: project.items,
       budgetItems: project.budgetItems || [],
       productKey: tool,
