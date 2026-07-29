@@ -392,7 +392,15 @@ for (const item of planned) {
       console.log(`= ${label} already in S3, recording key only`);
     } else {
       console.log(`\n→ ${label} ${item.name}`);
-      let lastPct = 0;
+      process.stdout.write("  connecting…");
+
+      // Report on a clock rather than only at 10% marks. On a slow uplink the
+      // first 10% of a 6 GB file is 20 minutes of total silence, which is
+      // indistinguishable from a hang.
+      const startedAt = Date.now();
+      let lastTickAt = 0;
+      let lastLine = 0;
+
       const body = await openDriveFile(item.fileId, token);
       await uploadStream({
         key: item.key,
@@ -404,14 +412,28 @@ for (const item of planned) {
           "module-code": String(item.moduleCode),
         },
         onProgress: ({ loaded }) => {
-          const pct = Math.floor((Number(loaded || 0) / Number(item.bytes)) * 100);
-          if (pct >= lastPct + 10) {
-            lastPct = pct;
-            process.stdout.write(`  ${pct}%…`);
-          }
+          const now = Date.now();
+          if (now - lastTickAt < 15000) return;
+          lastTickAt = now;
+
+          const done = Number(loaded || 0);
+          const total = Number(item.bytes) || 1;
+          const pct = Math.min(100, Math.floor((done / total) * 100));
+          const mbps = done / 1024 / 1024 / ((now - startedAt) / 1000);
+          const etaSec = mbps > 0 ? (total - done) / 1024 / 1024 / mbps : 0;
+          const eta =
+            etaSec > 90 ? `${Math.round(etaSec / 60)}m left` : `${Math.round(etaSec)}s left`;
+
+          const line =
+            `  ${String(pct).padStart(3)}%  ` +
+            `${(done / 1024 ** 3).toFixed(2)}/${(total / 1024 ** 3).toFixed(2)} GB  ` +
+            `${mbps.toFixed(1)} MB/s  ${eta}`;
+          // Overwrite in place so a two-hour file doesn't produce 480 lines.
+          process.stdout.write(`\r${line.padEnd(Math.max(lastLine, line.length))}`);
+          lastLine = line.length;
         },
       });
-      process.stdout.write("\n");
+      process.stdout.write("\r".padEnd(lastLine + 1) + "\r");
     }
 
     const module = course.modules.find((m) => m.code === item.moduleCode);
