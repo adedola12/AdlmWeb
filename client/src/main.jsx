@@ -33,6 +33,7 @@ import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminProductEdit from "./pages/AdminProductEdit.jsx";
 import AdminCourseGrading from "./pages/AdminCourseGrading.jsx";
 import AdminCourseCockpit from "./pages/AdminCourseCockpit.jsx";
+import AdminQuizzes from "./pages/AdminQuizzes.jsx";
 import CheckoutThanks from "./pages/CheckoutThanks.jsx";
 import AboutADLM from "./pages/About.jsx";
 import WhatsNew from "./pages/WhatsNew.jsx";
@@ -503,6 +504,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute roles={["admin"]}>
             <AdminCourseCockpit />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/quizzes",
+        element: (
+          <AdminRoute roles={["admin"]}>
+            <AdminQuizzes />
           </AdminRoute>
         ),
       },

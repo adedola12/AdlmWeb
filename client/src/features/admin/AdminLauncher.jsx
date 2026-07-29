@@ -11,7 +11,7 @@ import {
   FiShoppingCart, FiShield, FiUsers, FiCalendar, FiMapPin, FiPlayCircle,
   FiBookOpen, FiCheckSquare, FiDollarSign, FiPlusSquare, FiFileText,
   FiClipboard, FiBox, FiTag, FiStar, FiGift, FiImage, FiBell,
-  FiLifeBuoy, FiActivity, FiCpu,
+  FiLifeBuoy, FiActivity, FiCpu, FiHelpCircle,
 } from "react-icons/fi";
 
 // area = the permission key that gates the card (see server/config/permissions.js)
@@ -24,6 +24,8 @@ const TOOLS = [
   { area: "learn", to: "/admin/learn", label: "Learn", desc: "Video courses & library", icon: FiPlayCircle },
   { area: "courses", to: "/admin/courses", label: "Courses", desc: "Paid online courses", icon: FiBookOpen },
   { area: "grading", to: "/admin/course-grading", label: "Grading", desc: "Grade course submissions", icon: FiCheckSquare },
+  { area: "courses", to: "/admin/course-cockpit", label: "Course Cockpit", desc: "Watch time, assignments & who has stalled", icon: FiActivity },
+  { area: "courses", to: "/admin/quizzes", label: "Quizzes", desc: "Write module quizzes", icon: FiHelpCircle },
   { area: "rategen", to: "/admin/rategen", label: "RateGen Prices", desc: "Material & labour prices", icon: FiDollarSign },
   { area: "rategen", to: "/admin/rategen/add-rate", label: "Build Rates", desc: "Create & edit rate library", icon: FiPlusSquare },
   { area: "invoices", to: "/admin/invoices", label: "Invoices", desc: "Client invoices & payments", icon: FiFileText },
