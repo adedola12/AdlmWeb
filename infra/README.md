@@ -120,25 +120,74 @@ MPXJ_API_URL  MPXJ_API_KEY
 
 ---
 
-## 3. Deploy
+## 3. DNS strategy — pick one
+
+Set by `useExternalDns` in `config.ts`. **Defaults to `true`.**
+
+| | `true` — external DNS (default) | `false` — Route 53 |
+| --- | --- | --- |
+| Stacks | `AdlmApi` only | `AdlmEdge` + `AdlmApi` |
+| DNS change | one CNAME at your current provider | delegate nameservers |
+| Certificate | you issue it first (§3a) | CDK issues and validates it |
+| Vercel records | never touched | must be replicated first |
+| Rollback | edit one CNAME back | wait for nameserver propagation |
+
+Use `true` for the emergency restore: it moves one record and leaves the
+frontend's DNS completely alone. Move to `false` later, calmly, when nothing is
+on fire — preview it first with `npx cdk diff --all -c useExternalDns=false`.
+
+### 3a. External DNS: issue the certificate first
+
+Deliberately out of band. If the certificate were created inside the stack with
+no hosted zone to validate against, the deploy would stall on a pending
+validation and could roll back — the last thing you want mid-outage. This way
+each step is independently verifiable and nothing hangs.
 
 ```bash
-npx cdk diff --all        # read this before every deploy
-npx cdk deploy --all
+# 1. Request it. MUST be us-east-1 — CloudFront accepts no other region.
+aws acm request-certificate --region us-east-1 \
+  --domain-name api.adlmstudio.net \
+  --validation-method DNS \
+  --query CertificateArn --output text
+# → arn:aws:acm:us-east-1:<ACCOUNT>:certificate/<ID>
+
+# 2. Read the CNAME it wants.
+aws acm describe-certificate --region us-east-1 \
+  --certificate-arn <ARN> \
+  --query 'Certificate.DomainValidationOptions[0].ResourceRecord'
+
+# 3. Add that Name → Value as a CNAME at your current DNS provider.
+#    This record is unrelated to any live record; adding it is safe.
+
+# 4. Wait for ISSUED (usually minutes).
+aws acm wait certificate-validated --region us-east-1 --certificate-arn <ARN>
 ```
 
-CDK deploys `AdlmEdge` (us-east-1) before `AdlmApi` (eu-west-1) because the
-CloudFront distribution needs the certificate.
+Leave that validation CNAME in place permanently — ACM re-validates on renewal,
+and removing it eventually breaks the certificate.
 
-The certificate validates automatically — the validation record is written into
-the hosted zone this stack creates. It does **not** require the domain to be
-live on Route 53 yet.
+### 3b. Deploy
+
+```bash
+CERT=arn:aws:acm:us-east-1:<ACCOUNT>:certificate/<ID>
+
+npx cdk diff  -c certificateArn=$CERT    # read this before every deploy
+npx cdk deploy -c certificateArn=$CERT
+```
+
+Or set `certificateArn` in `config.ts` and drop the flag. Synth fails with an
+actionable message if `useExternalDns` is true and no ARN is supplied.
+
+**Route 53 path instead:** set `useExternalDns: false`, then `npx cdk deploy
+--all`. CDK orders `AdlmEdge` before `AdlmApi`, creates the zone, and validates
+the certificate itself — no manual step, but you must then delegate
+nameservers, and §6 applies.
 
 Deploy outputs you need:
 
 - `FunctionUrl` — verify here first
-- `DistributionDomain` — verify TLS and routing here second
-- `NameServers` — for the delegation, **later**
+- `DistributionDomain` — verify second, then the CNAME target
+- `NameServers` — Route 53 path only, for the delegation, **later**
 
 ---
 
@@ -206,9 +255,31 @@ delegating DNS.
 
 ## 6. Cutover
 
-The DNS runbook is **Phase 5 and is not written yet** — it needs the current
-zone contents, which are held by whichever provider serves `adlmstudio.net`
-today. Do not improvise it. The order that matters:
+### External DNS (default) — one record
+
+1. Lower the TTL on the existing `api.adlmstudio.net` record to 60s. **Wait for
+   the old TTL to expire** before step 3, or resolvers will keep serving the
+   dead Render address for however long the old TTL says.
+2. Verify against `DistributionDomain` with a Host-header override (§4).
+3. Repoint `api.adlmstudio.net` at the CloudFront domain:
+   `CNAME api.adlmstudio.net → dXXXXXXXX.cloudfront.net`
+4. Watch resolution: `dig +short api.adlmstudio.net`
+5. Run the §4 checks against the real hostname, then §5's licence check.
+6. Update the **Paystack webhook URL** and any OAuth redirect URIs that point at
+   the old host.
+
+Nothing else moves. Vercel's records are untouched, so the frontend cannot go
+dark from a missed record. **Rollback is putting the old value back on that one
+record** — which is why step 1's TTL reduction matters.
+
+> If the current record is an `A` record rather than a `CNAME`, replace it with
+> a CNAME. CloudFront has no fixed IPs, so an A record cannot point at it.
+> Fine on a subdomain; only a zone apex forbids CNAMEs.
+
+### Route 53 path — full delegation
+
+Only if `useExternalDns: false`. Slower and much harder to undo, so not the
+emergency path. The order that matters:
 
 1. Export every existing record from the current DNS provider
 2. Replicate them **all** into the Route 53 zone — Vercel's records included,
@@ -218,7 +289,8 @@ today. Do not improvise it. The order that matters:
 5. Update the Paystack webhook URL and any OAuth redirect URIs
 
 Nameserver delegation is the slowest-propagating step and the hardest to undo.
-Anything missing from step 2 goes dark while it propagates.
+Anything missing from step 2 goes dark while it propagates, which is exactly the
+risk the external-DNS path avoids.
 
 ---
 
@@ -313,10 +385,16 @@ Recurring cost after the Activate credit expires on 31 July 2028:
 | SSM Parameter Store | standard parameters are free | $0.00 |
 | CloudWatch Logs | 5GB/month; 30-day retention caps growth | ~$0.00 |
 | SNS | first 1,000 email notifications free | $0.00 |
-| Route 53 hosted zone | none | **$0.50** |
-| **Total** | | **~$0.50/month** |
+| EventBridge Scheduler | 14M invocations/month free | $0.00 |
+| SQS (schedule DLQ) | 1M requests/month free | $0.00 |
+| Route 53 hosted zone | none — **not created on the default path** | $0.00 / $0.50 |
+| **Total** | | **$0.00–$0.50/month** |
 
-At roughly ₦800/USD that is about **₦400/month**, which is the point of this
-architecture: it survives the credit expiring. The figures that would break
+On the default external-DNS path there is no hosted zone, so the recurring cost
+is effectively **nil** — DNS stays wherever you already pay for it. Adopting
+Route 53 later adds $0.50/month.
+
+At roughly ₦800/USD that is under **₦400/month** either way, which is the point
+of this architecture: it survives the credit expiring. The figures that would break
 that are an ALB (~$16/mo) or App Runner for the MPXJ converter (~$5–25/mo) —
 both still open decisions, neither on the emergency path.

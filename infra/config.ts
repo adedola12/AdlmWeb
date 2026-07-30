@@ -94,6 +94,37 @@ export interface AdlmConfig {
   alarmEmail: string;
 
   /**
+   * DNS strategy.
+   *
+   * true  — EXTERNAL DNS (recommended for the emergency restore). No Route 53
+   *         hosted zone is created and no nameservers are delegated. You add
+   *         one CNAME for `apiHostname` at whichever provider serves
+   *         adlmstudio.net today, pointing at the CloudFront domain this stack
+   *         outputs. Vercel's records are never touched, so the frontend
+   *         cannot go dark from a missed record, and rollback is editing that
+   *         one CNAME back — not waiting for nameserver propagation.
+   *
+   *         Requires `certificateArn`: with no hosted zone, CDK cannot
+   *         DNS-validate a certificate for you. Issue it out of band first
+   *         (§3a of the runbook) so a pending validation can never stall or
+   *         roll back a deploy mid-outage.
+   *
+   * false — ROUTE 53. Creates the hosted zone, issues and validates the
+   *         certificate automatically, and writes A/AAAA alias records.
+   *         Requires delegating nameservers, which is the slowest-propagating
+   *         and least reversible step in the migration. Switch to this later,
+   *         calmly, once the outage is over.
+   */
+  useExternalDns: boolean;
+
+  /**
+   * Pre-issued us-east-1 certificate ARN covering `apiHostname`.
+   * Required when `useExternalDns` is true; ignored when it is false.
+   * Overridable at deploy time with `-c certificateArn=arn:aws:acm:...`.
+   */
+  certificateArn?: string;
+
+  /**
    * Function URL auth.
    *
    * "NONE"  — the Function URL is publicly reachable. Required for the
@@ -127,6 +158,10 @@ export const config: AdlmConfig = {
   logRetentionDays: 30,
 
   alarmEmail: "admin@adlmstudio.net", // ASSUMED
+
+  // Emergency restore: touch as little DNS as possible. See the doc above.
+  useExternalDns: true,
+  certificateArn: undefined, // set here, or pass -c certificateArn=...
 
   functionUrlAuth: "NONE",
 };

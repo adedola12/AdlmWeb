@@ -58,8 +58,12 @@ const SERVER_DIR = path.resolve(__dirname, "..", "..", "server");
 
 export interface AdlmApiStackProps extends StackProps {
   config: AdlmConfig;
-  /** Hosted zone from the us-east-1 edge stack (cross-region reference). */
-  zone: route53.IHostedZone;
+  /**
+   * Hosted zone from the us-east-1 edge stack (cross-region reference).
+   * Undefined when config.useExternalDns is true — no zone exists, and the
+   * CNAME is created by hand at whichever provider serves the domain today.
+   */
+  zone?: route53.IHostedZone;
   /** us-east-1 certificate ARN — CloudFront accepts no other region. */
   certificateArn: string;
 }
@@ -225,21 +229,29 @@ export class AdlmApiStack extends Stack {
       },
     });
 
-    new route53.ARecord(this, "ApiAliasA", {
-      zone,
-      recordName: cfg.apiHostname,
-      target: route53.RecordTarget.fromAlias(
-        new targets.CloudFrontTarget(distribution),
-      ),
-    });
-    // Plugins on IPv6-only mobile tethering are a real thing in Lagos.
-    new route53.AaaaRecord(this, "ApiAliasAAAA", {
-      zone,
-      recordName: cfg.apiHostname,
-      target: route53.RecordTarget.fromAlias(
-        new targets.CloudFrontTarget(distribution),
-      ),
-    });
+    if (zone) {
+      // Route 53 path: alias records, which need the zone to be authoritative
+      // for the domain — i.e. nameservers delegated.
+      new route53.ARecord(this, "ApiAliasA", {
+        zone,
+        recordName: cfg.apiHostname,
+        target: route53.RecordTarget.fromAlias(
+          new targets.CloudFrontTarget(distribution),
+        ),
+      });
+      // Plugins on IPv6-only mobile tethering are a real thing in Lagos.
+      new route53.AaaaRecord(this, "ApiAliasAAAA", {
+        zone,
+        recordName: cfg.apiHostname,
+        target: route53.RecordTarget.fromAlias(
+          new targets.CloudFrontTarget(distribution),
+        ),
+      });
+    }
+    // External-DNS path creates no records at all: the single CNAME goes in by
+    // hand at the current provider, using the DistributionDomain output below.
+    // Note that a CNAME cannot sit on a zone apex — fine here, because this is
+    // the `api` subdomain, not adlmstudio.net itself.
 
     /* ─────────────────── Alarms ───────────────────
      * Email, because there is one operator and no on-call rotation.
@@ -456,7 +468,9 @@ export class AdlmApiStack extends Stack {
     });
     new CfnOutput(this, "DistributionDomain", {
       value: distribution.distributionDomainName,
-      description: "Verify TLS + routing here, with a Host header override, before DNS.",
+      description: cfg.useExternalDns
+        ? `Verify with a Host-header override first, then add: CNAME ${cfg.apiHostname} -> this value, at your current DNS provider.`
+        : "Verify TLS + routing here, with a Host header override, before DNS.",
     });
     new CfnOutput(this, "ScheduledFunctionName", {
       value: scheduledFn.functionName,
