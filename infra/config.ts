@@ -1,15 +1,26 @@
 /**
  * ────────────────────────────────────────────────────────────────────────────
- * EVERY ASSUMPTION IN THE STACK LIVES HERE. Correct these, then deploy.
+ * EVERY TUNABLE IN THE STACK LIVES HERE. Nothing else in infra/ hardcodes a
+ * value you might need to change.
  *
- * Anything marked ASSUMED was chosen without confirmation and should be
- * checked before the first deploy. Nothing else in infra/ hardcodes a value
- * you might need to change.
+ * CONFIRMED — checked against reality by the founder. Don't re-litigate these
+ *   without a reason: apiHostname, atlasConnectionLimit, alarmEmail.
+ *
+ * CHOSEN — engineering decisions with the reasoning written alongside them,
+ *   not guesses. Safe to revisit as real traffic data arrives:
+ *   atlasBudgetShare, timeoutSeconds, mongoMaxPool, memoryMb, functionUrlAuth.
+ *
+ * The one value NOT set here is certificateArn on the external-DNS path — it
+ * comes from `-c certificateArn=...` at deploy time, or is set below.
  * ────────────────────────────────────────────────────────────────────────────
  */
 
 export interface AdlmConfig {
-  /** AWS account that owns the Activate credit. ASSUMED: resolved from CLI env. */
+  /**
+   * AWS account that owns the Activate credit. Resolved from the CLI's own
+   * credentials at synth time, so it is whatever `aws sts get-caller-identity`
+   * reports — check that before the first deploy.
+   */
   account?: string;
 
   /** Regional resources. Full service coverage, good subsea route to Lagos. */
@@ -59,7 +70,8 @@ export interface AdlmConfig {
    * headroom for the WPF desktop app, Compass, admin scripts and the old
    * Render service during a parallel run.
    *
-   * ASSUMED: 0.25 (25%).
+   * CHOSEN: 0.25 (25%). Deliberately conservative — raise it only once Atlas
+   * shows connection headroom AND CloudWatch shows Lambda throttles.
    */
   atlasBudgetShare: number;
 
@@ -87,9 +99,12 @@ export interface AdlmConfig {
   logRetentionDays: number;
 
   /**
-   * Alarm destination. ASSUMED from the repo's admin address.
+   * Alarm destination. CONFIRMED by the founder.
+   *
    * A subscription confirmation email is sent on first deploy and MUST be
-   * clicked or no alarm ever reaches anyone.
+   * clicked, or no alarm ever reaches anyone. This is the single easiest thing
+   * in the whole stack to get silently wrong: everything looks deployed and
+   * healthy, and then nothing tells you when it isn't.
    */
   alarmEmail: string;
 
@@ -157,7 +172,7 @@ export const config: AdlmConfig = {
   originTimeoutSeconds: 60,
   logRetentionDays: 30,
 
-  alarmEmail: "admin@adlmstudio.net", // ASSUMED
+  alarmEmail: "admin@adlmstudio.net", // CONFIRMED
 
   // Emergency restore: touch as little DNS as possible. See the doc above.
   useExternalDns: true,

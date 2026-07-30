@@ -14,20 +14,22 @@ been deployed — this session has no credentials for ADLM's AWS account.
 Everything questionable lives in one file: **`infra/config.ts`**. Nothing else
 hardcodes a value you might need to change.
 
-**Confirmed:**
+**Confirmed against reality — no longer open questions:**
 
 | Setting | Value | |
 | --- | --- | --- |
 | `apiHostname` | `api.adlmstudio.net` | A domain ADLM controls, so repointing DNS does rescue the locked-out plugins. |
 | `atlasConnectionLimit` | `1500` | M10. |
+| `alarmEmail` | `admin@adlmstudio.net` | **You must click the SNS confirmation email on first deploy** or no alarm ever reaches anyone. |
 
-**Still assumed — check before deploying:**
+**Chosen, with reasoning — revisit as real traffic data arrives:**
 
-| Setting | Assumed | How to check |
+| Setting | Value | Why |
 | --- | --- | --- |
-| `alarmEmail` | `admin@adlmstudio.net` | You must click the SNS confirmation email or no alarm ever reaches anyone. |
-| `atlasBudgetShare` | `0.25` | Share of Atlas connections this Lambda may consume. The rest is headroom for the WPF desktop app, Compass, admin scripts, and the old Render service during a parallel run. |
+| `atlasBudgetShare` | `0.25` | Share of Atlas connections this Lambda may consume. The rest is headroom for the WPF desktop app, Compass, admin scripts, and the old Render service during a parallel run. Raise only if Atlas shows connection headroom. |
 | `timeoutSeconds` | `60` | Deviation from the plan's 30s, because the AI agent path allows 45s and has a measured 22.8s uncached call. Drop to 30 once `/agent/*` moves off this function. |
+| `mongoMaxPool` | `5` | A Lambda container serves one request at a time, so a large pool buys nothing. Must stay equal to the `MONGO_MAX_POOL` env var — the stack sets both from this value. |
+| `functionUrlAuth` | `NONE` | Needed for the verify-before-DNS step and as a fallback hostname mid-outage. Switch to `AWS_IAM` after the soak. |
 
 `reservedConcurrency` is **derived**, not set by hand:
 
