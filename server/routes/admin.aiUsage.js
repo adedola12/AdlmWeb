@@ -274,8 +274,33 @@ function buildCredit(settings, awsAllTime, monthAws) {
   const dayOfMonth = Math.max(1, new Date().getUTCDate());
   const perDay = round(monthSpend / dayOfMonth, 4);
   const projectedMonthUsd = round(perDay * daysInThisMonth(), 2);
-  const daysRemaining =
+
+  const expiresAt = toDate(settings?.aiCreditExpiresAt);
+  const daysToExpiry =
+    expiresAt ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 86400000)) : null;
+
+  // Unbounded burn projection. At a near-zero rate this reaches absurd numbers
+  // — $25,000 at $0.0003/day is 83 million days — so it is never shown alone.
+  const burnDays =
     remainingUsd !== null && perDay > 0 ? Math.floor(remainingUsd / perDay) : null;
+
+  // The pool ends at whichever comes first: spending it, or the grant expiring.
+  // Credit that outlives its own expiry is not runway — it is credit that will
+  // be LOST unused, and "runs out in 83,333,300 days" hides exactly that. Same
+  // clamp the AI service applies in governance/creditGuard.js.
+  let daysRemaining = null;
+  let limitedBy = null;
+
+  if (daysToExpiry !== null && (burnDays === null || burnDays >= daysToExpiry)) {
+    daysRemaining = daysToExpiry;
+    limitedBy = "expiry";
+  } else if (burnDays !== null && burnDays <= MAX_PROJECTION_DAYS) {
+    daysRemaining = burnDays;
+    limitedBy = "burn";
+  }
+  // Otherwise no expiry is configured and burn is too slow to project. Left
+  // null, which the dashboard already renders as "—" — an honest "we cannot
+  // say" beats a number nobody can act on.
 
   return {
     label: settings?.aiCreditLabel || "AWS credit",
@@ -290,10 +315,26 @@ function buildCredit(settings, awsAllTime, monthAws) {
     projectedMonthUsd,
     daysRemaining,
     exhaustsOn:
-      daysRemaining !== null ? new Date(Date.now() + daysRemaining * 86400000) : null,
+      daysRemaining === null
+        ? null
+        : limitedBy === "expiry"
+          ? expiresAt
+          : new Date(Date.now() + daysRemaining * 86400000),
+    // "burn" = spent before it expires. "expiry" = expires with credit left.
+    // Lets the dashboard label the figure for what it actually is.
+    limitedBy,
     startAt: settings?.aiCreditStartAt || null,
     expiresAt: settings?.aiCreditExpiresAt || null,
   };
+}
+
+// Beyond a century the burn rate is noise, not a forecast.
+const MAX_PROJECTION_DAYS = 36500;
+
+function toDate(value) {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function daysInThisMonth() {

@@ -42,12 +42,18 @@ let cached = null;
 
 export function s3Client() {
   if (cached) return cached;
+
+  // Explicit keys when they are configured; otherwise fall through to the SDK's
+  // default provider chain. That is what lets this run on EC2 under an instance
+  // role, with no long-lived secret copied onto the box at all.
+  const accessKeyId = courseEnv("AWS_ACCESS_KEY_ID");
+  const secretAccessKey = courseEnv("AWS_SECRET_ACCESS_KEY");
+
   cached = new S3Client({
     region: requiredEnv("AWS_REGION"),
-    credentials: {
-      accessKeyId: requiredEnv("AWS_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnv("AWS_SECRET_ACCESS_KEY"),
-    },
+    ...(accessKeyId && secretAccessKey
+      ? { credentials: { accessKeyId, secretAccessKey } }
+      : {}),
   });
   return cached;
 }
@@ -69,6 +75,25 @@ export async function objectSize(key, bucket = archiveBucket()) {
     }
     throw err;
   }
+}
+
+/**
+ * A short-lived direct link to an archived master.
+ *
+ * This is a stopgap for the window between "the recording is in S3" and "the
+ * HLS ladder exists behind CloudFront". It streams the raw master, so there is
+ * no adaptive bitrate and a two-hour lecture is several gigabytes — fine for
+ * checking a file plays, wrong as a way to serve a cohort. `hlsKey` takes
+ * precedence the moment MediaConvert produces one, so this retires itself.
+ */
+export async function presignArchiveUrl(key, ttlSec = 2 * 60 * 60) {
+  const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+  return getSignedUrl(
+    s3Client(),
+    new GetObjectCommand({ Bucket: archiveBucket(), Key: key }),
+    { expiresIn: ttlSec },
+  );
 }
 
 /**
@@ -141,7 +166,12 @@ export async function uploadStream({
       Metadata: metadata,
     },
     queueSize: 4,
-    partSize: 64 * 1024 * 1024,
+    // Progress is emitted once per completed part, so part size sets how often
+    // the caller hears anything. At 64 MB a slow uplink goes silent for many
+    // minutes before the first update, which reads as a hang. 16 MB keeps the
+    // request count sane (a 6 GB file is ~380 parts against a 10,000 limit)
+    // while reporting four times as often.
+    partSize: 16 * 1024 * 1024,
     leavePartsOnError: false,
   });
 

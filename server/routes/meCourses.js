@@ -13,6 +13,7 @@ import {
   playbackCookieOptions,
   cdnUrl,
 } from "../utils/cloudfrontSign.js";
+import { presignArchiveUrl } from "../utils/awsS3.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -403,6 +404,20 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
   }).lean();
   if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
 
+  // Re-entering the SAME lecture is a reconnect, not a second stream. A page
+  // reload would otherwise claim a fresh seat while the previous one sat live
+  // for another 90 seconds, so two refreshes locked a student out of the
+  // lecture they were already watching.
+  await PlaybackSession.updateMany(
+    {
+      userId: req.user._id,
+      courseSku: sku,
+      moduleCode,
+      endedAt: null,
+    },
+    { $set: { endedAt: new Date() } },
+  );
+
   const live = await PlaybackSession.find({
     userId: req.user._id,
     endedAt: null,
@@ -457,6 +472,18 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
       // CloudFront not wired up yet — fall back to whatever videoUrl the
       // module already carries rather than failing the whole request.
       console.warn("[playback] could not sign cookies:", err.message);
+    }
+  }
+
+  // No HLS yet, but the master is archived: hand out a short-lived direct link
+  // so a freshly ingested recording is watchable before the delivery pipeline
+  // exists. Superseded automatically once hlsKey is set.
+  if (!playbackUrl && module?.sourceKey) {
+    try {
+      playbackUrl = await presignArchiveUrl(module.sourceKey);
+      playbackExpiresAt = toIso(new Date(Date.now() + 2 * 60 * 60 * 1000));
+    } catch (err) {
+      console.warn("[playback] could not presign archive object:", err.message);
     }
   }
 

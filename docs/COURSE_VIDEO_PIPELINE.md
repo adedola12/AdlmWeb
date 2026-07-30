@@ -101,7 +101,14 @@ Programmatic access only. Attach:
   "Version": "2012-10-17",
   "Statement": [
     { "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:ListBucket",
+        "s3:AbortMultipartUpload",
+        "s3:ListBucketMultipartUploads",
+        "s3:ListMultipartUploadParts"
+      ],
       "Resource": [
         "arn:aws:s3:::adlm-course-archive",
         "arn:aws:s3:::adlm-course-archive/*"
@@ -258,3 +265,107 @@ run out.
 | CORS error in console | Response headers policy missing `Allow-Credentials`, or using a wildcard origin |
 | Certificate not selectable | ACM cert issued outside us-east-1 |
 | Manifest 404 after a COMPLETE job | Destination naming — the master lands at `<prefix>index.m3u8`; check the delivery bucket prefix matches |
+
+---
+
+## 10. Running the ingest from EC2 (when your uplink is the bottleneck)
+
+Drive → your laptop → S3 is limited by your upload bandwidth. From an EC2
+instance in the same region as the bucket it is cloud-to-cloud: inbound from
+Google is free, EC2 → S3 in-region is free, and a `t3.small` costs about two
+cents an hour. A transfer measured in hours locally usually finishes in well
+under one.
+
+Nothing is written to disk — the script streams — so the default 8 GB root
+volume is plenty regardless of how large the lectures are.
+
+### 1. IAM role for the instance
+
+**IAM → Roles → Create role → AWS service → EC2**, attach the same
+`adlm-course-archive-rw` policy the app user has, name it
+`adlm-course-ingest-ec2`.
+
+Using a role means no long-lived AWS key is ever copied onto the box. The
+script omits explicit credentials when `COURSE_AWS_USE_INSTANCE_ROLE=true` and
+lets the SDK read them from instance metadata.
+
+### 2. Launch the instance
+
+- AMI: **Amazon Linux 2023**
+- Type: **t3.small** (t3.medium if you want more headroom)
+- Region: **us-east-1** — must match the bucket, or you lose the free in-region transfer
+- IAM instance profile: `adlm-course-ingest-ec2`
+- Security group: **no inbound rules needed** — connect with **EC2 Instance
+  Connect** from the console rather than opening port 22
+
+### 3. Allow the instance to reach MongoDB
+
+The script reads and writes the course record, so Atlas must accept the
+instance's IP. Copy the instance's public IPv4, then in Atlas: **Network Access
+→ Add IP Address**. Remove it again when you are done.
+
+Skipping this produces a Mongo connection timeout that looks nothing like a
+network-access problem.
+
+### 4. Set it up on the box
+
+```bash
+sudo dnf install -y git
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+. ~/.nvm/nvm.sh && nvm install 22
+```
+
+Node 20+ is required — the script uses `fetch` with a streaming body and
+`Readable.fromWeb`.
+
+```bash
+git clone https://github.com/adedola12/AdlmWeb.git
+cd AdlmWeb/server && npm install
+```
+
+The repo is private, so the clone needs a GitHub token as the password (a
+fine-grained PAT with read access to this repo is enough).
+
+### 5. Credentials, without copying secret files
+
+Base64 the service-account key **on your laptop**:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\key.json")) | Set-Clipboard
+```
+
+Then on the instance, write `server/.env`:
+
+```bash
+cat > .env <<'ENV'
+MONGO_URI=<same value as your local .env>
+AUTH_DB=adlmWeb
+COURSE_AWS_REGION=us-east-1
+COURSE_AWS_USE_INSTANCE_ROLE=true
+AWS_VIDEO_ARCHIVE_BUCKET=adlm-course-archive
+GOOGLE_SERVICE_ACCOUNT_KEY=<paste the base64 string>
+ENV
+```
+
+No AWS key, and the Google credential never exists as a file.
+
+### 6. Run it
+
+```bash
+node scripts/ingest-drive-videos.mjs --check
+```
+
+Both ticks green, then:
+
+```bash
+node scripts/ingest-drive-videos.mjs --apply
+```
+
+Use `screen` or `tmux` if you want to disconnect while it runs. Files already
+archived are skipped, so anything your laptop finished stays finished.
+
+### 7. Afterwards
+
+- **Terminate the instance** — it has no further purpose and bills by the hour
+- Remove the instance IP from the Atlas allowlist
+- Set the Drive service account back to **Viewer**

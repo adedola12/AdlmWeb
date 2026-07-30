@@ -32,15 +32,21 @@ let cached = null;
 
 export function mediaConvertClient() {
   if (cached) return cached;
+  // Read through courseEnv, not process.env directly — otherwise a value set as
+  // COURSE_AWS_MEDIACONVERT_ENDPOINT is silently ignored and the SDK falls back
+  // to the regional default. That happens to work, which is exactly why the bug
+  // would have gone unnoticed.
+  const endpoint = courseEnv("AWS_MEDIACONVERT_ENDPOINT");
+  const accessKeyId = courseEnv("AWS_ACCESS_KEY_ID");
+  const secretAccessKey = courseEnv("AWS_SECRET_ACCESS_KEY");
+
   cached = new MediaConvertClient({
     region: requiredEnv("AWS_REGION"),
-    // Account-specific endpoint; DescribeEndpoints returns it, but it is stable
-    // per account/region so it lives in config rather than costing a call.
-    endpoint: process.env.AWS_MEDIACONVERT_ENDPOINT || undefined,
-    credentials: {
-      accessKeyId: requiredEnv("AWS_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnv("AWS_SECRET_ACCESS_KEY"),
-    },
+    ...(endpoint ? { endpoint } : {}),
+    // Omitted under an EC2 instance role, same as the S3 client.
+    ...(accessKeyId && secretAccessKey
+      ? { credentials: { accessKeyId, secretAccessKey } }
+      : {}),
   });
   return cached;
 }
@@ -50,7 +56,7 @@ export function mediaConvertClient() {
  * redraws, so quality-defined variable bitrate with a generous max holds text
  * sharp during scrolling without paying for it the rest of the time.
  */
-function rung({ height, bitrate, maxBitrate, nameModifier }) {
+function rung({ height, maxBitrate, nameModifier }) {
   return {
     NameModifier: nameModifier,
     ContainerSettings: { Container: "M3U8", M3u8Settings: {} },
@@ -60,10 +66,12 @@ function rung({ height, bitrate, maxBitrate, nameModifier }) {
       CodecSettings: {
         Codec: "H_264",
         H264Settings: {
+          // QVBR takes a quality target and a ceiling. Setting Bitrate as well
+          // is rejected outright — the two are alternative rate-control models,
+          // not complementary knobs.
           RateControlMode: "QVBR",
           QvbrSettings: { QvbrQualityLevel: 8 },
           MaxBitrate: maxBitrate,
-          Bitrate: bitrate,
           SceneChangeDetect: "TRANSITION_DETECTION",
           GopSizeUnits: "AUTO",
           QualityTuningLevel: "SINGLE_PASS_HQ",
@@ -129,10 +137,10 @@ export async function submitHlsJob({ sourceKey, outPrefix, jobTag = "" }) {
             },
           },
           Outputs: [
-            rung({ height: 720, bitrate: 2400000, maxBitrate: 3600000, nameModifier: "_720" }),
-            rung({ height: 540, bitrate: 1200000, maxBitrate: 1800000, nameModifier: "_540" }),
-            rung({ height: 360, bitrate: 600000, maxBitrate: 900000, nameModifier: "_360" }),
-            rung({ height: 240, bitrate: 300000, maxBitrate: 450000, nameModifier: "_240" }),
+            rung({ height: 720, maxBitrate: 3600000, nameModifier: "_720" }),
+            rung({ height: 540, maxBitrate: 1800000, nameModifier: "_540" }),
+            rung({ height: 360, maxBitrate: 900000, nameModifier: "_360" }),
+            rung({ height: 240, maxBitrate: 450000, nameModifier: "_240" }),
           ],
         },
       ],

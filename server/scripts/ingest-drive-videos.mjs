@@ -69,11 +69,16 @@ function gb(bytes) {
  * 30 GB run is a miserable way to find out the bucket name is missing.
  */
 const REQUIRED = [
-  ["GOOGLE_SERVICE_ACCOUNT_KEY", "Google service account JSON (path, or the JSON itself)"],
+  ["GOOGLE_SERVICE_ACCOUNT_KEY", "Google service account JSON (path, JSON, or base64)"],
   ["AWS_REGION", "e.g. us-east-1"],
-  ["AWS_ACCESS_KEY_ID", "app IAM user"],
-  ["AWS_SECRET_ACCESS_KEY", "app IAM user"],
   ["AWS_VIDEO_ARCHIVE_BUCKET", "bucket the masters land in"],
+];
+
+// Not required when running on EC2 under an instance role — the SDK picks
+// credentials up from instance metadata instead.
+const REQUIRED_UNLESS_INSTANCE_ROLE = [
+  ["AWS_ACCESS_KEY_ID", "app IAM user (omit if using an EC2 instance role)"],
+  ["AWS_SECRET_ACCESS_KEY", "app IAM user (omit if using an EC2 instance role)"],
 ];
 
 // Accepts either COURSE_-prefixed or bare names, matching utils/awsS3.js.
@@ -84,8 +89,17 @@ function envValue(name) {
   );
 }
 
+function onInstanceRole() {
+  // Set by ECS/EKS, or detectable on EC2 via the metadata service. Keep it
+  // simple: an explicit opt-in beats probing 169.254.169.254 on a laptop.
+  return String(process.env.COURSE_AWS_USE_INSTANCE_ROLE || "") === "true";
+}
+
 function preflight({ warnOnly = false } = {}) {
-  const missing = REQUIRED.filter(([name]) => !envValue(name));
+  const required = onInstanceRole()
+    ? REQUIRED
+    : [...REQUIRED, ...REQUIRED_UNLESS_INSTANCE_ROLE];
+  const missing = required.filter(([name]) => !envValue(name));
   if (!missing.length) {
     if (warnOnly) console.log("\nCredentials look complete — --apply is ready to run.");
     return;
@@ -174,17 +188,32 @@ function loadServiceAccount() {
   }
 }
 
+let jwtClient = null;
+
+/**
+ * A Drive access token, refreshed as needed.
+ *
+ * Google's tokens last an hour. Minting one at the start of the run and
+ * reusing it meant that as soon as a single file took longer than that — the
+ * 5.82 GB lecture does — every subsequent file failed with a 401 that looked
+ * like a broken credential.
+ *
+ * The JWT client caches internally and re-mints when the token is close to
+ * expiry, so calling this before each file is cheap and always valid.
+ */
 async function driveToken() {
-  const key = loadServiceAccount();
-  const client = new JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-  });
+  if (!jwtClient) {
+    const key = loadServiceAccount();
+    jwtClient = new JWT({
+      email: key.client_email,
+      key: key.private_key,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+    });
+  }
   // getAccessToken() resolves to { token }, not { access_token } — reading the
   // wrong property looked exactly like an auth failure while the credential
   // was fine all along.
-  const { token } = await client.getAccessToken();
+  const { token } = await jwtClient.getAccessToken();
   if (!token) throw new Error("Could not mint a Drive access token");
   return token;
 }
@@ -351,9 +380,8 @@ if (CHECK) {
     process.exit(1);
   }
 
-  const awsMissing = REQUIRED.filter(
-    ([name]) => name.startsWith("AWS_") && !envValue(name),
-  );
+  const awsMissing = [...REQUIRED, ...(onInstanceRole() ? [] : REQUIRED_UNLESS_INSTANCE_ROLE)]
+    .filter(([name]) => name.startsWith("AWS_") && !envValue(name));
   if (awsMissing.length) {
     preflight({ warnOnly: true });
     process.exit(0);
@@ -381,7 +409,6 @@ preflight();
 
 // ── run ─────────────────────────────────────────────────────────────────────
 const bucket = archiveBucket();
-const token = await driveToken();
 let done = 0;
 
 for (const item of planned) {
@@ -392,8 +419,17 @@ for (const item of planned) {
       console.log(`= ${label} already in S3, recording key only`);
     } else {
       console.log(`\n→ ${label} ${item.name}`);
-      let lastPct = 0;
-      const body = await openDriveFile(item.fileId, token);
+      process.stdout.write("  connecting…");
+
+      // Report on a clock rather than only at 10% marks. On a slow uplink the
+      // first 10% of a 6 GB file is 20 minutes of total silence, which is
+      // indistinguishable from a hang.
+      const startedAt = Date.now();
+      let lastTickAt = 0;
+      let lastLine = 0;
+
+      // Fetched per file, not once per run — see driveToken().
+      const body = await openDriveFile(item.fileId, await driveToken());
       await uploadStream({
         key: item.key,
         body,
@@ -404,14 +440,28 @@ for (const item of planned) {
           "module-code": String(item.moduleCode),
         },
         onProgress: ({ loaded }) => {
-          const pct = Math.floor((Number(loaded || 0) / Number(item.bytes)) * 100);
-          if (pct >= lastPct + 10) {
-            lastPct = pct;
-            process.stdout.write(`  ${pct}%…`);
-          }
+          const now = Date.now();
+          if (now - lastTickAt < 15000) return;
+          lastTickAt = now;
+
+          const done = Number(loaded || 0);
+          const total = Number(item.bytes) || 1;
+          const pct = Math.min(100, Math.floor((done / total) * 100));
+          const mbps = done / 1024 / 1024 / ((now - startedAt) / 1000);
+          const etaSec = mbps > 0 ? (total - done) / 1024 / 1024 / mbps : 0;
+          const eta =
+            etaSec > 90 ? `${Math.round(etaSec / 60)}m left` : `${Math.round(etaSec)}s left`;
+
+          const line =
+            `  ${String(pct).padStart(3)}%  ` +
+            `${(done / 1024 ** 3).toFixed(2)}/${(total / 1024 ** 3).toFixed(2)} GB  ` +
+            `${mbps.toFixed(1)} MB/s  ${eta}`;
+          // Overwrite in place so a two-hour file doesn't produce 480 lines.
+          process.stdout.write(`\r${line.padEnd(Math.max(lastLine, line.length))}`);
+          lastLine = line.length;
         },
       });
-      process.stdout.write("\n");
+      process.stdout.write("\r".padEnd(lastLine + 1) + "\r");
     }
 
     const module = course.modules.find((m) => m.code === item.moduleCode);
