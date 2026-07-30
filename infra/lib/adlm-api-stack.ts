@@ -104,7 +104,11 @@ export class AdlmApiStack extends Stack {
       timeout: Duration.seconds(cfg.timeoutSeconds),
 
       // A ceiling derived from the Atlas connection limit — see config.ts.
-      reservedConcurrentExecutions: reservedConcurrency(cfg),
+      // Omitted when the account's concurrency quota is too low to permit any
+      // reservation; the quota then acts as the ceiling instead.
+      ...(cfg.useReservedConcurrency
+        ? { reservedConcurrentExecutions: reservedConcurrency(cfg) }
+        : {}),
 
       environment: {
         NODE_ENV: "production",
@@ -328,9 +332,11 @@ export class AdlmApiStack extends Stack {
       // otherwise a later run could take the lock while the first still holds it.
       timeout: Duration.minutes(10),
 
-      // Exactly one run at a time. The Mongo lock is the real guard; this is
-      // the belt to its braces, and it costs nothing.
-      reservedConcurrentExecutions: 1,
+      // Exactly one run at a time — but only when the account quota allows a
+      // reservation at all. The Mongo job lock in util/autoRenew.js is the
+      // real guard against overlapping runs; this was only ever the belt to
+      // its braces, so losing it costs correctness nothing.
+      ...(cfg.useReservedConcurrency ? { reservedConcurrentExecutions: 1 } : {}),
 
       environment: {
         NODE_ENV: "production",
@@ -492,8 +498,12 @@ export class AdlmApiStack extends Stack {
       description: "Dead-lettered schedule invocations. Should always be empty.",
     });
     new CfnOutput(this, "ReservedConcurrency", {
-      value: String(reservedConcurrency(cfg)),
-      description: `Max ${reservedConcurrency(cfg) * cfg.mongoMaxPool} Atlas connections of ${cfg.atlasConnectionLimit}`,
+      value: cfg.useReservedConcurrency
+        ? String(reservedConcurrency(cfg))
+        : "not set — bounded by the account concurrency quota instead",
+      description: cfg.useReservedConcurrency
+        ? `Max ${reservedConcurrency(cfg) * cfg.mongoMaxPool} Atlas connections of ${cfg.atlasConnectionLimit}`
+        : `Atlas connections are capped at (account quota) x ${cfg.mongoMaxPool}. Raise the Lambda quota, then set useReservedConcurrency: true.`,
     });
   }
 }

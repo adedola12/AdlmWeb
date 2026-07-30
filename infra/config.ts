@@ -75,6 +75,26 @@ export interface AdlmConfig {
    */
   atlasBudgetShare: number;
 
+  /**
+   * Whether to pin reserved concurrency on the functions.
+   *
+   * FALSE by default, because a new AWS account's total concurrent-execution
+   * quota is 10, and AWS rejects any reservation that would leave fewer than
+   * 10 unreserved — so every reservation fails, including a reservation of 1.
+   *
+   * Leaving it off is safe: the account quota itself becomes the ceiling, and
+   * at 10 containers x mongoMaxPool 5 that is 50 Atlas connections, far below
+   * the 375 the reservation was designed to enforce. The guard is redundant
+   * while the quota is this low.
+   *
+   * Turn this ON once the Lambda "Concurrent executions" quota is raised
+   * (Service Quotas -> Lambda -> L-B99A9384). Check the current value with:
+   *   aws service-quotas get-service-quota --region eu-west-1 \
+   *     --service-code lambda --quota-code L-B99A9384
+   * It needs to be at least reservedConcurrency() + 10 for the deploy to pass.
+   */
+  useReservedConcurrency: boolean;
+
   /** Lambda memory (MB). More memory = proportionally more CPU = faster cold start. */
   memoryMb: number;
 
@@ -166,6 +186,9 @@ export const config: AdlmConfig = {
   atlasConnectionLimit: 1500, // CONFIRMED — M10
   mongoMaxPool: 5,
   atlasBudgetShare: 0.25,
+
+  // Off until the account's Lambda concurrency quota is raised above 10.
+  useReservedConcurrency: false,
 
   memoryMb: 1024,
   timeoutSeconds: 60,
