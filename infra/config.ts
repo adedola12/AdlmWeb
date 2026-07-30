@@ -95,7 +95,18 @@ export interface AdlmConfig {
    */
   useReservedConcurrency: boolean;
 
-  /** Lambda memory (MB). More memory = proportionally more CPU = faster cold start. */
+  /**
+   * Lambda memory (MB) — which on Lambda also buys CPU, proportionally.
+   *
+   * 2048 rather than 1024 because cold start here is dominated by parsing an
+   * 8MB bundle, and that is CPU-bound. A full vCPU arrives at ~1769MB, so
+   * this sits just above the threshold; going higher buys little, since
+   * module init is single-threaded.
+   *
+   * It does NOT double the bill at this scale. The permanent free tier is
+   * 400,000 GB-seconds/month; at 2GB and ~0.3s per warm request that is well
+   * over half a million requests a month before anything is chargeable.
+   */
   memoryMb: number;
 
   /**
@@ -190,7 +201,7 @@ export const config: AdlmConfig = {
   // Off until the account's Lambda concurrency quota is raised above 10.
   useReservedConcurrency: false,
 
-  memoryMb: 1024,
+  memoryMb: 2048,
   timeoutSeconds: 60,
   originTimeoutSeconds: 60,
   logRetentionDays: 30,

@@ -147,6 +147,12 @@ export class AdlmApiStack extends Stack {
         // --enable-source-maps keep CloudWatch stack traces readable anyway.
         minify: true,
         sourceMap: true,
+        // The map without this is 30MB against 8MB of actual code, and Lambda
+        // downloads and unpacks the whole package on every cold start — so
+        // three quarters of that download was the original sources embedded
+        // in the map. Dropping them keeps file/line mappings in stack traces
+        // and costs only the inline source snippet.
+        sourcesContent: false,
         target: "node22",
         // ESM output is REQUIRED, not a preference: index.js uses top-level
         // await, which esbuild cannot express in CommonJS.
@@ -354,6 +360,12 @@ export class AdlmApiStack extends Stack {
         externalModules: [],
         minify: true,
         sourceMap: true,
+        // The map without this is 30MB against 8MB of actual code, and Lambda
+        // downloads and unpacks the whole package on every cold start — so
+        // three quarters of that download was the original sources embedded
+        // in the map. Dropping them keeps file/line mappings in stack traces
+        // and costs only the inline source snippet.
+        sourcesContent: false,
         target: "node22",
         format: OutputFormat.ESM,
         banner:
