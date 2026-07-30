@@ -27,7 +27,27 @@ const app = new App();
 
 // Context wins over the config file, so switching certificates never needs a
 // code edit: -c certificateArn=arn:aws:acm:us-east-1:123456789012:certificate/...
-const certificateArnOverride = app.node.tryGetContext("certificateArn");
+const certificateArnRaw = app.node.tryGetContext("certificateArn");
+
+// An EMPTY `-c certificateArn=` is a shell accident, never an intention.
+// PowerShell expands an unset $dns to nothing, so `-c certificateArn=$dns`
+// silently becomes `-c certificateArn=`, which previously read as "no custom
+// domain" and stripped the alias and certificate off a live CloudFront
+// distribution — taking api.adlmstudio.net down with a TLS error and breaking
+// every plugin. Deploying without a domain is still supported, but it has to
+// be the absence of the flag, not an empty value.
+if (certificateArnRaw !== undefined && String(certificateArnRaw).trim() === "") {
+  throw new Error(
+    "-c certificateArn= was passed with an EMPTY value.\n" +
+      "That is almost always an unset shell variable. Refusing, because it would\n" +
+      "remove the custom domain from a live distribution.\n\n" +
+      "  Set it:      $dns = \"arn:aws:acm:us-east-1:...:certificate/...\"\n" +
+      "  Check it:    \"dns = $dns\"\n" +
+      "  Or omit the flag entirely to deploy without a custom domain on purpose.",
+  );
+}
+
+const certificateArnOverride = certificateArnRaw;
 
 // Lets you preview the other DNS strategy without editing code, e.g.
 //   npx cdk diff --all -c useExternalDns=false
