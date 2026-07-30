@@ -69,11 +69,16 @@ function gb(bytes) {
  * 30 GB run is a miserable way to find out the bucket name is missing.
  */
 const REQUIRED = [
-  ["GOOGLE_SERVICE_ACCOUNT_KEY", "Google service account JSON (path, or the JSON itself)"],
+  ["GOOGLE_SERVICE_ACCOUNT_KEY", "Google service account JSON (path, JSON, or base64)"],
   ["AWS_REGION", "e.g. us-east-1"],
-  ["AWS_ACCESS_KEY_ID", "app IAM user"],
-  ["AWS_SECRET_ACCESS_KEY", "app IAM user"],
   ["AWS_VIDEO_ARCHIVE_BUCKET", "bucket the masters land in"],
+];
+
+// Not required when running on EC2 under an instance role — the SDK picks
+// credentials up from instance metadata instead.
+const REQUIRED_UNLESS_INSTANCE_ROLE = [
+  ["AWS_ACCESS_KEY_ID", "app IAM user (omit if using an EC2 instance role)"],
+  ["AWS_SECRET_ACCESS_KEY", "app IAM user (omit if using an EC2 instance role)"],
 ];
 
 // Accepts either COURSE_-prefixed or bare names, matching utils/awsS3.js.
@@ -84,8 +89,17 @@ function envValue(name) {
   );
 }
 
+function onInstanceRole() {
+  // Set by ECS/EKS, or detectable on EC2 via the metadata service. Keep it
+  // simple: an explicit opt-in beats probing 169.254.169.254 on a laptop.
+  return String(process.env.COURSE_AWS_USE_INSTANCE_ROLE || "") === "true";
+}
+
 function preflight({ warnOnly = false } = {}) {
-  const missing = REQUIRED.filter(([name]) => !envValue(name));
+  const required = onInstanceRole()
+    ? REQUIRED
+    : [...REQUIRED, ...REQUIRED_UNLESS_INSTANCE_ROLE];
+  const missing = required.filter(([name]) => !envValue(name));
   if (!missing.length) {
     if (warnOnly) console.log("\nCredentials look complete — --apply is ready to run.");
     return;
@@ -366,9 +380,8 @@ if (CHECK) {
     process.exit(1);
   }
 
-  const awsMissing = REQUIRED.filter(
-    ([name]) => name.startsWith("AWS_") && !envValue(name),
-  );
+  const awsMissing = [...REQUIRED, ...(onInstanceRole() ? [] : REQUIRED_UNLESS_INSTANCE_ROLE)]
+    .filter(([name]) => name.startsWith("AWS_") && !envValue(name));
   if (awsMissing.length) {
     preflight({ warnOnly: true });
     process.exit(0);

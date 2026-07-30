@@ -42,12 +42,18 @@ let cached = null;
 
 export function s3Client() {
   if (cached) return cached;
+
+  // Explicit keys when they are configured; otherwise fall through to the SDK's
+  // default provider chain. That is what lets this run on EC2 under an instance
+  // role, with no long-lived secret copied onto the box at all.
+  const accessKeyId = courseEnv("AWS_ACCESS_KEY_ID");
+  const secretAccessKey = courseEnv("AWS_SECRET_ACCESS_KEY");
+
   cached = new S3Client({
     region: requiredEnv("AWS_REGION"),
-    credentials: {
-      accessKeyId: requiredEnv("AWS_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnv("AWS_SECRET_ACCESS_KEY"),
-    },
+    ...(accessKeyId && secretAccessKey
+      ? { credentials: { accessKeyId, secretAccessKey } }
+      : {}),
   });
   return cached;
 }
