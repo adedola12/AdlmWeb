@@ -198,8 +198,11 @@ export const config: AdlmConfig = {
   mongoMaxPool: 5,
   atlasBudgetShare: 0.25,
 
-  // Off until the account's Lambda concurrency quota is raised above 10.
-  useReservedConcurrency: false,
+  // Enabled: the eu-west-1 Lambda concurrency quota was raised to 1000 on
+  // 2026-07-30 (case 178542623200131). Without this, 1000 containers x
+  // mongoMaxPool 5 could open 5000 Atlas connections against an M10 limit of
+  // 1500 and take the database down for everything.
+  useReservedConcurrency: true,
 
   memoryMb: 2048,
   timeoutSeconds: 60,
