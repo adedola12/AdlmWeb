@@ -68,8 +68,6 @@ const NEEDS_ATTENTION = {
   MPXJ_API_URL:
     "points at the Render MPXJ service, which is also down. .mpp import will " +
     "fail with the existing friendly error until that service is replaced.",
-  CORS_ORIGINS:
-    "the stack sets this too; the stack's value wins at runtime. Harmless.",
 };
 
 function die(msg) {

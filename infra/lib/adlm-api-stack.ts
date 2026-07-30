@@ -112,12 +112,11 @@ export class AdlmApiStack extends Stack {
         SSM_PREFIX: cfg.ssmPrefix,
         // Must match config.mongoMaxPool: the concurrency maths assumes it.
         MONGO_MAX_POOL: String(cfg.mongoMaxPool),
-        // Frontend is still on Vercel, so requests are genuinely cross-origin
-        // until the frontend moves behind the same domain (Phase 4).
-        CORS_ORIGINS: [
-          `https://${cfg.domainName}`,
-          `https://www.${cfg.domainName}`,
-        ].join(","),
+        // NOTE: CORS_ORIGINS is deliberately NOT set here. It comes from SSM,
+        // carrying across whatever Render was running. Hardcoding a narrower
+        // list here would silently drop origins that work today — the live
+        // Render value is materially longer than the two obvious site origins.
+        // Migration rule: preserve working config, don't re-derive it.
         // Belt and braces. index.js already starts cron only when run
         // directly, which never happens on Lambda — but every warm container
         // scheduling its own copy of a job that CHARGES REAL CARDS is bad
