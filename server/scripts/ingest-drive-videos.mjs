@@ -174,17 +174,32 @@ function loadServiceAccount() {
   }
 }
 
+let jwtClient = null;
+
+/**
+ * A Drive access token, refreshed as needed.
+ *
+ * Google's tokens last an hour. Minting one at the start of the run and
+ * reusing it meant that as soon as a single file took longer than that — the
+ * 5.82 GB lecture does — every subsequent file failed with a 401 that looked
+ * like a broken credential.
+ *
+ * The JWT client caches internally and re-mints when the token is close to
+ * expiry, so calling this before each file is cheap and always valid.
+ */
 async function driveToken() {
-  const key = loadServiceAccount();
-  const client = new JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-  });
+  if (!jwtClient) {
+    const key = loadServiceAccount();
+    jwtClient = new JWT({
+      email: key.client_email,
+      key: key.private_key,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+    });
+  }
   // getAccessToken() resolves to { token }, not { access_token } — reading the
   // wrong property looked exactly like an auth failure while the credential
   // was fine all along.
-  const { token } = await client.getAccessToken();
+  const { token } = await jwtClient.getAccessToken();
   if (!token) throw new Error("Could not mint a Drive access token");
   return token;
 }
@@ -381,7 +396,6 @@ preflight();
 
 // ── run ─────────────────────────────────────────────────────────────────────
 const bucket = archiveBucket();
-const token = await driveToken();
 let done = 0;
 
 for (const item of planned) {
@@ -401,7 +415,8 @@ for (const item of planned) {
       let lastTickAt = 0;
       let lastLine = 0;
 
-      const body = await openDriveFile(item.fileId, token);
+      // Fetched per file, not once per run — see driveToken().
+      const body = await openDriveFile(item.fileId, await driveToken());
       await uploadStream({
         key: item.key,
         body,
