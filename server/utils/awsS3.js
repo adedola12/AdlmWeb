@@ -11,6 +11,7 @@ import {
   HeadBucketCommand,
   CreateMultipartUploadCommand,
   AbortMultipartUploadCommand,
+  ListMultipartUploadsCommand,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 
@@ -75,6 +76,30 @@ export async function objectSize(key, bucket = archiveBucket()) {
     }
     throw err;
   }
+}
+
+/**
+ * Uploads that were started and never finished.
+ *
+ * These are invisible in a normal object listing but are billed for, so a run
+ * that died mid-file leaves paid-for debris nobody would think to look for.
+ */
+export async function listIncompleteUploads(bucket = archiveBucket()) {
+  const out = await s3Client().send(
+    new ListMultipartUploadsCommand({ Bucket: bucket }),
+  );
+  return (out.Uploads || []).map((u) => ({
+    key: u.Key,
+    uploadId: u.UploadId,
+    initiated: u.Initiated,
+  }));
+}
+
+/** Discards one abandoned upload and the parts it is holding. */
+export async function abortUpload(key, uploadId, bucket = archiveBucket()) {
+  await s3Client().send(
+    new AbortMultipartUploadCommand({ Bucket: bucket, Key: key, UploadId: uploadId }),
+  );
 }
 
 /**
