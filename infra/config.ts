@@ -1,0 +1,152 @@
+/**
+ * ────────────────────────────────────────────────────────────────────────────
+ * EVERY ASSUMPTION IN THE STACK LIVES HERE. Correct these, then deploy.
+ *
+ * Anything marked ASSUMED was chosen without confirmation and should be
+ * checked before the first deploy. Nothing else in infra/ hardcodes a value
+ * you might need to change.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+
+export interface AdlmConfig {
+  /** AWS account that owns the Activate credit. ASSUMED: resolved from CLI env. */
+  account?: string;
+
+  /** Regional resources. Full service coverage, good subsea route to Lagos. */
+  region: string;
+
+  /** CloudFront + ACM only exist in us-east-1. Not a choice. */
+  edgeRegion: string;
+
+  /** Apex domain. Route 53 hosted zone is created for this. */
+  domainName: string;
+
+  /**
+   * Hostname the QUIV / HERON plugins and the Vercel frontend call.
+   *
+   * ASSUMED: "api.adlmstudio.net". This MUST match what the shipped plugin
+   * binaries already resolve — a plugin pointed somewhere else will not be
+   * rescued by this stack no matter how correct the stack is. Confirm from
+   * the plugin config before deploying.
+   */
+  apiHostname: string;
+
+  /**
+   * SSM Parameter Store namespace holding the SecureStrings. Standard
+   * parameters are free; do NOT create advanced ones.
+   * Every parameter directly under this path is loaded into process.env at
+   * cold start under its leaf name (e.g. .../MONGO_URI -> process.env.MONGO_URI).
+   */
+  ssmPrefix: string;
+
+  /**
+   * Atlas connection ceiling for the MAIN cluster.
+   *
+   * ASSUMED: M10 => 1500 connections. Check Atlas -> Cluster -> Limits.
+   * Tier reference: M0/M2/M5 = 500, M10 = 1500, M20/M30 = 3000, M40 = 6000.
+   */
+  atlasConnectionLimit: number;
+
+  /**
+   * Mongoose maxPoolSize per Lambda container. Must match MONGO_MAX_POOL
+   * (server/db.js default is 5). A container serves one request at a time,
+   * so a big pool buys nothing here.
+   */
+  mongoMaxPool: number;
+
+  /**
+   * Share of the Atlas connection limit this Lambda may consume. The rest is
+   * headroom for the WPF desktop app, Compass, admin scripts and the old
+   * Render service during a parallel run.
+   *
+   * ASSUMED: 0.25 (25%).
+   */
+  atlasBudgetShare: number;
+
+  /** Lambda memory (MB). More memory = proportionally more CPU = faster cold start. */
+  memoryMb: number;
+
+  /**
+   * Lambda timeout (seconds).
+   *
+   * DEVIATION FROM THE PLAN, WHICH SAID 30s. The AI agent path
+   * (ADLM_AI_TIMEOUT_MS, default 45000) has a MEASURED uncached call of 22.8s
+   * and allows up to 45s, so a 30s function timeout would cut off real
+   * requests. 60s also matches the CloudFront origin timeout below.
+   * Drop this to 30 once /agent/* moves off the main function.
+   */
+  timeoutSeconds: number;
+
+  /**
+   * CloudFront origin response timeout (seconds). Default is 30, hard max is
+   * 60 without a quota increase. Must be >= the slowest real request.
+   */
+  originTimeoutSeconds: number;
+
+  /** CloudWatch log retention. Log groups never expire by default — that bill grows silently. */
+  logRetentionDays: number;
+
+  /**
+   * Alarm destination. ASSUMED from the repo's admin address.
+   * A subscription confirmation email is sent on first deploy and MUST be
+   * clicked or no alarm ever reaches anyone.
+   */
+  alarmEmail: string;
+
+  /**
+   * Function URL auth.
+   *
+   * "NONE"  — the Function URL is publicly reachable. Required for the
+   *           plan's "verify against a Function URL directly" step, and it
+   *           leaves a working fallback hostname if CloudFront misbehaves
+   *           mid-outage. Same exposure as adlmweb.onrender.com has today,
+   *           and every protected route still enforces its own JWT auth.
+   * "AWS_IAM" — only CloudFront (via OAC, SigV4-signed) can reach the
+   *           function. Tighter. Switch to this after the soak.
+   */
+  functionUrlAuth: "NONE" | "AWS_IAM";
+}
+
+export const config: AdlmConfig = {
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: "eu-west-1",
+  edgeRegion: "us-east-1",
+
+  domainName: "adlmstudio.net",
+  apiHostname: "api.adlmstudio.net", // ASSUMED — confirm against the plugins
+
+  ssmPrefix: "/adlm/cloud/prod",
+
+  atlasConnectionLimit: 1500, // ASSUMED M10
+  mongoMaxPool: 5,
+  atlasBudgetShare: 0.25,
+
+  memoryMb: 1024,
+  timeoutSeconds: 60,
+  originTimeoutSeconds: 60,
+  logRetentionDays: 30,
+
+  alarmEmail: "admin@adlmstudio.net", // ASSUMED
+
+  functionUrlAuth: "NONE",
+};
+
+/**
+ * Reserved concurrency, derived rather than guessed.
+ *
+ *   containers x maxPoolSize <= atlasConnectionLimit x budgetShare
+ *
+ * With the assumed numbers: floor(1500 x 0.25 / 5) = 75 containers,
+ * worst case 375 of 1500 Atlas connections.
+ *
+ * This is a CEILING, not a reservation of capacity — it also caps the blast
+ * radius of a traffic spike or a retry storm against Atlas. If you raise the
+ * Atlas tier, raise this; if you see Lambda throttles in CloudWatch while
+ * Atlas has headroom, raise budgetShare.
+ */
+export function reservedConcurrency(c: AdlmConfig = config): number {
+  return Math.max(
+    1,
+    Math.floor((c.atlasConnectionLimit * c.atlasBudgetShare) / c.mongoMaxPool),
+  );
+}
