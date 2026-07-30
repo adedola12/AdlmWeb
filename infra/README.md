@@ -12,21 +12,29 @@ been deployed — this session has no credentials for ADLM's AWS account.
 ## 0. Correct the assumptions first
 
 Everything questionable lives in one file: **`infra/config.ts`**. Nothing else
-hardcodes a value you might need to change. Check these five before deploying:
+hardcodes a value you might need to change.
+
+**Confirmed:**
+
+| Setting | Value | |
+| --- | --- | --- |
+| `apiHostname` | `api.adlmstudio.net` | A domain ADLM controls, so repointing DNS does rescue the locked-out plugins. |
+| `atlasConnectionLimit` | `1500` | M10. |
+
+**Still assumed — check before deploying:**
 
 | Setting | Assumed | How to check |
 | --- | --- | --- |
-| `apiHostname` | `api.adlmstudio.net` | **Most important.** Must match what the shipped QUIV/HERON binaries already call. A plugin pointed elsewhere is not rescued by this stack, however correct the stack is. |
-| `atlasConnectionLimit` | `1500` (M10) | Atlas → Cluster → Limits. M0/M2/M5 = 500, M10 = 1500, M20/M30 = 3000, M40 = 6000. |
-| `atlasBudgetShare` | `0.25` | Share of Atlas connections this Lambda may consume. The rest is headroom for the WPF desktop app, Compass, admin scripts, and the old Render service during a parallel run. |
 | `alarmEmail` | `admin@adlmstudio.net` | You must click the SNS confirmation email or no alarm ever reaches anyone. |
+| `atlasBudgetShare` | `0.25` | Share of Atlas connections this Lambda may consume. The rest is headroom for the WPF desktop app, Compass, admin scripts, and the old Render service during a parallel run. |
 | `timeoutSeconds` | `60` | Deviation from the plan's 30s, because the AI agent path allows 45s and has a measured 22.8s uncached call. Drop to 30 once `/agent/*` moves off this function. |
 
 `reservedConcurrency` is **derived**, not set by hand:
 
 ```
 floor(atlasConnectionLimit × atlasBudgetShare ÷ mongoMaxPool)
-floor(1500 × 0.25 ÷ 5) = 75 containers → at most 375 of 1500 Atlas connections
+floor(1500 × 0.25 ÷ 5) = 75 containers → 375 Atlas connections,
+plus 5 for the scheduled-jobs function = 380 of 1500
 ```
 
 Fix the tier number and the concurrency corrects itself. `mongoMaxPool` must

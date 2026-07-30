@@ -21,13 +21,12 @@ export interface AdlmConfig {
   /** Apex domain. Route 53 hosted zone is created for this. */
   domainName: string;
 
-  /**
+   /**
    * Hostname the QUIV / HERON plugins and the Vercel frontend call.
    *
-   * ASSUMED: "api.adlmstudio.net". This MUST match what the shipped plugin
-   * binaries already resolve — a plugin pointed somewhere else will not be
-   * rescued by this stack no matter how correct the stack is. Confirm from
-   * the plugin config before deploying.
+   * CONFIRMED by the founder: "api.adlmstudio.net". A domain ADLM controls,
+   * so repointing DNS at this stack does rescue the locked-out plugins —
+   * which would NOT have been true had they called *.onrender.com directly.
    */
   apiHostname: string;
 
@@ -42,8 +41,9 @@ export interface AdlmConfig {
   /**
    * Atlas connection ceiling for the MAIN cluster.
    *
-   * ASSUMED: M10 => 1500 connections. Check Atlas -> Cluster -> Limits.
-   * Tier reference: M0/M2/M5 = 500, M10 = 1500, M20/M30 = 3000, M40 = 6000.
+   * CONFIRMED by the founder: M10 => 1500 connections.
+   * Tier reference if the cluster is ever resized:
+   * M0/M2/M5 = 500, M10 = 1500, M20/M30 = 3000, M40 = 6000.
    */
   atlasConnectionLimit: number;
 
@@ -113,11 +113,11 @@ export const config: AdlmConfig = {
   edgeRegion: "us-east-1",
 
   domainName: "adlmstudio.net",
-  apiHostname: "api.adlmstudio.net", // ASSUMED — confirm against the plugins
+  apiHostname: "api.adlmstudio.net", // CONFIRMED
 
   ssmPrefix: "/adlm/cloud/prod",
 
-  atlasConnectionLimit: 1500, // ASSUMED M10
+  atlasConnectionLimit: 1500, // CONFIRMED — M10
   mongoMaxPool: 5,
   atlasBudgetShare: 0.25,
 
@@ -136,8 +136,10 @@ export const config: AdlmConfig = {
  *
  *   containers x maxPoolSize <= atlasConnectionLimit x budgetShare
  *
- * With the assumed numbers: floor(1500 x 0.25 / 5) = 75 containers,
- * worst case 375 of 1500 Atlas connections.
+ * With the confirmed M10 limit: floor(1500 x 0.25 / 5) = 75 containers,
+ * worst case 375 Atlas connections — plus 5 for the scheduled-jobs function,
+ * so 380 of 1500. The remaining ~1120 are headroom for the WPF desktop app,
+ * Compass, admin scripts, and Render during a parallel run.
  *
  * This is a CEILING, not a reservation of capacity — it also caps the blast
  * radius of a traffic spike or a retry storm against Atlas. If you raise the
