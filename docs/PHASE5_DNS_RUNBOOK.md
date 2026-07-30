@@ -32,7 +32,7 @@ Current records that matter:
 | `www.adlmstudio.net` | CNAME | `…vercel-dns-017.com` | **Yes** |
 | `adlmstudio.net` | MX | `aspmx.l.google.com` + alts (**Google Workspace**) | **Yes — this is your email** |
 | `adlmstudio.net` | TXT | `v=spf1 a mx include:_spf.google.com include:spf.mail.kudimail.net ~all` | **Yes** |
-| `api.adlmstudio.net` | — | **does not exist** | this is what you create |
+| `api.adlmstudio.net` | — | https://d3ay8iyy7zibie.cloudfront.net | this is what you create |
 
 > **Your company email runs on this zone.** Google Workspace MX plus an SPF
 > record covering Google and kudimail. Nothing in this runbook touches them —
