@@ -42,15 +42,18 @@ const useExternalDns =
 if (useExternalDns) {
   const certificateArn = certificateArnOverride ?? config.certificateArn;
 
-  // Fail at synth with an actionable message rather than at deploy with a
-  // CloudFormation error about an empty property.
+  // No certificate is a SUPPORTED, deliberate first step, not an error: the
+  // distribution comes up on its own *.cloudfront.net name with AWS's
+  // certificate. That gets the API live with no certificate to issue, no DNS
+  // record and no waiting — point the frontend at the CloudFront domain and
+  // users are back. Re-deploy with the ARN later to attach the custom domain.
   if (!certificateArn) {
-    throw new Error(
-      "useExternalDns is true, so a pre-issued us-east-1 certificate ARN is required.\n" +
-        "Issue one (see §3a of infra/README.md), then either set certificateArn in\n" +
-        "infra/config.ts or pass -c certificateArn=arn:aws:acm:us-east-1:...\n" +
-        "Alternatively set useExternalDns: false to have CDK create a Route 53\n" +
-        "hosted zone and validate a certificate itself.",
+    console.warn(
+      "\n[adlm] No certificateArn — deploying WITHOUT a custom domain.\n" +
+        "[adlm] The API will be reachable on the CloudFront domain only.\n" +
+        "[adlm] Set VITE_API_BASE to that domain to go live now; add\n" +
+        "[adlm] -c certificateArn=... later to attach " +
+        `${config.apiHostname}.\n`,
     );
   }
 

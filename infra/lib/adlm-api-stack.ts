@@ -64,8 +64,16 @@ export interface AdlmApiStackProps extends StackProps {
    * CNAME is created by hand at whichever provider serves the domain today.
    */
   zone?: route53.IHostedZone;
-  /** us-east-1 certificate ARN — CloudFront accepts no other region. */
-  certificateArn: string;
+  /**
+   * us-east-1 certificate ARN — CloudFront accepts no other region.
+   *
+   * Optional. Omit it and the distribution serves ONLY on its own
+   * *.cloudfront.net name, which already has a valid AWS certificate. That is
+   * the fastest way live: deploy, point the frontend at the CloudFront domain,
+   * done — no certificate to issue, no DNS record, no waiting. Add the ARN
+   * later to attach api.adlmstudio.net.
+   */
+  certificateArn?: string;
 }
 
 export class AdlmApiStack extends Stack {
@@ -74,11 +82,9 @@ export class AdlmApiStack extends Stack {
     const cfg = props.config;
     const zone = props.zone;
 
-    const certificate = acm.Certificate.fromCertificateArn(
-      this,
-      "ApiCert",
-      props.certificateArn,
-    );
+    const certificate = props.certificateArn
+      ? acm.Certificate.fromCertificateArn(this, "ApiCert", props.certificateArn)
+      : undefined;
 
     /* ───────────────────── The function ─────────────────────
      * ARM64 (Graviton): ~20% cheaper per GB-second and measurably faster than
@@ -197,9 +203,14 @@ export class AdlmApiStack extends Stack {
      * win actually comes from, and puts the API on a hostname ADLM controls.
      */
     const distribution = new cloudfront.Distribution(this, "ApiDistribution", {
-      comment: `ADLM Cloud API — ${cfg.apiHostname}`,
-      domainNames: [cfg.apiHostname],
-      certificate,
+      comment: certificate
+        ? `ADLM Cloud API — ${cfg.apiHostname}`
+        : "ADLM Cloud API — CloudFront domain only (no custom domain yet)",
+      // A custom domain requires a certificate; with neither, CloudFront serves
+      // on its own *.cloudfront.net name using AWS's own certificate.
+      ...(certificate
+        ? { domainNames: [cfg.apiHostname], certificate }
+        : {}),
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       // Cheapest price class that still includes African edge locations.
@@ -229,7 +240,7 @@ export class AdlmApiStack extends Stack {
       },
     });
 
-    if (zone) {
+    if (zone && certificate) {
       // Route 53 path: alias records, which need the zone to be authoritative
       // for the domain — i.e. nameservers delegated.
       new route53.ARecord(this, "ApiAliasA", {
