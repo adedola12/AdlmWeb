@@ -93,6 +93,66 @@ function loadApp() {
   return _appModulePromise;
 }
 
+/**
+ * Parse the request body that Express 5 will otherwise ignore.
+ *
+ * serverless-http hands Express an http.IncomingMessage with no real socket
+ * and `complete: true`. body-parser 2.x — which Express 5 depends on — starts
+ * with `if (isFinished(req)) return next()`, and on-finished treats a
+ * socket-less IncomingMessage as finished. So express.json() and
+ * express.urlencoded() bail before reading anything, leaving req.body as the
+ * raw Buffer serverless-http assigned. Every route then sees a Buffer where it
+ * expects an object, and destructuring quietly yields undefined — a login
+ * returns "identifier and password required" for a perfectly valid request.
+ *
+ * Express 4's body-parser keyed off `req._body`, which serverless-http never
+ * sets, so this only breaks on Express 5.
+ *
+ * Parsing here restores the shape routes expect. Local development is
+ * untouched: a real socket exists there and the normal parsers run.
+ */
+export function parseBodyForExpress5(req) {
+  const raw = req.body;
+  if (raw === undefined || raw === null) return;
+
+  const path = String(req.url || "").split("?")[0];
+
+  // Webhooks must keep the RAW bytes. routes/webhooks.js verifies Paystack's
+  // HMAC over the unmodified body, so parsing it here would break every
+  // payment notification. The skip above happens to deliver exactly what that
+  // route wants, so leave it alone.
+  if (path.startsWith("/webhooks")) return;
+
+  const type = String(req.headers?.["content-type"] || "").toLowerCase();
+  const isBufferish = Buffer.isBuffer(raw) || raw instanceof Uint8Array;
+  if (!isBufferish && typeof raw !== "string") return; // already an object
+
+  const text = isBufferish ? Buffer.from(raw).toString("utf8") : raw;
+
+  if (type.includes("application/json")) {
+    if (!text.trim()) {
+      req.body = {};
+    } else {
+      try {
+        req.body = JSON.parse(text);
+      } catch {
+        // Mirror body-parser: a malformed payload becomes an empty body and
+        // the route's own validation answers. Better a clean 400 from the
+        // route than a 502 from a throw inside this hook.
+        console.warn(`[lambda] malformed JSON body on ${path}`);
+        req.body = {};
+      }
+    }
+  } else if (type.includes("application/x-www-form-urlencoded")) {
+    req.body = Object.fromEntries(new URLSearchParams(text));
+  } else {
+    return; // multipart and friends: multer reads the stream itself
+  }
+
+  // Tell anything that checks the Express 4 convention that we've handled it.
+  req._body = true;
+}
+
 let _handler = null;
 
 export async function handler(event, context) {
@@ -105,6 +165,7 @@ export async function handler(event, context) {
     const { app, bootstrap } = await loadApp();
     await bootstrap();
     _handler = serverless(app, {
+      request: parseBodyForExpress5,
       // Multipart/binary bodies arrive base64-encoded from a Function URL.
       // serverless-http decodes them when it knows the type isn't text, and
       // this list is what it checks against.
