@@ -214,14 +214,51 @@ Anything missing from step 2 goes dark while it propagates.
 
 ---
 
-## 7. What this stack does NOT do
+## 7. Scheduled jobs
 
-- **The two cron jobs do not run.** `ENABLE_EXPIRY_CRON` and
-  `ENABLE_RENEWAL_CRON` are both forced to `false`, because on Lambda every warm
-  container would schedule its own copy and **auto-renew charges real cards**.
-  They move to EventBridge Scheduler in Phase 7. Until then nothing sends
-  expiry warnings and nothing auto-renews. Renewals will need doing by hand, or
-  Phase 7 needs bringing forward.
+The two jobs that node-cron ran inside the Render process now run on
+EventBridge Scheduler against a **separate** Lambda (`ScheduledFn`), with
+reserved concurrency 1 and a 10-minute timeout.
+
+| Job | Schedule | Retries | Payload |
+| --- | --- | --- | --- |
+| `auto-renew` | `cron(0 8 * * ? *)` `Africa/Lagos` | **0** | `{"job":"auto-renew"}` |
+| `expiry-notifier` | `cron(0 9 * * ? *)` `Africa/Lagos` | 2 | `{"job":"expiry-notifier"}` |
+
+Scheduler is used rather than an EventBridge Rule because rules are UTC-only.
+Africa/Lagos is UTC+1 with no daylight saving so the two are equivalent today,
+but naming the zone means these stay at 08:00/09:00 Lagos regardless.
+
+**Auto-renew does not retry, on purpose.** Scheduler is at-least-once and this
+job charges real cards. The renewal engine creates its Purchase record before
+charging and caps attempts to one per day, so a retry is *probably* safe — but
+"probably" is the wrong standard for taking money from customers. A failure
+dead-letters and alarms instead; recover by invoking it by hand:
+
+```bash
+aws lambda invoke --region eu-west-1 \
+  --function-name <ScheduledFunctionName output> \
+  --payload '{"job":"auto-renew"}' /dev/stdout
+```
+
+`runAutoRenewals` also accepts `{ dryRun: true }` internally if you want to
+check what it *would* charge before letting it run for real.
+
+**Timeout is 10 minutes, under the 15-minute Mongo job-lock TTL.** That
+ordering matters: a timed-out run is killed without releasing its lock, so the
+TTL must be able to expire only after the process is definitely gone.
+
+Two alarms cover this: any error from `ScheduledFn`, and DLQ depth > 0. A
+dead-lettered job **did not run** — decide what happened before re-invoking.
+
+> A run that logs `SKIPPED: lock-held` is normally healthy (an overlapping run
+> held the lock). If it persists across days, check the `job_locks` collection
+> for a stale document.
+
+---
+
+## 8. What this stack does NOT do
+
 - **Large uploads fail.** Lambda caps request payloads at 6 MB; the installer
   and APK admin routes accept up to 500 MB. Those routes will 413 until uploads
   move to presigned S3.
@@ -241,7 +278,7 @@ Anything missing from step 2 goes dark while it propagates.
 
 ---
 
-## 8. Rollback
+## 9. Rollback
 
 Nothing here is destructive until DNS is delegated, so rollback before that
 point is "stop using it".
@@ -255,7 +292,7 @@ point is "stop using it".
 
 ---
 
-## 9. Cost
+## 10. Cost
 
 Recurring cost after the Activate credit expires on 31 July 2028:
 

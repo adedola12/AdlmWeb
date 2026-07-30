@@ -32,6 +32,7 @@ import {
   Duration,
   RemovalPolicy,
   CfnOutput,
+  TimeZone,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
@@ -47,6 +48,9 @@ import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as actions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+import * as scheduler from "aws-cdk-lib/aws-scheduler";
+import * as schedulerTargets from "aws-cdk-lib/aws-scheduler-targets";
 import { AdlmConfig, reservedConcurrency } from "../config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -104,9 +108,11 @@ export class AdlmApiStack extends Stack {
           `https://${cfg.domainName}`,
           `https://www.${cfg.domainName}`,
         ].join(","),
-        // node-cron must NOT run on Lambda: every warm container would schedule
-        // its own copy, and auto-renew CHARGES REAL CARDS. These jobs move to
-        // EventBridge Scheduler in Phase 7.
+        // Belt and braces. index.js already starts cron only when run
+        // directly, which never happens on Lambda — but every warm container
+        // scheduling its own copy of a job that CHARGES REAL CARDS is bad
+        // enough to be worth two redundant env vars. The jobs run on
+        // EventBridge Scheduler against ScheduledFn instead (see below).
         ENABLE_EXPIRY_CRON: "false",
         ENABLE_RENEWAL_CRON: "false",
         // Never serve the frontend from the function.
@@ -276,6 +282,173 @@ export class AdlmApiStack extends Stack {
     ];
     alarms.forEach((a) => a.addAlarmAction(notify));
 
+    /* ═══════════════ Scheduled jobs ═══════════════
+     * The two jobs node-cron used to run inside the long-lived Render process.
+     * They CANNOT run on the API function: every warm container would schedule
+     * its own copy, and auto-renew charges real cards.
+     *
+     * A separate function on purpose — concurrency 1 so runs can never
+     * overlap, a batch-length timeout, and its own alarms so a failed nightly
+     * job is not lost inside the API's error rate.
+     */
+    const scheduledFn = new NodejsFunction(this, "ScheduledFn", {
+      entry: path.join(SERVER_DIR, "scheduled.js"),
+      handler: "handler",
+      projectRoot: SERVER_DIR,
+      depsLockFilePath: path.join(SERVER_DIR, "package-lock.json"),
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: cfg.memoryMb,
+
+      // 10 minutes, deliberately under the 15-minute Mongo job-lock TTL in
+      // util/autoRenew.js. A timed-out run dies without releasing its lock, so
+      // the TTL must be able to expire AFTER the process is definitely gone —
+      // otherwise a later run could take the lock while the first still holds it.
+      timeout: Duration.minutes(10),
+
+      // Exactly one run at a time. The Mongo lock is the real guard; this is
+      // the belt to its braces, and it costs nothing.
+      reservedConcurrentExecutions: 1,
+
+      environment: {
+        NODE_ENV: "production",
+        SSM_PREFIX: cfg.ssmPrefix,
+        MONGO_MAX_POOL: String(cfg.mongoMaxPool),
+        NODE_OPTIONS: "--enable-source-maps",
+      },
+
+      logGroup: new logs.LogGroup(this, "ScheduledFnLogs", {
+        retention: cfg.logRetentionDays,
+        removalPolicy: RemovalPolicy.RETAIN,
+      }),
+
+      bundling: {
+        externalModules: [],
+        minify: true,
+        sourceMap: true,
+        target: "node22",
+        format: OutputFormat.ESM,
+        banner:
+          "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);" +
+          "import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';" +
+          "const __filename=__f(import.meta.url);const __dirname=__d(__filename);",
+      },
+    });
+
+    scheduledFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:GetParametersByPath", "ssm:GetParameter", "ssm:GetParameters"],
+        resources: [
+          `arn:aws:ssm:${cfg.region}:${this.account}:parameter${cfg.ssmPrefix}`,
+          `arn:aws:ssm:${cfg.region}:${this.account}:parameter${cfg.ssmPrefix}/*`,
+        ],
+      }),
+    );
+    scheduledFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["kms:Decrypt"],
+        resources: ["*"],
+        conditions: {
+          StringEquals: { "kms:ViaService": `ssm.${cfg.region}.amazonaws.com` },
+        },
+      }),
+    );
+
+    /* A schedule that fails every retry must land somewhere visible rather
+     * than evaporating. Nothing consumes this queue — the alarm below is the
+     * consumer, and you drain it by hand after deciding what happened. */
+    const scheduleDlq = new sqs.Queue(this, "ScheduleDlq", {
+      retentionPeriod: Duration.days(14),
+      enforceSSL: true,
+    });
+
+    /* EventBridge Scheduler, NOT an EventBridge Rule: rules are UTC-only,
+     * whereas Scheduler understands named time zones. Africa/Lagos is UTC+1
+     * with no daylight saving, so the two are equivalent today — but naming
+     * the zone means these fire at 08:00 and 09:00 Lagos even if that ever
+     * changes, and it documents the intent for the next reader. */
+    const lagos = TimeZone.of("Africa/Lagos");
+
+    const makeJobSchedule = (opts: {
+      id: string;
+      job: string;
+      hour: string;
+      retryAttempts: number;
+      description: string;
+    }) =>
+      new scheduler.Schedule(this, opts.id, {
+        description: opts.description,
+        schedule: scheduler.ScheduleExpression.cron({
+          minute: "0",
+          hour: opts.hour,
+          day: "*",
+          month: "*",
+          timeZone: lagos,
+        }),
+        target: new schedulerTargets.LambdaInvoke(scheduledFn, {
+          input: scheduler.ScheduleTargetInput.fromObject({ job: opts.job }),
+          retryAttempts: opts.retryAttempts,
+          // A daily job replayed hours late is worse than one that is skipped
+          // and alarmed on, so events expire rather than queue up.
+          maxEventAge: Duration.hours(1),
+          deadLetterQueue: scheduleDlq,
+        }),
+      });
+
+    // 08:00 Lagos — runs BEFORE the expiry notifier so a user whose card
+    // renews successfully never gets a same-day "expiring soon" email.
+    //
+    // retryAttempts: 0 is deliberate. EventBridge Scheduler is at-least-once,
+    // and this job charges real cards. The renewal engine creates its Purchase
+    // record before charging and caps attempts to one per day, so a retry is
+    // *probably* safe — but "probably" is the wrong standard for taking money
+    // from customers. A failure goes straight to the DLQ and alarms; a missed
+    // day is recovered by invoking the function by hand. A double charge is
+    // not recoverable that cheaply.
+    makeJobSchedule({
+      id: "AutoRenewSchedule",
+      job: "auto-renew",
+      hour: "8",
+      retryAttempts: 0,
+      description: "ADLM auto-renewal charges — 08:00 Africa/Lagos daily",
+    });
+
+    // 09:00 Lagos — sends "expiring soon" email. Idempotent and harmless to
+    // repeat beyond a duplicate email, so retries are allowed here.
+    makeJobSchedule({
+      id: "ExpiryNotifierSchedule",
+      job: "expiry-notifier",
+      hour: "9",
+      retryAttempts: 2,
+      description: "ADLM entitlement expiry notifier — 09:00 Africa/Lagos daily",
+    });
+
+    const scheduledErrors = new cloudwatch.Alarm(this, "ScheduledErrorsAlarm", {
+      alarmDescription:
+        "A nightly job threw. Auto-renew failing means entitlements silently lapse — check " +
+        "the ScheduledFn log group for the run that failed.",
+      metric: scheduledFn.metricErrors({ period: Duration.hours(1) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const dlqDepth = new cloudwatch.Alarm(this, "ScheduleDlqAlarm", {
+      alarmDescription:
+        "A scheduled job exhausted its retries and was dead-lettered. It did NOT run. " +
+        "Decide what happened before re-invoking auto-renew by hand.",
+      metric: scheduleDlq.metricApproximateNumberOfMessagesVisible({
+        period: Duration.minutes(5),
+      }),
+      threshold: 0,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    [scheduledErrors, dlqDepth].forEach((a) => a.addAlarmAction(notify));
+
     /* ─────────────────── Outputs ─────────────────── */
     new CfnOutput(this, "FunctionUrl", {
       value: fnUrl.url,
@@ -284,6 +457,15 @@ export class AdlmApiStack extends Stack {
     new CfnOutput(this, "DistributionDomain", {
       value: distribution.distributionDomainName,
       description: "Verify TLS + routing here, with a Host header override, before DNS.",
+    });
+    new CfnOutput(this, "ScheduledFunctionName", {
+      value: scheduledFn.functionName,
+      description:
+        'Invoke by hand after a dead-letter: aws lambda invoke --function-name <this> --payload \'{"job":"auto-renew"}\' out.json',
+    });
+    new CfnOutput(this, "ScheduleDlqUrl", {
+      value: scheduleDlq.queueUrl,
+      description: "Dead-lettered schedule invocations. Should always be empty.",
     });
     new CfnOutput(this, "ReservedConcurrency", {
       value: String(reservedConcurrency(cfg)),

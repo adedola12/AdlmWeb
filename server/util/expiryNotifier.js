@@ -143,7 +143,10 @@ async function acquireJobLock(lockId, ttlMinutes = 10) {
     { returnDocument: "after" },
   );
 
-  if (upd?.value) return true;
+  // See the same fix in util/autoRenew.js: mongodb driver >= 6 resolves
+  // findOneAndUpdate to the document itself, not a { value } wrapper, so this
+  // stale-lock takeover never fired.
+  if (upd) return true;
 
   // 2) If no lock exists, try insert
   try {
