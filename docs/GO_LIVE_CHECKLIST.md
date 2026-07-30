@@ -311,6 +311,12 @@ curl -s "$FU/api/entitlements" -H "authorization: Bearer $TOKEN"
 
 ## Part 5 — Go live (one CNAME)
 
+> **Full detail: `docs/PHASE5_DNS_RUNBOOK.md`.** DNS is on **Google Cloud DNS**
+> (`ns-cloud-d*.googledomains.com`), not Cloudflare. `api.adlmstudio.net` does
+> not exist yet, so this is an ADD, not a repoint — nothing to break, and
+> rollback is deleting the record. Google Workspace email lives on this zone;
+> touch only the `api` record.
+
 Only after Parts 3 and 4 pass.
 
 1. **Lower the TTL** on the existing `api.adlmstudio.net` record to 60s.
