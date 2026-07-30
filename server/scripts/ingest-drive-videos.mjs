@@ -11,6 +11,8 @@
  * buffering it would blow the heap.
  *
  *   node scripts/ingest-drive-videos.mjs --check         # verify credentials + Drive share
+ *   node scripts/ingest-drive-videos.mjs --verify        # audit the archive, byte for byte
+ *   node scripts/ingest-drive-videos.mjs --abort-stale   # discard abandoned uploads
  *   node scripts/ingest-drive-videos.mjs                 # dry run, plans the work
  *   node scripts/ingest-drive-videos.mjs --apply         # do it
  *   node scripts/ingest-drive-videos.mjs --apply --only W3D2,W3D3
@@ -42,12 +44,16 @@ import {
   uploadStream,
   archiveBucket,
   verifyWriteAccess,
+  listIncompleteUploads,
+  abortUpload,
 } from "../utils/awsS3.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const APPLY = process.argv.includes("--apply");
 const FORCE = process.argv.includes("--force");
 const CHECK = process.argv.includes("--check");
+const VERIFY = process.argv.includes("--verify");
+const ABORT_STALE = process.argv.includes("--abort-stale");
 
 function argValue(flag) {
   const i = process.argv.indexOf(flag);
@@ -410,6 +416,84 @@ if (CHECK) {
   }
 
   preflight({ warnOnly: true });
+  process.exit(0);
+}
+
+/**
+ * --verify audits the finished state rather than the credentials: every module
+ * that should have a master, checked against what is actually in the bucket at
+ * the byte level, plus any abandoned uploads still being billed for.
+ *
+ * "18 ticks scrolled past" is not evidence the archive is complete.
+ */
+if (VERIFY) {
+  preflight();
+  const bucket = archiveBucket();
+  const problems = [];
+  let ok = 0;
+  let bytes = 0;
+
+  console.log(`\nverifying ${manifest.items.length} recordings against s3://${bucket}\n`);
+
+  for (const item of manifest.items) {
+    const module = (course.modules || []).find((m) => m.code === item.moduleCode);
+    const expected = Number(item.bytes) || 0;
+
+    if (!module?.sourceKey) {
+      problems.push(`${item.moduleCode}  not archived — no sourceKey recorded`);
+      continue;
+    }
+
+    const actual = await objectSize(module.sourceKey, bucket);
+    if (actual === null) {
+      problems.push(
+        `${item.moduleCode}  RECORDED BUT MISSING — ${module.sourceKey} is not in the bucket`,
+      );
+    } else if (actual !== expected) {
+      problems.push(
+        `${item.moduleCode}  SIZE MISMATCH — S3 has ${gb(actual)}, Drive has ${gb(expected)}`,
+      );
+    } else {
+      ok += 1;
+      bytes += actual;
+      console.log(`  ✓ ${item.moduleCode.padEnd(5)} ${gb(actual).padStart(8)}  ${module.sourceKey}`);
+    }
+  }
+
+  console.log(`\n${ok}/${manifest.items.length} verified, ${gb(bytes)} archived.`);
+
+  if (problems.length) {
+    console.log(`\n${problems.length} problem(s):`);
+    for (const p of problems) console.log(`  ✗ ${p}`);
+    console.log("\nRe-run with --apply to fetch what is missing.");
+  }
+
+  const stale = await listIncompleteUploads(bucket);
+  if (stale.length) {
+    console.log(`\n${stale.length} incomplete upload(s) still being billed for:`);
+    for (const u of stale) console.log(`  ${u.key}  (started ${u.initiated})`);
+    console.log("\nClear them with --abort-stale.");
+  } else {
+    console.log("\nNo abandoned uploads.");
+  }
+
+  process.exit(problems.length ? 1 : 0);
+}
+
+/** Discards the debris --verify reports. */
+if (ABORT_STALE) {
+  preflight();
+  const bucket = archiveBucket();
+  const stale = await listIncompleteUploads(bucket);
+  if (!stale.length) {
+    console.log("Nothing to abort.");
+    process.exit(0);
+  }
+  for (const u of stale) {
+    await abortUpload(u.key, u.uploadId, bucket);
+    console.log(`  aborted ${u.key}`);
+  }
+  console.log(`\n${stale.length} abandoned upload(s) discarded.`);
   process.exit(0);
 }
 
