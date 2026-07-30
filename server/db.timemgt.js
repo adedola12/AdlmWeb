@@ -27,6 +27,11 @@ export async function getTimeMgtDb() {
     .createConnection(uri, {
       dbName,
       serverSelectionTimeoutMS: 10000,
+      // Separate Atlas cluster, same Lambda concurrency maths as db.js — and
+      // note the WPF desktop app holds connections to this cluster too, so the
+      // budget here is smaller than it looks.
+      maxPoolSize: Number(process.env.TIMEMGT_MAX_POOL || 3),
+      minPoolSize: 0,
     })
     .asPromise()
     .then((conn) => {
