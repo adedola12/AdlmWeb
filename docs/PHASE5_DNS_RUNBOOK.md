@@ -20,9 +20,12 @@ Do not delegate nameservers. Do not touch anything except the two records in §3
 
 | | |
 | --- | --- |
-| Authoritative DNS | **Google Cloud DNS** — `ns-cloud-d{1,2,3,4}.googledomains.com` |
-| Cloudflare | **Not in the path.** No record resolves to a Cloudflare proxy range. |
+| Registrar + DNS panel | **Squarespace Domains** — `account.squarespace.com/domains/managed/adlmstudio.net/dns/dns-settings` |
+| Authoritative nameservers | `ns-cloud-d{1,2,3,4}.googledomains.com` — inherited from Google Domains before Squarespace acquired it. These look like Google Cloud DNS but the zone is NOT in a GCP project; editing happens in the Squarespace panel. |
+| Cloudflare | **Not in the path.** No record resolves to a Cloudflare proxy range. Cloudflare is used for R2 storage only. |
+| Google Cloud DNS | **Not in the path either.** The `ns-cloud-*` nameservers make it look that way; the GCP projects have no zones and the Cloud DNS API is disabled. Do not enable GCP billing chasing this. |
 | SOA negative-cache TTL | **300s** — a brand-new record can take up to 5 min to be visible to a resolver that already cached the NXDOMAIN |
+| Record TTL | **4 hours** on every existing record. If Squarespace offers no shorter option when adding `api`, a bad cutover takes HOURS to back out, not the minute this runbook originally assumed. Verify before adding, not after. |
 
 Current records that matter:
 
@@ -43,88 +46,103 @@ Current records that matter:
 
 ## 2. Before you start
 
-- [ ] Access to the **Google Cloud project** holding the zone. If you don't know
-      which project: sign in to <https://console.cloud.google.com/net-services/dns/zones>
-      and switch projects until you find `adlmstudio.net`.
-- [ ] `gcloud` installed and authenticated, **or** use the console (both below)
-- [ ] The AWS deploy from Part 2 finished, with `DistributionDomain` to hand
-- [ ] Part 3 and Part 4 of `GO_LIVE_CHECKLIST.md` passing
+- [ ] Sign in to **Squarespace Domains** →
+      <https://account.squarespace.com/domains/managed/adlmstudio.net/dns/dns-settings>
+- [ ] The AWS deploy finished, with `DistributionDomain` to hand
+- [ ] Parts 3 and 4 of `GO_LIVE_CHECKLIST.md` passing
 
-```bash
-gcloud auth login
-gcloud dns managed-zones list          # find the zone name
-export ZONE=<zone-name-from-above>     # NOT the domain — the managed-zone name
-gcloud dns record-sets list --zone=$ZONE
-```
+**PASS IF** the Custom records list shows the Google Workspace MX rows, the
+`www` CNAME and the `@` A record from §1. If it doesn't, you're in the wrong
+domain — stop.
 
-**PASS IF** the listing shows the MX, A and CNAME records from §1. If it doesn't,
-you're in the wrong project or zone — stop.
-
-> **Trailing dots are mandatory in Cloud DNS.** `api.adlmstudio.net.` and
-> `d1234.cloudfront.net.` — omit the dot and the record silently means something
-> else. This is the single most common mistake with this provider.
+> ### The one mistake that matters here
+>
+> **The NAME field takes only the subdomain part. Squarespace appends
+> `.adlmstudio.net` for you.** Paste a full hostname and you silently create
+> `api.adlmstudio.net.adlmstudio.net`, which resolves for nobody and looks
+> exactly like a propagation delay.
+>
+> And unlike Cloud DNS, Squarespace wants **no trailing dots** — strip the final
+> `.` from anything AWS prints.
 
 ---
 
 ## 3. The two records to add
 
-### 3a. ACM certificate validation (from checklist Part 2c)
+### 3a. ACM certificate validation
 
 Add this **first**, and leave it in place permanently — ACM re-validates at
 renewal, and removing it eventually kills the certificate.
 
-```bash
-gcloud dns record-sets create "_<validation-name>.api.adlmstudio.net." \
-  --zone=$ZONE --type=CNAME --ttl=300 \
-  --rrdatas="_<validation-value>.acm-validations.aws."
+Get both halves:
+
+```powershell
+aws acm describe-certificate --region us-east-1 --profile adlm-deploy `
+  --certificate-arn $CERT `
+  --query 'Certificate.DomainValidationOptions[0].ResourceRecord' --output text
 ```
 
-Take both halves verbatim from:
+AWS prints something like:
 
-```bash
-aws acm describe-certificate --region us-east-1 --certificate-arn $CERT \
-  --query 'Certificate.DomainValidationOptions[0].ResourceRecord'
 ```
+_ede298bc7cc027c0c456be8c768d68f8.api.adlmstudio.net.   CNAME   _cf44bdd80e054ac016ef7de054d73f75.jkddzztszm.acm-validations.aws.
+```
+
+Enter it as **Add record**:
+
+| Field | Value |
+| --- | --- |
+| Type | `CNAME` |
+| Name | `_ede298bc7cc027c0c456be8c768d68f8.api` — the printed name **minus** `.adlmstudio.net.` |
+| Data | `_cf44bdd80e054ac016ef7de054d73f75.jkddzztszm.acm-validations.aws` — **minus** the trailing dot |
+| TTL | default is fine |
 
 Then:
 
-```bash
-aws acm wait certificate-validated --region us-east-1 --certificate-arn $CERT
+```powershell
+aws acm wait certificate-validated --region us-east-1 --profile adlm-deploy --certificate-arn $CERT
 ```
 
-**PASS IF** the wait returns cleanly. Usually a few minutes.
+**PASS IF** the wait returns cleanly. Usually a few minutes. It is safe to leave
+the wait running in one terminal while adding the record in the browser.
 
 ### 3b. The API record — this is the cutover
 
-```bash
-gcloud dns record-sets create "api.adlmstudio.net." \
-  --zone=$ZONE --type=CNAME --ttl=60 \
-  --rrdatas="<DistributionDomain>."
-```
+Only after the certificate is `ISSUED` **and** the stack has been redeployed with
+`-c certificateArn=$CERT`, so CloudFront actually answers for the hostname.
 
-TTL 60 for the first days so a rollback propagates in a minute. Raise it to 300
-once you're happy.
+| Field | Value |
+| --- | --- |
+| Type | `CNAME` |
+| Name | `api` |
+| Data | `d3ay8iyy7zibie.cloudfront.net` (no trailing dot) |
+| TTL | **the shortest Squarespace offers** |
 
-**Console equivalent:** Cloud DNS → your zone → **Add standard** → DNS name
-`api`, Resource record type `CNAME`, TTL `60`, Canonical name
-`<DistributionDomain>.`
+> **It must be a CNAME, not an A record.** CloudFront has no fixed IPs. Fine on
+> a subdomain; only a zone apex forbids one.
 
-> **It must be a CNAME, not an A record.** CloudFront has no fixed IPs. This is
-> a subdomain, so a CNAME is fine — only a zone apex forbids one.
+> **Pick the lowest TTL available.** Every existing record here sits at 4 hours.
+> If that is the floor, a bad cutover takes hours to back out — so complete §4
+> before adding this record, not after.
 
 ---
 
 ## 4. Verify
 
-```bash
-# Authoritative answer, bypassing every cache
-dig +short CNAME api.adlmstudio.net @ns-cloud-d1.googledomains.com
-
+```powershell
 # What the world sees (allow up to 300s for the NXDOMAIN negative cache)
-dig +short api.adlmstudio.net
+nslookup api.adlmstudio.net
 
 # End to end
-curl -s https://api.adlmstudio.net/health
+curl.exe -s https://api.adlmstudio.net/health
+```
+
+Before adding the `api` record at all, prove CloudFront serves the hostname by
+overriding DNS locally — this needs no record and affects nobody:
+
+```powershell
+curl.exe -s --resolve "api.adlmstudio.net:443:<one IP of the CloudFront domain>" `
+  https://api.adlmstudio.net/health
 ```
 
 **PASS IF** `/health` returns `{"ok":true,"db":"connected",...}` over HTTPS with
@@ -201,12 +219,10 @@ before you promise anyone a timeline.
 
 Because nothing was overwritten, rollback is a delete:
 
-```bash
-gcloud dns record-sets delete "api.adlmstudio.net." --type=CNAME --zone=$ZONE
-```
+Delete the `api` CNAME in the Squarespace DNS Settings panel.
 
-With TTL 60 that clears in about a minute, and the world returns to exactly the
-state it's in today. The website and email are unaffected either way.
+It clears after the TTL you set — **up to 4 hours if Squarespace gave you no
+shorter option** — and the world returns to exactly the state it's in today. The website and email are unaffected either way.
 
 **Leave the ACM validation record in place** — deleting it serves no purpose and
 breaks certificate renewal later.

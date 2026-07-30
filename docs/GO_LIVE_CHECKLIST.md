@@ -311,11 +311,12 @@ curl -s "$FU/api/entitlements" -H "authorization: Bearer $TOKEN"
 
 ## Part 5 — Go live (one CNAME)
 
-> **Full detail: `docs/PHASE5_DNS_RUNBOOK.md`.** DNS is on **Google Cloud DNS**
-> (`ns-cloud-d*.googledomains.com`), not Cloudflare. `api.adlmstudio.net` does
-> not exist yet, so this is an ADD, not a repoint — nothing to break, and
-> rollback is deleting the record. Google Workspace email lives on this zone;
-> touch only the `api` record.
+> **Full detail: `docs/PHASE5_DNS_RUNBOOK.md`.** DNS is edited at **Squarespace
+> Domains**, not Cloudflare and not Google Cloud DNS — the `ns-cloud-*`
+> nameservers are inherited from Google Domains and mislead you into GCP, where
+> no zone exists. `api.adlmstudio.net` does not exist yet, so this is an ADD,
+> not a repoint. Google Workspace email lives on this zone; touch only the `api`
+> record, and remember Squarespace's NAME field takes the subdomain only.
 
 Only after Parts 3 and 4 pass.
 
