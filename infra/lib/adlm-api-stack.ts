@@ -90,6 +90,16 @@ export class AdlmApiStack extends Stack {
      * ARM64 (Graviton): ~20% cheaper per GB-second and measurably faster than
      * x86 for this workload. Node 22 to match engines.node.
      */
+
+    // Hoisted out of the function props so its name can be a stack output.
+    // Because this is an explicit LogGroup rather than the one Lambda creates
+    // implicitly, the name is CloudFormation-generated — it is NOT
+    // /aws/lambda/<function name>, and tailing that path finds nothing.
+    const apiLogs = new logs.LogGroup(this, "ApiFnLogs", {
+      retention: cfg.logRetentionDays,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
     const fn = new NodejsFunction(this, "ApiFn", {
       entry: path.join(SERVER_DIR, "lambda.js"),
       handler: "handler",
@@ -132,10 +142,7 @@ export class AdlmApiStack extends Stack {
         SERVE_CLIENT: "false",
       },
 
-      logGroup: new logs.LogGroup(this, "ApiFnLogs", {
-        retention: cfg.logRetentionDays,
-        removalPolicy: RemovalPolicy.RETAIN,
-      }),
+      logGroup: apiLogs,
 
       bundling: {
         // Bundle everything, including the AWS SDK. The Node 22 runtime ships
@@ -323,6 +330,12 @@ export class AdlmApiStack extends Stack {
      * overlap, a batch-length timeout, and its own alarms so a failed nightly
      * job is not lost inside the API's error rate.
      */
+    // Hoisted for the same reason as apiLogs — see the note there.
+    const scheduledLogs = new logs.LogGroup(this, "ScheduledFnLogs", {
+      retention: cfg.logRetentionDays,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
     const scheduledFn = new NodejsFunction(this, "ScheduledFn", {
       entry: path.join(SERVER_DIR, "scheduled.js"),
       handler: "handler",
@@ -351,10 +364,7 @@ export class AdlmApiStack extends Stack {
         NODE_OPTIONS: "--enable-source-maps",
       },
 
-      logGroup: new logs.LogGroup(this, "ScheduledFnLogs", {
-        retention: cfg.logRetentionDays,
-        removalPolicy: RemovalPolicy.RETAIN,
-      }),
+      logGroup: scheduledLogs,
 
       bundling: {
         externalModules: [],
@@ -508,6 +518,14 @@ export class AdlmApiStack extends Stack {
     new CfnOutput(this, "ScheduleDlqUrl", {
       value: scheduleDlq.queueUrl,
       description: "Dead-lettered schedule invocations. Should always be empty.",
+    });
+    new CfnOutput(this, "ApiLogGroup", {
+      value: apiLogs.logGroupName,
+      description: `Live API logs: aws logs tail <this> --region ${cfg.region} --follow`,
+    });
+    new CfnOutput(this, "ScheduledLogGroup", {
+      value: scheduledLogs.logGroupName,
+      description: `Nightly expiry/renewal job logs: aws logs tail <this> --region ${cfg.region} --since 24h`,
     });
     new CfnOutput(this, "ReservedConcurrency", {
       value: cfg.useReservedConcurrency
