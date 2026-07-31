@@ -241,7 +241,19 @@ export const config: AdlmConfig = {
 
   // Emergency restore: touch as little DNS as possible. See the doc above.
   useExternalDns: true,
-  certificateArn: undefined, // set here, or pass -c certificateArn=...
+
+  // The certificate already serving api.adlmstudio.net on distribution
+  // E3FD83SOO9EJZ (ACM us-east-1, status ISSUED).
+  //
+  // This MUST stay set. It was `undefined`, which meant a plain `cdk deploy`
+  // -- no -c flag -- synthesized a distribution with no Aliases and no
+  // ViewerCertificate, and `cdk diff` showed it removing both from the live
+  // one. Applying that detaches api.adlmstudio.net from CloudFront and takes
+  // down every product, all of which now resolve their API host to exactly
+  // that name. The deploy that fixes an outage must not be able to cause a
+  // bigger one because someone forgot a context flag.
+  certificateArn:
+    "arn:aws:acm:us-east-1:065634457992:certificate/b8b2a821-6e72-4911-8a12-ba0bdbffcf76",
 
   functionUrlAuth: "NONE",
 };
