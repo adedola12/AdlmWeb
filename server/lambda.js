@@ -155,34 +155,67 @@ export function parseBodyForExpress5(req) {
 
 let _handler = null;
 
+/**
+ * Everything a cold start has to do before the first request can be served:
+ * pull secrets from SSM, import the app, connect Mongo, seed roles, and build
+ * the serverless-http wrapper. Idempotent — the second call is a no-op.
+ */
+async function ensureHandler() {
+  if (_handler) return _handler;
+
+  const { app, bootstrap } = await loadApp();
+  await bootstrap();
+  _handler = serverless(app, {
+    request: parseBodyForExpress5,
+    // Multipart/binary bodies arrive base64-encoded from a Function URL.
+    // serverless-http decodes them when it knows the type isn't text, and
+    // this list is what it checks against.
+    binary: [
+      "application/octet-stream",
+      "application/pdf",
+      "application/zip",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "image/*",
+      "video/*",
+      "font/*",
+    ],
+  });
+
+  return _handler;
+}
+
 export async function handler(event, context) {
   // Return as soon as the response is written instead of waiting for the event
   // loop to drain. Without this, Mongoose's open sockets and any fire-and-forget
   // .catch() work keep the invocation billing until the timeout.
   context.callbackWaitsForEmptyEventLoop = false;
 
-  if (!_handler) {
-    const { app, bootstrap } = await loadApp();
-    await bootstrap();
-    _handler = serverless(app, {
-      request: parseBodyForExpress5,
-      // Multipart/binary bodies arrive base64-encoded from a Function URL.
-      // serverless-http decodes them when it knows the type isn't text, and
-      // this list is what it checks against.
-      binary: [
-        "application/octet-stream",
-        "application/pdf",
-        "application/zip",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-excel",
-        "image/*",
-        "video/*",
-        "font/*",
-      ],
-    });
+  // ── Scheduled keep-warm ping ──────────────────────────────────────────────
+  // Not an HTTP event: it never reaches Express and serves no user. Its only
+  // job is to hold one container open so a real sign-in doesn't pay the ~2s
+  // cold start. Traffic is low enough that almost every user was hitting a
+  // cold container, which is most of what "signing in is slow" actually was.
+  //
+  // The Mongo ping is deliberate. db.js sets minPoolSize: 0, so an idle
+  // container drops its pool and the next real query pays a reconnect on top
+  // of everything else — that is why /health can report "disconnected" on a
+  // container with minutes of uptime. Pinging keeps a live socket in the pool.
+  if (event?.__warm === true) {
+    await ensureHandler();
+    try {
+      const mongoose = (await import("mongoose")).default;
+      await mongoose.connection.db.admin().ping();
+    } catch (err) {
+      // Never fail the schedule over this — a failed ping just means the next
+      // real request reconnects, which is the behaviour we had before.
+      console.warn("[warm] mongo ping failed:", err?.message || err);
+    }
+    return { warmed: true };
   }
 
-  return _handler(event, context);
+  const h = await ensureHandler();
+  return h(event, context);
 }
 
 export default handler;

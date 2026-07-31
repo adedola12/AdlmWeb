@@ -130,6 +130,29 @@ export interface AdlmConfig {
   logRetentionDays: number;
 
   /**
+   * Keep one API container warm by pinging it on a schedule.
+   *
+   * WHY: traffic is low and bursty — a handful of plugin sign-ins spread over
+   * a day — so nearly every real user was landing on a cold container and
+   * paying the full init before their request even started. That is most of
+   * what "signing in is slow" was. The ping also re-establishes the Mongo
+   * socket, which db.js drops when idle because minPoolSize is 0.
+   *
+   * LIMIT, STATED PLAINLY: this keeps ONE container warm. Two users signing in
+   * at the same moment means the second still cold-starts. It removes the
+   * common case, not the worst case. Provisioned concurrency is the fix for
+   * the worst case and costs real money continuously; this does not.
+   *
+   * COST at 5-minute intervals: ~8,760 pings/month. Each is a bootstrap check
+   * plus a Mongo ping, ~100ms at 2GB, so ~1,750 GB-seconds — against a
+   * permanent free tier of 400,000. Post-credit, if the free tier were already
+   * exhausted by real traffic, it would add roughly $0.02/month in duration,
+   * $0.002 in requests and $0.009 in Scheduler invocations: about $0.03/month.
+   * Set to 0 to switch the warmer off entirely.
+   */
+  warmIntervalMinutes: number;
+
+  /**
    * Alarm destination. CONFIRMED by the founder.
    *
    * A subscription confirmation email is sent on first deploy and MUST be
@@ -208,6 +231,11 @@ export const config: AdlmConfig = {
   timeoutSeconds: 60,
   originTimeoutSeconds: 60,
   logRetentionDays: 30,
+
+  // 5 minutes. Lambda reclaims idle containers on an undocumented schedule
+  // that is usually well over 5 minutes, so this is comfortably inside it
+  // without being wasteful. Set to 0 to disable.
+  warmIntervalMinutes: 5,
 
   alarmEmail: "admin@adlmstudio.net", // CONFIRMED
 

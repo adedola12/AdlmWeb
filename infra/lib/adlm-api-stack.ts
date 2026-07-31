@@ -473,6 +473,29 @@ export class AdlmApiStack extends Stack {
       description: "ADLM entitlement expiry notifier — 09:00 Africa/Lagos daily",
     });
 
+    /* Keep-warm ping — see config.warmIntervalMinutes for the rationale, the
+     * one-container limit and the cost. Targets the API function, not
+     * ScheduledFn, because it is the API's cold start users actually feel.
+     *
+     * No DLQ and no retries: a missed ping costs one slow sign-in, so
+     * dead-lettering it would only add noise to a queue whose whole value is
+     * that a message in it means something went wrong. maxEventAge is one
+     * interval — a ping delivered later than that is pinging a container that
+     * has already gone cold, so it should be dropped rather than replayed. */
+    if (cfg.warmIntervalMinutes > 0) {
+      new scheduler.Schedule(this, "ApiWarmSchedule", {
+        description: `Keeps one API container and its Mongo pool warm — every ${cfg.warmIntervalMinutes} min`,
+        schedule: scheduler.ScheduleExpression.rate(
+          Duration.minutes(cfg.warmIntervalMinutes),
+        ),
+        target: new schedulerTargets.LambdaInvoke(fn, {
+          input: scheduler.ScheduleTargetInput.fromObject({ __warm: true }),
+          retryAttempts: 0,
+          maxEventAge: Duration.minutes(cfg.warmIntervalMinutes),
+        }),
+      });
+    }
+
     const scheduledErrors = new cloudwatch.Alarm(this, "ScheduledErrorsAlarm", {
       alarmDescription:
         "A nightly job threw. Auto-renew failing means entitlements silently lapse — check " +
