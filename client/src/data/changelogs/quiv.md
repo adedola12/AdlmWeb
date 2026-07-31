@@ -39,6 +39,14 @@ summary: Model-based quantity takeoff, priced budgets and a dockable workspace �
   ────────────────────────────────────────────────────────────────────────
 -->
 
+## 3.1.7 — 31 July 2026 — Closing the last path to a sign-in failure
+
+QUIV was not affected when ADLM's servers moved — it already read the service address from your machine rather than having it built in. This release closes the one remaining case where a QUIV install could have been caught out.
+
+### 🔧 Improved
+
+- **The built-in fallback address now points at the live service.** QUIV reads the ADLM service address from your machine's settings, which is why it kept working through the move while other plugins did not. It also carries a fallback address, used only when that setting is missing — a manual install that bypassed the Installer Hub, a reset Windows profile, or a brand-new workstation. That fallback still named the retired server, so a machine in one of those states would have failed to sign in for the same reason the other plugins did. It now names the live service, so QUIV works whether or not the setting is present.
+
 ## 3.1.6 — July 2026 — The AI Assistant, budgets that balance & QS-format exports
 
 Ask QUIV for a takeoff in plain English, let it match your unpriced labour, and get a budget that reconciles line-for-line with the rate you priced — exported in proper QS format.

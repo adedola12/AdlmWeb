@@ -90,6 +90,16 @@ export class AdlmApiStack extends Stack {
      * ARM64 (Graviton): ~20% cheaper per GB-second and measurably faster than
      * x86 for this workload. Node 22 to match engines.node.
      */
+
+    // Hoisted out of the function props so its name can be a stack output.
+    // Because this is an explicit LogGroup rather than the one Lambda creates
+    // implicitly, the name is CloudFormation-generated — it is NOT
+    // /aws/lambda/<function name>, and tailing that path finds nothing.
+    const apiLogs = new logs.LogGroup(this, "ApiFnLogs", {
+      retention: cfg.logRetentionDays,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
     const fn = new NodejsFunction(this, "ApiFn", {
       entry: path.join(SERVER_DIR, "lambda.js"),
       handler: "handler",
@@ -132,10 +142,7 @@ export class AdlmApiStack extends Stack {
         SERVE_CLIENT: "false",
       },
 
-      logGroup: new logs.LogGroup(this, "ApiFnLogs", {
-        retention: cfg.logRetentionDays,
-        removalPolicy: RemovalPolicy.RETAIN,
-      }),
+      logGroup: apiLogs,
 
       bundling: {
         // Bundle everything, including the AWS SDK. The Node 22 runtime ships
@@ -323,6 +330,12 @@ export class AdlmApiStack extends Stack {
      * overlap, a batch-length timeout, and its own alarms so a failed nightly
      * job is not lost inside the API's error rate.
      */
+    // Hoisted for the same reason as apiLogs — see the note there.
+    const scheduledLogs = new logs.LogGroup(this, "ScheduledFnLogs", {
+      retention: cfg.logRetentionDays,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
     const scheduledFn = new NodejsFunction(this, "ScheduledFn", {
       entry: path.join(SERVER_DIR, "scheduled.js"),
       handler: "handler",
@@ -351,10 +364,7 @@ export class AdlmApiStack extends Stack {
         NODE_OPTIONS: "--enable-source-maps",
       },
 
-      logGroup: new logs.LogGroup(this, "ScheduledFnLogs", {
-        retention: cfg.logRetentionDays,
-        removalPolicy: RemovalPolicy.RETAIN,
-      }),
+      logGroup: scheduledLogs,
 
       bundling: {
         externalModules: [],
@@ -463,6 +473,29 @@ export class AdlmApiStack extends Stack {
       description: "ADLM entitlement expiry notifier — 09:00 Africa/Lagos daily",
     });
 
+    /* Keep-warm ping — see config.warmIntervalMinutes for the rationale, the
+     * one-container limit and the cost. Targets the API function, not
+     * ScheduledFn, because it is the API's cold start users actually feel.
+     *
+     * No DLQ and no retries: a missed ping costs one slow sign-in, so
+     * dead-lettering it would only add noise to a queue whose whole value is
+     * that a message in it means something went wrong. maxEventAge is one
+     * interval — a ping delivered later than that is pinging a container that
+     * has already gone cold, so it should be dropped rather than replayed. */
+    if (cfg.warmIntervalMinutes > 0) {
+      new scheduler.Schedule(this, "ApiWarmSchedule", {
+        description: `Keeps one API container and its Mongo pool warm — every ${cfg.warmIntervalMinutes} min`,
+        schedule: scheduler.ScheduleExpression.rate(
+          Duration.minutes(cfg.warmIntervalMinutes),
+        ),
+        target: new schedulerTargets.LambdaInvoke(fn, {
+          input: scheduler.ScheduleTargetInput.fromObject({ __warm: true }),
+          retryAttempts: 0,
+          maxEventAge: Duration.minutes(cfg.warmIntervalMinutes),
+        }),
+      });
+    }
+
     const scheduledErrors = new cloudwatch.Alarm(this, "ScheduledErrorsAlarm", {
       alarmDescription:
         "A nightly job threw. Auto-renew failing means entitlements silently lapse — check " +
@@ -508,6 +541,14 @@ export class AdlmApiStack extends Stack {
     new CfnOutput(this, "ScheduleDlqUrl", {
       value: scheduleDlq.queueUrl,
       description: "Dead-lettered schedule invocations. Should always be empty.",
+    });
+    new CfnOutput(this, "ApiLogGroup", {
+      value: apiLogs.logGroupName,
+      description: `Live API logs: aws logs tail <this> --region ${cfg.region} --follow`,
+    });
+    new CfnOutput(this, "ScheduledLogGroup", {
+      value: scheduledLogs.logGroupName,
+      description: `Nightly expiry/renewal job logs: aws logs tail <this> --region ${cfg.region} --since 24h`,
     });
     new CfnOutput(this, "ReservedConcurrency", {
       value: cfg.useReservedConcurrency
