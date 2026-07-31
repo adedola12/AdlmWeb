@@ -89,12 +89,16 @@ function envValue(name) {
   );
 }
 
+const TRUTHY = new Set(["true", "1", "yes", "y", "on"]);
+
 function onInstanceRole() {
   // Set by ECS/EKS, or detectable on EC2 via the metadata service. Keep it
   // simple: an explicit opt-in beats probing 169.254.169.254 on a laptop.
   // Read through envValue like every other variable here, so the bare name
   // works and a dashboard's trailing whitespace doesn't defeat the compare.
-  return envValue("AWS_USE_INSTANCE_ROLE") === "true";
+  // Any of the spellings someone reasonably types for "on" counts, because
+  // the cost of not recognising one is a confusing demand for credentials.
+  return TRUTHY.has(envValue("AWS_USE_INSTANCE_ROLE").toLowerCase());
 }
 
 function preflight({ warnOnly = false } = {}) {
