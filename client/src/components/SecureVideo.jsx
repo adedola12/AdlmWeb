@@ -5,6 +5,12 @@
 //
 // What protection is realistic on the web:
 //   • You CANNOT truly block OS-level screenshots/recording from a browser.
+//     iOS is the clearest case: no key events to intercept, and the screenshot
+//     and screen-record paths are OS-level. Only FairPlay DRM blocks capture
+//     there, and it has to be applied at the packaging layer, not here.
+//   • Overlays only exist while the video plays INSIDE the page. Any native
+//     fullscreen takeover (iOS especially) hands the picture to the OS player
+//     and every DOM overlay vanishes with it — hence playsInline below.
 //   • So the real defense is a DYNAMIC, PER-USER WATERMARK tiled over the
 //     video (the user's email/id). Any screenshot or screen-recording then
 //     carries the leaker's identity — the same approach Udemy/Coursera use.
@@ -219,8 +225,16 @@ export function SecureVideo({
         src={isHls ? undefined : src}
         poster={poster || undefined}
         controls
-        controlsList="nodownload noremoteplayback noplaybackrate"
+        controlsList="nodownload noremoteplayback noplaybackrate nofullscreen"
         disablePictureInPicture
+        // iOS hands playback to the OS fullscreen player unless told not to,
+        // and that player is not part of the page — so the watermark, which is
+        // a DOM overlay, simply is not there. Inline playback is what keeps the
+        // identity burned across the picture on an iPhone.
+        playsInline
+        // Legacy attribute; older iOS reads this spelling instead.
+        webkit-playsinline="true"
+        x-webkit-airplay="deny"
         draggable={false}
         onContextMenu={(e) => e.preventDefault()}
         className={`w-full h-full ${videoClassName}`}

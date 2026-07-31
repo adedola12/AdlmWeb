@@ -56,6 +56,46 @@ export function mediaConvertClient() {
  * redraws, so quality-defined variable bitrate with a generous max holds text
  * sharp during scrolling without paying for it the rest of the time.
  */
+/**
+ * Optional burned-in watermark.
+ *
+ * The DOM watermark only exists while the video plays inside the page — a
+ * native fullscreen takeover or a screen recording loses it entirely. This one
+ * is encoded into the frames, so it survives fullscreen, screenshots, recording
+ * and re-encoding.
+ *
+ * The trade-off is that it is the same for every viewer: it proves where a leak
+ * came from, not who leaked it. Per-viewer burn-in needs a separate encode per
+ * student, which is not sane at this scale — the DOM overlay stays the thing
+ * that identifies the individual.
+ *
+ * Point COURSE_AWS_WATERMARK_PNG_KEY at a PNG in the archive bucket to enable.
+ */
+function watermarkOverlay(height) {
+  const key = courseEnv("AWS_WATERMARK_PNG_KEY");
+  if (!key) return undefined;
+  const bucket = requiredEnv("AWS_VIDEO_ARCHIVE_BUCKET");
+
+  // Scale with the rung so it stays proportionate rather than swamping 240p.
+  const width = Math.round(height * 0.28);
+  return {
+    ImageInserter: {
+      InsertableImages: [
+        {
+          ImageInserterInput: `s3://${bucket}/${key}`,
+          Layer: 1,
+          // Faint enough to watch through, present enough to survive a re-encode.
+          Opacity: 30,
+          ImageX: Math.round(height * 0.03),
+          ImageY: Math.round(height * 0.03),
+          Width: width,
+          FadeIn: 0,
+        },
+      ],
+    },
+  };
+}
+
 function rung({ height, maxBitrate, nameModifier }) {
   return {
     NameModifier: nameModifier,
@@ -63,6 +103,7 @@ function rung({ height, maxBitrate, nameModifier }) {
     VideoDescription: {
       Height: height,
       ScalingBehavior: "DEFAULT",
+      ...(watermarkOverlay(height) ? { VideoPreprocessors: watermarkOverlay(height) } : {}),
       CodecSettings: {
         Codec: "H_264",
         H264Settings: {
