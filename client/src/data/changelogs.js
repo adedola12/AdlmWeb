@@ -14,14 +14,29 @@ export const products = [
     "compatibility": "Revit 2024, 2026 & 2027",
     "summary": "Model-based quantity takeoff, priced budgets and a dockable workspace — right inside Revit.",
     "order": 1,
-    "latest": "3.1.6",
-    "lastUpdated": "July 2026",
-    "itemCount": 29,
+    "latest": "3.1.7",
+    "lastUpdated": "31 July 2026",
+    "itemCount": 30,
     "releases": [
+      {
+        "version": "3.1.7",
+        "date": "31 July 2026",
+        "latest": true,
+        "title": "Closing the last path to a sign-in failure",
+        "changes": [
+          {
+            "type": "improved",
+            "items": [
+              "The built-in fallback address now points at the live service. QUIV reads the ADLM service address from your machine's settings, which is why it kept working through the move while other plugins did not. It also carries a fallback address, used only when that setting is missing — a manual install that bypassed the Installer Hub, a reset Windows profile, or a brand-new workstation. That fallback still named the retired server, so a machine in one of those states would have failed to sign in for the same reason the other plugins did. It now names the live service, so QUIV works whether or not the setting is present."
+            ]
+          }
+        ],
+        "highlight": "QUIV was not affected when ADLM's servers moved — it already read the service address from your machine rather than having it built in. This release closes the one remaining case where a QUIV install could have been caught out."
+      },
       {
         "version": "3.1.6",
         "date": "July 2026",
-        "latest": true,
+        "latest": false,
         "title": "The AI Assistant, budgets that balance & QS-format exports",
         "changes": [
           {
@@ -156,14 +171,37 @@ export const products = [
     "compatibility": "PlanSwift 10+",
     "summary": "2D takeoff with automatic material + labour budgets, RateGen pricing and a fully-linked Excel BoQ — right inside PlanSwift.",
     "order": 3,
-    "latest": "2.5",
-    "lastUpdated": "25 July 2026",
-    "itemCount": 62,
+    "latest": "2.5.1",
+    "lastUpdated": "31 July 2026",
+    "itemCount": 66,
     "releases": [
+      {
+        "version": "2.5.1",
+        "date": "31 July 2026",
+        "latest": true,
+        "title": "Sign-in restored",
+        "changes": [
+          {
+            "type": "improved",
+            "items": [
+              "A server move no longer means a new download. Every part of HERON that talks to ADLM now goes through one setting, ADLM_API_BASE_URL, which the ADLM Installer Hub writes for you. This is the same mechanism QUIV already used — and the reason QUIV kept working throughout. If we ever move the service again, it is a settings change rather than a new version for every customer."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "\"Server is temporarily unavailable\" when signing in. HERON was built with ADLM's server address baked in. When the service moved to its new home, HERON kept calling the old address and every sign-in attempt failed with that message. Retrying did not help, and there was nothing you could change on your machine to point it at the working service — the address was fixed inside the plugin itself. HERON now reads the address from your machine's settings each time it starts, and sign-in works again.",
+              "\"You are offline\" while your connection was fine. HERON decided whether you had a working connection by contacting that same retired address. Because nothing answered there, it could report you as offline — and fall back to offline behaviour — on a perfectly healthy internet connection. It now checks against the live service.",
+              "Rates, cloud projects and licence checks were all affected by the same cause and all recover with this update. If HERON told you your subscription could not be verified during this period, that was this fault and not your licence."
+            ]
+          }
+        ],
+        "highlight": "HERON could not sign in after ADLM's servers moved. It now finds the service through your machine's settings instead of an address fixed when the plugin was built, so sign-in works again — and a future move will not need a new download."
+      },
       {
         "version": "2.5",
         "date": "25 July 2026",
-        "latest": true,
+        "latest": false,
         "title": "The Specifications Release",
         "changes": [
           {
@@ -372,14 +410,36 @@ export const products = [
     "compatibility": "Revit 2024, 2025, 2026 & 2027",
     "summary": "Mechanical, electrical & plumbing quantity takeoff right inside Revit — covers ductwork, pipework, electrical and plumbing disciplines in a dockable, cloud-connected workspace.",
     "order": 4,
-    "latest": "1.8.2",
-    "lastUpdated": "July 2026",
-    "itemCount": 30,
+    "latest": "1.8.3",
+    "lastUpdated": "31 July 2026",
+    "itemCount": 33,
     "releases": [
+      {
+        "version": "1.8.3",
+        "date": "31 July 2026",
+        "latest": true,
+        "title": "Sign-in restored",
+        "changes": [
+          {
+            "type": "improved",
+            "items": [
+              "A server move no longer means a new download. ADLM MEP now reads ADLM_API_BASE_URL from your machine — the setting the ADLM Installer Hub already writes — so the service address can change without a new version being shipped to every customer."
+            ]
+          },
+          {
+            "type": "fixed",
+            "items": [
+              "Sign-in failing after the server move. ADLM MEP had ADLM's server address built into it in three separate places — sign-in, licence-key checks and the cloud save service. When the service moved, all three kept calling the old address, so signing in failed and cloud saves could not complete. There was no setting on your machine that could redirect them. All three now read the address from one place at startup, and it is configurable.",
+              "Cloud takeoff saves and reopens recover with this update; they shared the same cause."
+            ]
+          }
+        ],
+        "highlight": "ADLM MEP could not sign in after ADLM's servers moved. It now finds the service through your machine's settings rather than an address fixed when the plugin was built."
+      },
       {
         "version": "1.8.2",
         "date": "July 2026",
-        "latest": true,
+        "latest": false,
         "title": "Sign in from any network",
         "changes": [
           {
