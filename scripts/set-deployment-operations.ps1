@@ -31,6 +31,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Windows PowerShell 5.1 still negotiates TLS 1.0 by default on some builds,
+# which a modern API refuses. Harmless on PowerShell 7.
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 function Fail($m) { Write-Host "`n  $m`n" -ForegroundColor Red; exit 1 }
 function Good($m) { Write-Host "  $m" -ForegroundColor Green }
 function Note($m) { Write-Host "  $m" -ForegroundColor DarkGray }

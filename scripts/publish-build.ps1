@@ -69,6 +69,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Windows PowerShell 5.1 still negotiates TLS 1.0 by default on some builds,
+# which a modern API refuses. Harmless on PowerShell 7.
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
+
 function Fail($msg) { Write-Host "`n  $msg`n" -ForegroundColor Red; exit 1 }
 function Note($msg) { Write-Host "  $msg" -ForegroundColor DarkGray }
 function Good($msg) { Write-Host "  $msg" -ForegroundColor Green }
@@ -194,9 +198,31 @@ if (-not $PSCmdlet.ShouldProcess("$key -> $Version", "publish to InstallerHub"))
 
 # ── 5. Upload, then point the record at it ──────────────────────────────────
 Write-Host "`nUploading..."
+
+# Built by hand rather than with -Form, which is PowerShell 7 only. Windows
+# ships 5.1 by default and that is what this will usually run under.
+# The body is assembled in a MemoryStream so the file's bytes are copied
+# verbatim — building it as a string corrupts binary content unless you go
+# through a byte-preserving encoding, and a silently corrupted upload would
+# only surface later as a hash mismatch on a user's machine.
+$boundary = [Guid]::NewGuid().ToString()
+$LF = "`r`n"
+$ms = New-Object System.IO.MemoryStream
+$sw = New-Object System.IO.StreamWriter($ms, [System.Text.Encoding]::ASCII)
+$sw.Write("--$boundary$LF")
+$sw.Write("Content-Disposition: form-data; name=`"file`"; filename=`"$($file.Name)`"$LF")
+$sw.Write("Content-Type: application/octet-stream$LF$LF")
+$sw.Flush()
+$fileBytes = [System.IO.File]::ReadAllBytes($file.FullName)
+$ms.Write($fileBytes, 0, $fileBytes.Length)
+$sw.Write("$LF--$boundary--$LF")
+$sw.Flush()
+$bodyBytes = $ms.ToArray()
+$sw.Dispose(); $ms.Dispose()
+
 try {
     $upload = Invoke-RestMethod -Method Post -Uri "$ApiBaseUrl/admin/deployments/upload-package" `
-        -Headers $headers -Form @{ file = $file }
+        -Headers $headers -ContentType "multipart/form-data; boundary=$boundary" -Body $bodyBytes
 } catch {
     $detail = ""
     try { $detail = ($_.ErrorDetails.Message | ConvertFrom-Json).error } catch { }
