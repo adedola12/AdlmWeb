@@ -453,6 +453,11 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
   // obtained without also claiming a concurrency seat and leaving an audit row.
   let playbackUrl = "";
   let playbackExpiresAt = null;
+  // "hls" is the real delivery path. "archive" means the student is pulling a
+  // multi-gigabyte master straight from S3 with no CDN and no bitrate ladder —
+  // watchable, but slow and stuttery on a Nigerian connection, and previously
+  // indistinguishable from working playback from the outside.
+  let playbackMode = "none";
   const course = await PaidCourse.findOne({ sku }).select("modules").lean();
   const module = (course?.modules || []).find((m) => m.code === moduleCode);
 
@@ -468,10 +473,17 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
       }
       playbackUrl = cdnUrl(module.hlsKey);
       playbackExpiresAt = toIso(expiresAt);
+      playbackMode = "hls";
     } catch (err) {
       // CloudFront not wired up yet — fall back to whatever videoUrl the
       // module already carries rather than failing the whole request.
-      console.warn("[playback] could not sign cookies:", err.message);
+      // Loud, because the fallback below still plays: the only symptom an
+      // operator sees is students reporting that video is slow.
+      console.warn(
+        `[playback] DEGRADED for ${sku}/${moduleCode} — CloudFront signing failed ` +
+          `(${err.message}). Serving the raw master from S3 instead of HLS. ` +
+          `See docs/COURSE_VIDEO_PIPELINE.md §5.`,
+      );
     }
   }
 
@@ -482,6 +494,7 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
     try {
       playbackUrl = await presignArchiveUrl(module.sourceKey);
       playbackExpiresAt = toIso(new Date(Date.now() + 2 * 60 * 60 * 1000));
+      playbackMode = "archive";
     } catch (err) {
       console.warn("[playback] could not presign archive object:", err.message);
     }
@@ -493,6 +506,7 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
     heartbeatSec: 30,
     playbackUrl,
     playbackExpiresAt,
+    playbackMode,
   });
 });
 

@@ -136,6 +136,116 @@ function Overlays({ label, guarded }) {
   );
 }
 
+/* ── playback speed ─────────────────────────────────────────────────────────
+ *
+ * A two-hour lecture is the case for this: students re-watching a section they
+ * already understand want 1.5×, and someone following along in Revit wants
+ * 0.75×. Capped at 2× because speech stops being intelligible above it.
+ */
+const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+const RATE_KEY = "adlm:playbackRate";
+
+/* "noplaybackrate" used to be in here, which suppressed Chrome's own speed
+   menu. Speed is a study aid, not a leak vector — the things worth blocking
+   are the download and the remote-playback handoff, and those stay. */
+const CONTROLS_LIST = "nodownload noremoteplayback";
+
+function readSavedRate() {
+  try {
+    const saved = Number(window.localStorage.getItem(RATE_KEY));
+    return SPEEDS.includes(saved) ? saved : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/**
+ * Holds the chosen rate across lectures.
+ *
+ * The rate has to be re-applied whenever the source changes: attaching a new
+ * src — which hls.js does on every module — resets playbackRate to 1, so a
+ * student who picked 1.5× would silently drop back to normal on the next
+ * lecture. `loadedmetadata` is the earliest point the element accepts it.
+ */
+function usePlaybackRate(videoRef, src) {
+  const [rate, setRate] = React.useState(readSavedRate);
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+    const apply = () => {
+      try { video.playbackRate = rate; } catch { /* ignore */ }
+    };
+    apply();
+    video.addEventListener("loadedmetadata", apply);
+    return () => video.removeEventListener("loadedmetadata", apply);
+  }, [videoRef, rate, src]);
+
+  const choose = React.useCallback((next) => {
+    setRate(next);
+    try { window.localStorage.setItem(RATE_KEY, String(next)); } catch { /* ignore */ }
+  }, []);
+
+  return [rate, choose];
+}
+
+function SpeedControl({ rate, onChange }) {
+  const [open, setOpen] = React.useState(false);
+  const wrap = React.useRef(null);
+
+  // Close on outside click and on Escape, so the menu never sits over the
+  // frame once the student has moved on.
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (!wrap.current?.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="secure-speed" ref={wrap}>
+      <button
+        type="button"
+        className="secure-speed__btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={`Playback speed, currently ${rate} times`}
+      >
+        {rate}×
+      </button>
+      {open && (
+        <div className="secure-speed__menu" role="menu">
+          {SPEEDS.map((speed) => (
+            <button
+              key={speed}
+              type="button"
+              role="menuitemradio"
+              aria-checked={speed === rate}
+              className={`secure-speed__item ${speed === rate ? "is-active" : ""}`}
+              onClick={() => {
+                onChange(speed);
+                setOpen(false);
+              }}
+            >
+              {speed}×{speed === 1 ? " · normal" : ""}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Attaches an HLS stream to a <video>.
  *
@@ -198,6 +308,7 @@ export function SecureVideo({
   const { guarded, paused } = useScreenshotGuard();
   const ref = React.useRef(null);
   const isHls = useHlsSource(ref, src);
+  const [rate, setRate] = usePlaybackRate(ref, src);
 
   // Pause when guarded; harden the element imperatively (props not all standard).
   React.useEffect(() => {
@@ -219,13 +330,14 @@ export function SecureVideo({
         src={isHls ? undefined : src}
         poster={poster || undefined}
         controls
-        controlsList="nodownload noremoteplayback noplaybackrate"
+        controlsList={CONTROLS_LIST}
         disablePictureInPicture
         draggable={false}
         onContextMenu={(e) => e.preventDefault()}
         className={`w-full h-full ${videoClassName}`}
         {...rest}
       />
+      <SpeedControl rate={rate} onChange={setRate} />
       <Overlays label={label} guarded={guarded} />
     </div>
   );

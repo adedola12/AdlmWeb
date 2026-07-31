@@ -12,10 +12,17 @@
  */
 import fs from "node:fs";
 import { getSignedCookies } from "@aws-sdk/cloudfront-signer";
+import { courseEnv } from "./awsS3.js";
 
+// Through courseEnv, like the S3 and MediaConvert clients: the rest of this
+// pipeline is configured with COURSE_-prefixed names, and reading only the
+// bare ones here meant a fully configured distribution looked unconfigured —
+// which downgrades playback to the raw master instead of failing loudly.
 function requiredEnv(name) {
-  const value = String(process.env[name] || "").trim();
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  const value = courseEnv(name);
+  if (!value) {
+    throw new Error(`Missing required environment variable: COURSE_${name} (or ${name})`);
+  }
   return value;
 }
 
@@ -53,7 +60,7 @@ export function signPlaybackCookies({ keyPrefix, ttlSec = 4 * 60 * 60, ip = "" }
   // Pinning to an IP is the strongest anti-sharing measure available here, but
   // it breaks the moment a student moves between wifi and mobile data — so it
   // is opt-in rather than the default.
-  if (ip && String(process.env.AWS_CLOUDFRONT_PIN_IP || "") === "true") {
+  if (ip && courseEnv("AWS_CLOUDFRONT_PIN_IP") === "true") {
     condition.IpAddress = { "AWS:SourceIp": `${ip}/32` };
   }
 
