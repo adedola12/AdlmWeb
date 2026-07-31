@@ -139,6 +139,71 @@ export async function listFromR2(prefix = "adlm/installers") {
   return items;
 }
 
+/**
+ * Presigned PUT straight to R2, so package bytes never travel through the API.
+ *
+ * This exists because the API runs on Lambda now. Lambda caps a synchronous
+ * invocation payload at 6 MiB and base64-encodes binary bodies on the way in,
+ * so the effective ceiling on a proxied upload is roughly 4.4 MB -- below the
+ * 8 MB threshold at which uploads are routed to R2 in the first place. The
+ * result was that the R2 path, the one built for large packages, could not be
+ * reached at all: anything big enough to need it was too big to arrive. On
+ * Render there was no such limit, so this worked until the migration.
+ *
+ * The caller PUTs the bytes to the returned url and then sends only the public
+ * URL back to the API.
+ *
+ * Note for browser callers: R2 needs a CORS rule allowing PUT from the calling
+ * origin. Desktop clients (InstallerHub) are unaffected.
+ */
+export async function presignR2Put(
+  key,
+  {
+    contentType = "application/octet-stream",
+    cacheControl = "public, max-age=31536000, immutable",
+    expiresIn = 900,
+  } = {},
+) {
+  const objectKey = String(key || "").trim();
+  if (!objectKey) {
+    throw new Error("An object key is required to presign an R2 upload.");
+  }
+  if (!isR2Configured()) {
+    throw new Error("R2 storage is not configured.");
+  }
+
+  const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+  const bucket = requiredEnv("R2_BUCKET");
+  const client = createClient();
+
+  // Every header signed here must be replayed verbatim by the client or R2
+  // rejects the signature.
+  const url = await getSignedUrl(
+    client,
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: objectKey,
+      ContentType: contentType,
+      CacheControl: cacheControl,
+    }),
+    { expiresIn },
+  );
+
+  const publicBaseUrl = normalizePublicBaseUrl();
+
+  return {
+    uploadUrl: url,
+    method: "PUT",
+    headers: {
+      "Content-Type": contentType,
+      "Cache-Control": cacheControl,
+    },
+    objectKey,
+    publicUrl: `${publicBaseUrl}/${encodeObjectKey(objectKey)}`,
+    expiresIn,
+  };
+}
+
 export async function uploadBufferToR2(
   buffer,
   {
