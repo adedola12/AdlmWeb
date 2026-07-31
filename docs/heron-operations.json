@@ -1,0 +1,65 @@
+{
+  "_readme": [
+    "InstallerHub install steps for HERON, including the Excel add-in.",
+    "",
+    "Apply with:  .\\scripts\\set-deployment-operations.ps1 -ProductKey planswift -OperationsFile .\\docs\\heron-operations.json",
+    "",
+    "ORDER MATTERS. The copy steps must land the files before the runExe step",
+    "registers them. The array order below is the execution order.",
+    "",
+    "VERIFY THE runExe STEP BEFORE TRUSTING IT. The server only validates that",
+    "`target` is non-empty (normalizeOperation in server/routes/admin.deployments.js",
+    "returns null for any operation with a blank target, so a malformed step is",
+    "silently DROPPED rather than rejected). How InstallerHub itself interprets",
+    "`source` vs `target` for runExe is decided in the InstallerHub client, which",
+    "is not in this repository — I could not read it. The values below assume",
+    "`source` is the executable relative to the installed folder and `target` is",
+    "the working directory. If your hub does the opposite, swap them.",
+    "",
+    "Check by installing on ONE machine and running:",
+    "  reg query \"HKCU\\Software\\Microsoft\\Office\\Excel\\Addins\\ExcelAddin\"",
+    "Four values (Description, FriendlyName, LoadBehavior=3, Manifest) means it",
+    "ran. Nothing at all means the runExe step did not execute and the field",
+    "mapping is wrong."
+  ],
+
+  "operations": [
+    {
+      "type": "copyDirectory",
+      "source": ".",
+      "target": "%LOCALAPPDATA%\\ADLM\\HERON",
+      "overwrite": true,
+      "cleanTargetOnUpdate": false,
+      "preservePatterns": [
+        "*.user.json",
+        "settings.json",
+        "pending-actions.json"
+      ],
+      "notes": "Main payload, including ExcelAddin.dll/.vsto/.dll.manifest and Register-ExcelAddin.ps1. cleanTargetOnUpdate is false and preservePatterns keeps user state across updates - wiping the folder would discard unsynced offline work."
+    },
+    {
+      "type": "runExe",
+      "source": "powershell.exe",
+      "target": "%LOCALAPPDATA%\\ADLM\\HERON",
+      "overwrite": true,
+      "cleanTargetOnUpdate": false,
+      "preservePatterns": [],
+      "notes": "Registers the VSTO Excel add-in under HKCU. Needs no elevation. Runs AFTER the copy so the .vsto it points at exists. If your hub cannot pass arguments to runExe, set installArguments on the deployment record to: -NoProfile -ExecutionPolicy Bypass -File \"%LOCALAPPDATA%\\ADLM\\HERON\\Register-ExcelAddin.ps1\" -Quiet"
+    },
+    {
+      "type": "createShortcut",
+      "source": "ADLMPlanswiftApp.exe",
+      "target": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\ADLM\\ADLM HERON.lnk",
+      "overwrite": true,
+      "cleanTargetOnUpdate": false,
+      "preservePatterns": [],
+      "notes": "Start Menu entry."
+    }
+  ],
+
+  "_notes": {
+    "elevation": "requiresElevation can stay false for this set. Everything writes to %LOCALAPPDATA% and HKCU. Asking for admin when you do not need it trains users to click through UAC prompts.",
+    "vstoRuntime": "Register-ExcelAddin.ps1 exits 3 if the VSTO runtime is absent. Excel silently ignores an add-in with no runtime - correct registry keys, nothing visible, no error. If users report a missing Takeoff Link tab, check that first: https://aka.ms/vstoruntime",
+    "uninstall": "Register-ExcelAddin.ps1 -Unregister removes the HKCU key. Worth wiring into your uninstall path so a removed HERON does not leave a dead add-in entry in Excel."
+  }
+}
