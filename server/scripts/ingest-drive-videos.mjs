@@ -92,7 +92,9 @@ function envValue(name) {
 function onInstanceRole() {
   // Set by ECS/EKS, or detectable on EC2 via the metadata service. Keep it
   // simple: an explicit opt-in beats probing 169.254.169.254 on a laptop.
-  return String(process.env.COURSE_AWS_USE_INSTANCE_ROLE || "") === "true";
+  // Read through envValue like every other variable here, so the bare name
+  // works and a dashboard's trailing whitespace doesn't defeat the compare.
+  return envValue("AWS_USE_INSTANCE_ROLE") === "true";
 }
 
 function preflight({ warnOnly = false } = {}) {
