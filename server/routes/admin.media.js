@@ -6,7 +6,7 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import cloudinary from "../cloudinary.js"; // configured v2 client
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { uploadAsset, deleteAsset } from "../utils/cloudinary.js";
-import { uploadBufferToR2, isR2Configured } from "../utils/r2Upload.js";
+import { uploadBufferToR2, isR2Configured, presignR2Put } from "../utils/r2Upload.js";
 
 const router = express.Router();
 
@@ -254,6 +254,12 @@ router.post("/upload-video-r2", uploadLarge.single("file"), async (req, res) => 
   }
 });
 
+// Extensions accepted for an installer, shared by the proxied upload's
+// fileFilter and /presign-installer (which never sees the file, so it has to
+// validate the claimed name instead). Declared here so both consumers sit
+// below it and neither depends on call-time evaluation order.
+const INSTALLER_EXTENSION_RE = /\.(exe|msi|zip|7z|appx|appxbundle|msix|msixbundle)$/;
+
 /**
  * POST /admin/media/upload-installer
  * Uploads the Installer Hub setup file (.exe/.msi/.zip) to R2 if large,
@@ -268,10 +274,72 @@ const uploadInstaller = multer({
   limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     const name = String(file.originalname || "").toLowerCase();
-    const ok = /\.(exe|msi|zip|7z|appx|appxbundle|msix|msixbundle)$/.test(name);
+    // Shared with /presign-installer so the two upload paths cannot drift.
+    const ok = INSTALLER_EXTENSION_RE.test(name);
     if (ok) return cb(null, true);
     cb(new Error("Only installer files (.exe, .msi, .zip, .7z, .appx, .msix) are allowed"));
   },
+});
+
+/**
+ * POST /admin/media/presign-installer
+ *
+ * Presigned PUT straight to R2 for the Installer Hub setup file.
+ *
+ * /upload-installer buffers the file in this process, which cannot work on
+ * Lambda: the 6 MiB invocation payload cap, plus base64 inflation of the body,
+ * puts the real ceiling near 4.4 MB. A self-contained Hub build is ~114 MB, so
+ * that route can never ship one -- its 500 MB multer limit is unreachable by a
+ * factor of a hundred. On Render it worked; the AWS migration removed the
+ * possibility without removing the code.
+ *
+ * The caller PUTs the bytes to uploadUrl and then saves secure_url in Site
+ * Settings.
+ *
+ * sha256 is the caller's job here. /upload-installer hashes the buffer it
+ * holds; this route never sees the bytes, and that hash is what makes the Hub
+ * refuse a tampered package, so it must be computed client-side over the same
+ * file and submitted with the settings save. Do not leave it blank.
+ */
+router.post("/presign-installer", async (req, res) => {
+  try {
+    const original = String(req.body?.fileName || "").trim();
+    if (!original) return res.status(400).json({ error: "fileName is required" });
+
+    if (!INSTALLER_EXTENSION_RE.test(original.toLowerCase())) {
+      return res.status(400).json({
+        error: "Only installer files (.exe, .msi, .zip, .7z, .appx, .msix) are allowed",
+      });
+    }
+
+    if (!isR2Configured()) {
+      return res.status(503).json({ error: "Cloudflare R2 is not configured." });
+    }
+
+    const safeName = original.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const key = `adlm/installer-hub/${Date.now()}-${safeName}`;
+    const contentType =
+      String(req.body?.contentType || "").trim() || "application/octet-stream";
+
+    const presigned = await presignR2Put(key, { contentType });
+
+    return res.json({
+      ok: true,
+      uploadUrl: presigned.uploadUrl,
+      method: presigned.method,
+      headers: presigned.headers,
+      objectKey: presigned.objectKey,
+      secure_url: presigned.publicUrl,
+      public_id: presigned.objectKey,
+      storageProvider: "r2",
+      originalName: original,
+      expiresIn: presigned.expiresIn,
+      // Not computed here -- see the note above.
+      sha256: null,
+    });
+  } catch (e) {
+    return res.status(400).json({ error: e.message || "Installer presign failed" });
+  }
 });
 
 router.post("/upload-installer", uploadInstaller.single("file"), async (req, res) => {
