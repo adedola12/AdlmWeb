@@ -22,6 +22,14 @@ export async function connectDB(uri) {
     .connect(mongoUri, {
       dbName: authDbName,
       serverSelectionTimeoutMS: 10000,
+      // On Lambda every concurrent container opens its own pool, so the real
+      // ceiling is MONGO_MAX_POOL x reserved concurrency and it is very easy to
+      // exhaust an Atlas tier's connection cap. Keep this small and size
+      // reserved concurrency against the tier limit — a container serves one
+      // request at a time, so a large pool buys nothing there anyway.
+      // The long-running server can afford more; override via env.
+      maxPoolSize: Number(process.env.MONGO_MAX_POOL || 5),
+      minPoolSize: 0,
     })
     .then((m) => {
       console.log(

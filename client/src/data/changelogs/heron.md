@@ -24,6 +24,20 @@ summary: 2D takeoff with automatic material + labour budgets, RateGen pricing an
   items from the plugin changelog are folded into Improved here.
 -->
 
+## 2.5.1 — 31 July 2026 — Sign-in restored
+
+HERON could not sign in after ADLM's servers moved. It now finds the service through your machine's settings instead of an address fixed when the plugin was built, so sign-in works again — and a future move will not need a new download.
+
+### 🔧 Improved
+
+- **A server move no longer means a new download.** Every part of HERON that talks to ADLM now goes through one setting, `ADLM_API_BASE_URL`, which the ADLM Installer Hub writes for you. This is the same mechanism QUIV already used — and the reason QUIV kept working throughout. If we ever move the service again, it is a settings change rather than a new version for every customer.
+
+### 🐛 Fixed
+
+- **"Server is temporarily unavailable" when signing in.** HERON was built with ADLM's server address baked in. When the service moved to its new home, HERON kept calling the old address and every sign-in attempt failed with that message. Retrying did not help, and there was nothing you could change on your machine to point it at the working service — the address was fixed inside the plugin itself. HERON now reads the address from your machine's settings each time it starts, and sign-in works again.
+- **"You are offline" while your connection was fine.** HERON decided whether you had a working connection by contacting that same retired address. Because nothing answered there, it could report you as offline — and fall back to offline behaviour — on a perfectly healthy internet connection. It now checks against the live service.
+- **Rates, cloud projects and licence checks** were all affected by the same cause and all recover with this update. If HERON told you your subscription could not be verified during this period, that was this fault and not your licence.
+
 ## 2.5 — 25 July 2026 — The Specifications Release
 
 Write your own bill descriptions. Every measured takeoff item now carries a free-text Specification — leave it blank and the bill keeps HERON's default wording; fill it in and your specification is what prints, in the cloud review, the Excel BoQ export and the Excel Takeoff Link.

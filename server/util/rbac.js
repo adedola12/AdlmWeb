@@ -68,8 +68,16 @@ export async function ensureRolesSeeded() {
     { key: "user", name: "User", system: true, isSuperAdmin: false, permissions: [] },
   ];
 
+  // One query for all three, not one each. This runs on every Lambda cold
+  // start, where each round trip to Atlas costs ~400-600ms — measured at ~1.9s
+  // for the whole function against a ~4s cold request. The seeding is
+  // idempotent and almost always finds everything already present, so the
+  // sequential findOne()s were pure latency on all but the first-ever run.
+  const existingRoles = await Role.find({ key: { $in: defaults.map((d) => d.key) } });
+  const byKey = new Map(existingRoles.map((r) => [r.key, r]));
+
   for (const d of defaults) {
-    const existing = await Role.findOne({ key: d.key });
+    const existing = byKey.get(d.key);
     if (!existing) {
       await Role.create(d);
       continue;

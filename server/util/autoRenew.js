@@ -69,7 +69,13 @@ async function acquireJobLock(lockId, ttlMinutes = 15) {
     { $set: { expiresAt, lockedAt: now } },
     { returnDocument: "after" },
   );
-  if (upd?.value) return true;
+  // mongodb driver >= 6 resolves findOneAndUpdate to the DOCUMENT (or null),
+  // not a { value } wrapper — that only comes back with
+  // includeResultMetadata: true. Checking `upd.value` was therefore always
+  // falsy, so this stale-lock takeover never fired and a lock left behind by a
+  // crashed run could never be reclaimed. That matters far more on Lambda,
+  // where a timeout kills the process before the `finally` releases the lock.
+  if (upd) return true;
 
   try {
     await col.insertOne({ _id: lockId, expiresAt, lockedAt: now });

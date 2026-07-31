@@ -14,7 +14,8 @@
 # and writes them to HKCU\Environment on that user's machine.
 #
 # BEFORE RUNNING:
-#   * Set the $ApiBaseUrl to your Render URL (the default is likely right).
+#   * $ApiBaseUrl defaults to the production API hostname. Only override it to
+#     point plugins at a staging or local API.
 #   * Set $AdminEmail / the script will prompt for your admin password.
 #   * Fill in the real secret values in $Shared below — these are the
 #     production values your server's .env already uses.
@@ -26,7 +27,10 @@
 # ============================================================================
 
 param(
-    [string] $ApiBaseUrl = "https://adlmweb.onrender.com",
+    # This value is written to ADLM_API_BASE_URL on every user machine the
+    # InstallerHub touches, so a stale default here points plugins at a dead
+    # host. It was https://adlmweb.onrender.com, which is offline.
+    [string] $ApiBaseUrl = "https://api.adlmstudio.net",
     [string] $AdminEmail = ""
 )
 

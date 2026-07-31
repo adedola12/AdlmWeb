@@ -1,0 +1,26 @@
+{
+  "name": "adlm-infra",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "adlm": "bin/adlm.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "synth": "cdk synth",
+    "diff": "cdk diff --all",
+    "deploy": "cdk deploy --all"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "aws-cdk": "^2.1021.0",
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.2",
+    "typescript": "~5.6.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.4.2"
+  }
+}

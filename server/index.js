@@ -8,7 +8,7 @@ import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import { connectDB } from "./db.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
@@ -497,20 +497,42 @@ function validateEnv() {
 /* -------- boot -------- */
 const port = process.env.PORT || 4000;
 
-try {
-  validateEnv();
-  await connectDB(process.env.MONGO_URI);
+// Shared readiness step for every runtime that serves this app: the long-lived
+// `node index.js` process AND the Lambda handler in lambda.js. Cached in a
+// module-scope promise so concurrent callers await one connect instead of
+// racing several — on Lambda this is what keeps one warm container to a single
+// Atlas connection.
+let _readyPromise = null;
 
-  // Seed built-in roles (admin / mini_admin / user) and warm the permission
-  // cache before serving. Non-fatal: a seed failure logs but doesn't block boot.
-  try {
-    await ensureRolesSeeded();
-  } catch (e) {
-    console.error("[rbac] role seed failed:", e?.message || e);
-  }
+export function bootstrap() {
+  if (_readyPromise) return _readyPromise;
 
-  app.listen(port, () => console.log(`Server running on :${port}`));
+  _readyPromise = (async () => {
+    validateEnv();
+    await connectDB(process.env.MONGO_URI);
 
+    // Seed built-in roles (admin / mini_admin / user) and warm the permission
+    // cache before serving. Non-fatal: a seed failure logs but doesn't block boot.
+    try {
+      await ensureRolesSeeded();
+    } catch (e) {
+      console.error("[rbac] role seed failed:", e?.message || e);
+    }
+  })().catch((err) => {
+    // Clear the cache so the NEXT caller retries instead of being handed a
+    // permanently rejected promise. On Lambda a transient Atlas blip would
+    // otherwise poison the container for its whole lifetime.
+    _readyPromise = null;
+    throw err;
+  });
+
+  return _readyPromise;
+}
+
+// node-cron only works in a process that stays alive, so it is started by the
+// long-running server path only. On Lambda these two jobs move to EventBridge
+// Scheduler (see the migration plan, Phase 7) — NOT to the request handler.
+function startCronJobs() {
   const ENABLE_EXPIRY_CRON =
     String(process.env.ENABLE_EXPIRY_CRON || "true") !== "false";
 
@@ -556,9 +578,34 @@ try {
 
     console.log("[auto-renew] cron scheduled:", RENEWAL_CRON);
   }
-} catch (err) {
-  console.error("DB error", err);
-  process.exit(1);
 }
 
+/**
+ * True when this file was started directly (`node index.js`, `nodemon index.js`)
+ * rather than imported. Keeps `npm run dev` / `npm start` behaving exactly as
+ * before while letting lambda.js import `app` without binding a port.
+ */
+function isMainModule() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return import.meta.url === pathToFileURL(entry).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
+  try {
+    await bootstrap();
+    app.listen(port, () => console.log(`Server running on :${port}`));
+    startCronJobs();
+  } catch (err) {
+    console.error("DB error", err);
+    process.exit(1);
+  }
+}
+
+export { app };
+export default app;
 
