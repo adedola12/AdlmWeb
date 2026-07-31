@@ -1,10 +1,12 @@
 # Prompt: rebuild and relink all ADLM desktop software to the new API
 
 Paste everything below the line into a Claude Code session started on the
-Windows machine that has the .NET SDK and all five plugin repos checked out
-(`C:\Users\ADLM\source\repos`). Do not run it from the web session — that
-environment has no .NET SDK and cannot compile, which is why the code changes
-so far are unverified.
+Windows machine that has all five plugin repos checked out
+(`C:\Users\ADLM\source\repos`) and — crucially — the licensed Autodesk and
+PlanSwift installations the projects reference by absolute path. Those
+references are the reason the three Autodesk-hosted plugins can only be built
+there; see the compile-status table below for what has already been verified
+elsewhere.
 
 ---
 
@@ -35,26 +37,51 @@ the pattern every product now follows.
 | RoadTools / CIVIQ | `ADLM.C3D.RoadTools` | `claude/api-base-url-from-env` | `AdlmConfig.ApiBaseUrl` const → property; sign-up hyperlink repointed |
 | TimeMgt | `TimeManagementApp` | `claude/timemgt-sync-via-api` | `MongoDbService` replaced by `TaskApiService`; sync moved to `/api/tasks` |
 
-**These branches have never been compiled.** They were written in an
-environment with no .NET SDK. Assume there are build errors and expect to fix
-them. The two most likely are a `const`-context use of `ApiBaseUrl` (it is a
-property now, so it cannot initialise another `const`, appear in an attribute
-argument, or be a `case` label) and a missing `using System;`.
+## Compile status — verified, not assumed
+
+An earlier version of this document said the branches had never been compiled
+and told you to expect build errors. That was wrong: the .NET 8 SDK installs
+fine on Linux and the builds were run.
+
+| Product | Build result |
+|---|---|
+| HERON | `dotnet build ADLMPlanswiftApp.csproj -c Release -p:EnableWindowsTargeting=true` → **succeeded, 0 errors** |
+| TimeMgt | `dotnet build -c Release -p:EnableWindowsTargeting=true` → **succeeded, 0 errors** |
+| MEP, RoadTools, QUIV | Full build impossible off Windows — they reference licensed Autodesk DLLs by absolute path (`C:\Program Files\Autodesk\Revit 2024\RevitAPI.dll`, `$(AutoCADPath)\acmgd.dll`). Every changed file was compiled in isolation instead: **succeeded, 0 errors.** |
+
+Two things that are NOT defects, so don't chase them:
+
+- `ExcelAddinBridge/ExcelAddin.csproj` fails outside Visual Studio — it imports
+  `Microsoft.VisualStudio.Tools.Office.targets` (VSTO). It builds fine in VS on
+  Windows and is untouched by this work.
+- `EnableWindowsTargeting=true` is only needed when building a `net*-windows`
+  target on Linux. On your Windows machine, plain `dotnet build -c Release`
+  is correct — do not add that property to any csproj.
+
+The `const` → property change was the one real risk (a property cannot
+initialise another `const`, appear in an attribute argument, or be a `case`
+label). The isolation build covers exactly that, including the cross-namespace
+case in MEP where `Helpers.AdlmConfig` reads `ADLM.Auth.ApiEndpoint`.
+
+**What is still unverified is runtime, not compilation.** No plugin has been
+launched, signed in, or had its licence checked. That is what your task below
+is for.
 
 ## Your task
 
 Work through the products one at a time, in this order: **MEP, RoadTools,
-TimeMgt, QUIV, HERON.** HERON is last because it is the largest diff and the
-only one currently broken in production, so it benefits from everything learned
-on the others.
+QUIV, HERON, TimeMgt.** The three Autodesk-hosted plugins come first because
+they are the only ones whose full build has never run anywhere.
 
 For each product:
 
 1. `git fetch` and check out the branch above. If the remote is not named
    `origin`, use whatever `git remote -v` reports.
-2. `dotnet build -c Release`. Fix any compile error in the smallest way that
-   preserves intent — do not restructure, do not upgrade packages, do not
-   change frameworks.
+2. `dotnet build -c Release`. The changed files are known to compile; any
+   error you hit is far more likely to be a missing Autodesk reference path
+   than a defect in the change. Fix it in the smallest way that preserves
+   intent — do not restructure, do not upgrade packages, do not change
+   frameworks.
 3. Confirm no live reference to `onrender` survives outside comments:
    `git grep -n onrender -- "*.cs" "*.xaml" "*.json" "*.config"`
 4. Launch the host application and sign in with a real account that holds the
