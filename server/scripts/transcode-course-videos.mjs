@@ -75,43 +75,84 @@ if (!course) {
 // ── status ──────────────────────────────────────────────────────────────────
 if (STATUS) {
   preflight();
-  do {
-    const pending = course.modules.filter(
-      (m) => m.transcodeJobId && m.transcodeStatus !== "COMPLETE",
-    );
-    if (!pending.length) {
-      console.log("No jobs outstanding.");
-      break;
-    }
 
-    let changed = false;
-    for (const module of pending) {
-      try {
-        const state = await getJobState(module.transcodeJobId);
-        const was = module.transcodeStatus;
-        module.transcodeStatus = state.status || was;
-        if (state.status === "COMPLETE") {
-          module.hlsKey = `${outPrefixFor(module.code)}index.m3u8`;
-          module.transcodeError = "";
-        } else if (state.status === "ERROR") {
-          module.transcodeError = state.errorMessage || "unknown";
+  // A watch can run for the better part of an hour. Anything transient in that
+  // window — a dropped Mongo socket, a throttled AWS call — used to escape the
+  // per-module catch and kill the process, which reads as "the transcodes
+  // failed" when the jobs themselves were fine. Nothing here is worth aborting
+  // a long poll over.
+  let interrupted = false;
+  process.on("SIGINT", () => {
+    interrupted = true;
+    console.log("\nStopped watching. The jobs keep running; re-run --status any time.");
+  });
+
+  let lastError = "";
+
+  while (!interrupted) {
+    try {
+      // Re-read each pass rather than holding one document open for an hour: a
+      // submit running elsewhere would otherwise make this save fail on a
+      // version conflict, and the in-memory copy would drift from reality.
+      const fresh = await PaidCourse.findOne({ sku: SKU });
+      if (!fresh) throw new Error(`course ${SKU} disappeared`);
+
+      const pending = (fresh.modules || []).filter(
+        (m) => m.transcodeJobId && m.transcodeStatus !== "COMPLETE",
+      );
+      if (!pending.length) break;
+
+      let changed = false;
+      for (const module of pending) {
+        try {
+          const state = await getJobState(module.transcodeJobId);
+          const was = module.transcodeStatus;
+          module.transcodeStatus = state.status || was;
+          if (state.status === "COMPLETE") {
+            module.hlsKey = `${outPrefixFor(module.code)}index.m3u8`;
+            module.transcodeError = "";
+          } else if (state.status === "ERROR") {
+            module.transcodeError = state.errorMessage || "unknown";
+          }
+          if (module.transcodeStatus !== was) changed = true;
+          console.log(
+            `  ${module.code}  ${module.transcodeStatus}` +
+              (state.percent ? ` ${state.percent}%` : "") +
+              (state.errorMessage ? ` — ${state.errorMessage}` : ""),
+          );
+        } catch (err) {
+          console.error(`  ${module.code} status check failed: ${err.message}`);
         }
-        if (module.transcodeStatus !== was) changed = true;
-        console.log(
-          `  ${module.code}  ${module.transcodeStatus}` +
-            (state.percent ? ` ${state.percent}%` : "") +
-            (state.errorMessage ? ` — ${state.errorMessage}` : ""),
-        );
-      } catch (err) {
-        console.error(`  ${module.code} status check failed: ${err.message}`);
+      }
+      if (changed) await fresh.save();
+      lastError = "";
+    } catch (err) {
+      // Report once and keep polling. Our inability to read or record the
+      // state has no bearing on whether the jobs themselves are progressing.
+      if (err.message !== lastError) {
+        console.error(`  poll failed, will retry: ${err.message}`);
+        lastError = err.message;
       }
     }
-    if (changed) await course.save();
 
-    if (WATCH) await new Promise((r) => setTimeout(r, 30000));
-  } while (WATCH);
+    if (!WATCH) break;
+    await new Promise((r) => setTimeout(r, 30000));
+  }
 
-  process.exit(0);
+  // Report what is actually true at the end, rather than assuming success.
+  const final = await PaidCourse.findOne({ sku: SKU }).lean();
+  const modules = final?.modules || [];
+  const done = modules.filter((m) => m.hlsKey).length;
+  const failed = modules.filter((m) => m.transcodeStatus === "ERROR");
+
+  console.log(`\n${done}/${modules.length} modules have a playable HLS manifest.`);
+  if (failed.length) {
+    console.log(`\n${failed.length} job(s) failed:`);
+    for (const m of failed) console.log(`  ✗ ${m.code}  ${m.transcodeError}`);
+    console.log("\nRe-run with --apply to resubmit them.");
+  }
+
+  process.exit(failed.length ? 1 : 0);
 }
 
 // ── submit ──────────────────────────────────────────────────────────────────

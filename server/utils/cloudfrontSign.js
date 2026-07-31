@@ -13,8 +13,14 @@
 import fs from "node:fs";
 import { getSignedCookies } from "@aws-sdk/cloudfront-signer";
 
+import { courseEnv } from "./awsS3.js";
+
+// COURSE_-prefixed first, same as the S3 and MediaConvert helpers. Reading
+// process.env directly here would have silently ignored every
+// COURSE_AWS_CLOUDFRONT_* value, thrown, and fallen back to the slow presigned
+// master — with nothing in the logs pointing at the prefix.
 function requiredEnv(name) {
-  const value = String(process.env[name] || "").trim();
+  const value = courseEnv(name);
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
@@ -53,7 +59,7 @@ export function signPlaybackCookies({ keyPrefix, ttlSec = 4 * 60 * 60, ip = "" }
   // Pinning to an IP is the strongest anti-sharing measure available here, but
   // it breaks the moment a student moves between wifi and mobile data — so it
   // is opt-in rather than the default.
-  if (ip && String(process.env.AWS_CLOUDFRONT_PIN_IP || "") === "true") {
+  if (ip && courseEnv("AWS_CLOUDFRONT_PIN_IP") === "true") {
     condition.IpAddress = { "AWS:SourceIp": `${ip}/32` };
   }
 
@@ -72,7 +78,7 @@ export function signPlaybackCookies({ keyPrefix, ttlSec = 4 * 60 * 60, ip = "" }
 
 /** Cookie options that let the CDN subdomain read what the API sets. */
 export function playbackCookieOptions(expiresAt) {
-  const parent = String(process.env.COOKIE_DOMAIN || "").trim();
+  const parent = courseEnv("COOKIE_DOMAIN");
   return {
     httpOnly: true,
     secure: true,
