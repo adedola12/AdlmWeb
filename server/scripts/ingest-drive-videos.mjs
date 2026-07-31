@@ -159,8 +159,16 @@ function archiveKey({ courseSku, cohort, moduleCode, moduleTitle }) {
  *                                         newlines — the safest for deploys)
  */
 function loadServiceAccount() {
-  const raw = String(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "").trim();
-  if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY is not set");
+  // Through envValue, not process.env — preflight accepts the COURSE_-prefixed
+  // name, so reading the bare one here let the check pass and the run die on
+  // the first file instead.
+  const raw = envValue("GOOGLE_SERVICE_ACCOUNT_KEY");
+  if (!raw) {
+    throw new Error(
+      "Missing required environment variable: COURSE_GOOGLE_SERVICE_ACCOUNT_KEY " +
+        "(or GOOGLE_SERVICE_ACCOUNT_KEY)",
+    );
+  }
 
   let json;
   if (raw.startsWith("{")) {
@@ -170,7 +178,7 @@ function loadServiceAccount() {
   } else {
     if (!fs.existsSync(raw)) {
       throw new Error(
-        `GOOGLE_SERVICE_ACCOUNT_KEY points at "${raw}", which does not exist. ` +
+        `The service account key points at "${raw}", which does not exist. ` +
           `Give it a path to the JSON key, the JSON itself, or base64 of it.`,
       );
     }
@@ -319,7 +327,7 @@ for (const item of manifest.items) {
 const totalBytes = planned.reduce((sum, i) => sum + Number(i.bytes || 0), 0);
 
 console.log(`course:   ${course.title} (${manifest.courseSku})`);
-console.log(`archive:  s3://${process.env.AWS_VIDEO_ARCHIVE_BUCKET || "<AWS_VIDEO_ARCHIVE_BUCKET unset>"}`);
+console.log(`archive:  s3://${envValue("AWS_VIDEO_ARCHIVE_BUCKET") || "<bucket unset>"}`);
 console.log(`to move:  ${planned.length} recordings, ${gb(totalBytes)}\n`);
 for (const item of planned) {
   console.log(`  ${gb(item.bytes).padStart(8)}  ${item.name}`);
