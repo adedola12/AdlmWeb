@@ -6,7 +6,7 @@ category: Web Platform
 accent: violet
 icon: trending
 status: live
-order: 6
+order: 7
 compatibility: Any modern browser
 summary: The web home for every ADLM product — projects and budgets from your plugins, valuations and reports, subscriptions, invoices and your AI assistant.
 ---

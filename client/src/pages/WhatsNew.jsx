@@ -21,6 +21,38 @@ import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";
 import { GUIDES } from "../data/guides.js";
 
+// Short seasonal note shown above the product cards.
+//
+// It carries an explicit `until` date and disappears on its own once that
+// passes, because a hardcoded "happy new month" still sitting there in November
+// reads worse than no greeting at all. To change it, edit `message` and push
+// `until` to the first of the following month; to pull it early, set
+// `message` to "".
+const SEASONAL_NOTE = {
+  message:
+    "Happy new month from all of us at ADLM Studio. August opens with ADLM Time Pro 1.1.0 — dark mode, a rebuilt side menu, and Microsoft Project exports that open first time.",
+  until: "2026-09-01",
+};
+
+function SeasonalNote() {
+  const note = SEASONAL_NOTE;
+  if (!note?.message) return null;
+  if (new Date() >= new Date(`${note.until}T00:00:00`)) return null;
+
+  return (
+    <Reveal className="mt-6">
+      <div className="flex items-start gap-3 rounded-adlm-xl border border-adlm-orange/25 bg-adlm-orange/5 px-5 py-4 dark:border-adlm-orange/25 dark:bg-adlm-orange/10">
+        <span className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-adlm-orange/15 text-adlm-orange">
+          <FiZap className="h-4 w-4" />
+        </span>
+        <p className="text-sm leading-relaxed text-slate-700 dark:text-adlm-dark-muted">
+          {note.message}
+        </p>
+      </div>
+    </Reveal>
+  );
+}
+
 function ProductCard({ product, index }) {
   const Icon = iconOf(product.icon);
   const accent = accentOf(product.accent);
@@ -151,6 +183,9 @@ export default function WhatsNew() {
           </div>
         </div>
       </header>
+
+      {/* Seasonal note — self-expiring, see SEASONAL_NOTE */}
+      <SeasonalNote />
 
       {/* Product cards */}
       <div className="mt-10 grid gap-5 pb-4 sm:grid-cols-2 lg:grid-cols-3">

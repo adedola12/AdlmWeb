@@ -6,7 +6,7 @@ category: Desktop App
 accent: blue
 icon: book
 status: live
-order: 7
+order: 8
 compatibility: Windows 10 & 11
 summary: One signed-in desktop app that installs your ADLM products, keeps them updated, shows what your subscription covers, and gets you help when something goes wrong.
 ---
