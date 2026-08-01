@@ -1,11 +1,21 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
+import { requireEntitlement } from "../middleware/requireEntitlement.js";
 import { LaborTask } from "../models/TimeMgtTask.js";
+
+// ADLM Time Pro's licence key. Historical value only — this app shipped as the
+// free "ADLM Time Manager" under it and the paid rollout kept it so existing
+// installs and device bindings carry over. Time Pro is a separate, independent
+// product from ADLM QS Takeoff, which has not launched.
+const TIME_PRO_ENTITLEMENT = "qs-takeoff";
 
 const router = Router();
 
-// All task routes require a valid ADLM JWT
-router.use(requireAuth);
+// The time log is a paid Time Pro feature. requireAuth alone only proved the
+// caller had *an* ADLM account, so any free signup could read and write
+// timesheets through this API — on the website and from the desktop app.
+// requireEntitlement adds the subscription check (403 when absent/expired).
+router.use(requireAuth, requireEntitlement(TIME_PRO_ENTITLEMENT));
 
 function ownerKey(req) {
   return String(req.user?.id || req.user?._id || req.user?.sub || "");

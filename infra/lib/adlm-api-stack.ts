@@ -82,6 +82,36 @@ export class AdlmApiStack extends Stack {
     const cfg = props.config;
     const zone = props.zone;
 
+    // Guard: refuse to synthesize a domain-less API by accident.
+    //
+    // Without this, a missing certificateArn silently produced a distribution
+    // with no alias and CloudFront's own certificate, so api.adlmstudio.net
+    // stopped serving TLS and every desktop client failed with "The SSL
+    // connection could not be established". The old behaviour only printed a
+    // warning, which scrolls past in a normal deploy.
+    //
+    // Dropping the live domain is now opt-in and explicit:
+    //     cdk deploy AdlmApi -c allowNoCustomDomain=true
+    const allowNoCustomDomain =
+      String(this.node.tryGetContext("allowNoCustomDomain") ?? "") === "true";
+
+    if (!props.certificateArn && !allowNoCustomDomain) {
+      throw new Error(
+        [
+          `Refusing to deploy ${cfg.apiHostname} without a certificate.`,
+          "",
+          "This would remove the custom domain from the CloudFront distribution",
+          "and break TLS for every client (desktop apps, Installer Hub, website).",
+          "",
+          "Set certificateArn in infra/config.ts (it is pinned there by default),",
+          "or pass -c certificateArn=arn:aws:acm:us-east-1:...",
+          "",
+          "If you genuinely want a CloudFront-domain-only deploy, opt in with:",
+          "  -c allowNoCustomDomain=true",
+        ].join("\n"),
+      );
+    }
+
     const certificate = props.certificateArn
       ? acm.Certificate.fromCertificateArn(this, "ApiCert", props.certificateArn)
       : undefined;

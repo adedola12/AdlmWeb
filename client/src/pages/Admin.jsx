@@ -634,6 +634,9 @@ export default function Admin({ section = null }) {
   // /admin/usage/summary (30-day window built from plugin heartbeats).
   const [usage, setUsage] = React.useState({});
   const [purchases, setPurchases] = React.useState([]);
+  // Bulk approve/reject on the pending tab: id → true for the ticked rows.
+  const [purchaseSel, setPurchaseSel] = React.useState({});
+  const [bulkBusy, setBulkBusy] = React.useState(false);
   const [q, setQ] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState("");
@@ -1616,21 +1619,34 @@ export default function Admin({ section = null }) {
     }
   }
 
+  // Raw calls — no refresh, no status message. The single-row handlers and the
+  // bulk runner both go through these so one purchase is decided exactly the
+  // same way whether it was clicked on its own or as part of a batch.
+  function approvePurchaseReq(id, months) {
+    const bodyObj =
+      typeof months === "number" && Number.isFinite(months) && months > 0
+        ? { months }
+        : {};
+
+    return apiAuthed(`/admin/purchases/${id}/approve`, {
+      token: accessToken,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyObj),
+    });
+  }
+
+  function rejectPurchaseReq(id) {
+    return apiAuthed(`/admin/purchases/${id}/reject`, {
+      token: accessToken,
+      method: "POST",
+    });
+  }
+
   async function approvePurchase(id, months) {
     setMsg("");
     try {
-      const bodyObj =
-        typeof months === "number" && Number.isFinite(months) && months > 0
-          ? { months }
-          : {};
-
-      const res = await apiAuthed(`/admin/purchases/${id}/approve`, {
-        token: accessToken,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyObj),
-      });
-
+      const res = await approvePurchaseReq(id, months);
       await load();
       setMsg(res?.message || "Purchase approved");
     } catch (e) {
@@ -1641,14 +1657,128 @@ export default function Admin({ section = null }) {
   async function rejectPurchase(id) {
     setMsg("");
     try {
-      await apiAuthed(`/admin/purchases/${id}/reject`, {
-        token: accessToken,
-        method: "POST",
-      });
+      await rejectPurchaseReq(id);
       await load();
       setMsg("Purchase rejected");
     } catch (e) {
       setMsg(e?.message || "Failed to reject purchase");
+    }
+  }
+
+  // ── bulk approve / reject ──────────────────────────────────────────────
+  const selectedPurchaseIds = React.useMemo(
+    () => Object.keys(purchaseSel || {}).filter((id) => purchaseSel[id]),
+    [purchaseSel],
+  );
+
+  // Drop ticks for rows that have left the pending list (decided here, or by
+  // another admin) so the count never claims more than what is on screen.
+  React.useEffect(() => {
+    setPurchaseSel((sel) => {
+      const ids = new Set(purchases.map((p) => String(p._id)));
+      const next = {};
+      let changed = false;
+      Object.keys(sel || {}).forEach((id) => {
+        if (sel[id] && ids.has(id)) next[id] = true;
+        else changed = true;
+      });
+      return changed ? next : sel;
+    });
+  }, [purchases]);
+
+  function togglePurchaseSel(id) {
+    const key = String(id);
+    setPurchaseSel((s) => {
+      const next = { ...s };
+      if (next[key]) delete next[key];
+      else next[key] = true;
+      return next;
+    });
+  }
+
+  function selectAllPending() {
+    const next = {};
+    purchases.forEach((p) => {
+      next[String(p._id)] = true;
+    });
+    setPurchaseSel(next);
+  }
+
+  function clearPurchaseSel() {
+    setPurchaseSel({});
+  }
+
+  // The month override lives on an uncontrolled <select id={`m-${id}`}> per row,
+  // so bulk approve reads each row's own choice — same value the single-row
+  // Approve button would have sent. Cart purchases carry no override.
+  function monthsForRow(p) {
+    if (Array.isArray(p.lines) && p.lines.length > 0) return undefined;
+    const el = document.getElementById(`m-${p._id}`);
+    const n = Number(el?.value);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+
+  async function bulkDecidePurchases(action) {
+    const ids = selectedPurchaseIds;
+    if (!ids.length || bulkBusy) return;
+
+    const verb = action === "approve" ? "Approve" : "Reject";
+    const ok = window.confirm(
+      `${verb} ${ids.length} pending purchase${ids.length === 1 ? "" : "s"}?` +
+        (action === "approve"
+          ? "\n\nEach one grants entitlements and emails the buyer."
+          : ""),
+    );
+    if (!ok) return;
+
+    // Snapshot the rows now — `purchases` is replaced by the load() at the end,
+    // and the month <select>s unmount with it.
+    const rows = ids
+      .map((id) => purchases.find((p) => String(p._id) === id))
+      .filter(Boolean)
+      .map((p) => ({ id: String(p._id), email: p.email, months: monthsForRow(p) }));
+
+    setBulkBusy(true);
+    setMsg(`${verb}ing 0/${rows.length}…`);
+
+    const failures = [];
+    let done = 0;
+
+    // Small pool rather than all-at-once: approve sends an email inside the
+    // request, so a wide fan-out just hammers the mail path.
+    const POOL = 3;
+    let cursor = 0;
+
+    async function worker() {
+      while (cursor < rows.length) {
+        const row = rows[cursor++];
+        try {
+          if (action === "approve") await approvePurchaseReq(row.id, row.months);
+          else await rejectPurchaseReq(row.id);
+        } catch (e) {
+          failures.push(`${row.email || row.id}: ${e?.message || "failed"}`);
+        }
+        done += 1;
+        setMsg(`${verb}ing ${done}/${rows.length}…`);
+      }
+    }
+
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(POOL, rows.length) }, () => worker()),
+      );
+    } finally {
+      setBulkBusy(false);
+      clearPurchaseSel();
+      await load();
+
+      const okCount = rows.length - failures.length;
+      const past = action === "approve" ? "approved" : "rejected";
+      setMsg(
+        failures.length
+          ? `${okCount}/${rows.length} ${past}. Failed: ${failures.join(" · ")}`
+          : `${okCount} purchase${okCount === 1 ? "" : "s"} ${past}`,
+      );
     }
   }
 
@@ -2839,8 +2969,49 @@ export default function Admin({ section = null }) {
             <div className="text-sm text-slate-600">No pending purchases.</div>
           ) : (
             <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2 border rounded p-2 bg-slate-50">
+                <span className="text-sm text-slate-600">
+                  {selectedPurchaseIds.length} selected
+                </span>
+
+                <button
+                  className="btn btn-ghost text-sm"
+                  onClick={selectAllPending}
+                  disabled={bulkBusy}
+                >
+                  Select all ({purchases.length})
+                </button>
+
+                <button
+                  className="btn btn-ghost text-sm"
+                  onClick={clearPurchaseSel}
+                  disabled={bulkBusy || !selectedPurchaseIds.length}
+                >
+                  Clear
+                </button>
+
+                <div className="ml-auto flex gap-2">
+                  <button
+                    className="btn"
+                    onClick={() => bulkDecidePurchases("approve")}
+                    disabled={bulkBusy || !selectedPurchaseIds.length}
+                  >
+                    Approve selected
+                  </button>
+
+                  <button
+                    className="btn"
+                    onClick={() => bulkDecidePurchases("reject")}
+                    disabled={bulkBusy || !selectedPurchaseIds.length}
+                  >
+                    Reject selected
+                  </button>
+                </div>
+              </div>
+
               {purchases.map((p) => {
                 const isCart = Array.isArray(p.lines) && p.lines.length > 0;
+                const selected = !!purchaseSel[String(p._id)];
 
                 const seatsTotal = seatsForPurchaseBadge(p);
                 const lt = inferLicenseType(
@@ -2852,36 +3023,48 @@ export default function Admin({ section = null }) {
                 return (
                   <div
                     key={p._id}
-                    className="border rounded p-3 flex flex-col gap-3"
+                    className={`border rounded p-3 flex flex-col gap-3 ${
+                      selected ? "border-slate-900 bg-slate-50" : ""
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="text-sm min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <b className="truncate">{p.email}</b>
-                          <OrganizationBadge
-                            licenseType={lt}
-                            organization={p.organization}
-                            organizationName={p?.organization?.name}
-                            seats={seatsTotal}
-                          />
-                        </div>
+                      <div className="text-sm min-w-0 flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          className="mt-1 shrink-0"
+                          checked={selected}
+                          disabled={bulkBusy}
+                          onChange={() => togglePurchaseSel(p._id)}
+                          aria-label={`Select purchase from ${p.email}`}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <b className="truncate">{p.email}</b>
+                            <OrganizationBadge
+                              licenseType={lt}
+                              organization={p.organization}
+                              organizationName={p?.organization?.name}
+                              seats={seatsTotal}
+                            />
+                          </div>
 
-                        <div className="text-slate-600 mt-1">
-                          {isCart ? (
-                            <>Submitted a cart</>
-                          ) : (
-                            <>
-                              Requested <b>{p.productKey}</b>
-                            </>
-                          )}
-                        </div>
+                          <div className="text-slate-600 mt-1">
+                            {isCart ? (
+                              <>Submitted a cart</>
+                            ) : (
+                              <>
+                                Requested <b>{p.productKey}</b>
+                              </>
+                            )}
+                          </div>
 
-                        <div className="text-slate-600">
-                          Requested:{" "}
-                          {p.requestedMonths
-                            ? `${p.requestedMonths} mo · `
-                            : ""}
-                          {dayjs(p.createdAt).format("YYYY-MM-DD HH:mm")}
+                          <div className="text-slate-600">
+                            Requested:{" "}
+                            {p.requestedMonths
+                              ? `${p.requestedMonths} mo · `
+                              : ""}
+                            {dayjs(p.createdAt).format("YYYY-MM-DD HH:mm")}
+                          </div>
                         </div>
                       </div>
 
@@ -2892,6 +3075,7 @@ export default function Admin({ section = null }) {
                               id={`m-${p._id}`}
                               defaultValue={p.requestedMonths || 1}
                               className="input max-w-[140px]"
+                              disabled={bulkBusy}
                             >
                               {MONTH_CHOICES.map((m) => (
                                 <option key={m.value} value={m.value}>
@@ -2902,6 +3086,7 @@ export default function Admin({ section = null }) {
 
                             <button
                               className="btn"
+                              disabled={bulkBusy}
                               onClick={() =>
                                 approvePurchase(
                                   p._id,
@@ -2917,6 +3102,7 @@ export default function Admin({ section = null }) {
                         ) : (
                           <button
                             className="btn"
+                            disabled={bulkBusy}
                             onClick={() => approvePurchase(p._id)}
                           >
                             Approve cart
@@ -2925,6 +3111,7 @@ export default function Admin({ section = null }) {
 
                         <button
                           className="btn"
+                          disabled={bulkBusy}
                           onClick={() => rejectPurchase(p._id)}
                         >
                           Reject
