@@ -6,7 +6,11 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import cloudinary from "../cloudinary.js"; // configured v2 client
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { uploadAsset, deleteAsset } from "../utils/cloudinary.js";
-import { uploadBufferToR2, isR2Configured } from "../utils/r2Upload.js";
+import {
+  uploadBufferToR2,
+  isR2Configured,
+  createPresignedPutUrl,
+} from "../utils/r2Upload.js";
 
 const router = express.Router();
 
@@ -261,6 +265,8 @@ router.post("/upload-video-r2", uploadLarge.single("file"), async (req, res) => 
  *
  * Used by Site Settings → Installer Hub section to replace the manual paste.
  */
+const INSTALLER_EXT_RE = /\.(exe|msi|zip|7z|appx|appxbundle|msix|msixbundle)$/;
+
 const uploadInstaller = multer({
   storage: multer.memoryStorage(),
   // 500MB cap — installers are usually much smaller, but headroom for combined
@@ -268,10 +274,61 @@ const uploadInstaller = multer({
   limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
     const name = String(file.originalname || "").toLowerCase();
-    const ok = /\.(exe|msi|zip|7z|appx|appxbundle|msix|msixbundle)$/.test(name);
-    if (ok) return cb(null, true);
+    if (INSTALLER_EXT_RE.test(name)) return cb(null, true);
     cb(new Error("Only installer files (.exe, .msi, .zip, .7z, .appx, .msix) are allowed"));
   },
+});
+
+/**
+ * POST /admin/media/installer-upload-url { filename, contentType?, size? }
+ *
+ * Returns a short-lived presigned PUT so the browser uploads the installer
+ * straight to R2. Preferred over /upload-installer for anything non-trivial:
+ * that route sends the whole file through the API, and the API runs on Lambda
+ * behind API Gateway, which caps request bodies at 10MB. A 50MB installer
+ * either fails outright there or crawls while Lambda buffers it in memory and
+ * re-uploads. Here only this small JSON round-trip touches the API.
+ *
+ * /upload-installer is deliberately left in place — it still serves small
+ * files and the Cloudinary path, and removing it would break older clients.
+ */
+router.post("/installer-upload-url", async (req, res) => {
+  try {
+    const original = String(req.body?.filename || "").trim();
+    if (!original) return res.status(400).json({ error: "filename is required" });
+
+    if (!INSTALLER_EXT_RE.test(original.toLowerCase())) {
+      return res.status(400).json({
+        error: "Only installer files (.exe, .msi, .zip, .7z, .appx, .msix) are allowed",
+      });
+    }
+
+    if (!isR2Configured()) {
+      return res.status(503).json({
+        error: "Cloudflare R2 is not configured, so a direct upload cannot be signed.",
+      });
+    }
+
+    const safeName = original.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const contentType =
+      String(req.body?.contentType || "").trim() || "application/octet-stream";
+
+    const signed = await createPresignedPutUrl({
+      key: `adlm/installer-hub/${Date.now()}-${safeName}`,
+      contentType,
+    });
+
+    return res.json({
+      ok: true,
+      storageProvider: "r2",
+      originalName: original,
+      ...signed,
+    });
+  } catch (e) {
+    return res
+      .status(400)
+      .json({ error: e.message || "Could not create an upload URL" });
+  }
 });
 
 router.post("/upload-installer", uploadInstaller.single("file"), async (req, res) => {

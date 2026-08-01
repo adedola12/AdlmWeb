@@ -23,6 +23,70 @@ const PTRAININGS_ADMIN_ROUTE = "/admin/ptrainings";
 // the standard entitlement endpoints.
 const BOQ_IMPORT_PRODUCT_KEY = "quiv-boq-import";
 
+// Above this we skip the integrity hash rather than pull the whole file into a
+// single ArrayBuffer — SubtleCrypto has no streaming digest, and a browser tab
+// OOMing mid-release is worse than a missing checksum.
+const SHA256_MAX_BYTES = 256 * 1024 * 1024;
+
+/**
+ * SHA-256 of a File, hex encoded. Returns "" when the file is too large to
+ * hash safely or the browser has no SubtleCrypto (non-HTTPS origins).
+ *
+ * Needed because presigned uploads go browser → R2 directly, so the server
+ * never holds the bytes and can no longer compute this itself.
+ */
+async function sha256HexOfFile(file) {
+  try {
+    if (!file || file.size > SHA256_MAX_BYTES) return "";
+    if (!window.crypto?.subtle) return "";
+    const buf = await file.arrayBuffer();
+    const digest = await window.crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * PUTs a File to a presigned URL, reporting 0–100 progress.
+ *
+ * XHR rather than fetch() because fetch still has no upload progress event,
+ * and a multi-minute upload with no feedback reads as a hang.
+ */
+function putFileWithProgress(url, file, contentType, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url, true);
+    // Must match the Content-Type the URL was signed with, or R2 returns 403.
+    xhr.setRequestHeader("Content-Type", contentType);
+
+    xhr.upload.onprogress = (evt) => {
+      if (!evt.lengthComputable || typeof onProgress !== "function") return;
+      onProgress(Math.round((evt.loaded / evt.total) * 100));
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve();
+      reject(
+        new Error(
+          `Upload failed (HTTP ${xhr.status}). If this is 403, check the R2 bucket's CORS rules allow PUT from this origin.`,
+        ),
+      );
+    };
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          "Upload failed — the browser could not reach R2. This is usually a missing CORS rule on the bucket.",
+        ),
+      );
+    xhr.onabort = () => reject(new Error("Upload cancelled"));
+
+    xhr.send(file);
+  });
+}
+
 // "0803…" → "+234803…" (numbers are stored the way users typed them; Nigerian
 // national format is the norm) so tel:/wa.me links dial correctly. Display
 // keeps the raw text.
@@ -1187,21 +1251,31 @@ export default function Admin({ section = null }) {
 
     (async () => {
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await apiAuthed("/admin/media/upload-installer", {
+        const contentType = file.type || "application/octet-stream";
+
+        // 1) Only this small JSON round-trip goes through the API. The API runs
+        //    on Lambda behind API Gateway, which caps request bodies at 10MB —
+        //    posting a 50MB installer through it is what made this slow.
+        const signed = await apiAuthed("/admin/media/installer-upload-url", {
           token: accessToken,
           method: "POST",
-          body: fd,
+          body: { filename: file.name, contentType, size: file.size },
         });
-        if (res?.secure_url) {
-          setIhUrlDraft(res.secure_url);
-          setIhMsg(
-            `Installer uploaded (${res.storageProvider || "cloud"}, SHA-256 ${(res.sha256 || "").slice(0, 12)}…). Click Save to apply.`,
-          );
-        } else {
-          setIhMsg("Upload failed — no URL returned");
-        }
+        if (!signed?.uploadUrl) throw new Error("No upload URL returned");
+
+        // 2) The server never sees the bytes now, so it can't hash them for us.
+        const sha256 = await sha256HexOfFile(file);
+
+        // 3) Straight to R2 at the browser's own line speed. Content-Type must
+        //    match what was signed or R2 answers 403.
+        await putFileWithProgress(signed.uploadUrl, file, contentType, (pct) =>
+          setIhUploadProg(Math.max(1, pct)),
+        );
+
+        setIhUrlDraft(signed.publicUrl);
+        setIhMsg(
+          `Installer uploaded (r2${sha256 ? `, SHA-256 ${sha256.slice(0, 12)}…` : ""}). Click Save to apply.`,
+        );
       } catch (err) {
         setIhMsg(err?.message || "Installer upload failed");
       } finally {
