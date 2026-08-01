@@ -3,3 +3,5 @@ cdk.out/
 *.js
 *.d.ts
 !bin/*.ts
+
+cdk.out*/
