@@ -241,7 +241,27 @@ export const config: AdlmConfig = {
 
   // Emergency restore: touch as little DNS as possible. See the doc above.
   useExternalDns: true,
-  certificateArn: undefined, // set here, or pass -c certificateArn=...
+
+  // PINNED — do not set back to undefined.
+  //
+  // The stack attaches the custom domain only when a certificate resolves:
+  //     ...(certificate ? { domainNames: [cfg.apiHostname], certificate } : {})
+  // so with this undefined, a plain `cdk deploy AdlmApi` silently drops
+  // api.adlmstudio.net and its certificate, CloudFront falls back to its own
+  // *.cloudfront.net cert, and every client fails the TLS handshake
+  // ("The SSL connection could not be established"). That is a full outage of
+  // the desktop apps and the Hub, and it has happened.
+  //
+  // Pinning it here means the safe deploy is the default one; -c certificateArn=
+  // still overrides for a different environment.
+  //
+  // us-east-1 (CloudFront accepts no other region), SAN api.adlmstudio.net,
+  // ISSUED, expires 2027-02-13. NOTE: a second, PENDING_VALIDATION certificate
+  // exists for the same domain — do not use it, and prefer this ARN over any
+  // `aws acm list-certificates ... --output text` lookup, which returns BOTH
+  // ARNs whitespace-separated and produces an invalid value.
+  certificateArn:
+    "arn:aws:acm:us-east-1:065634457992:certificate/b8b2a821-6e72-4911-8a12-ba0bdbffcf76",
 
   functionUrlAuth: "NONE",
 };

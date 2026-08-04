@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 function requiredEnv(name) {
   const value = String(process.env[name] || "").trim();
@@ -137,6 +138,54 @@ export async function listFromR2(prefix = "adlm/installers") {
   } while (continuationToken);
 
   return items;
+}
+
+/**
+ * Issues a short-lived presigned PUT so the browser can upload straight to R2.
+ *
+ * uploadBufferToR2 requires the whole file to travel through the API first,
+ * which for installers means a ~50MB body crossing API Gateway (hard 10MB
+ * request cap) and then being buffered in Lambda memory before a second
+ * upload to R2. Presigning moves the bytes out of that path entirely: the API
+ * only signs a URL, and the browser PUTs to R2 directly at its own line speed.
+ *
+ * The signature covers Content-Type, so the caller MUST send exactly the
+ * contentType passed here on the PUT or R2 rejects it with 403.
+ */
+export async function createPresignedPutUrl({
+  key,
+  contentType = "application/octet-stream",
+  expiresIn = 900,
+} = {}) {
+  const objectKey = String(key || "").trim();
+  if (!objectKey) {
+    throw new Error("An object key is required for a presigned upload.");
+  }
+  if (!isR2Configured()) {
+    throw new Error("R2 storage is not configured.");
+  }
+
+  const bucket = requiredEnv("R2_BUCKET");
+  const client = createClient();
+
+  const uploadUrl = await getSignedUrl(
+    client,
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: objectKey,
+      ContentType: contentType,
+    }),
+    { expiresIn },
+  );
+
+  const publicBaseUrl = normalizePublicBaseUrl();
+  return {
+    uploadUrl,
+    publicUrl: `${publicBaseUrl}/${encodeObjectKey(objectKey)}`,
+    key: objectKey,
+    contentType,
+    expiresIn,
+  };
 }
 
 export async function uploadBufferToR2(

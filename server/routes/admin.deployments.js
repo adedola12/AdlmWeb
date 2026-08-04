@@ -3,7 +3,13 @@ import multer from "multer";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
-import { isR2Configured, uploadBufferToR2, deleteFromR2, listFromR2 } from "../utils/r2Upload.js";
+import {
+  isR2Configured,
+  uploadBufferToR2,
+  deleteFromR2,
+  listFromR2,
+  createPresignedPutUrl,
+} from "../utils/r2Upload.js";
 import { deleteAsset } from "../utils/cloudinary.js";
 import cloudinary from "../utils/cloudinaryConfig.js";
 
@@ -56,7 +62,14 @@ function getUploadFolder(req) {
 }
 
 function buildUploadNames(req) {
-  const originalName = getOriginalName(req.file);
+  return buildUploadNamesFor(req, getOriginalName(req.file));
+}
+
+// Same naming rules, but driven by an explicit file name so the presign route
+// (which has no req.file) produces byte-identical object keys to the proxied
+// upload route. Two conventions would mean two places to keep in step.
+function buildUploadNamesFor(req, rawOriginalName) {
+  const originalName = String(rawOriginalName || "package.bin").trim() || "package.bin";
   const folder = getUploadFolder(req);
   const fallbackBase = `package-${Date.now()}`;
   const requestedId = req.body?.publicId || originalName || fallbackBase;
@@ -184,6 +197,57 @@ function normalizeDeployment(body = {}, productKeyOverride = "") {
 
   return result;
 }
+
+/**
+ * Hands back a presigned PUT so the client uploads package bytes straight to
+ * R2, then posts the resulting URL to the manifest endpoint.
+ *
+ * /upload-package proxies the bytes through this process, which cannot work on
+ * Lambda for anything over ~4.4 MB (6 MiB invocation payload cap, inflated by
+ * base64 encoding of the body). Installer ZIPs are never that small. Use this
+ * route instead; /upload-package is kept for small files and older clients.
+ */
+router.post(
+  "/presign-package",
+  asyncHandler(async (req, res) => {
+    const rawName = String(req.body?.fileName || "").trim();
+    if (!rawName) {
+      return res.status(400).json({ error: "fileName is required" });
+    }
+
+    if (!isR2Configured()) {
+      return res.status(503).json({
+        error:
+          "Cloudflare R2 is not configured on the server. Add R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, and R2_PUBLIC_BASE_URL.",
+      });
+    }
+
+    const { folder, baseName, fileName, originalName, packageKind } =
+      buildUploadNamesFor(req, rawName);
+
+    const objectKey = `${folder.replace(/^\/+|\/+$/g, "")}/${baseName}/${fileName}`;
+    const contentType =
+      String(req.body?.contentType || "").trim() || "application/octet-stream";
+
+    const presigned = await createPresignedPutUrl({ key: objectKey, contentType });
+
+    // createPresignedPutUrl signs only ContentType, so that is the one header
+    // the client must replay verbatim — anything else breaks the signature.
+    return res.json({
+      ok: true,
+      uploadUrl: presigned.uploadUrl,
+      method: "PUT",
+      headers: { "Content-Type": presigned.contentType },
+      objectKey: presigned.key,
+      packageUri: presigned.publicUrl,
+      publicId: presigned.key,
+      originalName,
+      packageKind,
+      storageProvider: "r2",
+      expiresIn: presigned.expiresIn,
+    });
+  }),
+);
 
 router.post(
   "/upload-package",

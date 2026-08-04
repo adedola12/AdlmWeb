@@ -281,6 +281,11 @@ function getLicenseJwtSecret() {
   return null;
 }
 
+// "No expiry" for the break-glass God account. Expressed as a far-future date
+// because both the licence token and the desktop entitlement check require a
+// concrete value; an absent one reads as "not entitled", not "forever".
+const GOD_NEVER_EXPIRES = new Date("2099-12-31T23:59:59.000Z");
+
 function offlineLicenseExpiryFor(entitlement) {
   const normalized = normalizeExpiryMaybe(entitlement?.expiresAt);
   if (normalized) return normalized;
@@ -649,10 +654,33 @@ router.post("/login", async (req, res) => {
         });
       }
 
-      const entitlement = (user.entitlements || []).find(
+      // The break-glass God account signs in to ANY product on ANY machine so
+      // support can reproduce customer issues. requireEntitlement already
+      // honours this (isGodUser -> next()), but plugin login did not: it went
+      // straight to the entitlements array and 403'd. That locked God out of
+      // every product it held no entitlement row for — which is every product
+      // it was never explicitly granted, Time Pro included.
+      const isGod = isGodUser(user);
+
+      let entitlement = (user.entitlements || []).find(
         (item) =>
           String(item?.productKey || "").toLowerCase() === chosenProductKey,
       );
+
+      if (!entitlement && isGod) {
+        // In-memory only — deliberately NOT pushed onto user.entitlements, so
+        // signing in never silently grants the account a real subscription.
+        // God access does not expire, so the licence is issued against a
+        // far-future date rather than offlineLicenseExpiryFor's 15-day default.
+        // Revoke by clearing isGod or removing the email from
+        // GOD_ACCOUNT_EMAILS — both take effect on the next request.
+        entitlement = {
+          productKey: chosenProductKey,
+          status: "active",
+          devices: [],
+          expiresAt: GOD_NEVER_EXPIRES,
+        };
+      }
 
       if (!entitlement) {
         return res.status(403).json({
@@ -661,24 +689,28 @@ router.post("/login", async (req, res) => {
         });
       }
 
-      normalizeLegacyEnt(entitlement);
+      // God bypasses the status/expiry gates too: a support account must still
+      // get in when the customer's own subscription is what has lapsed.
+      if (!isGod) {
+        normalizeLegacyEnt(entitlement);
 
-      const status = String(entitlement.status || "inactive").toLowerCase();
-      if (status !== "active") {
-        return res.status(403).json({
-          error: "Entitlement is not active for this product.",
-          code: "ENTITLEMENT_INACTIVE",
-        });
-      }
+        const status = String(entitlement.status || "inactive").toLowerCase();
+        if (status !== "active") {
+          return res.status(403).json({
+            error: "Entitlement is not active for this product.",
+            code: "ENTITLEMENT_INACTIVE",
+          });
+        }
 
-      const entitlementExpiry = normalizeExpiryMaybe(entitlement.expiresAt);
-      if (entitlementExpiry && entitlementExpiry.getTime() < Date.now()) {
-        entitlement.status = "expired";
-        changed = true;
-        return res.status(403).json({
-          error: "This subscription has expired.",
-          code: "ENTITLEMENT_EXPIRED",
-        });
+        const entitlementExpiry = normalizeExpiryMaybe(entitlement.expiresAt);
+        if (entitlementExpiry && entitlementExpiry.getTime() < Date.now()) {
+          entitlement.status = "expired";
+          changed = true;
+          return res.status(403).json({
+            error: "This subscription has expired.",
+            code: "ENTITLEMENT_EXPIRED",
+          });
+        }
       }
 
       // Read fingerprint version from header (defaults to 1 for legacy clients).
@@ -690,7 +722,9 @@ router.post("/login", async (req, res) => {
       // recorded as a device) so support can activate on customer machines
       // without consuming seats or tripping single-device licenses.
       const isAdminUser = String(user.role || "").toLowerCase() === "admin";
-      if (!isAdminUser) {
+      // God gets the same pass: its whole purpose is activating on a customer's
+      // machine, and a synthesized entitlement has no device list to bind to.
+      if (!isAdminUser && !isGod) {
         const binding = enforceDeviceBinding(
           entitlement,
           chosenFingerprint,
@@ -1153,7 +1187,34 @@ router.post("/step-up/verify", authLimiter, requireAuth, async (req, res) => {
 // already typed it in), lastName, and username. Combined with the
 // auth-tier rate limiter already wrapped around /auth/*, this makes bulk
 // harvesting impractical while keeping the Time Management UX working.
+// RETIRED — ADLM Time Pro v1.0.1 (2026-08).
+//
+// This endpoint authenticated nobody. It took an identifier with NO password
+// and returned a 90-day JWT signed with JWT_ACCESS_SECRET that requireAuth
+// accepted transparently, so anyone who could name a registered email had a
+// three-month session for the asking.
+//
+// It was the sole sign-in path for the free "ADLM Time Manager" builds. Time
+// Pro is now a paid product: v1.0.1 signs in with a password via /auth/login
+// and proves an active subscription, and reads its profile from /me/profile.
+// Nothing on the website ever called this route.
+//
+// Returning 410 therefore does two things at once: it closes the passwordless
+// token hole, and it stops every pre-1.0.1 build from signing in at all.
 router.post("/app/lookup", async (req, res) => {
+  return res.status(410).json({
+    error:
+      "This version of ADLM Time Pro is no longer supported. " +
+      "Please update to the latest version and sign in with your ADLM password. " +
+      "Time Pro now requires an active subscription.",
+    code: "CLIENT_UPDATE_REQUIRED",
+    upgradeUrl: "https://www.adlmstudio.net/product/qs-takeoff",
+  });
+});
+
+// Superseded by the 410 handler above; kept only for reference during rollout.
+// eslint-disable-next-line no-unused-vars
+const _retiredAppLookup = async (req, res) => {
   try {
     await ensureDb();
     const { identifier } = req.body || {};
@@ -1191,6 +1252,6 @@ router.post("/app/lookup", async (req, res) => {
     console.error("[/auth/app/lookup] error:", err);
     res.status(500).json({ error: "Lookup failed" });
   }
-});
+};
 
 export default router;

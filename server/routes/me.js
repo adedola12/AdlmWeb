@@ -15,8 +15,13 @@ import { TakeoffProject } from "../models/TakeoffProject.js";
 import { ActivityLog } from "../models/ActivityLog.js";
 import { sendMail } from "../util/mailer.js";
 import { resolveUserGuideUrl } from "../util/userGuide.js";
+import { isGodUser } from "../util/godAccount.js";
 
 const router = express.Router();
+
+// "No expiry" for the break-glass God account, expressed as a date because the
+// desktop clients require one. Far enough out to be perpetual in practice.
+const GOD_NEVER_EXPIRES = new Date("2099-12-31T23:59:59.000Z");
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -253,6 +258,39 @@ router.get(
       status: e.status,
       expiresAt: normalizeExpiry(e.expiresAt),
     }));
+
+    // Break-glass God account: the desktop apps re-check entitlement client-side
+    // against this list (AuthClient.EnsureEntitledAsync), so returning only real
+    // rows locked God out of every product it was never explicitly granted —
+    // even though /auth/login and requireEntitlement both let it through.
+    //
+    // Synthesized here only, never written to the account.
+    //
+    // God access does not expire. It still carries a date because the expiry
+    // field is not optional in practice: AuthClient.EnsureEntitledAsync treats
+    // a missing or unparseable expiresAt as "not entitled", so an absent value
+    // would lock God out rather than grant it forever. GOD_NEVER_EXPIRES is the
+    // far-future stand-in for "no expiry" — revoke by clearing isGod or
+    // removing the email from GOD_ACCOUNT_EMAILS, not by waiting for a date.
+    if (isGodUser(req.user)) {
+      const held = new Set(ent.map((e) => String(e.productKey).toLowerCase()));
+      const expiresAt = GOD_NEVER_EXPIRES;
+
+      const products = await Product.find(
+        { isCourse: { $ne: true } },
+        { key: 1 },
+      ).lean();
+
+      for (const p of products) {
+        const key = String(p.key || "").toLowerCase();
+        if (!key || held.has(key)) continue;
+        ent.push({
+          productKey: p.key,
+          status: "active",
+          expiresAt: normalizeExpiry(expiresAt),
+        });
+      }
+    }
 
     res.json(ent);
   }),
