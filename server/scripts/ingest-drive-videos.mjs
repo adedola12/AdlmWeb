@@ -18,6 +18,22 @@
  *   node scripts/ingest-drive-videos.mjs --apply --only W3D2,W3D3
  *   node scripts/ingest-drive-videos.mjs --apply --force # re-upload even if archived
  *
+ * More than one course lives here now, so every mode takes a manifest:
+ *
+ *   --sku BIM-MEP-25            reads scripts/drive-video-manifest.BIM-MEP-25.json
+ *   --manifest path/to/file     or name the file outright
+ *
+ * With no --sku and no --manifest it falls back to drive-video-manifest.json,
+ * which is the building-works (bim-bld-arch) cohort.
+ *
+ * A course whose manifest does not exist yet gets one from Drive:
+ *
+ *   node scripts/ingest-drive-videos.mjs --list <driveFolderId> --sku BIM-MEP-25
+ *
+ * That walks the folder, matches recordings to the course's modules by week and
+ * position, and writes a DRAFT manifest. Read it before ingesting — the matching
+ * is a proposal, and Drive's naming is not to be trusted.
+ *
  * Safe to stop and re-run. Before uploading, each object is checked in S3 and
  * skipped when it is already there at the right size, so an interrupted run
  * resumes instead of paying for the same gigabytes twice.
@@ -63,6 +79,20 @@ const ONLY = argValue("--only")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+const SKU_ARG = argValue("--sku");
+const LIST_FOLDER = argValue("--list");
+const OUT_ARG = argValue("--out");
+
+/**
+ * One manifest per course, named after the sku. The building-works cohort keeps
+ * the original unsuffixed filename so nothing that already works has to move.
+ */
+function manifestPath(sku = SKU_ARG) {
+  const explicit = argValue("--manifest");
+  if (explicit) return path.resolve(explicit);
+  return path.join(here, sku ? `drive-video-manifest.${sku}.json` : "drive-video-manifest.json");
+}
 
 function gb(bytes) {
   return `${(Number(bytes || 0) / 1024 ** 3).toFixed(2)} GB`;
@@ -297,11 +327,219 @@ async function probeDriveDownload(fileId, token) {
   await res.arrayBuffer();
 }
 
+// ── discovery ───────────────────────────────────────────────────────────────
+/** One page-loop over Drive's file list; folders come back as entries too. */
+async function listFolder(folderId, token) {
+  const files = [];
+  let pageToken = "";
+  do {
+    const url = new URL("https://www.googleapis.com/drive/v3/files");
+    url.searchParams.set("q", `'${folderId}' in parents and trashed=false`);
+    url.searchParams.set("fields", "nextPageToken,files(id,name,size,mimeType)");
+    url.searchParams.set("supportsAllDrives", "true");
+    url.searchParams.set("includeItemsFromAllDrives", "true");
+    url.searchParams.set("orderBy", "name");
+    url.searchParams.set("pageSize", "200");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw await driveReadError(res, folderId);
+    const body = await res.json();
+    files.push(...(body.files || []));
+    pageToken = body.nextPageToken || "";
+  } while (pageToken);
+  return files;
+}
+
+/**
+ * Recurses into subfolders, because week 4 onwards of the last cohort lived in
+ * "Week 4 Lecture/Day 1.mp4" — the week is in the parent, not the filename, so
+ * the path has to be carried down or the matching has nothing to work with.
+ */
+async function walkDrive(folderId, token, prefix = "") {
+  const out = [];
+  for (const entry of await listFolder(folderId, token)) {
+    const name = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.mimeType === "application/vnd.google-apps.folder") {
+      out.push(...(await walkDrive(entry.id, token, name)));
+    } else if (String(entry.mimeType || "").startsWith("video/")) {
+      out.push({ fileId: entry.id, name, bytes: Number(entry.size) || 0 });
+    }
+  }
+  return out;
+}
+
+/** "Week 2 Lecture/Day 3.mp4" -> { week: 2, part: 3 } */
+function weekPartOf(name) {
+  const week = /week\s*0*(\d+)/i.exec(name);
+  const part = /\b(?:day|part|session|class)\s*0*(\d+)\b/i.exec(name);
+  return {
+    week: week ? Number(week[1]) : null,
+    part: part ? Number(part[1]) : null,
+  };
+}
+
+/** Modules grouped by the week in their code — W1P1/W1P2… or W1D1/W1D2… */
+function modulesByWeek(modules) {
+  const weeks = new Map();
+  for (const m of modules || []) {
+    const hit = /^W(\d+)[A-Za-z](\d+)$/.exec(String(m.code || ""));
+    if (!hit) continue;
+    const week = Number(hit[1]);
+    if (!weeks.has(week)) weeks.set(week, []);
+    weeks.get(week).push({ code: m.code, part: Number(hit[2]), title: m.title });
+  }
+  for (const list of weeks.values()) list.sort((a, b) => a.part - b.part);
+  return weeks;
+}
+
+if (LIST_FOLDER) {
+  if (!SKU_ARG) {
+    console.error("--list needs --sku so the recordings can be matched to modules.");
+    process.exit(1);
+  }
+
+  await connectDB();
+  const target = await PaidCourse.findOne({ sku: SKU_ARG });
+  if (!target) {
+    console.error(`No course with sku "${SKU_ARG}".`);
+    process.exit(1);
+  }
+
+  const token = await driveToken();
+  const found = await walkDrive(LIST_FOLDER, token);
+  console.log(`course: ${target.title} (${SKU_ARG})`);
+  console.log(`drive:  ${found.length} video file(s) under ${LIST_FOLDER}\n`);
+
+  // Anything that is plainly not a lecture master. Kept in the manifest rather
+  // than dropped, so the next person can see the call was made deliberately.
+  const ignored = [];
+  const seenBytes = new Map();
+  const candidates = [];
+  for (const file of found) {
+    const base = file.name.split("/").pop();
+    if (/^copy of /i.test(base)) {
+      ignored.push({ ...file, reason: "Drive duplicate ('Copy of …')." });
+      continue;
+    }
+    if (/\blow\b/i.test(base)) {
+      ignored.push({ ...file, reason: "Low-bitrate encode; the host builds its own ladder." });
+      continue;
+    }
+    const twin = seenBytes.get(file.bytes);
+    if (file.bytes && twin) {
+      ignored.push({ ...file, reason: `Byte-identical to "${twin}".` });
+      continue;
+    }
+    if (file.bytes) seenBytes.set(file.bytes, file.name);
+    candidates.push(file);
+  }
+
+  const weeks = modulesByWeek(target.modules);
+  const items = [];
+  const needsDecision = [];
+  const unmatched = [];
+
+  for (const [week, mods] of [...weeks.entries()].sort((a, b) => a[0] - b[0])) {
+    const forWeek = candidates
+      .filter((f) => weekPartOf(f.name).week === week)
+      .sort((a, b) => {
+        const pa = weekPartOf(a.name).part ?? 99;
+        const pb = weekPartOf(b.name).part ?? 99;
+        return pa - pb || a.name.localeCompare(b.name);
+      });
+
+    mods.forEach((mod, i) => {
+      const file = forWeek[i];
+      if (!file) {
+        needsDecision.push({
+          moduleCode: mod.code,
+          issue: `no week ${week} recording left to assign`,
+        });
+        return;
+      }
+      const parsed = weekPartOf(file.name).part;
+      items.push({
+        moduleCode: mod.code,
+        fileId: file.fileId,
+        name: file.name,
+        bytes: file.bytes,
+        ...(parsed && parsed !== mod.part
+          ? {
+              note:
+                `Drive calls this part ${parsed}; assigned to ${mod.code} by its ` +
+                `position in the week. Confirm before ingesting.`,
+            }
+          : {}),
+      });
+    });
+
+    for (const extra of forWeek.slice(mods.length)) {
+      unmatched.push({ ...extra, reason: `week ${week} has no module left for this file` });
+    }
+  }
+
+  for (const file of candidates) {
+    if (weekPartOf(file.name).week === null) {
+      unmatched.push({ ...file, reason: "no week could be read from the name or its folder" });
+    }
+  }
+
+  const out = OUT_ARG ? path.resolve(OUT_ARG) : manifestPath(SKU_ARG);
+  if (fs.existsSync(out) && !FORCE) {
+    console.error(`${out} already exists. Re-run with --force to overwrite it.`);
+    process.exit(1);
+  }
+
+  const draft = {
+    _comment:
+      `DRAFT — generated by ingest-drive-videos.mjs --list on ${new Date().toISOString().slice(0, 10)}. ` +
+      `Recordings were matched to modules by week and then by position within the week, ` +
+      `which is a guess: Drive's filenames are not reliable. Watch the first minute of ` +
+      `anything carrying a note, and clear needsDecision/unmatched, before --apply.`,
+    courseSku: SKU_ARG,
+    cohort: argValue("--cohort") || String(new Date().getFullYear()),
+    driveFolderId: LIST_FOLDER,
+    items,
+    needsDecision,
+    unmatched,
+    ignored,
+  };
+  fs.writeFileSync(out, `${JSON.stringify(draft, null, 2)}\n`);
+
+  for (const item of items) {
+    console.log(`  ${item.moduleCode.padEnd(5)} ${gb(item.bytes).padStart(8)}  ${item.name}`);
+    if (item.note) console.log(`        ⚠ ${item.note}`);
+  }
+  for (const d of needsDecision) console.log(`  ⚠ ${d.moduleCode}: ${d.issue}`);
+  for (const u of unmatched) console.log(`  ? ${u.name} — ${u.reason}`);
+  if (ignored.length) console.log(`\nignored ${ignored.length} file(s) — see the manifest.`);
+
+  console.log(`\nDraft written to ${out}. Review it, then:`);
+  console.log(`  node scripts/ingest-drive-videos.mjs --sku ${SKU_ARG}`);
+  process.exit(0);
+}
+
 // ── plan ────────────────────────────────────────────────────────────────────
-const manifest = JSON.parse(
-  fs.readFileSync(path.join(here, "drive-video-manifest.json"), "utf8"),
-);
+const MANIFEST = manifestPath();
+if (!fs.existsSync(MANIFEST)) {
+  console.error(`No manifest at ${MANIFEST}.`);
+  console.error(
+    SKU_ARG
+      ? `Build one from Drive:\n  node scripts/ingest-drive-videos.mjs --list <driveFolderId> --sku ${SKU_ARG}`
+      : `Pass --sku <SKU> (or --manifest <path>) to name one.`,
+  );
+  process.exit(1);
+}
+const manifest = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
 const cohort = manifest.cohort || "2025";
+
+if (SKU_ARG && manifest.courseSku && SKU_ARG !== manifest.courseSku) {
+  console.error(
+    `--sku ${SKU_ARG} but ${path.basename(MANIFEST)} is for ${manifest.courseSku}. Refusing to guess.`,
+  );
+  process.exit(1);
+}
 
 await connectDB();
 const course = await PaidCourse.findOne({ sku: manifest.courseSku });
