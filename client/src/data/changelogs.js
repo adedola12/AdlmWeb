@@ -171,12 +171,12 @@ export const products = [
     "compatibility": "PlanSwift 10+",
     "summary": "2D takeoff with automatic material + labour budgets, RateGen pricing and a fully-linked Excel BoQ — right inside PlanSwift.",
     "order": 3,
-    "latest": "2.5.1",
+    "latest": "2.9.1",
     "lastUpdated": "31 July 2026",
     "itemCount": 66,
     "releases": [
       {
-        "version": "2.5.1",
+        "version": "2.9.1",
         "date": "31 July 2026",
         "latest": true,
         "title": "Sign-in restored",
