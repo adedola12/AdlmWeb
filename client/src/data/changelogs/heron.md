@@ -24,7 +24,7 @@ summary: 2D takeoff with automatic material + labour budgets, RateGen pricing an
   items from the plugin changelog are folded into Improved here.
 -->
 
-## 2.5.1 — 31 July 2026 — Sign-in restored
+## 2.9.1 — 31 July 2026 — Sign-in restored
 
 HERON could not sign in after ADLM's servers moved. It now finds the service through your machine's settings instead of an address fixed when the plugin was built, so sign-in works again — and a future move will not need a new download.
 
