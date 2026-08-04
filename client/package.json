@@ -9,6 +9,7 @@
     "dev": "vite",
     "prebuild": "node scripts/gen-changelogs.mjs",
     "build": "vite build",
+    "prelint": "node scripts/gen-changelogs.mjs",
     "lint": "eslint .",
     "preview": "vite preview --port 5173"
   },
