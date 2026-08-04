@@ -1,76 +1,43 @@
-import OpenAI from "openai";
-import { recordAiUsage, normalizeUsage, checkAiAllowance } from "./aiUsage.js";
+import { createMessage, agentEnabled } from "./aiClient.js";
+import { checkAiAllowance } from "./aiUsage.js";
 
-const model = process.env.HELPBOT_AI_MODEL || "gpt-4o-mini";
-
-const client = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
-
+// Routed through aiClient.createMessage rather than holding its own provider
+// client. That module is the single choke point for direct model calls, so it
+// already owns the transport, the timeout, prompt caching and the usage
+// record — this file previously duplicated all four against OpenAI, which is
+// why its spend showed up on the dashboard under a second provider.
+//
 // `meta` ({ user, ip, sessionId }) attributes the call on the admin AI-usage
 // dashboard and lets a per-user allocation stop it. Returning null on a blocked
 // call is deliberate — the route already renders a graceful "no answer" reply
 // for that case, so a spent allowance degrades to catalogue-only search rather
 // than an error.
-export async function askAI({ question, context, meta = {} }) {
-  if (process.env.HELPBOT_AI_ENABLED !== "true") return null;
-  if (!client) return null;
+const MAX_TOKENS = Number(process.env.HELPBOT_AI_MAX_TOKENS || 140);
 
-  const gate = await checkAiAllowance({ user: meta.user, feature: "helpbot", ip: meta.ip });
-  if (!gate.allowed) return null;
-
-  const prompt = `
-You are ADLM HelpBot.
+// The rules never vary, so they are the cacheable half of the prompt; the
+// page context and the question change every call and must stay out of it or
+// nothing ever cache-hits.
+const RULES = `You are ADLM HelpBot.
 
 Rules:
 - Keep answers short (max 6 lines).
 - Only talk about ADLM navigation, products, courses, trainings.
 - Never invent pricing or features.
-- If unsure, say "I may not be fully certain" and suggest WhatsApp support.
+- If unsure, say "I may not be fully certain" and suggest WhatsApp support.`;
 
-Context:
-${context}
+export async function askAI({ question, context, meta = {} }) {
+  if (process.env.HELPBOT_AI_ENABLED !== "true") return null;
+  if (!agentEnabled()) return null;
 
-User question:
-${question}
-`;
+  const gate = await checkAiAllowance({ user: meta.user, feature: "helpbot", ip: meta.ip });
+  if (!gate.allowed) return null;
 
-  const started = Date.now();
-  try {
-    const res = await client.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: Number(process.env.HELPBOT_AI_MAX_TOKENS || 140),
-      temperature: 0.2,
-    });
+  const out = await createMessage({
+    system: { cacheable: RULES, dynamic: context ? `Context:\n${context}` : "" },
+    messages: [{ role: "user", content: String(question || "") }],
+    maxTokens: MAX_TOKENS,
+    meta: { feature: "helpbot", user: meta.user || null, ip: meta.ip, sessionId: meta.sessionId },
+  });
 
-    const usage = normalizeUsage(res.usage);
-    recordAiUsage({
-      feature: "helpbot",
-      user: meta.user || null,
-      provider: "openai",
-      model: res.model || model,
-      usage: usage || undefined,
-      tokenSource: usage ? "reported" : "none",
-      ms: Date.now() - started,
-      ok: true,
-      ip: meta.ip,
-      sessionId: meta.sessionId,
-    });
-
-    return res.choices?.[0]?.message?.content?.trim() || null;
-  } catch (e) {
-    recordAiUsage({
-      feature: "helpbot",
-      user: meta.user || null,
-      provider: "openai",
-      model,
-      ms: Date.now() - started,
-      ok: false,
-      errorCode: String(e?.message || "error").slice(0, 120),
-      ip: meta.ip,
-      sessionId: meta.sessionId,
-    });
-    throw e;
-  }
+  return out?.text?.trim() || null;
 }

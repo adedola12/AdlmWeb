@@ -41,7 +41,6 @@
     "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.10",
-    "openai": "^6.13.0",
     "pdfkit": "^0.17.2",
     "qrcode": "^1.5.4",
     "serverless-http": "^3.2.0",
