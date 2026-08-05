@@ -95,7 +95,13 @@ const fmt = (b) => `${(b / 1024 / 1024).toFixed(1)} MB`;
 function familyOf(key) {
   const parts = key.split("/");
   const base = parts.length > 1 ? parts[parts.length - 2] : parts[0];
-  return base.replace(/[-_.]?v?\d+(\.\d+)*$/i, "") || base;
+  // The separator inside the version is a DASH, not a dot: sanitizeBaseName in
+  // admin.deployments.js rewrites "adlm-rategen-v2.6.0" to
+  // "adlm-rategen-v2-6-0". Matching only dots stripped the last segment and
+  // left "adlm-rategen-v2-6", so every MINOR version became its own family and
+  // --keep applied per-minor instead of per-product — which is why a first run
+  // over 25 objects proposed deleting 2.
+  return base.replace(/[-_.]?v?\d+([-_.]\d+)*$/i, "") || base;
 }
 
 const main = async () => {
@@ -162,7 +168,12 @@ const main = async () => {
     // Newest first, so "keep N previous" means the N after the live one.
     items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-    console.log(`\n${family}`);
+    // No deployment points at ANY version here. Either the product was renamed
+    // or retired, or the object is junk. "Keep 2 previous" is meaningless with
+    // no current release to be previous TO, so say so rather than quietly
+    // filing them under rollback where they look deliberate.
+    const hasLive = items.some((o) => live.has(o.packageUri));
+    console.log(`\n${family}${hasLive ? "" : "   [ORPHAN — no deployment references any version]"}`);
     let keptPrevious = 0;
 
     for (const o of items) {
@@ -174,7 +185,9 @@ const main = async () => {
         keptBytes += o.bytes;
       } else if (keptPrevious < KEEP) {
         keptPrevious += 1;
-        verdict = `rollback  keep — previous ${keptPrevious} of ${KEEP}`;
+        verdict = hasLive
+          ? `rollback  keep — previous ${keptPrevious} of ${KEEP}`
+          : `orphan    keep — nothing points here; --keep 0 removes it`;
         keptBytes += o.bytes;
       } else {
         verdict = "SUPERSEDED  delete";
