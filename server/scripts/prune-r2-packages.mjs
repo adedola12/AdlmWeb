@@ -29,9 +29,52 @@
  */
 
 import mongoose from "mongoose";
+import { SSMClient, GetParametersByPathCommand } from "@aws-sdk/client-ssm";
 import { connectDB } from "../db.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
 import { isR2Configured, listFromR2, deleteFromR2 } from "../utils/r2Upload.js";
+
+/**
+ * Fills gaps in process.env from SSM, exactly as lambda.js does at cold start.
+ *
+ * Without this the script needs MONGO_URI and five R2_* values in a local
+ * .env. R2_PUBLIC_BASE_URL in particular lives only in SSM, so the script
+ * would refuse with "R2 is not configured" on a machine where everything is
+ * correctly set up — and the obvious workaround is pasting production secrets
+ * into a file on disk, which is how credentials end up somewhere they should
+ * not be.
+ *
+ * Explicit environment variables win, matching lambda.js, so a local override
+ * still works for pointing at a staging bucket.
+ */
+async function hydrateFromSsm() {
+  const prefix = (process.env.SSM_PREFIX || "/adlm/cloud/prod").replace(/\/+$/, "");
+  const ssm = new SSMClient({ region: process.env.AWS_REGION || "eu-west-1" });
+  let NextToken;
+  let filled = 0;
+
+  do {
+    const page = await ssm.send(
+      new GetParametersByPathCommand({
+        Path: prefix,
+        Recursive: false,
+        WithDecryption: true,
+        MaxResults: 10,
+        NextToken,
+      }),
+    );
+    for (const p of page.Parameters || []) {
+      const key = p.Name.slice(p.Name.lastIndexOf("/") + 1);
+      if (process.env[key] === undefined) {
+        process.env[key] = p.Value;
+        filled += 1;
+      }
+    }
+    NextToken = page.NextToken;
+  } while (NextToken);
+
+  return { prefix, filled };
+}
 
 const args = process.argv.slice(2);
 const DO_DELETE = args.includes("--delete");
@@ -56,11 +99,37 @@ function familyOf(key) {
 }
 
 const main = async () => {
+  if (!isR2Configured() || !process.env.MONGO_URI) {
+    try {
+      const { prefix, filled } = await hydrateFromSsm();
+      if (filled) console.log(`\nLoaded ${filled} setting(s) from SSM ${prefix}`);
+    } catch (e) {
+      console.error(
+        `\n  Could not read SSM: ${e?.name || ""} ${e?.message || e}` +
+          "\n  Either set AWS credentials with ssm:GetParametersByPath, or put" +
+          "\n  MONGO_URI and the five R2_* values in server/.env.\n",
+      );
+      process.exit(1);
+    }
+  }
+
   if (!isR2Configured()) {
+    const missing = [
+      "R2_ACCOUNT_ID",
+      "R2_ACCESS_KEY_ID",
+      "R2_SECRET_ACCESS_KEY",
+      "R2_BUCKET",
+      "R2_PUBLIC_BASE_URL",
+    ].filter((k) => !String(process.env[k] || "").trim());
     console.error(
-      "\n  R2 is not configured. Needs R2_ACCOUNT_ID, R2_ACCESS_KEY_ID," +
-        "\n  R2_SECRET_ACCESS_KEY, R2_BUCKET and R2_PUBLIC_BASE_URL.\n",
+      `\n  R2 is not configured. Missing after checking the environment and SSM: ${missing.join(", ")}` +
+        "\n  Set them with: node scripts/configure-r2.mjs --set KEY=value\n",
     );
+    process.exit(1);
+  }
+
+  if (!process.env.MONGO_URI) {
+    console.error("\n  MONGO_URI is not set, and was not found in SSM.\n");
     process.exit(1);
   }
 
