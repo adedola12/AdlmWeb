@@ -241,6 +241,70 @@ automatically in place of the old embed.
 
 ---
 
+## 7a. A second course
+
+Nothing above is specific to the building-works cohort — the AWS side is shared,
+and playback resolves per module. What each course needs of its own is a
+**manifest**: which Drive file becomes which module.
+
+One file per course, named after the sku, next to the original:
+
+| Course | Manifest |
+| --- | --- |
+| `bim-bld-arch` | `scripts/drive-video-manifest.json` (unsuffixed, historical) |
+| anything else | `scripts/drive-video-manifest.<SKU>.json` |
+
+Share the course's Drive folder with the service account, then let the script
+write the first draft rather than transcribing 18 file IDs by hand:
+
+```powershell
+node scripts/ingest-drive-videos.mjs --list <driveFolderId> --sku BIM-MEP-25
+```
+
+It walks the folder and its subfolders, drops "Copy of …" duplicates,
+byte-identical twins and low-bitrate encodes, then matches what is left to the
+course's modules — first by the week in the filename or its parent folder, then
+by position within that week.
+
+**The matching is a proposal.** Last cohort had a `Week 1 Day 1 Class 2.mp4`
+that was actually day 2, and weeks 4–6 carried no week in the filename at all.
+The draft flags anything whose parsed part number disagrees with its assigned
+module (`note`), any module left without a file (`needsDecision`), and any file
+left without a module (`unmatched`). Watch the first minute of anything flagged
+and fix the `items` array before ingesting; clear `needsDecision` and
+`unmatched` when you have.
+
+Then the same two steps as above, told which course they are for:
+
+```powershell
+node scripts/ingest-drive-videos.mjs --sku BIM-MEP-25
+```
+
+```powershell
+node scripts/ingest-drive-videos.mjs --sku BIM-MEP-25 --apply
+```
+
+```powershell
+node scripts/transcode-course-videos.mjs --sku BIM-MEP-25 --cohort 2026
+```
+
+```powershell
+node scripts/transcode-course-videos.mjs --sku BIM-MEP-25 --cohort 2026 --apply
+```
+
+```powershell
+node scripts/transcode-course-videos.mjs --sku BIM-MEP-25 --cohort 2026 --status --watch
+```
+
+`--cohort` has to be the same on the plan, the apply and the status poll: it is
+part of the S3 output prefix, and `--status` derives the manifest key from it
+when a job completes. Omitted, it is `2025`.
+
+`--verify` takes `--sku` too and audits just that course. `--abort-stale` is
+bucket-wide by nature — abandoned uploads are not attributable to a course.
+
+---
+
 ## 8. Costs
 
 The one-time encode is roughly 30 hours of footage across four rungs, and
