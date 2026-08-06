@@ -17,6 +17,13 @@ import { saveCardAuthorization } from "../util/paymentMethods.js";
 const router = express.Router();
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
 
+// Organization licences normally start at 2 users. RateGen is the exception:
+// firms buy it for a single estimator, so an org may take just 1 seat.
+// Mirrored client-side in client/src/pages/Purchase.jsx.
+const SINGLE_SEAT_ORG_KEYS = new Set(["rategen"]);
+const minOrgSeatsFor = (key) =>
+  SINGLE_SEAT_ORG_KEYS.has(String(key || "").toLowerCase()) ? 1 : 2;
+
 // If you are on Node < 18, uncomment:
 // import fetch from "node-fetch";
 
@@ -122,9 +129,10 @@ router.post("/cart", requireAuth, async (req, res) => {
           .json({ error: `Invalid product: ${i.productKey}` });
 
       const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10) || 1, 1);
-      if (purchaseLicenseType === "organization" && seats < 2) {
+      const minSeats = minOrgSeatsFor(p.key);
+      if (purchaseLicenseType === "organization" && seats < minSeats) {
         return res.status(400).json({
-          error: "Organization licences require a minimum of 2 users.",
+          error: `Organization licences require a minimum of ${minSeats} users for ${p.name}.`,
         });
       }
       let periods = Math.max(parseInt(i.periods ?? 1, 10) || 1, 1);

@@ -20,6 +20,18 @@ function getProductKey(p) {
   return String(p?.key || p?.slug || p?._id || "").trim();
 }
 
+// Organization licences normally start at 2 users. RateGen is the exception:
+// firms buy it for a single estimator, so an org may take just 1 seat.
+// Mirrored server-side in routes/purchase.js.
+const SINGLE_SEAT_ORG_KEYS = new Set(["rategen"]);
+
+function minSeatsFor(licenseType, productKey) {
+  if (licenseType !== "organization") return 1;
+  return SINGLE_SEAT_ORG_KEYS.has(String(productKey || "").toLowerCase())
+    ? 1
+    : 2;
+}
+
 function readCartItems() {
   try {
     const arr = JSON.parse(localStorage.getItem("cartItems") || "[]");
@@ -316,7 +328,10 @@ export default function Purchase() {
       const next = { ...cur, ...patch };
 
       next.periods = clampPeriodsFor(productByKey(key), next.periods);
-      next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
+      next.seats = Math.max(
+        parseInt(next.seats || 1, 10),
+        minSeatsFor(licenseType, key),
+      );
 
       if (licenseType !== "organization") next.seats = 1;
 
@@ -373,11 +388,12 @@ export default function Purchase() {
 
   // Patch the draft (clamped; seats locked to 1 for personal licenses).
   function patchDraft(patch) {
+    const minSeats = minSeatsFor(licenseType, activeKey);
     const next = { ...draft, ...patch };
     next.periods = Math.max(parseInt(next.periods || 1, 10), 1);
     next.seats = Math.max(parseInt(next.seats || 1, 10), 1);
     if (licenseType !== "organization") next.seats = 1;
-    else if (next.seats < 2) next.seats = 2; // org licences: minimum 2 users
+    else if (next.seats < minSeats) next.seats = minSeats; // org minimum
     setDraft(next);
 
     // Live-sync: when the product is already in the order, config edits apply
@@ -390,7 +406,7 @@ export default function Purchase() {
           periods: clampPeriodsFor(productByKey(activeKey), next.periods),
           seats:
             licenseType === "organization"
-              ? Math.max(parseInt(next.seats || 2, 10), 2)
+              ? Math.max(parseInt(next.seats || minSeats, 10), minSeats)
               : 1,
           firstTime: !!next.firstTime,
           storageBlocks: Math.max(
@@ -429,13 +445,14 @@ export default function Purchase() {
   // Commit the current draft to the cart (add or update the active product).
   function commitActive() {
     if (!activeKey) return;
+    const minSeats = minSeatsFor(licenseType, activeKey);
     setCart((c) => ({
       ...c,
       [activeKey]: {
         periods: clampPeriodsFor(productByKey(activeKey), draft.periods),
         seats:
           licenseType === "organization"
-            ? Math.max(parseInt(draft.seats || 2, 10), 2)
+            ? Math.max(parseInt(draft.seats || minSeats, 10), minSeats)
             : 1,
         firstTime: !!draft.firstTime,
         storageBlocks: Math.max(parseInt(draft.storageBlocks || 0, 10) || 0, 0),
@@ -635,7 +652,10 @@ export default function Purchase() {
       periods: clampPeriodsFor(productByKey(productKey), entry?.periods),
       seats:
         licenseType === "organization"
-          ? Math.max(parseInt(entry?.seats || 1, 10), 1)
+          ? Math.max(
+              parseInt(entry?.seats || 1, 10),
+              minSeatsFor(licenseType, productKey),
+            )
           : 1,
       firstTime: !!entry?.firstTime,
     }));
@@ -653,14 +673,18 @@ export default function Purchase() {
 
   }, [cart, licenseType, org]);
 
-  // Organization licences require a minimum of 2 users — bump any 1-seat items
-  // when the buyer switches to an organization licence.
+  // Organization licences require a minimum of 2 users (1 for RateGen) — bump
+  // any under-minimum items when the buyer switches to an organization licence.
   React.useEffect(() => {
     if (licenseType !== "organization") return;
     setCart((c) => {
       const next = {};
       Object.entries(c).forEach(([k, v]) => {
-        next[k] = { ...v, seats: Math.max(parseInt(v.seats || 2, 10), 2) };
+        const minSeats = minSeatsFor(licenseType, k);
+        next[k] = {
+          ...v,
+          seats: Math.max(parseInt(v.seats || minSeats, 10), minSeats),
+        };
       });
       return next;
     });
@@ -732,7 +756,10 @@ export default function Purchase() {
           productKey: k,
           seats:
             licenseType === "organization"
-              ? Math.max(parseInt(entry.seats || 1, 10), 1)
+              ? Math.max(
+                  parseInt(entry.seats || 1, 10),
+                  minSeatsFor(licenseType, k),
+                )
               : 1,
           periods: clampPeriodsFor(p, entry.periods),
           firstTime: !!entry.firstTime,
@@ -868,6 +895,7 @@ export default function Purchase() {
 
   const anyInstall = chosen.some((p) => !!cart[getProductKey(p)]?.firstTime);
   const showOrgPanel = licenseType === "organization";
+  const activeMinSeats = minSeatsFor(licenseType, activeKey);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -1264,14 +1292,18 @@ export default function Purchase() {
                         <button type="button" className={stepClass} onClick={() => patchDraft({ seats: Number(draft.seats || 1) - 1 })} aria-label="Decrease seats">−</button>
                         <input
                           type="number"
-                          min="2"
+                          min={activeMinSeats}
                           value={draft.seats}
                           onChange={(e) => patchDraft({ seats: e.target.value })}
                           className="w-12 text-center bg-transparent outline-none py-2"
                         />
                         <button type="button" className={stepClass} onClick={() => patchDraft({ seats: Number(draft.seats || 1) + 1 })} aria-label="Increase seats">+</button>
                       </div>
-                      <div className="mt-1 text-xs text-slate-500">Minimum 2 users for organization licences.</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {activeMinSeats > 1
+                          ? `Minimum ${activeMinSeats} users for organization licences.`
+                          : "This product can be bought for a single user."}
+                      </div>
                     </div>
                   ) : (
                     <div className="text-xs text-slate-500">
