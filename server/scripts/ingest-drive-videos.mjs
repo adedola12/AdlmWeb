@@ -328,6 +328,36 @@ async function probeDriveDownload(fileId, token) {
 }
 
 // ── discovery ───────────────────────────────────────────────────────────────
+/**
+ * Confirms the folder is actually visible, and returns its name.
+ *
+ * Worth a request of its own because a `'<id>' in parents` query against a
+ * folder this account cannot see returns 200 with an empty list — identical to
+ * a folder that is genuinely empty. Left undiagnosed that reads as "there are
+ * no recordings" when the truth is "nobody shared them".
+ */
+async function folderName(folderId, token) {
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}` +
+      `?fields=id,name,mimeType&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (res.status === 404 || res.status === 403) {
+    const key = loadServiceAccount();
+    throw new DrivePermissionError(
+      `Drive returned ${res.status} for folder ${folderId} — this account cannot see it.\n\n` +
+        `  Share the folder with ${key.client_email} as Viewer.\n` +
+        `  (Check the id too: it is the part of the folder URL after /folders/.)`,
+    );
+  }
+  if (!res.ok) throw new Error(`Drive error ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const folder = await res.json();
+  if (folder.mimeType !== "application/vnd.google-apps.folder") {
+    throw new Error(`${folderId} is a ${folder.mimeType}, not a folder.`);
+  }
+  return folder.name;
+}
+
 /** One page-loop over Drive's file list; folders come back as entries too. */
 async function listFolder(folderId, token) {
   const files = [];
@@ -407,9 +437,29 @@ if (LIST_FOLDER) {
   }
 
   const token = await driveToken();
-  const found = await walkDrive(LIST_FOLDER, token);
+  let found;
+  let folder;
+  try {
+    folder = await folderName(LIST_FOLDER, token);
+    found = await walkDrive(LIST_FOLDER, token);
+  } catch (err) {
+    console.error(`\n✗ ${err.message}`);
+    process.exit(1);
+  }
+
   console.log(`course: ${target.title} (${SKU_ARG})`);
-  console.log(`drive:  ${found.length} video file(s) under ${LIST_FOLDER}\n`);
+  console.log(`drive:  ${found.length} video file(s) under "${folder}"\n`);
+
+  // No manifest is better than an empty one: writing 18 lines of "no recording
+  // to assign" looks like a result, and the next run would then need --force to
+  // replace it.
+  if (!found.length) {
+    console.error(
+      `"${folder}" is readable but holds no video files, in it or below it.\n` +
+        `  Point --list at the folder that actually contains the recordings.`,
+    );
+    process.exit(1);
+  }
 
   // Anything that is plainly not a lecture master. Kept in the manifest rather
   // than dropped, so the next person can see the call was made deliberately.
