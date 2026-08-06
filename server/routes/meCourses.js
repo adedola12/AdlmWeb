@@ -107,6 +107,11 @@ function buildModuleSubmissions(course, enrollment, submissionsByKey) {
       instructions: module.instructions || "",
       assignmentPrompt: module.assignmentPrompt || "",
       durationSec: Number(module.durationSec || 0) || 0,
+
+      // Only the fact that a recap exists, and how long it runs — the key
+      // itself stays server-side, same as the lecture's.
+      hasSummary: Boolean(module.summary?.hlsKey || module.summary?.sourceKey),
+      summaryDurationSec: Number(module.summary?.durationSec || 0) || 0,
     };
   });
 }
@@ -201,7 +206,22 @@ function buildCourseResponse(enrollment, context) {
   const softwares = (courseRaw.softwareIds || [])
     .map((id) => context.softwareById?.[String(id)])
     .filter(Boolean);
-  const course = { ...courseRaw, softwares };
+
+  // Spreading the raw document put every S3 and CloudFront key for every
+  // module into the browser. Nothing is playable without the signed cookies, so
+  // it was not a way in, but it is our storage layout published to anyone
+  // enrolled — and there is no reason for the student page to see it. It reads
+  // the module list through `moduleSubmissions`; only the admin pages consume
+  // `course.modules`, and they come from a different route.
+  const { modules, onboarding, ...courseSafe } = courseRaw;
+  const course = {
+    ...courseSafe,
+    softwares,
+    // The intro carried through our own pipeline, reduced to the two facts the
+    // player needs: whether to offer it, and how long it runs.
+    hasOnboarding: Boolean(onboarding?.hlsKey || onboarding?.sourceKey),
+    onboardingDurationSec: Number(onboarding?.durationSec || 0) || 0,
+  };
   const product = context.productBySku[enrollment.courseSku] || null;
   const entitlement = product
     ? context.entitlementsByKey[String(product.key || "").toLowerCase()] || null
@@ -209,8 +229,14 @@ function buildCourseResponse(enrollment, context) {
 
   const startedAt = enrollment.accessStartedAt || enrollment.createdAt || null;
   const expiresAt = enrollment.accessExpiresAt || entitlement?.expiresAt || null;
-  const moduleSubmissions = buildModuleSubmissions(course, enrollment, context.submissionsByKey);
-  const summary = buildSummary(course, moduleSubmissions);
+  // Built from the raw document, not the trimmed one — this is where the module
+  // list actually reaches the student, with the storage keys left behind.
+  const moduleSubmissions = buildModuleSubmissions(
+    courseRaw,
+    enrollment,
+    context.submissionsByKey,
+  );
+  const summary = buildSummary(courseRaw, moduleSubmissions);
 
   return {
     enrollment: {
@@ -397,6 +423,11 @@ router.get("/:sku/certificate-template", async (req, res) => {
 router.post("/:sku/playback/start", express.json(), async (req, res) => {
   const sku = req.params.sku;
   const moduleCode = String(req.body?.moduleCode || "").trim();
+  // Anything not explicitly named is the lecture, so an older client that
+  // knows nothing about tracks keeps getting exactly what it always got.
+  const track = ["summary", "onboarding"].includes(req.body?.track)
+    ? req.body.track
+    : "lecture";
 
   const enrollment = await CourseEnrollment.findOne({
     userId: req.user._id,
@@ -444,6 +475,7 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
     email: req.user.email || "",
     courseSku: sku,
     moduleCode,
+    track,
     sessionRef: makeSessionRef(),
     ip: clientIp(req),
     userAgent: String(req.headers["user-agent"] || "").slice(0, 300),
@@ -453,8 +485,19 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
   // obtained without also claiming a concurrency seat and leaving an audit row.
   let playbackUrl = "";
   let playbackExpiresAt = null;
-  const course = await PaidCourse.findOne({ sku }).select("modules").lean();
-  const module = (course?.modules || []).find((m) => m.code === moduleCode);
+  const course = await PaidCourse.findOne({ sku })
+    .select("modules onboarding")
+    .lean();
+  const found = (course?.modules || []).find((m) => m.code === moduleCode);
+  // Each track is its own encode under its own key prefix, so from here down
+  // the only difference between them is which keys get signed. The intro
+  // belongs to the course rather than to any module, hence no lookup by code.
+  const module =
+    track === "onboarding"
+      ? course?.onboarding || null
+      : track === "summary"
+        ? found?.summary || null
+        : found;
 
   if (module?.hlsKey) {
     try {
@@ -491,6 +534,7 @@ router.post("/:sku/playback/start", express.json(), async (req, res) => {
     sessionId: String(session._id),
     sessionRef: session.sessionRef,
     heartbeatSec: 30,
+    track,
     playbackUrl,
     playbackExpiresAt,
   });

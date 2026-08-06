@@ -182,12 +182,13 @@ function slugify(text) {
     .replace(/-+$/g, "");
 }
 
-function archiveKey({ courseSku, cohort, moduleCode, moduleTitle }) {
+function archiveKey({ courseSku, cohort, moduleCode, moduleTitle, track = "lecture" }) {
   // Titles read "Week 1 · Day 1 — Introduction to BIM…"; the part after the
   // em dash is the actual subject, which is what belongs in the filename.
   const subject = String(moduleTitle || "").split("—").slice(1).join("—").trim();
   const slug = slugify(subject || moduleTitle || moduleCode);
-  const name = `${moduleCode.toLowerCase()}${slug ? `-${slug}` : ""}.mp4`;
+  const suffix = track === "summary" ? "-summary" : "";
+  const name = `${moduleCode.toLowerCase()}${slug ? `-${slug}` : ""}${suffix}.mp4`;
   return `courses/${courseSku}/${cohort}/${name}`;
 }
 
@@ -254,10 +255,24 @@ let jwtClient = null;
 async function driveToken() {
   if (!jwtClient) {
     const key = loadServiceAccount();
+    // Impersonate a real user in the owning domain when one is configured.
+    //
+    // Recordings that came through Google Classroom are owned by a Workspace
+    // account, and Workspace can forbid download by anyone outside the domain.
+    // A service account is outside it by definition, so it ends up able to
+    // read metadata and even edit, while every request for actual bytes comes
+    // back "This file cannot be downloaded by the user" — a contradiction that
+    // no amount of re-sharing fixes. Acting AS someone in the domain makes the
+    // read internal, which is what the policy is actually asking for.
+    //
+    // Requires domain-wide delegation for this service account's client id in
+    // the Workspace admin console. See docs/COURSE_VIDEO_PIPELINE.md §1a.
+    const subject = envValue("GOOGLE_IMPERSONATE_USER");
     jwtClient = new JWT({
       email: key.client_email,
       key: key.private_key,
       scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+      ...(subject ? { subject } : {}),
     });
   }
   // getAccessToken() resolves to { token }, not { access_token } — reading the
@@ -290,15 +305,17 @@ async function driveReadError(res, fileId) {
   if (res.status === 403 && body.includes("cannotDownloadFile")) {
     return new DrivePermissionError(
       `Drive is refusing to send the file contents (cannotDownloadFile).\n` +
-        `  The share is fine — metadata reads work — but these files are set to\n` +
+        `  The share is fine — metadata reads work — but this file is set to\n` +
         `  "Viewers and commenters cannot download, print, or copy", and that\n` +
         `  restriction only exempts writers.\n\n` +
-        `  Fix either way:\n` +
-        `    • Change the service account from Viewer to Editor on "BIM Training",\n` +
-        `      run the ingest, then set it back to Viewer. Nothing changes for\n` +
-        `      the people you actually share the folder with.\n` +
-        `    • Or turn the restriction off: folder → Share → gear icon → untick\n` +
-        `      "Viewers and commenters can see the option to download, print, and copy".`,
+        `  Fix: change the service account from Viewer to EDITOR on the course\n` +
+        `  folder, run the ingest, then set it back to Viewer. Nothing changes\n` +
+        `  for the people you actually share the folder with.\n\n` +
+        `  Clearing the setting on the folder is NOT enough on its own. The flag\n` +
+        `  (copyRequiresWriterPermission) lives on each file, and a video that was\n` +
+        `  ever shared individually keeps its own copy of it after the folder is\n` +
+        `  cleared — so it has to be unticked file by file, or out-ranked by\n` +
+        `  granting write access once.`,
     );
   }
   if (res.status === 403 || res.status === 404) {
@@ -365,7 +382,11 @@ async function listFolder(folderId, token) {
   do {
     const url = new URL("https://www.googleapis.com/drive/v3/files");
     url.searchParams.set("q", `'${folderId}' in parents and trashed=false`);
-    url.searchParams.set("fields", "nextPageToken,files(id,name,size,mimeType)");
+    url.searchParams.set(
+      "fields",
+      "nextPageToken,files(id,name,size,mimeType,createdTime," +
+        "videoMediaMetadata(durationMillis))",
+    );
     url.searchParams.set("supportsAllDrives", "true");
     url.searchParams.set("includeItemsFromAllDrives", "true");
     url.searchParams.set("orderBy", "name");
@@ -393,16 +414,30 @@ async function walkDrive(folderId, token, prefix = "") {
     if (entry.mimeType === "application/vnd.google-apps.folder") {
       out.push(...(await walkDrive(entry.id, token, name)));
     } else if (String(entry.mimeType || "").startsWith("video/")) {
-      out.push({ fileId: entry.id, name, bytes: Number(entry.size) || 0 });
+      out.push({
+        fileId: entry.id,
+        name,
+        bytes: Number(entry.size) || 0,
+        createdAt: entry.createdTime || "",
+        durationSec: Math.round(Number(entry.videoMediaMetadata?.durationMillis || 0) / 1000),
+      });
     }
   }
   return out;
 }
 
-/** "Week 2 Lecture/Day 3.mp4" -> { week: 2, part: 3 } */
+/**
+ * "Week 2 Lecture/Day 3.mp4" -> { week: 2, part: 3 }
+ *
+ * The MEP folder abbreviates: "Week 1/BIM MEP D2.mp4" sits beside
+ * "BIM MEP Day 1.mp4", so a bare D<n> counts as a part too. The leading word
+ * boundary keeps it off "4D" and "5D", which appear in plenty of lecture
+ * titles and mean something else entirely.
+ */
 function weekPartOf(name) {
   const week = /week\s*0*(\d+)/i.exec(name);
-  const part = /\b(?:day|part|session|class)\s*0*(\d+)\b/i.exec(name);
+  const part =
+    /\b(?:day|part|session|class)\s*0*(\d+)\b/i.exec(name) || /\bD\s*0*(\d+)\b/i.exec(name);
   return {
     week: week ? Number(week[1]) : null,
     part: part ? Number(part[1]) : null,
@@ -436,10 +471,12 @@ if (LIST_FOLDER) {
     process.exit(1);
   }
 
-  const token = await driveToken();
   let found;
   let folder;
   try {
+    // Inside the try: minting the token is a network call like any other, and
+    // a timeout there used to come out as a raw Node stack dump.
+    const token = await driveToken();
     folder = await folderName(LIST_FOLDER, token);
     found = await walkDrive(LIST_FOLDER, token);
   } catch (err) {
@@ -485,20 +522,62 @@ if (LIST_FOLDER) {
     candidates.push(file);
   }
 
+  // A lecture runs an hour or two; the recap clips run two to four minutes.
+  // Duration separates them cleanly where filenames do not — the recaps carry
+  // topic titles ("Lecture Summary: 4D BIM for MEP Projects") with no day
+  // number in them at all. A file Drive reports no duration for is treated as
+  // a lecture, because wrongly demoting a two-hour session is the worse error.
+  const SUMMARY_MAX_SEC = 15 * 60;
+  const isSummary = (f) => f.durationSec > 0 && f.durationSec <= SUMMARY_MAX_SEC;
+
+  const at = (f) => new Date(f.createdAt || 0).getTime() || 0;
+
+  /**
+   * Assigns recap clips to lectures within a week by upload time, closest pair
+   * first.
+   *
+   * Recording a session and uploading its recap happen minutes apart, so
+   * proximity in time is a far better signal than either filename or
+   * alphabetical order — the recaps are named after their subject. Greedy on
+   * the smallest gap rather than in file order, so one ambiguous clip cannot
+   * push every later pairing off by one.
+   */
+  function pairSummaries(lectures, shorts) {
+    const pairs = [];
+    for (const clip of shorts) {
+      for (const lecture of lectures) {
+        pairs.push({ clip, lecture, delta: Math.abs(at(clip) - at(lecture.file)) });
+      }
+    }
+    pairs.sort((a, b) => a.delta - b.delta);
+
+    const takenClips = new Set();
+    const byModule = new Map();
+    for (const pair of pairs) {
+      if (takenClips.has(pair.clip.fileId)) continue;
+      if (byModule.has(pair.lecture.moduleCode)) continue;
+      takenClips.add(pair.clip.fileId);
+      byModule.set(pair.lecture.moduleCode, { clip: pair.clip, delta: pair.delta });
+    }
+    return { byModule, leftover: shorts.filter((s) => !takenClips.has(s.fileId)) };
+  }
+
   const weeks = modulesByWeek(target.modules);
   const items = [];
   const needsDecision = [];
   const unmatched = [];
 
   for (const [week, mods] of [...weeks.entries()].sort((a, b) => a[0] - b[0])) {
-    const forWeek = candidates
-      .filter((f) => weekPartOf(f.name).week === week)
+    const inWeek = candidates.filter((f) => weekPartOf(f.name).week === week);
+    const forWeek = inWeek
+      .filter((f) => !isSummary(f))
       .sort((a, b) => {
         const pa = weekPartOf(a.name).part ?? 99;
         const pb = weekPartOf(b.name).part ?? 99;
         return pa - pb || a.name.localeCompare(b.name);
       });
 
+    const assigned = [];
     mods.forEach((mod, i) => {
       const file = forWeek[i];
       if (!file) {
@@ -508,12 +587,14 @@ if (LIST_FOLDER) {
         });
         return;
       }
+      assigned.push({ moduleCode: mod.code, file });
       const parsed = weekPartOf(file.name).part;
       items.push({
         moduleCode: mod.code,
         fileId: file.fileId,
         name: file.name,
         bytes: file.bytes,
+        durationSec: file.durationSec,
         ...(parsed && parsed !== mod.part
           ? {
               note:
@@ -524,15 +605,51 @@ if (LIST_FOLDER) {
       });
     });
 
+    const { byModule, leftover } = pairSummaries(assigned, inWeek.filter(isSummary));
+    for (const item of items) {
+      const hit = byModule.get(item.moduleCode);
+      if (!hit) continue;
+      const hours = hit.delta / 3600000;
+      item.summary = {
+        fileId: hit.clip.fileId,
+        name: hit.clip.name,
+        bytes: hit.clip.bytes,
+        durationSec: hit.clip.durationSec,
+        ...(hours > 6
+          ? {
+              note:
+                `Paired to ${item.moduleCode} only because every closer lecture was ` +
+                `already taken — uploaded ${Math.round(hours)}h apart. Confirm the topic.`,
+            }
+          : {}),
+      };
+    }
+
     for (const extra of forWeek.slice(mods.length)) {
       unmatched.push({ ...extra, reason: `week ${week} has no module left for this file` });
     }
+    for (const clip of leftover) {
+      unmatched.push({ ...clip, reason: `week ${week} has no lecture left to attach this recap to` });
+    }
   }
 
+  // A short video sitting at the top of the folder, belonging to no week, is
+  // almost always the course intro — both cohorts had exactly one. Proposed as
+  // `onboarding` rather than assumed: it lands in the manifest for review like
+  // everything else, and the ingest only acts on it if it survives that.
+  let onboarding = null;
   for (const file of candidates) {
-    if (weekPartOf(file.name).week === null) {
-      unmatched.push({ ...file, reason: "no week could be read from the name or its folder" });
+    if (weekPartOf(file.name).week !== null) continue;
+    if (!onboarding && isSummary(file) && /intro|welcome|overview|orientation/i.test(file.name)) {
+      onboarding = {
+        fileId: file.fileId,
+        name: file.name,
+        bytes: file.bytes,
+        durationSec: file.durationSec,
+      };
+      continue;
     }
+    unmatched.push({ ...file, reason: "no week could be read from the name or its folder" });
   }
 
   const out = OUT_ARG ? path.resolve(OUT_ARG) : manifestPath(SKU_ARG);
@@ -551,15 +668,24 @@ if (LIST_FOLDER) {
     cohort: argValue("--cohort") || String(new Date().getFullYear()),
     driveFolderId: LIST_FOLDER,
     items,
+    ...(onboarding ? { onboarding } : {}),
     needsDecision,
     unmatched,
     ignored,
   };
   fs.writeFileSync(out, `${JSON.stringify(draft, null, 2)}\n`);
 
+  const mins = (sec) => (sec ? `${Math.round(sec / 60)}m` : "?");
   for (const item of items) {
-    console.log(`  ${item.moduleCode.padEnd(5)} ${gb(item.bytes).padStart(8)}  ${item.name}`);
+    console.log(
+      `  ${item.moduleCode.padEnd(5)} ${gb(item.bytes).padStart(8)} ` +
+        `${mins(item.durationSec).padStart(5)}  ${item.name}`,
+    );
     if (item.note) console.log(`        ⚠ ${item.note}`);
+    if (item.summary) {
+      console.log(`        + recap ${mins(item.summary.durationSec).padStart(4)}  ${item.summary.name}`);
+      if (item.summary.note) console.log(`        ⚠ ${item.summary.note}`);
+    }
   }
   for (const d of needsDecision) console.log(`  ⚠ ${d.moduleCode}: ${d.issue}`);
   for (const u of unmatched) console.log(`  ? ${u.name} — ${u.reason}`);
@@ -602,6 +728,17 @@ const byCode = new Map((course.modules || []).map((m) => [m.code, m]));
 const planned = [];
 const skipped = [];
 
+/**
+ * A manifest entry is up to two transfers: the lecture, and the short recap
+ * recorded alongside it. They are independent — a module can have its lecture
+ * archived and its summary not — so they are planned and skipped separately.
+ */
+function tracksOf(item) {
+  const tracks = [{ track: "lecture", ...item }];
+  if (item.summary?.fileId) tracks.push({ track: "summary", ...item.summary });
+  return tracks;
+}
+
 for (const item of manifest.items) {
   if (ONLY.length && !ONLY.includes(item.moduleCode)) continue;
   const module = byCode.get(item.moduleCode);
@@ -609,19 +746,52 @@ for (const item of manifest.items) {
     skipped.push(`${item.moduleCode}: no such module on the course`);
     continue;
   }
-  if (module.sourceKey && !FORCE) {
-    skipped.push(`${item.moduleCode}: already archived (${module.sourceKey})`);
-    continue;
-  }
-  planned.push({
-    ...item,
-    key: archiveKey({
-      courseSku: manifest.courseSku,
-      cohort,
+
+  for (const { track, fileId, name, bytes, durationSec } of tracksOf(item)) {
+    const label = track === "summary" ? `${item.moduleCode} summary` : item.moduleCode;
+    const already = track === "summary" ? module.summary?.sourceKey : module.sourceKey;
+    if (already && !FORCE) {
+      skipped.push(`${label}: already archived (${already})`);
+      continue;
+    }
+    planned.push({
       moduleCode: item.moduleCode,
-      moduleTitle: module.title,
-    }),
-  });
+      track,
+      label,
+      fileId,
+      name,
+      bytes,
+      durationSec,
+      key: archiveKey({
+        courseSku: manifest.courseSku,
+        cohort,
+        moduleCode: item.moduleCode,
+        moduleTitle: module.title,
+        track,
+      }),
+    });
+  }
+}
+
+// The course intro belongs to no module — it plays before the first one — so
+// it is planned off the manifest's own `onboarding` block and recorded on the
+// course document rather than inside `modules`.
+if (manifest.onboarding?.fileId && !ONLY.length) {
+  const already = course.onboarding?.sourceKey;
+  if (already && !FORCE) {
+    skipped.push(`intro: already archived (${already})`);
+  } else {
+    planned.push({
+      moduleCode: "",
+      track: "onboarding",
+      label: "intro",
+      fileId: manifest.onboarding.fileId,
+      name: manifest.onboarding.name,
+      bytes: manifest.onboarding.bytes,
+      durationSec: manifest.onboarding.durationSec,
+      key: `courses/${manifest.courseSku}/${cohort}/course-intro.mp4`,
+    });
+  }
 }
 
 const totalBytes = planned.reduce((sum, i) => sum + Number(i.bytes || 0), 0);
@@ -721,34 +891,38 @@ if (VERIFY) {
   let ok = 0;
   let bytes = 0;
 
-  console.log(`\nverifying ${manifest.items.length} recordings against s3://${bucket}\n`);
+  const expectedTracks = manifest.items.flatMap((item) =>
+    tracksOf(item).map((t) => ({ ...t, moduleCode: item.moduleCode })),
+  );
+  console.log(`\nverifying ${expectedTracks.length} recordings against s3://${bucket}\n`);
 
-  for (const item of manifest.items) {
-    const module = (course.modules || []).find((m) => m.code === item.moduleCode);
-    const expected = Number(item.bytes) || 0;
+  for (const entry of expectedTracks) {
+    const module = (course.modules || []).find((m) => m.code === entry.moduleCode);
+    const recorded =
+      entry.track === "summary" ? module?.summary?.sourceKey : module?.sourceKey;
+    const label = entry.track === "summary" ? `${entry.moduleCode}+s` : entry.moduleCode;
+    const expected = Number(entry.bytes) || 0;
 
-    if (!module?.sourceKey) {
-      problems.push(`${item.moduleCode}  not archived — no sourceKey recorded`);
+    if (!recorded) {
+      problems.push(`${label}  not archived — no sourceKey recorded`);
       continue;
     }
 
-    const actual = await objectSize(module.sourceKey, bucket);
+    const actual = await objectSize(recorded, bucket);
     if (actual === null) {
-      problems.push(
-        `${item.moduleCode}  RECORDED BUT MISSING — ${module.sourceKey} is not in the bucket`,
-      );
+      problems.push(`${label}  RECORDED BUT MISSING — ${recorded} is not in the bucket`);
     } else if (actual !== expected) {
       problems.push(
-        `${item.moduleCode}  SIZE MISMATCH — S3 has ${gb(actual)}, Drive has ${gb(expected)}`,
+        `${label}  SIZE MISMATCH — S3 has ${gb(actual)}, Drive has ${gb(expected)}`,
       );
     } else {
       ok += 1;
       bytes += actual;
-      console.log(`  ✓ ${item.moduleCode.padEnd(5)} ${gb(actual).padStart(8)}  ${module.sourceKey}`);
+      console.log(`  ✓ ${label.padEnd(7)} ${gb(actual).padStart(8)}  ${recorded}`);
     }
   }
 
-  console.log(`\n${ok}/${manifest.items.length} verified, ${gb(bytes)} archived.`);
+  console.log(`\n${ok}/${expectedTracks.length} verified, ${gb(bytes)} archived.`);
 
   if (problems.length) {
     console.log(`\n${problems.length} problem(s):`);
@@ -798,7 +972,7 @@ const bucket = archiveBucket();
 let done = 0;
 
 for (const item of planned) {
-  const label = `${item.moduleCode} (${gb(item.bytes)})`;
+  const label = `${item.label} (${gb(item.bytes)})`;
   try {
     const existing = await objectSize(item.key, bucket);
     if (existing !== null && existing === Number(item.bytes) && !FORCE) {
@@ -850,10 +1024,21 @@ for (const item of planned) {
       process.stdout.write("\r".padEnd(lastLine + 1) + "\r");
     }
 
-    const module = course.modules.find((m) => m.code === item.moduleCode);
-    module.sourceKey = item.key;
-    module.sourceName = item.name;
-    module.sourceBytes = Number(item.bytes) || 0;
+    let target;
+    if (item.track === "onboarding") {
+      if (!course.onboarding) course.onboarding = {};
+      target = course.onboarding;
+    } else {
+      const module = course.modules.find((m) => m.code === item.moduleCode);
+      if (item.track === "summary" && !module.summary) module.summary = {};
+      target = item.track === "summary" ? module.summary : module;
+    }
+    target.sourceKey = item.key;
+    target.sourceName = item.name;
+    target.sourceBytes = Number(item.bytes) || 0;
+    // Drive already knows how long each recording runs, and the player wants it
+    // to label the tabs. Cheaper to carry it across now than to probe S3 later.
+    if (item.durationSec) target.durationSec = Number(item.durationSec);
     await course.save();
 
     done += 1;

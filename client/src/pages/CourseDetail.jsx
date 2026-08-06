@@ -25,6 +25,11 @@ function statCard(label, value, helper = "") {
   return { label, value, helper };
 }
 
+/* Stands in for a module code in the sidebar selection, so one piece of state
+   drives both which recording plays and which panel is shown. Never sent to the
+   server: the intro is requested with an empty moduleCode. */
+const INTRO_CODE = "__intro";
+
 /**
  * Claims a streaming seat for the module being watched, keeps it alive with a
  * heartbeat, and hands back the session ref that gets burned into the video
@@ -33,13 +38,20 @@ function statCard(label, value, helper = "") {
  * Returns `blocked` when the account already has the maximum number of streams
  * running — the seat frees itself ~90s after the other device stops, so the
  * message tells the student that rather than leaving them stuck.
+ *
+ * `track` picks the lecture or its recap clip. Switching tears the session down
+ * and claims a fresh one, which is right: they are two different encodes behind
+ * two different signed prefixes, and only one of them is playing at a time.
  */
-function usePlaybackSession(sku, moduleCode, token) {
+function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
   const [session, setSession] = React.useState(null);
   const [blocked, setBlocked] = React.useState(null);
 
   React.useEffect(() => {
-    if (!sku || !moduleCode || !token) return undefined;
+    // The intro belongs to the course, not to a module, so it is the one track
+    // that legitimately has no module code.
+    if (!sku || !token) return undefined;
+    if (!moduleCode && track !== "onboarding") return undefined;
 
     let cancelled = false;
     let timer = null;
@@ -70,7 +82,10 @@ function usePlaybackSession(sku, moduleCode, token) {
             token,
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ moduleCode }),
+            body: JSON.stringify({
+              moduleCode: track === "onboarding" ? "" : moduleCode,
+              track,
+            }),
           },
         );
         if (cancelled) {
@@ -113,7 +128,7 @@ function usePlaybackSession(sku, moduleCode, token) {
       window.removeEventListener("pagehide", stop);
       stop();
     };
-  }, [sku, moduleCode, token]);
+  }, [sku, moduleCode, token, track]);
 
   return { session, blocked };
 }
@@ -125,6 +140,7 @@ export default function CourseDetail() {
   const [err, setErr] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
   const [activeCode, setActiveCode] = React.useState("");
+  const [track, setTrack] = React.useState("lecture");
   const [certModalOpen, setCertModalOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
@@ -149,7 +165,15 @@ export default function CourseDetail() {
     sku,
     activeCode,
     accessToken,
+    track,
   );
+
+  // Moving to another session always lands on its lecture. Staying on "recap"
+  // across a module change would silently start the next session on a 3-minute
+  // summary — and on the modules that have none, on nothing at all.
+  React.useEffect(() => {
+    setTrack(activeCode === INTRO_CODE ? "onboarding" : "lecture");
+  }, [activeCode]);
 
   async function markComplete(moduleCode) {
     try {
@@ -219,10 +243,15 @@ export default function CourseDetail() {
   if (!data) return <div className="card text-sm text-slate-600">Loading...</div>;
 
   const { course, enrollment, progress, moduleSubmissions, summary, access, classroom } = data;
-  const active =
-    moduleSubmissions.find((module) => module.moduleCode === activeCode) ||
-    moduleSubmissions[0] ||
-    {};
+  // The intro is not a module: it has no assignment, no quiz and nothing to
+  // mark complete, so it selects an empty module rather than falling through to
+  // the first one — which would quietly play lecture one under an "intro" tab.
+  const isIntro = activeCode === INTRO_CODE;
+  const active = isIntro
+    ? {}
+    : moduleSubmissions.find((module) => module.moduleCode === activeCode) ||
+      moduleSubmissions[0] ||
+      {};
 
   // A signed CloudFront stream wins when the session hands one back: it is the
   // only source that carries the concurrency seat and the audit row. Anything
@@ -231,9 +260,15 @@ export default function CourseDetail() {
   // Only fall back to the onboarding video when there are no modules at all.
   // Playing it under every module made all 18 sessions look like the same
   // recording while the real ones were still being migrated.
-  const fallbackSrc = active?.moduleCode
-    ? active?.videoUrl || ""
-    : course?.onboardingVideoUrl || "";
+  // The legacy per-module URL is the lecture, so it is not a stand-in for a
+  // recap that has not finished encoding — showing the two-hour session under
+  // a "Recap" tab would be worse than showing nothing.
+  const fallbackSrc =
+    track === "summary"
+      ? ""
+      : active?.moduleCode
+        ? active?.videoUrl || ""
+        : course?.onboardingVideoUrl || "";
   const parsed = hlsSrc ? null : parseBunny(fallbackSrc);
   const isBunny = parsed?.kind === "bunny";
   const playerSrc = hlsSrc || (isBunny ? bunnyIframeSrc(parsed.libId, parsed.videoId) : parsed?.src);
@@ -432,6 +467,37 @@ export default function CourseDetail() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="card lg:col-span-2">
+          {active?.hasSummary ? (
+            <div className="mb-3 flex items-center gap-1 rounded-lg bg-slate-100 p-1 dark:bg-white/5 w-fit">
+              {[
+                { id: "lecture", label: "Full session", hint: active.durationSec },
+                { id: "recap", label: "Recap", hint: active.summaryDurationSec },
+              ].map((tab) => {
+                const id = tab.id === "recap" ? "summary" : "lecture";
+                const on = track === id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setTrack(id)}
+                    aria-pressed={on}
+                    className={`rounded-md px-3 py-1.5 text-sm transition ${
+                      on
+                        ? "bg-white font-medium text-slate-900 shadow-sm dark:bg-white/10 dark:text-white"
+                        : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.hint ? (
+                      <span className="ml-1.5 text-xs opacity-60">
+                        {Math.round(tab.hint / 60)} min
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           {playbackBlocked ? (
             <div className="grid w-full aspect-video place-items-center rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
               <div>
@@ -553,12 +619,34 @@ export default function CourseDetail() {
               </div>
             </div>
           )}
-          <ModuleQuiz sku={sku} moduleCode={active?.moduleCode || ""} />
+          {isIntro ? null : <ModuleQuiz sku={sku} moduleCode={active?.moduleCode || ""} />}
         </div>
 
         <div className="card">
           <div className="mb-2 font-semibold">Modules</div>
           <div className="space-y-2">
+            {course?.hasOnboarding ? (
+              <button
+                className={`w-full rounded border border-dashed p-3 text-left hover:bg-slate-50 ${
+                  activeCode === INTRO_CODE ? "ring-2 ring-adlm-blue-700" : ""
+                }`}
+                onClick={() => setActiveCode(INTRO_CODE)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium">Start here — course intro</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      How the programme runs
+                    </div>
+                  </div>
+                  {course.onboardingDurationSec ? (
+                    <div className="text-right text-xs text-slate-500">
+                      {Math.round(course.onboardingDurationSec / 60)} min
+                    </div>
+                  ) : null}
+                </div>
+              </button>
+            ) : null}
             {moduleSubmissions.map((module, idx) => (
               <button
                 key={module.moduleCode}

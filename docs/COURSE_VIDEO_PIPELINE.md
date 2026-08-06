@@ -32,6 +32,45 @@ only turns up EBS volumes and CloudFormation articles.
 
 ---
 
+## 1a. "This file cannot be downloaded by the user"
+
+Sharing the folder is enough for recordings that live in a personal Drive. It is
+often **not** enough for a course that ran on Google Classroom, where each video
+carries its own download restriction:
+
+```
+capabilities: { canEdit: true, canDownload: false }
+GET ?alt=media  ->  403 "This file cannot be downloaded by the user"
+```
+
+Editable but not downloadable, which reads like a bug and is not one. Two
+separate things have to be true, and only fixing both clears it:
+
+1. **The ingest account has to be an Editor**, not a Viewer. The restriction is
+   "*viewers and commenters* cannot download", so it is escaped by role.
+2. **Each file's own setting has to allow editors to download.** On the file:
+   **⋮ → Share → the gear icon → People who can download, copy, and print →
+   tick Editors**. Students keep their protection: viewers and commenters stay
+   blocked. Clearing the equivalent setting on the *folder* does not reach files
+   that already carry their own copy of the flag — Drive reports it per file as
+   `copyRequiresWriterPermission`.
+
+Step 2 is per file. Multi-select a whole week folder before opening Share, or
+expect to repeat it once per recording.
+
+`--check` proves the whole path in seconds by pulling a real kilobyte of
+content, which is the only evidence that means anything here — metadata reads
+succeed the entire time the bytes are refused.
+
+> If a genuine Workspace policy ever blocks download domain-wide rather than
+> per file, `COURSE_GOOGLE_IMPERSONATE_USER=someone@yourdomain` makes the
+> service account act as that user instead. It needs the service account's
+> numeric client id authorised for domain-wide delegation (admin console →
+> Security → API controls) against the `drive.readonly` scope. That was not the
+> cause here, and it is worth ruling out the per-file setting first.
+
+---
+
 ## 2. S3 buckets
 
 Region: **eu-west-1** is a sensible default. `af-south-1` (Cape Town) is

@@ -24,6 +24,15 @@ const PlaybackSessionSchema = new mongoose.Schema(
     email: { type: String, default: "" },
     courseSku: { type: String, index: true },
     moduleCode: { type: String, default: "" },
+    // Which recording was playing: the lecture, its recap, or the course intro
+    // (which belongs to no module, so moduleCode is empty for that one). Watch
+    // time against a 3-minute summary means something different from watch
+    // time against a 2-hour session.
+    track: {
+      type: String,
+      enum: ["lecture", "summary", "onboarding"],
+      default: "lecture",
+    },
 
     // Short, human-quotable handle that also appears in the video watermark.
     sessionRef: { type: String, index: true, required: true },

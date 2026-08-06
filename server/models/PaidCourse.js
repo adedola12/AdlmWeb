@@ -1,5 +1,30 @@
 import mongoose from "mongoose";
 
+/**
+ * One playable recording: the master in the archive, and the HLS built from it.
+ *
+ * Broken out because a course now carries more than one recording per place —
+ * a lecture and its short recap on a module, plus a course-level intro — and
+ * ingest, transcode and playback all treat them as the same shape.
+ */
+const TrackSchema = new mongoose.Schema(
+  {
+    sourceKey: { type: String, default: "" },
+    sourceName: { type: String, default: "" },
+    sourceBytes: { type: Number, default: 0 },
+    hlsKey: { type: String, default: "" },
+    transcodeJobId: { type: String, default: "" },
+    transcodeStatus: {
+      type: String,
+      enum: ["", "SUBMITTED", "PROGRESSING", "COMPLETE", "ERROR", "CANCELED"],
+      default: "",
+    },
+    transcodeError: { type: String, default: "" },
+    durationSec: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
 const ModuleSchema = new mongoose.Schema(
   {
     code: String,
@@ -27,6 +52,10 @@ const ModuleSchema = new mongoose.Schema(
       default: "",
     },
     transcodeError: { type: String, default: "" },
+
+    // The 2-4 minute recap recorded alongside this session. Optional: the
+    // building-works cohort has none, and MEP week 1 has none either.
+    summary: { type: TrackSchema, default: () => ({}) },
   },
   { _id: false },
 );
@@ -38,7 +67,13 @@ const PaidCourseSchema = new mongoose.Schema(
     blurb: { type: String, default: "" },
     description: { type: String, default: "" },
     thumbnailUrl: { type: String },
+
+    // `onboardingVideoUrl` is the legacy field — a plain URL on someone else's
+    // host. `onboarding` is the same video carried through our own pipeline,
+    // and wins when it has been encoded, because only it is behind the signed
+    // cookies and the concurrency seat.
     onboardingVideoUrl: { type: String },
+    onboarding: { type: TrackSchema, default: () => ({}) },
     classroomJoinUrl: { type: String, default: "" },
     classroomProvider: {
       type: String,
