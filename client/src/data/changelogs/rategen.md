@@ -10,9 +10,29 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
-## 2.5.0 — July 2026 — Build with AI & one master price library
+## 2.6.0 — August 2026 — Your custom rates build your price library
 
-Describe a rate in plain English and let RateGen draft the build-up for you — and every ADLM product now prices from the same master library for your zone.
+Happy new month. Every material and labour line you price on a custom rate now joins your library automatically — and when the AI drafts a build-up, it prices from your library instead of guessing.
+
+### ✨ New
+
+- **Your custom rates now build up your price library.** Every material and labour line you price on a custom rate is added to your library when you save it. Type a material once and it is in the dropdown — with its rate and unit — for every rate you build afterwards. Prices you already have are never changed: if the library already knows an item, saving a rate that uses it at a different figure leaves your library price alone, and only items the library has never seen are added. New entries appear under the category **Custom Rate**, and the save confirmation tells you how many were added.
+- **Build with AI now uses your prices.** When the AI drafts a rate build-up, any component that exists in your library is priced from your library, at your rate and your unit — the AI's own figure is discarded. Only components your library has never heard of keep the AI's estimate, and those stay tagged `[AI]` so you can see at a glance which lines still need your review. Previously the AI's price overrode your library on every line.
+
+### 🔧 Improved
+
+- **Organizations can buy RateGen for one user.** Organization licences start at two users across the rest of the range; RateGen is now the exception. Choose an organization licence on the purchase page and you can set seats to 1 — so a firm that needs RateGen for a single estimator buys it in the company's name, and under the company's billing details, without paying for a seat it won't use. Every other product still starts at two.
+- **Press Enter to sign in.** Enter from either the email or the password field signs you in. Enter on "Forgot password?" and "Create account" still opens those pages.
+
+### 🐛 Fixed
+
+- **Overhead and Profit are readable again.** Both boxes were rendering their value clipped out of view, so they looked empty. They now show their percentage clearly, with the cash value each one adds shown underneath — and the totals block gained **Overhead**, **Profit** and a **Grand Total** line. The grand total was being calculated but never displayed.
+- **A part-typed percentage no longer wipes the box.** Typing "1." into Overhead or Profit blanked the field mid-entry.
+- **Reopening a saved rate no longer zeroes AI-priced labour.** Any labour line your library does not recognise — every line tagged `[AI]` — lost its price when the rate was loaded back.
+
+## 2.5.1 — 31 July 2026 — Sign-in restored, Build with AI & one master price library
+
+RateGen could not sign in after ADLM's servers moved. It now finds the service through your machine's settings rather than an address fixed when the app was built — and the same release brings AI-drafted build-ups and one shared price library.
 
 ### ✨ New
 
@@ -22,6 +42,18 @@ Describe a rate in plain English and let RateGen draft the build-up for you — 
 ### 🔧 Improved
 
 - **Your zone follows your account.** Refreshing your profile stores your account's pricing zone, so every sync prices against your real location. Signing in now refreshes prices silently even when your zone hasn't changed; the confirmation prompt is kept for an actual zone switch.
+- **A server move no longer means a new download.** RateGen now reads `ADLM_API_BASE_URL` from your machine — the setting the ADLM Installer Hub already writes — so the service address can change without a new version being shipped to every customer.
+
+### 🐛 Fixed
+
+- **Sign-in failing after the server move.** RateGen had the retired server address built in as its fallback for both sign-in and licence checks, so an installed copy could not be redirected without shipping a new build. It now resolves the address from your machine's settings first, and an old setting still naming the retired server is ignored rather than obeyed — older RateGen installers wrote that address into your Windows environment, so on exactly the machines that were broken the stale value would otherwise have outranked the fix.
+
+## 2.5.0 — July 2026 — Stable device binding
+
+Sign-in stops treating the same computer as a new device every time your network changes.
+
+### 🔧 Improved
+
 - **Diagnosable upgrades.** Data-migration problems on startup are written to a timestamped log under your local app data instead of being discarded, so a support ticket can be resolved from the log. Migrations still never block RateGen from starting.
 
 ### 🐛 Fixed
