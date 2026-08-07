@@ -19,9 +19,41 @@ const FlyerSchema = new mongoose.Schema(
     thumbnailUrl: { type: String, trim: true, default: "" },
     published: { type: Boolean, default: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+    // Editorial calendar. Deliberately a plan, not an automation: nothing here
+    // posts anything. Flyer images are rendered by html2canvas in the browser,
+    // so a job with no browser has no image to send — `status` is moved by a
+    // person, and `postedAt` records when they say they did it.
+    schedule: {
+      // Null means unscheduled, which is what the backlog view lists.
+      scheduledFor: { type: Date, default: null },
+      channels: {
+        type: [String],
+        default: [],
+        validate: {
+          validator: (v) =>
+            !Array.isArray(v) ||
+            v.every((c) =>
+              ["instagram", "facebook", "linkedin", "x", "whatsapp", "youtube", "other"].includes(c),
+            ),
+          message: "Unknown channel",
+        },
+      },
+      status: {
+        type: String,
+        enum: ["planned", "ready", "posted"],
+        default: "planned",
+      },
+      postedAt: { type: Date, default: null },
+      notes: { type: String, default: "", maxlength: 500 },
+    },
   },
   { timestamps: true, minimize: false },
 );
+
+// The calendar reads by date window, and the due-nudge reads everything not yet
+// posted with a date in the past. Both are this index.
+FlyerSchema.index({ "schedule.scheduledFor": 1, "schedule.status": 1 });
 
 export const Flyer =
   mongoose.models.Flyer || mongoose.model("Flyer", FlyerSchema);

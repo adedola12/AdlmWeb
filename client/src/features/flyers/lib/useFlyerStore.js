@@ -52,6 +52,29 @@ export function useFlyerStore(accessToken) {
     [accessToken, reload],
   );
 
+  /**
+   * Calendar fields only. Goes to its own endpoint rather than PUT, because
+   * PUT replaces `data` wholesale — scheduling through it would mean sending
+   * the whole flyer config back just to move a date.
+   *
+   * Patches the local list in place instead of reloading: the calendar changes
+   * a status per click, and a full refetch per click makes the UI jump.
+   */
+  const setSchedule = useCallback(
+    async (id, patch) => {
+      const res = await apiAuthed(`/admin/flyers/${id}/schedule`, {
+        token: accessToken,
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res?.ok) throw new Error(res?.error || "Could not update the schedule");
+      setFlyers((list) => list.map((f) => (f._id === id ? res.item : f)));
+      return res.item;
+    },
+    [accessToken],
+  );
+
   const deleteFlyer = useCallback(
     async (id) => {
       const res = await apiAuthed(`/admin/flyers/${id}`, {
@@ -64,5 +87,5 @@ export function useFlyerStore(accessToken) {
     [accessToken, reload],
   );
 
-  return { flyers, loading, error, reload, saveFlyer, deleteFlyer };
+  return { flyers, loading, error, reload, saveFlyer, deleteFlyer, setSchedule };
 }

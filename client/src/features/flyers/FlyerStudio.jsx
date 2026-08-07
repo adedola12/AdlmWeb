@@ -12,6 +12,7 @@ import FlyerCanvas from "./templates/FlyerCanvas.jsx";
 import FlyerForm from "./components/FlyerForm.jsx";
 import ExportControls from "./components/ExportControls.jsx";
 import SavedFlyersList from "./components/SavedFlyersList.jsx";
+import FlyerCalendar from "./components/FlyerCalendar.jsx";
 import { defaultFlyer, normalizeFlyer, TEMPLATES, templatesForFormat } from "./lib/defaults.js";
 import { getFormat, FORMATS } from "./lib/formats.js";
 import { useFlyerStore } from "./lib/useFlyerStore.js";
@@ -24,13 +25,20 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeou
 export default function FlyerStudio({ accessToken }) {
   const exportRef = useRef(null);
   const [flyer, setFlyer] = useState(() => defaultFlyer("announcement"));
-  const [packVariant, setPackVariant] = useState(null);
+  // Whatever the offscreen node should render instead of the edited flyer.
+  // Used by both the 4-layout pack (same flyer, different template) and the
+  // bulk export (a different flyer entirely) — one mechanism, since the only
+  // thing that varies is which flyer object gets mounted.
+  const [exportOverride, setExportOverride] = useState(null);
   const [showSaved, setShowSaved] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [bulkLabel, setBulkLabel] = useState("");
+  const [schedulingId, setSchedulingId] = useState("");
   const [busy, setBusy] = useState(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const { flyers, deleteFlyer, saveFlyer } = useFlyerStore(accessToken);
+  const { flyers, deleteFlyer, saveFlyer, setSchedule } = useFlyerStore(accessToken);
 
   // Derived format
   const fmt = getFormat(flyer.format || "portrait");
@@ -38,6 +46,13 @@ export default function FlyerStudio({ accessToken }) {
   const PREVIEW_H = Math.round(fmt.h * SCALE);
 
   const templateLabel = TEMPLATES.find((t) => t.value === flyer.template)?.label || flyer.template;
+
+  // Scheduled, past its date, and nobody has marked it posted. Surfaced on the
+  // toolbar so the calendar does not have to be open to notice.
+  const dueCount = flyers.filter((f) => {
+    const when = f?.schedule?.scheduledFor;
+    return when && f?.schedule?.status !== "posted" && new Date(when).getTime() <= Date.now();
+  }).length;
 
   function fileBase() {
     const slug = (flyer.title || "flyer").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "flyer";
@@ -93,14 +108,14 @@ export default function FlyerStudio({ accessToken }) {
     let failed = null;
     try {
       for (const t of formatTemplates) {
-        flushSync(() => setPackVariant(t.value));
+        flushSync(() => setExportOverride({ ...flyer, template: t.value }));
         await nextFrame();
         const canvas = await captureCanvas(exportRef.current);
         const blob = await canvasToBlob(canvas);
         zip.file(`ADLM_${t.value}.png`, blob);
       }
     } catch (e) { failed = e; }
-    finally { flushSync(() => setPackVariant(null)); }
+    finally { flushSync(() => setExportOverride(null)); }
     if (failed) { setMsg(`Pack failed: ${failed.message}`); setBusy(null); return; }
     try {
       const content = await zip.generateAsync({ type: "blob" });
@@ -109,6 +124,97 @@ export default function FlyerStudio({ accessToken }) {
       URL.revokeObjectURL(url);
     } catch (e) { setMsg(`Pack failed: ${e.message}`); }
     finally { setBusy(null); }
+  }
+
+  /**
+   * Bulk export: one PNG per selected flyer, in one zip.
+   *
+   * Rendering is the constraint. html2canvas can only photograph a node that
+   * is actually mounted, so this cannot fan out — each flyer is mounted into
+   * the offscreen node in turn, captured, and replaced. Sequential by
+   * necessity, which is why it reports progress rather than just spinning.
+   *
+   * A flyer that fails to render does not abandon the others: it is collected
+   * and named at the end, and the zip still contains everything that worked.
+   */
+  async function handleBulkExport(ids) {
+    const chosen = ids
+      .map((id) => flyers.find((f) => f._id === id))
+      .filter(Boolean);
+    if (!chosen.length) return;
+
+    setMsg("");
+    const zip = new JSZip();
+    const failures = [];
+    const usedNames = new Set();
+
+    try {
+      for (let i = 0; i < chosen.length; i += 1) {
+        const doc = chosen[i];
+        setBulkLabel(`Rendering ${i + 1}/${chosen.length}…`);
+        try {
+          const target = normalizeFlyer(doc.data || {});
+          target.template = doc.template || target.template;
+          flushSync(() => setExportOverride(target));
+          await nextFrame();
+          const canvas = await captureCanvas(exportRef.current);
+          const blob = await canvasToBlob(canvas);
+
+          // Two flyers can share a title, and JSZip would silently keep only
+          // the last one under a duplicate name.
+          const slug =
+            (doc.title || "flyer").toLowerCase().replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-|-$/g, "").slice(0, 40) || "flyer";
+          let name = `ADLM_${slug}.png`;
+          let n = 2;
+          while (usedNames.has(name)) name = `ADLM_${slug}-${n++}.png`;
+          usedNames.add(name);
+
+          zip.file(name, blob);
+        } catch {
+          // Named at the end rather than aborting: one unrenderable flyer
+          // should not cost you the other nineteen.
+          failures.push(doc.title || doc._id);
+        }
+      }
+    } finally {
+      flushSync(() => setExportOverride(null));
+    }
+
+    if (!usedNames.size) {
+      setBulkLabel("");
+      setMsg(`Export failed — none of the ${chosen.length} flyers could be rendered.`);
+      return;
+    }
+
+    try {
+      setBulkLabel("Zipping…");
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      downloadDataUrl(url, `ADLM_flyers_${usedNames.size}.zip`);
+      URL.revokeObjectURL(url);
+      setMsg(
+        failures.length
+          ? `Exported ${usedNames.size} of ${chosen.length}. Failed: ${failures.join(", ")}.`
+          : `Exported ${usedNames.size} flyer${usedNames.size === 1 ? "" : "s"}.`,
+      );
+    } catch (e) {
+      setMsg(`Could not build the zip: ${e.message}`);
+    } finally {
+      setBulkLabel("");
+    }
+  }
+
+  async function handleSchedule(id, patch) {
+    setSchedulingId(id);
+    setMsg("");
+    try {
+      await setSchedule(id, patch);
+    } catch (e) {
+      setMsg(e?.message || "Could not update the schedule");
+    } finally {
+      setSchedulingId("");
+    }
   }
 
   async function handleSaveLibrary() {
@@ -146,7 +252,11 @@ export default function FlyerStudio({ accessToken }) {
 
   function handleNew() { setFlyer(defaultFlyer(flyer.template)); setMsg(""); }
 
-  const exportFlyer = packVariant ? { ...flyer, template: packVariant } : flyer;
+  const exportFlyer = exportOverride || flyer;
+  // Sized from the flyer being exported, not the one being edited. A bulk
+  // selection can mix portrait flyers with 16:9 thumbnails, and capturing a
+  // 1280×720 thumbnail through a 1080×1350 window would crop it.
+  const exportFmt = getFormat(exportFlyer.format || "portrait");
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 170px)", minHeight:620, border:"1.5px solid #DDE3F0", borderRadius:14, overflow:"hidden", background:"#fff", fontFamily:"'Lexend',sans-serif" }}>
@@ -173,7 +283,10 @@ export default function FlyerStudio({ accessToken }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={handleNew} style={toolBtn(false)}>+ New</button>
-          <button onClick={() => setShowSaved((v) => !v)} style={toolBtn(true)}>Saved ({flyers.length})</button>
+          <button onClick={() => { setShowCalendar((v) => !v); setShowSaved(false); }} style={toolBtn(false)}>
+            Calendar{dueCount ? ` (${dueCount})` : ""}
+          </button>
+          <button onClick={() => { setShowSaved((v) => !v); setShowCalendar(false); }} style={toolBtn(true)}>Saved ({flyers.length})</button>
         </div>
       </div>
 
@@ -206,15 +319,42 @@ export default function FlyerStudio({ accessToken }) {
       </div>
 
       {/* Offscreen native-size export node */}
-      <div aria-hidden="true" style={{ position:"fixed", top:0, left:-99999, width:fmt.w, height:fmt.h, pointerEvents:"none", zIndex:-1 }}>
+      <div aria-hidden="true" style={{ position:"fixed", top:0, left:-99999, width:exportFmt.w, height:exportFmt.h, pointerEvents:"none", zIndex:-1 }}>
         <FlyerCanvas ref={exportRef} flyer={exportFlyer} />
       </div>
 
       {/* Saved flyers drawer */}
       {showSaved && (
         <>
-          <div style={{ position:"fixed", inset:0, background:"rgba(5,17,31,.18)", zIndex:99 }} onClick={() => setShowSaved(false)} />
-          <SavedFlyersList flyers={flyers} currentId={flyer.id} onLoad={handleLoad} onDelete={handleDelete} onClose={() => setShowSaved(false)} />
+          {/* No click-away while a bulk export is running: closing the drawer
+              unmounts nothing it depends on, but it does hide the only progress
+              indicator, and the render loop keeps going invisibly. */}
+          <div
+            style={{ position:"fixed", inset:0, background:"rgba(5,17,31,.18)", zIndex:99 }}
+            onClick={() => { if (!bulkLabel) setShowSaved(false); }}
+          />
+          <SavedFlyersList
+            flyers={flyers}
+            currentId={flyer.id}
+            onLoad={handleLoad}
+            onDelete={handleDelete}
+            onClose={() => { if (!bulkLabel) setShowSaved(false); }}
+            onBulkExport={handleBulkExport}
+            exporting={bulkLabel}
+          />
+        </>
+      )}
+
+      {showCalendar && (
+        <>
+          <div style={{ position:"fixed", inset:0, background:"rgba(5,17,31,.18)", zIndex:99 }} onClick={() => setShowCalendar(false)} />
+          <FlyerCalendar
+            flyers={flyers}
+            onLoad={(doc) => { handleLoad(doc); setShowCalendar(false); }}
+            onSchedule={handleSchedule}
+            onClose={() => setShowCalendar(false)}
+            busyId={schedulingId}
+          />
         </>
       )}
     </div>

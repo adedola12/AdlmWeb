@@ -111,6 +111,93 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+const CHANNELS = ["instagram", "facebook", "linkedin", "x", "whatsapp", "youtube", "other"];
+const STATUSES = ["planned", "ready", "posted"];
+
+/**
+ * ✅ SCHEDULE — set or clear the calendar fields on one flyer.
+ *
+ * Separate from PUT deliberately. PUT requires a title and REPLACES `data`
+ * wholesale, so scheduling through it would mean the calendar had to round-trip
+ * the entire flyer config just to move a date — and any caller that forgot
+ * would silently wipe the artwork. This touches only `schedule`.
+ */
+router.patch("/:id/schedule", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidId(id))
+      return res.status(400).json({ ok: false, error: "Invalid id" });
+
+    const patch = {};
+
+    if ("scheduledFor" in req.body) {
+      const raw = req.body.scheduledFor;
+      if (raw === null || raw === "") {
+        patch["schedule.scheduledFor"] = null;
+      } else {
+        const when = new Date(raw);
+        if (Number.isNaN(when.getTime()))
+          return res.status(400).json({ ok: false, error: "Invalid scheduledFor" });
+        patch["schedule.scheduledFor"] = when;
+      }
+    }
+
+    if ("channels" in req.body) {
+      const list = Array.isArray(req.body.channels) ? req.body.channels : [];
+      const bad = list.filter((c) => !CHANNELS.includes(c));
+      if (bad.length)
+        return res.status(400).json({ ok: false, error: `Unknown channel: ${bad[0]}` });
+      patch["schedule.channels"] = [...new Set(list)];
+    }
+
+    if ("status" in req.body) {
+      if (!STATUSES.includes(req.body.status))
+        return res.status(400).json({ ok: false, error: "Invalid status" });
+      patch["schedule.status"] = req.body.status;
+      // Stamped here rather than trusted from the client, so "when was this
+      // posted" cannot drift from when anyone actually said so.
+      patch["schedule.postedAt"] = req.body.status === "posted" ? new Date() : null;
+    }
+
+    if ("notes" in req.body) {
+      patch["schedule.notes"] = String(req.body.notes || "").slice(0, 500);
+    }
+
+    if (!Object.keys(patch).length)
+      return res.status(400).json({ ok: false, error: "Nothing to update" });
+
+    const item = await Flyer.findByIdAndUpdate(id, { $set: patch }, { new: true });
+    if (!item) return res.status(404).json({ ok: false, error: "Not found" });
+
+    return res.json({ ok: true, item });
+  } catch (e) {
+    console.error("flyers schedule", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+/**
+ * ✅ DUE — anything scheduled on or before now that nobody has marked posted.
+ *
+ * This is what the nudge reads. It is a question about the plan, not a queue:
+ * calling it changes nothing.
+ */
+router.get("/due/list", async (req, res) => {
+  try {
+    const items = await Flyer.find({
+      "schedule.scheduledFor": { $ne: null, $lte: new Date() },
+      "schedule.status": { $ne: "posted" },
+    })
+      .select("title template thumbnailUrl schedule")
+      .sort({ "schedule.scheduledFor": 1 })
+      .lean();
+    return res.json({ ok: true, items });
+  } catch (e) {
+    console.error("flyers due", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
 // ✅ DELETE
 router.delete("/:id", async (req, res) => {
   try {

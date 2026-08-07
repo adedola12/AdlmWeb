@@ -10,9 +10,36 @@ import React from "react";
 //   onLoad     (flyer)  -> load this flyer into the editor
 //   onDelete   (_id)    -> delete this flyer
 //   onClose    ()       -> close the drawer
+//   onBulkExport (ids)  -> render each selected flyer and zip the PNGs
+//   exporting  string   -> progress label while a bulk export runs
 
-export default function SavedFlyersList({ flyers, currentId, onLoad, onDelete, onClose }) {
+export default function SavedFlyersList({
+  flyers,
+  currentId,
+  onLoad,
+  onDelete,
+  onClose,
+  onBulkExport,
+  exporting = "",
+}) {
   const list = Array.isArray(flyers) ? flyers : [];
+  const [selected, setSelected] = React.useState(() => new Set());
+
+  const busy = Boolean(exporting);
+  const allSelected = list.length > 0 && selected.size === list.length;
+
+  function toggle(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(list.map((f) => f._id)));
+  }
 
   return (
     <div
@@ -60,6 +87,56 @@ export default function SavedFlyersList({ flyers, currentId, onLoad, onDelete, o
         </button>
       </div>
 
+      {/* Bulk export bar. Rendered whenever anything is saved, so the control
+          is discoverable before you have selected anything — a toolbar that
+          only appears once you already know it exists teaches nobody. */}
+      {list.length > 0 && (
+        <div
+          style={{
+            padding: "10px 14px",
+            borderBottom: `1.5px solid #DDE3F0`,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+            background: "#FAFBFF",
+          }}
+        >
+          <label
+            style={{
+              fontSize: 11,
+              color: "#5A6485",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              cursor: busy ? "default" : "pointer",
+            }}
+          >
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} disabled={busy} />
+            Select all
+          </label>
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            disabled={busy || selected.size === 0}
+            onClick={() => onBulkExport?.([...selected])}
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              padding: "5px 11px",
+              borderRadius: 5,
+              border: "none",
+              cursor: busy || selected.size === 0 ? "default" : "pointer",
+              background: selected.size ? "#05111f" : "#DDE3F0",
+              color: selected.size ? "#fff" : "#8892B0",
+              fontFamily: "'Lexend', sans-serif",
+            }}
+          >
+            {exporting || `Export ${selected.size || ""} (.zip)`.replace("  ", " ")}
+          </button>
+        </div>
+      )}
+
       {/* Empty state */}
       {list.length === 0 && (
         <div
@@ -89,6 +166,27 @@ export default function SavedFlyersList({ flyers, currentId, onLoad, onDelete, o
                 background: "#FAFBFF",
               }}
             >
+              {/* Selection */}
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 10,
+                  color: "#5A6485",
+                  marginBottom: 6,
+                  cursor: busy ? "default" : "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(f._id)}
+                  onChange={() => toggle(f._id)}
+                  disabled={busy}
+                />
+                Include in export
+              </label>
+
               {/* Thumbnail (or placeholder) */}
               {f.thumbnailUrl ? (
                 <img
