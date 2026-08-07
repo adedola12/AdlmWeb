@@ -1,5 +1,16 @@
 # ADLM Cloud — AWS deploy runbook
 
+> **Routine deploys are automated.** `.github/workflows/deploy-api.yml` runs
+> `cdk deploy` whenever `server/**` or `infra/**` lands on `main`, so a server
+> change no longer waits for someone to remember. It needs a one-time IAM/OIDC
+> setup, documented at the top of that file, and it is inert until then.
+>
+> This runbook remains the reference for anything the workflow does not do:
+> first deploys, certificate and DNS changes, and recovering a stack by hand.
+> Run `npx cdk deploy` locally from `infra/` for those.
+
+
+
 Emergency restore of the ADLM Cloud API (`adlmstudio.net`) onto AWS Lambda,
 after the Render suspension took it offline.
 

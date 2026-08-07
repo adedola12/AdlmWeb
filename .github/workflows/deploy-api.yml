@@ -1,0 +1,132 @@
+# Deploys the API Lambda when server or infra code lands on main.
+#
+# WHY THIS EXISTS
+# The client is on Vercel and deploys itself on every push. The API is not: it
+# is a CDK stack that only moves when somebody runs `cdk deploy` by hand. That
+# asymmetry has already cost us — a server change sat unshipped while the
+# client that depended on it was live, and the symptom was a feature silently
+# not appearing rather than anything that looked like a failed deploy.
+#
+# ONE-TIME SETUP (nothing here works until this is done)
+#
+# 1. Add GitHub as an OIDC identity provider in the AWS account, if it is not
+#    already there:
+#
+#      aws iam create-open-id-connect-provider \
+#        --url https://token.actions.githubusercontent.com \
+#        --client-id-list sts.amazonaws.com
+#
+# 2. Create a role GitHub may assume, trusting only this repository's main
+#    branch. Trust policy:
+#
+#      {
+#        "Version": "2012-10-17",
+#        "Statement": [{
+#          "Effect": "Allow",
+#          "Principal": { "Federated": "arn:aws:iam::065634457992:oidc-provider/token.actions.githubusercontent.com" },
+#          "Action": "sts:AssumeRoleWithWebIdentity",
+#          "Condition": {
+#            "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
+#            "StringLike":   { "token.actions.githubusercontent.com:sub": "repo:adedola12/AdlmWeb:ref:refs/heads/main" }
+#          }
+#        }]
+#      }
+#
+#    Keep the `sub` condition. Without it ANY repository on GitHub can assume
+#    this role.
+#
+# 3. Permissions policy on that role — CDK does the real work through its own
+#    bootstrap roles, so this only needs to be allowed to assume them:
+#
+#      {
+#        "Version": "2012-10-17",
+#        "Statement": [{
+#          "Effect": "Allow",
+#          "Action": "sts:AssumeRole",
+#          "Resource": "arn:aws:iam::065634457992:role/cdk-*"
+#        }]
+#      }
+#
+# 4. Repository → Settings → Secrets and variables → Actions → New secret:
+#      AWS_DEPLOY_ROLE_ARN = arn:aws:iam::065634457992:role/<the role above>
+#
+# No long-lived access key is stored anywhere. GitHub mints a short-lived token
+# per run, which is the point of doing it this way.
+
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "infra/**"
+      - ".github/workflows/deploy-api.yml"
+  # Lets you ship without an empty commit — after changing an SSM parameter,
+  # for instance, which needs new containers but touches no code.
+  workflow_dispatch:
+
+# One deploy at a time. cancel-in-progress is deliberately false: cancelling a
+# CloudFormation update midway leaves the stack in UPDATE_IN_PROGRESS and the
+# next run fails on a lock rather than fixing anything.
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # required to mint the OIDC token
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # server/package.json requires >=22.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            infra/package-lock.json
+
+      # The Lambda is bundled with esbuild and `externalModules: []`, so every
+      # import is resolved from server/node_modules at synth time. Without this
+      # the bundle fails to build, not at runtime but during `cdk deploy`.
+      - name: Install server dependencies
+        run: npm ci --prefix server
+
+      - name: Install infra dependencies
+        run: npm ci --prefix infra
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      # Printed into the run log before anything changes, so a surprising deploy
+      # can be read after the fact rather than reconstructed.
+      - name: Diff
+        working-directory: infra
+        run: npx cdk diff || true
+
+      - name: Deploy
+        working-directory: infra
+        # --require-approval never: there are no IAM or security-group changes
+        # in a routine code deploy, and a prompt in CI just hangs until timeout.
+        # A change that DOES touch IAM will still show in the diff step above.
+        run: npx cdk deploy --require-approval never
+
+      # A cold start that cannot import its own bundle returns 502 on every
+      # request, and CloudFormation will have reported success regardless — the
+      # function updated fine, it just cannot run.
+      - name: Smoke test
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://api.adlmstudio.net/health)
+          echo "GET /health -> $code"
+          test "$code" = "200"
