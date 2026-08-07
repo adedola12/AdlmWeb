@@ -177,6 +177,26 @@ function useHlsSource(videoRef, src) {
         // far ahead on a metered Nigerian connection burns the student's data
         // for footage they may never reach.
         maxBufferLength: 30,
+
+        // Discard what has already been watched. hls.js keeps 90s of back
+        // buffer by default, but on a two-hour lecture the real cost is memory
+        // on a cheap Android device, where growth shows up as stutter that
+        // looks like a network problem and is not one.
+        backBufferLength: 30,
+
+        // Deliberately NOT capping the level to the player size. That is the
+        // usual advice, and it is wrong for this content: these are screen
+        // recordings of Revit and Excel, where the thing a student needs to
+        // read is 11px UI text. Capping a phone to its ~360px width would save
+        // bandwidth by making the toolbars illegible — the blurry-playback
+        // complaint the ladder was built to fix in the first place.
+
+        // hls.js assumes a fast connection until it has measured one, which on
+        // a slow link means starting at 720p and stalling before the estimate
+        // catches up. Starting the guess low costs a few seconds at a lower
+        // rung and climbs within one segment; guessing high costs a stall on
+        // the opening minute of every lecture.
+        abrEwmaDefaultEstimate: 600_000,
       });
       hls.loadSource(src);
       hls.attachMedia(video);
