@@ -17,6 +17,7 @@
     "@vercel/functions": "^3.4.2",
     "canvas-confetti": "^1.9.4",
     "dayjs": "^1.11.18",
+    "framer-motion": "^13.0.0",
     "hls.js": "^1.6.16",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.1.0",

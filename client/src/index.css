@@ -636,15 +636,11 @@ body {
   100% { transform: translate3d(-2%, 2%, 0) scale(1.03); }
 }
 
-/* ── 3D tilt (vars are set by the TiltCard component) ───────────────── */
-.tilt {
-  transform: perspective(900px)
-             rotateX(var(--tilt-rx, 0deg))
-             rotateY(var(--tilt-ry, 0deg));
-  transform-style: preserve-3d;
-  transition: transform 200ms ease-out;
-  will-change: transform;
-}
+/* ── 3D tilt ─────────────────────────────────────────────────────────────
+   The rotation itself moved into <TiltCard>, which drives it with Framer
+   Motion springs on the element's own style. Only the inner layer stays here:
+   it is applied by pages directly, and lifts content off the card face so the
+   tilt reads as depth rather than as a flat picture being rotated. */
 .tilt-layer { transform: translateZ(40px); transform-style: preserve-3d; }
 
 /* ── Spotlight sheen that follows the cursor (--mx/--my from JS) ─────── */
@@ -705,18 +701,11 @@ body {
   pointer-events: none;
 }
 
-/* ── Scroll reveal (driven by the Reveal component) ─────────────────────
-   Namespaced .fx-reveal to avoid colliding with page-local .reveal styles
-   (e.g. About.jsx ships its own .reveal/.reveal.show animation). */
-.fx-reveal {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 650ms cubic-bezier(.2, .7, .2, 1),
-              transform 650ms cubic-bezier(.2, .7, .2, 1);
-  transition-delay: var(--reveal-delay, 0ms);
-  will-change: opacity, transform;
-}
-.fx-reveal.is-visible { opacity: 1; transform: none; }
+/* Scroll reveal used to live here as .fx-reveal, toggled by a class. It is now
+   <Reveal> in components/effects.jsx, animated by Framer Motion — which also
+   means an element that never scrolls into view no longer sits at opacity 0
+   with no way back. About.jsx still ships its own page-local .reveal; that one
+   is unrelated and untouched. */
 
 /* ── Floating accents (hero blobs) ──────────────────────────────────── */
 @keyframes float-slow {
@@ -857,8 +846,9 @@ body {
 
 /* ── Respect reduced-motion: kill all the new motion ────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .fx-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
-  .tilt { transition: none !important; }
+  /* .fx-reveal and .tilt are gone — <Reveal> and <TiltCard> now opt out via
+     Framer's useReducedMotion, which tracks the preference live rather than
+     needing a reload. What is left here is the CSS-only motion. */
   .lift { transition: none !important; }
   .license-scene, .license-stage__inner { transition: none !important; }
   .animate-float, .animate-float-slow,
