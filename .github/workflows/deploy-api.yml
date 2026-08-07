@@ -16,8 +16,7 @@
 #        --url https://token.actions.githubusercontent.com \
 #        --client-id-list sts.amazonaws.com
 #
-# 2. Create a role GitHub may assume, trusting only this repository's main
-#    branch. Trust policy:
+# 2. Create a role GitHub may assume. Trust policy:
 #
 #      {
 #        "Version": "2012-10-17",
@@ -26,14 +25,29 @@
 #          "Principal": { "Federated": "arn:aws:iam::065634457992:oidc-provider/token.actions.githubusercontent.com" },
 #          "Action": "sts:AssumeRoleWithWebIdentity",
 #          "Condition": {
-#            "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-#            "StringLike":   { "token.actions.githubusercontent.com:sub": "repo:adedola12/AdlmWeb:ref:refs/heads/main" }
+#            "StringEquals": {
+#              "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+#              "token.actions.githubusercontent.com:sub": "repo:adedola12/AdlmWeb:environment:production"
+#            }
 #          }
 #        }]
 #      }
 #
+#    The `sub` is the ENVIRONMENT form, not `ref:refs/heads/main`. This job
+#    declares `environment: production` below, and that changes the claim
+#    GitHub mints — a ref-pinned condition fails with "Not authorized to
+#    perform sts:AssumeRoleWithWebIdentity", which reads like a missing
+#    permission rather than a mismatched string. Getting the branch guarantee
+#    back is step 2b, not a wider `sub`.
+#
 #    Keep the `sub` condition. Without it ANY repository on GitHub can assume
 #    this role.
+#
+# 2b. Restrict the environment to main, since the trust policy no longer does:
+#
+#      echo '{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}' \
+#        | gh api -X PUT repos/adedola12/AdlmWeb/environments/production --input -
+#      gh api -X POST repos/adedola12/AdlmWeb/environments/production/deployment-branch-policies -f name=main
 #
 # 3. Permissions policy on that role — CDK does the real work through its own
 #    bootstrap roles, so this only needs to be allowed to assume them:
@@ -52,6 +66,10 @@
 #
 # No long-lived access key is stored anywhere. GitHub mints a short-lived token
 # per run, which is the point of doing it this way.
+#
+# DONE on 2026-08-07: provider created, role github-actions-deploy-api,
+# AWS_DEPLOY_ROLE_ARN set, production environment pinned to main. First green
+# run: 31167306535.
 
 name: Deploy API
 
