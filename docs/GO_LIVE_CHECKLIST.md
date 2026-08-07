@@ -375,9 +375,10 @@ Atlas connection. Test: sign in → build a rate → confirm library loads.
 
 **ArchiCAD (`archicad`).** Test: sign in → run a BoQ export.
 
-**TimeMgt (WPF).** Separate Atlas cluster (`TIMEMGT_MONGO_URI`), synced via
-`/api/tasks`. Test: create a task locally → confirm it syncs → confirm it
-appears on the web dashboard.
+**TimeMgt (WPF).** Synced via `/api/tasks` into the main database
+(`adlmWeb.timemgtTasks`) — no separate cluster, and no `TIMEMGT_MONGO_URI`.
+Test: create a task locally → confirm it syncs → confirm it appears on the web
+dashboard.
 
 ### 6c. Confirm the server saw it
 
