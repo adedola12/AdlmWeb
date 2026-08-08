@@ -30,7 +30,7 @@ import { GUIDES } from "../data/guides.js";
 // `message` to "".
 const SEASONAL_NOTE = {
   message:
-    "Happy new month from all of us at ADLM Studio. August opens with ADLM Time Pro 1.1.0 — dark mode, a rebuilt side menu, and Microsoft Project exports that open first time.",
+    "Happy new month from all of us at ADLM Studio. August opens with ADLM Time Pro 1.1.1 — dark mode, a rebuilt side menu, and Microsoft Project exports that open first time.",
   until: "2026-09-01",
 };
 
