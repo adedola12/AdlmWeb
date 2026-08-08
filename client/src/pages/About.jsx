@@ -3,6 +3,11 @@ import React from "react";
 import { Link } from "react-router-dom";
 import dolapo from "../assets/team/Dola.jpeg";
 import richard from "../assets/team/Richard.jpg";
+// This page keeps its own local <Reveal> (a page-local .reveal animation that
+// predates the shared one); only the pieces it does not already have are
+// pulled in from the shared layer.
+import { Stagger, StaggerItem } from "../components/effects.jsx";
+import { Eyebrow } from "../components/brand.jsx";
 // import gladys from "../assets/team/Gladys.JPG";
 
 /* -------------------- tiny animation helpers -------------------- */
@@ -115,10 +120,18 @@ function SafeImg({ src, alt = "", className = "" }) {
 function JourneyTimeline() {
   const items = [
     { year: "2019", title: "ADLM Studio was founded" },
-    { year: "2020", title: "Started QS Software Training" },
-    { year: "2022", title: "Launched PlanSwift plugin" },
-    { year: "2024", title: "Launched Revit Plugin for Quantity Takeoff" },
-    { year: "2025", title: "Launched ADLM Rate Gen" },
+    { year: "2020", title: "Started QS software training" },
+    { year: "2022", title: "Launched the PlanSwift plugin" },
+    { year: "2024", title: "Launched the Revit plugin for quantity takeoff" },
+    {
+      year: "2025",
+      title: "ADLM Rate Generator, and the first BIM + AI course for MEP and HVAC",
+    },
+    {
+      year: "2026",
+      title:
+        "ADLM Cloud, QUIV for Revit and ArchiCAD, Heron, and the move to firm-wide programmes",
+    },
   ];
 
   return (
@@ -317,11 +330,30 @@ export default function AboutADLM() {
           </Reveal>
           <Reveal delay={120}>
             <p className="mt-4 max-w-2xl text-blue-100">
-              ADLM is a Nigerian ConTech studio building practical tools for
-              Quantity Surveyors and AEC teams—BIM plugins, cost automation,
-              rate build-ups, training, and cloud workflows tailored for the
-              African market.
+              ADLM is a Nigerian ConTech studio that digitises quantity surveying
+              end to end — model-based takeoff, rate build-ups, bills,
+              programmes and dashboards — and puts the whole workflow on one
+              platform. We do not sell a tool and leave. We bring firms the
+              software, the training and the process together, so the change
+              actually holds.
             </p>
+          </Reveal>
+          <Reveal delay={180}>
+            <dl className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl">
+              {[
+                ["800+", "AEC professionals trained"],
+                ["10", "products in the suite"],
+                ["2019", "building for Nigerian QS"],
+                ["NIQS", "Official Technical Partner"],
+              ].map(([stat, label]) => (
+                <div key={label}>
+                  <dt className="text-2xl font-extrabold text-white">{stat}</dt>
+                  <dd className="mt-1 text-xs leading-snug text-blue-100/80">
+                    {label}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </Reveal>
           <Reveal delay={240}>
             <div className="mt-6 flex gap-3">
@@ -349,10 +381,11 @@ export default function AboutADLM() {
             <div className="rounded-xl bg-white p-6 ring-1 ring-slate-200 shadow-depth">
               <h3 className="text-xl font-semibold">Our Mission</h3>
               <p className="mt-2 text-slate-600">
-                To empower Quantity Surveyors and construction teams with{" "}
-                <b>Africa-first</b> digital tools that improve{" "}
-                <b>speed, accuracy, and profitability</b>—from model-based
-                takeoff to rate build-ups and asset handover.
+                To digitise the quantity surveying process for African firms —
+                improving <b>accuracy, productivity and workflow</b> from
+                model-based takeoff through rate build-up, bills and handover —
+                and to make that change stick by pairing every tool with the{" "}
+                <b>training and process</b> a firm needs to adopt it.
               </p>
             </div>
           </Reveal>
@@ -397,6 +430,66 @@ export default function AboutADLM() {
             </Reveal>
           ))}
         </div>
+      </section>
+
+      {/* STRENGTHS — what actually differentiates ADLM.
+
+          Every claim here is one we can stand behind publicly. Client work is
+          described, never named: naming a firm on a public page needs that
+          firm's agreement, and several engagements have nothing in writing. */}
+      <section className="max-w-6xl mx-auto px-4 pt-14">
+        <Reveal>
+          <div className="text-center">
+            <Eyebrow tone="blue">Why firms choose us</Eyebrow>
+            <h2 className="mt-3 text-2xl md:text-3xl font-semibold">
+              Built for how Nigerian QS firms actually work
+            </h2>
+            <p className="text-slate-600 dark:text-adlm-dark-muted mt-2 max-w-2xl mx-auto">
+              Most construction software is built elsewhere, priced elsewhere,
+              and assumes a workflow that is not yours. Ours is not.
+            </p>
+          </div>
+        </Reveal>
+
+        <Stagger gap={0.08} className="grid md:grid-cols-2 gap-4 md:gap-6 mt-8">
+          {[
+            {
+              title: "The whole workflow, not one tool",
+              body: "Takeoff from Revit, ArchiCAD, PlanSwift or a flat drawing; rates built from live material and labour prices; bills, programmes and dashboards off the same data. One login, one entitlement, no re-keying between steps.",
+            },
+            {
+              title: "Rates that reflect this market",
+              body: "Rate build-ups run on Nigerian material and labour prices you can edit, not on a foreign cost book converted at a guess. The same engine supports international rates when a project needs them.",
+            },
+            {
+              title: "Tools, training and process together",
+              body: "Software alone does not change how a firm estimates. Every programme pairs the tools with structured training and a working process, delivered in person or online, so the team keeps using it after we leave.",
+            },
+            {
+              title: "Trusted by the profession",
+              body: "Official Technical Partner to the Nigerian Institute of Quantity Surveyors, resource persons on the NIQS professional readiness programme, and 800+ AEC professionals trained through our cohorts and corporate programmes.",
+            },
+            {
+              title: "Proven on real delivery",
+              body: "Beyond software: scan-to-BIM as-built documentation delivered for a Lagos data centre, 4D and 5D BIM programmes running with contractors and QS firms, and MEP and HVAC BIM training delivered on site.",
+            },
+            {
+              title: "AI where it earns its place",
+              body: "Cost intelligence, bill checking and rate build-up support are metered into every subscription — used where it saves a quantity surveyor real time, not bolted on as a demo.",
+            },
+          ].map((s) => (
+            <StaggerItem key={s.title}>
+              <div className="h-full relative spotlight rounded-xl bg-white dark:bg-adlm-dark-panel p-5 ring-1 ring-slate-200 dark:ring-adlm-dark-border shadow-depth">
+                <div className="font-semibold text-slate-900 dark:text-adlm-dark-text">
+                  {s.title}
+                </div>
+                <p className="text-sm text-slate-600 dark:text-adlm-dark-muted mt-2 leading-relaxed">
+                  {s.body}
+                </p>
+              </div>
+            </StaggerItem>
+          ))}
+        </Stagger>
       </section>
 
       {/* JOURNEY / TIMELINE — FIXED */}
