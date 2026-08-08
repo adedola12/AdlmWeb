@@ -2,7 +2,8 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import FeaturedTrainingBanner from "../components/FeaturedTrainingBanner.jsx";
-import { Reveal, TiltCard } from "../components/effects.jsx";
+import { Reveal, Stagger, StaggerItem, TiltCard } from "../components/effects.jsx";
+import { Eyebrow, GlowTile } from "../components/brand.jsx";
 
 import { useAuth } from "../store.jsx";
 
@@ -195,53 +196,51 @@ export default function Home() {
         <div className="relative z-10 flex-1 flex items-center">
           <div className="w-full max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 py-16 sm:py-20">
             <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-              {/* Left — Text + CTA */}
-              <div
-                className="opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
-                style={{ animationDelay: "100ms" }}
-              >
-                {/* Badge */}
-                <div
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-6 opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
-                  style={{
-                    animationDelay: "150ms",
-                    backgroundColor: "rgba(232,106,39,0.15)",
-                    color: "#E86A27",
-                    border: "1px solid rgba(232,106,39,0.3)",
-                  }}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-adlm-orange animate-pulse" />
-                  Trusted by 1,000+ QS Professionals
-                </div>
+              {/* Left — Text + CTA.
 
-                <h1
-                  className="text-3xl sm:text-4xl lg:text-[3.2rem] xl:text-[3.5rem] font-bold leading-[1.12] tracking-tight text-white opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
-                  style={{ animationDelay: "250ms" }}
-                >
-                  Digitizing Quantity Surveying for{" "}
-                  <span className="text-gradient-warm">Faster</span>, Defensible
-                  Cost Management
-                </h1>
+                  Entrances run through <Stagger>, not the old
+                  `opacity-0 motion-safe:animate-[…]` pairing. That pairing was
+                  a live bug: `.opacity-0` applies unconditionally while the
+                  animation sits inside @media(prefers-reduced-motion:
+                  no-preference), so a visitor with reduce-motion on never got
+                  the animation that was supposed to reveal the text — the whole
+                  hero rendered at zero opacity, permanently. */}
+              <Stagger gap={0.09}>
+                {/* Eyebrow rather than the old orange pill. Orange is the
+                    interrupt in this system and there is already one on the
+                    page — the primary CTA below. Two orange elements at
+                    different sizes is the thing the collateral never does. */}
+                <StaggerItem>
+                  <div className="mb-6 inline-flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-adlm-blue-500" />
+                    <Eyebrow tone="onDark">Trusted by 1,000+ QS Professionals</Eyebrow>
+                  </div>
+                </StaggerItem>
 
-                <p
-                  className="mt-5 text-base sm:text-lg text-white/80 max-w-xl leading-relaxed opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
-                  style={{ animationDelay: "350ms" }}
-                >
-                  ADLM STUDIO builds smart digital tools made specifically for
-                  <b className="text-white"> Quantity Surveyors</b>. We simplify
-                  everyday work like material scheduling, bill preparation,
-                  valuation, and quantification so you can get things done
-                  faster, easier, and with far less stress. Our goal is simple!
-                  We fully digitize the quantity surveying process while
-                  improving accuracy, productivity, and overall workflow in the
-                  construction industry.
-                </p>
+                <StaggerItem>
+                  <h1 className="text-3xl sm:text-4xl lg:text-[3.2rem] xl:text-[3.5rem] font-bold leading-[1.12] tracking-tight text-white">
+                    Digitizing Quantity Surveying for{" "}
+                    <span className="text-adlm-blue-500">Faster</span>, Defensible
+                    Cost Management
+                  </h1>
+                </StaggerItem>
+
+                <StaggerItem>
+                  <p className="mt-5 text-base sm:text-lg text-white/80 max-w-xl leading-relaxed">
+                    ADLM STUDIO builds smart digital tools made specifically for
+                    <b className="text-white"> Quantity Surveyors</b>. We simplify
+                    everyday work like material scheduling, bill preparation,
+                    valuation, and quantification so you can get things done
+                    faster, easier, and with far less stress. Our goal is simple!
+                    We fully digitize the quantity surveying process while
+                    improving accuracy, productivity, and overall workflow in the
+                    construction industry.
+                  </p>
+                </StaggerItem>
 
                 {/* CTA Buttons */}
-                <div
-                  className="mt-8 flex flex-col sm:flex-row flex-wrap gap-3 opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
-                  style={{ animationDelay: "450ms" }}
-                >
+                <StaggerItem>
+                  <div className="mt-8 flex flex-col sm:flex-row flex-wrap gap-3">
                   <Link
                     to={isAuthed ? "/purchase" : "/signup"}
                     className="group inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-base font-semibold text-white transition-all hover:brightness-110 hover:-translate-y-0.5 active:scale-[0.98] shadow-glow-orange"
@@ -305,15 +304,22 @@ export default function Home() {
                       />
                     </svg>
                   </Link>
-                </div>
-              </div>
+                  </div>
+                </StaggerItem>
+              </Stagger>
 
-              {/* Right — Feature highlight cards with 3D tilt (desktop) */}
-              <div
-                className="hidden lg:grid grid-cols-2 gap-4 opacity-0 motion-safe:animate-[fade-in-up_700ms_ease-out_forwards]"
-                style={{ animationDelay: "550ms" }}
-              >
-                {HERO_CARDS.map((card, idx) => (
+              {/* Right — the hero's subject.
+
+                  Product mode portrays one lit object floating over a podium.
+                  The four cards stay (they carry real information) but now read
+                  as a single cluster hanging in light rather than four separate
+                  panes: one shared podium glow, one slow float, tilt on each.
+                  No hexagon field here — hexagons are the corporate-mode
+                  texture, and this composition is product mode. */}
+              <Reveal delay={420} className="hidden lg:block">
+                <GlowTile className="w-full" glow="#005be3">
+                  <div className="grid grid-cols-2 gap-4">
+                    {HERO_CARDS.map((card, idx) => (
                   <TiltCard
                     key={idx}
                     max={10}
@@ -346,8 +352,10 @@ export default function Home() {
                       {card.desc}
                     </div>
                   </TiltCard>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                </GlowTile>
+              </Reveal>
             </div>
           </div>
         </div>
