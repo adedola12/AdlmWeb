@@ -145,7 +145,7 @@ export default function WhatsNew() {
       <style>{`@keyframes fade-in-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
       {/* Hero — what ADLM does */}
-      <header className="relative overflow-hidden rounded-adlm-xl bg-gradient-to-br from-adlm-navy via-adlm-navy-mid to-adlm-navy-tertiary px-6 py-12 text-white opacity-0 motion-safe:animate-[fade-in-up_650ms_ease-out_forwards] sm:px-10 sm:py-14">
+      <header className="relative overflow-hidden rounded-adlm-xl bg-gradient-to-br from-adlm-navy via-adlm-navy-mid to-adlm-navy-tertiary px-6 py-12 text-white motion-safe:animate-[fade-in-up_650ms_ease-out_forwards] sm:px-10 sm:py-14">
         <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
         <div
           aria-hidden="true"

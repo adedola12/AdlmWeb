@@ -228,7 +228,7 @@ export default function WhatsNewProduct() {
       </Link>
 
       {/* Hero */}
-      <header className="relative mt-3 overflow-hidden rounded-adlm-xl bg-gradient-to-br from-adlm-navy via-adlm-navy-mid to-adlm-navy-tertiary px-6 py-10 text-white opacity-0 motion-safe:animate-[fade-in-up_600ms_ease-out_forwards] sm:px-10 sm:py-12">
+      <header className="relative mt-3 overflow-hidden rounded-adlm-xl bg-gradient-to-br from-adlm-navy via-adlm-navy-mid to-adlm-navy-tertiary px-6 py-10 text-white motion-safe:animate-[fade-in-up_600ms_ease-out_forwards] sm:px-10 sm:py-12">
         <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
         <div
           aria-hidden="true"
