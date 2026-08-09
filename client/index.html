@@ -13,7 +13,19 @@
       name="description"
       content="BIM Training, QS Tools, and Digital Construction Solutions."
     />
-    <link rel="canonical" href="https://www.adlmstudio.net/" />
+    <!--
+      NO static canonical here, deliberately.
+
+      Vercel rewrites every path to this one file, so a canonical hardcoded to
+      "/" was served on /products, /about, /product/<key> and everything else —
+      each of them telling Google it is a duplicate of the homepage. That is an
+      instruction to drop the page from the index, and it applied site-wide.
+
+      <Seo> sets the correct canonical per route. A page that has not adopted it
+      yet ends up with no canonical at all, which is safe: Google then treats
+      the URL as its own canonical, and self-referencing is the default we want.
+    -->
+    <meta name="robots" content="index,follow" />
 
     <!-- ✅ Default Open Graph -->
     <meta property="og:type" content="website" />

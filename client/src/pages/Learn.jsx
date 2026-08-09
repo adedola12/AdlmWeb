@@ -1,4 +1,5 @@
 import React from "react";
+import Seo from "../components/Seo.jsx";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config";
 
@@ -200,6 +201,11 @@ export default function Learn() {
 
   return (
     <div className="space-y-10">
+      <Seo
+        title="Learn — BIM & QS Training Courses"
+        description="Self-paced and cohort BIM training for quantity surveyors: Revit, Navisworks, MS Project, Power BI, 4D and 5D BIM, and AI for cost management. Free YouTube courses and paid programmes."
+        path="/learn"
+      />
       {/* Page header */}
       <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white px-5 py-7 md:px-8 md:py-9 shadow-depth">
         <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />

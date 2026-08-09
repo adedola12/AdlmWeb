@@ -1,5 +1,7 @@
 // src/pages/Home.jsx
 import React from "react";
+import Seo from "../components/Seo.jsx";
+import { organizationSchema, websiteSchema } from "../lib/schema.js";
 import { Link, useNavigate } from "react-router-dom";
 import FeaturedTrainingBanner from "../components/FeaturedTrainingBanner.jsx";
 import { Reveal, Stagger, StaggerItem, TiltCard } from "../components/effects.jsx";
@@ -125,6 +127,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-slate-900 dark:bg-adlm-dark-bg dark:text-adlm-dark-text">
+      <Seo
+        title="BIM & Quantity Surveying Software for Construction Firms"
+        description="ADLM Studio builds BIM takeoff, rate build-up and cost management tools for quantity surveyors, and trains the firms that use them. Revit, ArchiCAD and PlanSwift plugins built for the Nigerian market."
+        path="/"
+        jsonLd={[organizationSchema(), websiteSchema()]}
+      />
       {/* local keyframes for the hero entrance fades */}
       <style>{`
         @keyframes fade-in-up {

@@ -1,0 +1,45 @@
+# https://www.adlmstudio.net
+#
+# Everything under Disallow is either behind a login, personal to one user, or
+# a one-off token URL. None of it is secret — this file is public, so it is a
+# crawling instruction, not a security control — but none of it belongs in
+# search results either, and letting a crawler spend its budget on receipts and
+# invoices costs the marketing pages their crawl rate.
+
+User-agent: *
+
+# Staff only
+Disallow: /admin
+Disallow: /admin/
+
+# Signed-in areas: personal, and useless to anyone arriving from a search
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /change-password
+Disallow: /purchase
+Disallow: /checkout/
+Disallow: /receipt/
+Disallow: /invoice/
+Disallow: /portfolio-dashboard
+Disallow: /pm-tracker
+Disallow: /revit-projects
+Disallow: /projects/
+Disallow: /archicad
+Disallow: /model-check/
+
+# Tokenised one-off links. Indexing these would publish a share code.
+Disallow: /proposal/
+Disallow: /j/
+Disallow: /projects/shared/
+
+# Auth pages carry no content and compete with the pages that do
+Disallow: /login
+Disallow: /signup
+
+# Filtered views of the same grid. The canonical already points back at the
+# clean URL, but not spending crawl budget on them at all is cheaper.
+Disallow: /*?q=
+Disallow: /*?page=
+Disallow: /*?cat=
+
+Sitemap: https://www.adlmstudio.net/sitemap.xml

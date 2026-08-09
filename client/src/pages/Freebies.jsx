@@ -1,5 +1,6 @@
 // src/pages/Freebies.jsx
 import React from "react";
+import Seo from "../components/Seo.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 
@@ -168,6 +169,11 @@ export default function Freebies() {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 space-y-4 md:space-y-5 pb-10">
+      <Seo
+        title="Free QS & BIM Resources"
+        description="Free templates, tools and resources for quantity surveyors from ADLM Studio — rate templates, BoQ formats and BIM starter files."
+        path="/freebies"
+      />
       {/* Header */}
       <div className="rounded-2xl bg-gradient-to-br from-adlm-navy-tertiary to-adlm-navy text-white p-4 sm:p-5 shadow">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

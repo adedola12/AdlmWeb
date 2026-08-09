@@ -1,5 +1,6 @@
 // src/pages/AboutADLM.jsx
 import React from "react";
+import Seo from "../components/Seo.jsx";
 import { Link } from "react-router-dom";
 import dolapo from "../assets/team/Dola.jpeg";
 import richard from "../assets/team/Richard.jpg";
@@ -310,6 +311,11 @@ export default function AboutADLM() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <Seo
+        title="About ADLM Studio"
+        description="A Nigerian ConTech studio digitising quantity surveying end to end — takeoff, rates, bills, programmes and dashboards — with the training and process firms need to adopt it. 800+ AEC professionals trained since 2019."
+        path="/about"
+      />
       <style>{styles}</style>
 
       {/* HERO */}
