@@ -3,6 +3,7 @@ import React from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
+import { trackEvent } from "../ga";
 
 export default function CheckoutThanks() {
   const [qs] = useSearchParams();
@@ -27,6 +28,28 @@ export default function CheckoutThanks() {
         const out = await res.json();
         if (out?.ok) {
           setStatus("Payment successful! Your access has been activated.");
+
+          // Fired only after the server has verified the reference with
+          // Paystack — never on redirect back from the gateway. A user can
+          // land on this URL without having paid, and revenue that counts
+          // abandoned checkouts is worse than no revenue reporting.
+          //
+          // `transaction_id` is the payment reference, so GA deduplicates if
+          // the page is reloaded rather than counting the sale twice.
+          trackEvent("purchase", {
+            transaction_id: reference,
+            currency: out?.currency || "NGN",
+            value: Number(out?.amountNGN ?? out?.amount ?? 0) || 0,
+            items: Array.isArray(out?.items)
+              ? out.items.map((it) => ({
+                  item_id: it.productKey || it.key || "",
+                  item_name: it.name || it.productKey || "",
+                  quantity: Number(it.qty || 1),
+                  price: Number(it.unitPriceNGN ?? it.price ?? 0) || 0,
+                }))
+              : undefined,
+          });
+
           // e.g. take users to their courses/dashboard after 2–3s
           setTimeout(() => navigate("/dashboard"), 1500);
         } else {

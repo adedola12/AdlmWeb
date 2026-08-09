@@ -7,6 +7,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 import { AppTile } from "../components/brand.jsx";
+import { trackEvent } from "../ga";
 
 /* -------------------- UI helpers -------------------- */
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
@@ -438,6 +439,28 @@ export default function Products() {
 
     const totalQty = writeCartItems(items);
     setCartCount(totalQty);
+
+    // GA4 ecommerce shape, not a bespoke one: `items` with item_id/item_name
+    // and a top-level currency+value is what the standard add_to_cart report
+    // reads. A custom payload would still arrive and still show up nowhere.
+    const unitPrice =
+      (p.billingInterval === "yearly"
+        ? p.price?.discountedYearlyNGN || p.price?.yearlyNGN
+        : p.price?.discountedMonthlyNGN || p.price?.monthlyNGN) || 0;
+
+    trackEvent("add_to_cart", {
+      currency: "NGN",
+      value: Number(unitPrice) * months,
+      items: [
+        {
+          item_id: productKey,
+          item_name: p.name || productKey,
+          item_category: getCategory(p),
+          price: Number(unitPrice),
+          quantity: months,
+        },
+      ],
+    });
   }
 
   /* -------------------- animations CSS -------------------- */

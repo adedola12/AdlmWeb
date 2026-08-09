@@ -3,6 +3,7 @@ import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
+import { trackEvent } from "../ga";
 
 // Password field with a show/hide eye toggle. The toggle is a type="button"
 // (so it never submits the form) and is kept out of the tab order, so Enter
@@ -133,6 +134,7 @@ export default function Login() {
         accessToken: res.accessToken,
         licenseToken: res.licenseToken,
       });
+      trackEvent("login", { method: "password" });
       nav(next, { replace: true });
     } catch (e) {
       setErr(e.message);

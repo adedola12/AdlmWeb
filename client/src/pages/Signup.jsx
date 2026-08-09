@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
+import { trackEvent } from "../ga";
 
 export default function Signup() {
   const nav = useNavigate();
@@ -44,6 +45,10 @@ export default function Signup() {
         accessToken: res.accessToken,
         licenseToken: res.licenseToken, // if your API returns this
       });
+      // Fired after the account exists, not on submit: a failed signup is not
+      // a signup, and counting attempts here would inflate the only number
+      // anyone checks on this page.
+      trackEvent("sign_up", { method: "password" });
       nav("/");
     } catch (e) {
       setErr(e.message || "Signup failed");

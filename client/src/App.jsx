@@ -6,8 +6,10 @@ import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import AiAgent from "./components/AiAgent.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import AnalyticsTracker from "./components/AnalyticsTracker.jsx";
 
 import { API_BASE } from "./config";
+import { initGA } from "./ga";
 
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
@@ -22,6 +24,12 @@ export default function App() {
   React.useEffect(() => {
     setShowVideo(location.pathname === "/");
   }, [location.pathname]);
+
+  // Announce boot into the dataLayer once per load. GTM fires its own
+  // gtm.js/gtm.dom/gtm.load, but nothing told it the app itself had started.
+  React.useEffect(() => {
+    initGA();
+  }, []);
 
   React.useEffect(() => {
     (async () => {
@@ -47,6 +55,12 @@ export default function App() {
           onClose={() => setBannerDismissed(true)}
         />
       )}
+
+      {/* Mounted in the root layout so it sees every route change.
+          It existed before this and was never rendered anywhere, which meant
+          GA recorded the first page of a session and nothing after it — in a
+          single-page app, almost every pageview was missing. */}
+      <AnalyticsTracker />
 
       <Nav />
 

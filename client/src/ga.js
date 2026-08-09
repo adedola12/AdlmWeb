@@ -8,6 +8,12 @@ export function initGA() {
   if (typeof window === "undefined") return;
   window.dataLayer = window.dataLayer || [];
 
+  // Once per page load. React.StrictMode invokes effects twice in development,
+  // which pushed two app_init events per boot — harmless in isolation, but it
+  // makes any "sessions started" figure built on this event twice the truth.
+  if (window.__ADLM_GA_INIT) return;
+  window.__ADLM_GA_INIT = true;
+
   // Optional: mark app boot (useful in GTM preview)
   window.dataLayer.push({
     event: "app_init",
