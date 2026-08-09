@@ -141,6 +141,55 @@ export function GlowTile({
   );
 }
 
+/* ── App tile ─────────────────────────────────────────────────────────────
+   How every product is presented on the flyers: a bevelled, glossy rounded
+   square sitting on a pale hexagon ground with light pooled underneath.
+
+   This is the presentation shell only — whatever the product actually shows
+   (a poster, a hover-to-play preview, an icon) goes in as children, so the
+   treatment is shared without the shell knowing anything about media.
+
+   The glow is a hover state rather than an idle animation. A grid of twenty
+   products each breathing on its own cycle is a fairground; the flyers get
+   away with it because there is exactly one object on the page. */
+export function AppTile({ children, className = "", ground = true, glow = true, ...rest }) {
+  return (
+    // Rest props land on the outer element so a caller can make the whole tile
+    // the hover target — the media inside is smaller than the thing that looks
+    // hoverable, and hovering the padding should still count.
+    <div className={`group/tile relative ${className}`} {...rest}>
+      {/* Light pooled under the tile. Sits behind, and is clipped by nothing,
+          so it reads as spill rather than as a border. */}
+      {glow && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-6 bottom-1 h-6 rounded-[50%] bg-adlm-blue-600/0 blur-xl transition-colors duration-500 group-hover/tile:bg-adlm-blue-600/40"
+        />
+      )}
+
+      <div
+        className={`relative overflow-hidden rounded-2xl p-2.5 ring-1 ring-black/5 dark:ring-white/10 ${
+          ground
+            ? "bg-gradient-to-b from-slate-50 to-slate-100 dark:from-adlm-dark-raised dark:to-adlm-dark-panel"
+            : ""
+        }`}
+      >
+        {ground && <HexField opacity={0.12} size={72} />}
+
+        {/* The tile face. The ring plus the top highlight is what reads as a
+            bevel — a shadow alone just looks like a floating rectangle. */}
+        <div className="relative rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-[0_6px_16px_-6px_rgba(5,17,31,.45)]">
+          {children}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/20 to-transparent"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Ribbon strip ─────────────────────────────────────────────────────────
    The diagonal repeating bands from the seasonal posts. Runs off both edges by
    design, so it is always wider than its container and rotated.
@@ -185,4 +234,4 @@ export function RibbonStrip({
   );
 }
 
-export default { Eyebrow, StickerHeading, HexField, GlowTile, RibbonStrip };
+export default { Eyebrow, StickerHeading, HexField, GlowTile, AppTile, RibbonStrip };

@@ -1,10 +1,12 @@
 // src/pages/Products.jsx
 import React from "react";
+import Seo from "../components/Seo.jsx";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
+import { AppTile } from "../components/brand.jsx";
 
 /* -------------------- UI helpers -------------------- */
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
@@ -74,28 +76,39 @@ function CardVideo({ src, poster }) {
     ref.current.currentTime = 0;
   };
 
+  // The tile is the presentation; this stays responsible only for the media
+  // and the hover-to-play behaviour. Handlers live on the outer element so the
+  // whole tile is the hover target, not just the video rectangle.
   return (
-    <div
-      className="rounded-xl overflow-hidden aspect-video bg-black ring-1 ring-black/5"
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-    >
-      {src ? (
-        <video
-          ref={ref}
-          muted
-          playsInline
-          preload="metadata"
-          className="w-full h-full object-cover"
-          src={src}
-          poster={poster || undefined}
-        />
-      ) : poster ? (
-        <img src={poster} className="w-full h-full object-cover" alt="Product thumbnail" />
-      ) : (
-        <div className="w-full h-full bg-adlm-navy" />
-      )}
-    </div>
+    <AppTile onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <div className="aspect-video bg-black">
+        {src ? (
+          <video
+            ref={ref}
+            muted
+            playsInline
+            preload="metadata"
+            className="w-full h-full object-cover"
+            src={src}
+            poster={poster || undefined}
+          />
+        ) : poster ? (
+          <img src={poster} className="w-full h-full object-cover" alt="Product thumbnail" />
+        ) : (
+          // Was a flat navy rectangle. A product with no artwork now still
+          // reads as a product rather than as a loading failure.
+          <div className="grid h-full w-full place-items-center bg-gradient-to-br from-adlm-navy-mid to-adlm-navy">
+            <img
+              src="/Logo.png"
+              alt=""
+              aria-hidden="true"
+              className="h-10 w-auto opacity-45"
+              loading="lazy"
+            />
+          </div>
+        )}
+      </div>
+    </AppTile>
   );
 }
 
@@ -435,6 +448,11 @@ export default function Products() {
 
   return (
     <div className="space-y-4 py-4 px-3 md:px-6 lg:px-12">
+      <Seo
+        title="Products — BIM Plugins & QS Software"
+        description="Quantity takeoff plugins for Revit, ArchiCAD and PlanSwift, automated rate build-ups and cost management tools. Subscription pricing in naira, built for Nigerian quantity surveyors."
+        path="/products"
+      />
       <style>{style}</style>
 
       <ComingSoonModal show={showModal} onClose={closeModal} />
