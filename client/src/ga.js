@@ -1,4 +1,12 @@
-export const GA_MEASUREMENT_ID = "G-SYS6ONRJ9W"; // used inside GTM GA4 config
+// Configured inside the GTM container (GTM-THPFGFZS), not read by this file —
+// kept here so the ID is discoverable from the codebase.
+//
+// Note the SIXTH character is a DIGIT ZERO, not a letter O. It was a letter O
+// here and in the GTM tag for months, so every hit was sent to a measurement
+// ID that does not exist. Google's collector accepts any well-formed tid and
+// returns success, so the site looked perfectly instrumented while the real
+// property recorded nothing at all.
+export const GA_MEASUREMENT_ID = "G-SYS60NRJ9W";
 
 function nowMs() {
   return Date.now ? Date.now() : new Date().getTime();
