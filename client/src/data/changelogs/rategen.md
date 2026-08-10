@@ -32,6 +32,26 @@ The first full price refresh since RateGen launched, and the library finally cov
 - **Fuel was priced from the labourer's day rate, not from diesel.** Thirty places in the costing engine worked out fuel cost from what a labourer earns, so the Diesel price sitting in your library affected nothing at all. Diesel is now the diesel price, and it is in the library at ₦1,215 a litre.
 - **Granite and hardcore were measured in tonnes but costed per cubic metre.** The library called them tonnes while every calculation used volume, so the figure on screen never matched the figure in the rate. Both now read m³, and both carry observed market prices.
 
+## 2.6.2 — August 2026 — Saving a rate no longer risks your library
+
+A library that holds two rows with the same name — which the shipped library does, by design — could lose rows when you saved a custom rate.
+
+### 🐛 Fixed
+
+- **Saving a custom rate could quietly drop library rows, or harvest nothing at all.** The library keeps items that share a name but differ by unit or category: the shipped list has 500 rows across 477 distinct names. Saving a rate rebuilt the library keyed on the name alone, so those duplicates either collapsed to one row each — silently discarding the others — or the save gave up and harvested nothing, with no message either way. Rows are now matched by name and updated in place, so duplicates survive, your file keeps its original order, and genuinely new items are added to the end.
+
+## 2.6.1 — August 2026 — AI prices stay where the AI put them
+
+An AI-built rate could save with every price at zero, and stay that way when you reopened it. That is fixed, and the AI now tells you when it is unsure.
+
+### ✨ New
+
+- **You are told when the AI is not confident in a rate.** When a build-up fails the service's own pro-rating or sanity checks, it is still returned — but RateGen used to show it exactly like a clean one. Those warnings now appear in an amber block on the form, listed separately from the ordinary status text, and are cleared when you build again or clear the form. A rate that is wrong but plausible is more dangerous than one that is obviously broken, so it should not read as normal progress.
+
+### 🐛 Fixed
+
+- **An AI-built rate could save with every price at 0.00.** The prices the AI returned were correct — RateGen was discarding them on the way to disk. Components come back tagged, like `Cement (Portland 42.5R) [AI]`, and the price lookup searched on that full text, so it never matched the library entry and cleared the price on every miss. Because saving reloads the library, that clearing ran on every line in the open form moments before it was written. Nothing was harvested into your library either, since harvesting skips lines priced at zero. The lookup now ignores the provenance tag, and an unrecognised item keeps its price unless you actively pick a different one.
+
 ## 2.6.0 — August 2026 — Your custom rates build your price library
 
 Happy new month. Every material and labour line you price on a custom rate now joins your library automatically — and when the AI drafts a build-up, it prices from your library instead of guessing.
