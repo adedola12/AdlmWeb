@@ -24,6 +24,19 @@ summary: 2D takeoff with automatic material + labour budgets, RateGen pricing an
   items from the plugin changelog are folded into Improved here.
 -->
 
+## 2.9.2 — 9 August 2026 — The Excel Takeoff Link actually appears
+
+The Excel add-in has been installed with HERON all along, but Excel was never told about it, so it never showed up. Update to 2.9.2 and it appears on its own.
+
+### 🐛 Fixed
+
+- **The Excel Takeoff Link never appeared in Excel.** Installing HERON copied the add-in onto your machine, but Excel only loads an add-in it has been registered to know about — and that registration step was missing from the installer package. So the files were there, nothing was broken on your side, and the ribbon simply never appeared. The registration now ships with HERON and runs as part of the install.
+- **Reinstalling did not help either.** Because the missing piece was in the package rather than on your machine, repairing or reinstalling 2.9.1 changed nothing. Updating to 2.9.2 is what fixes it.
+
+### 🔧 Improved
+
+- **You can re-run the registration yourself.** The registration tool now also lands next to HERON's own files, at `C:\ProgramData\Planswift Plugin\Register-ExcelAddin.cmd`. If the Excel link ever stops appearing — after an Office repair or a profile change, say — double-click it and Excel will pick the add-in up again.
+
 ## 2.9.1 — 31 July 2026 — Sign-in restored
 
 HERON could not sign in after ADLM's servers moved. It now finds the service through your machine's settings instead of an address fixed when the plugin was built, so sign-in works again — and a future move will not need a new download.
