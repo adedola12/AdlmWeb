@@ -101,11 +101,16 @@ function selectForZone(all, zoneKey, nameKey, priceKey) {
 
 /* ---------------- public API ---------------- */
 
-/** Return [{ sn, description, unit, price }] for Materials */
+/** Return [{ sn, description, unit, price, category }] for Materials */
 export async function fetchMasterMaterials(zoneKey) {
   await ensureMasterDb();
 
-  // Pull minimal fields. If you need more, add them here.
+  // MaterialCategory is NOT optional. RateGen's DataSourceCloudSync reads
+  // `category` off this payload and falls back to "" when it is absent, so
+  // omitting it here silently blanks the category on every row in every user's
+  // library at their next sign-in — which broke the category filter in the
+  // desktop app completely: the dropdown had values, the data had none, so
+  // every selection matched nothing.
   const docs = await _mats
     .find(
       {},
@@ -114,6 +119,7 @@ export async function fetchMasterMaterials(zoneKey) {
           MaterialName: 1,
           MaterialUnit: 1,
           MaterialPrice: 1,
+          MaterialCategory: 1,
           zone: 1,
         },
       }
@@ -135,17 +141,26 @@ export async function fetchMasterMaterials(zoneKey) {
     description: d.MaterialName || "",
     unit: d.MaterialUnit || "",
     price: Number(d.MaterialPrice || 0),
+    category: d.MaterialCategory || "",
   }));
 }
 
-/** Return [{ sn, description, unit, price }] for Labour */
+/** Return [{ sn, description, unit, price, category }] for Labour */
 export async function fetchMasterLabour(zoneKey) {
   await ensureMasterDb();
 
   const docs = await _labs
     .find(
       {},
-      { projection: { LabourName: 1, LabourUnit: 1, LabourPrice: 1, zone: 1 } }
+      {
+        projection: {
+          LabourName: 1,
+          LabourUnit: 1,
+          LabourPrice: 1,
+          LabourCategory: 1,
+          zone: 1,
+        },
+      }
     )
     .limit(5000)
     .toArray();
@@ -164,5 +179,6 @@ export async function fetchMasterLabour(zoneKey) {
     description: d.LabourName || "",
     unit: d.LabourUnit || "",
     price: Number(d.LabourPrice || 0),
+    category: d.LabourCategory || "",
   }));
 }
