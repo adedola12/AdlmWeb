@@ -10,6 +10,28 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
+## 2.7.0 — August 2026 — New prices, and MEP arrives
+
+The first full price refresh since RateGen launched, and the library finally covers mechanical, electrical and plumbing. Cement moves from ₦4,300 to ₦11,500 a bag, reinforcement from ₦350,000 to ₦1,700,000 a tonne, and 67 MEP items join the library with a new MEP tab to build rates from them.
+
+### ✨ New
+
+- **Every price in the library has been refreshed.** All 568 material and labour rates were repriced — the first full refresh since launch. We calibrated against three recently priced bills of quantities from two independent QS firms, 494 checked lines covering ₦5.31bn of work, then set the primary commodities from current market prices rather than from the bills, because a bill priced in February is already out of date. Cement ₦4,300 → ₦11,500 a bag, high tensile reinforcement ₦350,000 → ₦1,700,000 a tonne, granite ₦1,860 → ₦9,500/m³, sharp sand ₦842 → ₦6,500/m³, a labourer ₦1,800 → ₦5,400 a day. Expect your concrete rates to come out around 10% above what the same job would have been priced at earlier in the year.
+- **Mechanical, electrical and plumbing.** The library had no MEP items at all. It now has 67: power cables from 4mm² to 70mm² including armoured and fibre, luminaires, switches and socket outlets, sanitary fittings, air conditioning and ventilation, fire protection, earthing and cable containment. A new **MEP Works** tab computes 37 build-ups from them — lighting and power points, cable runs, sanitary fixtures, split units, detectors and more. MEP rates are supply-and-install, so every MEP category is labelled "(supply & install)": do not add a fixing labour line on top of them.
+- **You can see exactly what is in every MEP rate.** Each MEP build-up lists its components as separate lines rather than a single figure, so you can see what the rate covers and strike anything you have already billed elsewhere.
+
+### 🔧 Improved
+
+- **Your own prices survive the update.** If you edited a price in your library, that edit is kept. The refresh only touches rows still sitting at the original default, rows you deleted are restored, and your previous library file is backed up before anything is written.
+- **We are telling you how confident we are.** Not every item is equally well supported. 197 are backed by evidence in those bills or by observed market prices. The remaining 438 — mostly paints, ceilings, aluminium, glazing and timber — are not priced at supplier level in any of the bills, so they moved on a documented index instead. Treat those as a better starting point than what you had, not as a quotation. A supplier price list is being sourced to put them on the same footing.
+- **There are no pipes yet, and that is deliberate.** None of the bills we calibrated against carries a pipe price — every pipework line in them was a provisional sum. Rather than guess, we left pipes out. uPVC, PPR and GI pipe, fittings, conduit and small-gauge wiring are next.
+
+### 🐛 Fixed
+
+- **Mixing labour was being charged at a full day rate against an hourly quantity.** Every concrete rate that mixes on site was carrying roughly eight times the mixing labour it should have. Concrete rates drop accordingly.
+- **Fuel was priced from the labourer's day rate, not from diesel.** Thirty places in the costing engine worked out fuel cost from what a labourer earns, so the Diesel price sitting in your library affected nothing at all. Diesel is now the diesel price, and it is in the library at ₦1,215 a litre.
+- **Granite and hardcore were measured in tonnes but costed per cubic metre.** The library called them tonnes while every calculation used volume, so the figure on screen never matched the figure in the rate. Both now read m³, and both carry observed market prices.
+
 ## 2.6.0 — August 2026 — Your custom rates build your price library
 
 Happy new month. Every material and labour line you price on a custom rate now joins your library automatically — and when the AI drafts a build-up, it prices from your library instead of guessing.
