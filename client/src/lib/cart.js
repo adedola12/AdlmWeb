@@ -28,8 +28,35 @@ export function getProductKey(p) {
   return String(p?.key || p?.slug || p?._id || "").trim();
 }
 
-export const getCategory = (p) =>
-  p?.metadata?.category || p?.category || p?.type || "General";
+/**
+ * What bucket a product belongs in.
+ *
+ * An admin-set `category` wins when there is one. There usually is not: the
+ * Product schema had no such field until now, which is why this used to return
+ * the literal "General" for every product in the catalogue — the filter on
+ * /products offered one option, and each card wore a badge that said nothing.
+ *
+ * The fallback keys off `isCourse` first, then off the product key. Mapping
+ * keys in code is not where this belongs long term — set `category` on the
+ * product and this table stops being consulted — but it is honest about the
+ * eight products that exist, and a new product simply lands in "Software"
+ * rather than breaking anything.
+ */
+const KEY_CATEGORIES = {
+  revit: "Takeoff Software",
+  civil3d: "Takeoff Software",
+  planswift: "Takeoff Software",
+  mep: "Takeoff Software",
+  rategen: "Rates & Costing",
+  "qs-takeoff": "Project Management",
+};
+
+export const getCategory = (p) => {
+  const explicit = p?.metadata?.category || p?.category || p?.type;
+  if (explicit) return explicit;
+  if (p?.isCourse) return "Courses";
+  return KEY_CATEGORIES[String(p?.key || "").trim()] || "Software";
+};
 
 /**
  * Add `months` of a product to the cart and report it to GA4.

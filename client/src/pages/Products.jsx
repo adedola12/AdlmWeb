@@ -18,6 +18,7 @@ import {
   IconArrowRight,
   IconCalendar,
   IconCart,
+  IconClose,
   IconSearch,
 } from "../components/icons.jsx";
 
@@ -137,7 +138,12 @@ export default function Products() {
   const navigate = useNavigate();
 
   const page = Math.max(parseInt(qs.get("page") || "1", 10), 1);
-  const pageSize = 9;
+  // Search, category and sort all run on the client, so they can only be
+  // correct if the client holds the whole catalogue — sorting "price low to
+  // high" across one page of nine would silently sort a subset and look right.
+  // The catalogue is eight products; one request covers it with room to grow,
+  // and the pagination below stays for the day it does not.
+  const pageSize = 60;
 
   const [data, setData] = React.useState({
     items: [],
@@ -154,6 +160,7 @@ export default function Products() {
 
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState("All Products");
+  const [sortBy, setSortBy] = React.useState("popular");
 
   const [cartCount, setCartCount] = React.useState(() => {
     const n = Number(localStorage.getItem("cartCount") || 0);
@@ -386,15 +393,57 @@ export default function Products() {
   }, [data.items]);
 
   /* -------------------- derived: what the grid shows -------------------- */
+  // The unit price a sort should compare on: whatever the buyer would actually
+  // pay today, so a discounted product sorts where its real price puts it.
+  const effectivePrice = React.useCallback((p) => {
+    const yearly = p?.billingInterval === "yearly";
+    const list = yearly ? p?.price?.yearlyNGN : p?.price?.monthlyNGN;
+    const disc = yearly
+      ? p?.price?.discountedYearlyNGN
+      : p?.price?.discountedMonthlyNGN;
+    return Number(disc > 0 && disc < list ? disc : list) || 0;
+  }, []);
+
   const visibleProducts = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (data.items || []).filter((p) => {
+
+    const filtered = (data.items || []).filter((p) => {
       const catOk = category === "All Products" || getCategory(p) === category;
       if (!q) return catOk;
-      const hay = `${p.name || ""} ${p.blurb || ""}`.toLowerCase();
+      // Description too — someone searching "BESMM" or "Civil 3D" is searching
+      // for words that only appear in the long copy, and getting no results
+      // for a product you do sell is the worst outcome on this page.
+      const hay = `${p.name || ""} ${p.blurb || ""} ${p.description || ""}`.toLowerCase();
       return catOk && hay.includes(q);
     });
-  }, [data.items, query, category]);
+
+    const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""));
+    const sorted = [...filtered];
+
+    if (sortBy === "price-asc") sorted.sort((a, b) => effectivePrice(a) - effectivePrice(b) || byName(a, b));
+    else if (sortBy === "price-desc") sorted.sort((a, b) => effectivePrice(b) - effectivePrice(a) || byName(a, b));
+    else if (sortBy === "name") sorted.sort(byName);
+    else if (sortBy === "newest") {
+      sorted.sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime() ||
+          byName(a, b),
+      );
+    } else {
+      // "popular" — the server's isPopular is earned from live licence counts,
+      // so lead with those, then fall back to the admin `sort` order the API
+      // already applies. Coming-soon products sink: they cannot be bought.
+      sorted.sort((a, b) => {
+        const soon = (x) => (x.isComingSoon ? 1 : 0);
+        if (soon(a) !== soon(b)) return soon(a) - soon(b);
+        const pop = (x) => (x.isPopular ? 0 : 1);
+        if (pop(a) !== pop(b)) return pop(a) - pop(b);
+        return (Number(b.sort) || 0) - (Number(a.sort) || 0) || byName(a, b);
+      });
+    }
+
+    return sorted;
+  }, [data.items, query, category, sortBy, effectivePrice]);
 
   /* -------------------- Add-to-cart -------------------- */
   // Cart writes and the GA4 payload live in lib/cart.js so the product detail
@@ -460,19 +509,31 @@ export default function Products() {
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="flex-1 relative">
             <input
-              type="text"
+              type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search products…"
-              className="w-full rounded-xl px-10 py-2.5 outline-none border border-slate-200 dark:border-adlm-dark-border bg-transparent focus:border-adlm-blue-600 focus:ring-2 focus:ring-adlm-blue-600/30 transition"
+              aria-label="Search products"
+              className="w-full rounded-xl pl-10 pr-10 py-2.5 outline-none border border-slate-200 dark:border-adlm-dark-border bg-transparent focus:border-adlm-blue-600 focus:ring-2 focus:ring-adlm-blue-600/30 transition"
             />
-            <IconSearch className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <IconSearch className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition"
+              >
+                <IconClose className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           <select
             className="rounded-xl px-3 py-2.5 border border-slate-200 dark:border-adlm-dark-border bg-transparent focus:border-adlm-blue-600 focus:ring-2 focus:ring-adlm-blue-600/30 transition"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
+            aria-label="Filter by category"
             title="Category"
           >
             {allCats.map((c) => (
@@ -480,6 +541,20 @@ export default function Products() {
                 {c}
               </option>
             ))}
+          </select>
+
+          <select
+            className="rounded-xl px-3 py-2.5 border border-slate-200 dark:border-adlm-dark-border bg-transparent focus:border-adlm-blue-600 focus:ring-2 focus:ring-adlm-blue-600/30 transition"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            aria-label="Sort products"
+            title="Sort"
+          >
+            <option value="popular">Most popular</option>
+            <option value="price-asc">Price: low to high</option>
+            <option value="price-desc">Price: high to low</option>
+            <option value="name">Name: A–Z</option>
+            <option value="newest">Newest first</option>
           </select>
 
           {isAdmin && (
@@ -511,8 +586,24 @@ export default function Products() {
           </button>
         </div>
 
-        <div className="mt-2.5 text-xs text-slate-500 dark:text-adlm-dark-muted">
-          Showing {(data.items || []).length} of {data.total || 0} products.
+        <div className="mt-2.5 flex items-center gap-2 flex-wrap text-xs text-slate-500 dark:text-adlm-dark-muted">
+          <span>
+            Showing {visibleProducts.length} of {data.total || 0} products
+            {category !== "All Products" ? ` in ${category}` : ""}
+            {query ? ` matching “${query}”` : ""}.
+          </span>
+          {(query || category !== "All Products") && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setCategory("All Products");
+              }}
+              className="font-semibold text-adlm-blue-700 dark:text-adlm-blue-400 hover:underline"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 

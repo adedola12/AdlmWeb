@@ -60,6 +60,12 @@ const ProductSchema = new mongoose.Schema(
       default: "monthly",
     },
 
+    // Groups the product on /products. Optional: when it is empty the client
+    // derives a bucket from isCourse and the product key (see lib/cart.js
+    // getCategory). Set it here to override that, or to place a product the
+    // derivation doesn't know about.
+    category: { type: String, trim: true, default: "" },
+
     isCourse: { type: Boolean, default: false },
     courseSku: { type: String, default: undefined },
     relatedFreeVideoIds: [
