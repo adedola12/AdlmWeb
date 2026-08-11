@@ -123,7 +123,7 @@ Civil & infrastructure takeoff inside AutoCAD Civil 3D 2024+. **Not on sale.** L
 | **HERON** (PlanSwift) | ₦12,000 / $10 | ₦65,000 / $50 | ₦120,000 / $100 | ₦15,000 / $5 |
 | **ADLM MEP** (Revit) | ₦18,000 / $15 | ₦90,000 / $60 | ₦180,000 / $120 | ₦20,000 / $6 |
 | **QUIV** (Revit) | ₦50,000 / $30 | — | ₦500,000 / $200 | ₦25,000 / $25 |
-| **ADLM Time Pro** | ₦2,000 | — | ₦20,000 | — |
+| **ADLM Time Pro** | ₦2,000 / $2 | — | ₦20,000 / $20 | — |
 | **CIVIQ** | *not purchasable — in development* | | | |
 
 **Courses** (one-off, twelve months' access)
@@ -135,7 +135,9 @@ Civil & infrastructure takeoff inside AutoCAD Civil 3D 2024+. **Not on sale.** L
 
 Also available: **extra project storage slots** in blocks of ten, per product, priced live on the purchase page.
 
-> ⚠️ **Do not quote a USD price for Time Pro.** The catalogue currently carries $2,000/month and $20,000/year for it, which is the Naira figure in the wrong field. Quote ₦2,000/₦20,000 to Nigerian contacts and escalate any international Time Pro enquiry to the team. *(Flagged for fixing in the admin product editor.)*
+> ⚠️ **Time Pro's USD price needs entering in the admin editor before it can be quoted.** The catalogue still carries $2,000/month and $20,000/year — the Naira figure typed into the USD box. The agreed price is **$2/month and $20/year**; until it is set, quote Naira only and escalate international Time Pro enquiries.
+>
+> To fix: **Admin → Products → ADLM Time Pro → Edit** (`/admin/products/6a6d68be5c8260c85559ac49/edit`), then under **Tier Pricing** set *Actual USD / month* to `2` and *Actual USD / year* to `20`, and save. Delete this note once done.
 
 ---
 
@@ -291,5 +293,5 @@ curl "https://api.adlmstudio.net/learn/free?page=1&pageSize=100"
 
 **Known gaps in this edition**
 - No demo video exists for RateGen, Time Pro, the Installer Hub or CIVIQ (§5).
-- Time Pro's USD price in the catalogue is wrong (§4).
+- Time Pro's USD price is agreed at $2/$20 but not yet entered in the admin editor (§4).
 - Content from the Obsidian vault has **not** been merged into this edition — the vault is not reachable from where this was assembled. Everything here comes from the website, the live API and Notion. Hand over the relevant notes and they can be folded in.
