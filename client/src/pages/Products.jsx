@@ -6,42 +6,23 @@ import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
-import { AppTile } from "../components/brand.jsx";
+import { AppTile, Eyebrow } from "../components/brand.jsx";
+import { Reveal, Stagger, StaggerItem } from "../components/effects.jsx";
 import {
   readCartItems,
   addProductToCart,
   getProductKey,
   getCategory,
 } from "../lib/cart.js";
-import { IconCalendar, IconSearch } from "../components/icons.jsx";
+import {
+  IconArrowRight,
+  IconCalendar,
+  IconCart,
+  IconSearch,
+} from "../components/icons.jsx";
 
 /* -------------------- UI helpers -------------------- */
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
-
-/* -------------------- UI: in-view animation -------------------- */
-function useInView(ref, threshold = 0.12) {
-  const [inView, setInView] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!ref.current) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setInView(true);
-      return;
-    }
-
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setInView(true);
-      },
-      { threshold },
-    );
-
-    obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, [ref, threshold]);
-
-  return inView;
-}
 
 function CardVideo({ src, poster }) {
   const ref = React.useRef(null);
@@ -404,6 +385,17 @@ export default function Products() {
     return Array.from(set);
   }, [data.items]);
 
+  /* -------------------- derived: what the grid shows -------------------- */
+  const visibleProducts = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (data.items || []).filter((p) => {
+      const catOk = category === "All Products" || getCategory(p) === category;
+      if (!q) return catOk;
+      const hay = `${p.name || ""} ${p.blurb || ""}`.toLowerCase();
+      return catOk && hay.includes(q);
+    });
+  }, [data.items, query, category]);
+
   /* -------------------- Add-to-cart -------------------- */
   // Cart writes and the GA4 payload live in lib/cart.js so the product detail
   // page cannot drift into a slightly different `add_to_cart` shape — GA4's
@@ -420,7 +412,7 @@ export default function Products() {
   `;
 
   return (
-    <div className="space-y-4 py-4 px-3 md:px-6 lg:px-12">
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-8 md:space-y-12">
       <Seo
         title="Products — BIM Plugins & QS Software"
         description="Quantity takeoff plugins for Revit, ArchiCAD and PlanSwift, automated rate build-ups and cost management tools. Subscription pricing in naira, built for Nigerian quantity surveyors."
@@ -436,13 +428,11 @@ export default function Products() {
         <div aria-hidden="true" className="absolute -top-16 right-8 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float" />
         <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-orange/15 blur-3xl animate-float-slow" />
         <div className="relative">
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/15 ring-1 ring-adlm-orange/30">
-            ADLM Products
-          </span>
-          <h1 className="mt-3 text-2xl md:text-3xl font-bold tracking-tight">
+          <Eyebrow tone="onDark">ADLM Products</Eyebrow>
+          <h1 className="mt-3 text-3xl md:text-4xl font-extrabold leading-tight tracking-tight">
             Software, Plugins &amp; Training
           </h1>
-          <p className="mt-2 text-sm md:text-base text-white/70 max-w-2xl">
+          <p className="mt-3 text-sm md:text-base leading-relaxed text-white/70 max-w-2xl">
             Everything a modern Quantity Surveyor needs — instant rate build-ups,
             2D/3D take-off plugins, and hands-on professional training.
           </p>
@@ -466,7 +456,7 @@ export default function Products() {
       </div>
 
       {/* Toolbar */}
-      <div className="rounded-2xl bg-white p-3 md:p-4 sticky top-[56px] z-10 shadow-depth ring-1 ring-black/5">
+      <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-3 md:p-4 sticky top-[56px] z-10 shadow-depth">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="flex-1 relative">
             <input
@@ -474,13 +464,13 @@ export default function Products() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search products…"
-              className="w-full rounded-lg px-10 py-2 outline-none ring-1 ring-black/5 focus:ring-2 focus:ring-adlm-blue-700"
+              className="w-full rounded-xl px-10 py-2.5 outline-none border border-slate-200 dark:border-adlm-dark-border bg-transparent focus:border-adlm-blue-600 focus:ring-2 focus:ring-adlm-blue-600/30 transition"
             />
-            <IconSearch className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <IconSearch className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
 
           <select
-            className="rounded-lg px-3 py-2 ring-1 ring-black/5 focus:ring-2 focus:ring-adlm-blue-700"
+            className="rounded-xl px-3 py-2.5 border border-slate-200 dark:border-adlm-dark-border bg-transparent focus:border-adlm-blue-600 focus:ring-2 focus:ring-adlm-blue-600/30 transition"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             title="Category"
@@ -496,7 +486,7 @@ export default function Products() {
             <button
               type="button"
               onClick={() => navigate("/admin/products")}
-              className="rounded-lg px-3 py-2 ring-1 ring-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:animate-[pop_200ms_ease-out]"
+              className="rounded-xl px-3 py-2.5 text-sm font-semibold ring-1 ring-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition"
               title="Add a new product"
             >
               + Add Product
@@ -510,35 +500,44 @@ export default function Products() {
                 `/purchase?return=${encodeURIComponent("/products?page=" + page)}`,
               )
             }
-            className="relative rounded-lg px-3 py-2 ring-1 ring-black/5 hover:bg-slate-50 active:animate-[pop_200ms_ease-out]"
+            className="relative inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold border border-slate-200 dark:border-adlm-dark-border hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
             title="Cart"
           >
+            <IconCart className="w-4 h-4" />
             Cart
-            <span className="ml-2 inline-flex items-center justify-center text-xs px-2 h-5 rounded-full bg-adlm-blue-700 text-white">
+            <span className="inline-flex items-center justify-center text-xs px-2 h-5 rounded-full bg-adlm-blue-700 text-white">
               {cartCount}
             </span>
           </button>
         </div>
 
-        <div className="mt-2 text-xs text-slate-600">
+        <div className="mt-2.5 text-xs text-slate-500 dark:text-adlm-dark-muted">
           Showing {(data.items || []).length} of {data.total || 0} products.
         </div>
       </div>
 
       {/* ✅ NEW: Physical Trainings section */}
-      <div className="rounded-2xl bg-white p-4 md:p-5 ring-1 ring-black/5">
+      <Reveal
+        as="section"
+        className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth"
+      >
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl grid place-items-center bg-adlm-orange/10 text-adlm-orange flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="w-11 h-11 rounded-xl grid place-items-center bg-adlm-orange/10 text-adlm-orange flex-shrink-0">
               <IconCalendar className="w-5 h-5" />
             </span>
             <div>
-              <div className="text-lg font-bold text-slate-900 dark:text-white">Physical Trainings</div>
-              <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">In-person workshops & hands-on sessions</div>
+              <Eyebrow tone="orange">In person</Eyebrow>
+              <div className="mt-0.5 text-lg md:text-xl font-bold text-slate-900 dark:text-adlm-dark-text">
+                Physical Trainings
+              </div>
+              <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">
+                Workshops &amp; hands-on sessions
+              </div>
             </div>
           </div>
           <button
-            className="shrink-0 px-3 py-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border font-semibold text-sm hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
+            className="shrink-0 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-adlm-dark-border font-semibold text-sm hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
             onClick={() => navigate("/trainings")}
             type="button"
           >
@@ -555,34 +554,47 @@ export default function Products() {
             <TrainingCard key={t._id} t={t} />
           ))}
           {!(trainings || []).length ? (
-            <div className="text-sm text-slate-600">
+            <div className="text-sm text-slate-500 dark:text-adlm-dark-muted">
               No trainings published yet.
             </div>
           ) : null}
         </div>
-      </div>
+      </Reveal>
 
       {msg && <div className="text-sm">{msg}</div>}
 
       {loading ? (
-        <div className="text-sm text-slate-600">Loading…</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="animate-pulse rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-4"
+            >
+              <div className="aspect-[4/3] rounded-xl bg-slate-200 dark:bg-white/10" />
+              <div className="mt-4 h-4 w-2/3 rounded bg-slate-200 dark:bg-white/10" />
+              <div className="mt-2 h-3 w-full rounded bg-slate-200 dark:bg-white/10" />
+              <div className="mt-4 h-7 w-28 rounded bg-slate-200 dark:bg-white/10" />
+            </div>
+          ))}
+        </div>
       ) : (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {(data.items || [])
-              .filter((p) => {
-                const q = query.trim().toLowerCase();
-                const catOk =
-                  category === "All Products" || getCategory(p) === category;
-                if (!q) return catOk;
-                const hay = `${p.name || ""} ${p.blurb || ""}`.toLowerCase();
-                return catOk && hay.includes(q);
-              })
-              .map((p, idx) => (
+        <section>
+          <Reveal>
+            <Eyebrow tone="orange">The catalogue</Eyebrow>
+            <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-adlm-dark-text">
+              Every ADLM tool
+            </h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-adlm-dark-muted max-w-2xl">
+              One account signs into all of them, and rates built in one flow
+              through to the others.
+            </p>
+          </Reveal>
+
+          <Stagger className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+            {visibleProducts.map((p, idx) => (
+              <StaggerItem key={p._id || getProductKey(p) || idx} className="h-full">
                 <ProductCard
-                  key={p._id || getProductKey(p) || idx}
                   p={p}
-                  idx={idx}
                   isAdmin={isAdmin}
                   isEditing={isEditing}
                   startEdit={startEdit}
@@ -594,29 +606,52 @@ export default function Products() {
                   coupons={activeCoupons}
                   onComingSoon={() => setShowModal(true)}
                 />
-              ))}
-          </div>
+              </StaggerItem>
+            ))}
+          </Stagger>
 
-          <div className="mt-6 flex items-center justify-between">
-            <button
-              className="btn btn-sm"
-              disabled={page <= 1}
-              onClick={() => gotoPage(page - 1)}
-            >
-              Previous
-            </button>
-            <div className="text-sm text-slate-600">
-              Page {page} of {pages}
+          {!visibleProducts.length && (
+            <div className="mt-6 rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border p-10 text-center">
+              <div className="text-sm font-semibold text-slate-700 dark:text-adlm-dark-text">
+                Nothing matches that search
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setCategory("All Products");
+                }}
+                className="mt-3 text-sm font-semibold text-adlm-blue-700 dark:text-adlm-blue-400 hover:underline"
+              >
+                Clear filters
+              </button>
             </div>
-            <button
-              className="btn btn-sm"
-              disabled={page >= pages}
-              onClick={() => gotoPage(page + 1)}
-            >
-              Next
-            </button>
-          </div>
-        </>
+          )}
+
+          {pages > 1 && (
+            <div className="mt-8 flex items-center justify-between gap-4">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={page <= 1}
+                onClick={() => gotoPage(page - 1)}
+              >
+                Previous
+              </button>
+              <div className="text-sm text-slate-500 dark:text-adlm-dark-muted">
+                Page {page} of {pages}
+              </div>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={page >= pages}
+                onClick={() => gotoPage(page + 1)}
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
@@ -625,7 +660,6 @@ export default function Products() {
 /* -------------------- Card -------------------- */
 function ProductCard({
   p,
-  idx,
   isAdmin,
   isEditing,
   startEdit,
@@ -660,9 +694,10 @@ function ProductCard({
   const hasDiscount = discUnit != null && discUnit > 0 && discUnit < unit;
   const pctOff = hasDiscount ? Math.round(((unit - discUnit) / unit) * 100) : 0;
 
+  // The reveal is now the <Stagger>/<StaggerItem> wrapper in the grid, which
+  // respects prefers-reduced-motion; the old hand-rolled useInView + CSS
+  // keyframe did not, and left the card at opacity-0 for anyone who had it on.
   const cardRef = React.useRef(null);
-  const inView = useInView(cardRef);
-  const delay = 80 + idx * 30;
 
   const productKey = getProductKey(p);
 
@@ -693,17 +728,7 @@ function ProductCard({
   return (
     <article
       ref={cardRef}
-      className={`
-        relative spotlight rounded-2xl bg-white p-3 md:p-4 flex flex-col
-        shadow-depth ring-1 ring-black/5 transition will-change-transform
-        hover:-translate-y-0.5 hover:shadow-depth-lg hover:ring-black/10
-        ${inView ? "opacity-100" : "opacity-0"}
-      `}
-      style={{
-        animation: inView
-          ? `fade-in-up 500ms ease-out ${delay}ms forwards`
-          : undefined,
-      }}
+      className="group relative h-full rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-4 flex flex-col shadow-depth transition duration-200 hover:-translate-y-1 hover:shadow-depth-lg"
     >
       {(popular || outOfStock || isComingSoon) && (
         <div className="absolute right-3 top-3 z-10">
@@ -734,10 +759,12 @@ function ProductCard({
 
       <CardVideo src={p.previewUrl} poster={p.thumbnailUrl} />
 
-      <div className="mt-2 flex items-center justify-between">
-        <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[11px]">
-          {cat}
-        </span>
+      {/* getCategory falls back to the literal "General" because Product has no
+          category field, and a pill reading GENERAL on every card is noise. */}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <Eyebrow tone="blue">
+          {p.isCourse ? "ADLM Course" : cat !== "General" ? cat : "ADLM Software"}
+        </Eyebrow>
         {rating && (
           <span className="text-[11px] text-amber-500 inline-flex items-center gap-1">
             ★ {rating.toFixed(1)}
@@ -747,41 +774,37 @@ function ProductCard({
 
       <Link
         to={`/product/${encodeURIComponent(productKey)}`}
-        className="mt-2 text-base md:text-lg font-semibold hover:text-adlm-blue-700 line-clamp-2"
+        className="mt-1.5 text-base md:text-lg font-bold leading-snug text-slate-900 dark:text-adlm-dark-text hover:text-adlm-blue-700 dark:hover:text-adlm-blue-400 transition line-clamp-2"
         title={p.name}
       >
         {p.name}
       </Link>
 
       {p.blurb && !editing && (
-        <p className="mt-1 text-xs md:text-sm text-slate-600 line-clamp-2">
+        <p className="mt-1.5 text-xs md:text-sm leading-relaxed text-slate-500 dark:text-adlm-dark-muted line-clamp-2">
           {p.blurb}
         </p>
       )}
 
-      <div className="mt-3">
-        {hasDiscount ? (
-          <>
-            <div className="text-slate-400 tracking-tight line-through text-sm">
-              NGN {(Number(unit) || 0).toLocaleString()}
-            </div>
-            <div className="text-slate-900 tracking-tight flex items-center gap-2">
-              <span className="text-base align-top mr-1">NGN</span>
-              <span className="text-2xl md:text-3xl font-bold">
-                {(Number(discUnit) || 0).toLocaleString()}
+      <div className="mt-4">
+        <div className="flex items-end gap-2 flex-wrap">
+          <span className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            {ngn(hasDiscount ? discUnit : unit)}
+          </span>
+          {hasDiscount && (
+            <>
+              <span className="text-sm text-slate-400 line-through pb-1">
+                {ngn(unit)}
               </span>
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{pctOff}% OFF</span>
-            </div>
-          </>
-        ) : (
-          <div className="text-slate-900 tracking-tight">
-            <span className="text-base align-top mr-1">NGN</span>
-            <span className="text-2xl md:text-3xl font-bold">
-              {(Number(unit) || 0).toLocaleString()}
-            </span>
-          </div>
-        )}
-        <div className="text-[11px] text-slate-500 -mt-0.5">per {cadence}</div>
+              <span className="mb-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-500/15 dark:text-emerald-400 px-1.5 py-0.5 rounded-full">
+                {pctOff}% OFF
+              </span>
+            </>
+          )}
+          <span className="pb-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
+            / {cadence}
+          </span>
+        </div>
       </div>
 
       {editing && isAdmin ? (
@@ -832,11 +855,16 @@ function ProductCard({
           </div>
         </div>
       ) : (
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        // mt-auto pins the actions to the bottom so buttons line up across a
+        // row whatever the blurb length does to the card above them.
+        <div className="mt-auto pt-4 grid grid-cols-2 gap-2">
           <button
-            className={`rounded-md px-3 py-2 text-sm font-medium ring-1 ring-slate-200 transition active:animate-[pop_180ms_ease-out]
-              ${outOfStock || isComingSoon ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50"}
-            `}
+            type="button"
+            className={`rounded-xl px-3 py-2.5 text-sm font-semibold border border-slate-200 dark:border-adlm-dark-border transition active:scale-[.99] ${
+              outOfStock || isComingSoon
+                ? "opacity-50 cursor-not-allowed"
+                : "hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
+            }`}
             onClick={() => {
               if (outOfStock) return;
               if (isComingSoon) {
@@ -847,20 +875,22 @@ function ProductCard({
             }}
             title={isComingSoon ? "Coming Soon" : "Add to Cart"}
           >
-            {isComingSoon ? "Coming Soon" : "Add to Cart"}
+            {isComingSoon ? "Coming Soon" : "Add to cart"}
           </button>
 
           <Link
-            className="rounded-md px-3 py-2 text-sm font-medium text-center bg-adlm-blue-700 text-white hover:bg-[#0050c8] transition active:animate-[pop_180ms_ease-out]"
+            className="group/cta inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-center bg-adlm-blue-700 text-white hover:bg-adlm-blue-600 shadow-lg shadow-adlm-blue-700/20 transition active:scale-[.99]"
             to={`/product/${encodeURIComponent(productKey)}`}
             title="View details"
           >
             View details
+            <IconArrowRight className="w-4 h-4 transition-transform group-hover/cta:translate-x-0.5" />
           </Link>
 
           {isAdmin && (
             <button
-              className="col-span-2 rounded-md px-3 py-2 text-sm font-medium ring-1 ring-slate-200 hover:bg-slate-50 transition"
+              type="button"
+              className="col-span-2 rounded-xl px-3 py-2.5 text-sm font-semibold border border-slate-200 dark:border-adlm-dark-border hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
               onClick={() => startEdit(p)}
               title="Edit product"
             >
