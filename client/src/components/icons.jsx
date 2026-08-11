@@ -123,6 +123,18 @@ import {
   Wrench01Icon,
   Xls01Icon,
   YoutubeIcon,
+  Alert01Icon,
+  Building06Icon,
+  CalculatorIcon,
+  ChampionIcon,
+  Moon02Icon,
+  MortarboardIcon,
+  PlaySquareIcon,
+  SparklesIcon,
+  Sun01Icon,
+  ViewOffIcon,
+  CheckmarkBadge01Icon,
+  GlobalIcon,
 } from "@hugeicons/core-free-icons";
 
 // Bigger than react-icons' 1em default — these read as buttons and affordances,
@@ -276,3 +288,47 @@ export const FiUserX = make(UserRemove01Icon, "FiUserX");
 export const FiUsers = make(UserMultiple02Icon, "FiUsers");
 export const FiX = make(Cancel01Icon, "FiX");
 export const FiZap = make(FlashIcon, "FiZap");
+
+/* ── Semantic names ───────────────────────────────────────────────────────
+   These replaced hand-drawn inline <svg> blocks. Prefer these over the
+   react-icons aliases above when adding anything new — the aliases only
+   exist so the library swap could be done without touching any JSX. */
+export const IconAlertCircle = make(Alert01Icon, "IconAlertCircle");
+export const IconAlertTriangle = make(Alert02Icon, "IconAlertTriangle");
+export const IconArrowLeft = make(ArrowLeft01Icon, "IconArrowLeft");
+export const IconArrowRight = make(ArrowRight01Icon, "IconArrowRight");
+export const IconBook = make(BookOpen01Icon, "IconBook");
+export const IconBuilding = make(Building06Icon, "IconBuilding");
+export const IconCalculator = make(CalculatorIcon, "IconCalculator");
+export const IconCalendar = make(Calendar03Icon, "IconCalendar");
+export const IconCart = make(ShoppingCart01Icon, "IconCart");
+export const IconCheck = make(Tick02Icon, "IconCheck");
+export const IconChevronRight = make(ArrowRight01Icon, "IconChevronRight");
+export const IconClose = make(Cancel01Icon, "IconClose");
+export const IconCube = make(CubeIcon, "IconCube");
+export const IconDesktop = make(ComputerIcon, "IconDesktop");
+export const IconDownload = make(Download01Icon, "IconDownload");
+export const IconEye = make(ViewIcon, "IconEye");
+export const IconEyeOff = make(ViewOffIcon, "IconEyeOff");
+export const IconGift = make(GiftIcon, "IconGift");
+export const IconGraduation = make(MortarboardIcon, "IconGraduation");
+export const IconLink = make(Link01Icon, "IconLink");
+export const IconLock = make(LockIcon, "IconLock");
+export const IconMenu = make(Menu01Icon, "IconMenu");
+export const IconMoon = make(Moon02Icon, "IconMoon");
+export const IconPlayCircle = make(PlayCircleIcon, "IconPlayCircle");
+export const IconPlaySquare = make(PlaySquareIcon, "IconPlaySquare");
+export const IconPlus = make(Add01Icon, "IconPlus");
+export const IconRefresh = make(RefreshIcon, "IconRefresh");
+export const IconSearch = make(Search01Icon, "IconSearch");
+export const IconShield = make(Shield01Icon, "IconShield");
+export const IconSparkle = make(SparklesIcon, "IconSparkle");
+export const IconStar = make(StarIcon, "IconStar");
+export const IconSun = make(Sun01Icon, "IconSun");
+export const IconTrophy = make(ChampionIcon, "IconTrophy");
+export const IconUser = make(UserIcon, "IconUser");
+export const IconUsers = make(UserMultiple02Icon, "IconUsers");
+export const IconLayout = make(DashboardSquare01Icon, "IconLayout");
+export const IconShieldCheck = make(CheckmarkBadge01Icon, "IconShieldCheck");
+export const IconGlobe = make(GlobalIcon, "IconGlobe");
+export const IconWorkflow = make(WorkflowSquare01Icon, "IconWorkflow");

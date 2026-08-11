@@ -6,6 +6,7 @@ import { payWithPaystack, verifyPaystack } from "../lib/paystack.js";
 import { useCountry, isForeignBuyer } from "../lib/geo.js";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import LicenseScene from "../components/LicenseScene.jsx";
+import { IconChevronRight, IconPlus } from "../components/icons.jsx";
 
 // Real 3D scene is lazy-loaded (it pulls in three.js) so it never blocks the
 // initial checkout render; the SVG <LicenseScene> is the instant fallback.
@@ -1153,19 +1154,13 @@ export default function Purchase() {
                       {fmt(unitShown, currency)} / {p.billingInterval === "yearly" ? "yr" : "mo"}
                     </span>
                   </span>
-                  <svg
-                    viewBox="0 0 24 24"
+                  <IconChevronRight
                     className={`w-4 h-4 flex-shrink-0 transition ${
-                      active ? "text-adlm-blue-700 dark:text-adlm-blue-400 translate-x-0.5" : "text-slate-300 dark:text-slate-600"
+                      active
+                        ? "text-adlm-blue-700 dark:text-adlm-blue-400 translate-x-0.5"
+                        : "text-slate-300 dark:text-slate-600"
                     }`}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M9 6l6 6-6 6" />
-                  </svg>
+                  />
                 </button>
               );
             })}
@@ -1182,7 +1177,7 @@ export default function Purchase() {
               return (
                 <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border p-10 text-center">
                   <div className="mx-auto w-12 h-12 rounded-xl grid place-items-center bg-adlm-blue-700/10 text-adlm-blue-700 dark:text-adlm-blue-400 mb-3">
-                    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+                    <IconChevronRight className="w-6 h-6" />
                   </div>
                   <div className="font-semibold text-slate-900 dark:text-white">
                     Pick a product to configure
@@ -1399,7 +1394,7 @@ export default function Purchase() {
                         onClick={commitActive}
                         className="btn-3d inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-base font-bold text-white"
                       >
-                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+                        <IconPlus className="w-5 h-5" />
                         {inCart ? "Update order" : "Add to order"}
                       </button>
                     </div>

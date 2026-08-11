@@ -23,6 +23,7 @@
 
 import React from "react";
 import { useAuth } from "../store.jsx";
+import { IconLock } from "./icons.jsx";
 
 /* Identity shown in the watermark. Falls back to brand text for logged-out
    viewers (e.g. free videos).
@@ -131,10 +132,7 @@ function Overlays({ label, guarded }) {
       <span className="secure-watermark__chip" aria-hidden="true">{label}</span>
       <div className={`secure-guard ${guarded ? "is-active" : ""}`} aria-hidden={!guarded}>
         <span className="secure-guard__msg">
-          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="11" width="18" height="10" rx="2" />
-            <path d="M7 11V7a5 5 0 0110 0v4" />
-          </svg>
+          <IconLock className="w-4 h-4" />
           Protected content — paused
         </span>
       </div>

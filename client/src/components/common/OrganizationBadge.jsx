@@ -1,63 +1,16 @@
 // src/components/common/OrganizationBadge.jsx
 import React from "react";
+import { IconBuilding, IconUser } from "../icons.jsx";
 
 function UserIcon({ className = "" }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M20 21a8 8 0 10-16 0"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M12 12a4 4 0 100-8 4 4 0 000 8z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
+    <IconUser className={className} />
   );
 }
 
 function BuildingIcon({ className = "" }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M3 21h18"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M6 21V7a2 2 0 012-2h2v16"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M14 21V5a2 2 0 012-2h2v18"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M8.5 9.5h1M8.5 12.5h1M8.5 15.5h1"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
+    <IconBuilding className={className} />
   );
 }
 

@@ -6,29 +6,22 @@ import { isStaff } from "../utils/roles.js";
 import { api } from "../api.js";
 import adlmLogo from "../assets/logo/adlmLogo.png";
 import { FiBox, FiCalendar, FiFileText, FiGrid, FiHome, FiInfo, FiLogOut, FiPlayCircle, FiShield, FiShoppingCart, FiUser, FiZap } from "./icons.jsx";
+import { IconClose, IconDesktop, IconMenu, IconMoon, IconSun } from "./icons.jsx";
 
 // Lightweight inline icons so we don't pull in another react-icons import.
 function SunIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-      <circle cx="12" cy="12" r="4" />
-      <path strokeLinecap="round" d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-    </svg>
+    <IconSun className="w-4 h-4" />
   );
 }
 function MoonIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" />
-    </svg>
+    <IconMoon className="w-4 h-4" />
   );
 }
 function DesktopIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-      <rect x="3" y="4" width="18" height="12" rx="2" />
-      <path strokeLinecap="round" d="M8 20h8M12 16v4" />
-    </svg>
+    <IconDesktop className="w-4 h-4" />
   );
 }
 
@@ -244,9 +237,7 @@ export default function Nav() {
             onClick={() => setOpen(true)}
             aria-label="Open menu"
           >
-            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <IconMenu className="w-6 h-6" />
           </button>
         </div>
       </header>
@@ -286,9 +277,7 @@ export default function Nav() {
             style={{ minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }}
             aria-label="Close menu"
           >
-            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <IconClose className="w-6 h-6" />
           </button>
         </div>
 

@@ -3,6 +3,7 @@ import React from "react";
 import { useParams, Link } from "react-router-dom";
 import { API_BASE } from "../config";
 import { SecureEmbed } from "../components/SecureVideo.jsx";
+import { IconLock } from "../components/icons.jsx";
 
 export default function FreeVideoDetail() {
   const { id } = useParams(); // Mongo _id
@@ -65,7 +66,7 @@ export default function FreeVideoDetail() {
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       />
       <p className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-adlm-dark-dim">
-        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
+        <IconLock className="w-3.5 h-3.5" />
         This lesson is watermarked to your session. Please don’t record or redistribute.
       </p>
 

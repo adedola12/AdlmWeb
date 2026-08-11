@@ -32,6 +32,7 @@ import { addProductToCart, getProductKey, getCategory } from "../lib/cart.js";
 import { faqFor } from "../data/productFaq.js";
 import { guideForProductKey } from "../data/guides.js";
 import { trackEvent } from "../ga";
+import { IconBook, IconCheck, IconPlus } from "../components/icons.jsx";
 
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
 const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -733,9 +734,7 @@ export default function ProductDetail() {
                   className={`${card} p-5 hover:-translate-y-1 hover:shadow-depth-lg transition duration-200`}
                 >
                   <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-adlm-blue-50 dark:bg-adlm-blue-700/15 text-adlm-blue-700 dark:text-adlm-blue-400">
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
+                    <IconCheck className="w-5 h-5" />
                   </span>
                   <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-adlm-dark-text">{f}</p>
                 </StaggerItem>
@@ -762,9 +761,7 @@ export default function ProductDetail() {
                 className="mt-6 inline-flex items-center gap-3 rounded-xl border border-adlm-blue-100 dark:border-adlm-blue-700/30 bg-adlm-blue-50/60 dark:bg-adlm-blue-700/10 px-4 py-3 hover:bg-adlm-blue-100/70 dark:hover:bg-adlm-blue-700/20 transition group"
               >
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-white/10 text-adlm-blue-700 dark:text-adlm-blue-300 shrink-0">
-                  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                  </svg>
+                  <IconBook className="w-5 h-5" />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-adlm-blue-900 dark:text-adlm-blue-200 group-hover:underline">
@@ -851,9 +848,7 @@ export default function ProductDetail() {
                       className={`shrink-0 mt-0.5 text-adlm-blue-700 dark:text-adlm-blue-400 transition-transform duration-200 ${open ? "rotate-45" : ""}`}
                       aria-hidden
                     >
-                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
+                      <IconPlus className="w-5 h-5" />
                     </span>
                   </button>
                   {open && (

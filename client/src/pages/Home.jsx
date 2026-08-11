@@ -8,6 +8,18 @@ import { Reveal, Stagger, StaggerItem, TiltCard } from "../components/effects.js
 import { Eyebrow, GlowTile } from "../components/brand.jsx";
 
 import { useAuth } from "../store.jsx";
+import {
+  IconArrowRight,
+  IconBook,
+  IconCalculator,
+  IconChevronRight,
+  IconCube,
+  IconGlobe,
+  IconGraduation,
+  IconLayout,
+  IconShieldCheck,
+  IconUsers,
+} from "../components/icons.jsx";
 
 /* ---------------------- tiny helpers ---------------------- */
 function easeOutCubic(t) {
@@ -72,22 +84,22 @@ const FALLBACK_APP_URL =
 /* Feature highlight cards shown on the right of the hero */
 const HERO_CARDS = [
   {
-    icon: "M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z",
+    icon: IconCalculator,
     title: "Rate Build-ups",
     desc: "Instant rate generation for accurate cost estimates",
   },
   {
-    icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z",
+    icon: IconLayout,
     title: "2D/3D Take-off",
     desc: "Revit & PlanSwift plugins for digital measurement",
   },
   {
-    icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253",
+    icon: IconBook,
     title: "Pro Training",
     desc: "Physical & online training for your team",
   },
   {
-    icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+    icon: IconShieldCheck,
     title: "99.9% Uptime",
     desc: "Reliable cloud infrastructure you can depend on",
   },
@@ -255,40 +267,14 @@ export default function Home() {
                     style={{ backgroundColor: "#E86A27" }}
                   >
                     {isAuthed ? "Get Started" : "Get Started Free"}
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 transition-transform group-hover:translate-x-1"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                      />
-                    </svg>
+                    <IconArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </Link>
 
                   <Link
                     to="/quote"
                     className="inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-base font-semibold border-2 border-white/30 text-white transition-all hover:bg-white/10 hover:border-white/50 hover:-translate-y-0.5"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                      />
-                    </svg>
+                    <IconCalculator className="h-4 w-4" />
                     Get Quotation
                   </Link>
 
@@ -297,20 +283,7 @@ export default function Home() {
                     className="group inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-base font-medium text-white/80 transition hover:text-white"
                   >
                     Explore Products
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 transition-transform group-hover:translate-x-1"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
+                    <IconChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </Link>
                   </div>
                 </StaggerItem>
@@ -337,21 +310,7 @@ export default function Home() {
                       className="tilt-layer w-10 h-10 rounded-lg flex items-center justify-center mb-3"
                       style={{ backgroundColor: "rgba(232,106,39,0.15)" }}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5"
-                        style={{ color: "#E86A27" }}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d={card.icon}
-                        />
-                      </svg>
+                      <card.icon className="h-5 w-5" />
                     </div>
                     <div className="font-semibold text-white text-sm">
                       {card.title}
@@ -376,22 +335,22 @@ export default function Home() {
                 {
                   node: <CountUp to={4} suffix="+" />,
                   label: "Software Tools",
-                  icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+                  icon: IconCube,
                 },
                 {
                   node: <CountUp to={1000} suffix="+" />,
                   label: "QS Professionals",
-                  icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
+                  icon: IconUsers,
                 },
                 {
                   node: <CountUp to={10} suffix="+" />,
                   label: "Countries",
-                  icon: "M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064",
+                  icon: IconGlobe,
                 },
                 {
                   node: <CountUp to={99.9} decimals={1} suffix="%" />,
                   label: "Uptime",
-                  icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z",
+                  icon: IconShieldCheck,
                 },
               ].map((stat, idx) => (
                 <button
@@ -404,20 +363,7 @@ export default function Home() {
                     className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ backgroundColor: "rgba(35,156,255,0.15)" }}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-adlm-blue-600"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d={stat.icon}
-                      />
-                    </svg>
+                    <stat.icon className="h-4 w-4 text-adlm-blue-600" />
                   </span>
                   <span>
                     <span className="block text-lg sm:text-xl font-bold text-white">
@@ -459,37 +405,21 @@ export default function Home() {
             accent="orange"
             title="Smarter Takeoff Tools"
             text="Say goodbye to costly errors and manual stress. With our 2D & 3D takeoff software and powerful plugins, quantity surveyors achieve faster, more accurate quantification and cost estimation — with confidence."
-            icon={
-              <>
-                <path d="M3 21v-6a4 4 0 014-4h10a4 4 0 014 4v6" />
-                <circle cx="7.5" cy="7" r="3" />
-                <circle cx="16.5" cy="7" r="3" />
-              </>
-            }
+            icon={IconUsers}
           />
           <BentoCard
             delay={90}
             accent="blue"
             title="BIM-Focused Training"
             text="We don’t just give you tools — we show you how to use them. Through hands-on sessions and BIM-focused learning, ADLM Studio helps QS professionals move into modern digital workflows with ease, confidence, and real-world skill."
-            icon={
-              <>
-                <path d="M22 10L12 5 2 10l10 5 10-5z" />
-                <path d="M6 12v5c0 1 2.5 2.5 6 2.5s6-1.5 6-2.5v-5" />
-              </>
-            }
+            icon={IconGraduation}
           />
           <BentoCard
             delay={180}
             accent="orange"
             title="Valuation & Cost Management"
             text="Track valuations, manage construction costs, and prepare payment certificates in one place — with the history, updates, and audit trails you can defend to clients, auditors, or management."
-            icon={
-              <>
-                <path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z" />
-                <path d="M9 12l2 2 4-4" />
-              </>
-            }
+            icon={IconShieldCheck}
           />
         </div>
       </section>
@@ -523,20 +453,7 @@ export default function Home() {
               style={{ backgroundColor: "#E86A27" }}
             >
               Get Started Today
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4 transition-transform group-hover:translate-x-1"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 7l5 5m0 0l-5 5m5-5H6"
-                />
-              </svg>
+              <IconArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
           </div>
         </Reveal>
@@ -548,7 +465,7 @@ export default function Home() {
 /* ----------- presentational helpers ----------- */
 
 function BentoCard({
-  icon,
+  icon: Icon,
   title,
   text,
   accent = "orange",
@@ -570,17 +487,7 @@ function BentoCard({
         <div
           className={`tilt-layer relative inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4 ${isBlue ? "bg-adlm-blue-700/10 text-adlm-blue-700 dark:text-adlm-blue-600" : "bg-adlm-orange/10 text-adlm-orange"}`}
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {icon}
-          </svg>
+          {Icon ? <Icon className="w-6 h-6" /> : null}
         </div>
         <h3 className="relative text-base sm:text-lg font-semibold text-adlm-navy dark:text-white">
           {title}

@@ -13,6 +13,7 @@ import {
   getProductKey,
   getCategory,
 } from "../lib/cart.js";
+import { IconCalendar, IconSearch } from "../components/icons.jsx";
 
 /* -------------------- UI helpers -------------------- */
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
@@ -475,16 +476,7 @@ export default function Products() {
               placeholder="Search products…"
               className="w-full rounded-lg px-10 py-2 outline-none ring-1 ring-black/5 focus:ring-2 focus:ring-adlm-blue-700"
             />
-            <svg
-              className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.3-4.3" />
-            </svg>
+            <IconSearch className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           </div>
 
           <select
@@ -538,10 +530,7 @@ export default function Products() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="w-9 h-9 rounded-xl grid place-items-center bg-adlm-orange/10 text-adlm-orange flex-shrink-0">
-              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <path d="M16 2v4M8 2v4M3 10h18" />
-              </svg>
+              <IconCalendar className="w-5 h-5" />
             </span>
             <div>
               <div className="text-lg font-bold text-slate-900 dark:text-white">Physical Trainings</div>

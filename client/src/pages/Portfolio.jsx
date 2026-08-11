@@ -5,6 +5,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { IconArrowLeft, IconArrowRight, IconLink } from "../components/icons.jsx";
 
 dayjs.extend(relativeTime);
 
@@ -56,15 +57,7 @@ function ProjectCard({ project, onClick }) {
             title="Publicly shared"
             className="flex-shrink-0 text-blue-500 mt-0.5"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-4 h-4"
-            >
-              <path d="M12.232 4.232a2.5 2.5 0 013.536 3.536l-1.225 1.224a.75.75 0 001.061 1.06l1.224-1.224a4 4 0 00-5.656-5.656l-3 3a4 4 0 00.225 5.865.75.75 0 00.977-1.138 2.5 2.5 0 01-.142-3.667l3-3z" />
-              <path d="M11.603 7.963a.75.75 0 00-.977 1.138 2.5 2.5 0 01.142 3.667l-3 3a2.5 2.5 0 01-3.536-3.536l1.225-1.224a.75.75 0 00-1.061-1.06l-1.224 1.224a4 4 0 105.656 5.656l3-3a4 4 0 00-.225-5.865z" />
-            </svg>
+            <IconLink className="w-4 h-4" />
           </span>
         )}
       </div>
@@ -123,18 +116,7 @@ export default function Portfolio() {
           to="/dashboard"
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="w-4 h-4"
-          >
-            <path
-              fillRule="evenodd"
-              d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
-              clipRule="evenodd"
-            />
-          </svg>
+          <IconArrowLeft className="w-4 h-4" />
           Back to Dashboard
         </Link>
 
@@ -154,18 +136,7 @@ export default function Portfolio() {
               <span className="font-semibold">QUIV users:</span> track your
               project schedule in the PM Tracker
             </span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-4 h-4 text-blue-500 flex-shrink-0 group-hover:translate-x-0.5 transition-transform"
-            >
-              <path
-                fillRule="evenodd"
-                d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <IconArrowRight className="w-4 h-4 text-blue-500 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         )}
 

@@ -9,6 +9,7 @@ import richard from "../assets/team/Richard.jpg";
 // pulled in from the shared layer.
 import { Stagger, StaggerItem } from "../components/effects.jsx";
 import { Eyebrow } from "../components/brand.jsx";
+import { IconShield, IconSparkle, IconStar, IconUsers } from "../components/icons.jsx";
 // import gladys from "../assets/team/Gladys.JPG";
 
 /* -------------------- tiny animation helpers -------------------- */
@@ -215,69 +216,28 @@ export default function AboutADLM() {
       title: "Excellence",
       desc: "Raising the bar for QS/BIM software quality, training, and support in Africa.",
       icon: (
-        <svg
-          className="w-5 h-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-        >
-          <path
-            strokeWidth="2"
-            d="M12 3l3.09 6.26L22 10l-5 4.9L18.18 22 12 18.77 5.82 22 7 14.9 2 10l6.91-0.74L12 3z"
-          />
-        </svg>
+        <IconStar className="w-5 h-5" />
       ),
     },
     {
       title: "Customer First",
       desc: "Built with Nigerian QS workflows in mind—BESMM4R, NRM2, local pricing & realities.",
       icon: (
-        <svg
-          className="w-5 h-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-        >
-          <path
-            strokeWidth="2"
-            d="M12 12c2.8 0 5-2.2 5-5S14.8 2 12 2 7 4.2 7 7s2.2 5 5 5z"
-          />
-          <path strokeWidth="2" d="M3 22c0-4.4 3.6-8 8-8s8 3.6 8 8" />
-        </svg>
+        <IconUsers className="w-5 h-5" />
       ),
     },
     {
       title: "Innovation",
       desc: "From Revit & PlanSwift plugins to RateGen & COBie tools—ship, learn, iterate.",
       icon: (
-        <svg
-          className="w-5 h-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-        >
-          <path
-            strokeWidth="2"
-            d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
-          />
-        </svg>
+        <IconSparkle className="w-5 h-5" />
       ),
     },
     {
       title: "Reliability",
       desc: "Transparent pricing, responsive support, and tools you can depend on for delivery.",
       icon: (
-        <svg
-          className="w-5 h-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-        >
-          <path
-            strokeWidth="2"
-            d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-          />
-        </svg>
+        <IconShield className="w-5 h-5" />
       ),
     },
   ];

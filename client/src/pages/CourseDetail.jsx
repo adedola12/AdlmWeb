@@ -7,6 +7,7 @@ import { parseBunny, bunnyIframeSrc } from "../lib/video.js";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { SecureVideo, SecureEmbed } from "../components/SecureVideo.jsx";
 import ModuleQuiz from "../components/ModuleQuiz.jsx";
+import { IconAlertCircle, IconLock } from "../components/icons.jsx";
 
 function accessTone(access) {
   if (access?.isExpired) {
@@ -328,9 +329,7 @@ export default function CourseDetail() {
             ) : null}
 
             <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
-              <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <IconAlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
               <p className="text-xs text-amber-800">
                 <span className="font-semibold">Disclaimer:</span> ADLM Softwares and Plugins do not come with the course.
               </p>
@@ -543,7 +542,7 @@ export default function CourseDetail() {
             </div>
           )}
           <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-adlm-dark-dim">
-            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
+            <IconLock className="w-3.5 h-3.5" />
             Protected stream — watermarked to your account. Recording or sharing is prohibited.
           </p>
 

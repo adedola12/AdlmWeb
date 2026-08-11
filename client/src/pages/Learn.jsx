@@ -2,6 +2,7 @@ import React from "react";
 import Seo from "../components/Seo.jsx";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config";
+import { IconGraduation, IconPlaySquare } from "../components/icons.jsx";
 
 function makePreviewUrl(url, seconds = 60, startAt = 0) {
   if (!url) return url;
@@ -228,10 +229,7 @@ export default function Learn() {
       <section className="card">
         <div className="flex items-center gap-2.5 mb-1">
           <span className="w-9 h-9 rounded-xl grid place-items-center bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400 flex-shrink-0">
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M10 8.5l5 3.5-5 3.5z" fill="currentColor" stroke="none" />
-            </svg>
+            <IconPlaySquare className="w-5 h-5" />
           </span>
           <h2 className="text-xl font-semibold">Free Courses</h2>
         </div>
@@ -277,10 +275,7 @@ export default function Learn() {
       <section className="space-y-4">
         <div className="flex items-center gap-2.5">
           <span className="w-9 h-9 rounded-xl grid place-items-center bg-adlm-blue-700/10 text-adlm-blue-700 dark:text-adlm-blue-400 flex-shrink-0">
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 10L12 5 2 10l10 5 10-5z" />
-              <path d="M6 12v5c0 1 2.5 2.5 6 2.5s6-1.5 6-2.5v-5" />
-            </svg>
+            <IconGraduation className="w-5 h-5" />
           </span>
           <h2 className="text-xl font-semibold">Paid Courses</h2>
         </div>

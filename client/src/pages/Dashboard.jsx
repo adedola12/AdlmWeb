@@ -13,6 +13,7 @@ import { TiltCard } from "../components/effects.jsx";
 import StorageBar from "../components/StorageBar.jsx";
 import Seo from "../components/Seo.jsx";
 import { ownedGuidesFor } from "../data/guides.js";
+import { IconAlertTriangle, IconArrowRight, IconBook, IconCart, IconCheck, IconChevronRight, IconCube, IconDownload, IconGift, IconPlayCircle, IconPlaySquare, IconRefresh, IconTrophy } from "../components/icons.jsx";
 
 dayjs.extend(relativeTime);
 
@@ -422,7 +423,7 @@ export default function Dashboard() {
             subtitle="Products you can access"
             delay={60}
             accent="blue"
-            icon={<svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12" /></svg>}
+            icon={<IconCube className="w-5 h-5" />}
           />
           <StatCard
             title="Active Subscriptions"
@@ -430,7 +431,7 @@ export default function Dashboard() {
             subtitle="Currently active"
             delay={120}
             accent="emerald"
-            icon={<svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>}
+            icon={<IconRefresh className="w-5 h-5" />}
           />
           <StatCard
             title="Tutorials Watched"
@@ -438,7 +439,7 @@ export default function Dashboard() {
             subtitle="Learning progress"
             delay={180}
             accent="orange"
-            icon={<svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M10 8.5l5 3.5-5 3.5z" fill="currentColor" stroke="none" /></svg>}
+            icon={<IconPlaySquare className="w-5 h-5" />}
           />
           <StatCard
             title="Total Orders"
@@ -446,7 +447,7 @@ export default function Dashboard() {
             subtitle="Purchases + trainings"
             delay={240}
             accent="violet"
-            icon={<svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>}
+            icon={<IconCart className="w-5 h-5" />}
           />
         </div>
 
@@ -454,9 +455,7 @@ export default function Dashboard() {
           <div className="bg-red-50 border border-red-200 text-red-900 rounded-xl shadow-depth p-4 md:p-5">
             <div className="flex items-start gap-3">
               <div className="shrink-0 mt-0.5">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                </svg>
+                <IconAlertTriangle className="h-5 w-5 text-red-600" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold uppercase tracking-wide text-red-700">
@@ -524,20 +523,7 @@ export default function Dashboard() {
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-white text-adlm-blue-700 text-sm font-semibold hover:bg-blue-50 transition"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
+                <IconDownload className="h-4 w-4" />
                 Download Installer Hub
               </a>
               {summary.installerHub.guideUrl ? (
@@ -547,20 +533,7 @@ export default function Dashboard() {
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-white/10 ring-1 ring-white/40 text-white text-sm font-semibold hover:bg-white/20 transition"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                    />
-                  </svg>
+                  <IconBook className="h-4 w-4" />
                   Download User Guide
                 </a>
               ) : null}
@@ -673,19 +646,7 @@ export default function Dashboard() {
                   className="group flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:border-adlm-blue-700 hover:bg-blue-50/40 transition"
                 >
                   <span className="shrink-0 mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 text-adlm-blue-700">
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.8}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                      />
-                    </svg>
+                    <IconBook className="h-5 w-5" />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-slate-900 group-hover:text-adlm-blue-700">
@@ -733,7 +694,7 @@ export default function Dashboard() {
               <div className="relative flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <span className="grid place-items-center w-11 h-11 rounded-xl flex-shrink-0 bg-gradient-to-br from-adlm-orange to-amber-500 text-white shadow-glow-orange">
-                    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>
+                    <IconTrophy className="w-6 h-6" />
                   </span>
                   <div>
                     <div className="text-xs text-slate-500">Membership</div>
@@ -761,7 +722,7 @@ export default function Dashboard() {
                 className="relative mt-5 w-full inline-flex items-center justify-center gap-2 bg-adlm-orange text-white text-sm font-semibold py-2.5 px-3 rounded-lg shadow-glow-orange hover:brightness-110 active:scale-[.99] transition"
                 onClick={() => navigate("/freebies")}
               >
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5" /></svg>
+                <IconGift className="w-4 h-4" />
                 Explore ADLM Freebies
               </button>
             </div>
@@ -790,7 +751,7 @@ export default function Dashboard() {
                       <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{q.icon}</svg>
                     </span>
                     <span className="flex-1">{q.label}</span>
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-slate-300 transition group-hover:text-adlm-blue-700 group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                    <IconChevronRight className="w-4 h-4 text-slate-300 transition group-hover:text-adlm-blue-700 group-hover:translate-x-0.5" />
                   </button>
                 ))}
               </div>
@@ -932,7 +893,7 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage, storageData = n
           >
             <div className="flex items-start gap-4">
               <div className="hidden sm:grid place-items-center w-12 h-12 rounded-xl flex-shrink-0 bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue">
-                <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12" /></svg>
+                <IconCube className="w-6 h-6" />
               </div>
 
               <div className="min-w-0 flex-1">
@@ -987,7 +948,7 @@ function SubscriptionsTab({ entitlements = [], onOpen, onManage, storageData = n
                     onClick={() => onOpen(s)}
                   >
                     Open
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 transition-transform group-hover/btn:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                    <IconArrowRight className="w-4 h-4 transition-transform group-hover/btn:translate-x-0.5" />
                   </button>
                   <button
                     className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-adlm-dark-border text-sm hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
@@ -2029,9 +1990,7 @@ export function InstallationsTab({
                             target="_blank"
                             rel="noreferrer"
                           >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
+                            <IconDownload className="w-4 h-4" />
                             Download Installer Hub
                           </a>
                         ) : null}
@@ -2043,9 +2002,7 @@ export function InstallationsTab({
                             target="_blank"
                             rel="noreferrer"
                           >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                            </svg>
+                            <IconBook className="w-4 h-4" />
                             Download User Guide
                           </a>
                         ) : null}
@@ -2055,10 +2012,7 @@ export function InstallationsTab({
                             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition"
                             onClick={() => setSetupVideoModal(true)}
                           >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <IconPlayCircle className="w-4 h-4" />
                             Watch Setup Guide
                           </button>
                         ) : null}
@@ -2148,13 +2102,6 @@ export function InstallationsTab({
 
 function CheckIcon() {
   return (
-    <svg
-      className="w-4 h-4 text-emerald-600 shrink-0"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-    >
-      <path strokeWidth="2" d="M5 13l4 4L19 7" />
-    </svg>
+    <IconCheck className="w-4 h-4 text-emerald-600 shrink-0" />
   );
 }

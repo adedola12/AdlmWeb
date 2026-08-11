@@ -1,6 +1,7 @@
 import React from "react";
 import { API_BASE } from "../config";
 import { Link } from "react-router-dom";
+import { IconCalculator, IconCheck } from "../components/icons.jsx";
 
 const fmt = (n, currency = "NGN") =>
   new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
@@ -305,20 +306,7 @@ export default function Quote() {
                       }`}
                     >
                       {isSelected && (
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                        >
-                          <path
-                            d="M2 6L5 9L10 3"
-                            stroke="white"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
+                        <IconCheck />
                       )}
                     </div>
                   </div>
@@ -620,9 +608,7 @@ export default function Quote() {
       {lineItems.length === 0 && (
         <div className="mt-8 text-center py-12 text-slate-400">
           <div className="text-4xl mb-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
+            <IconCalculator className="mx-auto h-12 w-12" />
           </div>
           <div className="font-medium text-slate-600">
             Select products above to see your quote
