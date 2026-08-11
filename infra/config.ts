@@ -194,6 +194,41 @@ export interface AdlmConfig {
   certificateArn?: string;
 
   /**
+   * MPXJ converter: deploy it, or leave it alone.
+   *
+   * This is the Java service in tools/mpxj-converter that turns .mpp into MS
+   * Project XML, which server/util/msProjectParser.js calls over HTTP. It
+   * lived on Render and died with the suspension, so `MPXJ_API_URL` pointed at
+   * a 503 and every .mpp import failed with MPP_SERVICE_FAILED.
+   *
+   * Set false to skip it entirely — the stack then contains no Docker asset,
+   * which is worth knowing because a `cdk deploy` with this true REQUIRES a
+   * working Docker daemon to build the image. CI has one; a machine with
+   * Docker Desktop stopped does not, and the failure is at synth time.
+   */
+  deployMpxj: boolean;
+
+  /**
+   * Memory (MB) for the converter. Also buys CPU, and this workload is
+   * CPU-bound XML parsing, so it is the throughput dial.
+   *
+   * 2048 puts it just past the ~1769 MB full-vCPU threshold. The JVM cold
+   * start plus a real conversion is seconds either way; halving this would
+   * roughly double both. Duration billing is per GB-ms, so 2 GB for 4 s costs
+   * the same as 1 GB for 8 s — there is no saving in going smaller, only a
+   * slower user.
+   */
+  mpxjMemoryMb: number;
+
+  /**
+   * Timeout (seconds). MUST stay under the caller's own budget: the fetch in
+   * msProjectParser.js aborts at 60s, and it is itself running inside the API
+   * function's 60s timeout. 50 leaves the caller room to return a clean error
+   * instead of both sides being cut off at once.
+   */
+  mpxjTimeoutSeconds: number;
+
+  /**
    * Function URL auth.
    *
    * "NONE"  — the Function URL is publicly reachable. Required for the
@@ -238,6 +273,11 @@ export const config: AdlmConfig = {
   warmIntervalMinutes: 5,
 
   alarmEmail: "admin@adlmstudio.net", // CONFIRMED
+
+  // Added 2026-08-11, to finish moving off Render. See the interface docs.
+  deployMpxj: true,
+  mpxjMemoryMb: 2048,
+  mpxjTimeoutSeconds: 50,
 
   // Emergency restore: touch as little DNS as possible. See the doc above.
   useExternalDns: true,

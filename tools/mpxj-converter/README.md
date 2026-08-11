@@ -47,7 +47,41 @@ curl -X POST --data-binary @sample.mpp \
   http://localhost:8080/convert > sample.xml
 ```
 
-## Deploy on Render (recommended)
+## Deploy on AWS Lambda (this is where it actually runs)
+
+**Since 11 August 2026 this service runs as `MpxjFn` in the `AdlmApi` CDK
+stack**, `eu-west-1`. You do not deploy it by hand and there are no environment
+variables to copy anywhere:
+
+```bash
+cd infra && npx cdk deploy AdlmApi
+```
+
+CDK builds this Dockerfile, pushes it to ECR, creates the function and its
+Function URL, and injects that URL into the main API function as
+`MPXJ_API_URL`. Requires a **running Docker daemon**, because the image is built
+locally. Full rationale, measured cold-start numbers and the two settings that
+must change together are in `infra/README.md` §7a.
+
+Two differences from every other deployment target below:
+
+- **The Lambda Web Adapter** is copied into `/opt/extensions/lambda-adapter` so
+  the JDK `HttpServer` in `Main.java` can answer Lambda invocations unmodified.
+  Only Lambda executes `/opt/extensions`, so the same image still runs normally
+  everywhere else. Nothing in `Main.java` knows it is on Lambda.
+- **Auth is IAM, not `MPXJ_API_KEY`.** The Function URL is `AWS_IAM` and only the
+  API function's role may invoke it, so `MPXJ_API_KEY` is left unset there and
+  the app-layer check is inactive. The caller signs with SigV4. Everywhere else
+  in this README, the API key is still the way to protect a public URL.
+
+## Deploy on Render (historical — the account is suspended)
+
+> **Kept for reference only.** ADLM's Render account was suspended for
+> non-payment and `adlm-mpxj-converter.onrender.com` returns **503**. That
+> outage is why the service moved to Lambda. `render.yaml` still works if you
+> point a live Render account at it, but note step 5: the API key was
+> `generateValue: true`, so Render generated it and held the only copy. It did
+> not survive the suspension.
 
 This directory ships a `render.yaml` Blueprint so the deploy is one click.
 

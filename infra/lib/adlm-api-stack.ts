@@ -55,6 +55,7 @@ import { AdlmConfig, reservedConcurrency } from "../config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = path.resolve(__dirname, "..", "..", "server");
+const MPXJ_DIR = path.resolve(__dirname, "..", "..", "tools", "mpxj-converter");
 
 export interface AdlmApiStackProps extends StackProps {
   config: AdlmConfig;
@@ -551,6 +552,101 @@ export class AdlmApiStack extends Stack {
     });
 
     [scheduledErrors, dlqDepth].forEach((a) => a.addAlarmAction(notify));
+
+    /* ═══════════════ MPXJ converter ═══════════════
+     * The Java service in tools/mpxj-converter, which turns .mpp into MS
+     * Project XML for server/util/msProjectParser.js. It ran on Render's FREE
+     * tier and went down with the account, so MPXJ_API_URL pointed at a 503
+     * and every .mpp import returned MPP_SERVICE_FAILED.
+     *
+     * A container image function, not a NodejsFunction: the service is Java
+     * and stays Java. The AWS Lambda Web Adapter in its Dockerfile lets the
+     * existing JDK HttpServer answer Lambda invocations unmodified, so no Java
+     * was rewritten to move it — see the comments in that Dockerfile.
+     *
+     * WHY LAMBDA AND NOT APP RUNNER. App Runner would have been a pure
+     * lift-and-shift of the container with no adapter and no payload ceiling,
+     * and horlawealth already uses it in this account. But it bills for
+     * provisioned memory continuously, ~$5/month, to serve a feature used a
+     * few times a week. This function costs nothing when idle, and the request
+     * ceiling that Lambda imposes is not a real constraint here: a .mpp can
+     * only reach this service by first being uploaded to the API function,
+     * which has the same 6 MB limit. The RESPONSE side is the one that needed
+     * handling, and that is what RESPONSE_STREAM below is for.
+     *
+     * It is deliberately NOT behind the CloudFront distribution. Nothing
+     * external calls it — only the API function does, server to server.
+     */
+    if (cfg.deployMpxj) {
+      const mpxjLogs = new logs.LogGroup(this, "MpxjFnLogs", {
+        retention: cfg.logRetentionDays,
+        removalPolicy: RemovalPolicy.RETAIN,
+      });
+
+      const mpxjFn = new lambda.DockerImageFunction(this, "MpxjFn", {
+        description:
+          "MPXJ .mpp -> MS Project XML converter (Java, via Lambda Web Adapter)",
+        code: lambda.DockerImageCode.fromImageAsset(MPXJ_DIR),
+        memorySize: cfg.mpxjMemoryMb,
+        timeout: Duration.seconds(cfg.mpxjTimeoutSeconds),
+        logGroup: mpxjLogs,
+        // No reserved concurrency. It touches no database, so it needs no
+        // share of the Atlas connection budget, and reserving here would take
+        // capacity away from the API's 75 for no benefit.
+      });
+
+      /* IAM auth, NOT the X-API-Key shared secret the Render deployment used.
+       *
+       * That key was `generateValue: true` in render.yaml, meaning Render
+       * generated it and held the only copy, so it died with the account.
+       * Recreating it would mean carrying a secret that must be set
+       * identically in two places, and if it were ever missing on this side
+       * the Java service falls back to "open access" — which is a silent
+       * security downgrade that looks like a working deploy.
+       *
+       * IAM cannot fail that way. Unsigned requests are rejected by Lambda
+       * before the container is invoked, and a misconfiguration is a loud 403
+       * rather than a quiet opening. The API function still sends X-API-Key
+       * when MPXJ_API_KEY is set, so nothing stops you adding the app-layer
+       * check back on top.
+       */
+      const mpxjUrl = mpxjFn.addFunctionUrl({
+        authType: lambda.FunctionUrlAuthType.AWS_IAM,
+        // MSPDI XML is far more verbose than the .mpp it came from, and a
+        // buffered Lambda response is capped at 6 MB. Streaming lifts that,
+        // and must match AWS_LWA_INVOKE_MODE in the Dockerfile.
+        invokeMode: lambda.InvokeMode.RESPONSE_STREAM,
+      });
+
+      // Only the API function converts files. ScheduledFn is not granted.
+      mpxjUrl.grantInvokeUrl(fn);
+      fn.addEnvironment("MPXJ_API_URL", mpxjUrl.url);
+      // The signer needs a region and the SigV4 service name; both are fixed,
+      // but naming them means msProjectParser.js does not have to guess.
+      fn.addEnvironment("MPXJ_SIGV4_REGION", cfg.region);
+
+      const mpxjErrors = new cloudwatch.Alarm(this, "MpxjErrorsAlarm", {
+        alarmDescription:
+          "The .mpp converter is throwing. Programme imports are failing, and the user-facing " +
+          "message tells them to export MS Project XML by hand instead. Check the MpxjFn log group.",
+        metric: mpxjFn.metricErrors({ period: Duration.minutes(15) }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      mpxjErrors.addAlarmAction(notify);
+
+      new CfnOutput(this, "MpxjFunctionUrl", {
+        value: mpxjUrl.url,
+        description:
+          "Converter endpoint. IAM-signed, so a plain curl gets 403. It is injected into the API " +
+          "function as MPXJ_API_URL automatically, and the SSM parameter of that name is ignored.",
+      });
+      new CfnOutput(this, "MpxjLogGroup", {
+        value: mpxjLogs.logGroupName,
+        description: `Converter logs: aws logs tail <this> --region ${cfg.region} --since 1h`,
+      });
+    }
 
     /* ─────────────────── Outputs ─────────────────── */
     new CfnOutput(this, "FunctionUrl", {

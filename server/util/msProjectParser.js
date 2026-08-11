@@ -371,11 +371,105 @@ export async function parseMsProjectMpp(buffer, { filename = "" } = {}) {
           .trim();
         if (cleanKey) headers["X-API-Key"] = cleanKey;
       }
+
+      // ── SigV4, for the Lambda Function URL deployment ──────────────────
+      // The converter moved off Render (which died) onto a Lambda Function
+      // URL with IAM auth, so requests must be signed. Render's deployment
+      // used a shared X-API-Key instead; that path above is left intact, so
+      // this function still works against a plain HTTP converter — a local
+      // `docker run`, or App Runner — with no signing at all.
+      //
+      // Detected from the hostname rather than a feature flag: a Function URL
+      // is unmistakable, and an operator who repoints MPXJ_API_URL at
+      // something else should not also have to remember to turn signing off.
+      let signedHeaders = headers;
+      const isLambdaUrl = /\.lambda-url\.[a-z0-9-]+\.on\.aws$/i.test(
+        new URL(targetUrl).hostname,
+      );
+      if (isLambdaUrl) {
+        try {
+          // Pull named exports defensively, for two separate reasons.
+          //
+          // 1. These packages are CommonJS with no statically-detectable named
+          //    exports, so a dynamic import can put everything under `.default`
+          //    and a plain destructure silently yields undefined. esbuild hides
+          //    that when it bundles for Lambda, which is the trap: it would
+          //    work in production and throw under a local `node index.js`.
+          // 2. The credential provider is called `defaultProvider` in
+          //    @aws-sdk/credential-provider-node, but `fromNodeProviderChain`
+          //    in @aws-sdk/credential-providers, and both names show up in
+          //    documentation for "the default chain". Accept either.
+          const pick = (mod, ...names) => {
+            for (const n of names) {
+              const fn = mod?.[n] ?? mod?.default?.[n];
+              if (typeof fn === "function") return fn;
+            }
+            throw new Error(
+              `none of [${names.join(", ")}] found; module exports: ${Object.keys(
+                mod || {},
+              )
+                .slice(0, 8)
+                .join(", ")}`,
+            );
+          };
+          const [sigMod, shaMod, credMod] = await Promise.all([
+            import("@smithy/signature-v4"),
+            import("@aws-crypto/sha256-js"),
+            import("@aws-sdk/credential-provider-node"),
+          ]);
+          const SignatureV4 = pick(sigMod, "SignatureV4");
+          const Sha256 = pick(shaMod, "Sha256");
+          const credentialProvider = pick(
+            credMod,
+            "defaultProvider",
+            "fromNodeProviderChain",
+          );
+
+          const u = new URL(targetUrl);
+          const signer = new SignatureV4({
+            service: "lambda",
+            region:
+              process.env.MPXJ_SIGV4_REGION ||
+              process.env.AWS_REGION ||
+              "eu-west-1",
+            credentials: credentialProvider(),
+            sha256: Sha256,
+          });
+          const signed = await signer.sign({
+            method: "POST",
+            protocol: u.protocol,
+            hostname: u.hostname,
+            path: u.pathname,
+            // `host` must be part of the signed set or Lambda rejects it.
+            headers: { ...headers, host: u.hostname },
+            body: buffer,
+          });
+          signedHeaders = signed.headers;
+        } catch (signErr) {
+          // Be explicit. An unsigned request to an IAM-auth Function URL comes
+          // back as a bare 403 with no body, which reads like a broken
+          // deployment rather than a missing credential.
+          return {
+            ok: false,
+            format: "msproject-mpp",
+            tasks: [],
+            skipped: 0,
+            errorCode: "MPP_SERVICE_FAILED",
+            error: `Could not sign the request to the MPXJ converter (${
+              signErr?.message || signErr
+            }). The converter is on an IAM-authenticated Lambda Function URL, so this host needs AWS credentials with lambda:InvokeFunctionUrl. Meanwhile, export MS Project XML and upload that instead.`,
+          };
+        }
+      }
+
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 60_000);
+      // Under the API function's own 60s ceiling, and under the converter's
+      // 50s timeout, so whichever gives out first this side still returns a
+      // real error rather than being killed mid-flight.
+      const timeout = setTimeout(() => controller.abort(), 55_000);
       const res = await fetch(targetUrl, {
         method: "POST",
-        headers,
+        headers: signedHeaders,
         body: buffer,
         signal: controller.signal,
       }).finally(() => clearTimeout(timeout));

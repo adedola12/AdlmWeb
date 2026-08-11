@@ -1,5 +1,15 @@
 # Render Blueprint for the MPXJ Converter service.
 #
+# HISTORICAL. This is not where the service runs. ADLM's Render account was
+# suspended for non-payment on or before 8 August 2026 and this service
+# returns 503; it now runs as MpxjFn in the AdlmApi CDK stack on AWS Lambda
+# (see infra/README.md §7a). Kept because the Dockerfile is still portable and
+# this file documents the shape of a non-AWS deployment.
+#
+# Note MPXJ_API_KEY below: generateValue means Render generated the secret and
+# held the only copy, so it did not survive the suspension. The Lambda
+# deployment uses IAM auth on the Function URL instead of a shared key.
+#
 # How to use:
 #   1. Push this directory to a public/private Git repo (or commit it
 #      inside ADLMWebsite and point Render at the subdirectory).

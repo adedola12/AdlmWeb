@@ -14,6 +14,19 @@
 Emergency restore of the ADLM Cloud API (`adlmstudio.net`) onto AWS Lambda,
 after the Render suspension took it offline.
 
+> **STATUS, 11 August 2026: this has been executed and it is live.** The
+> sentence below was true when written and is kept for the record, but do not
+> read this file as a plan any more. `AdlmApi` is deployed in `eu-west-1`
+> (account `065634457992`), `api.adlmstudio.net` resolves to its CloudFront
+> distribution, `/health` returns `{"ok":true,"db":"connected"}`, and
+> `/.well-known/jwks.json` returns one RS256 key, so licence signing survived
+> the move. Both nightly schedules run on Africa/Lagos time. Verified figures:
+> 36,790 invocations in the three days to 11 August with zero errors and zero
+> throttles, and $0.34 of Lambda cost across 1-11 August.
+>
+> The MPXJ converter moved on the same day and is no longer a gap; see §
+> "MPXJ converter" below.
+
 **You run every command in this file. Nothing here has been executed.** The
 stacks synthesize cleanly and the Lambda bundle builds, but nothing has ever
 been deployed — this session has no credentials for ADLM's AWS account.
@@ -127,9 +140,12 @@ MPXJ_API_URL  MPXJ_API_KEY
 > today, so course-video signed URLs stay broken until that is changed — it is
 > not licence-critical, so it is not on the emergency path.
 
-> **`MPXJ_API_URL` still points at Render** and that service is down too. `.mpp`
-> import will fail with the existing friendly error telling users to export XML
-> instead. Acceptable for now; see D4 in the migration plan.
+> **~~`MPXJ_API_URL` still points at Render~~ — FIXED 11 August 2026.** The
+> converter now runs in this stack as `MpxjFn` and the API function receives its
+> URL as an injected environment variable, which wins over SSM because
+> `lambda.js` only fills a key that is `undefined`. The SSM parameter was
+> updated too, so nothing in Parameter Store references `onrender.com` any more.
+> `MPXJ_API_KEY` is now unused: see § "MPXJ converter".
 
 ---
 
@@ -350,6 +366,69 @@ dead-lettered job **did not run** — decide what happened before re-invoking.
 
 ---
 
+## 7a. MPXJ converter
+
+Added 11 August 2026, to finish moving off Render. `tools/mpxj-converter` is a
+small Java service that turns `.mpp` into MS Project XML;
+`server/util/msProjectParser.js` calls it over HTTP. It ran on Render's **free**
+tier, so it died with the account and every `.mpp` import returned
+`MPP_SERVICE_FAILED`.
+
+It is now `MpxjFn` in this stack: **a container-image Lambda, 2048 MB, 50s
+timeout, x86_64**, with its own Function URL and error alarm. No Java was
+rewritten. The **AWS Lambda Web Adapter** is copied into
+`/opt/extensions/lambda-adapter` in the Dockerfile, and since Lambda is the only
+runtime that executes `/opt/extensions`, the same image still runs unchanged
+under a plain `docker run`, App Runner or ECS.
+
+**Why Lambda rather than App Runner.** App Runner would have been a pure
+lift-and-shift with no adapter and no payload ceiling, and `horlawealth` already
+uses it in this account. But it bills for provisioned memory continuously,
+about $5/month, for a feature used a few times a week. This costs nothing idle.
+The request ceiling is not a real constraint either: a `.mpp` can only reach the
+converter by first being uploaded to the API function, which has the same 6 MB
+limit.
+
+**Two things that are easy to get wrong here.**
+
+1. **The response, not the request, is the size problem.** MSPDI XML is far more
+   verbose than the `.mpp` it came from — measured at **6.5x** on the smoke-test
+   file — and a *buffered* Lambda response is capped at 6 MB. So the Function
+   URL uses `invokeMode: RESPONSE_STREAM` and the Dockerfile sets
+   `AWS_LWA_INVOKE_MODE=response_stream`. **Those two must change together.**
+   Buffered, a large programme fails at the Lambda boundary *after* a successful
+   conversion.
+2. **Auth is IAM, not the old `X-API-Key`.** `render.yaml` declared that key as
+   `generateValue: true`, so Render generated it and held the only copy; it died
+   with the account. Rather than reissue a shared secret that must match in two
+   places — and that silently degrades to *open access* if it is ever missing on
+   the Java side — the Function URL uses `AWS_IAM` and only `ApiFn`'s role is
+   granted `lambda:InvokeFunctionUrl`. `msProjectParser.js` SigV4-signs the
+   request when the hostname looks like a Function URL, and leaves the
+   `X-API-Key` path intact so a plain HTTP converter still works locally.
+
+Verified 11 August 2026 with a real conversion end to end:
+
+| | |
+|---|---|
+| Unsigned `POST` | **403**, before the container is invoked |
+| Signed `POST` | **200**, `application/xml`, byte-identical to a local `docker run` |
+| First-ever cold start | 12.8s — includes one-off container image optimisation |
+| Cold start after that | **2.25s**, measured by forcing fresh containers with a concurrent burst |
+| Warm | **~550ms** |
+
+Cold start is not a regression: the Render free tier slept after 15 minutes and
+took roughly 15s to wake. There is deliberately **no warmer** on this function —
+it is used a few times a week, and paying to keep a JVM warm to save two seconds
+on a file upload that already takes seconds is the wrong trade.
+
+Set `deployMpxj: false` in `config.ts` to leave it out. Note that `true`
+**requires a running Docker daemon at `cdk deploy` time**, because the image is
+built locally and pushed to ECR. CI has one; a laptop with Docker Desktop
+stopped does not, and it fails at synth.
+
+---
+
 ## 8. What this stack does NOT do
 
 - **Large uploads fail.** Lambda caps request payloads at 6 MB; the installer
@@ -408,6 +487,19 @@ is effectively **nil** — DNS stays wherever you already pay for it. Adopting
 Route 53 later adds $0.50/month.
 
 At roughly ₦800/USD that is under **₦400/month** either way, which is the point
-of this architecture: it survives the credit expiring. The figures that would break
-that are an ALB (~$16/mo) or App Runner for the MPXJ converter (~$5–25/mo) —
-both still open decisions, neither on the emergency path.
+of this architecture: it survives the credit expiring. The figure that would
+still break it is an **ALB (~$16/mo)**, if the 6 MB request ceiling ever forces
+one — that decision is still open.
+
+**App Runner for the MPXJ converter (~$5–25/mo) is no longer on that list.** The
+converter went to Lambda instead on 11 August 2026, which keeps it inside the
+same free tiers; see §7a. Adding it changed the recurring total by nothing.
+
+**Measured, not projected:** Lambda cost for 1-11 August 2026 was **$0.34**,
+against $7/month for the Render Starter service this replaced. The Activate
+credit is therefore not what keeps this running.
+
+**Where the account's money actually goes**, same period, so nobody optimises the
+wrong thing: **MediaConvert $52.79**, Registrar $16.00, a committed CloudFront
+flat-rate plan $15.00, and $22.61 of ELB, VPC and compute for an idle
+`sotunde-api` ECS service. This stack is $0.34 of a ~$110 eleven-day bill.
