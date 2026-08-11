@@ -3,4 +3,15 @@ target/
 .vscode/
 *.iml
 .DS_Store
+
+# Documentation and non-AWS deploy config. Excluded because this directory is
+# now a CDK DockerImageAsset build context, and CDK hashes that context to tag
+# the image: anything included here means a docs-only edit produces a new image
+# tag and a real production redeploy of the Lambda.
+#
+# That already happened once. Editing render.yaml on 11 Aug 2026 to mark it
+# historical changed the asset hash, and the next CI run rebuilt and shipped a
+# new converter image for a comment change. Harmless, but it makes deploys look
+# meaningful when they are not.
 README.md
+render.yaml
