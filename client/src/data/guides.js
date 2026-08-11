@@ -68,6 +68,30 @@ export function guideForChangelogSlug(slug) {
  * then the rest. Never hides anything — a customer evaluating a product
  * should still be able to read its guide.
  */
+/**
+ * Only the guides a user has actually paid for.
+ *
+ * Different from orderGuidesFor, which shows everything and merely sorts the
+ * relevant ones first. A guide for a product someone has not bought is an
+ * advert dressed as documentation, and it also leaks the shape of products
+ * they have no access to. This returns nothing they are not entitled to.
+ *
+ * `alwaysShow` survives the filter, but only once they own something: the
+ * Installer Hub guide covers how to install and license whatever they bought,
+ * so it is useless to a user with no products and necessary to everyone else.
+ */
+export function ownedGuidesFor(ownedProductKeys = []) {
+  const owned = new Set(
+    (ownedProductKeys || [])
+      .map((k) => String(k || "").toLowerCase())
+      .filter(Boolean),
+  );
+  if (!owned.size) return [];
+  return GUIDES.filter(
+    (g) => g.alwaysShow || g.productKeys.some((k) => owned.has(k)),
+  );
+}
+
 export function orderGuidesFor(ownedProductKeys = []) {
   const owned = new Set(
     (ownedProductKeys || []).map((k) => String(k || "").toLowerCase()),

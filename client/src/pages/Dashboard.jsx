@@ -11,7 +11,7 @@ import { parseBunny, bunnyIframeSrc } from "../lib/video";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { TiltCard } from "../components/effects.jsx";
 import StorageBar from "../components/StorageBar.jsx";
-import { orderGuidesFor } from "../data/guides.js";
+import { ownedGuidesFor } from "../data/guides.js";
 
 dayjs.extend(relativeTime);
 
@@ -577,61 +577,6 @@ export default function Dashboard() {
           </div>
         ) : null}
 
-        {/* Illustrated PDF guides, ordered so the ones covering what you own come first */}
-        <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-depth p-4 md:p-5">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div>
-              <h2 className="text-base md:text-lg font-bold text-slate-900">
-                User guides
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Illustrated, step-by-step PDFs — every screen, from sign-in to a
-                finished bill.
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {orderGuidesFor(
-              (summary?.entitlements || []).map((e) => e.productKey),
-            ).map((g) => (
-              <a
-                key={g.id}
-                href={g.file}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:border-adlm-blue-700 hover:bg-blue-50/40 transition"
-              >
-                <span className="shrink-0 mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 text-adlm-blue-700">
-                  <svg
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.8}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                    />
-                  </svg>
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-slate-900 group-hover:text-adlm-blue-700">
-                    {g.title}
-                  </span>
-                  <span className="block text-xs text-slate-500 leading-snug mt-0.5">
-                    {g.blurb}
-                  </span>
-                  <span className="block text-[11px] text-slate-400 mt-1">
-                    PDF · {g.pages} pages
-                  </span>
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-depth p-3 flex flex-wrap items-center gap-2">
@@ -696,6 +641,66 @@ export default function Dashboard() {
                   onManage={manageSubscription}
                   storageData={storageData}
                 />
+              )}
+
+              {/* User guides sit with the rest of the learning material, and
+                  only the ones on the user's subscription are listed. A guide
+                  for a product they have not bought is an advert dressed as
+                  documentation, and it advertises what they cannot open. */}
+              {activeTab === "learning" && (
+          <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-depth p-4 md:p-5">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-base md:text-lg font-bold text-slate-900">
+                  User guides
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Illustrated, step-by-step PDFs for the products on your
+                  subscription — every screen, from sign-in to a finished bill.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {ownedGuidesFor(
+                (summary?.entitlements || []).map((e) => e.productKey),
+              ).map((g) => (
+                <a
+                  key={g.id}
+                  href={g.file}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:border-adlm-blue-700 hover:bg-blue-50/40 transition"
+                >
+                  <span className="shrink-0 mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 text-adlm-blue-700">
+                    <svg
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.8}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                      />
+                    </svg>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-900 group-hover:text-adlm-blue-700">
+                      {g.title}
+                    </span>
+                    <span className="block text-xs text-slate-500 leading-snug mt-0.5">
+                      {g.blurb}
+                    </span>
+                    <span className="block text-[11px] text-slate-400 mt-1">
+                      PDF · {g.pages} pages
+                    </span>
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
               )}
 
               {activeTab === "learning" && (
@@ -769,12 +774,16 @@ export default function Dashboard() {
                     ? [{ label: "Import Excel BoQ (QUIV)", to: "/projects/revit", icon: <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 3v18" /></> }]
                     : []),
                   { label: "Learning Center", to: "/learn", icon: <><path d="M22 10L12 5 2 10l10 5 10-5z" /><path d="M6 12v5c0 1 2.5 2.5 6 2.5s6-1.5 6-2.5v-5" /></> },
+                  // Switches tab rather than navigating: the guides live in the
+                  // Learning tab on this page, and they are filtered by what
+                  // the user owns, which is data this page already has.
+                  { label: "User Guides", tab: "learning", icon: <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /> },
                   { label: "Contact Support", to: "/support", icon: <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z" /> },
                 ].map((q) => (
                   <button
-                    key={q.to}
+                    key={q.to || q.tab}
                     className="group flex items-center gap-3 text-left text-sm py-2 px-3 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
-                    onClick={() => navigate(q.to)}
+                    onClick={() => (q.tab ? setActiveTab(q.tab) : navigate(q.to))}
                   >
                     <span className="text-adlm-blue-700 dark:text-adlm-blue-400">
                       <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{q.icon}</svg>
