@@ -379,6 +379,16 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen p-4 md:p-6">
+      {/* noindex: this is a signed-in page, personal to one user, and already
+          blocked in robots.txt. The title matters anyway — it is what shows in
+          GA4 under "Views by Page title", and without it every signed-in page
+          reports as the generic site title. */}
+      <Seo
+        title="Dashboard"
+        description="Your ADLM Studio products, courses and licences."
+        path="/dashboard"
+        noindex
+      />
       <style>{`
         .fade-up { opacity:0; transform: translateY(8px); animation: fadeUp .6s ease forwards; }
         @keyframes fadeUp { to { opacity:1; transform: translateY(0); } }

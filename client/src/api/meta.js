@@ -190,9 +190,90 @@ function injectMeta(html, meta) {
   return out;
 }
 
+/**
+ * Descriptions for the pages that have no record behind them.
+ *
+ * These are what a link to the site shows in WhatsApp, LinkedIn and Google.
+ * <Seo> sets the same values client-side for Google's benefit, but a social
+ * scraper never runs JavaScript — it reads the HTML this file produces and
+ * nothing else. So the two have to be kept saying the same thing.
+ */
+const STATIC_META = {
+  "/": {
+    title: "BIM & Quantity Surveying Software for Construction Firms | ADLM Studio",
+    description:
+      "ADLM Studio builds BIM takeoff, rate build-up and cost management tools for quantity surveyors, and trains the firms that use them. Revit, ArchiCAD and PlanSwift plugins built for the Nigerian market.",
+  },
+  "/products": {
+    title: "Products — BIM Plugins & QS Software | ADLM Studio",
+    description:
+      "Quantity takeoff plugins for Revit, ArchiCAD and PlanSwift, automated rate build-ups and cost management tools. Subscription pricing in naira, built for Nigerian quantity surveyors.",
+  },
+  "/about": {
+    title: "About ADLM Studio",
+    description:
+      "A Nigerian ConTech studio digitising quantity surveying end to end — takeoff, rates, bills, programmes and dashboards — with the training and process firms need to adopt it. 800+ AEC professionals trained since 2019.",
+  },
+  "/learn": {
+    title: "Learn — BIM & QS Training Courses | ADLM Studio",
+    description:
+      "Self-paced and cohort BIM training for quantity surveyors: Revit, Navisworks, MS Project, Power BI, 4D and 5D BIM, and AI for cost management.",
+  },
+  "/trainings": {
+    title: "Training & Events | ADLM Studio",
+    description:
+      "Upcoming ADLM Studio BIM and quantity surveying training, in person and online. Corporate programmes for QS firms and contractors across Nigeria.",
+  },
+  "/freebies": {
+    title: "Free QS & BIM Resources | ADLM Studio",
+    description:
+      "Free templates, tools and resources for quantity surveyors — rate templates, BoQ formats and BIM starter files.",
+  },
+  "/testimonials": {
+    title: "Testimonials | ADLM Studio",
+    description:
+      "What quantity surveyors and construction firms say about working with ADLM Studio.",
+  },
+  "/whats-new": {
+    title: "What's New | ADLM Studio",
+    description:
+      "Release notes for the ADLM plugin suite and cloud platform — what shipped, when, and what changed.",
+  },
+  "/support": {
+    title: "Support | ADLM Studio",
+    description: "Get help with ADLM plugins, licensing and installation.",
+  },
+  "/quote": {
+    title: "Request a Quote | ADLM Studio",
+    description:
+      "Tell us about your firm and we will price the tools, training and process to suit it.",
+  },
+};
+
+async function fetchJson(url, ms = 2500) {
+  // Every one of these runs inside a request the visitor is waiting on, and a
+  // scraper will not wait long. A slow API must degrade to the generic card
+  // rather than hold the page — the preview is worth less than the page.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const r = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function resolveMeta({ baseUrl, pathname }) {
   const cleanPath = String(pathname || "/");
   const canonical = new URL(cleanPath, baseUrl).toString();
+  const API_BASE = String(process.env.VITE_API_BASE || "").trim().replace(/\/+$/, "");
 
   let meta = {
     title: "ADLM Studio",
@@ -201,19 +282,70 @@ async function resolveMeta({ baseUrl, pathname }) {
     image: new URL("/og-default.jpg", baseUrl).toString(),
   };
 
+  // Pages with no record behind them.
+  const stat = STATIC_META[cleanPath.replace(/\/+$/, "") || "/"];
+  if (stat) meta = { ...meta, ...stat };
+
+  // /product/:key — the commercially important one. A shared product link
+  // should show that product's own artwork, not the house card.
+  const productMatch = cleanPath.match(/^\/product\/([^/]+)\/?$/i);
+  if (productMatch && API_BASE) {
+    const key = decodeURIComponent(productMatch[1]);
+    const p = await fetchJson(`${API_BASE}/products/${encodeURIComponent(key)}`);
+    if (p?.name) {
+      const price = p?.price?.monthlyNGN || p?.price?.yearlyNGN;
+      const cadence = p?.price?.monthlyNGN ? "month" : "year";
+      meta = {
+        ...meta,
+        title: `${p.name} | ADLM Studio`,
+        description:
+          truncate(p.blurb || p.description, 180) ||
+          `${p.name} from ADLM Studio${price ? ` — from NGN ${Number(price).toLocaleString()} per ${cadence}` : ""}.`,
+        image: toOgImage(absolutizeUrl(p.thumbnailUrl, baseUrl)) || meta.image,
+      };
+    }
+  }
+
+  // /whats-new/:slug — the slug is the product line the notes belong to.
+  const changelogMatch = cleanPath.match(/^\/whats-new\/([^/]+)\/?$/i);
+  if (changelogMatch) {
+    const slug = decodeURIComponent(changelogMatch[1]);
+    // Product names are not title-case-able from their slugs — "rategen"
+    // would come out "Rategen" and QUIV would lose its capitals entirely.
+    const NAMES = {
+      rategen: "ADLM RateGen",
+      quiv: "QUIV",
+      heron: "Heron",
+      mep: "ADLM MEP Plugin",
+      timepro: "ADLM TimePro",
+      civiq: "CiviQ",
+      cloud: "ADLM Cloud",
+      hub: "ADLM Installer Hub",
+      courses: "ADLM Courses",
+    };
+    const pretty =
+      NAMES[slug.toLowerCase()] ||
+      slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    meta = {
+      ...meta,
+      title: `${pretty} — What's New | ADLM Studio`,
+      description: `Release notes for ${pretty}: what shipped, when, and what changed.`,
+    };
+  }
+
   // /ptrainings/:slug
   const m = cleanPath.match(/^\/ptrainings\/([^/]+)\/?$/i);
   if (m) {
     const slug = decodeURIComponent(m[1]);
 
-    const API_BASE = String(process.env.VITE_API_BASE || "").trim();
+    // Uses the API_BASE resolved at the top of this function, and the shared
+    // fetchJson so this path gets the same timeout as the others — an
+    // unbounded fetch here would hold the whole page render.
     if (API_BASE) {
       try {
-        const r = await fetch(
-          `${API_BASE.replace(/\/+$/, "")}/ptrainings/events/${encodeURIComponent(slug)}`,
-          { headers: { accept: "application/json" } },
+        const j = await fetchJson(
+          `${API_BASE}/ptrainings/events/${encodeURIComponent(slug)}`,
         );
-        const j = await r.json();
 
         const title = j?.title
           ? `${j.title} | ADLM Studio`
