@@ -71,7 +71,17 @@ router.get("/master", async (req, res) => {
       fetchMasterLabour(zone, qState),
     ]);
 
-    res.json({ materials, labour, source: "mongo-master", zone, state: qState });
+    // accountState is the state saved on the profile, as opposed to `state` which
+    // echoes what was actually priced. The desktop compares the two so a location
+    // changed on the website reaches the app without a second request.
+    res.json({
+      materials,
+      labour,
+      source: "mongo-master",
+      zone,
+      state: qState,
+      accountState: normalizeState(req.user.state) || null,
+    });
   } catch (e) {
     console.error("[/rategen/master] error:", e);
     res

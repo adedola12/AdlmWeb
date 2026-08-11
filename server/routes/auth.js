@@ -49,6 +49,10 @@ function buildAuthPayload(user) {
     email: user.email,
     role: user.role || "user",
     zone: user.zone || "",
+    // The pricing location the account is set to. RateGen reads this to follow a
+    // state chosen on the website, so a QS who moves job changes it in one place
+    // and the desktop reprices on its next sync.
+    state: user.state || "",
     entitlements: user.entitlements || [],
     firstName: user.firstName || "",
     lastName: user.lastName || "",

@@ -7,6 +7,7 @@ import { User } from "../models/User.js";
 import { rolePermissionList, isSuperAdminRole } from "../util/rbac.js";
 import { ALL_AREA_KEYS } from "../config/permissions.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
+import { STATES, normalizeState, zoneForState } from "../util/states.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
 import { Setting } from "../models/Setting.js";
@@ -199,6 +200,11 @@ router.get(
       refreshVersion: 1,
       security: 1,
       role: 1,
+      // Read the location from the DB, not the JWT. A user who changes state on
+      // the website must be priced against it on the desktop's next sync, without
+      // being made to sign out and back in to refresh a token.
+      state: 1,
+      zone: 1,
     });
 
     if (user) {
@@ -227,7 +233,8 @@ router.get(
       role: effectiveRole,
       username,
       avatarUrl,
-      zone,
+      zone: user?.zone || zone,
+      state: user?.state || null,
       entitlements: entitlementsLegacy, // legacy payload (but now accurate)
       entitlementsV2,
       refreshVersion: user?.refreshVersion || 1,
@@ -589,6 +596,10 @@ router.get(
       role,
       zone,
       zones: ZONES,
+      // The state is what the user actually picks; the zone is derived from it.
+      // Both are returned because older desktop builds still read zone alone.
+      state: u.state || null,
+      states: STATES,
       firstName: firstName || "",
       lastName: lastName || "",
       whatsapp: whatsapp || "",
@@ -608,6 +619,7 @@ router.post(
       username,
       avatarUrl,
       zone,
+      state,
       firstName,
       lastName,
       whatsapp,
@@ -627,10 +639,23 @@ router.post(
     if (username !== undefined) u.username = username;
     if (avatarUrl !== undefined) u.avatarUrl = avatarUrl;
 
-    if (zone !== undefined) {
+    // State wins over zone. A state implies exactly one zone, so deriving it here
+    // is the only way the two can never drift apart: a user whose state says Kano
+    // and whose zone says south_west would be priced against Lagos with nothing on
+    // screen to explain why.
+    if (state !== undefined) {
+      const ns = normalizeState(state);
+      if (!ns) return res.status(400).json({ error: "Invalid state" });
+      u.state = ns;
+      u.zone = zoneForState(ns);
+      u.refreshVersion = (u.refreshVersion || 0) + 1;
+    } else if (zone !== undefined) {
       const nz = normalizeZone(zone);
       if (!nz) return res.status(400).json({ error: "Invalid zone" });
       u.zone = nz;
+      // The stored state is no longer necessarily inside the chosen zone, and a
+      // stale one would override the zone the user just picked on every sync.
+      if (u.state && zoneForState(u.state) !== nz) u.state = null;
       u.refreshVersion = (u.refreshVersion || 0) + 1;
     }
 
@@ -668,6 +693,7 @@ router.post(
         avatarUrl: u.avatarUrl,
         role: u.role,
         zone: u.zone,
+        state: u.state || null,
         firstName: u.firstName || "",
         lastName: u.lastName || "",
         whatsapp: u.whatsapp || "",

@@ -32,6 +32,12 @@ export default function Profile() {
   const [zone, setZone] = React.useState("");
   const [zones, setZones] = React.useState([]); // from server labels
 
+  // The state is what the user picks. The zone is derived from it server-side and
+  // is shown read-only, because it is what the price is actually graded by and
+  // hiding that would make two states quoting the same figure look like a bug.
+  const [stateKey, setStateKey] = React.useState("");
+  const [states, setStates] = React.useState([]);
+
   // upload state
   const [uploading, setUploading] = React.useState(false);
   const [pct, setPct] = React.useState(0);
@@ -57,6 +63,8 @@ export default function Profile() {
         setNameLocked(!!res?.nameLockedForCertificate);
         setZone(res?.zone || "");
         setZones(Array.isArray(res?.zones) ? res.zones : []);
+        setStateKey(res?.state || "");
+        setStates(Array.isArray(res?.states) ? res.states : []);
         setStepUpEnabled(!!res?.stepUpEnabled);
       } catch (e) {
         setMsg(e?.message || "Failed to load profile.");
@@ -66,7 +74,11 @@ export default function Profile() {
   }, [accessToken]);
 
   async function saveProfile(next = {}) {
-    const body = { username, avatarUrl, zone, firstName, lastName, location, firmName, ...next };
+    // Send the state, not the zone, whenever one is chosen. The server derives the
+    // zone from it, so sending both risks a contradiction the user cannot see.
+    const body = stateKey
+      ? { username, avatarUrl, state: stateKey, firstName, lastName, location, firmName, ...next }
+      : { username, avatarUrl, zone, firstName, lastName, location, firmName, ...next };
 
     const res = await apiAuthed("/me/profile", {
       token: accessToken,
@@ -82,9 +94,17 @@ export default function Profile() {
       user: { ...(prev?.user || {}), ...(updatedUser || {}) },
     }));
 
-    // If zone changed, force a token refresh so the new JWT includes the updated zone
-    // This ensures RateGen API calls immediately use the new zone
-    if (body.zone && body.zone !== user?.zone) {
+    // The server derives the zone from the state, so take its answer rather than
+    // recomputing one here that could disagree.
+    if (updatedUser?.zone !== undefined) setZone(updatedUser.zone || "");
+    if (updatedUser?.state !== undefined) setStateKey(updatedUser.state || "");
+
+    // If the location changed, force a token refresh so the new JWT carries it.
+    // This ensures RateGen API calls immediately use the new location.
+    if (
+      (body.zone && body.zone !== user?.zone) ||
+      (body.state && body.state !== user?.state)
+    ) {
       try {
         const refreshRes = await fetch("/auth/refresh", {
           method: "POST",
@@ -247,6 +267,22 @@ export default function Profile() {
     return { key: String(key), label: String(label) };
   });
 
+  const stateOptions = (Array.isArray(states) ? states : [])
+    .map((s) => ({
+      key: String(s?.key ?? ""),
+      label: String(s?.label ?? s?.key ?? ""),
+      zone: String(s?.zone ?? ""),
+    }))
+    .filter((s) => s.key)
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  // Show the zone the chosen state is priced from, using the server's own zone
+  // labels so the wording matches everywhere else.
+  const selectedStateZone = stateOptions.find((s) => s.key === stateKey)?.zone || "";
+  const selectedZoneLabel =
+    zoneOptions.find((z) => z.key === selectedStateZone)?.label ||
+    selectedStateZone.replace(/_/g, " ");
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* IDENTITY HERO */}
@@ -271,9 +307,9 @@ export default function Profile() {
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 ring-1 ring-white/20 capitalize">
                 {user?.role || "member"}
               </span>
-              {zone ? (
+              {stateKey || zone ? (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-adlm-orange/20 text-amber-200 ring-1 ring-adlm-orange/30">
-                  {zone}
+                  {stateOptions.find((s) => s.key === stateKey)?.label || zone}
                 </span>
               ) : null}
             </div>
@@ -403,27 +439,58 @@ export default function Profile() {
           </div>
 
           <div>
-            <label className="form-label">Location (Geopolitical Zone)</label>
+            <label className="form-label">Pricing location (State)</label>
             <select
               className="input"
-              value={zone || ""}
-              onChange={(e) => setZone(e.target.value)}
+              value={stateKey || ""}
+              onChange={(e) => setStateKey(e.target.value)}
             >
-              <option value="">— Select zone —</option>
-              {zoneOptions.map((z) => (
-                <option key={z.key} value={z.key}>
-                  {z.label}
+              <option value="">— Select state —</option>
+              {stateOptions.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
                 </option>
               ))}
             </select>
 
             <p className="text-xs text-slate-500 mt-1">
-              Your RateGen prices will default to this zone when you sign in.{" "}
+              {selectedZoneLabel ? (
+                <>
+                  Priced from <strong>{selectedZoneLabel}</strong> rates. Prices are
+                  evidenced by zone, so states in the same zone read alike until one
+                  is priced on its own.{" "}
+                </>
+              ) : (
+                <>Your RateGen prices will use this location when you sign in. </>
+              )}
               <Link to="/rategen" className="underline">
                 View Prices
               </Link>
             </p>
           </div>
+
+          {/* Kept for accounts created before states existed, so a user whose zone
+              was set but whose state was never chosen can still see and change it. */}
+          {!stateKey && zone ? (
+            <div>
+              <label className="form-label">Location (Geopolitical Zone)</label>
+              <select
+                className="input"
+                value={zone || ""}
+                onChange={(e) => setZone(e.target.value)}
+              >
+                <option value="">— Select zone —</option>
+                {zoneOptions.map((z) => (
+                  <option key={z.key} value={z.key}>
+                    {z.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">
+                Choosing a state above replaces this.
+              </p>
+            </div>
+          ) : null}
 
           {msg && <div className="text-sm">{msg}</div>}
           {!accessToken && (
