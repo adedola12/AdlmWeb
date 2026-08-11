@@ -2,7 +2,7 @@
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import { FaTrash, FaEdit, FaTimes } from "react-icons/fa";
+import { FaEdit, FaTimes, FaTrash } from "../components/icons.jsx";
 
 const SECTIONS = [
   { key: "ground", label: "Groundwork" },
@@ -975,6 +975,4 @@ export default function AdminAddRate() {
     </div>
   );
 }
-
-
 

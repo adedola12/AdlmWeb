@@ -2,7 +2,7 @@
 // Element drill-down route — GET /api/archicad/element/:projectId/:guid.
 import React from "react";
 import { Link, useParams } from "react-router-dom";
-import { FaArrowLeft } from "react-icons/fa";
+import { FaArrowLeft } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { unwrap } from "../features/archicad/archicadApi.js";

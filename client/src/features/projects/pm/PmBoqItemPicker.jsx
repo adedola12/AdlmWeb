@@ -1,5 +1,5 @@
 import React from "react";
-import { FaSearch, FaCheckSquare, FaRegSquare, FaTimes } from "react-icons/fa";
+import { FaCheckSquare, FaRegSquare, FaSearch, FaTimes } from "../../../components/icons.jsx";
 
 function safeNum(value) {
   const n = Number(value);

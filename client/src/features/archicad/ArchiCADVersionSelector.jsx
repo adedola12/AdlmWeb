@@ -4,7 +4,7 @@
 // Reapply-rates button re-prices the CURRENT version with current rates.
 import React from "react";
 import dayjs from "dayjs";
-import { FaSyncAlt, FaSpinner } from "react-icons/fa";
+import { FaSpinner, FaSyncAlt } from "../../components/icons.jsx";
 import { fmtMoney } from "../../utils/archicadUnits.js";
 
 export default function ArchiCADVersionSelector({

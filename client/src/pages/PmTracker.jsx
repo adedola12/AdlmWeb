@@ -5,22 +5,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { API_BASE } from "../config";
 import { Link } from "react-router-dom";
-import {
-  FaPlus,
-  FaTimes,
-  FaTasks,
-  FaExclamationTriangle,
-  FaBug,
-  FaFileImport,
-  FaSyncAlt,
-  FaTrash,
-  FaArrowLeft,
-  FaClock,
-  FaSpinner,
-  FaShareAlt,
-  FaCopy,
-  FaCheck,
-} from "react-icons/fa";
+import { FaArrowLeft, FaBug, FaCheck, FaClock, FaCopy, FaExclamationTriangle, FaFileImport, FaPlus, FaShareAlt, FaSpinner, FaSyncAlt, FaTasks, FaTimes, FaTrash } from "../components/icons.jsx";
 import PmDashboardView from "../features/projects/pm/PmDashboardView.jsx";
 import PmDetailsView from "../features/projects/pm/PmDetailsView.jsx";
 import { PmTaskModal, PmRiskModal, PmIssueModal } from "../features/projects/pm/PmModals.jsx";

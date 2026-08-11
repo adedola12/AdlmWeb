@@ -10,20 +10,7 @@
 // Gated by the `changelogs` admin area via <AdminRoute permission="changelogs">.
 import React from "react";
 import { Link } from "react-router-dom";
-import {
-  FiPlus,
-  FiTrash2,
-  FiArrowUp,
-  FiArrowDown,
-  FiSave,
-  FiExternalLink,
-  FiX,
-  FiRotateCcw,
-  FiStar,
-  FiTrendingUp,
-  FiTool,
-  FiClock,
-} from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiClock, FiExternalLink, FiPlus, FiRotateCcw, FiSave, FiStar, FiTool, FiTrash2, FiTrendingUp, FiX } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { Reveal } from "../components/effects.jsx";

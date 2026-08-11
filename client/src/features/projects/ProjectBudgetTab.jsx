@@ -1,13 +1,5 @@
 import React from "react";
-import {
-  FaCubes,
-  FaHardHat,
-  FaTools,
-  FaBoxes,
-  FaLayerGroup,
-  FaSearch,
-  FaTimes,
-} from "react-icons/fa";
+import { FaBoxes, FaCubes, FaHardHat, FaLayerGroup, FaSearch, FaTimes, FaTools } from "../../components/icons.jsx";
 import SectionRail from "./SectionRail.jsx";
 import { RateCell } from "./ProjectBillTable.jsx";
 import { resolveAll, normalizeTitle } from "../../lib/budgetBillLink.js";

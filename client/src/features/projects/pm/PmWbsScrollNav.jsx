@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  FaChevronUp,
-  FaChevronDown,
-  FaListOl,
-  FaTimes,
-  FaSearch,
-} from "react-icons/fa";
+import { FaChevronDown, FaChevronUp, FaListOl, FaSearch, FaTimes } from "../../../components/icons.jsx";
 
 // PmWbsScrollNav — floating navigation aid for long WBS task lists.
 //

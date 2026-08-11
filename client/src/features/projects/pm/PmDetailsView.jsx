@@ -1,18 +1,5 @@
 import React from "react";
-import {
-  FaArrowLeft,
-  FaTasks,
-  FaExclamationTriangle,
-  FaBug,
-  FaPencilAlt,
-  FaTrash,
-  FaPlus,
-  FaLink,
-  FaCheckCircle,
-  FaFileImport,
-  FaSyncAlt,
-  FaCalendarAlt,
-} from "react-icons/fa";
+import { FaArrowLeft, FaBug, FaCalendarAlt, FaCheckCircle, FaExclamationTriangle, FaFileImport, FaLink, FaPencilAlt, FaPlus, FaSyncAlt, FaTasks, FaTrash } from "../../../components/icons.jsx";
 import SectionRail from "../SectionRail.jsx";
 
 // A row is treated as a section anchor in the scroll-nav drawer if it's

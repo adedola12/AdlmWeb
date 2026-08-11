@@ -8,13 +8,7 @@
 // All quantities arrive metric; conversion happens at display time only.
 import React from "react";
 import { Link } from "react-router-dom";
-import {
-  FaChevronDown,
-  FaChevronRight,
-  FaSearch,
-  FaExclamationTriangle,
-  FaCubes,
-} from "react-icons/fa";
+import { FaChevronDown, FaChevronRight, FaCubes, FaExclamationTriangle, FaSearch } from "../../components/icons.jsx";
 import {
   convertQuantity,
   unitLabel,

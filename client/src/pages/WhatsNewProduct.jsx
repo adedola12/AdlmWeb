@@ -6,17 +6,7 @@
 // Edit the markdown to publish an update — no edits needed here.
 import React from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-  FiStar,
-  FiTrendingUp,
-  FiTool,
-  FiCheck,
-  FiArrowRight,
-  FiArrowLeft,
-  FiClock,
-  FiDownload,
-  FiBookOpen,
-} from "react-icons/fi";
+import { FiArrowLeft, FiArrowRight, FiBookOpen, FiCheck, FiClock, FiDownload, FiStar, FiTool, FiTrendingUp } from "../components/icons.jsx";
 import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";
 import { guideForChangelogSlug } from "../data/guides.js";

@@ -1,5 +1,5 @@
 import React from "react";
-import { FaThLarge, FaSearch, FaCheckCircle } from "react-icons/fa";
+import { FaCheckCircle, FaSearch, FaThLarge } from "../../../components/icons.jsx";
 
 function safeNum(value) {
   const n = Number(value);

@@ -1,5 +1,5 @@
 import React from "react";
-import { FaFolder, FaObjectGroup, FaTrash } from "react-icons/fa";
+import { FaFolder, FaObjectGroup, FaTrash } from "../../components/icons.jsx";
 import ProjectSectionSummary from "./ProjectSectionSummary.jsx";
 import StorageBar from "../../components/StorageBar.jsx";
 

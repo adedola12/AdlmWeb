@@ -3,7 +3,7 @@
 // ArchiCADBudgetDashboard around the current costed BoQ document.
 import React from "react";
 import { Link, useParams } from "react-router-dom";
-import { FaArrowLeft, FaListUl } from "react-icons/fa";
+import { FaArrowLeft, FaListUl } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { unwrap } from "../features/archicad/archicadApi.js";

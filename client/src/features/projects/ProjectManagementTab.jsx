@@ -3,7 +3,7 @@ import PmDashboardView from "./pm/PmDashboardView.jsx";
 import PmDetailsView from "./pm/PmDetailsView.jsx";
 import { PmTaskModal, PmRiskModal, PmIssueModal, PmModalShell } from "./pm/PmModals.jsx";
 import PmMppHelperModal from "./pm/PmMppHelperModal.jsx";
-import { FaCog, FaTimes, FaSpinner } from "react-icons/fa";
+import { FaCog, FaSpinner, FaTimes } from "../../components/icons.jsx";
 
 // First-load skeleton — shown when the parent hasn't fetched the dashboard
 // yet. Without this users briefly see "0%" on every tile which looks broken.

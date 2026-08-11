@@ -3,7 +3,7 @@
 // the AnyDesk address + full detail, change status, schedule a fix date, add
 // internal notes, or delete. Gated by the "support" permission area.
 import React from "react";
-import { FiLifeBuoy } from "react-icons/fi";
+import { FiLifeBuoy } from "../components/icons.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";

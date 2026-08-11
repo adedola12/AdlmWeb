@@ -4,7 +4,7 @@
 // (rate name/source/id, labour method, gang composition, labour unit rate).
 import React from "react";
 import { Link } from "react-router-dom";
-import { FaCube, FaTag, FaUsers } from "react-icons/fa";
+import { FaCube, FaTag, FaUsers } from "../../components/icons.jsx";
 import {
   breakdownFieldLabel,
   formatBreakdownValue,

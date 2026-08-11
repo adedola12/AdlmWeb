@@ -1,26 +1,5 @@
 import React from "react";
-import {
-  FaPlus,
-  FaExclamationTriangle,
-  FaBug,
-  FaMagic,
-  FaFileImport,
-  FaSyncAlt,
-  FaCheckCircle,
-  FaTimesCircle,
-  FaArrowRight,
-  FaListUl,
-  FaBalanceScale,
-  FaTachometerAlt,
-  FaCoins,
-  FaClock,
-  FaChartLine,
-  FaTasks,
-  FaTimes,
-  FaUnlink,
-  FaCopy,
-  FaLayerGroup,
-} from "react-icons/fa";
+import { FaArrowRight, FaBalanceScale, FaBug, FaChartLine, FaCheckCircle, FaClock, FaCoins, FaCopy, FaExclamationTriangle, FaFileImport, FaLayerGroup, FaListUl, FaMagic, FaPlus, FaSyncAlt, FaTachometerAlt, FaTasks, FaTimes, FaTimesCircle, FaUnlink } from "../../../components/icons.jsx";
 import PmBoqHeatmap from "./PmBoqHeatmap.jsx";
 
 function safeNum(v) {

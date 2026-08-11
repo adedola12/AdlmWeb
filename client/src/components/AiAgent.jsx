@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
-import { FaRegCommentDots, FaTimes, FaPaperPlane } from "react-icons/fa";
+import { FaPaperPlane, FaRegCommentDots, FaTimes } from "./icons.jsx";
 
 /**
  * ADLM AI Agent ("Ada") — a conversion-focused conversational assistant that

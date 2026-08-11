@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  FaTimes,
-  FaInfoCircle,
-  FaFileImport,
-  FaCheck,
-  FaArrowRight,
-  FaShieldAlt,
-} from "react-icons/fa";
+import { FaArrowRight, FaCheck, FaFileImport, FaInfoCircle, FaShieldAlt, FaTimes } from "../../../components/icons.jsx";
 
 // PmMppHelperModal — appears when the server returns MPP_NOT_ENABLED
 // after a .mpp upload. Walks the user through MS Project's XML export

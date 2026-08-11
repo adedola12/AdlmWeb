@@ -5,7 +5,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { FaCubes, FaChartBar, FaSyncAlt, FaTerminal } from "react-icons/fa";
+import { FaChartBar, FaCubes, FaSyncAlt, FaTerminal } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { unwrapList } from "../features/archicad/archicadApi.js";

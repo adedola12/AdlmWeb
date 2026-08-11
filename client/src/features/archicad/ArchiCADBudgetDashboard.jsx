@@ -4,7 +4,7 @@
 // features/projects/ProjectDashboardChart.jsx), and a budget-vs-actual
 // tracker persisted via PATCH /api/archicad/boq/:projectId/budget.
 import React from "react";
-import { FaSpinner } from "react-icons/fa";
+import { FaSpinner } from "../../components/icons.jsx";
 import {
   fmtMoney,
   formatQty,

@@ -7,12 +7,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../store.jsx";
 import { can } from "../../utils/roles.js";
 import { Reveal } from "../../components/effects.jsx";
-import {
-  FiShoppingCart, FiShield, FiUsers, FiCalendar, FiMapPin, FiPlayCircle,
-  FiBookOpen, FiCheckSquare, FiDollarSign, FiPlusSquare, FiFileText,
-  FiClipboard, FiBox, FiTag, FiStar, FiGift, FiImage, FiBell,
-  FiLifeBuoy, FiActivity, FiCpu, FiHelpCircle,
-} from "react-icons/fi";
+import { FiActivity, FiBell, FiBookOpen, FiBox, FiCalendar, FiCheckSquare, FiClipboard, FiCpu, FiDollarSign, FiFileText, FiGift, FiHelpCircle, FiImage, FiLifeBuoy, FiMapPin, FiPlayCircle, FiPlusSquare, FiShield, FiShoppingCart, FiStar, FiTag, FiUsers } from "../../components/icons.jsx";
 
 // area = the permission key that gates the card (see server/config/permissions.js)
 const TOOLS = [

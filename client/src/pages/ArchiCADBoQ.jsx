@@ -4,15 +4,7 @@
 // highlighting and the data-issues banner.
 import React from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-  FaArrowLeft,
-  FaChartBar,
-  FaLink,
-  FaCopy,
-  FaCheck,
-  FaExclamationTriangle,
-  FaHistory,
-} from "react-icons/fa";
+import { FaArrowLeft, FaChartBar, FaCheck, FaCopy, FaExclamationTriangle, FaHistory, FaLink } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { unwrap, unwrapList } from "../features/archicad/archicadApi.js";

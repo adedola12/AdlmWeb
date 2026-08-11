@@ -3,7 +3,7 @@
 // plus management of who holds God status. Gated by the admin-exclusive "audit"
 // permission area, so only super-admins can reach it.
 import React from "react";
-import { FiActivity } from "react-icons/fi";
+import { FiActivity } from "../components/icons.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";

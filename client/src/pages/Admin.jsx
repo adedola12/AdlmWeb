@@ -7,7 +7,7 @@ import { apiAuthed } from "../http.js";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
-import { FiShield } from "react-icons/fi";
+import { FiShield } from "../components/icons.jsx";
 
 const MONTH_CHOICES = [
   { label: "1 month", value: 1 },
@@ -5536,5 +5536,4 @@ export default function Admin({ section = null }) {
     </div>
   );
 }
-
 

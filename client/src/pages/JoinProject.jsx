@@ -1,6 +1,6 @@
 import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { FaSpinner, FaExclamationTriangle, FaUserPlus } from "react-icons/fa";
+import { FaExclamationTriangle, FaSpinner, FaUserPlus } from "../components/icons.jsx";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 

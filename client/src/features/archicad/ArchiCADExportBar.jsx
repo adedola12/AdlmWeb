@@ -3,7 +3,7 @@
 // fetch → blob → anchor click (same pattern as the BoQ exports in
 // ProjectsGeneric.jsx — apiAuthed parses JSON/text, so binary uses fetch).
 import React from "react";
-import { FaFileExcel, FaFilePdf, FaSpinner } from "react-icons/fa";
+import { FaFileExcel, FaFilePdf, FaSpinner } from "../../components/icons.jsx";
 import { useAuth } from "../../store.jsx";
 import { API_BASE } from "../../config";
 

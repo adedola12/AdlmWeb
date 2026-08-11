@@ -8,10 +8,7 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { Reveal } from "../components/effects.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
-import {
-  FiShield, FiPlus, FiTrash2, FiLock, FiUsers, FiSearch,
-  FiChevronDown, FiChevronRight, FiUserX, FiClock,
-} from "react-icons/fi";
+import { FiChevronDown, FiChevronRight, FiClock, FiLock, FiPlus, FiSearch, FiShield, FiTrash2, FiUserX, FiUsers } from "../components/icons.jsx";
 
 export default function AdminRoles() {
   const { accessToken, user } = useAuth();

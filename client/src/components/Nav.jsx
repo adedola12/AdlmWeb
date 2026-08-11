@@ -5,10 +5,7 @@ import { useTheme } from "../theme.jsx";
 import { isStaff } from "../utils/roles.js";
 import { api } from "../api.js";
 import adlmLogo from "../assets/logo/adlmLogo.png";
-import {
-  FiHome, FiBox, FiCalendar, FiInfo, FiPlayCircle, FiFileText,
-  FiShoppingCart, FiUser, FiGrid, FiShield, FiLogOut, FiZap,
-} from "react-icons/fi";
+import { FiBox, FiCalendar, FiFileText, FiGrid, FiHome, FiInfo, FiLogOut, FiPlayCircle, FiShield, FiShoppingCart, FiUser, FiZap } from "./icons.jsx";
 
 // Lightweight inline icons so we don't pull in another react-icons import.
 function SunIcon() {

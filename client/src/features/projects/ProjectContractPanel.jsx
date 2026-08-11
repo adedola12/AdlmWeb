@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  FaFileInvoiceDollar,
-  FaDownload,
-  FaPlus,
-  FaTrashAlt,
-  FaUpload,
-  FaCube,
-} from "react-icons/fa";
+import { FaCube, FaDownload, FaFileInvoiceDollar, FaPlus, FaTrashAlt, FaUpload } from "../../components/icons.jsx";
 import { deriveItemDiscipline } from "../../lib/boqCategory.js";
 
 function safeNum(v) {

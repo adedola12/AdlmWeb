@@ -1,22 +1,5 @@
 import React, { useRef, useCallback, useState, useEffect } from "react";
-import {
-  FaInfoCircle,
-  FaLink,
-  FaSearch,
-  FaTimes,
-  FaTrashAlt,
-  FaArrowUp,
-  FaArrowDown,
-  FaGripVertical,
-  FaPlus,
-  FaListUl,
-  FaCogs,
-  FaFileInvoiceDollar,
-  FaClipboardList,
-  FaSync,
-  FaChevronUp,
-  FaChevronDown,
-} from "react-icons/fa";
+import { FaArrowDown, FaArrowUp, FaChevronDown, FaChevronUp, FaClipboardList, FaCogs, FaFileInvoiceDollar, FaGripVertical, FaInfoCircle, FaLink, FaListUl, FaPlus, FaSearch, FaSync, FaTimes, FaTrashAlt } from "../../components/icons.jsx";
 import SectionRail from "./SectionRail.jsx";
 
 /**

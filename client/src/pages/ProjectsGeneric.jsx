@@ -8,20 +8,7 @@ import { API_BASE } from "../config";
 // ifcElements (which pulls in the ~1.5 MB web-ifc wasm wrapper) is imported
 // dynamically inside handleUploadModel so it is code-split out of the main
 // bundle and only fetched when a user actually uploads a model.
-import {
-  FaInfoCircle,
-  FaSearch,
-  FaTimes,
-  FaFolder,
-  FaCubes,
-  FaThLarge,
-  FaSyncAlt,
-  FaUserPlus,
-  FaKey,
-  FaChartBar,
-  FaTasks,
-  FaFileExcel,
-} from "react-icons/fa";
+import { FaChartBar, FaCubes, FaFileExcel, FaFolder, FaInfoCircle, FaKey, FaSearch, FaSyncAlt, FaTasks, FaThLarge, FaTimes, FaUserPlus } from "../components/icons.jsx";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
@@ -1264,7 +1251,6 @@ export default function ProjectsGeneric() {
     // Reset the override when moving between projects.
     setMergeGroupOverride(null);
   }, [selectedId]);
-
 
   function itemKey(it, i) {
     const sn = it?.sn ?? i + 1;
@@ -5799,9 +5785,4 @@ export default function ProjectsGeneric() {
     </div>
   );
 }
-
-
-
-
-
 

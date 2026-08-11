@@ -1,16 +1,5 @@
 import React from "react";
-import {
-  FaTimes,
-  FaCopy,
-  FaCheck,
-  FaTrash,
-  FaKey,
-  FaUserFriends,
-  FaEye,
-  FaPen,
-  FaQrcode,
-  FaLink,
-} from "react-icons/fa";
+import { FaCheck, FaCopy, FaEye, FaKey, FaLink, FaPen, FaQrcode, FaTimes, FaTrash, FaUserFriends } from "../../components/icons.jsx";
 import { QRCodeSVG } from "qrcode.react";
 import { apiAuthed } from "../../http.js";
 

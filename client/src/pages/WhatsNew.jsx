@@ -9,13 +9,7 @@
 // Edit the markdown to publish — no edits needed here.
 import React from "react";
 import { Link } from "react-router-dom";
-import {
-  FiArrowRight,
-  FiClock,
-  FiZap,
-  FiDownload,
-  FiBookOpen,
-} from "react-icons/fi";
+import { FiArrowRight, FiBookOpen, FiClock, FiDownload, FiZap } from "../components/icons.jsx";
 import { Reveal, TiltCard } from "../components/effects.jsx";
 import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";

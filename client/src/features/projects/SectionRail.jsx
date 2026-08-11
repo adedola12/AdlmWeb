@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  FaChevronUp,
-  FaChevronDown,
-  FaBars,
-  FaTimes,
-  FaSearch,
-  FaListUl,
-} from "react-icons/fa";
+import { FaBars, FaChevronDown, FaChevronUp, FaListUl, FaSearch, FaTimes } from "../../components/icons.jsx";
 
 // SectionRail — persistent docked side menu for jumping between page
 // sections without scrolling through content.

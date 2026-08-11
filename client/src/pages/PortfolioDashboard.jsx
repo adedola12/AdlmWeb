@@ -7,14 +7,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
-import {
-  FaChartBar,
-  FaArrowLeft,
-  FaSyncAlt,
-  FaFileExcel,
-  FaFilePdf,
-  FaExternalLinkAlt,
-} from "react-icons/fa";
+import { FaArrowLeft, FaChartBar, FaExternalLinkAlt, FaFileExcel, FaFilePdf, FaSyncAlt } from "../components/icons.jsx";
 
 // Lazy — the report preview pulls in the chart/PDF stack only when opened.
 const ReportModal = React.lazy(() => import("../features/reports/ReportModal.jsx"));

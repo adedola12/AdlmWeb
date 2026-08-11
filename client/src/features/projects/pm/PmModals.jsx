@@ -1,5 +1,5 @@
 import React from "react";
-import { FaTimes, FaTasks, FaExclamationTriangle, FaBug, FaLink, FaKeyboard } from "react-icons/fa";
+import { FaBug, FaExclamationTriangle, FaKeyboard, FaLink, FaTasks, FaTimes } from "../../../components/icons.jsx";
 import PmBoqItemPicker from "./PmBoqItemPicker.jsx";
 
 function safeNum(v) {

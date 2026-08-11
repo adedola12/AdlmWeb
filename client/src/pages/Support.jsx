@@ -1,14 +1,7 @@
 // src/pages/Support.jsx
 import React from "react";
 import { Link } from "react-router-dom";
-import {
-  FaLinkedin,
-  FaXTwitter,
-  FaYoutube,
-  FaWhatsapp,
-  FaInstagram,
-  FaArrowRight,
-} from "react-icons/fa6";
+import { FaArrowRight, FaInstagram, FaLinkedin, FaWhatsapp, FaXTwitter, FaYoutube } from "../components/icons.jsx";
 
 const WHATSAPP_NUMBER = "2348106503524";
 

@@ -1,22 +1,5 @@
 import React from "react";
-import {
-  FaArrowLeft,
-  FaTrash,
-  FaShareAlt,
-  FaCopy,
-  FaCheck,
-  FaSave,
-  FaDownload,
-  FaChartPie,
-  FaFileInvoiceDollar,
-  FaCube,
-  FaProjectDiagram,
-  FaFileContract,
-  FaWallet,
-  FaUserFriends,
-  FaEye,
-  FaLock,
-} from "react-icons/fa";
+import { FaArrowLeft, FaChartPie, FaCheck, FaCopy, FaCube, FaDownload, FaEye, FaFileContract, FaFileInvoiceDollar, FaLock, FaProjectDiagram, FaSave, FaShareAlt, FaTrash, FaUserFriends, FaWallet } from "../../components/icons.jsx";
 import ProjectBillTable from "./ProjectBillTable.jsx";
 import ProjectBudgetTab from "./ProjectBudgetTab.jsx";
 import ProjectContractPanel from "./ProjectContractPanel.jsx";

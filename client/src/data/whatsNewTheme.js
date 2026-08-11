@@ -8,16 +8,7 @@
 // NOTE: the class strings here are written out in full (no interpolation) so
 // Tailwind's scanner sees them and keeps them in the build.
 
-import {
-  FiBox,
-  FiMap,
-  FiLayers,
-  FiZap,
-  FiDollarSign,
-  FiPlayCircle,
-  FiTrendingUp,
-  FiBookOpen,
-} from "react-icons/fi";
+import { FiBookOpen, FiBox, FiDollarSign, FiLayers, FiMap, FiPlayCircle, FiTrendingUp, FiZap } from "../components/icons.jsx";
 
 export const ICONS = {
   cube: FiBox,
