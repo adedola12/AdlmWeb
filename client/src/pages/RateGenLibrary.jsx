@@ -305,7 +305,33 @@ export default function RateGenLibrary() {
   const latestMineRef = React.useRef(null);
 
   const zone = master?.zone || "";
+  const stateKey = master?.state || master?.accountState || "";
+  const [states, setStates] = React.useState([]);
   const trimmedSearch = search.trim().toLowerCase();
+
+  // Labels come from the server so this page names a state exactly as the
+  // profile and the desktop app do, rather than title-casing the key here and
+  // ending up with "Fct" next to "FCT (Abuja)" everywhere else.
+  React.useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiAuthed("/rategen/states", { token: accessToken });
+        if (!cancelled && Array.isArray(res)) setStates(res);
+      } catch {
+        // Non-fatal. The card falls back to the raw key.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  const stateLabel =
+    states.find((s) => s?.key === stateKey)?.label ||
+    (stateKey ? stateKey.replace(/_/g, " ") : "");
+  const zoneLabel = zone ? zone.replace(/_/g, " ") : "";
 
   React.useEffect(() => {
     latestMineRef.current = mine;
@@ -595,10 +621,17 @@ export default function RateGenLibrary() {
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {/* The state is what the user chooses; the zone is what the price is
+              actually graded by. Naming both is what stops two states in the
+              same zone quoting identical figures from looking like a fault. */}
           <SummaryCard
-            label="Zone"
-            value={zone ? zone.replace(/_/g, " ") : "-"}
-            detail="Master prices follow the zone on your user profile."
+            label="Pricing Location"
+            value={stateLabel || zoneLabel || "-"}
+            detail={
+              stateLabel && zoneLabel
+                ? `Priced from ${zoneLabel} rates. Change it on your Profile.`
+                : "Set a state on your Profile to price against your location."
+            }
           />
           <SummaryCard
             label="My Library"
