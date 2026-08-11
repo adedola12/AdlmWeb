@@ -27,6 +27,19 @@ const RateGenRateSchema = new Schema(
     sectionKey: { type: String, required: true, index: true, trim: true },
     sectionLabel: { type: String, required: true, trim: true },
 
+    // Where this rate applies. Both null means it applies everywhere, which is
+    // what every rate written before this change is, so nothing needs migrating.
+    //
+    // Resolution for a consumer asking about a state, most specific first:
+    //   state match  ->  zone match  ->  location-free rate
+    //
+    // The materials and labour underneath have been priced by zone since 2026
+    // and by state since Aug 2026, but the composite rates served to QUIV and
+    // HERON carried no location at all, so a Kano estimator and a Lagos
+    // estimator were handed the same figure off differently priced inputs.
+    state: { type: String, default: null, trim: true, lowercase: true, index: true },
+    zone: { type: String, default: null, trim: true, lowercase: true, index: true },
+
     itemNo: { type: Number },
     code: { type: String, trim: true },
 

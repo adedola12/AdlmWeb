@@ -1,5 +1,7 @@
 // server/routes/rategen.library.js
 import express from "express";
+import { normalizeState, zoneForState } from "../util/states.js";
+import { normalizeZone } from "../util/zones.js";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { requireEntitlement } from "../middleware/requireEntitlement.js";
@@ -677,11 +679,46 @@ function toComputeItemDefinition(x) {
   };
 }
 
+
+/**
+ * Location filter for the shared rate library.
+ *
+ * A consumer asking about a state should get, per rate, the most specific
+ * version that exists: a rate written for that state, else one written for its
+ * zone, else the location-free rate. Mongo cannot express "best match per
+ * description" in a find(), so this returns the candidate set and
+ * pickBestByLocation() narrows it.
+ */
+function locationScope(req) {
+  const state = normalizeState(req.query.state) || normalizeState(req.user?.state);
+  const zone =
+    (state ? zoneForState(state) : null) ||
+    normalizeZone(req.query.zone) ||
+    req.user?.zone ||
+    null;
+  return { state, zone };
+}
+
+function pickBestByLocation(docs, { state, zone }) {
+  const rank = (d) => (d.state && d.state === state ? 3 : d.zone && d.zone === zone ? 2 : !d.state && !d.zone ? 1 : 0);
+  const best = new Map();
+  for (const d of docs) {
+    const r = rank(d);
+    if (r === 0) continue; // written for somewhere else entirely
+    const key = `${d.sectionKey}|${d.description}|${d.unit}`;
+    const cur = best.get(key);
+    if (!cur || r > cur.r) best.set(key, { r, d });
+  }
+  return [...best.values()].map((x) => x.d);
+}
+
 function toRateDefinition(r) {
   const def = {
     id: String(r._id),
     sectionKey: r.sectionKey || "",
     sectionLabel: r.sectionLabel || "",
+    state: r.state || null,
+    zone: r.zone || null,
     itemNo: r.itemNo ?? null,
     description: r.description || "",
     unit: r.unit || "",
@@ -1241,8 +1278,11 @@ router.get("/library/rates/sync", async (req, res, next) => {
     const sectionKey = normalizeSectionKey(req.query.sectionKey);
     const cur = parseCursor(req.query.cursor);
 
+    const loc = locationScope(req);
     const q = {};
     if (sectionKey) q.sectionKey = sectionKey;
+    // Candidates: this state, its zone, or location-free.
+    q.$and = [{ $or: [{ state: loc.state }, { zone: loc.zone }, { state: null, zone: null }] }];
 
     if (cur?.ts) {
       q.$or = cur.id
@@ -1269,7 +1309,8 @@ router.get("/library/rates/sync", async (req, res, next) => {
     res.json({
       ok: true,
       meta: { version: meta.version, updatedAt: meta.updatedAt },
-      items: docs.map(toRateDefinition),
+      items: pickBestByLocation(docs, locationScope(req)).map(toRateDefinition),
+      location: locationScope(req),
       nextCursor,
     });
   } catch (err) {
