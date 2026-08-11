@@ -10,6 +10,25 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
+## 2.8.0 - August 2026 - Your prices stay yours, and pricing by state
+
+Any price you edited in your library was being wiped every time you signed in. That is fixed, your library can now be rolled back to any earlier point, and you can price against any of the 36 states or the FCT instead of picking a geopolitical zone.
+
+### 🐛 Fixed
+
+- **Prices you edited were being wiped every time you signed in.** When your library synced, it was rebuilt from the published prices plus the rows you added yourself. A price you changed on a row that came with the product was in neither of those, so it was overwritten, with nothing said and no way to get it back. If you have been re-entering the same corrections after every sign-in, this is why. Your edits are now kept, and the app can tell the difference between a price you typed and a price we sent. This also means 2.7.0's note that your own prices survive the update was only true of the installer, not of signing in. Apologies, that was our error.
+- **An empty or failed price response could empty your library.** If the server returned nothing, the app treated it as a catalog containing nothing and reduced your library to the rows you had added yourself. It now leaves your library alone and reports the failure.
+
+### ✨ New
+
+- **Undo, for your whole library.** Your material and labour libraries are copied before anything rewrites them, whether that is a sign-in, a price sync, or changing your location. The **Undo** button in the library toolbar lists those points and puts any of them back. The last 20 are kept, and restoring takes a copy first, so an undo can itself be undone.
+- **When we publish a new price for something you edited, you decide.** Your figure stays in use and a note appears above the library showing what changed and by how much. Keep yours, or take the published price, in one click. If we have not changed a price you edited, nothing is asked and your figure simply stays, so you will not be nagged about the same rate every time you open the app.
+- **Price by state.** Your ADLM profile now asks for a state rather than a geopolitical zone, covering all 36 and the FCT, and RateGen has the same picker in the library toolbar. Change it in either place and the other follows on the next sign-in. Be aware of what this does and does not do yet: prices are still evidenced at zone level, so Kano and Katsina read the same today because they are both North West. The picker names the zone your state prices from so you can see that. What it changes is that your state can now be priced on its own when we have evidence for it, without you doing anything.
+
+### 🔧 Improved
+
+- **The location you pick is now one setting, not two.** Choosing a state sets the zone it belongs to automatically. Previously it was possible for an account to say one thing and price from another, which showed up as rates that looked wrong for where you were with nothing on screen to explain why.
+
 ## 2.7.0 - August 2026 - New prices, MEP, steel and roof carpentry
 
 The first full price refresh since RateGen launched. Cement moves from ₦4,300 to ₦11,500 a bag and reinforcement from ₦350,000 to ₦1,700,000 a tonne. The library gains a mechanical, electrical and plumbing section it never had, the roof section finally prices the timber holding the sheets up, structural steel is priced for the first time, and the category filter works again.
