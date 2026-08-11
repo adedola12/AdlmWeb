@@ -64,6 +64,20 @@ export function guideForChangelogSlug(slug) {
 }
 
 /**
+ * The guide covering a given product, or null.
+ *
+ * Unlike ownedGuidesFor this ignores entitlement on purpose: it backs the
+ * product page, where letting someone read the manual before they buy is the
+ * point. `alwaysShow` guides are not returned here — the Installer Hub book is
+ * not what a visitor is asking about when they are looking at RateGen.
+ */
+export function guideForProductKey(productKey) {
+  const key = String(productKey || "").toLowerCase();
+  if (!key) return null;
+  return GUIDES.find((g) => (g.productKeys || []).includes(key)) || null;
+}
+
+/**
  * Guides ordered for a given user: ones covering a product they own first,
  * then the rest. Never hides anything — a customer evaluating a product
  * should still be able to read its guide.

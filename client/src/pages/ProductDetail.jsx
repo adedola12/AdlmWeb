@@ -1,27 +1,47 @@
 // src/pages/ProductDetail.jsx
+//
+// The page a visitor lands on from an ad, a WhatsApp share or the product grid.
+// It has four jobs, in this order: make the product legible, make the price
+// legible, answer the question that is stopping the purchase, and offer the
+// next thing to look at.
+//
+// Two things worth knowing before editing:
+//
+//  * The term selector's prices come from lib/termPricing.js, which mirrors the
+//    tiers in Purchase.jsx. If the tiers move there, move them there too — a
+//    page that advertises a price checkout does not honour is worse than a page
+//    with no prices on it.
+//
+//  * `blurb` is the subtitle. This page used to read `p.tagline ||
+//    p.shortDescription`, neither of which exists on the Product schema, so the
+//    subtitle silently never rendered while `blurb` sat unused in the document.
+
 import React from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
+import Seo from "../components/Seo.jsx";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 import StorageBar from "../components/StorageBar.jsx";
 import { apiAuthed } from "../api.js";
+import { Reveal, Stagger, StaggerItem } from "../components/effects.jsx";
+import { Eyebrow } from "../components/brand.jsx";
+import { productSchema, courseSchema, breadcrumbSchema } from "../lib/schema.js";
+import { termOptions, termTotalNGN, unitPrices } from "../lib/termPricing.js";
+import { addProductToCart, getProductKey, getCategory } from "../lib/cart.js";
+import { faqFor } from "../data/productFaq.js";
+import { guideForProductKey } from "../data/guides.js";
+import { trackEvent } from "../ga";
 
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
 const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
-
-function getProductKey(p) {
-  return String(p?.key || p?.slug || p?._id || "").trim();
-}
 
 // Safe extractor for various YouTube URL/ID shapes
 function extractYouTubeId(input = "") {
   try {
     if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
     const url = new URL(input);
-    if (url.hostname.includes("youtu.be")) {
-      return url.pathname.replace("/", "");
-    }
+    if (url.hostname.includes("youtu.be")) return url.pathname.replace("/", "");
     if (url.hostname.includes("youtube.com")) {
       const id = url.searchParams.get("v");
       if (id) return id;
@@ -38,7 +58,7 @@ async function fetchJsonStrict(url, options = {}) {
   const res = await fetch(url, options);
   const ct = (res.headers.get("content-type") || "").toLowerCase();
 
-  // If server returns HTML (like your meta/index fallback), treat it as failure
+  // If server returns HTML (like the meta/index fallback), treat it as failure
   const isJson = ct.includes("application/json");
 
   if (!res.ok) {
@@ -67,57 +87,24 @@ async function fetchJsonStrict(url, options = {}) {
   return res.json();
 }
 
+async function fetchProductList(signal, pageSize = 200) {
+  const data = await fetchJsonStrict(
+    `${API_BASE}/products?page=1&pageSize=${pageSize}`,
+    { credentials: "include", signal },
+  );
+  return Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+}
+
 async function findProductFromListFallback(key, signal) {
   const wanted = String(key || "").trim();
-
-  // Try large pageSize first (you currently only have a few products)
-  const tryPageSizes = [200, 100, 50];
-
-  for (const pageSize of tryPageSizes) {
-    const first = await fetchJsonStrict(
-      `${API_BASE}/products?page=1&pageSize=${pageSize}`,
-      { credentials: "include", signal },
+  for (const pageSize of [200, 100, 50]) {
+    const items = await fetchProductList(signal, pageSize);
+    const match = items.find(
+      (p) => getProductKey(p) === wanted || String(p?._id || "") === wanted,
     );
-
-    // Your list API returns {items,total,page,pageSize}
-    const items = Array.isArray(first?.items)
-      ? first.items
-      : Array.isArray(first)
-        ? first
-        : [];
-    const total = Number(first?.total || items.length || 0);
-
-    const match = items.find((p) => {
-      const pk = getProductKey(p);
-      return pk === wanted || String(p?._id || "") === wanted;
-    });
     if (match) return match;
-
-    // If server really paginates and total > pageSize, loop remaining pages (bounded)
-    const pages = Math.max(Math.ceil(total / pageSize), 1);
-    const maxPages = Math.min(pages, 25);
-
-    for (let page = 2; page <= maxPages; page++) {
-      const next = await fetchJsonStrict(
-        `${API_BASE}/products?page=${page}&pageSize=${pageSize}`,
-        { credentials: "include", signal },
-      );
-
-      const nextItems = Array.isArray(next?.items)
-        ? next.items
-        : Array.isArray(next)
-          ? next
-          : [];
-      const found = nextItems.find((p) => {
-        const pk = getProductKey(p);
-        return pk === wanted || String(p?._id || "") === wanted;
-      });
-
-      if (found) return found;
-      if (!nextItems.length) break;
-    }
+    if (!items.length) break;
   }
-
   return null;
 }
 
@@ -130,6 +117,10 @@ export default function ProductDetail() {
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
   const [productStorage, setProductStorage] = React.useState(null);
+  const [siblings, setSiblings] = React.useState([]);
+  const [months, setMonths] = React.useState(1);
+  const [added, setAdded] = React.useState(false);
+  const [openFaq, setOpenFaq] = React.useState(0);
 
   React.useEffect(() => {
     const ctl = new AbortController();
@@ -143,29 +134,21 @@ export default function ProductDetail() {
       const safeKey = String(key || "").trim();
 
       try {
-        // 1) Try direct endpoint (if your backend supports it)
         const direct = await fetchJsonStrict(
           `${API_BASE}/products/${encodeURIComponent(safeKey)}`,
           { credentials: "include", signal: ctl.signal },
         );
-
         if (!mounted) return;
         if (direct && (direct._id || direct.key || direct.slug)) {
           setP(direct);
           return;
         }
-
-        // 2) Fallback to list endpoint (works even when /products/:key crashes)
         const fallback = await findProductFromListFallback(safeKey, ctl.signal);
         if (!mounted) return;
         setP(fallback);
       } catch (e) {
-        // 3) If direct fails (500 / HTML), still try list fallback once
         try {
-          const fallback = await findProductFromListFallback(
-            safeKey,
-            ctl.signal,
-          );
+          const fallback = await findProductFromListFallback(safeKey, ctl.signal);
           if (!mounted) return;
           setP(fallback);
           if (!fallback) setErr(e?.message || "Failed to load product");
@@ -185,27 +168,52 @@ export default function ProductDetail() {
     };
   }, [key]);
 
+  // Everything else in the catalogue, for the cross-sell strip. Failing here
+  // must not take the page down — it is the least important thing on it.
+  React.useEffect(() => {
+    const ctl = new AbortController();
+    fetchProductList(ctl.signal)
+      .then((items) => setSiblings(items))
+      .catch(() => setSiblings([]));
+    return () => ctl.abort();
+  }, []);
+
+  // GA4 ecommerce: the funnel is view_item -> add_to_cart -> purchase, and
+  // without this first step the other two have nothing to convert against.
+  React.useEffect(() => {
+    if (!p) return;
+    const price =
+      (p.billingInterval === "yearly"
+        ? p.price?.discountedYearlyNGN || p.price?.yearlyNGN
+        : p.price?.discountedMonthlyNGN || p.price?.monthlyNGN) || 0;
+    trackEvent("view_item", {
+      currency: "NGN",
+      value: Number(price),
+      items: [
+        {
+          item_id: getProductKey(p),
+          item_name: p.name || getProductKey(p),
+          item_category: getCategory(p),
+          price: Number(price),
+          quantity: 1,
+        },
+      ],
+    });
+  }, [p]);
+
   // Build slides: video first (if any) then thumbnail + images
   const slides = React.useMemo(() => {
     const out = [];
     if (p?.previewUrl) {
-      out.push({
-        type: "video",
-        src: p.previewUrl,
-        poster: p.thumbnailUrl || "",
-      });
+      out.push({ type: "video", src: p.previewUrl, poster: p.thumbnailUrl || "" });
     }
     if (p?.thumbnailUrl) out.push({ type: "image", src: p.thumbnailUrl });
-
     if (Array.isArray(p?.images)) {
       for (const src of p.images) {
-        if (!src) continue;
-        if (src === p.thumbnailUrl) continue;
+        if (!src || src === p.thumbnailUrl) continue;
         out.push({ type: "image", src });
       }
     }
-
-    // de-dupe
     const seen = new Set();
     return out.filter((s) => {
       const k = `${s.type}:${s.src}`;
@@ -215,7 +223,6 @@ export default function ProductDetail() {
     });
   }, [p]);
 
-  // Fetch per-product storage for logged-in users
   React.useEffect(() => {
     if (!user || !accessToken || !key) return;
     const safeKey = String(key).trim();
@@ -227,7 +234,12 @@ export default function ProductDetail() {
 
   const [activeSlide, setActiveSlide] = React.useState(0);
   const [zoom, setZoom] = React.useState(false);
-  React.useEffect(() => setActiveSlide(0), [key]);
+  React.useEffect(() => {
+    setActiveSlide(0);
+    setMonths(1);
+    setAdded(false);
+    setOpenFaq(0);
+  }, [key]);
 
   const hasMany = slides.length > 1;
   const prevSlide = React.useCallback(() => {
@@ -256,6 +268,36 @@ export default function ProductDetail() {
     return () => window.removeEventListener("keydown", onKey);
   }, [zoom]);
 
+  // Sticky buy bar: shown once the hero's CTA has scrolled away, so the price
+  // and the button are never more than a thumb-reach from the visitor.
+  const ctaRef = React.useRef(null);
+  const [showBar, setShowBar] = React.useState(false);
+  React.useEffect(() => {
+    const el = ctaRef.current;
+    if (!el) return;
+
+    // A scroll listener rather than an IntersectionObserver on purpose. An
+    // observer only fires when the element crosses the threshold, so a single
+    // callback that lands before a programmatic scroll settles — or a load that
+    // starts part-way down the page — leaves the bar stuck in the wrong state
+    // until the next crossing.
+    //
+    // Measured directly in the handler rather than inside requestAnimationFrame:
+    // rAF does not run while the document is hidden or not compositing, which
+    // silently freezes the bar in whatever state it was last in. It is one
+    // getBoundingClientRect on one element, and React drops a setState to the
+    // same value, so there is nothing to save by deferring it.
+    const check = () => setShowBar(el.getBoundingClientRect().bottom < 0);
+
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [loading, p]);
+
   const isComingSoon = !!p?.isComingSoon;
   const [showComingSoon, setShowComingSoon] = React.useState(false);
 
@@ -265,37 +307,64 @@ export default function ProductDetail() {
       return;
     }
     const productKey = getProductKey(p) || key;
-    const nextUrl = `/purchase?product=${encodeURIComponent(productKey)}&months=1`;
+    const nextUrl = `/purchase?product=${encodeURIComponent(productKey)}&months=${months}`;
     if (!user) return navigate(`/login?next=${encodeURIComponent(nextUrl)}`);
     navigate(nextUrl);
   }
 
-  if (loading)
+  function addToCart() {
+    if (isComingSoon || !p) return;
+    addProductToCart(p, months);
+    setAdded(true);
+    window.setTimeout(() => setAdded(false), 2200);
+  }
+
+  if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 text-sm text-slate-500 dark:text-adlm-dark-muted">
-        Loading…
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-10">
+        <div className="animate-pulse space-y-6">
+          <div className="h-4 w-40 rounded bg-slate-200 dark:bg-white/10" />
+          <div className="flex flex-col lg:flex-row gap-8">
+            <div className="w-full lg:w-[480px] aspect-[4/5] rounded-2xl bg-slate-200 dark:bg-white/10" />
+            <div className="flex-1 space-y-4 py-2">
+              <div className="h-8 w-2/3 rounded bg-slate-200 dark:bg-white/10" />
+              <div className="h-4 w-1/2 rounded bg-slate-200 dark:bg-white/10" />
+              <div className="h-12 w-40 rounded bg-slate-200 dark:bg-white/10" />
+              <div className="h-12 w-full rounded-xl bg-slate-200 dark:bg-white/10" />
+            </div>
+          </div>
+        </div>
       </div>
     );
+  }
 
   if (!p) {
     return (
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 space-y-3">
-        <div className="text-sm text-red-600">{err || "Product not found."}</div>
-        <Link className="btn" to="/products">
-          Back to products
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-16 text-center space-y-4">
+        <Seo title="Product not found" path={`/product/${key}`} noindex />
+        <div className="text-4xl">🔍</div>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+          We couldn&apos;t find that product
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-adlm-dark-muted max-w-md mx-auto">
+          {err || "It may have been renamed or is no longer published."}
+        </p>
+        <Link
+          className="inline-flex items-center justify-center rounded-xl bg-adlm-blue-700 text-white px-5 py-2.5 text-sm font-semibold hover:bg-adlm-blue-600 transition"
+          to="/products"
+        >
+          Browse all products
         </Link>
       </div>
     );
   }
 
   const cadence = p.billingInterval === "yearly" ? "year" : "month";
-  const unitNGN =
-    p.billingInterval === "yearly" ? p.price?.yearlyNGN : p.price?.monthlyNGN;
-  const unitUSD =
-    p.billingInterval === "yearly" ? p.price?.yearlyUSD : p.price?.monthlyUSD;
+  const u = unitPrices(p);
+  const unitNGN = p.billingInterval === "yearly" ? p.price?.yearlyNGN : p.price?.monthlyNGN;
+  const unitUSD = p.billingInterval === "yearly" ? p.price?.yearlyUSD : p.price?.monthlyUSD;
+  const baseNGN = p.billingInterval === "yearly" ? u.yearly : u.monthly;
 
-
-  // Discounted price (sale)
   const discNGN =
     p.billingInterval === "yearly"
       ? p.price?.discountedYearlyNGN
@@ -303,23 +372,35 @@ export default function ProductDetail() {
   const hasDiscount = discNGN != null && discNGN > 0 && discNGN < unitNGN;
   const pctOff = hasDiscount ? Math.round(((unitNGN - discNGN) / unitNGN) * 100) : 0;
 
-  // Storage upgrade price — admin-configured if set, otherwise 3% of active price
-  const activePrice = hasDiscount ? discNGN : (unitNGN || 0);
+  const terms = termOptions(p);
+  const selected = terms.find((t) => t.months === months) || terms[0] || null;
+  const dueNow = selected ? selected.total : termTotalNGN(p, months);
+
+  const activePrice = hasDiscount ? discNGN : unitNGN || 0;
   const storageUpgradeNGN =
     productStorage?.slotUpgradePrice != null
       ? productStorage.slotUpgradePrice
       : Math.round(activePrice * 0.03);
   const productKey = getProductKey(p) || key;
 
-  const related = Array.isArray(p.relatedFreeVideoIds)
-    ? p.relatedFreeVideoIds
-    : [];
-
+  const related = Array.isArray(p.relatedFreeVideoIds) ? p.relatedFreeVideoIds : [];
   const active = slides[activeSlide];
   const features = Array.isArray(p.features) ? p.features : [];
-  const subtitle = p.tagline || p.shortDescription || "";
+  const subtitle = p.blurb || "";
+  const guide = guideForProductKey(productKey);
+  const faq = faqFor(productKey);
+  const isCourse = !!p.isCourse;
 
-  // One thumbnail button — reused by the desktop rail and the mobile strip.
+  const others = siblings
+    .filter((s) => getProductKey(s) !== productKey && s.isPublished !== false)
+    .slice(0, 4);
+
+  const canonicalPath = `/product/${productKey}`;
+  const metaDescription =
+    subtitle ||
+    (p.description ? String(p.description).replace(/\s+/g, " ").slice(0, 155) : "") ||
+    `${p.name} from ADLM Studio.`;
+
   function Thumb({ s, i, className }) {
     const activeThumb = i === activeSlide;
     return (
@@ -351,25 +432,68 @@ export default function ProductDetail() {
 
   const arrowBtn =
     "absolute top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/85 hover:bg-white text-slate-900 grid place-items-center shadow-lg text-2xl leading-none opacity-0 group-hover:opacity-100 focus:opacity-100 transition";
+  const card =
+    "rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth";
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-8">
-        {/* Back link */}
-        <Link
-          to="/products"
-          className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-adlm-dark-muted hover:text-adlm-blue-700 dark:hover:text-adlm-blue-400 transition"
-        >
-          <span aria-hidden>←</span> Back to products
-        </Link>
+      <Seo
+        title={p.name}
+        description={metaDescription}
+        path={canonicalPath}
+        image={p.thumbnailUrl || undefined}
+        type="product"
+        jsonLd={[
+          isCourse
+            ? courseSchema({
+                name: p.name,
+                description: metaDescription,
+                url: `https://www.adlmstudio.net${canonicalPath}`,
+              })
+            : productSchema({
+                name: p.name,
+                description: metaDescription,
+                image: p.thumbnailUrl,
+                url: `https://www.adlmstudio.net${canonicalPath}`,
+                priceNGN: activePrice,
+                interval: cadence,
+              }),
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Products", path: "/products" },
+            { name: p.name, path: canonicalPath },
+          ]),
+        ]}
+      />
 
-        {/* Hero: gallery (left) + buy panel (right) */}
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-stretch">
-          {/* GALLERY — main image left, vertical rail right; framed to the
-              flyer-engine 4:5 (1080×1350) ratio and matched to the buy-card height */}
-          <div className="lg:shrink-0 min-w-0">
-            <div className="flex gap-3 lg:h-[560px] xl:h-[600px]">
-              <div className="relative w-full aspect-[4/5] lg:aspect-auto lg:w-[448px] xl:w-[480px] lg:h-full rounded-2xl overflow-hidden bg-slate-950 ring-1 ring-black/10 dark:ring-white/10 group">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-10 md:space-y-14">
+        {/* Breadcrumb */}
+        <nav aria-label="Breadcrumb" className="text-sm text-slate-500 dark:text-adlm-dark-muted">
+          <ol className="flex items-center gap-1.5 flex-wrap">
+            <li>
+              <Link to="/" className="hover:text-adlm-blue-700 dark:hover:text-adlm-blue-400 transition">
+                Home
+              </Link>
+            </li>
+            <li aria-hidden className="text-slate-300 dark:text-white/25">/</li>
+            <li>
+              <Link to="/products" className="hover:text-adlm-blue-700 dark:hover:text-adlm-blue-400 transition">
+                Products
+              </Link>
+            </li>
+            <li aria-hidden className="text-slate-300 dark:text-white/25">/</li>
+            <li className="text-slate-700 dark:text-adlm-dark-text font-medium truncate max-w-[60vw]">
+              {p.name}
+            </li>
+          </ol>
+        </nav>
+
+        {/* ── HERO ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 lg:items-start">
+          {/* Gallery */}
+          <Reveal className="lg:shrink-0 min-w-0" y={16}>
+            <div className="flex gap-3">
+              <div className="relative w-full aspect-[4/5] lg:w-[448px] xl:w-[480px] rounded-2xl overflow-hidden bg-slate-950 ring-1 ring-black/10 dark:ring-white/10 group">
                 {!active ? (
                   <div className="absolute inset-0 grid place-items-center text-slate-500 text-sm">
                     No preview available
@@ -410,9 +534,8 @@ export default function ProductDetail() {
                 )}
               </div>
 
-              {/* Desktop vertical thumbnail rail (right) */}
               {hasMany && (
-                <div className="hidden lg:flex flex-col gap-2.5 w-[84px] shrink-0 lg:h-full overflow-y-auto pr-0.5">
+                <div className="hidden lg:flex flex-col gap-2.5 w-[84px] shrink-0 max-h-[600px] overflow-y-auto pr-0.5">
                   {slides.map((s, i) => (
                     <Thumb key={`v-${i}`} s={s} i={i} className="w-full aspect-[4/5]" />
                   ))}
@@ -420,7 +543,6 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* Mobile thumbnail strip (horizontal) */}
             {hasMany && (
               <div className="lg:hidden mt-3 flex gap-2 overflow-x-auto pb-1">
                 {slides.map((s, i) => (
@@ -428,183 +550,259 @@ export default function ProductDetail() {
                 ))}
               </div>
             )}
-          </div>
+          </Reveal>
 
-          {/* BUY PANEL — drives the hero height; the image matches it */}
-          <div className="lg:flex-1 min-w-0">
-            <div className="lg:h-[560px] xl:h-[600px] lg:overflow-y-auto rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth flex flex-col">
-              {p.category && (
-                <div className="text-xs font-semibold uppercase tracking-wider text-adlm-blue-700 dark:text-adlm-blue-400 mb-2">
-                  {p.category}
-                </div>
-              )}
-              <h1 className="text-2xl md:text-[1.7rem] font-bold leading-tight text-slate-900 dark:text-adlm-dark-text">
-                {p.name}
-              </h1>
-              {subtitle && (
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-adlm-dark-muted">{subtitle}</p>
-              )}
+          {/* Buy panel */}
+          <Reveal className="lg:flex-1 min-w-0" y={16} delay={80}>
+            {/* getCategory falls back to the literal "General" because Product
+                has no category field — an eyebrow reading "GENERAL" tells the
+                visitor nothing and looks like a placeholder someone forgot. */}
+            <Eyebrow tone="blue">
+              {isCourse
+                ? "ADLM Course"
+                : getCategory(p) !== "General"
+                  ? getCategory(p)
+                  : "ADLM Software"}
+            </Eyebrow>
+            <h1 className="mt-2 text-3xl md:text-4xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-adlm-dark-text">
+              {p.name}
+            </h1>
+            {subtitle && (
+              <p className="mt-3 text-base md:text-lg leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
+                {subtitle}
+              </p>
+            )}
 
-              {/* Price */}
-              <div className="mt-5 flex items-end gap-2 flex-wrap">
-                {hasDiscount ? (
-                  <>
-                    <span className="text-3xl font-extrabold text-slate-900 dark:text-white">{ngn(discNGN)}</span>
-                    <span className="text-lg text-slate-400 line-through">{ngn(unitNGN)}</span>
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-500/15 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                      {pctOff}% OFF
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-3xl font-extrabold text-slate-900 dark:text-white">{ngn(unitNGN)}</span>
-                )}
-                <span className="text-sm text-slate-500 dark:text-adlm-dark-muted pb-1">/ {cadence}</span>
+            {isComingSoon && (
+              <div className="mt-4 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
+                Coming soon — not yet available for purchase
               </div>
-              <div className="mt-1.5 text-sm text-slate-500 dark:text-adlm-dark-muted">
-                {unitUSD ? <>≈ {usd(unitUSD)} / {cadence}</> : null}
-                {Number(p.price?.installNGN) > 0 && (
-                  <>
-                    {unitUSD ? " · " : ""}One-time install fee{" "}
-                    <span className="font-semibold text-slate-700 dark:text-adlm-dark-text">{ngn(p.price.installNGN)}</span>
-                  </>
-                )}
-              </div>
+            )}
 
-              {isComingSoon && (
-                <div className="mt-4 inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
-                  Coming Soon — not yet available for purchase
+            {/* Term selector */}
+            {!isComingSoon && terms.length > 1 && (
+              <div className="mt-6">
+                <Eyebrow className="mb-2">Choose your term</Eyebrow>
+                {/* A product with no 6-month saving offers only two terms, and
+                    a 3-column grid would leave a gap that reads as a bug. */}
+                <div className={`grid gap-2 ${terms.length >= 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                  {terms.map((t) => {
+                    const on = t.months === months;
+                    return (
+                      <button
+                        key={t.months}
+                        type="button"
+                        onClick={() => setMonths(t.months)}
+                        aria-pressed={on}
+                        className={`relative rounded-xl border px-3 py-3 text-left transition ${
+                          on
+                            ? "border-adlm-blue-600 bg-adlm-blue-50/70 dark:bg-adlm-blue-700/15 ring-1 ring-adlm-blue-600"
+                            : "border-slate-200 dark:border-adlm-dark-border hover:border-adlm-blue-300 dark:hover:border-adlm-blue-700/50"
+                        }`}
+                      >
+                        {t.savePct > 0 && (
+                          <span className="absolute -top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-adlm-orange text-white shadow">
+                            −{t.savePct}%
+                          </span>
+                        )}
+                        <span className="block text-sm font-semibold text-slate-900 dark:text-white">
+                          {t.label}
+                        </span>
+                        <span className="block text-[11px] text-slate-500 dark:text-adlm-dark-muted mt-0.5">
+                          {ngn(Math.round(t.perMonth))}/mo
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* CTA */}
+            {/* Price */}
+            <div className="mt-6 flex items-end gap-2.5 flex-wrap">
+              <span className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                {ngn(dueNow || baseNGN)}
+              </span>
+              {hasDiscount && months === 1 && (
+                <>
+                  <span className="text-lg text-slate-400 line-through pb-1">{ngn(unitNGN)}</span>
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-500/15 dark:text-emerald-400 px-2 py-0.5 rounded-full mb-1.5">
+                    {pctOff}% OFF
+                  </span>
+                </>
+              )}
+              <span className="text-sm text-slate-500 dark:text-adlm-dark-muted pb-1.5">
+                {selected && selected.months > 1 ? `for ${selected.label}` : `/ ${cadence}`}
+              </span>
+            </div>
+            <div className="mt-1.5 text-sm text-slate-500 dark:text-adlm-dark-muted">
+              {unitUSD ? <>≈ {usd(unitUSD)} / {cadence}</> : null}
+              {Number(p.price?.installNGN) > 0 && (
+                <>
+                  {unitUSD ? " · " : ""}One-time install fee{" "}
+                  <span className="font-semibold text-slate-700 dark:text-adlm-dark-text">
+                    {ngn(p.price.installNGN)}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* CTAs */}
+            <div ref={ctaRef} className="mt-6 flex flex-col sm:flex-row gap-2.5">
               <button
                 type="button"
                 onClick={purchase}
-                className={`mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl py-3 text-base font-semibold text-white transition active:scale-[.99] shadow-lg ${
+                className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold text-white transition active:scale-[.99] shadow-lg ${
                   isComingSoon
                     ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
                     : "bg-adlm-blue-700 hover:bg-adlm-blue-600 shadow-adlm-blue-700/25"
                 }`}
               >
-                {isComingSoon ? "Notify me when available" : "Purchase now"}
+                {isComingSoon ? "Notify me when available" : "Get started now"}
               </button>
-              <Link
-                to="/products"
-                className="mt-2.5 w-full inline-flex items-center justify-center rounded-xl py-2.5 text-sm font-medium border border-slate-200 dark:border-adlm-dark-border text-slate-700 dark:text-adlm-dark-text hover:bg-slate-50 dark:hover:bg-adlm-dark-hover transition"
-              >
-                Back to products
-              </Link>
-
-              {/* Cloud storage — shown when user has an active subscription */}
-              {productStorage && !productStorage.isMaterials ? (
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-adlm-dark-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
-                      Cloud Storage
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-adlm-dark-dim">
-                      {productStorage.limit - productStorage.used} slot{productStorage.limit - productStorage.used === 1 ? "" : "s"} remaining
-                    </span>
-                  </div>
-                  <StorageBar
-                    used={productStorage.used}
-                    limit={productStorage.limit}
-                    productKey={productStorage.productKey || key}
-                    compact
-                  />
-                  {storageUpgradeNGN > 0 && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          `/purchase?addon=storage-slots&for=${encodeURIComponent(productKey)}&slots=10&price=${storageUpgradeNGN}&return=/products/${encodeURIComponent(key)}`,
-                        )
-                      }
-                      className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-adlm-blue-200 dark:border-adlm-blue-700/40 bg-adlm-blue-50 dark:bg-adlm-blue-700/10 px-3 py-2 text-xs font-semibold text-adlm-blue-700 dark:text-adlm-blue-300 hover:bg-adlm-blue-100 dark:hover:bg-adlm-blue-700/20 transition"
-                    >
-                      <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-                      Add 10 project slots — {ngn(storageUpgradeNGN)}
-                    </button>
-                  )}
-                </div>
-              ) : null}
-
-              {/* Trust row */}
-              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-adlm-dark-border space-y-2 text-xs text-slate-500 dark:text-adlm-dark-muted">
-                <TrustRow>Secure checkout · cancel anytime</TrustRow>
-                <TrustRow>Instant license activation</TrustRow>
-                <TrustRow>Free support after purchase</TrustRow>
-                <TrustRow muted>Onboarding available (paid add-on)</TrustRow>
-              </div>
-
-              {/* Quick feature highlights */}
-              {features.length > 0 && (
-                <ul className="mt-4 space-y-1.5">
-                  {features.slice(0, 4).map((f, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-slate-600 dark:text-adlm-dark-muted">
-                      <span className="text-adlm-blue-700 dark:text-adlm-blue-400 mt-0.5">✓</span>
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
+              {!isComingSoon && (
+                <button
+                  type="button"
+                  onClick={addToCart}
+                  className={`sm:w-44 inline-flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold border transition active:scale-[.99] ${
+                    added
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/40"
+                      : "border-slate-200 dark:border-adlm-dark-border text-slate-700 dark:text-adlm-dark-text hover:bg-slate-50 dark:hover:bg-adlm-dark-hover"
+                  }`}
+                >
+                  {added ? "✓ Added to cart" : "Add to cart"}
+                </button>
               )}
             </div>
-          </div>
+
+            {/* Trust */}
+            <div className="mt-6 pt-5 border-t border-slate-100 dark:border-adlm-dark-border grid sm:grid-cols-2 gap-2.5 text-xs text-slate-600 dark:text-adlm-dark-muted">
+              <TrustRow>Licence activates the moment you pay</TrustRow>
+              <TrustRow>Secure checkout · no card stored unless you ask</TrustRow>
+              <TrustRow>Support included, from real people</TrustRow>
+              <TrustRow muted>Onboarding available as a paid add-on</TrustRow>
+            </div>
+
+            {/* Storage, for licensed users */}
+            {productStorage && !productStorage.isMaterials ? (
+              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-adlm-dark-border">
+                <div className="flex items-center justify-between mb-2">
+                  <Eyebrow>Your cloud storage</Eyebrow>
+                  <span className="text-[11px] text-slate-400 dark:text-adlm-dark-dim">
+                    {productStorage.limit - productStorage.used} slot
+                    {productStorage.limit - productStorage.used === 1 ? "" : "s"} remaining
+                  </span>
+                </div>
+                <StorageBar
+                  used={productStorage.used}
+                  limit={productStorage.limit}
+                  productKey={productStorage.productKey || key}
+                  compact
+                />
+                {storageUpgradeNGN > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/purchase?addon=storage-slots&for=${encodeURIComponent(productKey)}&slots=10&price=${storageUpgradeNGN}&return=/product/${encodeURIComponent(key)}`,
+                      )
+                    }
+                    className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-adlm-blue-200 dark:border-adlm-blue-700/40 bg-adlm-blue-50 dark:bg-adlm-blue-700/10 px-3 py-2 text-xs font-semibold text-adlm-blue-700 dark:text-adlm-blue-300 hover:bg-adlm-blue-100 dark:hover:bg-adlm-blue-700/20 transition"
+                  >
+                    Add 10 project slots — {ngn(storageUpgradeNGN)}
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </Reveal>
         </div>
 
-        {/* Features (full) */}
+        {/* ── WHAT YOU GET ─────────────────────────────────────────────── */}
         {features.length > 0 && (
-          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-3">What you get</h2>
-            <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+          <section>
+            <Reveal>
+              <Eyebrow tone="orange">What you get</Eyebrow>
+              <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-adlm-dark-text">
+                Everything included in {p.name.split(":")[0]}
+              </h2>
+            </Reveal>
+            <Stagger className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {features.map((f, i) => (
-                <li key={i} className="flex gap-2 text-sm text-slate-600 dark:text-adlm-dark-muted">
-                  <span className="text-adlm-blue-700 dark:text-adlm-blue-400 mt-0.5">✓</span>
-                  <span>{f}</span>
-                </li>
+                <StaggerItem
+                  key={i}
+                  className={`${card} p-5 hover:-translate-y-1 hover:shadow-depth-lg transition duration-200`}
+                >
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-adlm-blue-50 dark:bg-adlm-blue-700/15 text-adlm-blue-700 dark:text-adlm-blue-400">
+                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-adlm-dark-text">{f}</p>
+                </StaggerItem>
               ))}
-            </ul>
+            </Stagger>
           </section>
         )}
 
-        {/* Description */}
+        {/* ── ABOUT ────────────────────────────────────────────────────── */}
         {p.description && (
-          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-2">About this product</h2>
-            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
+          <Reveal as="section" className={`${card} p-6 md:p-8`}>
+            <Eyebrow tone="blue">About</Eyebrow>
+            <h2 className="mt-2 text-xl md:text-2xl font-bold text-slate-900 dark:text-adlm-dark-text">
+              Why people use it
+            </h2>
+            <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-slate-600 dark:text-adlm-dark-muted max-w-3xl">
               {p.description}
             </p>
-          </section>
+            {guide && (
+              <a
+                href={guide.file}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-6 inline-flex items-center gap-3 rounded-xl border border-adlm-blue-100 dark:border-adlm-blue-700/30 bg-adlm-blue-50/60 dark:bg-adlm-blue-700/10 px-4 py-3 hover:bg-adlm-blue-100/70 dark:hover:bg-adlm-blue-700/20 transition group"
+              >
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-white/10 text-adlm-blue-700 dark:text-adlm-blue-300 shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-adlm-blue-900 dark:text-adlm-blue-200 group-hover:underline">
+                    Read the {guide.title} guide before you buy
+                  </span>
+                  <span className="block text-xs text-adlm-blue-700/80 dark:text-adlm-blue-300/80 mt-0.5">
+                    {guide.pages}-page illustrated PDF · every screen, start to finish
+                  </span>
+                </span>
+              </a>
+            )}
+          </Reveal>
         )}
 
-        {/* Cloud storage — full card for licensed users */}
+        {/* ── CLOUD STORAGE (licensed users) ───────────────────────────── */}
         {productStorage && !productStorage.isMaterials ? (
-          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth">
+          <Reveal as="section" className={`${card} p-6 md:p-8`}>
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text">
-                  Cloud Storage
+                <Eyebrow tone="blue">Cloud storage</Eyebrow>
+                <h2 className="mt-2 text-xl font-bold text-slate-900 dark:text-adlm-dark-text">
+                  Project slots for {p.name}
                 </h2>
-                <p className="mt-0.5 text-sm text-slate-500 dark:text-adlm-dark-muted">
-                  Project slots used for <span className="font-medium text-slate-700 dark:text-adlm-dark-text">{p.name}</span>
-                </p>
               </div>
               {storageUpgradeNGN > 0 && (
                 <button
                   type="button"
                   onClick={() =>
                     navigate(
-                      `/purchase?addon=storage-slots&for=${encodeURIComponent(productKey)}&slots=10&price=${storageUpgradeNGN}&return=/products/${encodeURIComponent(key)}`,
+                      `/purchase?addon=storage-slots&for=${encodeURIComponent(productKey)}&slots=10&price=${storageUpgradeNGN}&return=/product/${encodeURIComponent(key)}`,
                     )
                   }
                   className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-adlm-blue-700 text-white text-sm font-semibold hover:bg-adlm-blue-600 transition shadow-md"
                 >
-                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
                   Add 10 slots — {ngn(storageUpgradeNGN)}
                 </button>
               )}
             </div>
-
             <div className="mt-4">
               <StorageBar
                 used={productStorage.used}
@@ -612,54 +810,80 @@ export default function ProductDetail() {
                 productKey={productStorage.productKey || key}
               />
             </div>
-
             <div className="mt-4 grid sm:grid-cols-3 gap-3">
-              <div className="rounded-xl bg-slate-50 dark:bg-white/5 p-3 text-center">
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">{productStorage.used}</div>
-                <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted mt-0.5">Projects used</div>
-              </div>
-              <div className="rounded-xl bg-slate-50 dark:bg-white/5 p-3 text-center">
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">{productStorage.limit - productStorage.used}</div>
-                <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted mt-0.5">Slots remaining</div>
-              </div>
-              <div className="rounded-xl bg-slate-50 dark:bg-white/5 p-3 text-center">
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">{productStorage.limit}</div>
-                <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted mt-0.5">Total included</div>
-              </div>
-            </div>
-
-            {storageUpgradeNGN > 0 && (
-              <div className="mt-4 rounded-xl border border-adlm-blue-100 dark:border-adlm-blue-700/30 bg-adlm-blue-50/60 dark:bg-adlm-blue-700/10 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-adlm-blue-900 dark:text-adlm-blue-200">
-                    Need more space?
-                  </div>
-                  <div className="mt-0.5 text-xs text-adlm-blue-700 dark:text-adlm-blue-300">
-                    Add 10 extra project slots for just {ngn(storageUpgradeNGN)} — that's 3% of your {cadence}ly subscription.
-                    Slots are added instantly and never expire while your license is active.
-                  </div>
+              {[
+                [productStorage.used, "Projects used"],
+                [productStorage.limit - productStorage.used, "Slots remaining"],
+                [productStorage.limit, "Total included"],
+              ].map(([n, label]) => (
+                <div key={label} className="rounded-xl bg-slate-50 dark:bg-white/5 p-3 text-center">
+                  <div className="text-2xl font-bold text-slate-900 dark:text-white">{n}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted mt-0.5">{label}</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate(
-                      `/purchase?addon=storage-slots&for=${encodeURIComponent(productKey)}&slots=10&price=${storageUpgradeNGN}&return=/products/${encodeURIComponent(key)}`,
-                    )
-                  }
-                  className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-adlm-blue-700 text-white text-sm font-semibold hover:bg-adlm-blue-600 transition"
-                >
-                  Buy 10 slots — {ngn(storageUpgradeNGN)}
-                </button>
-              </div>
-            )}
-          </section>
+              ))}
+            </div>
+          </Reveal>
         ) : null}
 
-        {/* Related learning */}
+        {/* ── FAQ ──────────────────────────────────────────────────────── */}
+        <section>
+          <Reveal>
+            <Eyebrow tone="orange">Before you buy</Eyebrow>
+            <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-adlm-dark-text">
+              Questions people ask
+            </h2>
+          </Reveal>
+          <div className="mt-6 grid lg:grid-cols-2 gap-3">
+            {faq.map((item, i) => {
+              const open = openFaq === i;
+              return (
+                <Reveal key={item.q} delay={i * 40} className={`${card} overflow-hidden`}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaq(open ? -1 : i)}
+                    aria-expanded={open}
+                    className="w-full flex items-start justify-between gap-4 text-left p-5 hover:bg-slate-50/70 dark:hover:bg-white/5 transition"
+                  >
+                    <span className="text-sm font-semibold text-slate-900 dark:text-adlm-dark-text">
+                      {item.q}
+                    </span>
+                    <span
+                      className={`shrink-0 mt-0.5 text-adlm-blue-700 dark:text-adlm-blue-400 transition-transform duration-200 ${open ? "rotate-45" : ""}`}
+                      aria-hidden
+                    >
+                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </span>
+                  </button>
+                  {open && (
+                    <p className="px-5 pb-5 -mt-1 text-sm leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
+                      {item.a}
+                    </p>
+                  )}
+                </Reveal>
+              );
+            })}
+          </div>
+          <Reveal className="mt-4 text-sm text-slate-500 dark:text-adlm-dark-muted">
+            Still unsure?{" "}
+            <Link to="/support" className="font-semibold text-adlm-blue-700 dark:text-adlm-blue-400 hover:underline">
+              Ask us directly
+            </Link>{" "}
+            — we would rather answer than have you guess.
+          </Reveal>
+        </section>
+
+        {/* ── RELATED LEARNING ─────────────────────────────────────────── */}
         {related.length > 0 && (
-          <section className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel p-5 md:p-6 shadow-depth">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text mb-3">Related learning</h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <section>
+            <Reveal>
+              <Eyebrow tone="blue">See it working</Eyebrow>
+              <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-adlm-dark-text">
+                Watch before you commit
+              </h2>
+            </Reveal>
+            <Stagger className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {related.map((v, idx) => {
                 const youtubeId = typeof v === "string" ? v : v?.youtubeId;
                 const title = typeof v === "string" ? "Watch video" : v?.title || "Watch video";
@@ -667,33 +891,161 @@ export default function ProductDetail() {
                 const thumb =
                   (typeof v === "object" && v?.thumbnailUrl) ||
                   (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "");
-
                 return (
-                  <a
-                    key={v?._id || id || idx}
-                    href={id ? `https://www.youtube.com/watch?v=${id}` : "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group rounded-xl border border-slate-200 dark:border-adlm-dark-border overflow-hidden hover:shadow-depth-lg transition lift"
-                  >
-                    {thumb && (
-                      <div className="relative">
-                        <img src={thumb} className="w-full aspect-video object-cover" alt="" />
-                        <span className="absolute inset-0 grid place-items-center">
-                          <span className="w-11 h-11 rounded-full bg-black/55 text-white grid place-items-center text-sm pl-0.5 group-hover:bg-adlm-blue-700 transition">
-                            ▶
+                  <StaggerItem key={v?._id || id || idx}>
+                    <a
+                      href={id ? `https://www.youtube.com/watch?v=${id}` : "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`${card} group block overflow-hidden hover:-translate-y-1 hover:shadow-depth-lg transition duration-200`}
+                    >
+                      {thumb && (
+                        <div className="relative">
+                          <img src={thumb} className="w-full aspect-video object-cover" alt="" loading="lazy" />
+                          <span className="absolute inset-0 grid place-items-center">
+                            <span className="w-12 h-12 rounded-full bg-black/55 text-white grid place-items-center text-sm pl-0.5 group-hover:bg-adlm-orange group-hover:scale-110 transition">
+                              ▶
+                            </span>
                           </span>
-                        </span>
+                        </div>
+                      )}
+                      <div className="p-4 text-sm font-medium text-slate-700 dark:text-adlm-dark-text">
+                        {title}
                       </div>
-                    )}
-                    <div className="p-3 text-sm font-medium text-slate-700 dark:text-adlm-dark-text">{title}</div>
-                  </a>
+                    </a>
+                  </StaggerItem>
                 );
               })}
-            </div>
+            </Stagger>
           </section>
         )}
+
+        {/* ── CROSS-SELL ───────────────────────────────────────────────── */}
+        {others.length > 0 && (
+          <section>
+            <Reveal>
+              <Eyebrow tone="orange">The rest of the suite</Eyebrow>
+              <h2 className="mt-2 text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-adlm-dark-text">
+                Works alongside
+              </h2>
+              <p className="mt-2 text-sm text-slate-500 dark:text-adlm-dark-muted max-w-2xl">
+                Every ADLM tool signs in with the same account, and rates built in one
+                flow through to the others.
+              </p>
+            </Reveal>
+            <Stagger className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {others.map((s) => {
+                const sk = getProductKey(s);
+                const sPrice =
+                  (s.billingInterval === "yearly"
+                    ? s.price?.discountedYearlyNGN || s.price?.yearlyNGN
+                    : s.price?.discountedMonthlyNGN || s.price?.monthlyNGN) || 0;
+                return (
+                  <StaggerItem key={sk}>
+                    <Link
+                      to={`/product/${encodeURIComponent(sk)}`}
+                      className={`${card} group block overflow-hidden h-full hover:-translate-y-1 hover:shadow-depth-lg transition duration-200`}
+                    >
+                      <div className="aspect-[4/3] bg-slate-100 dark:bg-white/5 overflow-hidden">
+                        {s.thumbnailUrl ? (
+                          <img
+                            src={s.thumbnailUrl}
+                            alt=""
+                            loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-[1.04] transition duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full grid place-items-center text-slate-400 text-xs">
+                            ADLM
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <div className="text-sm font-bold text-slate-900 dark:text-adlm-dark-text line-clamp-2 group-hover:text-adlm-blue-700 dark:group-hover:text-adlm-blue-400 transition">
+                          {s.name}
+                        </div>
+                        {s.blurb && (
+                          <p className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted line-clamp-2">
+                            {s.blurb}
+                          </p>
+                        )}
+                        {sPrice > 0 && (
+                          <div className="mt-2.5 text-sm font-semibold text-slate-900 dark:text-white">
+                            {ngn(sPrice)}
+                            <span className="text-xs font-normal text-slate-500 dark:text-adlm-dark-muted">
+                              {" "}/ {s.billingInterval === "yearly" ? "year" : "month"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </Link>
+                  </StaggerItem>
+                );
+              })}
+            </Stagger>
+          </section>
+        )}
+
+        {/* ── CLOSING CTA ──────────────────────────────────────────────── */}
+        {!isComingSoon && (
+          <Reveal
+            as="section"
+            className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white p-8 md:p-12 text-center shadow-depth"
+          >
+            <div aria-hidden className="pointer-events-none absolute -top-20 -right-16 w-72 h-72 rounded-full bg-adlm-blue-600/25 blur-3xl" />
+            <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-10 w-72 h-72 rounded-full bg-adlm-orange/20 blur-3xl" />
+            <div className="relative">
+              <Eyebrow tone="onDark">Ready when you are</Eyebrow>
+              <h2 className="mt-3 text-2xl md:text-4xl font-extrabold tracking-tight">
+                Start using {p.name.split(":")[0]} today
+              </h2>
+              <p className="mt-3 text-sm md:text-base text-blue-100/90 max-w-xl mx-auto">
+                {ngn(dueNow || baseNGN)}
+                {selected && selected.months > 1 ? ` for ${selected.label}` : ` per ${cadence}`}.
+                Activated the moment you pay.
+              </p>
+              <button
+                type="button"
+                onClick={purchase}
+                className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-adlm-orange px-8 py-3.5 text-base font-bold text-white shadow-glow-orange hover:brightness-110 active:scale-[.99] transition"
+              >
+                Get started now
+              </button>
+            </div>
+          </Reveal>
+        )}
       </div>
+
+      {/* ── STICKY BUY BAR ─────────────────────────────────────────────── */}
+      {showBar && !isComingSoon && (
+        <div className="fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 dark:border-adlm-dark-border bg-white/95 dark:bg-adlm-dark-panel/95 backdrop-blur shadow-[0_-4px_20px_rgba(15,23,42,.10)]">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex items-center gap-4">
+            {p.thumbnailUrl && (
+              <img
+                src={p.thumbnailUrl}
+                alt=""
+                className="hidden sm:block w-10 h-10 rounded-lg object-cover ring-1 ring-black/10 dark:ring-white/10"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-900 dark:text-adlm-dark-text truncate">
+                {p.name}
+              </div>
+              <div className="text-xs text-slate-500 dark:text-adlm-dark-muted">
+                {ngn(dueNow || baseNGN)}
+                {selected && selected.months > 1 ? ` · ${selected.label}` : ` / ${cadence}`}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={purchase}
+              className="shrink-0 inline-flex items-center justify-center rounded-xl bg-adlm-blue-700 px-5 sm:px-7 py-2.5 text-sm font-semibold text-white hover:bg-adlm-blue-600 active:scale-[.99] transition shadow-lg shadow-adlm-blue-700/25"
+            >
+              Get started
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox */}
       {zoom && active && active.type !== "video" && (
@@ -752,7 +1104,7 @@ function TrustRow({ children, muted = false }) {
   return (
     <div className="flex items-center gap-2">
       <span
-        className={`w-4 h-4 rounded-full grid place-items-center text-[9px] ${
+        className={`w-4 h-4 shrink-0 rounded-full grid place-items-center text-[9px] ${
           muted
             ? "bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-adlm-dark-muted"
             : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"

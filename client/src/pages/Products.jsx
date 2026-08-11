@@ -7,35 +7,15 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 import { AppTile } from "../components/brand.jsx";
-import { trackEvent } from "../ga";
+import {
+  readCartItems,
+  addProductToCart,
+  getProductKey,
+  getCategory,
+} from "../lib/cart.js";
 
 /* -------------------- UI helpers -------------------- */
 const ngn = (n) => `₦${(Number(n) || 0).toLocaleString()}`;
-
-const getCategory = (p) =>
-  p?.metadata?.category || p?.category || p?.type || "General";
-
-function getProductKey(p) {
-  return String(p?.key || p?.slug || p?._id || "").trim();
-}
-
-/* -------------------- localStorage cart helpers -------------------- */
-function readCartItems() {
-  try {
-    const arr = JSON.parse(localStorage.getItem("cartItems") || "[]");
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeCartItems(items) {
-  const safe = Array.isArray(items) ? items : [];
-  localStorage.setItem("cartItems", JSON.stringify(safe));
-  const totalQty = safe.reduce((sum, it) => sum + Number(it.qty || 0), 0);
-  localStorage.setItem("cartCount", String(totalQty));
-  return totalQty;
-}
 
 /* -------------------- UI: in-view animation -------------------- */
 function useInView(ref, threshold = 0.12) {
@@ -424,43 +404,12 @@ export default function Products() {
   }, [data.items]);
 
   /* -------------------- Add-to-cart -------------------- */
+  // Cart writes and the GA4 payload live in lib/cart.js so the product detail
+  // page cannot drift into a slightly different `add_to_cart` shape — GA4's
+  // standard ecommerce report only populates when the shape matches exactly.
   function addToCart(p, months = 1) {
-    const productKey = getProductKey(p);
-    if (!productKey) return;
-
-    const items = readCartItems();
-    const i = items.findIndex((it) => String(it.productKey) === productKey);
-
-    if (i >= 0) {
-      items[i].qty = Math.max(parseInt(items[i].qty || 0, 10), 0) + months;
-    } else {
-      items.push({ productKey, qty: months, firstTime: false });
-    }
-
-    const totalQty = writeCartItems(items);
-    setCartCount(totalQty);
-
-    // GA4 ecommerce shape, not a bespoke one: `items` with item_id/item_name
-    // and a top-level currency+value is what the standard add_to_cart report
-    // reads. A custom payload would still arrive and still show up nowhere.
-    const unitPrice =
-      (p.billingInterval === "yearly"
-        ? p.price?.discountedYearlyNGN || p.price?.yearlyNGN
-        : p.price?.discountedMonthlyNGN || p.price?.monthlyNGN) || 0;
-
-    trackEvent("add_to_cart", {
-      currency: "NGN",
-      value: Number(unitPrice) * months,
-      items: [
-        {
-          item_id: productKey,
-          item_name: p.name || productKey,
-          item_category: getCategory(p),
-          price: Number(unitPrice),
-          quantity: months,
-        },
-      ],
-    });
+    const totalQty = addProductToCart(p, months);
+    if (totalQty != null) setCartCount(totalQty);
   }
 
   /* -------------------- animations CSS -------------------- */
