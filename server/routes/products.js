@@ -3,6 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import { Product } from "../models/Product.js";
 import { attachUSDFields, attachUSDList } from "../util/fx.js";
+import { attachPopularity, popularProductKeys, markPopular } from "../util/popularity.js";
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ router.get("/", async (req, res, next) => {
       .limit(pageSize)
       .lean();
 
-    const items = await attachUSDList(raw);
+    const items = await attachPopularity(await attachUSDList(raw));
     res.json({ items, total, page, pageSize });
   } catch (err) {
     next(err);
@@ -50,7 +51,7 @@ router.get("/:key", async (req, res, next) => {
 
     if (!found) return res.status(404).json({ error: "Product not found" });
 
-    const p = await attachUSDFields(found);
+    const p = markPopular(await attachUSDFields(found), await popularProductKeys());
     res.json(p);
   } catch (err) {
     next(err);

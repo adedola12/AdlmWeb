@@ -652,10 +652,11 @@ function ProductCard({
   const cat = getCategory(p);
   const rating = Number(p.rating || 0) || null;
 
-  const popular =
-    typeof p.isPopular === "boolean"
-      ? p.isPopular
-      : (p.sort ?? 99) <= 1 || (rating || 0) >= 4.8;
+  // `isPopular` now comes from the server, computed from how many people hold
+  // a live licence (util/popularity.js). No local fallback on purpose: the old
+  // one was `(p.sort ?? 99) <= 1`, and since every product carries sort: 0 it
+  // badged the entire catalogue. A badge everything wears is not a badge.
+  const popular = p.isPopular === true;
 
   const outOfStock = false;
   const isComingSoon = !!p.isComingSoon;
