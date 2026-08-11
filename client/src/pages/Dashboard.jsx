@@ -11,6 +11,7 @@ import { parseBunny, bunnyIframeSrc } from "../lib/video";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { TiltCard } from "../components/effects.jsx";
 import StorageBar from "../components/StorageBar.jsx";
+import Seo from "../components/Seo.jsx";
 import { ownedGuidesFor } from "../data/guides.js";
 
 dayjs.extend(relativeTime);
