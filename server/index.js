@@ -60,6 +60,7 @@ import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 import agentRoutes from "./routes/agent.js";
+import aiRoutes from "./routes/ai.js";
 import geoRoutes from "./routes/geo.js";
 
 import meTrainingsRoutes from "./routes/me-trainings.js";
@@ -278,6 +279,8 @@ app.use("/changelogs", changelogsPublic);
 app.use("/coupons", couponsPublic);
 app.use("/helpbot", helpbotRoutes);
 app.use("/agent", agentRoutes);
+// AI cost-intelligence for the desktop plugins (auth required, metered).
+app.use("/ai", aiRoutes);
 app.use("/geo", geoRoutes);
 
 // Public settings (no auth) — mobile app URL etc.

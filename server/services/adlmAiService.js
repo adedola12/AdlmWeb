@@ -147,6 +147,29 @@ async function post(path, body, accessToken, track = {}) {
   }
 }
 
+/**
+ * The same call as `post`, but returning the AI service's structured result
+ * instead of prose.
+ *
+ * The exported helpers below (checkRatesAgainstMarket and friends) format
+ * their answer into sentences for Ada to say, which is exactly wrong for a
+ * caller that wants to render it — the desktop plugins want the verdict rows,
+ * not a paragraph about them. This keeps the shared path: the allowance gate,
+ * the caller's own token, and the usage recording all still happen in `post`.
+ *
+ * @returns {Promise<{ok:boolean, status:number, code:string, result:any}>}
+ */
+export async function callAiService(path, body, accessToken, track = {}) {
+  const r = await post(path, body, accessToken, track);
+  return {
+    ok: r.ok,
+    status: r.status || (r.ok ? 200 : 502),
+    code: r.code || "",
+    reason: r.reason || "",
+    result: r.data?.result ?? null,
+  };
+}
+
 // One place to turn the service's failure codes into a sentence Ada can say.
 // The entitlement case is deliberately phrased as an offer — it is the honest
 // answer AND the natural upsell.
