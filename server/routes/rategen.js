@@ -15,6 +15,7 @@ import {
   toUserRateDefinition,
 } from "../util/rategenUserRates.js";
 import { normalizeZone, ZONES } from "../util/zones.js";
+import { STATES, normalizeState, zoneForState } from "../util/states.js";
 import { ensureDb } from "../db.js";
 
 const router = express.Router();
@@ -52,20 +53,25 @@ function toLibraryResponse(lib) {
 }
 
 router.get("/zones", (_req, res) => res.json(ZONES));
+router.get("/states", (_req, res) => res.json(STATES));
 
 router.get("/master", async (req, res) => {
   try {
     await ensureDb(); // ⬅️ safe guard
 
+    // A state wins over a zone when both are supplied, and the user's saved
+    // state or zone is the fallback. `zone` stays in the response so older
+    // clients that only understand zones keep working unchanged.
+    const qState = normalizeState(req.query.state) || normalizeState(req.user.state);
     const qZone = normalizeZone(req.query.zone);
-    const zone = qZone || req.user.zone || null;
+    const zone = (qState ? zoneForState(qState) : null) || qZone || req.user.zone || null;
 
     const [materials, labour] = await Promise.all([
-      fetchMasterMaterials(zone),
-      fetchMasterLabour(zone),
+      fetchMasterMaterials(zone, qState),
+      fetchMasterLabour(zone, qState),
     ]);
 
-    res.json({ materials, labour, source: "mongo-master", zone });
+    res.json({ materials, labour, source: "mongo-master", zone, state: qState });
   } catch (e) {
     console.error("[/rategen/master] error:", e);
     res

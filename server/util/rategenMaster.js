@@ -1,6 +1,7 @@
 // server/util/rategenMaster.js
 import { MongoClient } from "mongodb";
 import { normalizeZone } from "./zones.js";
+import { normalizeState, zoneForState, ZONE_ANCHOR_STATE } from "./states.js";
 
 /* ---------------- env helpers ---------------- */
 function env(name, defVal) {
@@ -66,8 +67,9 @@ function hasPrice(doc, priceKey) {
  *   3) "national"
  *   4) any record (to at least show the row)
  */
-function selectForZone(all, zoneKey, nameKey, priceKey) {
-  const z = normalizeZone(zoneKey);
+function selectForZone(all, zoneKey, nameKey, priceKey, stateKey) {
+  const st = normalizeState(stateKey);
+  const z = st ? zoneForState(st) : normalizeZone(zoneKey);
   const byName = new Map();
 
   for (const d of all) {
@@ -78,19 +80,17 @@ function selectForZone(all, zoneKey, nameKey, priceKey) {
 
   const out = [];
   for (const [, arr] of byName.entries()) {
+    // Preference order, most specific first. A state row that someone has
+    // actually priced beats the zone row it was seeded from, which is the whole
+    // point of materialising states: Lagos can diverge from Ogun without
+    // anything else changing.
     const chosen =
-      (z &&
-        arr.find(
-          (x) => (x.zone || "").toLowerCase() === z && hasPrice(x, priceKey)
-        )) ||
-      arr.find(
-        (x) =>
-          (x.zone || "").toLowerCase() === "south_west" && hasPrice(x, priceKey)
-      ) ||
-      arr.find(
-        (x) =>
-          (x.zone || "").toLowerCase() === "national" && hasPrice(x, priceKey)
-      ) ||
+      (st && arr.find((x) => x.state === st && hasPrice(x, priceKey))) ||
+      (z && arr.find((x) => !x.state && (x.zone || "").toLowerCase() === z && hasPrice(x, priceKey))) ||
+      (z && arr.find((x) => (x.zone || "").toLowerCase() === z && hasPrice(x, priceKey))) ||
+      arr.find((x) => !x.state && (x.zone || "").toLowerCase() === "south_west" && hasPrice(x, priceKey)) ||
+      arr.find((x) => (x.zone || "").toLowerCase() === "national" && hasPrice(x, priceKey)) ||
+      (st && arr.find((x) => x.state === st)) ||
       (z && arr.find((x) => (x.zone || "").toLowerCase() === z)) ||
       arr[0];
 
@@ -99,10 +99,26 @@ function selectForZone(all, zoneKey, nameKey, priceKey) {
   return out;
 }
 
+
+// Only the rows that could possibly win: the requested state, its zone's rows,
+// and the south_west fallback. Before states existed the collection was 3,576
+// docs and `.limit(5000)` fetched all of it; it is now 25,628, so an unfiltered
+// read with that limit would silently drop most states. Filter in the query.
+function scopeFilter(zoneKey, stateKey) {
+  const st = normalizeState(stateKey);
+  const z = st ? zoneForState(st) : normalizeZone(zoneKey);
+  const or = [];
+  if (st) or.push({ state: st });
+  if (z) or.push({ zone: z, state: { $exists: false } });
+  or.push({ zone: "south_west", state: { $exists: false } });
+  or.push({ zone: "national" });
+  return or.length ? { $or: or } : {};
+}
+
 /* ---------------- public API ---------------- */
 
 /** Return [{ sn, description, unit, price, category }] for Materials */
-export async function fetchMasterMaterials(zoneKey) {
+export async function fetchMasterMaterials(zoneKey, stateKey) {
   await ensureMasterDb();
 
   // MaterialCategory is NOT optional. RateGen's DataSourceCloudSync reads
@@ -113,7 +129,7 @@ export async function fetchMasterMaterials(zoneKey) {
   // every selection matched nothing.
   const docs = await _mats
     .find(
-      {},
+      scopeFilter(zoneKey, stateKey),
       {
         projection: {
           MaterialName: 1,
@@ -121,17 +137,19 @@ export async function fetchMasterMaterials(zoneKey) {
           MaterialPrice: 1,
           MaterialCategory: 1,
           zone: 1,
+          state: 1,
         },
       }
     )
-    .limit(5000)
+    .limit(20000)
     .toArray();
 
   const selected = selectForZone(
     docs,
     zoneKey,
     "MaterialName",
-    "MaterialPrice"
+    "MaterialPrice",
+    stateKey
   ).sort((a, b) =>
     String(a.MaterialName || "").localeCompare(String(b.MaterialName || ""))
   );
@@ -142,16 +160,18 @@ export async function fetchMasterMaterials(zoneKey) {
     unit: d.MaterialUnit || "",
     price: Number(d.MaterialPrice || 0),
     category: d.MaterialCategory || "",
+    state: d.state || null,
+    zone: d.zone || null,
   }));
 }
 
 /** Return [{ sn, description, unit, price, category }] for Labour */
-export async function fetchMasterLabour(zoneKey) {
+export async function fetchMasterLabour(zoneKey, stateKey) {
   await ensureMasterDb();
 
   const docs = await _labs
     .find(
-      {},
+      scopeFilter(zoneKey, stateKey),
       {
         projection: {
           LabourName: 1,
@@ -159,17 +179,19 @@ export async function fetchMasterLabour(zoneKey) {
           LabourPrice: 1,
           LabourCategory: 1,
           zone: 1,
+          state: 1,
         },
       }
     )
-    .limit(5000)
+    .limit(20000)
     .toArray();
 
   const selected = selectForZone(
     docs,
     zoneKey,
     "LabourName",
-    "LabourPrice"
+    "LabourPrice",
+    stateKey
   ).sort((a, b) =>
     String(a.LabourName || "").localeCompare(String(b.LabourName || ""))
   );
@@ -180,5 +202,7 @@ export async function fetchMasterLabour(zoneKey) {
     unit: d.LabourUnit || "",
     price: Number(d.LabourPrice || 0),
     category: d.LabourCategory || "",
+    state: d.state || null,
+    zone: d.zone || null,
   }));
 }

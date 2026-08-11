@@ -116,6 +116,13 @@ const UserSchema = new mongoose.Schema(
       default: null,
     },
 
+    // The state the user prices in. Preferred over `zone` everywhere both are
+    // present; `zone` is kept because it is what older clients send and what
+    // the price evidence is actually graded at. Not an enum: the valid list
+    // lives in util/states.js and validating in two places guarantees they
+    // drift apart.
+    state: { type: String, default: null, trim: true, lowercase: true },
+
     passwordHash: { type: String, default: "" },
 
     // Role key — references a Role.key (see server/models/Role.js). No enum so
