@@ -30,7 +30,7 @@ const MAX_PLAUSIBLE_NGN_USD = 0.1;
  *   base NGN -> rates.USD is already USD per naira
  *   base USD -> rates.NGN is naira per dollar, so invert it
  */
-async function fetchLiveFx() {
+export async function fetchLiveFx() {
   const res = await fetch(SOURCE, { timeout: 10_000 });
   if (!res.ok) throw new Error(`FX HTTP ${res.status}`);
   const json = await res.json();
