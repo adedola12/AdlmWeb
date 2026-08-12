@@ -40,6 +40,29 @@ export const SERVICE_TYPE_DEFAULTS = Object.freeze({
   equipment: { measure: "count", standardLength: 0, connectorRule: "none", unit: "Nr" },
 });
 
+function normText(s) {
+  return String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// Infer a service type (for constants selection) from a bill item's type /
+// takeoff line / unit. Heuristic; the QS can refine constants per type.
+// Lives here (not serviceResolve) so the pure engine — and the Excel BoQ
+// importer that reuses it — never has to pull in the mongoose models.
+export function mapServiceType(item) {
+  const t = `${normText(item?.type)} ${normText(item?.takeoffLine)} ${normText(item?.category)} ${normText(item?.description)}`;
+  const unit = normText(item?.unit);
+  const isLength =
+    ["m", "lm", "rm", "metre", "meter", "m.", "lin.m", "lin m", "linm"].includes(unit) ||
+    /(^|\s)m($|\s)/.test(unit);
+  if (/conduit/.test(t)) return "conduit";
+  if (/tray|trunking|cable rack|ladder/.test(t)) return "tray";
+  if (/pipe/.test(t)) return "pipe";
+  if (/duct/.test(t) && isLength) return "duct";
+  if (/cable|fibre|fiber/.test(t) && isLength) return "cable";
+  if (isLength) return "pipe"; // generic length run
+  return "fixture"; // counts: terminals/fixtures/equipment/fittings
+}
+
 // Whole standard lengths ("sticks"/bundles) needed for a run.
 // standardLength <= 0 → continuous (no bundling): sticks = qty.
 export function computeBundles(qty, standardLength) {

@@ -206,6 +206,9 @@ export default function ProjectOpenView({
   budgetItems = [],
   materialItems = [],
   onSaveBudget,
+  // Rebuild the material & labour schedule from the current Material Constants.
+  // Null hides the control (e.g. view-only access).
+  onRebuildSchedule = null,
   productKey = "",
   // "boq-import" marks a project created from an Excel BoQ (admin-granted
   // Quiv feature): no BIM model exists, so the 3D Model tab and linking
@@ -810,6 +813,7 @@ export default function ProjectOpenView({
           onSearchRateGen={onSearchBudgetRates}
           canRateGen={budgetRateGenReady}
           contractLocked={Boolean(contract?.locked)}
+          onRebuildSchedule={onRebuildSchedule}
         />
       ) : null}
 

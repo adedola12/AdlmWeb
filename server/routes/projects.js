@@ -249,6 +249,8 @@ import {
   buildBoqTemplateWorkbook,
 } from "../util/boqExcelImport.js";
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
+import { generateMlSchedule } from "../util/mlSchedule.js";
+import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
 // IFC files; we can raise this per-tier later via an entitlement flag.
@@ -270,17 +272,21 @@ const uploadModelFile = multer({
   },
 });
 
-// ── Admin-granted BoQ Import (Quiv) ─────────────────────────────────────────
-// Organization accounts holding the quiv-boq-import entitlement (granted only
-// by an admin via the UAC entitlement panel, org+active-Quiv only) can create
-// revit projects from an Excel BoQ. Access requires BOTH the grant and a live
-// Quiv (revit) subscription — it lapses with the licence. Imported projects
-// are ordinary revit projects (origin "boq-import"): they appear on the main
-// projects page, count toward the storage/project limit and ride the full
-// budget/valuation/variation pipeline. Only the 3D-model and project-linking
-// surfaces are withheld (no model exists to view or link by element).
+// ── BoQ Import ──────────────────────────────────────────────────────────────
+// Any subscriber can create a project from an Excel Bill of Quantities for a
+// product they hold: Quiv (revit) and Heron (planswift) for building bills, MEP
+// (revitmep) for services bills. Access lapses with the licence.
+//
+// (Until 2026-08 this was an admin-granted, organization-only feature behind a
+// separate quiv-boq-import entitlement. That grant is now redundant — the
+// product subscription is the gate — but existing grants are harmless.)
+//
+// Imported projects are ordinary projects of that product (origin
+// "boq-import"): they appear on the main projects page, count toward the
+// storage/project limit and ride the full budget/valuation/variation pipeline.
+// Only the 3D-model and project-linking surfaces are withheld (no model exists
+// to view or link by element).
 const BOQ_IMPORT_ORIGIN = "boq-import";
-const BOQ_IMPORT_ENTITLEMENT = "quiv-boq-import";
 const BOQ_IMPORT_MAX_BYTES = 15 * 1024 * 1024; // 15 MB
 
 const boqImportUpload = multer({
@@ -1054,6 +1060,7 @@ function sanitizeBudgetItems(items) {
       unit: String(b.unit || "").trim().slice(0, 50),
       qty: num(b.qty),
       rate,
+      rateSource: String(b.rateSource || "").trim().slice(0, 40),
       netUnitCost,
       overheadPercent: num(b.overheadPercent),
       profitPercent: num(b.profitPercent),
@@ -5204,15 +5211,44 @@ function stampImportedActuals(items) {
   }
 }
 
-// Link the imported Material & Labour schedule to the bill, guarantee every
-// bill line has budget coverage (the coverage engine auto-generates rows when
-// the workbook came without a schedule), then derive live bill rates from the
+// Link the imported Material & Labour schedule to the bill, GENERATE the
+// schedule for every bill line the workbook did not bring one for, guarantee
+// coverage for anything still bare, then derive live bill rates from the
 // build-up and reconcile progress — the same pipeline plugin saves run.
-function runBoqImportBudgetPipeline(project, budget) {
+//
+// Generation is the step that makes an uploaded bill useful: barely any real
+// workbook ships a Material & Labour sheet, so without it the Budget tab opens
+// with one generic row per line instead of the cement / sand / granite /
+// blocks / labour a QS actually orders and buys against.
+async function runBoqImportBudgetPipeline(project, budget, ctx) {
   backfillBudgetLinks(project.items, budget);
-  project.budgetItems = ensureBillItemCoverage(project.items, budget);
+
+  let list = budget;
+  const warnings = [];
+  if (ctx) {
+    const gen = generateMlSchedule(project.items, list, ctx.K, ctx);
+    list = sanitizeBudgetItems(gen.budgetItems);
+    warnings.push(...gen.warnings);
+    if (gen.covered > 0) {
+      warnings.push(
+        `Generated a material & labour schedule for ${gen.covered} bill line(s) — ${gen.generated} resource row(s).`,
+      );
+    }
+  }
+
+  project.budgetItems = ensureBillItemCoverage(project.items, list);
   deriveBillRatesFromBudget(project);
   reconcileItemsFromBudget(project);
+  return warnings;
+}
+
+// Building bills (Quiv/Heron) and services bills (MEP) import through the same
+// engine; the product key only decides which subscription is required and which
+// project bucket the result lands in. Set on the request by the route below
+// rather than read from the URL, so the storage bucket can never be chosen by
+// the caller.
+function boqImportProductKey(req) {
+  return req.boqProductKey || null;
 }
 
 async function importBoqCreate(req, res) {
@@ -5227,6 +5263,11 @@ async function importBoqCreate(req, res) {
         .json({ error: "Excel file required (multipart field: file)" });
     }
 
+    const productKey = boqImportProductKey(req);
+    if (!productKey) {
+      return res.status(400).json({ error: "Unsupported product for BoQ import" });
+    }
+
     const parsed = await parseBoqWorkbook(req.file.buffer);
     const fallbackName = String(req.file.originalname || "")
       .replace(/\.[^.]+$/, "")
@@ -5234,7 +5275,6 @@ async function importBoqCreate(req, res) {
     const name =
       String(req.body?.name || "").trim() || fallbackName || "Imported BoQ";
 
-    const productKey = "revit";
     await assertWithinProjectLimit(userId, productKey);
 
     stampImportedActuals(parsed.items);
@@ -5259,7 +5299,12 @@ async function importBoqCreate(req, res) {
       customCategories: parsed.categories,
     });
 
-    runBoqImportBudgetPipeline(project, sanitizeBudgetItems(parsed.budgetItems));
+    const ctx = await buildMlScheduleContext(userId);
+    const pipelineWarnings = await runBoqImportBudgetPipeline(
+      project,
+      sanitizeBudgetItems(parsed.budgetItems),
+      ctx,
+    );
     await project.save();
 
     recordActivity(
@@ -5276,7 +5321,7 @@ async function importBoqCreate(req, res) {
 
     return res.json({
       ...projectForClient(project),
-      _importWarnings: parsed.warnings || [],
+      _importWarnings: [...(parsed.warnings || []), ...pipelineWarnings],
     });
   } catch (err) {
     if (err?.code === "PROJECT_LIMIT") {
@@ -5315,8 +5360,13 @@ async function importBoqUpdate(req, res) {
         .json({ error: "Excel file required (multipart field: file)" });
     }
 
+    const productKey = boqImportProductKey(req);
+    if (!productKey) {
+      return res.status(400).json({ error: "Unsupported product for BoQ import" });
+    }
+
     const project = await TakeoffProject.findOne(
-      accessFilter(id, userId, "revit"),
+      accessFilter(id, userId, productKey),
     );
     if (!project) return res.status(404).json({ error: "Not found" });
     if (project.origin !== BOQ_IMPORT_ORIGIN) {
@@ -5337,9 +5387,9 @@ async function importBoqUpdate(req, res) {
     stampImportedActuals(parsed.items);
 
     const tracked = applyValuationTracking({
-      productKey: "revit",
+      productKey,
       previousItems: project.items,
-      nextItems: sanitizeItems(parsed.items, "revit"),
+      nextItems: sanitizeItems(parsed.items, productKey),
       previousEvents: project.valuationEvents,
     });
     project.items = tracked.items;
@@ -5384,7 +5434,8 @@ async function importBoqUpdate(req, res) {
       budget = project.budgetItems;
     }
 
-    runBoqImportBudgetPipeline(project, budget);
+    const ctx = await buildMlScheduleContext(userId);
+    const pipelineWarnings = await runBoqImportBudgetPipeline(project, budget, ctx);
     project.version = (Number(project.version) || 0) + 1;
     await project.save();
 
@@ -5402,13 +5453,58 @@ async function importBoqUpdate(req, res) {
 
     return res.json({
       ...projectForClient(project, access),
-      _importWarnings: parsed.warnings || [],
+      _importWarnings: [...(parsed.warnings || []), ...pipelineWarnings],
     });
   } catch (err) {
     if (err?.statusCode === 400) {
       return res.status(400).json({ error: err.message, code: err.code });
     }
     console.error("importBoqUpdate error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
+
+// Rebuild the Material & Labour schedule for a project from the current
+// constants library. This is what makes the Material Constants window useful:
+// change "blocks per m²" from 10 to 12.5, hit regenerate, and every blockwork
+// line re-orders. Rows the plugin sent, rows that came from the workbook's own
+// schedule, and any price or procurement mark the QS has already put on a
+// generated row all survive — see generateMlSchedule.
+async function regenerateMlSchedule(req, res) {
+  try {
+    const userId = getUserObjectId(req);
+    if (!userId) return res.status(401).json({ error: "Invalid user id in token" });
+
+    const id = String(req.params.id || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid id" });
+
+    const productKey = normalizeProductKey(req.params.productKey);
+    const project = await TakeoffProject.findOne(accessFilter(id, userId, productKey));
+    if (!project) return res.status(404).json({ error: "Not found" });
+
+    const access = await resolveProjectAccess(req, project);
+    if (!access.canEdit) {
+      return res
+        .status(403)
+        .json({ error: "View-only access cannot edit this project.", code: "VIEW_ONLY" });
+    }
+
+    const ctx = await buildMlScheduleContext(userId);
+    const warnings = await runBoqImportBudgetPipeline(project, project.budgetItems, ctx);
+    project.version = (Number(project.version) || 0) + 1;
+    await project.save();
+
+    recordActivity(
+      req,
+      project,
+      ACT.PROJECT_UPDATED,
+      "Regenerated the material & labour schedule",
+      { budgetLineCount: (project.budgetItems || []).length },
+    );
+
+    return res.json({ ...projectForClient(project, access), _importWarnings: warnings });
+  } catch (err) {
+    console.error("regenerateMlSchedule error:", err);
     return res.status(500).json({ error: "Server error" });
   }
 }
@@ -6055,34 +6151,47 @@ async function listLinkCandidates(req, res) {
   }
 }
 
-// ── BoQ Import (Quiv) routes ──
-// Double-gated: the admin-granted quiv-boq-import entitlement AND a live
-// Quiv (revit) subscription — the feature is reserved for organization
-// accounts and dies with the Quiv licence until renewal. Registered before
-// the generic /:productKey routes so "import-boq" is never captured as
-// an :id.
-router.get(
-  "/revit/import-boq/template",
-  requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
-  requireEntitlement("revit"),
-  downloadBoqImportTemplate,
-);
+// ── BoQ Import routes ──
+// A bill uploaded here becomes a full project: parsed bill + a generated
+// material & labour schedule priced off the constants library and RateGen.
+//
+// Access is per product — you import a bill for a product you subscribe to.
+// Quiv (revit) and Heron (planswift) cover building bills; MEP (revitmep)
+// covers services bills, which break down through the services engine. The
+// legacy admin-granted quiv-boq-import entitlement is still honoured on the
+// revit route so existing org grants keep working, but it is no longer the
+// only way in.
+//
+// Registered before the generic /:productKey routes so "import-boq" is never
+// captured as an :id.
+for (const [route, productKey] of [
+  ["revit", "revit"],
+  ["planswift", "planswift"],
+  ["mep", "revitmep"],
+]) {
+  // The entitlement key IS the storage key here (revit/planswift/revitmep).
+  const gate = requireEntitlement(productKey);
+  const stamp = (req, _res, next) => {
+    req.boqProductKey = productKey;
+    next();
+  };
 
-router.post(
-  "/revit/import-boq",
-  requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
-  requireEntitlement("revit"),
-  boqImportUpload.single("file"),
-  importBoqCreate,
-);
-
-router.put(
-  "/revit/:id/import-boq",
-  requireEntitlement(BOQ_IMPORT_ENTITLEMENT),
-  requireEntitlement("revit"),
-  boqImportUpload.single("file"),
-  importBoqUpdate,
-);
+  router.get(`/${route}/import-boq/template`, gate, downloadBoqImportTemplate);
+  router.post(
+    `/${route}/import-boq`,
+    gate,
+    stamp,
+    boqImportUpload.single("file"),
+    importBoqCreate,
+  );
+  router.put(
+    `/${route}/:id/import-boq`,
+    gate,
+    stamp,
+    boqImportUpload.single("file"),
+    importBoqUpdate,
+  );
+}
 
 router.post(
   "/revit/full",
@@ -6369,6 +6478,14 @@ router.put(
   mapEntitlementParam,
   requireEntitlementParam,
   markBudget,
+);
+
+// Rebuild the material & labour schedule from the current constants library.
+router.post(
+  "/:productKey/:id/ml-schedule",
+  mapEntitlementParam,
+  requireEntitlementParam,
+  regenerateMlSchedule,
 );
 
 // Price all services bill lines from RateGen (MEP web Budget view).

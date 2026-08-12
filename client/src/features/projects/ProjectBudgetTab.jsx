@@ -98,11 +98,15 @@ export default function ProjectBudgetTab({
   onSearchRateGen,
   canRateGen = false,
   contractLocked = false,
+  // Rebuild the material & labour schedule from the current constants library.
+  // Absent (null) for products/projects where regeneration does not apply.
+  onRebuildSchedule = null,
 }) {
   const [view, setView] = React.useState("breakdown");
   const [leadDays, setLeadDays] = React.useState(14);
   const [query, setQuery] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [rebuilding, setRebuilding] = React.useState(false);
   // In-progress Overhead/Profit edits, keyed by group — committed on blur.
   const [opDraft, setOpDraft] = React.useState({});
   // Global Overhead/Profit — when set, overrides every item's O&P. Empty = off.
@@ -727,6 +731,42 @@ export default function ProjectBudgetTab({
               </span>
             </>
           ) : null}
+        </div>
+      ) : null}
+
+      {onRebuildSchedule && view === "breakdown" ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs dark:border-adlm-dark-border dark:bg-white/5">
+          <span className="font-semibold text-slate-700 dark:text-adlm-dark-text">
+            Material &amp; Labour schedule
+          </span>
+          <span className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
+            built from the bill using your constants — your prices and
+            procurement marks are kept
+          </span>
+          <button
+            type="button"
+            disabled={!canEdit || saving || rebuilding}
+            onClick={async () => {
+              setRebuilding(true);
+              try {
+                await onRebuildSchedule();
+              } finally {
+                setRebuilding(false);
+              }
+            }}
+            className="rounded-lg bg-adlm-blue-700 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-adlm-blue-600 disabled:opacity-50"
+            title="Re-derive every generated material and labour row from the current Material Constants"
+          >
+            {rebuilding ? "Rebuilding…" : "Rebuild schedule"}
+          </button>
+          <a
+            href="/rategen/material-constants"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-white dark:border-adlm-dark-border dark:text-adlm-dark-muted"
+          >
+            Material constants →
+          </a>
         </div>
       ) : null}
 

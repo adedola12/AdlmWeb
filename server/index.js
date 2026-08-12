@@ -24,6 +24,7 @@ import wellKnownRoutes from "./routes/wellKnown.js";
 import authRoutes from "./routes/auth.js";
 import meRoutes from "./routes/me.js";
 import meBillingRoutes from "./routes/me.billing.js";
+import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import adminRoutes from "./routes/admin.js";
@@ -241,6 +242,8 @@ app.use(auditGod);
 app.use("/auth", authLimiter, authRoutes);
 // Billing must mount before the broad /me router so its paths win.
 app.use("/me/billing", meBillingRoutes);
+// Mounted before the catch-all /me router so its own routes win.
+app.use("/me/material-constants", materialConstantsRoutes);
 app.use("/me", meRoutes);
 app.use("/me/deployments", deviceLimiter, meDeploymentsRoutes);
 app.use("/me/courses", meCourses);

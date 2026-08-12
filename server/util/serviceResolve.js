@@ -6,7 +6,16 @@ import { RateGenMaterial } from "../models/RateGenMaterial.js";
 import { RateGenLabour } from "../models/RateGenLabour.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { ServiceConstant } from "../models/ServiceConstant.js";
-import { computeServiceBuildup, SERVICE_TYPE_DEFAULTS } from "./serviceCompute.js";
+import {
+  computeServiceBuildup,
+  SERVICE_TYPE_DEFAULTS,
+  mapServiceType,
+} from "./serviceCompute.js";
+
+// mapServiceType moved to serviceCompute.js (pure) so the Excel BoQ importer
+// can classify services lines without pulling in the mongoose models. Re-exported
+// here because callers already import it from this module.
+export { mapServiceType };
 
 export function norm(s) {
   return String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -91,21 +100,6 @@ export function lookup(map, name) {
     if (key.includes(k) || k.includes(key)) return val;
   }
   return 0;
-}
-
-// Infer a service type (for constants selection) from a bill item's type /
-// takeoff line / unit. Heuristic; the QS can refine constants per type.
-export function mapServiceType(item) {
-  const t = `${norm(item?.type)} ${norm(item?.takeoffLine)} ${norm(item?.category)} ${norm(item?.description)}`;
-  const unit = norm(item?.unit);
-  const isLength = ["m", "lm", "rm", "metre", "meter", "m."].includes(unit) || /(^|\s)m($|\s)/.test(unit);
-  if (/conduit/.test(t)) return "conduit";
-  if (/tray/.test(t)) return "tray";
-  if (/pipe/.test(t)) return "pipe";
-  if (/duct/.test(t) && isLength) return "duct";
-  if (/cable/.test(t) && isLength) return "cable";
-  if (isLength) return "pipe"; // generic length run
-  return "fixture"; // counts: terminals/fixtures/equipment/fittings
 }
 
 // Price one service "item" (resolve rates + compute build-up). Returns

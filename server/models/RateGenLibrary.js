@@ -90,6 +90,34 @@ const UserCustomRateSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/**
+ * A published price the user has replaced with their own, for one location.
+ *
+ * Scoped by state because that is the whole point: a QS working in Kano and a
+ * QS working in Lagos are correcting different markets, and one figure cannot
+ * serve both. A null state means "everywhere I work", which is what someone
+ * with no state set still needs.
+ *
+ * Held against the user rather than against the master catalog. The master
+ * library is evidence we publish and stand behind; this is the user's own
+ * correction to it, and the two must never be mistaken for each other.
+ */
+const UserPriceOverrideSchema = new mongoose.Schema(
+  {
+    kind: { type: String, enum: ["material", "labour"], required: true },
+    // Name and unit together, because the catalog deliberately carries rows
+    // that share a name and differ by unit: steel is priced per tonne and per
+    // kg, and matching on name alone would collapse them onto one figure.
+    name: { type: String, required: true, trim: true },
+    unit: { type: String, trim: true, default: "" },
+    price: { type: Number, required: true, min: 0 },
+    state: { type: String, trim: true, lowercase: true, default: null },
+    note: { type: String, trim: true, default: "" },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const RateGenLibrarySchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
@@ -98,8 +126,10 @@ const RateGenLibrarySchema = new mongoose.Schema(
     version: { type: Number, default: 1 },
     rateOverrides: { type: [UserRateOverrideSchema], default: [] },
     customRates: { type: [UserCustomRateSchema], default: [] },
+    priceOverrides: { type: [UserPriceOverrideSchema], default: [] },
     ratesVersion: { type: Number, default: 1 },
     customRatesVersion: { type: Number, default: 1 },
+    priceOverridesVersion: { type: Number, default: 1 },
   },
   { timestamps: true }
 );

@@ -45,15 +45,25 @@ function isMaterialsTool(tool) {
       || t === "planswift-materials" || t === "planswift-material";
 }
 
-// ── BoQ Import (admin-granted Quiv feature) ──
-// Organization accounts holding the quiv-boq-import entitlement (granted only
-// by an admin) can create Quiv projects from an Excel Bill of Quantities.
-// Access requires BOTH the grant AND a live Quiv (revit) subscription — the
-// feature lapses with the licence. Imported projects are ordinary revit
-// projects (origin "boq-import") — they live in this list, count toward
-// storage, and carry every tab except 3D Model and linking.
-const BOQ_IMPORT_PRODUCT_KEY = "quiv-boq-import";
+// ── BoQ Import ──
+// Upload an Excel Bill of Quantities and get a full project back: the parsed
+// bill plus a generated material & labour schedule (cement / sand / granite /
+// blocks / labour, priced from RateGen and your Material Constants).
+//
+// Open to any subscriber, for the product they hold: Quiv (revit) and Heron
+// (planswift) take building bills, MEP (revitmep) takes services bills. Access
+// lapses with the licence. Imported projects are ordinary projects of that
+// product (origin "boq-import") — they live in this list, count toward storage,
+// and carry every tab except 3D Model and linking.
 const BOQ_IMPORT_ORIGIN = "boq-import";
+
+// tool → { route segment on the API, entitlement that unlocks it }
+const BOQ_IMPORT_TOOLS = {
+  revit: { route: "revit", entitlement: "revit" },
+  planswift: { route: "planswift", entitlement: "planswift" },
+  revitmep: { route: "mep", entitlement: "revitmep" },
+  mep: { route: "mep", entitlement: "revitmep" },
+};
 
 function entActive(ents, productKey) {
   return ents.some(
@@ -64,9 +74,12 @@ function entActive(ents, productKey) {
   );
 }
 
-function hasBoqImportAccess(user) {
+/** The import config for a tool when the user may use it, else null. */
+function boqImportFor(user, tool) {
+  const cfg = BOQ_IMPORT_TOOLS[String(tool || "").toLowerCase()];
+  if (!cfg) return null;
   const ents = Array.isArray(user?.entitlements) ? user.entitlements : [];
-  return entActive(ents, BOQ_IMPORT_PRODUCT_KEY) && entActive(ents, "revit");
+  return entActive(ents, cfg.entitlement) ? cfg : null;
 }
 
 function getSidebarMeta(tool) {
@@ -1158,7 +1171,12 @@ export default function ProjectsGeneric() {
   const [notice, setNotice] = React.useState("");
 
   // ── BoQ Import (admin-granted Quiv feature) state ──
-  const canBoqImport = toolNorm === "revit" && hasBoqImportAccess(authUser);
+  // Which API routes this tool's BoQ import uses (null = not available here).
+  const boqImport = boqImportFor(authUser, toolNorm);
+  const canBoqImport = Boolean(boqImport);
+  const boqRoute = boqImport?.route || "revit";
+  const boqImportBadge =
+    toolNorm === "planswift" ? "HERON" : toolNorm === "revitmep" ? "MEP" : "QUIV";
   const [boqImportOpen, setBoqImportOpen] = React.useState(false);
   const [boqImportBusy, setBoqImportBusy] = React.useState(false);
   const [boqImportFile, setBoqImportFile] = React.useState(null);
@@ -1901,11 +1919,11 @@ export default function ProjectsGeneric() {
     }
   }
 
-  // ── BoQ Import (admin-granted Quiv feature) actions ──
+  // ── BoQ Import actions ──
 
   async function downloadBoqTemplate() {
     try {
-      const res = await fetch(`${API_BASE}/projects/revit/import-boq/template`, {
+      const res = await fetch(`${API_BASE}/projects/${boqRoute}/import-boq/template`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) throw new Error(`Template download failed (${res.status})`);
@@ -1941,7 +1959,7 @@ export default function ProjectsGeneric() {
       const form = new FormData();
       form.append("file", boqImportFile);
       if (boqImportName.trim()) form.append("name", boqImportName.trim());
-      const res = await fetch(`${API_BASE}/projects/revit/import-boq`, {
+      const res = await fetch(`${API_BASE}/projects/${boqRoute}/import-boq`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
         body: form,
@@ -1975,7 +1993,7 @@ export default function ProjectsGeneric() {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(
-        `${API_BASE}/projects/revit/${selectedId}/import-boq`,
+        `${API_BASE}/projects/${boqRoute}/${selectedId}/import-boq`,
         {
           method: "PUT",
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -1992,6 +2010,27 @@ export default function ProjectsGeneric() {
     } finally {
       setBoqImportBusy(false);
       if (boqReimportInputRef.current) boqReimportInputRef.current.value = "";
+    }
+  }
+
+  // Re-derive the generated material & labour rows from the current Material
+  // Constants library. Rows the plugin sent, rows that came from the workbook's
+  // own schedule, and any price or procurement mark already on a generated row
+  // are all preserved — see server/util/mlSchedule.js.
+  async function rebuildMlSchedule() {
+    if (!selectedId) return;
+    setErr("");
+    try {
+      const data = await apiAuthed(
+        `/projects/${normTool(tool)}/${selectedId}/ml-schedule`,
+        { token: accessToken, method: "POST" },
+      );
+      await view(selectedId);
+      setNotice(
+        `Material & labour schedule rebuilt.${importWarningsText(data)}`,
+      );
+    } catch (e) {
+      setErr(e?.message || "Could not rebuild the schedule");
     }
   }
 
@@ -5225,7 +5264,7 @@ export default function ProjectsGeneric() {
                         setBoqImportErr("");
                         setBoqImportOpen(true);
                       }}
-                      title="Create a project from an Excel Bill of Quantities (admin-granted feature)"
+                      title="Create a project from an Excel Bill of Quantities — the material & labour schedule is built for you"
                       className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
                     >
                       <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -5233,7 +5272,7 @@ export default function ProjectsGeneric() {
                       </span>
                       <span className="flex-1 text-left">Import Excel BoQ</span>
                       <span className="rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                        QUIV
+                        {boqImportBadge}
                       </span>
                     </button>
                   )}
@@ -5497,6 +5536,9 @@ export default function ProjectsGeneric() {
                 budgetItems={sel?.budgetItems || []}
                 materialItems={sel?.materialItems || []}
                 onSaveBudget={saveBudgetProcurement}
+                onRebuildSchedule={
+                  sel?._access?.canEdit === false ? null : rebuildMlSchedule
+                }
                 productKey={toolNorm}
                 projectOrigin={sel?.origin || ""}
                 projectId={selectedId}
@@ -5692,7 +5734,7 @@ export default function ProjectsGeneric() {
         </div>
       ) : null}
 
-      {/* ── Import Excel BoQ modal (admin-granted Quiv feature) ── */}
+      {/* ── Import Excel BoQ modal ── */}
       {boqImportOpen ? (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
@@ -5711,11 +5753,14 @@ export default function ProjectsGeneric() {
                   Import Excel BoQ
                 </h3>
                 <p className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
-                  Creates a Quiv project from an Excel Bill of Quantities.
-                  Categories, planned-vs-actual columns and an optional
-                  Material &amp; Labour sheet are read from the workbook — the
-                  budget is generated automatically and stays live across the
-                  Dashboard, BoQ, Budget and Valuation tabs.
+                  Creates a {boqImportBadge} project from an Excel Bill of
+                  Quantities. Categories, planned-vs-actual columns and an
+                  optional Material &amp; Labour sheet are read from the
+                  workbook. Where the workbook has no schedule, one is built
+                  for you — cement, sand, granite, blocks, formwork, rebar and
+                  labour, priced from your Material Constants and RateGen —
+                  and it stays live across the Dashboard, BoQ, Budget and
+                  Valuation tabs.
                 </p>
               </div>
               <button
