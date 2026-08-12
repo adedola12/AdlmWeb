@@ -10,6 +10,14 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
+## 2.8.1 - August 2026 - Housekeeping on an old setting
+
+Nothing you will notice. A leftover setting from an older installer is now cleared off the machine instead of being worked around.
+
+### 🐛 Fixed
+
+- **An old installer left a setting pointing at a server we retired.** It was written into your Windows environment by a RateGen installer from before we moved hosts, and on some machines it is still there. RateGen has been ignoring it since 2.8.0, which is why those installs kept working, but ignoring it means it sits there forever. It is now removed on startup. If you never saw a problem, that is because the workaround was doing its job, and there is nothing for you to do.
+
 ## 2.8.0 - August 2026 - Your prices stay yours, and pricing by state
 
 Any price you edited in your library was being wiped every time you signed in. That is fixed, your library can now be rolled back to any earlier point, and you can price against any of the 36 states or the FCT. Separately, the electrical light fittings we shipped in 2.7.0 were badly overpriced and have been rebuilt. If you have priced MEP work since the start of August, please read the first item below and check it.
