@@ -22,8 +22,9 @@ This is the knowledge pack the **ADLM WhatsApp AI** answers from. It carries wha
 
 ## 2. The headline: what to lead with in August 2026
 
-If someone asks "what's new at ADLM?", these are the four things worth saying, in this order.
+If someone asks "what's new at ADLM?", these are the things worth saying, in this order.
 
+0. **If they have priced lighting since the start of August, tell them before anything else.** The MEP light fittings shipped in 2.7.0 were priced at up to **48 times** what the fitting costs — a 12W LED ceiling fitting that sells for about ₦3,500 was in the library at ₦169,000. 2.8.0 rebuilds every installed light fitting from the supply price plus fixings plus electrician time. **Any job priced with lighting between 2.7.0 and now was priced too high and the bill needs revisiting.** This is not a "by the way" — raise it unprompted with anyone who does electrical work. See §8 for how to say it.
 1. **RateGen has had its first full price refresh since launch, and it now prices by state.** Cement moved ₦4,300 → ₦11,500 a bag, reinforcement ₦350,000 → ₦1,700,000 a tonne. A new MEP tab computes 35 build-ups, structural steel is priced for the first time, and roof carpentry finally prices the timber under the sheets. Your profile now takes a **state** (all 36 + FCT) rather than a geopolitical zone.
 2. **Your edited prices are now safe.** Until 2.8.0, a price you corrected on a shipped row was wiped every time you signed in. That is fixed, the whole library has **Undo** (last 20 restore points), and when ADLM publishes a new price for a row you edited, you choose which one wins.
 3. **AI is now in the products, not just on the website.** QUIV has an AI Assistant that measures from a plain-English request and an AI Match Labour button. RateGen drafts build-ups with **Build with AI**, priced from *your* library. On the website, **Ada** answers about the catalogue and — signed in — about your own projects, budgets and subscription.
@@ -36,14 +37,19 @@ If someone asks "what's new at ADLM?", these are the four things worth saying, i
 ### 3.1 RateGen — 2.8.0, August 2026
 *Rate build-ups and market pricing. 500+ materials, 200+ labour items.*
 
-**Fixed (say this plainly, it is the important one)**
+**Fixed — the lighting recall comes first**
+- **The MEP light fittings in 2.7.0 were priced at up to 48× what the fitting costs.** The lighting rates came from a priced bill whose electrical section was billed far above the cost of the goods, and they were published without being checked against what the fittings actually sell for. A 12W LED ceiling fitting selling for about ₦3,500 sat in the library at ₦169,000; a 7W LED spot selling for ₦2,500 was at ₦110,000. Every installed light fitting is rebuilt as supply price + 10% for flex, connectors and fixings + electrician and mate time, using the labour rates already in the user's library. A complete lighting point with a 600 × 600mm LED panel and switch was ₦111,900 and is now ₦75,900. **Anyone who priced lighting between 2.7.0 and now needs to revisit that bill.**
+- **Point wiring has been rebuilt from its components too** — this one was closer to right than it looked. There is no supply price to check point wiring against, so it was built from 20mm PVC conduit and single-core copper at current supplier prices plus electrician, mate and labourer at the library's own day rates. The lighting point came out at ₦30,500 against ₦35,000, the socket point at ₦35,000 against ₦47,500. The whole electrical section now rests on one set of evidence.
+- **Four materials were priced at zero, and a roofing sheet had been corrupted.** A material at zero doesn't fail loudly — it quietly under-prices every rate that uses it, and the rate still looks like a rate. Someone editing "0.55mm (24SWG) sheet, coloured" typed an extra letter into the name and lost the price, so the correctly named row read zero while the real price sat under the typo. Recovered. Bitumen 60/70 and two Peacock paints are now priced from their nearest neighbour in the same category, marked as estimates rather than quotations.
 - Prices you edited were wiped on every sign-in. The library was being rebuilt from published prices plus your own added rows — an edit to a shipped row was in neither, so it was overwritten silently with no way back. Fixed. *(This also means 2.7.0's claim that "your own prices survive the update" was only true of the installer, not of signing in. Own that if it comes up.)*
 - An empty or failed price response could empty the library. It now leaves the library alone and reports the failure.
 
 **New**
 - **Undo for the whole library** — 20 restore points, taken before any sign-in, price sync or location change. Restoring takes a copy first, so an undo can be undone.
 - **You decide on conflicts** — when ADLM publishes a new price for a row you edited, your figure stays and a note shows what changed and by how much. Keep yours or take the published one, one click. No nagging if nothing changed.
-- **Price by state** — all 36 states and the FCT, in both the ADLM profile and the RateGen library toolbar; change either and the other follows. Be honest about the limit: **prices are still evidenced at zone level today**, so Kano and Katsina read the same because both are North West. What it buys you is that a state can be priced on its own the moment there is evidence, with nothing to do on your side.
+- **Price by state** — all 36 states and the FCT. It is set in **one place only, the profile on the website**, and RateGen picks it up on the next sign-in. There is deliberately no second picker in the app: two places to set the same thing means two answers that can disagree with nothing on screen to say which won. Be honest about the limit: **prices are evidenced at zone level today**, so Kano and Katsina read the same because both are North West. What it buys you is that a state can be priced on its own the moment there is evidence, with nothing to do on your side.
+- **Set your own prices, on the website, for your location.** On the RateGen page, click any price in Master Materials or Master Labour and type what you actually pay. Your figure is used by RateGen, QUIV and HERON from your next sign-in, and reset puts the published price back. It applies to the state on your profile, so a correction made for Kano does not follow you to a job in Lagos.
+- **Open a rate's components straight from its breakdown.** When a rate looks wrong it is nearly always one line that is wrong, and finding it meant hunting through 600 rows. Click a component name in any breakdown and the library opens filtered to it, ready to edit. Totals, sub-totals and "add for waste" rows are arithmetic rather than library items, so those stay plain text.
 
 **From 2.7.0 — the price refresh (still the biggest talking point)**
 - Calibrated against 3 recently priced BoQs from 2 independent QS firms — 494 checked lines covering ₦5.31bn of work — with primary commodities set from current market prices rather than the bills.
@@ -213,6 +219,19 @@ Both have preview videos on their course pages: https://www.adlmstudio.net/learn
 
 Copy, adjust the name, send. Keep them short; do not paste more than one link at a time.
 
+**Anyone who priced lighting since 2.7.0 — send this first, unprompted**
+> Hi [Name] — something you need to know, and it was our mistake.
+>
+> The light fittings we shipped in RateGen 2.7.0 were priced far too high — up to 48× what the fitting actually costs. A 12W LED ceiling fitting that sells for about ₦3,500 was in the library at ₦169,000.
+>
+> If you priced any job with lighting since the start of August, those rates were too high and the bill will need revisiting. I'm sorry — we published rates from a bill without checking them against what the goods sell for.
+>
+> 2.8.0 rebuilds every light fitting from the supply price plus fixings plus the electrician time to connect it. A complete lighting point with a 600×600 LED panel and switch was ₦111,900 and is now ₦75,900. Update from the Installer Hub.
+>
+> Can I help you check which jobs are affected?
+>
+> — Adedolapo | ADLM Studio
+
 **Broadcast — August update (existing customers)**
 > Hi [Name] 👋 Quick August update from ADLM Studio.
 >
@@ -255,6 +274,8 @@ Copy, adjust the name, send. Keep them short; do not paste more than one link at
 
 | They say | Answer |
 |---|---|
+| "I already billed a job with your lighting rates." | Then that bill was priced too high and needs revisiting — up to 48× on the fitting itself. It was our error: we published rates from a priced bill without checking them against what the fittings sell for. Offer to help them identify the affected jobs, and escalate to Adedolapo. Do not minimise it and do not wait to be asked. |
+| "How do I know the rest of your rates aren't wrong too?" | Fair question. 2.8.0 also rebuilt point wiring from its components and found four materials priced at zero, including a roofing sheet whose price was lost to a typo in its name. The electrical section now rests on one set of evidence. Across the library, 197 items are backed by evidence and 438 moved on a documented index — we publish which is which, and this is the first month we have. |
 | "I've been re-entering my corrected prices after every sign-in." | That was a real bug, fixed in RateGen 2.8.0. Your edits now survive, and Undo can roll the library back to any of the last 20 restore points. |
 | "You said my prices survived the 2.7.0 update, and they didn't." | Correct, and that was our error. It was true of the installer but not of signing in. 2.8.0 fixes the sign-in path. |
 | "Does picking my state actually change my rates?" | Not yet, and we say so on the release notes. Prices are still evidenced at zone level, so Kano and Katsina read the same today. The picker names the zone your state prices from. What it buys you is that your state can be priced on its own the moment we have evidence — with nothing to do on your side. |
