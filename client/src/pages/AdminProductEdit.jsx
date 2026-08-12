@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { apiAuthed } from "../http.js";
 import { useAuth } from "../store.jsx";
 import { API_BASE } from "../config";
+import { confirmPriceSanity } from "../lib/priceSanity.js";
 
 /** Video picker from Learn/free */
 function FreeVideoPicker({ selected, setSelected }) {
@@ -513,6 +514,13 @@ export default function AdminProductEdit() {
         payload.price.discountedYearlyNGN = Number(price.discountedYearlyNGN);
       if (price.discountedYearlyUSD !== "")
         payload.price.discountedYearlyUSD = Number(price.discountedYearlyUSD);
+
+      // A USD box holding a Naira figure saves silently and reaches the
+      // catalogue as a real price — ask before letting one through.
+      if (!confirmPriceSanity(payload.price)) {
+        setMsg("Not saved — check the USD prices.");
+        return;
+      }
 
       await apiAuthed(`/admin/products/${id}`, {
         token: accessToken,
