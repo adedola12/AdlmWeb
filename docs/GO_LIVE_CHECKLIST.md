@@ -106,9 +106,14 @@ never contacts AWS.
 cd ../server && npm test
 ```
 
-**PASS IF** 36 of 37 pass. The one failure is
-`scripts/test-real-boq-parse.mjs`, which is an ad-hoc CLI tool needing an
-`.xlsx` argument; it fails on `main` too and is unrelated.
+**PASS IF** every test passes — 84 of 84 at the time of writing, and the
+count only goes up.
+
+The one failure this step used to tell you to ignore is gone. It was
+`scripts/test-real-boq-parse.mjs`, an ad-hoc CLI tool needing an `.xlsx`
+argument, which `node --test` was running because its name matched the
+`test-*` glob. It is now `scripts/parse-real-boq.mjs` and is not collected.
+A red suite here means something is actually wrong.
 
 ---
 
