@@ -55,6 +55,43 @@ function toLibraryResponse(lib) {
 router.get("/zones", (_req, res) => res.json(ZONES));
 router.get("/states", (_req, res) => res.json(STATES));
 
+/**
+ * Apply a user's own prices over the published ones.
+ *
+ * Done HERE rather than in each client, so the desktop app, QUIV and HERON all
+ * see the same figure without three separate implementations that could drift.
+ * A correction the user made on the website is not much use if it only holds in
+ * the place they typed it.
+ *
+ * An override with no state applies anywhere. A state-specific one wins over it,
+ * because it is the more precise statement about where the user is working.
+ */
+export function applyPriceOverrides(rows, overrides, kind, stateKey, nameKey) {
+  if (!overrides?.length || !rows?.length) return rows;
+
+  const rank = (o) => (o.state && o.state === stateKey ? 2 : !o.state ? 1 : 0);
+  const best = new Map();
+  for (const o of overrides) {
+    if (o.kind !== kind) continue;
+    const r = rank(o);
+    if (r === 0) continue; // belongs to a different state
+    const k = `${String(o.name).toLowerCase()}|${String(o.unit || "").toLowerCase()}`;
+    const prev = best.get(k);
+    if (!prev || r > prev.r) best.set(k, { r, price: o.price });
+  }
+  if (!best.size) return rows;
+
+  let hits = 0;
+  const out = rows.map((row) => {
+    const k = `${String(row[nameKey] ?? row.description ?? "").toLowerCase()}|${String(row.unit || "").toLowerCase()}`;
+    const hit = best.get(k);
+    if (!hit) return row;
+    hits++;
+    return { ...row, price: hit.price, isUserPrice: true };
+  });
+  return hits ? out : rows;
+}
+
 router.get("/master", async (req, res) => {
   try {
     await ensureDb(); // ⬅️ safe guard
@@ -66,10 +103,15 @@ router.get("/master", async (req, res) => {
     const qZone = normalizeZone(req.query.zone);
     const zone = (qState ? zoneForState(qState) : null) || qZone || req.user.zone || null;
 
-    const [materials, labour] = await Promise.all([
+    const [rawMaterials, rawLabour, lib] = await Promise.all([
       fetchMasterMaterials(zone, qState),
       fetchMasterLabour(zone, qState),
+      RateGenLibrary.findOne({ userId: getUserId(req) }, { priceOverrides: 1 }).lean(),
     ]);
+
+    const ov = lib?.priceOverrides || [];
+    const materials = applyPriceOverrides(rawMaterials, ov, "material", qState, "description");
+    const labour = applyPriceOverrides(rawLabour, ov, "labour", qState, "description");
 
     // accountState is the state saved on the profile, as opposed to `state` which
     // echoes what was actually priced. The desktop compares the two so a location
@@ -81,6 +123,7 @@ router.get("/master", async (req, res) => {
       zone,
       state: qState,
       accountState: normalizeState(req.user.state) || null,
+      priceOverrides: ov.length,
     });
   } catch (e) {
     console.error("[/rategen/master] error:", e);
@@ -88,6 +131,79 @@ router.get("/master", async (req, res) => {
       .status(500)
       .json({ error: e?.message || "Failed to load master prices" });
   }
+});
+
+/* ── the user's own prices, per location ── */
+
+router.get("/price-overrides", async (req, res) => {
+  await ensureDb();
+  const lib = await RateGenLibrary.findOne(
+    { userId: getUserId(req) },
+    { priceOverrides: 1, priceOverridesVersion: 1 },
+  ).lean();
+  res.json({
+    items: lib?.priceOverrides || [],
+    version: lib?.priceOverridesVersion || 1,
+    state: normalizeState(req.user.state) || null,
+    states: STATES,
+  });
+});
+
+/**
+ * Set or clear one price. A null or empty price clears the override and the
+ * published figure comes back, which is the only way out of a correction the
+ * user no longer wants. Deleting is done here rather than with a DELETE route
+ * so the UI has a single call and cannot leave a half-applied state.
+ */
+router.put("/price-overrides", async (req, res) => {
+  await ensureDb();
+
+  const { kind, name, unit, price, note } = req.body || {};
+  if (kind !== "material" && kind !== "labour")
+    return res.status(400).json({ error: "kind must be material or labour" });
+  if (!String(name || "").trim())
+    return res.status(400).json({ error: "name is required" });
+
+  // Scope to the state the user is actually set to. Taking this from the body
+  // would let one user's correction be filed under a location they do not work
+  // in, and there is no screen anywhere that would show the mistake.
+  const stateKey = normalizeState(req.user.state) || null;
+
+  const userId = getUserId(req);
+  let lib = await RateGenLibrary.findOne({ userId });
+  if (!lib) lib = await RateGenLibrary.create({ userId });
+
+  const nm = String(name).trim();
+  const un = String(unit || "").trim();
+  const same = (o) =>
+    o.kind === kind &&
+    String(o.name).toLowerCase() === nm.toLowerCase() &&
+    String(o.unit || "").toLowerCase() === un.toLowerCase() &&
+    (o.state || null) === stateKey;
+
+  lib.priceOverrides = (lib.priceOverrides || []).filter((o) => !same(o));
+
+  const n = Number(price);
+  const clearing = price === null || price === "" || price === undefined;
+  if (!clearing) {
+    if (!Number.isFinite(n) || n < 0)
+      return res.status(400).json({ error: "price must be a number of zero or more" });
+    lib.priceOverrides.push({
+      kind, name: nm, unit: un, price: n, state: stateKey,
+      note: String(note || "").trim(), updatedAt: new Date(),
+    });
+  }
+
+  lib.priceOverridesVersion = (lib.priceOverridesVersion || 1) + 1;
+  await lib.save();
+
+  res.json({
+    ok: true,
+    cleared: clearing,
+    items: lib.priceOverrides,
+    version: lib.priceOverridesVersion,
+    state: stateKey,
+  });
 });
 
 router.get("/library", async (req, res) => {
