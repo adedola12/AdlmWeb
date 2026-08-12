@@ -17,34 +17,6 @@ const router = express.Router();
 router.use(requireAuth, requireAdmin);
 
 // --- helpers ---
-function cleanDiscount(d) {
-  if (!d) return undefined;
-
-  const type = String(d.type || "").toLowerCase();
-  if (!["percent", "fixed"].includes(type)) return undefined;
-
-  const valueNGN = Number(d.valueNGN || 0) || 0;
-  const valueUSD =
-    d.valueUSD == null || d.valueUSD === "" ? null : Number(d.valueUSD || 0);
-
-  // require at least one positive value
-  if (valueNGN <= 0 && (valueUSD == null || valueUSD <= 0)) return undefined;
-
-  return { type, valueNGN, valueUSD };
-}
-
-function cleanDiscounts(discounts) {
-  if (!discounts) return undefined;
-
-  const next = {
-    sixMonths: cleanDiscount(discounts.sixMonths),
-    oneYear: cleanDiscount(discounts.oneYear),
-  };
-
-  if (!next.sixMonths && !next.oneYear) return undefined;
-  return next;
-}
-
 function optNum(v) {
   if (v === "" || v == null) return undefined;
   const n = Number(v);
@@ -120,7 +92,6 @@ router.post("/", async (req, res) => {
     priceYearly,
     installFee,
     price,
-    discounts,
     previewUrl,
     thumbnailUrl,
     isPublished = true,
@@ -153,8 +124,6 @@ router.post("/", async (req, res) => {
     });
   }
 
-  const safeDiscounts = cleanDiscounts(discounts);
-
   const p = await Product.create({
     key: String(key).trim(),
     name: String(name).trim(),
@@ -166,7 +135,6 @@ router.post("/", async (req, res) => {
     isCourse: !!isCourse,
     courseSku: courseSku || undefined,
     price: safePrice,
-    discounts: safeDiscounts,
     previewUrl,
     thumbnailUrl,
     isPublished: !!isPublished,
@@ -243,21 +211,12 @@ router.patch("/:id", async (req, res) => {
     }
   }
 
-  // ✅ BUILD UPDATE OBJECT (so we can $unset discounts when cleared)
   const update = { ...body };
 
-  // sanitize discounts (and allow clearing)
-  if ("discounts" in body) {
-    const safe = cleanDiscounts(body.discounts);
-
-    if (!safe) {
-      // user cleared discounts -> remove from doc
-      update.$unset = { ...(update.$unset || {}), discounts: 1 };
-      delete update.discounts;
-    } else {
-      update.discounts = safe;
-    }
-  }
+  // Legacy bundle discounts are gone; sale prices live on price.discounted*.
+  // Dropped explicitly so a cached older admin bundle cannot write the field
+  // back — mongoose's strict mode would ignore it, but this says so out loud.
+  delete update.discounts;
 
   const p = await Product.findOneAndUpdate(filter, update, {
     new: true,
