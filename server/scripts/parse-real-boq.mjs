@@ -1,6 +1,8 @@
 // Parse real-world BoQ workbooks through the importer + budget pipeline.
 // Temporary tooling — safe to delete.
-// Usage: node scripts/test-real-boq-parse.mjs <file.xlsx> [--verbose]
+// Usage: node scripts/parse-real-boq.mjs <file.xlsx> [--verbose]
+// Named to avoid the `test-*` prefix: `node --test` globs that pattern and
+// would run this CLI with no argument, failing the suite.
 import fs from "node:fs";
 import { parseBoqWorkbook } from "../util/boqExcelImport.js";
 import { backfillBudgetLinks } from "../util/budgetBillLink.js";

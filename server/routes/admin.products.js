@@ -3,6 +3,10 @@ import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { Product } from "../models/Product.js";
 import { PaidCourse } from "../models/PaidCourse.js";
+import {
+  findImplausibleUSD,
+  describeImplausibleUSD,
+} from "../util/priceSanity.js";
 
 function requireAdmin(req, res, next) {
   if (req.user?.role === "admin") return next();
@@ -138,6 +142,17 @@ router.post("/", async (req, res) => {
     installNGN: Number(installFee || 0) || 0,
   });
 
+  // A USD field holding a Naira figure is almost always a slip, so it is
+  // refused rather than published — but `allowUnusualPrice` lets a deliberate
+  // figure through, which is what the admin form sends once you confirm.
+  const oddPrice = findImplausibleUSD(safePrice);
+  if (oddPrice.length && !req.body?.allowUnusualPrice) {
+    return res.status(400).json({
+      error: describeImplausibleUSD(oddPrice),
+      fields: oddPrice.map((f) => f.field),
+    });
+  }
+
   const safeDiscounts = cleanDiscounts(discounts);
 
   const p = await Product.create({
@@ -195,6 +210,12 @@ router.patch("/:id", async (req, res) => {
   // never allow changing key via edit
   if ("key" in body) delete body.key;
 
+  // A confirmation flag, not a field on the product — strip it before it can
+  // reach the update. (Mongoose would drop it as an unknown path, but leaving
+  // it in the object makes that a matter of schema settings rather than intent.)
+  const allowUnusualPrice = !!body.allowUnusualPrice;
+  delete body.allowUnusualPrice;
+
   // sanitize arrays
   if (Array.isArray(body.features)) body.features = body.features.filter(Boolean);
   if (Array.isArray(body.images)) body.images = body.images.filter(Boolean);
@@ -207,6 +228,20 @@ router.patch("/:id", async (req, res) => {
   const filter = mongoose.isValidObjectId(id)
     ? { _id: id }
     : { $or: [{ key: id }, { courseSku: id }] };
+
+  // Refuse a USD price that looks like a Naira figure. The stored price is
+  // read first because a PATCH may send a USD field without its Naira
+  // counterpart, and the check needs something to measure it against.
+  if (body.price && !allowUnusualPrice) {
+    const current = await Product.findOne(filter).select("price").lean();
+    const oddPrice = findImplausibleUSD(body.price, current?.price || {});
+    if (oddPrice.length) {
+      return res.status(400).json({
+        error: describeImplausibleUSD(oddPrice),
+        fields: oddPrice.map((f) => f.field),
+      });
+    }
+  }
 
   // ✅ BUILD UPDATE OBJECT (so we can $unset discounts when cleared)
   const update = { ...body };

@@ -6,6 +6,7 @@ import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
+import { confirmPriceSanity } from "../lib/priceSanity.js";
 import { AppTile, Eyebrow } from "../components/brand.jsx";
 import { Reveal, Stagger, StaggerItem } from "../components/effects.jsx";
 import {
@@ -369,6 +370,13 @@ export default function Products() {
         payload.price.yearlyUSD = Number(draft.yearlyUSD);
       if (draft.installUSD !== "")
         payload.price.installUSD = Number(draft.installUSD);
+
+      // Same guard as the full editor: a Naira figure in a USD box would
+      // otherwise save without comment.
+      if (!confirmPriceSanity(payload)) {
+        setMsg("Not saved — check the USD prices.");
+        return;
+      }
 
       await apiAuthed(`/admin/products/${p._id}`, {
         token: accessToken,
