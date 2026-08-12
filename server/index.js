@@ -60,6 +60,7 @@ import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
+import whatsappLeadRoutes from "./routes/whatsapp.lead.js";
 import agentRoutes from "./routes/agent.js";
 import aiRoutes from "./routes/ai.js";
 import geoRoutes from "./routes/geo.js";
@@ -281,6 +282,8 @@ app.use("/showcase", showcasePublic);
 app.use("/changelogs", changelogsPublic);
 app.use("/coupons", couponsPublic);
 app.use("/helpbot", helpbotRoutes);
+// Server-to-server intake for the WhatsApp bot (x-admin-key).
+app.use("/whatsapp", whatsappLeadRoutes);
 app.use("/agent", agentRoutes);
 // AI cost-intelligence for the desktop plugins (auth required, metered).
 app.use("/ai", aiRoutes);

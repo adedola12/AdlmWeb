@@ -260,12 +260,44 @@ async function findCrmContact({ email, phone }) {
 }
 
 /**
- * Upsert a warm lead captured by the AI Agent into the same CRM database.
+ * Optional fields a caller may set on the lead to drive the CRM columns. Every
+ * value maps onto an option that already exists in the ADLM CRM database — we
+ * do not invent select options, because Notion silently creates them and the
+ * board fills with near-duplicates nobody chose.
+ *
+ * Absent means "leave it alone", which is what keeps the website agent's
+ * behaviour unchanged.
+ */
+export const CRM_STAGES = [
+  "New",
+  "In Conversation",
+  "Proposal Sent",
+  "Negotiating",
+  "Closed Won",
+  "Closed Lost",
+  "Nurture",
+  "Lead",
+];
+const CRM_OUTCOMES = [
+  "Interested",
+  "Not Interested",
+  "Converted",
+  "Pending",
+  "No Response",
+];
+const CRM_CATEGORIES = ["Client", "Lead", "Partner", "University", "NIQS", "Trainer"];
+
+/**
+ * Upsert a warm lead into the CRM database.
+ *
  * Idempotent by email, or by phone when there is no email — WhatsApp leads
  * arrive phone-only, and matching on email alone created a fresh contact on
  * every conversation. Never throws — returns a `notion` sub-document to
  * persist on the Lead, with `lastError` populated on failure. Dormant until
  * NOTION_API_KEY is configured.
+ *
+ * Beyond the Lead's own fields it will read, if present: `crmStage`, `outcome`,
+ * `category`, `firm` and `followUpDate`.
  */
 export async function syncLeadToNotion(lead) {
   const result = {
@@ -292,34 +324,53 @@ export async function syncLeadToNotion(lead) {
       (summaryParts.join(" ") ||
         `Captured from ${isWhatsApp ? "WhatsApp" : "website"} chat.`);
 
+    // Only values that already exist as options in the CRM database get
+    // through; anything else is ignored rather than written, because Notion
+    // creates unknown select options on the fly.
+    const crmStage = CRM_STAGES.includes(lead.crmStage) ? lead.crmStage : null;
+    const outcome = CRM_OUTCOMES.includes(lead.outcome) ? lead.outcome : null;
+    const category = CRM_CATEGORIES.includes(lead.category) ? lead.category : null;
+
     let contactId = result.contactPageId;
     if (!contactId) {
       contactId = await findCrmContact({ email: lead.email, phone: lead.phone });
     }
 
     if (contactId) {
+      // Only touch Stage when the caller actually has one. This used to write
+      // Stage: "Lead" on every update, which silently undid any move a human
+      // made on the board — a contact dragged to Negotiating was back to Lead
+      // after the next message.
+      const patch = {
+        "Activity Type": select("Chat"),
+        "Last Contacted": dateOnly(new Date()),
+      };
+      if (crmStage) patch.Stage = select(crmStage);
+      if (outcome) patch.Outcome = select(outcome);
+      if (lead.firm) patch.Company = richText(lead.firm);
+      if (lead.followUpDate) patch["Next Follow-Up Date"] = dateOnly(lead.followUpDate);
+      if (lead.note) patch.Notes = richText(summary);
+
       await notionApi(`/pages/${contactId}`, {
         method: "PATCH",
-        body: {
-          properties: {
-            Stage: select("Lead"),
-            "Activity Type": select("Chat"),
-            "Last Contacted": dateOnly(new Date()),
-          },
-        },
+        body: { properties: patch },
       });
     } else {
       const props = {
         // Phone-only leads used to land as a wall of identical "AI Agent Lead"
         // rows, which is unusable in a CRM list; fall back to the number.
         Name: title(lead.name || lead.email || lead.phone || "AI Agent Lead"),
-        Stage: select("Lead"),
+        Stage: select(crmStage || "Lead"),
         "Activity Type": select("Chat"),
         "Follow-Up Status": select("Scheduled"),
         "Follow-Up Channel": select(isWhatsApp || lead.phone ? "WhatsApp" : "Email"),
         "Last Contacted": dateOnly(new Date()),
         Notes: richText(summary),
       };
+      if (outcome) props.Outcome = select(outcome);
+      if (category) props.Category = select(category);
+      if (lead.firm) props.Company = richText(lead.firm);
+      if (lead.followUpDate) props["Next Follow-Up Date"] = dateOnly(lead.followUpDate);
       if (lead.email) props.Email = { email: lead.email };
       if (lead.phone) props["Phone / WhatsApp"] = { phone_number: lead.phone };
 

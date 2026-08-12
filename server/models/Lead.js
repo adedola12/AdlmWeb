@@ -13,7 +13,11 @@ const LeadSchema = new mongoose.Schema(
   {
     name: { type: String, default: "", trim: true },
     email: { type: String, default: "", trim: true, lowercase: true, index: true },
-    phone: { type: String, default: "", trim: true },
+    // Indexed because WhatsApp leads are upserted by phone — they arrive with
+    // no email, so phone is the only stable key they have.
+    phone: { type: String, default: "", trim: true, index: true },
+    // Maps to the CRM "Company" column. Only ever what the person told us.
+    firm: { type: String, default: "", trim: true },
 
     // Free-text of what they're after, plus any product keys the agent matched.
     interest: { type: String, default: "", trim: true },
