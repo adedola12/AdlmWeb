@@ -14,20 +14,49 @@ let _cache = {
   fetchedAt: 0,
 };
 
+// A real NGN->USD rate is a small fraction — around 0.0007. Anything at or
+// above this would mean the naira trading under ₦10 to the dollar, so it is a
+// misread response rather than a market move. The check exists because the
+// previous version of this function returned exactly 1.0 for months: it asked
+// for rates with NGN as the base and then read `rates.NGN`, which is a
+// currency against itself and therefore always 1. Every price with no explicit
+// USD override was served at one dollar to the naira, and nothing said so.
+const MAX_PLAUSIBLE_NGN_USD = 0.1;
+
 /**
- * Fetch live rate (USD base) and convert to NGN->USD.
- * open.er-api.com returns rates where 1 USD = rates.NGN (NGN per USD).
- * We need NGN->USD, so fx = 1 / rates.NGN.
+ * Fetch the live NGN->USD rate (USD per ₦1).
+ *
+ * Handles either base currency, because FX_SOURCE is configurable:
+ *   base NGN -> rates.USD is already USD per naira
+ *   base USD -> rates.NGN is naira per dollar, so invert it
  */
 async function fetchLiveFx() {
   const res = await fetch(SOURCE, { timeout: 10_000 });
   if (!res.ok) throw new Error(`FX HTTP ${res.status}`);
   const json = await res.json();
-  const ngnPerUsd = json?.rates?.NGN;
-  if (!ngnPerUsd || typeof ngnPerUsd !== "number" || ngnPerUsd <= 0) {
-    throw new Error("FX response missing NGN rate");
+
+  const base = String(json?.base_code || json?.base || "").toUpperCase();
+  const rates = json?.rates || {};
+
+  let fxRateNGNUSD;
+  if (base === "NGN") {
+    fxRateNGNUSD = Number(rates.USD);
+  } else if (base === "USD") {
+    const ngnPerUsd = Number(rates.NGN);
+    if (!(ngnPerUsd > 0)) throw new Error("FX response missing NGN rate");
+    fxRateNGNUSD = 1 / ngnPerUsd;
+  } else {
+    throw new Error(`FX response has unexpected base "${base || "?"}"`);
   }
-  const fxRateNGNUSD = 1 / ngnPerUsd; // USD per NGN
+
+  if (!Number.isFinite(fxRateNGNUSD) || fxRateNGNUSD <= 0) {
+    throw new Error("FX response missing a usable rate");
+  }
+  // Fall through to the DB setting rather than publish a nonsense rate.
+  if (fxRateNGNUSD >= MAX_PLAUSIBLE_NGN_USD) {
+    throw new Error(`FX rate ${fxRateNGNUSD} is implausible for NGN->USD`);
+  }
+
   // round to 6dp to avoid fp noise
   return Math.round(fxRateNGNUSD * 1e6) / 1e6;
 }

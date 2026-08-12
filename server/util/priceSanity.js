@@ -10,7 +10,13 @@
 // Why it exists: USD is an *optional override* in PriceSchema. Leave it blank
 // and calcUSD converts from the Naira price; fill it in and the override is
 // returned untouched (util/fx.js), so nothing downstream ever questions it.
-// ADLM Time Pro advertised $2,000/month for a ₦2,000 product this way.
+//
+// Note on provenance: this check was written in response to ADLM Time Pro
+// showing $2,000/month for a ₦2,000 product, on the assumption someone had
+// typed the naira figure into the USD box. That turned out to be wrong — the
+// box was empty and fetchLiveFx was returning a rate of 1.0 (see util/fx.js).
+// The check is kept because the hazard it describes is real and unguarded,
+// but it was not the cause of that incident.
 //
 // The client warns before saving, but that guard only covers the two admin
 // forms — this one covers the API itself, so a script or a hand-rolled request

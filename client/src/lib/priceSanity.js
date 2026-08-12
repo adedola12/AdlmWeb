@@ -8,10 +8,16 @@
 // filled-in box is never sanity-checked anywhere downstream, and a Naira figure
 // pasted into one reaches the catalogue as a real price.
 //
-// That is how ADLM Time Pro came to advertise $2,000/month for a ₦2,000
-// product. The error is ~1000x, so the check does not need to be clever about
+// The error would be ~1000x, so the check does not need to be clever about
 // exchange rates — it only needs to notice that a USD price is the same order
 // of magnitude as its Naira counterpart.
+//
+// Note on provenance: this was written in response to ADLM Time Pro showing
+// $2,000/month for a ₦2,000 product, on the assumption someone had typed the
+// naira figure into the USD box. That turned out to be wrong — the box was
+// empty and the server's FX lookup was returning a rate of 1.0. The check is
+// kept because the hazard is real and otherwise unguarded, but it was not the
+// cause of that incident.
 
 // A dollar price should never be worth more than 1% of the Naira price beside
 // it — that would mean pricing the dollar below ₦100. The real catalogue sits

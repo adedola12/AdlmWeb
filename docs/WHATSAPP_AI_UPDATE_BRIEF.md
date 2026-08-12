@@ -135,9 +135,9 @@ Civil & infrastructure takeoff inside AutoCAD Civil 3D 2024+. **Not on sale.** L
 
 Also available: **extra project storage slots** in blocks of ten, per product, priced live on the purchase page.
 
-> ⚠️ **Time Pro's USD price needs entering in the admin editor before it can be quoted.** The catalogue still carries $2,000/month and $20,000/year — the Naira figure typed into the USD box. The agreed price is **$2/month and $20/year**; until it is set, quote Naira only and escalate international Time Pro enquiries.
+> ⚠️ **Do not quote Time Pro in dollars until the site is showing $2 and $20.** The site currently advertises **$2,000/month and $20,000/year** for it. Nothing is wrong with the product record — its USD fields are empty, which is the normal setting, and the server converts from the Naira price. The conversion itself was broken: it was reading a currency's rate against itself, always 1, so every price with an empty USD field was served at one dollar to the naira. Time Pro is the only product with empty USD fields, which is why it was the only one visibly wrong.
 >
-> To fix: **Admin → Products → ADLM Time Pro → Edit** (`/admin/products/6a6d68be5c8260c85559ac49/edit`), then under **Tier Pricing** set *Actual USD / month* to `2` and *Actual USD / year* to `20`, and save. Delete this note once done.
+> Two things clear it: the conversion fix ships (`server/util/fx.js`), and the deliberate $2/$20 is entered under **Admin → Products → ADLM Time Pro → Edit → Tier Pricing** — *Actual USD / month* `2`, *Actual USD / year* `20`. Without the second, the price is correct but floats with the exchange rate (about $1.47 today). Delete this note once the site agrees.
 
 ---
 
@@ -293,5 +293,5 @@ curl "https://api.adlmstudio.net/learn/free?page=1&pageSize=100"
 
 **Known gaps in this edition**
 - No demo video exists for RateGen, Time Pro, the Installer Hub or CIVIQ (§5).
-- Time Pro's USD price is agreed at $2/$20 but not yet entered in the admin editor (§4).
+- Time Pro still shows $2,000/$20,000 on the site until the currency-conversion fix ships and the agreed $2/$20 is entered (§4).
 - Content from the Obsidian vault has **not** been merged into this edition — the vault is not reachable from where this was assembled. Everything here comes from the website, the live API and Notion. Hand over the relevant notes and they can be folded in.
