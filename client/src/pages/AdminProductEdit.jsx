@@ -517,7 +517,7 @@ export default function AdminProductEdit() {
 
       // A USD box holding a Naira figure saves silently and reaches the
       // catalogue as a real price — ask before letting one through.
-      if (!confirmPriceSanity(payload.price)) {
+      if (!confirmPriceSanity(payload)) {
         setMsg("Not saved — check the USD prices.");
         return;
       }

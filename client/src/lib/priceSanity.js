@@ -88,11 +88,20 @@ export function describeImplausibleUSD(found) {
 }
 
 /**
- * Check a price object and, if anything looks wrong, ask before saving.
+ * Check the price in a save payload and, if anything looks wrong, ask first.
+ *
+ * On confirmation this sets `allowUnusualPrice` on the payload: the API runs
+ * the same check (server/util/priceSanity.js) and rejects the save without it,
+ * so answering "Save anyway" here has to carry that answer through to the
+ * request — otherwise the dialog would promise something the server refuses.
+ *
+ * @param {object} payload  the PATCH/POST body, containing `price`
  * @returns {boolean} true to go ahead with the save
  */
-export function confirmPriceSanity(price) {
-  const found = findImplausibleUSD(price);
+export function confirmPriceSanity(payload) {
+  const found = findImplausibleUSD(payload?.price || {});
   if (!found.length) return true;
-  return window.confirm(describeImplausibleUSD(found));
+  if (!window.confirm(describeImplausibleUSD(found))) return false;
+  payload.allowUnusualPrice = true;
+  return true;
 }

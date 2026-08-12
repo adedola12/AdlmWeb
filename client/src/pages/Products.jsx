@@ -373,7 +373,7 @@ export default function Products() {
 
       // Same guard as the full editor: a Naira figure in a USD box would
       // otherwise save without comment.
-      if (!confirmPriceSanity(payload.price)) {
+      if (!confirmPriceSanity(payload)) {
         setMsg("Not saved — check the USD prices.");
         return;
       }
