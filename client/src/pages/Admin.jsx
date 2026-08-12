@@ -21,7 +21,20 @@ const PTRAININGS_ADMIN_ROUTE = "/admin/ptrainings";
 // Admin-granted feature entitlement: Excel BoQ import projects on the Quiv
 // projects page. Granted/revoked ONLY from this panel (never sold), reusing
 // the standard entitlement endpoints.
-const BOQ_IMPORT_PRODUCT_KEY = "quiv-boq-import";
+// The BoQ Import + Material & Labour schedule feature grant. "quiv-boq-import"
+// is the pre-2026-08 key, from when the feature was Quiv-only; existing grants
+// under it still work, but new grants use "boq-import".
+const BOQ_IMPORT_PRODUCT_KEY = "boq-import";
+const BOQ_IMPORT_LEGACY_KEY = "quiv-boq-import";
+const BOQ_IMPORT_KEYS = [BOQ_IMPORT_PRODUCT_KEY, BOQ_IMPORT_LEGACY_KEY];
+
+// Products whose bills can be imported. A grant is only useful to someone who
+// already subscribes to one of them.
+const BOQ_IMPORT_PRODUCTS = [
+  { key: "revit", label: "QUIV" },
+  { key: "planswift", label: "Heron" },
+  { key: "revitmep", label: "MEP" },
+];
 
 // Above this we skip the integrity hash rather than pull the whole file into a
 // single ArrayBuffer — SubtleCrypto has no streaming digest, and a browser tab
@@ -708,28 +721,27 @@ export default function Admin({ section = null }) {
   const [boqGrantMonths, setBoqGrantMonths] = React.useState(12);
   const [boqGrantBusy, setBoqGrantBusy] = React.useState(false);
 
-  // Only Organization accounts holding an ACTIVE Quiv (revit) subscription
-  // are eligible for the BoQ Import grant. The server enforces the same rule
-  // — this list just keeps the picker honest.
+  // Only accounts with an ACTIVE QUIV, Heron or MEP subscription can be
+  // granted BoQ Import — the grant is an add-on to a licence, not a licence.
+  // The server enforces the same rule; this list keeps the picker honest and
+  // shows WHICH products each account could import bills for.
   const boqEligibleUsers = React.useMemo(() => {
+    const live = (e) =>
+      e.status === "active" && (!e.expiresAt || dayjs(e.expiresAt).isAfter(dayjs()));
     const out = [];
     (users || []).forEach((u) => {
-      const revitEnt = (u.entitlements || []).find(
-        (e) =>
-          e.productKey === "revit" &&
-          e.status === "active" &&
-          e.licenseType === "organization" &&
-          (!e.expiresAt || dayjs(e.expiresAt).isAfter(dayjs())),
+      const ents = u.entitlements || [];
+      const products = BOQ_IMPORT_PRODUCTS.filter((p) =>
+        ents.some((e) => e.productKey === p.key && live(e)),
       );
-      if (revitEnt) {
-        out.push({
-          email: u.email,
-          organizationName: revitEnt.organizationName || "",
-          alreadyGranted: (u.entitlements || []).some(
-            (e) => e.productKey === BOQ_IMPORT_PRODUCT_KEY,
-          ),
-        });
-      }
+      if (!products.length) return;
+      const orgEnt = ents.find((e) => live(e) && e.organizationName);
+      out.push({
+        email: u.email,
+        organizationName: orgEnt?.organizationName || "",
+        products: products.map((p) => p.label).join(", "),
+        alreadyGranted: ents.some((e) => BOQ_IMPORT_KEYS.includes(e.productKey)),
+      });
     });
     return out.sort((a, b) => String(a.email).localeCompare(String(b.email)));
   }, [users]);
@@ -1575,7 +1587,7 @@ export default function Admin({ section = null }) {
     const email = boqGrantEmail.trim().toLowerCase();
     if (!email) {
       setMsg(
-        "Select an eligible organization account to grant BoQ Import access.",
+        "Select an eligible subscriber to grant BoQ Import access.",
       );
       return;
     }
@@ -3227,20 +3239,25 @@ export default function Admin({ section = null }) {
       {/* ------------------ active tab ------------------ */}
       {tab === "active" && (
         <>
-        {/* Quiv BoQ Import — admin-granted feature access (UAC). Not a
-            purchasable product: this panel is the only way users get it. */}
+        {/* BoQ Import & M&L Schedule — admin-granted feature access (UAC).
+            Not a purchasable product: this panel is the only way users get it. */}
         <div className="card mb-4">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-[260px]">
-              <h2 className="font-semibold">Quiv BoQ Import — Feature Access</h2>
+              <h2 className="font-semibold">
+                BoQ Import &amp; M&amp;L Schedule — Feature Access
+              </h2>
               <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
-                Unlocks the Excel Bill-of-Quantities import section on the Quiv
-                projects page (all project features except 3D models &
-                linking). Imported projects appear on the user's main projects
-                page and count toward their storage limit. Only{" "}
-                <b>Organization accounts with an active Quiv subscription</b>{" "}
-                are eligible — other accounts are rejected by the server, and
-                access pauses automatically if the Quiv subscription lapses.
+                Unlocks Excel Bill-of-Quantities import on the{" "}
+                <b>QUIV, Heron and MEP</b> projects pages, and the material
+                &amp; labour schedule generated behind it (cement, sand,
+                granite, blocks, formwork, rebar and labour, priced from the
+                constants library). Imported projects appear on the user's main
+                projects page and count toward their storage limit. Only
+                accounts with an <b>active QUIV, Heron or MEP subscription</b>{" "}
+                are eligible — other accounts are rejected by the server. A user
+                can only import bills for the products they actually subscribe
+                to, and access pauses automatically if that subscription lapses.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -3248,17 +3265,18 @@ export default function Admin({ section = null }) {
                 className="input min-w-[260px]"
                 value={boqGrantEmail}
                 onChange={(e) => setBoqGrantEmail(e.target.value)}
-                title="Organization accounts with an active Quiv subscription"
+                title="Accounts with an active QUIV, Heron or MEP subscription"
               >
                 <option value="">
                   {boqEligibleUsers.length
-                    ? "Select an eligible organization…"
-                    : "No eligible accounts (needs active Quiv org licence)"}
+                    ? "Select an eligible subscriber…"
+                    : "No eligible accounts (needs active QUIV, Heron or MEP)"}
                 </option>
                 {boqEligibleUsers.map((u) => (
                   <option key={u.email} value={u.email}>
                     {u.email}
                     {u.organizationName ? ` — ${u.organizationName}` : ""}
+                    {u.products ? ` [${u.products}]` : ""}
                     {u.alreadyGranted ? " (granted)" : ""}
                   </option>
                 ))}
@@ -3289,11 +3307,15 @@ export default function Admin({ section = null }) {
             const grants = [];
             (users || []).forEach((u) => {
               (u.entitlements || []).forEach((e) => {
-                if (e.productKey === BOQ_IMPORT_PRODUCT_KEY) {
+                if (BOQ_IMPORT_KEYS.includes(e.productKey)) {
                   grants.push({
                     email: u.email,
                     status: e.status,
                     expiresAt: e.expiresAt,
+                    // The row's OWN key: a legacy "quiv-boq-import" grant must
+                    // be disabled/revoked under that key, not the new one.
+                    productKey: e.productKey,
+                    legacy: e.productKey === BOQ_IMPORT_LEGACY_KEY,
                   });
                 }
               });
@@ -3353,7 +3375,7 @@ export default function Admin({ section = null }) {
                                   onClick={() =>
                                     updateEntitlement(
                                       g.email,
-                                      BOQ_IMPORT_PRODUCT_KEY,
+                                      g.productKey,
                                       0,
                                       "disabled",
                                     )
@@ -3367,7 +3389,7 @@ export default function Admin({ section = null }) {
                                   onClick={() =>
                                     updateEntitlement(
                                       g.email,
-                                      BOQ_IMPORT_PRODUCT_KEY,
+                                      g.productKey,
                                       0,
                                       "active",
                                     )
@@ -3384,10 +3406,7 @@ export default function Admin({ section = null }) {
                                     `Revoke BoQ Import access for ${g.email}? This cannot be undone.`,
                                   );
                                   if (ok)
-                                    deleteEntitlement(
-                                      g.email,
-                                      BOQ_IMPORT_PRODUCT_KEY,
-                                    );
+                                    deleteEntitlement(g.email, g.productKey);
                                 }}
                               >
                                 Revoke

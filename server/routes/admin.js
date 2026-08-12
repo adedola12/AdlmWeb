@@ -12,6 +12,10 @@ import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 import { sendMail } from "../util/mailer.js";
 import { runExpiryNotifier } from "../util/expiryNotifier.js";
 import { sendBoqImportGrantEmail } from "../util/boqImportGrantEmail.js";
+import {
+  BOQ_IMPORT_ENTITLEMENTS,
+  isBoqImportEligible,
+} from "../util/boqImportAccess.js";
 import { Setting } from "../models/Setting.js";
 import {
   resolveUserGuideUrl,
@@ -1197,23 +1201,16 @@ router.post(
     u.entitlements = u.entitlements || [];
     const now = dayjs();
 
-    // BoQ Import is an admin-granted feature reserved for Organization
-    // accounts that hold an active Quiv (revit) subscription. Enforced here
-    // (not just in the panel UI) so no other grant path can bypass it.
-    if (productKey === "quiv-boq-import") {
-      const revitEnt = u.entitlements.find(
-        (e) =>
-          e.productKey === "revit" &&
-          e.status === "active" &&
-          (!e.expiresAt || dayjs(e.expiresAt).isAfter(now)),
-      );
-      if (!revitEnt || revitEnt.licenseType !== "organization") {
-        return res.status(400).json({
-          error:
-            "BoQ Import can only be granted to Organization accounts with an active Quiv subscription.",
-          code: "BOQ_IMPORT_NOT_ELIGIBLE",
-        });
-      }
+    // BoQ Import is an admin-granted add-on, not a licence of its own: it can
+    // only go to an account that already subscribes to QUIV, Heron or MEP.
+    // Enforced here (not just in the panel UI) so no other grant path can
+    // bypass it.
+    if (BOQ_IMPORT_ENTITLEMENTS.includes(productKey) && !isBoqImportEligible(u)) {
+      return res.status(400).json({
+        error:
+          "BoQ Import can only be granted to accounts with an active QUIV, Heron or MEP subscription.",
+        code: "BOQ_IMPORT_NOT_ELIGIBLE",
+      });
     }
 
     let ent = u.entitlements.find((e) => e.productKey === productKey);
@@ -1277,7 +1274,7 @@ router.post(
     // is for, how long the access runs, and how to start migrating their
     // existing bills. Fire-and-forget — a mail hiccup must not fail the
     // grant (sendBoqImportGrantEmail never throws).
-    if (productKey === "quiv-boq-import" && ent.status === "active") {
+    if (BOQ_IMPORT_ENTITLEMENTS.includes(productKey) && ent.status === "active") {
       sendBoqImportGrantEmail({ user: u, entitlement: ent });
     }
 

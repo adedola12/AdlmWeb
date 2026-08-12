@@ -251,6 +251,11 @@ import {
 import { priceServiceItems, mapServiceType } from "../util/serviceResolve.js";
 import { generateMlSchedule } from "../util/mlSchedule.js";
 import { buildMlScheduleContext } from "../util/mlScheduleContext.js";
+import {
+  BOQ_IMPORT_PRODUCTS,
+  hasBoqImportGrant,
+  canImportBoqFor,
+} from "../util/boqImportAccess.js";
 
 // Project-model upload limit: 100 MB. Big enough for most arch / struct / MEP
 // IFC files; we can raise this per-tier later via an entitlement flag.
@@ -273,13 +278,16 @@ const uploadModelFile = multer({
 });
 
 // ── BoQ Import ──────────────────────────────────────────────────────────────
-// Any subscriber can create a project from an Excel Bill of Quantities for a
-// product they hold: Quiv (revit) and Heron (planswift) for building bills, MEP
-// (revitmep) for services bills. Access lapses with the licence.
+// Creating a project from an Excel Bill of Quantities — and the Material &
+// Labour schedule generated behind it — is an ADMIN-GRANTED feature. It is not
+// purchasable: an admin switches it on per account from the Admin panel, for
+// users who already subscribe to QUIV (revit), Heron (planswift) or MEP
+// (revitmep).
 //
-// (Until 2026-08 this was an admin-granted, organization-only feature behind a
-// separate quiv-boq-import entitlement. That grant is now redundant — the
-// product subscription is the gate — but existing grants are harmless.)
+// Double-gated on every route: the grant AND a live subscription to the product
+// whose bill is being imported. So access dies with the licence on its own, and
+// a user granted the feature can only import bills for products they actually
+// hold. See util/boqImportAccess.js.
 //
 // Imported projects are ordinary projects of that product (origin
 // "boq-import"): they appear on the main projects page, count toward the
@@ -288,6 +296,41 @@ const uploadModelFile = multer({
 // to view or link by element).
 const BOQ_IMPORT_ORIGIN = "boq-import";
 const BOQ_IMPORT_MAX_BYTES = 15 * 1024 * 1024; // 15 MB
+
+// Gate a route on the admin grant plus the given product's own subscription.
+// `productKey` null = "any importable product" (used by the schedule rebuild,
+// which is not tied to one bill type).
+function requireBoqImport(productKey = null) {
+  return async (req, res, next) => {
+    try {
+      const userId = getUserObjectId(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const u = await User.findById(userId, { entitlements: 1 }).lean();
+      if (!u) return res.status(401).json({ error: "User not found" });
+
+      if (!hasBoqImportGrant(u)) {
+        return res.status(403).json({
+          error:
+            "Excel BoQ import is switched on per account. Ask ADLM to enable it for you.",
+          code: "BOQ_IMPORT_NOT_GRANTED",
+        });
+      }
+
+      if (productKey && !canImportBoqFor(u, productKey)) {
+        const label = BOQ_IMPORT_PRODUCTS[productKey]?.label || productKey;
+        return res.status(403).json({
+          error: `Importing a ${label} bill needs a live ${label} subscription.`,
+          code: "BOQ_IMPORT_NO_SUBSCRIPTION",
+        });
+      }
+      return next();
+    } catch (err) {
+      console.error("requireBoqImport error:", err);
+      return res.status(500).json({ error: "Server error" });
+    }
+  };
+}
 
 const boqImportUpload = multer({
   storage: multer.memoryStorage(),
@@ -6164,29 +6207,26 @@ async function listLinkCandidates(req, res) {
 //
 // Registered before the generic /:productKey routes so "import-boq" is never
 // captured as an :id.
-for (const [route, productKey] of [
-  ["revit", "revit"],
-  ["planswift", "planswift"],
-  ["mep", "revitmep"],
-]) {
-  // The entitlement key IS the storage key here (revit/planswift/revitmep).
-  const gate = requireEntitlement(productKey);
+for (const [productKey, { route }] of Object.entries(BOQ_IMPORT_PRODUCTS)) {
+  // Product subscription first (the familiar "no active subscription" error),
+  // then the admin grant on top of it.
+  const gate = [requireEntitlement(productKey), requireBoqImport(productKey)];
   const stamp = (req, _res, next) => {
     req.boqProductKey = productKey;
     next();
   };
 
-  router.get(`/${route}/import-boq/template`, gate, downloadBoqImportTemplate);
+  router.get(`/${route}/import-boq/template`, ...gate, downloadBoqImportTemplate);
   router.post(
     `/${route}/import-boq`,
-    gate,
+    ...gate,
     stamp,
     boqImportUpload.single("file"),
     importBoqCreate,
   );
   router.put(
     `/${route}/:id/import-boq`,
-    gate,
+    ...gate,
     stamp,
     boqImportUpload.single("file"),
     importBoqUpdate,
@@ -6481,10 +6521,13 @@ router.put(
 );
 
 // Rebuild the material & labour schedule from the current constants library.
+// Same admin grant as the import — generating a schedule IS the feature, so it
+// must not be reachable just by opening a project's Budget tab.
 router.post(
   "/:productKey/:id/ml-schedule",
   mapEntitlementParam,
   requireEntitlementParam,
+  requireBoqImport(),
   regenerateMlSchedule,
 );
 

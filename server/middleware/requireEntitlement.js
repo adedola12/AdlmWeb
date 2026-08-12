@@ -11,11 +11,11 @@ function entitlementKeyFor(productKey) {
   return k;
 }
 
-// Feature grants that stand in for a product licence. Currently empty:
-// quiv-boq-import deliberately does NOT satisfy "revit" — BoQ Import access
-// is tied to the org's live Quiv subscription, so when the Quiv licence
-// lapses the projects area (and the import feature with it) closes until
-// renewal.
+// Feature grants that stand in for a product licence. Deliberately empty:
+// the BoQ Import grant ("boq-import", legacy "quiv-boq-import") must NOT
+// satisfy revit/planswift/revitmep. It is an add-on to a live subscription,
+// so when that subscription lapses the projects area — and the import feature
+// with it — closes until renewal. See util/boqImportAccess.js.
 const SATISFIED_BY = {};
 
 function acceptableKeysFor(productKey) {

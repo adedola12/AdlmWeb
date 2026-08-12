@@ -50,12 +50,20 @@ function isMaterialsTool(tool) {
 // bill plus a generated material & labour schedule (cement / sand / granite /
 // blocks / labour, priced from RateGen and your Material Constants).
 //
-// Open to any subscriber, for the product they hold: Quiv (revit) and Heron
-// (planswift) take building bills, MEP (revitmep) takes services bills. Access
-// lapses with the licence. Imported projects are ordinary projects of that
-// product (origin "boq-import") — they live in this list, count toward storage,
-// and carry every tab except 3D Model and linking.
+// ADMIN-GRANTED, not purchasable. Two conditions, both required: the grant, and
+// a live subscription to the product whose bill is being imported — QUIV
+// (revit), Heron (planswift) or MEP (revitmep). So access lapses on its own
+// when a licence does. Mirrors server/util/boqImportAccess.js; the server
+// enforces the same rule, this just keeps the UI honest.
+//
+// Imported projects are ordinary projects of that product (origin
+// "boq-import") — they live in this list, count toward storage, and carry every
+// tab except 3D Model and linking.
 const BOQ_IMPORT_ORIGIN = "boq-import";
+
+// The feature grant. "quiv-boq-import" is the pre-2026-08 key, from when this
+// was Quiv-only — still honoured so existing grants keep working.
+const BOQ_IMPORT_ENTITLEMENTS = ["boq-import", "quiv-boq-import"];
 
 // tool → { route segment on the API, entitlement that unlocks it }
 const BOQ_IMPORT_TOOLS = {
@@ -74,10 +82,17 @@ function entActive(ents, productKey) {
   );
 }
 
+/** True when an admin has switched the feature on for this account. */
+function hasBoqImportGrant(user) {
+  const ents = Array.isArray(user?.entitlements) ? user.entitlements : [];
+  return BOQ_IMPORT_ENTITLEMENTS.some((key) => entActive(ents, key));
+}
+
 /** The import config for a tool when the user may use it, else null. */
 function boqImportFor(user, tool) {
   const cfg = BOQ_IMPORT_TOOLS[String(tool || "").toLowerCase()];
   if (!cfg) return null;
+  if (!hasBoqImportGrant(user)) return null;
   const ents = Array.isArray(user?.entitlements) ? user.entitlements : [];
   return entActive(ents, cfg.entitlement) ? cfg : null;
 }
@@ -5537,7 +5552,11 @@ export default function ProjectsGeneric() {
                 materialItems={sel?.materialItems || []}
                 onSaveBudget={saveBudgetProcurement}
                 onRebuildSchedule={
-                  sel?._access?.canEdit === false ? null : rebuildMlSchedule
+                  // Generating a schedule is the granted feature itself, so the
+                  // control is hidden without it — not shown and then refused.
+                  canBoqImport && sel?._access?.canEdit !== false
+                    ? rebuildMlSchedule
+                    : null
                 }
                 productKey={toolNorm}
                 projectOrigin={sel?.origin || ""}
