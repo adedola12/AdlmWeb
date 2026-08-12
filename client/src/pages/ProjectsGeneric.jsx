@@ -65,12 +65,13 @@ const BOQ_IMPORT_ORIGIN = "boq-import";
 // was Quiv-only — still honoured so existing grants keep working.
 const BOQ_IMPORT_ENTITLEMENTS = ["boq-import", "quiv-boq-import"];
 
-// tool → { route segment on the API, entitlement that unlocks it }
+// tool → { route segment on the API, entitlement that unlocks it }.
+// MEP is "mep" for the entitlement, the project bucket and the route alike —
+// "revitmep" is not a key any user actually holds.
 const BOQ_IMPORT_TOOLS = {
   revit: { route: "revit", entitlement: "revit" },
   planswift: { route: "planswift", entitlement: "planswift" },
-  revitmep: { route: "mep", entitlement: "revitmep" },
-  mep: { route: "mep", entitlement: "revitmep" },
+  mep: { route: "mep", entitlement: "mep" },
 };
 
 function entActive(ents, productKey) {
@@ -1191,7 +1192,7 @@ export default function ProjectsGeneric() {
   const canBoqImport = Boolean(boqImport);
   const boqRoute = boqImport?.route || "revit";
   const boqImportBadge =
-    toolNorm === "planswift" ? "HERON" : toolNorm === "revitmep" ? "MEP" : "QUIV";
+    toolNorm === "planswift" ? "HERON" : toolNorm === "mep" ? "MEP" : "QUIV";
   const [boqImportOpen, setBoqImportOpen] = React.useState(false);
   const [boqImportBusy, setBoqImportBusy] = React.useState(false);
   const [boqImportFile, setBoqImportFile] = React.useState(null);

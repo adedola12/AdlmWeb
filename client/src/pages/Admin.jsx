@@ -33,7 +33,7 @@ const BOQ_IMPORT_KEYS = [BOQ_IMPORT_PRODUCT_KEY, BOQ_IMPORT_LEGACY_KEY];
 const BOQ_IMPORT_PRODUCTS = [
   { key: "revit", label: "QUIV" },
   { key: "planswift", label: "Heron" },
-  { key: "revitmep", label: "MEP" },
+  { key: "mep", label: "MEP" },
 ];
 
 // Above this we skip the integrity hash rather than pull the whole file into a

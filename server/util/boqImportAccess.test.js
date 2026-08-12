@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import {
   BOQ_IMPORT_ENTITLEMENT,
   BOQ_IMPORT_LEGACY_ENTITLEMENT,
+  BOQ_IMPORT_PRODUCTS,
   hasBoqImportGrant,
   isBoqImportEligible,
   subscribedBoqProducts,
@@ -31,7 +32,7 @@ const DISABLED = { status: "disabled" };
 // ── the grant ───────────────────────────────────────────────────────────────
 
 test("no grant means no access, however many products are subscribed", () => {
-  const u = user(ent("revit"), ent("planswift"), ent("revitmep"));
+  const u = user(ent("revit"), ent("planswift"), ent("mep"));
   assert.equal(hasBoqImportGrant(u), false);
   assert.equal(canImportBoqFor(u, "revit"), false);
 });
@@ -65,7 +66,7 @@ test("access is per product: you import bills for what you subscribe to", () => 
   const u = user(GRANT(), ent("planswift"));
   assert.equal(canImportBoqFor(u, "planswift"), true);
   assert.equal(canImportBoqFor(u, "revit"), false, "no QUIV sub");
-  assert.equal(canImportBoqFor(u, "revitmep"), false, "no MEP sub");
+  assert.equal(canImportBoqFor(u, "mep"), false, "no MEP sub");
 });
 
 test("access lapses on its own when the subscription does", () => {
@@ -76,11 +77,25 @@ test("access lapses on its own when the subscription does", () => {
 });
 
 test("a granted user with all three products can import all three", () => {
-  const u = user(GRANT(), ent("revit"), ent("planswift"), ent("revitmep"));
-  assert.deepEqual(subscribedBoqProducts(u).sort(), ["planswift", "revit", "revitmep"]);
-  for (const p of ["revit", "planswift", "revitmep"]) {
+  const u = user(GRANT(), ent("revit"), ent("planswift"), ent("mep"));
+  assert.deepEqual(subscribedBoqProducts(u).sort(), ["mep", "planswift", "revit"]);
+  for (const p of ["revit", "planswift", "mep"]) {
     assert.equal(canImportBoqFor(u, p), true, p);
   }
+});
+
+test("the product keys are the ones users actually hold", () => {
+  // Gating MEP on "revitmep" locked out all 18 real MEP subscribers, because
+  // no account has ever held an entitlement under that key — it only appears
+  // in stale comments and one "revitmep-materials" project. Pin the three keys
+  // so a rename has to be deliberate.
+  assert.deepEqual(Object.keys(BOQ_IMPORT_PRODUCTS).sort(), [
+    "mep",
+    "planswift",
+    "revit",
+  ]);
+  assert.equal(canImportBoqFor(user(GRANT(), ent("mep")), "mep"), true);
+  assert.equal(canImportBoqFor(user(GRANT(), ent("revitmep")), "revitmep"), false);
 });
 
 // ── who may be granted ──────────────────────────────────────────────────────
@@ -90,7 +105,7 @@ test("eligibility needs a live QUIV, Heron or MEP subscription", () => {
   assert.equal(isBoqImportEligible(user(ent("rategen"))), false, "wrong product");
   assert.equal(isBoqImportEligible(user(ent("revit", EXPIRED))), false, "expired");
   assert.equal(isBoqImportEligible(user(ent("revit", DISABLED))), false, "disabled");
-  for (const p of ["revit", "planswift", "revitmep"]) {
+  for (const p of ["revit", "planswift", "mep"]) {
     assert.equal(isBoqImportEligible(user(ent(p))), true, p);
   }
 });

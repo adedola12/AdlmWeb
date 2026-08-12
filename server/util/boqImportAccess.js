@@ -29,11 +29,17 @@ export const BOQ_IMPORT_ENTITLEMENTS = Object.freeze([
   BOQ_IMPORT_LEGACY_ENTITLEMENT,
 ]);
 
-/** Products whose bills can be imported, keyed by the entitlement required. */
+// Products whose bills can be imported, keyed by the entitlement required.
+//
+// The MEP product is "mep" everywhere that matters — the entitlement users
+// actually hold (18 accounts in production), the project bucket (`mep`), and
+// the route. "revitmep" appears in a few older comments and in one stray
+// `revitmep-materials` project, but NO user has ever held an entitlement under
+// it, so gating on it silently locks out every real MEP subscriber.
 export const BOQ_IMPORT_PRODUCTS = Object.freeze({
   revit: { label: "QUIV", route: "revit" },
   planswift: { label: "Heron", route: "planswift" },
-  revitmep: { label: "MEP", route: "mep" },
+  mep: { label: "MEP", route: "mep" },
 });
 
 export const BOQ_IMPORT_PRODUCT_KEYS = Object.freeze(Object.keys(BOQ_IMPORT_PRODUCTS));
