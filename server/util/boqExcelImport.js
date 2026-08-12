@@ -141,6 +141,135 @@ function findHeader(sheet, roleFor, maxScan = 60) {
   return null;
 }
 
+// Real bills label only the columns the typist thought needed labelling. One in
+// this set heads its columns "S/N | CODE | DESCRIPTION OF ITEMS | | UNIT | RATE"
+// — the Qty and Amount columns are simply blank in the header row, so every
+// line imported with a quantity of zero and no schedule could be built. When a
+// role is missing, its column is recovered from where the numbers actually sit.
+function completeHeaderColumns(ws, header, maxScan = 300) {
+  const cols = header.columns;
+  if (cols.description === undefined || cols.unit === undefined) return header;
+  if (cols.qty !== undefined && cols.amount !== undefined) return header;
+
+  const taken = new Set(Object.values(cols));
+  const last = Math.min(ws.rowCount || 0, header.headerRowNumber + maxScan);
+  const beforeUnit = new Map();
+  const afterRate = new Map();
+
+  for (let r = header.headerRowNumber + 1; r <= last; r += 1) {
+    const row = ws.getRow(r);
+    // Only learn from rows that are clearly measured items.
+    if (!squish(cellText(row.getCell(cols.description)))) continue;
+    if (!squish(cellText(row.getCell(cols.unit)))) continue;
+    row.eachCell({ includeEmpty: false }, (cell, col) => {
+      if (taken.has(col)) return;
+      if (cellNumber(cell) === null) return;
+      if (col < cols.unit && col > cols.description) {
+        beforeUnit.set(col, (beforeUnit.get(col) || 0) + 1);
+      } else if (cols.rate !== undefined && col > cols.rate) {
+        afterRate.set(col, (afterRate.get(col) || 0) + 1);
+      }
+    });
+  }
+
+  // Qty is the numeric column between the description and the unit; amount is
+  // the FIRST numeric after the rate (a trailing repeat of the quantity is
+  // common, so "last" would pick the wrong one).
+  const pick = (tally, choose) => {
+    const seen = [...tally.entries()].filter(([, n]) => n >= 3);
+    if (!seen.length) return undefined;
+    return choose(seen.sort((a, b) => a[0] - b[0]))[0];
+  };
+
+  if (cols.qty === undefined) {
+    const col = pick(beforeUnit, (rows) => rows.reduce((a, b) => (b[1] > a[1] ? b : a)));
+    if (col !== undefined) cols.qty = col;
+  }
+  if (cols.amount === undefined) {
+    const col = pick(afterRate, (rows) => rows[0]);
+    if (col !== undefined) cols.amount = col;
+  }
+  return header;
+}
+
+// Some bills carry no column header at all — the header lives in the page
+// layout, not in a cell, so the sheet opens straight onto measured items. That
+// is a whole workbook the importer would otherwise reject, so when findHeader
+// comes up empty the layout is inferred from the data instead: find the rows
+// that LOOK like measured items (a long description, a recognisable unit, and
+// numbers) and take the column positions they agree on.
+const UNIT_CELL_RE =
+  /^(?:lin\.?\s*m|l\.?m|m|m2|m²|m3|m³|sq\.?\s*m|cu\.?\s*m|nr|no\.?|nos\.?|each|item|sum|kg|tonne?s?|ton|set|pair|pcs|prs|days?|wks?|hr?s?|lot|%)$/i;
+
+function inferHeader(ws, maxScan = 400) {
+  const last = Math.min(ws.rowCount || 0, maxScan);
+  const votes = []; // { descCol, unitCol, numericCols }
+  for (let r = 1; r <= last; r += 1) {
+    const row = ws.getRow(r);
+    let descCol = 0;
+    let descLen = 0;
+    let unitCol = 0;
+    const numericCols = [];
+    row.eachCell({ includeEmpty: false }, (cell, col) => {
+      const t = squish(cellText(cell));
+      if (!t) return;
+      const n = cellNumber(cell);
+      if (n !== null && !UNIT_CELL_RE.test(t)) {
+        numericCols.push(col);
+        return;
+      }
+      if (UNIT_CELL_RE.test(t)) {
+        if (!unitCol) unitCol = col;
+        return;
+      }
+      if (t.length > descLen && t.length >= 12) {
+        descLen = t.length;
+        descCol = col;
+      }
+    });
+    // A measured line: something described, a unit, and at least a rate and an
+    // amount to the right of it.
+    if (descCol && unitCol && numericCols.filter((c) => c > unitCol).length >= 1 && numericCols.length >= 2) {
+      votes.push({ descCol, unitCol, numericCols });
+    }
+  }
+  if (votes.length < 5) return null;
+
+  const modal = (pick) => {
+    const tally = new Map();
+    for (const v of votes) {
+      const k = pick(v);
+      if (k) tally.set(k, (tally.get(k) || 0) + 1);
+    }
+    let best = 0;
+    let bestN = 0;
+    for (const [k, n] of tally) if (n > bestN) [best, bestN] = [k, n];
+    return best;
+  };
+
+  const description = modal((v) => v.descCol);
+  const unit = modal((v) => v.unitCol);
+  if (!description || !unit) return null;
+
+  // Qty sits between the description and the unit in every layout seen; rate is
+  // the first number after the unit, amount the last.
+  const qty = modal((v) => v.numericCols.find((c) => c > description && c < unit) || 0);
+  const rate = modal((v) => v.numericCols.find((c) => c > unit) || 0);
+  const amount = modal((v) => {
+    const after = v.numericCols.filter((c) => c > unit);
+    return after.length > 1 ? after[after.length - 1] : 0;
+  });
+
+  const columns = { description, unit };
+  if (qty) columns.qty = qty;
+  if (rate) columns.rate = rate;
+  if (amount && amount !== rate) columns.amount = amount;
+  if (columns.qty === undefined && columns.rate === undefined) return null;
+
+  // Row 0 = "there is no header row", so parsing starts at row 1.
+  return { headerRowNumber: 0, columns, inferred: true };
+}
+
 // ── row classification helpers ──────────────────────────────────────────────
 
 function squish(s) {
@@ -150,9 +279,21 @@ function squish(s) {
 function isSummaryText(s) {
   const t = String(s || "").trim();
   return (
-    /^(grand\s+)?(sub\s*)?total\b|^summary\b|^collections?\b|^carried\s+(to|forward)\b|^brought\s+forward\b|^to\s+collection\b|^page\b|schedule$/i.test(t) ||
+    /^(grand\s+)?(sub\s*)?total\b|^summary\b|^collections?\b|^carried\s+(to|forward)\b|^brought\s+forward\b|^page\b|schedule$/i.test(t) ||
+    // "To Collection", "To General Summary :", "To Summary"
+    /^to\s+(the\s+)?(general\s+)?(summary|collection|bill\s+summary)\b/i.test(t) ||
     // "Frame carried to summary", "BILL NR 2 … CARRIED TO GENERAL SUMMARY"
     /(carried|c\/?f)\s+(to\s+|forward\s+)?(general\s+)?(summary|collection)/i.test(t)
+  );
+}
+
+// Long bills repeat their column header on every printed page. Only the first
+// one is found by findHeader; the rest reach the row loop and — having a
+// "Description" in the description column and often a stray number beside it —
+// were imported as bill lines called "Description" with the unit "Unit".
+function isRepeatedHeaderText(s) {
+  return /^(descriptions?(\s+of\s+items?)?|item\s*(no\.?|s)?|s\s*\/?\s*n|qty|quantity|unit|rate|amount|total\s*cost|cost)$/i.test(
+    String(s || "").trim(),
   );
 }
 
@@ -238,7 +379,8 @@ function classifySheets(workbook) {
       if (header) schedules.push({ ws, header });
       continue;
     }
-    const header = findHeader(ws, boqRoleFor);
+    const found = findHeader(ws, boqRoleFor);
+    const header = found ? completeHeaderColumns(ws, found) : inferHeader(ws);
     if (header) bills.push({ ws, header });
   }
   return { bills, schedules };
@@ -269,6 +411,7 @@ function parseBillSheet({ ws, header }, ctx) {
 
     if (!description && !categoryCell && qty === null && rate === null && amount === null) continue;
     if (isSummaryText(description)) continue;
+    if (isRepeatedHeaderText(description)) continue;
     if (!description) continue; // stray numbers with no description
 
     const hasNumbers = qty !== null || rate !== null || amount !== null;
@@ -514,7 +657,13 @@ export async function parseBoqWorkbook(buffer) {
 
   for (const bill of bills) {
     const n = parseBillSheet(bill, ctx);
-    if (!n) warnings.push(`Sheet "${bill.ws.name}": no bill lines found.`);
+    if (!n) {
+      warnings.push(`Sheet "${bill.ws.name}": no bill lines found.`);
+    } else if (bill.header.inferred) {
+      warnings.push(
+        `Sheet "${bill.ws.name}" has no column header — the layout was read from the items themselves. Check the quantities and rates on a few lines.`,
+      );
+    }
   }
 
   // Template compat: "Bill S/N" references resolve against imported sn order.

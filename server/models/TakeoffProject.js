@@ -143,6 +143,11 @@ const BudgetItemSchema = new mongoose.Schema(
     unit: { type: String, default: "" },
     qty: { type: Number, default: 0 },
     rate: { type: Number, default: 0 },
+    // Where the row came from. "ml-schedule" marks a row the Material & Labour
+    // engine generated from the bill + the constants library, which makes it
+    // safe to replace on a re-generate — a row the plugin sent or the QS typed
+    // never is. See util/mlSchedule.js.
+    rateSource: { type: String, default: "" },
     netUnitCost: { type: Number, default: 0 },
     overheadPercent: { type: Number, default: 0 },
     profitPercent: { type: Number, default: 0 },
