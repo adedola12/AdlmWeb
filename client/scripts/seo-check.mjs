@@ -10,9 +10,16 @@
 //
 //   node scripts/seo-check.mjs                       # local SSR server
 //   node scripts/seo-check.mjs https://www.adlmstudio.net
+//
+// A Vercel preview deployment sits behind Vercel Authentication and answers
+// 302 to an unauthenticated fetch. Pass the session cookie to check one, which
+// is the only way to prove the SSR bundle actually shipped with the function:
+//
+//   SEO_CHECK_COOKIE="_vercel_jwt=..." node scripts/seo-check.mjs https://<preview>
 import { ROUTES } from "./seo-routes.mjs";
 
 const BASE = (process.argv[2] || "http://localhost:3000").replace(/\/+$/, "");
+const COOKIE = process.env.SEO_CHECK_COOKIE || "";
 
 /**
  * The page's own content, not the chrome around it.
@@ -66,7 +73,11 @@ for (const route of ROUTES) {
 
   try {
     const res = await fetch(url, {
-      headers: { "user-agent": "Mozilla/5.0 (compatible; bingbot/2.0)" },
+      redirect: "follow",
+      headers: {
+        "user-agent": "Mozilla/5.0 (compatible; bingbot/2.0)",
+        ...(COOKIE ? { cookie: COOKIE } : {}),
+      },
     });
     status = res.status;
     html = await res.text();
