@@ -15,6 +15,10 @@ Disallow: /admin/
 # Signed-in areas: personal, and useless to anyone arriving from a search
 Disallow: /dashboard
 Disallow: /profile
+# Both sit behind ProtectedRoute. They were in the sitemap until now, which
+# invited crawlers to spend budget on pages that can only redirect them away.
+Disallow: /freebies
+Disallow: /time-management
 Disallow: /change-password
 Disallow: /purchase
 Disallow: /checkout/

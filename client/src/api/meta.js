@@ -1,6 +1,8 @@
 // api/meta.js (Vercel)
 import fs from "node:fs";
 import path from "node:path";
+import { isSsrPath } from "../lib/ssrPaths.js";
+import { PAGE_META, fullTitle } from "../lib/pageMeta.js";
 
 const INDEX_CANDIDATES = [
   process.env.INDEX_HTML_PATH,
@@ -126,6 +128,57 @@ function rewriteTag(html, { type, key, value }) {
   return html;
 }
 
+/**
+ * Put the rendered app inside the shell.
+ *
+ * The div is matched empty because that is exactly how Vite emits it. If the
+ * markup ever changes shape this returns the html untouched, which degrades to
+ * the client-only shell rather than producing a broken page.
+ */
+function injectBody(html, bodyHtml, preload) {
+  const ROOT = /<div id="root">\s*<\/div>/i;
+  if (!ROOT.test(html)) return html;
+
+  // __ADLM_SSR__ tells main.jsx to hydrate rather than mount from scratch, and
+  // useHydrated() to hold session-dependent UI back for one frame.
+  //
+  // The </script> escape matters: any product blurb containing that string
+  // would otherwise close this tag early and inject the rest as markup.
+  const payload = JSON.stringify(preload || {}).replace(/</g, "\\u003c");
+
+  return html.replace(
+    ROOT,
+    `<div id="root">${bodyHtml}</div>\n` +
+      `<script>window.__ADLM_SSR__=true;window.__ADLM_PRELOAD__=${payload};</script>`,
+  );
+}
+
+/**
+ * JSON-LD collected during the render, as script tags a crawler can read.
+ *
+ * The data-seo attribute is not decoration. <Seo> writes the same blocks from
+ * an effect after hydration, and it clears the old ones by querying exactly
+ * that attribute. Without it the server's copies are invisible to that cleanup
+ * and the page ends up carrying every block twice — which describes a page
+ * with two of everything and is the kind of thing Google penalises rather than
+ * ignores. Tagging them here makes the client replace ours instead of adding to
+ * them.
+ */
+function injectJsonLd(html, blocks) {
+  if (!blocks?.length) return html;
+
+  const tags = blocks
+    .map(
+      (block) =>
+        `<script type="application/ld+json" data-seo="1">${JSON.stringify(
+          block,
+        ).replace(/</g, "\\u003c")}</script>`,
+    )
+    .join("\n");
+
+  return html.replace(/<\/head>/i, `${tags}\n</head>`);
+}
+
 function injectMeta(html, meta) {
   let out = html;
 
@@ -194,61 +247,17 @@ function injectMeta(html, meta) {
  * Descriptions for the pages that have no record behind them.
  *
  * These are what a link to the site shows in WhatsApp, LinkedIn and Google.
- * <Seo> sets the same values client-side for Google's benefit, but a social
- * scraper never runs JavaScript — it reads the HTML this file produces and
- * nothing else. So the two have to be kept saying the same thing.
+ * The strings themselves live in src/lib/pageMeta.js because <Seo> renders the
+ * same ones in the browser. They used to be duplicated here, and duplicated
+ * copy drifts: the page ended up telling a crawler one thing and a social
+ * scraper another. One import, one source, no drift.
  */
-const STATIC_META = {
-  "/": {
-    title: "BIM & Quantity Surveying Software for Construction Firms | ADLM Studio",
-    description:
-      "ADLM Studio builds BIM takeoff, rate build-up and cost management tools for quantity surveyors, and trains the firms that use them. Revit, ArchiCAD and PlanSwift plugins built for the Nigerian market.",
-  },
-  "/products": {
-    title: "Products — BIM Plugins & QS Software | ADLM Studio",
-    description:
-      "Quantity takeoff plugins for Revit, ArchiCAD and PlanSwift, automated rate build-ups and cost management tools. Subscription pricing in naira, built for Nigerian quantity surveyors.",
-  },
-  "/about": {
-    title: "About ADLM Studio",
-    description:
-      "A Nigerian ConTech studio digitising quantity surveying end to end — takeoff, rates, bills, programmes and dashboards — with the training and process firms need to adopt it. 800+ AEC professionals trained since 2019.",
-  },
-  "/learn": {
-    title: "Learn — BIM & QS Training Courses | ADLM Studio",
-    description:
-      "Self-paced and cohort BIM training for quantity surveyors: Revit, Navisworks, MS Project, Power BI, 4D and 5D BIM, and AI for cost management.",
-  },
-  "/trainings": {
-    title: "Training & Events | ADLM Studio",
-    description:
-      "Upcoming ADLM Studio BIM and quantity surveying training, in person and online. Corporate programmes for QS firms and contractors across Nigeria.",
-  },
-  "/freebies": {
-    title: "Free QS & BIM Resources | ADLM Studio",
-    description:
-      "Free templates, tools and resources for quantity surveyors — rate templates, BoQ formats and BIM starter files.",
-  },
-  "/testimonials": {
-    title: "Testimonials | ADLM Studio",
-    description:
-      "What quantity surveyors and construction firms say about working with ADLM Studio.",
-  },
-  "/whats-new": {
-    title: "What's New | ADLM Studio",
-    description:
-      "Release notes for the ADLM plugin suite and cloud platform — what shipped, when, and what changed.",
-  },
-  "/support": {
-    title: "Support | ADLM Studio",
-    description: "Get help with ADLM plugins, licensing and installation.",
-  },
-  "/quote": {
-    title: "Request a Quote | ADLM Studio",
-    description:
-      "Tell us about your firm and we will price the tools, training and process to suit it.",
-  },
-};
+const STATIC_META = Object.fromEntries(
+  Object.entries(PAGE_META).map(([routePath, entry]) => [
+    routePath,
+    { title: fullTitle(entry.title), description: entry.description },
+  ]),
+);
 
 async function fetchJson(url, ms = 2500) {
   // Every one of these runs inside a request the visitor is waiting on, and a
@@ -273,7 +282,16 @@ async function fetchJson(url, ms = 2500) {
 async function resolveMeta({ baseUrl, pathname }) {
   const cleanPath = String(pathname || "/");
   const canonical = new URL(cleanPath, baseUrl).toString();
-  const API_BASE = String(process.env.VITE_API_BASE || "").trim().replace(/\/+$/, "");
+  // Defaulted rather than left empty. Without the fallback this function
+  // silently skipped every database-backed title whenever the env var was not
+  // set — which is the case locally and in any preview deployment that did not
+  // copy it, so product pages looked correct in production and generic
+  // everywhere they were tested.
+  const API_BASE = String(
+    process.env.VITE_API_BASE || "https://api.adlmstudio.net",
+  )
+    .trim()
+    .replace(/\/+$/, "");
 
   let meta = {
     title: "ADLM Studio",
@@ -383,6 +401,28 @@ async function resolveMeta({ baseUrl, pathname }) {
   return meta;
 }
 
+/**
+ * Load the compiled server bundle, once per instance.
+ *
+ * Imported lazily and defensively: if the SSR build is missing or fails to
+ * load, every route keeps working as the client-rendered shell it was before
+ * any of this existed. That is the whole safety story — a broken server render
+ * costs the page its crawlability, never its availability.
+ */
+let ssrModule;
+let ssrLoadFailed = false;
+
+async function loadSsr() {
+  if (ssrModule || ssrLoadFailed) return ssrModule;
+  try {
+    ssrModule = await import("../../dist-ssr/entry-server.js");
+  } catch (e) {
+    ssrLoadFailed = true;
+    console.error("[ssr] server bundle unavailable:", e?.message || e);
+  }
+  return ssrModule;
+}
+
 export default async function handler(req, res) {
   try {
     const baseUrl = getBaseUrl(req);
@@ -391,11 +431,52 @@ export default async function handler(req, res) {
     const pathname = full.searchParams.get("path") || "/";
 
     const template = readIndexHtml();
-    const meta = await resolveMeta({ baseUrl, pathname });
+    let meta = await resolveMeta({ baseUrl, pathname });
 
-    const html = injectMeta(template, meta);
+    // Body render. Everything past this point is best-effort: any failure
+    // leaves the shell, which already carries correct <head> tags.
+    let statusCode = 200;
+    let bodyHtml = null;
+    let preload;
+    let jsonLd;
 
-    res.statusCode = 200;
+    // Gated on the explicit list, not on whether the router finds a match.
+    // Every app route — dashboard, admin, projects, login — falls straight
+    // through to the client shell it has always been served.
+    const ssr = isSsrPath(pathname) ? await loadSsr() : null;
+    if (ssr?.render) {
+      const rendered = await ssr.render(new URL(pathname, baseUrl).toString());
+      if (rendered?.html) {
+        bodyHtml = rendered.html;
+        preload = rendered.preload;
+        jsonLd = rendered.head?.jsonLd;
+
+        // The page's own <Seo> wins over the table above. A page knows things
+        // this function cannot — a product's real name, a changelog's product
+        // line — and having rendered it, we have those values to hand. The
+        // table stays as the fallback for anything that sets no <Seo> at all.
+        meta = {
+          ...meta,
+          ...(rendered.head?.title ? { title: rendered.head.title } : {}),
+          ...(rendered.head?.description
+            ? { description: rendered.head.description }
+            : {}),
+        };
+
+        // Only server-rendered routes can be judged this way. A path the server
+        // does not know is left at 200 for the client router to handle, which
+        // is how every app route still works.
+        if (rendered.notFound) statusCode = 404;
+      }
+    }
+
+    let html = injectMeta(template, meta);
+    if (bodyHtml) {
+      html = injectBody(html, bodyHtml, preload);
+      html = injectJsonLd(html, jsonLd);
+    }
+
+    res.statusCode = statusCode;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, s-maxage=300, max-age=0");
     res.end(html);

@@ -1,7 +1,8 @@
 import React from "react";
-import Seo from "../components/Seo.jsx";
+import PageSeo from "../components/PageSeo.jsx";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config";
+import { readPreloaded } from "../lib/preload.js";
 import { IconGraduation, IconPlaySquare } from "../components/icons.jsx";
 
 function makePreviewUrl(url, seconds = 60, startAt = 0) {
@@ -154,7 +155,12 @@ export default function Learn() {
     page: 1,
     pageSize: 5,
   });
-  const [courses, setCourses] = React.useState([]);
+  // Seeded by the server so the catalogue is in the HTML rather than appearing
+  // a second later. Undefined on any route the server did not render, which is
+  // the signal for loadCourses() below to behave exactly as it always has.
+  const [courses, setCourses] = React.useState(
+    () => readPreloaded("learn:courses") ?? [],
+  );
   const [loadingFree, setLoadingFree] = React.useState(false);
   const [loadingCourses, setLoadingCourses] = React.useState(false);
 
@@ -202,11 +208,7 @@ export default function Learn() {
 
   return (
     <div className="space-y-10">
-      <Seo
-        title="Learn — BIM & QS Training Courses"
-        description="Self-paced and cohort BIM training for quantity surveyors: Revit, Navisworks, MS Project, Power BI, 4D and 5D BIM, and AI for cost management. Free YouTube courses and paid programmes."
-        path="/learn"
-      />
+      <PageSeo path="/learn" crumb="Learn" />
       {/* Page header */}
       <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white px-5 py-7 md:px-8 md:py-9 shadow-depth">
         <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />

@@ -9,6 +9,7 @@
 // Edit the markdown to publish — no edits needed here.
 import React from "react";
 import { Link } from "react-router-dom";
+import PageSeo from "../components/PageSeo.jsx";
 import { FiArrowRight, FiBookOpen, FiClock, FiDownload, FiZap } from "../components/icons.jsx";
 import { Reveal, TiltCard } from "../components/effects.jsx";
 import { useChangelogs } from "../data/changelogsSource.js";
@@ -126,16 +127,11 @@ function ProductCard({ product, index }) {
 export default function WhatsNew() {
   const { products } = useChangelogs();
 
-  React.useEffect(() => {
-    const prev = document.title;
-    document.title = "What's New | ADLM Studio";
-    return () => {
-      document.title = prev;
-    };
-  }, []);
-
   return (
     <div className="mx-auto max-w-6xl">
+      {/* Replaces a bare document.title effect. Same title, plus the canonical,
+          Open Graph and breadcrumb tags that effect never set. */}
+      <PageSeo path="/whats-new" crumb="What's new" />
       <style>{`@keyframes fade-in-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
       {/* Hero — what ADLM does */}

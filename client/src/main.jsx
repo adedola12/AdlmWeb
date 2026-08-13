@@ -93,6 +93,11 @@ import PTrainingEnrollment from "./pages/PTrainingEnrollment.jsx";
 
 import TimeManagement from "./pages/TimeManagement.jsx";
 
+// Search landing pages. Shared with the server route tree in
+// routes.marketing.jsx so both render the same components for these paths,
+// which is what lets React hydrate the server's HTML instead of replacing it.
+import { landingRoutes } from "./pages/landing/routes.jsx";
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -113,6 +118,8 @@ const router = createBrowserRouter([
       { path: "products", element: <Products /> },
       { path: "quote", element: <Quote /> },
       { path: "product/:key", element: <ProductDetail /> },
+
+      ...landingRoutes,
 
       // Public client-facing proposal view
       { path: "proposal/:token", element: <PublicProposal /> },
@@ -675,7 +682,7 @@ const router = createBrowserRouter([
 // Find the AuthProvider wrap below; we add ThemeProvider as an outer
 // wrapper so theme is available everywhere including the AuthProvider's
 // internal state hooks if they ever want it.
-ReactDOM.createRoot(document.getElementById("root")).render(
+const tree = (
   <React.StrictMode>
     <ThemeProvider>
       <AuthProvider>
@@ -684,5 +691,20 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         </StepUpProvider>
       </AuthProvider>
     </ThemeProvider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
+
+const container = document.getElementById("root");
+
+// Marketing routes arrive with their HTML already rendered (see
+// src/entry-server.jsx). Hydrating attaches to that markup instead of
+// discarding it — calling createRoot on server HTML would wipe the very
+// content we sent the crawler and cause a visible repaint for everyone else.
+//
+// The flag is set by the server; every other route still mounts from empty, so
+// the app-side routes behave exactly as they did before.
+if (window.__ADLM_SSR__ === true && container.hasChildNodes()) {
+  ReactDOM.hydrateRoot(container, tree);
+} else {
+  ReactDOM.createRoot(container).render(tree);
+}
