@@ -32,6 +32,7 @@ const TOOLS = [
   { area: "freebies", to: "/admin/freebies", label: "Freebies", desc: "Free resources", icon: FiGift },
   { area: "flyers", to: "/admin/flyers", label: "Flyer Engine", desc: "Design flyers & thumbnails", icon: FiImage },
   { area: "support", to: "/admin/support-tickets", label: "Support Tickets", desc: "User help requests & AnyDesk", icon: FiLifeBuoy },
+  { area: "whatsapp", to: "/admin/whatsapp", label: "WhatsApp Queues", desc: "Leads & conversations from the bot", icon: FiLifeBuoy },
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },
   { area: "aiusage", to: "/admin/ai-usage", label: "AI Usage", desc: "AI spend, quotas & AWS credit", icon: FiCpu },
 ];

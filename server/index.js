@@ -61,6 +61,7 @@ import couponsPublic from "./routes/coupons.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 import agentRoutes from "./routes/agent.js";
+import adminWhatsappRoutes from "./routes/admin.whatsapp.js";
 import aiRoutes from "./routes/ai.js";
 import geoRoutes from "./routes/geo.js";
 
@@ -379,6 +380,8 @@ app.use("/admin/roles", adminRoles);
 import adminSupport from "./routes/admin.support.js";
 import adminAudit from "./routes/admin.audit.js";
 app.use("/admin/support-tickets", adminSupport);
+// WhatsApp queue board ("whatsapp" area). Reads the collection the bot owns.
+app.use("/admin/whatsapp", adminWhatsappRoutes);
 app.use("/admin/audit-log", adminAudit);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific

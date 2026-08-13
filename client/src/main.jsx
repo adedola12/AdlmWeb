@@ -53,6 +53,7 @@ import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RequestTechnicalHelp from "./pages/RequestTechnicalHelp.jsx";
 import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
+import AdminWhatsApp from "./pages/AdminWhatsApp.jsx";
 import AdminAuditLog from "./pages/AdminAuditLog.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
 import ProjectsGeneric from "./pages/ProjectsGeneric.jsx";
@@ -627,6 +628,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="support">
             <AdminSupportTickets />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ WhatsApp queue board — staff-grantable ("whatsapp" area)
+      {
+        path: "admin/whatsapp",
+        element: (
+          <AdminRoute permission="whatsapp">
+            <AdminWhatsApp />
           </AdminRoute>
         ),
       },

@@ -1,6 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { Product } from "../models/Product.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import {
@@ -8,13 +8,18 @@ import {
   describeImplausibleUSD,
 } from "../util/priceSanity.js";
 
-function requireAdmin(req, res, next) {
-  if (req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
-
 const router = express.Router();
-router.use(requireAuth, requireAdmin);
+
+// Gate on the "products" area like every other admin router, rather than the
+// local role check this file used to carry. That check read req.user.role
+// straight off the JWT, so it authorised against whatever role the token held
+// when it was issued — an account promoted to admin mid-session kept getting
+// "Admin only" until it signed out and back in. requirePermission re-reads the
+// role from the database, so a reassignment takes effect immediately.
+//
+// Access is unchanged in practice: "products" is staffGrantable: false, so no
+// staff role can hold it and only super-admins pass.
+router.use(requireAuth, requirePermission("products"));
 
 // --- helpers ---
 function cleanDiscount(d) {

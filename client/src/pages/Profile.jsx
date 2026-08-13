@@ -2,7 +2,7 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { apiAuthed } from "../http.js";
+import { api, apiAuthed } from "../http.js";
 import { isAdmin, isStaff } from "../utils/roles.js";
 import AccountActivity from "../features/account/AccountActivity.jsx";
 import Billing from "../features/account/Billing.jsx";
@@ -106,16 +106,14 @@ export default function Profile() {
       (body.state && body.state !== user?.state)
     ) {
       try {
-        const refreshRes = await fetch("/auth/refresh", {
-          method: "POST",
-          credentials: "include",
-        });
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          if (refreshData?.accessToken) {
-            setAuth((prev) => ({ ...prev, accessToken: refreshData.accessToken }));
-            window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: refreshData }));
-          }
+        // Via api() so it reaches API_BASE. A bare fetch() resolved against
+        // this site's origin, where the SPA rewrite returns index.html with a
+        // 200 — so `ok` was true, .json() threw, and the catch below swallowed
+        // it. The immediate refresh this block exists for never happened.
+        const refreshData = await api("/auth/refresh", { method: "POST" });
+        if (refreshData?.accessToken) {
+          setAuth((prev) => ({ ...prev, accessToken: refreshData.accessToken }));
+          window.dispatchEvent(new CustomEvent("auth:refreshed", { detail: refreshData }));
         }
       } catch {
         // Non-critical — token will refresh naturally within 15 min

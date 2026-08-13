@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import appleLogo from "../assets/icons/apple-logo.png";
 import googlePlayLogo from "../assets/icons/playstore.png";
 import ComingSoonModal from "./ComingSoonModal.jsx";
+import { api } from "../http.js";
 
 const FALLBACK_APP_URL =
   "https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link";
@@ -11,8 +12,11 @@ export default function Footer() {
   const [appUrl, setAppUrl] = useState(FALLBACK_APP_URL);
 
   useEffect(() => {
-    fetch("/settings/mobile-app-url")
-      .then((r) => r.json())
+    // Must go through api() so it reaches API_BASE. A bare fetch() hits this
+    // site's own origin, where the SPA rewrite in vercel.json answers every
+    // unknown path with index.html — so r.json() throws, the catch swallows
+    // it, and the link silently stayed on FALLBACK_APP_URL forever.
+    api("/settings/mobile-app-url")
       .then((d) => { if (d?.mobileAppUrl) setAppUrl(d.mobileAppUrl); })
       .catch(() => {});
   }, []);

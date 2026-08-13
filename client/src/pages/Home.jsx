@@ -8,6 +8,7 @@ import { Reveal, Stagger, StaggerItem, TiltCard } from "../components/effects.js
 import { Eyebrow, GlowTile } from "../components/brand.jsx";
 
 import { useAuth } from "../store.jsx";
+import { api } from "../http.js";
 import {
   IconArrowRight,
   IconBook,
@@ -78,9 +79,6 @@ function CountUp({ to = 100, duration = 1200, decimals = 0, suffix = "" }) {
  * Hero uses a background image at /public/hero-construction.jpg.
  * Swap the URL if you prefer a different image.
  */
-const FALLBACK_APP_URL =
-  "https://drive.google.com/file/d/1dICSLBCbSERq6VwLmCvrisPjSKq_sg8v/view?usp=drive_link";
-
 /* Feature highlight cards shown on the right of the hero */
 const HERO_CARDS = [
   {
@@ -110,15 +108,6 @@ export default function Home() {
   const navigate = useNavigate();
   const isAuthed = Boolean(accessToken || (user && user.email));
 
-  const [appUrl, setAppUrl] = React.useState(FALLBACK_APP_URL);
-  React.useEffect(() => {
-    fetch("/settings/mobile-app-url")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.mobileAppUrl) setAppUrl(d.mobileAppUrl);
-      })
-      .catch(() => {});
-  }, []);
 
   // Pointer parallax for the hero decorative layers. Subtle (~few %), and
   // purely pointer-driven so it doesn't trigger on reduced-motion devices.
