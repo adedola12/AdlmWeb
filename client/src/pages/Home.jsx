@@ -8,7 +8,6 @@ import { Reveal, Stagger, StaggerItem, TiltCard } from "../components/effects.js
 import { Eyebrow, GlowTile } from "../components/brand.jsx";
 
 import { useAuth } from "../store.jsx";
-import { api } from "../http.js";
 import {
   IconArrowRight,
   IconBook,
