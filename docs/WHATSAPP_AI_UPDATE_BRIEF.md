@@ -11,7 +11,7 @@ This is the knowledge pack the **ADLM WhatsApp AI** answers from. It carries wha
 ## 1. How the WhatsApp AI should use this
 
 1. **Ground every answer here.** Never invent a feature, a price, a date, a discount or a release. If it is not in this brief or on the site, say you will check with the team.
-2. **Prices are per seat.** Nigerian contacts are quoted in ₦, everyone else in $. Organisation licences start at **two seats — except RateGen, which can be bought for one**.
+2. **Prices are per seat.** Nigerian contacts are quoted in ₦, everyone else in $. Organisation licences start at **two seats — except RateGen, which can be bought for one**. Naira prices are fixed and safe to quote; **dollar prices are converted at the day's exchange rate and move daily**, so read those off the site rather than from here (§4).
 3. **Send a video before offering a call.** Most "how does it work" questions are answered by a video below. A live demo is the fallback, not the opener.
 4. **Never ask for a password or card details on WhatsApp.** Checkout happens on the site.
 5. **CIVIQ is not purchasable.** It is in development. Take the contact's details and log the interest.
@@ -125,25 +125,32 @@ Civil & infrastructure takeoff inside AutoCAD Civil 3D 2024+. **Not on sale.** L
 
 | Product | Monthly | 6 months | Yearly | Installation |
 |---|---|---|---|---|
-| **RateGen** | ₦8,000 / $10 | ₦35,000 / $45 | ₦70,000 / $100 | — |
-| **HERON** (PlanSwift) | ₦12,000 / $10 | ₦65,000 / $50 | ₦120,000 / $100 | ₦15,000 / $5 |
-| **ADLM MEP** (Revit) | ₦18,000 / $15 | ₦90,000 / $60 | ₦180,000 / $120 | ₦20,000 / $6 |
-| **QUIV** (Revit) | ₦50,000 / $30 | — | ₦500,000 / $200 | ₦25,000 / $25 |
-| **ADLM Time Pro** | ₦2,000 / $2 | — | ₦20,000 / $20 | — |
+| **RateGen** | ₦8,000 | ₦35,000 | ₦70,000 | — |
+| **HERON** (PlanSwift) | ₦12,000 | ₦65,000 | ₦120,000 | ₦15,000 |
+| **ADLM MEP** (Revit) | ₦18,000 | ₦90,000 | ₦180,000 | ₦20,000 |
+| **QUIV** (Revit) | ₦50,000 | ₦285,000 | ₦500,000 | ₦25,000 |
+| **ADLM Time Pro** | ₦2,000 | — | ₦20,000 | — |
 | **CIVIQ** | *not purchasable — in development* | | | |
 
-**Courses** (one-off, twelve months' access)
+**Courses** (one-off, twelve months' access): BIM Course on Building Works **₦125,000**, BIM Course on Building Services (MEP & HVAC) **₦105,000**.
 
-| Course | Nigeria | International |
-|---|---|---|
-| BIM Course on Building Works | ₦125,000 | $149.99 |
-| BIM Course on Building Services (MEP & HVAC) | ₦105,000 | $99.98 |
+### Dollar prices are converted live — never quote one from this document
+
+As of 13 August 2026, ADLM no longer holds fixed dollar prices. Every USD figure is the Naira price converted at the day's exchange rate, so **it changes daily**. At ₦1,361 to the dollar the equivalents are:
+
+| | monthly | 6 months | yearly | installation |
+|---|---|---|---|---|
+| RateGen | $5.88 | $25.73 | $51.45 | — |
+| HERON | $8.82 | $47.78 | $88.20 | $11.03 |
+| ADLM MEP | $13.23 | $66.15 | $132.30 | $14.70 |
+| QUIV | $36.75 | $209.48 | $367.50 | $18.38 |
+| ADLM Time Pro | $1.47 | — | $14.70 | — |
+| BIM Building Works | | | $91.88 | |
+| BIM Services (MEP & HVAC) | | | $77.18 | |
+
+Treat that table as *illustrative*. Before quoting a dollar figure, read the live one off the product or purchase page — a rate move of ₦50 shifts QUIV's yearly price by more than $13. The Naira prices above are the stable ones and are safe to quote from memory.
 
 Also available: **extra project storage slots** in blocks of ten, per product, priced live on the purchase page.
-
-> ⚠️ **Do not quote Time Pro in dollars until the site is showing $2 and $20.** The site currently advertises **$2,000/month and $20,000/year** for it. Nothing is wrong with the product record — its USD fields are empty, which is the normal setting, and the server converts from the Naira price. The conversion itself was broken: it was reading a currency's rate against itself, always 1, so every price with an empty USD field was served at one dollar to the naira. Time Pro is the only product with empty USD fields, which is why it was the only one visibly wrong.
->
-> Two things clear it: the conversion fix ships (`server/util/fx.js`), and the deliberate $2/$20 is entered under **Admin → Products → ADLM Time Pro → Edit → Tier Pricing** — *Actual USD / month* `2`, *Actual USD / year* `20`. Without the second, the price is correct but floats with the exchange rate (about $1.47 today). Delete this note once the site agrees.
 
 ---
 
@@ -205,9 +212,9 @@ Every link below is live. The `/learn/free/...` URL is the ADLM website page (ke
 
 ## 6. Courses and training
 
-**BIM Course on Building Works** — ₦125,000 / $149.99. Project setup done properly (EIR → BEP → MIDP/TIDP → MPDT) in a real CDE; coordinate Arch/Struct/MEP with clash and issue tracking; auditable BoQs and 5D cost from model data; 4D sequencing; COBie handover; Power BI dashboards. Graduates leave with a portfolio: BEP pack, federated model, 4D/5D clip, BoQ, COBie and a dashboard. Taught with ADLM tools (HERON, RateGen, COBie Exporter).
+**BIM Course on Building Works** — ₦125,000 (about $92 at today’s rate). Project setup done properly (EIR → BEP → MIDP/TIDP → MPDT) in a real CDE; coordinate Arch/Struct/MEP with clash and issue tracking; auditable BoQs and 5D cost from model data; 4D sequencing; COBie handover; Power BI dashboards. Graduates leave with a portfolio: BEP pack, federated model, 4D/5D clip, BoQ, COBie and a dashboard. Taught with ADLM tools (HERON, RateGen, COBie Exporter).
 
-**BIM Course on Building Services (MEP & HVAC)** — ₦105,000 / $99.98. 100% online via Google Classroom, self-paced, over a 6-week roadmap (foundations → 3D → 4D → 5D → analytics → capstone). Revit MEP, ADLM Revit MEP plugin, Navisworks Manage, MS Project, Excel, RateGen, PlanSwift/CostX, Power BI, optional Python/AI. Weekly assessments, a "BIM Manager" capstone, certificate of completion, and the top 3 projects featured on ADLM channels.
+**BIM Course on Building Services (MEP & HVAC)** — ₦105,000 (about $77 at today’s rate). 100% online via Google Classroom, self-paced, over a 6-week roadmap (foundations → 3D → 4D → 5D → analytics → capstone). Revit MEP, ADLM Revit MEP plugin, Navisworks Manage, MS Project, Excel, RateGen, PlanSwift/CostX, Power BI, optional Python/AI. Weekly assessments, a "BIM Manager" capstone, certificate of completion, and the top 3 projects featured on ADLM channels.
 
 Both have preview videos on their course pages: https://www.adlmstudio.net/learn/course/bim-bld-arch and https://www.adlmstudio.net/learn/course/BIM-MEP-25
 
@@ -314,5 +321,4 @@ curl "https://api.adlmstudio.net/learn/free?page=1&pageSize=100"
 
 **Known gaps in this edition**
 - No demo video exists for RateGen, Time Pro, the Installer Hub or CIVIQ (§5).
-- Time Pro still shows $2,000/$20,000 on the site until the currency-conversion fix ships and the agreed $2/$20 is entered (§4).
 - Content from the Obsidian vault has **not** been merged into this edition — the vault is not reachable from where this was assembled. Everything here comes from the website, the live API and Notion. Hand over the relevant notes and they can be folded in.
