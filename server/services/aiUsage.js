@@ -41,7 +41,7 @@ export function monthStart(d = new Date()) {
  * @param {object} evt
  * @param {string} evt.feature        feature key (config/aiPricing.js)
  * @param {object} [evt.user]         lean User doc (or {_id,email,name,role})
- * @param {string} [evt.provider]     anthropic | openai | adlm-ai-service
+ * @param {string} [evt.provider]     bedrock | anthropic | openai | adlm-ai-service
  * @param {string} [evt.model]
  * @param {object} [evt.usage]        {inputTokens,outputTokens,cacheReadTokens,cacheWriteTokens}
  * @param {string} [evt.tokenSource]  reported | estimated | none

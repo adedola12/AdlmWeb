@@ -69,8 +69,15 @@ function openai() {
   return _openai;
 }
 
-export function agentEnabled() {
-  if (process.env.AGENT_ENABLED !== "true") return false;
+/**
+ * Can the selected provider be called at all? Credentials only — this asks
+ * nothing about whether any particular FEATURE is switched on.
+ *
+ * Separate from agentEnabled() because Ada is not the only caller: HelpBot has
+ * its own master switch, and hanging its availability off Ada's would mean
+ * turning the chat widget off silently took the help search's answers with it.
+ */
+export function providerConfigured() {
   if (PROVIDER === "openai") return !!process.env.OPENAI_API_KEY;
   // Bedrock authenticates with the function's IAM role. There is deliberately
   // no key to check here — removing that check is the point of the move, not
@@ -78,6 +85,11 @@ export function agentEnabled() {
   // rather than as a silently disabled agent.
   if (PROVIDER === "bedrock") return true;
   return !!process.env.ANTHROPIC_API_KEY;
+}
+
+export function agentEnabled() {
+  if (process.env.AGENT_ENABLED !== "true") return false;
+  return providerConfigured();
 }
 
 export function agentProvider() {
@@ -149,7 +161,7 @@ function anthropicSystem(system, { extendedTtl = false } = {}) {
 }
 
 /* ------------------------- Anthropic ------------------------- */
-async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}) {
+async function anthropicCreate({ system, messages, tools, maxTokens, temperature }, opts = {}) {
   const extendedTtl = opts.extendedTtl ?? useExtendedTtl();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -170,6 +182,7 @@ async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}
         system: anthropicSystem(system, { extendedTtl }),
         messages,
         ...(tools && tools.length ? { tools } : {}),
+        ...(temperature != null ? { temperature } : {}),
       }),
     });
 
@@ -200,7 +213,7 @@ async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}
           );
         }
         clearTimeout(timer);
-        return anthropicCreate({ system, messages, tools, maxTokens }, { extendedTtl: false });
+        return anthropicCreate({ system, messages, tools, maxTokens, temperature }, { extendedTtl: false });
       }
       throw new Error(msg);
     }
@@ -267,7 +280,14 @@ function looksLikeCacheRejection(msg) {
  * Notably it must carry `anthropic_version` and must NOT carry `model`, which
  * is the opposite of the direct API on both counts.
  */
-export function bedrockRequestBody({ system, messages, tools, maxTokens, useCache = true }) {
+export function bedrockRequestBody({
+  system,
+  messages,
+  tools,
+  maxTokens,
+  temperature,
+  useCache = true,
+}) {
   return {
     anthropic_version: BEDROCK_ANTHROPIC_VERSION,
     max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
@@ -277,16 +297,18 @@ export function bedrockRequestBody({ system, messages, tools, maxTokens, useCach
       : flattenSystem(system),
     messages,
     ...(tools && tools.length ? { tools } : {}),
+    // Omitted unless asked for, so each provider keeps its own default.
+    ...(temperature != null ? { temperature } : {}),
   };
 }
 
-async function bedrockCreate({ system, messages, tools, maxTokens }, opts = {}) {
+async function bedrockCreate({ system, messages, tools, maxTokens, temperature }, opts = {}) {
   const useCache = opts.useCache ?? (CACHE_ENABLED && !bedrockCacheUnavailable);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
 
   try {
-    const body = bedrockRequestBody({ system, messages, tools, maxTokens, useCache });
+    const body = bedrockRequestBody({ system, messages, tools, maxTokens, temperature, useCache });
 
     let res;
     try {
@@ -307,7 +329,7 @@ async function bedrockCreate({ system, messages, tools, maxTokens }, opts = {}) 
           `[aiClient] Bedrock rejected prompt caching (${msg}) — retrying without it.`,
         );
         clearTimeout(timer);
-        return bedrockCreate({ system, messages, tools, maxTokens }, { useCache: false });
+        return bedrockCreate({ system, messages, tools, maxTokens, temperature }, { useCache: false });
       }
       // Keep the SDK's error NAME in the message. It is the difference between
       // "the role cannot invoke this model" (AccessDeniedException) and "this
@@ -407,11 +429,13 @@ function toOpenAiMessages(system, messages) {
   return out;
 }
 
-async function openaiCreate({ system, messages, tools, maxTokens }) {
+async function openaiCreate({ system, messages, tools, maxTokens, temperature }) {
   const res = await openai().chat.completions.create({
     model: DEFAULT_MODEL,
     max_tokens: maxTokens || 700,
-    temperature: 0.3,
+    // 0.3 was this path's existing default and stays the default; a caller
+    // that asks for something more deterministic now gets it.
+    temperature: temperature ?? 0.3,
     messages: toOpenAiMessages(system, messages),
     ...(tools && tools.length
       ? { tools: toOpenAiTools(tools), tool_choice: "auto" }
@@ -464,15 +488,15 @@ async function openaiCreate({ system, messages, tools, maxTokens }) {
  * model call the website makes, so metering lives here rather than in each
  * caller — a new agent feature is metered the moment it calls createMessage().
  */
-export async function createMessage({ system, messages, tools, maxTokens, meta }) {
+export async function createMessage({ system, messages, tools, maxTokens, temperature, meta }) {
   const started = Date.now();
   try {
     const out =
       PROVIDER === "openai"
-        ? await openaiCreate({ system, messages, tools, maxTokens })
+        ? await openaiCreate({ system, messages, tools, maxTokens, temperature })
         : PROVIDER === "bedrock"
-          ? await bedrockCreate({ system, messages, tools, maxTokens })
-          : await anthropicCreate({ system, messages, tools, maxTokens });
+          ? await bedrockCreate({ system, messages, tools, maxTokens, temperature })
+          : await anthropicCreate({ system, messages, tools, maxTokens, temperature });
 
     recordAiUsage({
       feature: meta?.feature || "ada-chat",

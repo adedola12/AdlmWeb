@@ -4,11 +4,16 @@
 // reads all three from here so a new feature or model only has to be declared
 // once.
 //
-// WHY billing accounts matter: ADLM's QS cost-intelligence features run on the
-// separate AWS AI service (Bedrock), so their spend burns the AWS credit pool.
-// Ada (the sales agent) currently calls the Anthropic API directly, which is a
-// different bill. Mixing the two into one "AI spend" number would make the
-// credit runway meaningless, so every usage row is tagged with its account.
+// WHY billing accounts matter: a usage row is only comparable to another row
+// on the same bill, so every one is tagged with the account that pays for it.
+//
+// As of 2026-08-13 every AI feature runs on AWS and burns the same credit
+// pool: the QS cost-intelligence tools via the separate AI service, and Ada
+// and HelpBot via Bedrock. Both of the latter moved off third-party API keys
+// after an exhausted Anthropic credit balance took Ada down for hours. The
+// per-account split stays because the code still supports pointing Ada or
+// HelpBot back at Anthropic or OpenAI, and the day that happens the runway
+// number has to keep meaning something.
 
 /* ───────────────────────────── features ───────────────────────────── */
 // key          — stored on every AiUsage row and on per-feature allocations
@@ -34,7 +39,9 @@ export const AI_FEATURES = [
     key: "helpbot",
     label: "HelpBot fallback",
     desc: "One-shot answer when the catalogue search finds nothing.",
-    provider: "openai",
+    // "agent", like Ada: it goes through the shared transport and so follows
+    // AGENT_PROVIDER. It was pinned to OpenAI until it moved off its own key.
+    provider: "agent",
     metered: true,
     guestAllowed: true,
   },

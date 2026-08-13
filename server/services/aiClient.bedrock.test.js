@@ -89,6 +89,15 @@ test("messages pass through untouched", () => {
   assert.deepEqual(bedrockRequestBody({ messages: MESSAGES }).messages, MESSAGES);
 });
 
+test("temperature is sent only when the caller asks for one", () => {
+  // HelpBot wants 0.2; Ada expresses no preference and must keep the
+  // provider's default rather than silently inheriting HelpBot's.
+  assert.equal(bedrockRequestBody({ messages: MESSAGES, temperature: 0.2 }).temperature, 0.2);
+  assert.ok(!("temperature" in bedrockRequestBody({ messages: MESSAGES })));
+  // 0 is a real setting, not an absent one.
+  assert.equal(bedrockRequestBody({ messages: MESSAGES, temperature: 0 }).temperature, 0);
+});
+
 /* ------------------------- metering ------------------------- */
 // Switching provider must not silently blind the AI-spend dashboard.
 
