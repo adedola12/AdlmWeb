@@ -50,6 +50,28 @@ export interface AdlmConfig {
   ssmPrefix: string;
 
   /**
+   * Which provider Ada's model calls go to, set as AGENT_PROVIDER on the API
+   * function: "bedrock" | "anthropic" | "openai".
+   *
+   * Set HERE rather than in SSM deliberately. lambda.js only copies a
+   * parameter into the environment when the variable is not already set, so a
+   * value here wins over whatever Parameter Store still holds — and what it
+   * holds is "anthropic" from before the move, pointing at an API key whose
+   * prepaid balance ran dry and took the agent down for hours.
+   *
+   * "bedrock" needs no key: the function's IAM role is the credential (see the
+   * bedrock:InvokeModel grant in adlm-api-stack.ts) and the spend lands on the
+   * AWS bill. It does require the model to be enabled for the account in the
+   * Bedrock console, which is a one-time click no deploy can perform.
+   *
+   * To move back to the direct API, change this to "anthropic" and redeploy;
+   * the key is still read from SSM. The model id is NOT set here on purpose —
+   * BEDROCK_MODEL_ID stays an SSM parameter so a wrong or retired one can be
+   * corrected without a deploy.
+   */
+  agentProvider: "bedrock" | "anthropic" | "openai";
+
+  /**
    * Atlas connection ceiling for the MAIN cluster.
    *
    * CONFIRMED by the founder: M10 => 1500 connections.
@@ -251,6 +273,10 @@ export const config: AdlmConfig = {
   apiHostname: "api.adlmstudio.net", // CONFIRMED
 
   ssmPrefix: "/adlm/cloud/prod",
+
+  // Moved off the direct Anthropic API on 2026-08-13, after an exhausted
+  // credit balance rejected every one of Ada's calls. See the interface docs.
+  agentProvider: "bedrock",
 
   atlasConnectionLimit: 1500, // CONFIRMED — M10
   mongoMaxPool: 5,

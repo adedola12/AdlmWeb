@@ -19,19 +19,19 @@
 /** Ordered most-specific first — the first pattern to match wins. */
 const PATTERNS = [
   [
-    /\b401\b|unauthor|authentication_error|invalid.{0,12}api.?key|invalid x-api-key|permission_error|\b403\b/i,
+    /\b401\b|\b403\b|unauthor|not authoriz|authentication_error|invalid.{0,12}api.?key|invalid x-api-key|permission_error|accessdenied|expiredtoken|unrecognizedclient|signature/i,
     "provider_auth",
-    "The AI provider rejected the credentials. Check the API key on the server is present, current and not revoked.",
+    "The AI provider rejected the credentials. On Bedrock that is the function's IAM role — check it may call bedrock:InvokeModel and that model access is enabled for the account. On the direct API, check the key is present, current and not revoked.",
   ],
   [
     /credit balance|billing|insufficient|payment|spend.{0,8}(cap|limit)|out of (credit|quota)/i,
     "provider_billing",
-    "The AI provider rejected the call for billing reasons. Check the credit balance and any spend cap on the account that owns the key.",
+    "The AI provider rejected the call for billing reasons. Check the credit balance and any spend cap on the account being billed.",
   ],
   [
-    /\b429\b|\b529\b|rate.?limit|overloaded|too many requests/i,
+    /\b429\b|\b529\b|rate.?limit|throttl|overloaded|too many requests|servicequotaexceeded/i,
     "provider_rate_limit",
-    "The AI provider is rate-limiting or overloaded. Usually transient — retry before changing anything.",
+    "The AI provider is rate-limiting or overloaded. Usually transient — retry before changing anything. On Bedrock a persistent one means the account's per-model quota is too low.",
   ],
   [
     /mongo|buffering timed out|topology|failed to connect to server|ECONNREFUSED.*27017/i,
@@ -39,14 +39,18 @@ const PATTERNS = [
     "The agent could not read the database it grounds its answers in. Check /health for the connection state.",
   ],
   [
-    /abort|timed? ?out|ETIMEDOUT|ENOTFOUND|ECONNRESET|ECONNREFUSED|socket hang up|fetch failed|network/i,
+    // The bare socket codes are word-bounded on purpose. Unanchored,
+    // ENOTFOUND matches inside "ResourceNotFoundException" (resourc-enotfound-
+    // exception), which would send someone to check DNS when the real answer
+    // is that the Bedrock model id does not exist.
+    /abort|timed? ?out|\bETIMEDOUT\b|\bENOTFOUND\b|\bECONNRESET\b|\bECONNREFUSED\b|socket hang up|fetch failed|\bnetwork\b/i,
     "provider_unreachable",
     "The call to the AI provider never completed. Check egress from the Lambda and the provider's status page.",
   ],
   [
-    /\b(400|404|422)\b|invalid_request|not_found_error|unsupported|model/i,
+    /\b(400|404|422)\b|invalid_request|not_found_error|validationexception|resourcenotfound|unsupported|model/i,
     "provider_rejected",
-    "The AI provider rejected the request itself — most often an unknown model name, a malformed tool schema, or a beta header it no longer accepts.",
+    "The AI provider rejected the request itself — most often an unknown model id (on Bedrock, one missing its regional inference-profile prefix), a malformed tool schema, or a beta header it no longer accepts.",
   ],
 ];
 

@@ -1,14 +1,22 @@
 // server/services/aiClient.js
 // Provider-agnostic chat transport for the ADLM AI Agent.
 //
-//   AGENT_PROVIDER=anthropic (default) → Claude via REST (native tool use).
+//   AGENT_PROVIDER=bedrock (default)   → Claude on Amazon Bedrock (IAM auth).
+//   AGENT_PROVIDER=anthropic           → Claude via REST, with an API key.
 //   AGENT_PROVIDER=openai              → OpenAI SDK (function-calling).
 //
-// BOTH providers support tools, so the full agent (Buy/Sign-up buttons + lead
-// capture) works either way. The canonical message/tool format used across the
-// agent loop is Anthropic-style content blocks; the OpenAI adapter translates
-// that to/from OpenAI's chat format on each call, so salesAgent.js never needs
-// to know which provider is active.
+// ALL THREE support tools, so the full agent (Buy/Sign-up buttons + lead
+// capture) works whichever is active. The canonical message/tool format used
+// across the agent loop is Anthropic-style content blocks; the OpenAI adapter
+// translates that to/from OpenAI's chat format on each call, so salesAgent.js
+// never needs to know which provider is active.
+//
+// WHY BEDROCK IS THE DEFAULT: the direct Anthropic endpoint authenticates with
+// an API key drawn against a prepaid credit balance, and both of those are
+// single points of failure that have already taken Ada down — every message
+// for hours, with the provider answering "your credit balance is too low".
+// Bedrock authenticates with the function's own IAM role and bills to AWS, so
+// there is no key to revoke, rotate or leak and no separate balance to drain.
 //
 // The agent loop (services/salesAgent.js) owns the tools and the multi-turn
 // tool-result exchange; this module only normalizes one model round-trip into:
@@ -17,16 +25,39 @@
 
 import fetch from "node-fetch";
 import OpenAI from "openai";
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { recordAiUsage, normalizeUsage } from "./aiUsage.js";
 
-const PROVIDER = (process.env.AGENT_PROVIDER || "anthropic").toLowerCase();
+const PROVIDER = (process.env.AGENT_PROVIDER || "bedrock").toLowerCase();
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MS || 30000);
 
+// Bedrock pins the Messages API contract in the body rather than a header.
+const BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31";
+
+// Lambda sets AWS_REGION for us; the literal is only for local runs.
+const BEDROCK_REGION =
+  process.env.BEDROCK_REGION || process.env.AWS_REGION || "eu-west-1";
+
+// A cross-region inference profile, not a bare foundation-model id — the newer
+// Claude models are only on-demand invocable through one. The `eu.` prefix is
+// tied to the EU regions: deploying outside them means changing this to the
+// matching prefix (`us.`, `apac.`) via BEDROCK_MODEL_ID, and the model has to
+// be enabled for the account in the Bedrock console first either way.
+const BEDROCK_MODEL_ID =
+  process.env.BEDROCK_MODEL_ID || "eu.anthropic.claude-haiku-4-5-20251001-v1:0";
+
+// Bedrock is keyed on BEDROCK_MODEL_ID and ignores AGENT_MODEL entirely: the
+// two id formats are not interchangeable, and AGENT_MODEL is already set to a
+// direct-API id in every environment carried over from the API-key era.
+// Letting it win here would only mislabel the usage rows, since the call
+// itself always goes to BEDROCK_MODEL_ID.
 const DEFAULT_MODEL =
-  process.env.AGENT_MODEL ||
-  (PROVIDER === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001");
+  PROVIDER === "bedrock"
+    ? BEDROCK_MODEL_ID
+    : process.env.AGENT_MODEL ||
+      (PROVIDER === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001");
 
 // Output-token cap per model round-trip. Bounds spend on a public key; the
 // caller may pass a smaller value but never a larger one.
@@ -41,6 +72,11 @@ function openai() {
 export function agentEnabled() {
   if (process.env.AGENT_ENABLED !== "true") return false;
   if (PROVIDER === "openai") return !!process.env.OPENAI_API_KEY;
+  // Bedrock authenticates with the function's IAM role. There is deliberately
+  // no key to check here — removing that check is the point of the move, not
+  // an omission. A missing role shows up as an AccessDenied on the first call
+  // rather than as a silently disabled agent.
+  if (PROVIDER === "bedrock") return true;
   return !!process.env.ANTHROPIC_API_KEY;
 }
 
@@ -192,6 +228,120 @@ async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}
   }
 }
 
+/* ------------------------- Bedrock ------------------------- */
+// Claude on Amazon Bedrock speaks the same Messages API as Anthropic's own
+// endpoint, so the request body, the tool definitions and the response content
+// blocks are all identical and the agent loop above needs no adapter. Three
+// things differ, and all three are handled here:
+//
+//   1. the model is the InvokeModel target, not a `model` body field;
+//   2. `anthropic_version` is required IN THE BODY, pinned to a Bedrock-
+//      specific string that is not the date used on the direct API;
+//   3. there is no anthropic-beta header, so the 1h cache TTL cannot be asked
+//      for at all — Bedrock offers the standard ephemeral cache and nothing
+//      longer. Asking anyway would be a hard validation error, so the
+//      extendedTtl machinery above is simply not reachable from this path.
+
+let _bedrock = null;
+function bedrock() {
+  if (!_bedrock) _bedrock = new BedrockRuntimeClient({ region: BEDROCK_REGION });
+  return _bedrock;
+}
+
+// Set if Bedrock ever objects to the cache_control blocks, so we degrade to an
+// uncached prompt for the rest of the process instead of failing every call.
+// Same principle as the extended-TTL fallback: a cost optimisation must never
+// be the reason the agent is down. Prompt-cache support varies by model, and
+// BEDROCK_MODEL_ID is deliberately easy to change.
+let bedrockCacheUnavailable = false;
+
+function looksLikeCacheRejection(msg) {
+  const s = String(msg || "").toLowerCase();
+  return s.includes("cache") || s.includes("cachepoint");
+}
+
+/**
+ * The InvokeModel request body. Exported for tests: the shape is the whole
+ * contract with Bedrock, and every way of getting it wrong fails identically
+ * from outside — a ValidationException and an agent that answers nothing.
+ * Notably it must carry `anthropic_version` and must NOT carry `model`, which
+ * is the opposite of the direct API on both counts.
+ */
+export function bedrockRequestBody({ system, messages, tools, maxTokens, useCache = true }) {
+  return {
+    anthropic_version: BEDROCK_ANTHROPIC_VERSION,
+    max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+    // Never the extended TTL on this path — see the note above.
+    system: useCache
+      ? anthropicSystem(system, { extendedTtl: false })
+      : flattenSystem(system),
+    messages,
+    ...(tools && tools.length ? { tools } : {}),
+  };
+}
+
+async function bedrockCreate({ system, messages, tools, maxTokens }, opts = {}) {
+  const useCache = opts.useCache ?? (CACHE_ENABLED && !bedrockCacheUnavailable);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+
+  try {
+    const body = bedrockRequestBody({ system, messages, tools, maxTokens, useCache });
+
+    let res;
+    try {
+      res = await bedrock().send(
+        new InvokeModelCommand({
+          modelId: BEDROCK_MODEL_ID,
+          contentType: "application/json",
+          accept: "application/json",
+          body: JSON.stringify(body),
+        }),
+        { abortSignal: ctrl.signal },
+      );
+    } catch (err) {
+      const msg = String(err?.message || err);
+      if (useCache && looksLikeCacheRejection(msg)) {
+        bedrockCacheUnavailable = true;
+        console.warn(
+          `[aiClient] Bedrock rejected prompt caching (${msg}) — retrying without it.`,
+        );
+        clearTimeout(timer);
+        return bedrockCreate({ system, messages, tools, maxTokens }, { useCache: false });
+      }
+      // Keep the SDK's error NAME in the message. It is the difference between
+      // "the role cannot invoke this model" (AccessDeniedException) and "this
+      // model id does not exist in this region" (ValidationException), and the
+      // health endpoint classifies on this text.
+      throw new Error(`Bedrock ${err?.name || "error"}: ${msg}`);
+    }
+
+    const data = JSON.parse(new TextDecoder().decode(res.body));
+    const content = Array.isArray(data.content) ? data.content : [];
+    const text = content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    const toolUses = content
+      .filter((b) => b.type === "tool_use")
+      .map((b) => ({ id: b.id, name: b.name, input: b.input || {} }));
+
+    return {
+      text,
+      toolUses,
+      assistantContent: content, // echo back verbatim on the next turn
+      stopReason: data.stop_reason || "end_turn",
+      // Bedrock does not echo the model, and the id it was invoked with is
+      // what the cost table needs to match on anyway.
+      model: BEDROCK_MODEL_ID,
+      usage: normalizeUsage(data.usage),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* ------------------------- OpenAI (function-calling) ------------------------- */
 
 // Anthropic tool defs → OpenAI function-tool defs.
@@ -320,7 +470,9 @@ export async function createMessage({ system, messages, tools, maxTokens, meta }
     const out =
       PROVIDER === "openai"
         ? await openaiCreate({ system, messages, tools, maxTokens })
-        : await anthropicCreate({ system, messages, tools, maxTokens });
+        : PROVIDER === "bedrock"
+          ? await bedrockCreate({ system, messages, tools, maxTokens })
+          : await anthropicCreate({ system, messages, tools, maxTokens });
 
     recordAiUsage({
       feature: meta?.feature || "ada-chat",
@@ -357,5 +509,5 @@ export async function createMessage({ system, messages, tools, maxTokens, meta }
 }
 
 export function supportsTools() {
-  return true; // both providers support tools now
+  return true; // all three providers support tools
 }

@@ -171,6 +171,10 @@ export class AdlmApiStack extends Stack {
         ENABLE_RENEWAL_CRON: "false",
         // Never serve the frontend from the function.
         SERVE_CLIENT: "false",
+        // Ada's model provider — "bedrock", authenticated by this function's
+        // IAM role (see the grant below). Set from config rather than SSM on
+        // purpose; the reasoning is on AdlmConfig.agentProvider.
+        AGENT_PROVIDER: cfg.agentProvider,
       },
 
       logGroup: apiLogs,
@@ -228,6 +232,30 @@ export class AdlmApiStack extends Stack {
         conditions: {
           StringEquals: { "kms:ViaService": `ssm.${cfg.region}.amazonaws.com` },
         },
+      }),
+    );
+
+    /* ───────────── Permission to call Claude on Bedrock ─────────────
+     * This replaces an Anthropic API key, so the role IS the credential now.
+     *
+     * Two resources, because a cross-region inference profile is not one
+     * thing: the call is authorised against the PROFILE, and the profile then
+     * fans the request out to the underlying foundation model in whichever
+     * region it picks. Granting only the profile fails at the second hop with
+     * an AccessDenied that names a model ARN nobody asked for directly.
+     *
+     * Scoped to Anthropic models rather than "*" — this role serves the whole
+     * public API, so it should not be able to invoke every model in the
+     * account. The regions stay wildcarded because choosing them is the
+     * inference profile's job.
+     */
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ["bedrock:InvokeModel"],
+        resources: [
+          `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
+          "arn:aws:bedrock:*::foundation-model/anthropic.*",
+        ],
       }),
     );
 

@@ -50,6 +50,28 @@ test("throttling and overload are called out as transient", () => {
   }
 });
 
+// Bedrock reports the same underlying conditions in an entirely different
+// vocabulary — AWS exception names, no HTTP status in the message. A
+// classifier that only knows Anthropic's wording goes blind the moment the
+// provider is switched, which is precisely when it is needed most.
+test("AWS exception names classify as well as Anthropic's wording", () => {
+  const cases = [
+    // The two that a fresh Bedrock setup actually hits: the role lacks
+    // bedrock:InvokeModel, or model access was never enabled in the console.
+    ["Bedrock AccessDeniedException: User: arn:aws:sts::…:assumed-role/ApiFn is not authorized to perform: bedrock:InvokeModel", "provider_auth"],
+    ["Bedrock ExpiredTokenException: The security token included in the request is expired", "provider_auth"],
+    ["Bedrock UnrecognizedClientException: The security token included in the request is invalid", "provider_auth"],
+    ["Bedrock ThrottlingException: Too many requests, please wait before trying again", "provider_rate_limit"],
+    ["Bedrock ServiceQuotaExceededException", "provider_rate_limit"],
+    // A model id missing its regional inference-profile prefix.
+    ["Bedrock ValidationException: The provided model identifier is invalid", "provider_rejected"],
+    ["Bedrock ResourceNotFoundException", "provider_rejected"],
+  ];
+  for (const [msg, want] of cases) {
+    assert.equal(classifyAgentError(new Error(msg)).code, want, msg);
+  }
+});
+
 test("a mongoose buffering timeout is the database, not the provider", () => {
   // Ordering matters here: this message also contains "timed out", which would
   // otherwise class it as an unreachable provider and send someone to check
