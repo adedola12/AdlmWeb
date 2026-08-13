@@ -17,7 +17,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { fetchLiveFx, calcUSD } from "./fx.js";
+import { fetchLiveFx, calcUSD, usdPrice } from "./fx.js";
+import { getEffectivePrices } from "./pricing.js";
 
 // Rates as open.er-api.com actually returned them on the day the bug was found.
 const NGN_PER_USD = 1362;
@@ -165,6 +166,76 @@ test("₦2,000 converts to $1.47, not $2,000", async () => {
 test("converted prices are rounded to 2dp for display", async () => {
   assert.equal(calcUSD(50000, USD_PER_NGN), 36.7);
   assert.equal(calcUSD(1, USD_PER_NGN), 0);
+});
+
+// ── usdPrice: what the pages actually read ──────────────────────────────────
+
+test("every USD tier is resolved, not just monthly/yearly/install", async () => {
+  // The 6-month tier is the one that bit: Purchase.jsx reads `sixMonthUSD || 0`
+  // off this payload, so leaving it unresolved advertised a 6-month
+  // subscription at $0 while checkout charged the converted price.
+  const out = usdPrice(
+    { monthlyNGN: 12000, sixMonthNGN: 65000, yearlyNGN: 120000, installNGN: 15000 },
+    USD_PER_NGN,
+  );
+  assert.equal(out.monthlyUSD, 8.81);
+  assert.equal(out.sixMonthUSD, 47.71);
+  assert.equal(out.yearlyUSD, 88.08);
+  assert.equal(out.installUSD, 11.01);
+});
+
+test("explicit overrides still win on every tier", async () => {
+  const out = usdPrice(
+    {
+      monthlyNGN: 12000, monthlyUSD: 10,
+      sixMonthNGN: 65000, sixMonthUSD: 50,
+      yearlyNGN: 120000, yearlyUSD: 100,
+      installNGN: 15000, installUSD: 5,
+    },
+    USD_PER_NGN,
+  );
+  assert.deepEqual(
+    [out.monthlyUSD, out.sixMonthUSD, out.yearlyUSD, out.installUSD],
+    [10, 50, 100, 5],
+  );
+});
+
+test("a discounted tier that was never set is left absent", async () => {
+  // Writing 0 into an unset sale price would read as "₦0, on offer" to
+  // anything testing presence rather than value.
+  const out = usdPrice({ monthlyNGN: 12000 }, USD_PER_NGN);
+  assert.equal("discountedMonthlyUSD" in out, false);
+  assert.equal("discountedYearlyUSD" in out, false);
+});
+
+test("a discounted tier that IS set gets converted", async () => {
+  const out = usdPrice(
+    { monthlyNGN: 12000, discountedMonthlyNGN: 9000 },
+    USD_PER_NGN,
+  );
+  assert.equal(out.discountedMonthlyUSD, 6.61);
+});
+
+test("what the page shows equals what checkout charges", async () => {
+  // The display path (usdPrice, here) and the money path (getEffectivePrices in
+  // pricing.js) are separate implementations of the same rule. This is the
+  // assertion that keeps them honest — a buyer must never be quoted one figure
+  // and charged another.
+  for (const price of [
+    { monthlyNGN: 12000, sixMonthNGN: 65000, yearlyNGN: 120000, installNGN: 15000 },
+    { monthlyNGN: 8000, sixMonthNGN: 35000, yearlyNGN: 70000, installNGN: 0 },
+    { monthlyNGN: 2000, yearlyNGN: 20000, monthlyUSD: 2, yearlyUSD: 20 },
+    { monthlyNGN: 50000, yearlyNGN: 500000, installNGN: 25000, monthlyUSD: 30 },
+  ]) {
+    const shown = usdPrice(price, USD_PER_NGN);
+    const charged = getEffectivePrices({ price }, "USD", USD_PER_NGN);
+    assert.equal(shown.monthlyUSD, charged.monthly, "monthly");
+    assert.equal(shown.yearlyUSD, charged.yearly, "yearly");
+    assert.equal(shown.installUSD, charged.install, "install");
+    if (price.sixMonthNGN) {
+      assert.equal(shown.sixMonthUSD, charged.sixMonth, "6-month");
+    }
+  }
 });
 
 test("an override of 0 is honoured rather than converted", async () => {

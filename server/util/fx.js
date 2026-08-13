@@ -115,18 +115,43 @@ export function calcUSD(ngn, fxRate, override) {
   return Math.round((usd + Number.EPSILON) * 100) / 100;
 }
 
+// Every USD field the client reads, paired with the naira field it converts
+// from. This must cover the whole of PriceSchema's USD side: the pages read
+// these values straight off the payload, so a tier missing here is displayed
+// as `undefined || 0` — i.e. free — while checkout charges the real converted
+// amount from getEffectivePrices (util/pricing.js). The 6-month tier and the
+// discounted tiers were missing, so any product without an explicit override
+// on them advertised $0.
+const USD_TIERS = [
+  ["monthlyUSD", "monthlyNGN"],
+  ["sixMonthUSD", "sixMonthNGN"],
+  ["yearlyUSD", "yearlyNGN"],
+  ["installUSD", "installNGN"],
+  ["discountedMonthlyUSD", "discountedMonthlyNGN"],
+  ["discountedSixMonthUSD", "discountedSixMonthNGN"],
+  ["discountedYearlyUSD", "discountedYearlyNGN"],
+];
+
+/** Price object with every USD tier resolved: override if set, else converted. */
+export function usdPrice(price = {}, fx) {
+  const out = { ...price };
+  for (const [usd, ngn] of USD_TIERS) {
+    // Only fill a discounted tier that actually exists — writing 0 into one
+    // that was never set is harmless today (the "discount wins if > 0" rule
+    // ignores it) but it would read as a real ₦0 sale price to anything that
+    // checks presence rather than value.
+    if (usd.startsWith("discounted") && price[ngn] == null && price[usd] == null) continue;
+    out[usd] = calcUSD(price[ngn], fx, price[usd]);
+  }
+  return out;
+}
+
 /** Attach computed USD fields to a single product object */
 export async function attachUSDFields(product) {
   const fx = await getFxRate();
-  const price = product.price || {};
   return {
     ...product,
-    price: {
-      ...price,
-      monthlyUSD: calcUSD(price.monthlyNGN, fx, price.monthlyUSD),
-      yearlyUSD: calcUSD(price.yearlyNGN, fx, price.yearlyUSD),
-      installUSD: calcUSD(price.installNGN, fx, price.installUSD),
-    },
+    price: usdPrice(product.price || {}, fx),
     fxRateNGNUSD: fx,
   };
 }
@@ -134,17 +159,9 @@ export async function attachUSDFields(product) {
 /** Attach computed USD fields to a list */
 export async function attachUSDList(items) {
   const fx = await getFxRate();
-  return items.map((p) => {
-    const price = p.price || {};
-    return {
-      ...p,
-      price: {
-        ...price,
-        monthlyUSD: calcUSD(price.monthlyNGN, fx, price.monthlyUSD),
-        yearlyUSD: calcUSD(price.yearlyNGN, fx, price.yearlyUSD),
-        installUSD: calcUSD(price.installNGN, fx, price.installUSD),
-      },
-      fxRateNGNUSD: fx,
-    };
-  });
+  return items.map((p) => ({
+    ...p,
+    price: usdPrice(p.price || {}, fx),
+    fxRateNGNUSD: fx,
+  }));
 }
