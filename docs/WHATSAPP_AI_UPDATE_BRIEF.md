@@ -11,7 +11,7 @@ This is the knowledge pack the **ADLM WhatsApp AI** answers from. It carries wha
 ## 1. How the WhatsApp AI should use this
 
 1. **Ground every answer here.** Never invent a feature, a price, a date, a discount or a release. If it is not in this brief or on the site, say you will check with the team.
-2. **Prices are per seat.** Nigerian contacts are quoted in ₦, everyone else in $. Organisation licences start at **two seats — except RateGen, which can be bought for one**. Naira prices are fixed and safe to quote; **dollar prices are converted at the day's exchange rate and move daily**, so read those off the site rather than from here (§4).
+2. **Quote the naira price — it is fixed. Never state a dollar figure as final.** Prices are per seat. Organisation licences start at **two seats — except RateGen, which can be bought for one**. Dollar prices are the naira price converted at the day's exchange rate, so they move daily and any figure in this document is only true for the day it was written. For an international buyer: give the naira price, say the dollar equivalent tracks the exchange rate, and either send them the product page — which always shows today's figure — or offer to confirm it for them (§4).
 3. **Send a video before offering a call.** Most "how does it work" questions are answered by a video below. A live demo is the fallback, not the opener.
 4. **Never ask for a password or card details on WhatsApp.** Checkout happens on the site.
 5. **CIVIQ is not purchasable.** It is in development. Take the contact's details and log the interest.
@@ -148,7 +148,16 @@ As of 13 August 2026, ADLM no longer holds fixed dollar prices. Every USD figure
 | BIM Building Works | | | $91.88 | |
 | BIM Services (MEP & HVAC) | | | $77.18 | |
 
-Treat that table as *illustrative*. Before quoting a dollar figure, read the live one off the product or purchase page — a rate move of ₦50 shifts QUIV's yearly price by more than $13. The Naira prices above are the stable ones and are safe to quote from memory.
+**Treat that table as illustrative, never as a quote.** It is what the conversion produced on 13 August 2026 at ₦1,361 to the dollar, and it moves every day — a ₦50 shift changes QUIV's yearly price by more than $13.
+
+So when someone asks the price in dollars:
+
+- Give the **naira** price, which is fixed and always correct.
+- Say the dollar equivalent tracks the exchange rate, so it moves day to day.
+- Send them the product page (`adlmstudio.net/product/<key>`) — it always shows today's figure — **or** offer to confirm the exact amount for them.
+- If they need a firm figure to put in front of a client or a finance team, hand off to Adedolapo. A quotation should not be built on a number that changes overnight.
+
+Rough order of magnitude is fine in conversation ("around $88 a year"). A precise figure stated as final is not.
 
 Also available: **extra project storage slots** in blocks of ten, per product, priced live on the purchase page.
 
