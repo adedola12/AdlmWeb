@@ -21,7 +21,7 @@ let _cache = {
 // for rates with NGN as the base and then read `rates.NGN`, which is a
 // currency against itself and therefore always 1. Every price with no explicit
 // USD override was served at one dollar to the naira, and nothing said so.
-const MAX_PLAUSIBLE_NGN_USD = 0.1;
+export const MAX_PLAUSIBLE_NGN_USD = 0.1;
 
 /**
  * Fetch the live NGN->USD rate (USD per ₦1).
@@ -93,7 +93,11 @@ export async function getFxRate() {
   try {
     const s = await Setting.findOne({ key: "global" }).lean();
     const dbFx = Number(s?.fxRateNGNUSD || 0);
-    if (dbFx > 0) {
+    // Same bound as the live path. Without it the stored rate is the one hole
+    // left in the guard: fetchLiveFx refuses a 1.0 from the API, but a 1.0
+    // sitting in Settings would be trusted the moment the fetch fails — which
+    // is exactly the state that published naira figures as dollars.
+    if (dbFx > 0 && dbFx < MAX_PLAUSIBLE_NGN_USD) {
       _cache = { fxRateNGNUSD: dbFx, fetchedAt: now };
       return dbFx;
     }

@@ -2,6 +2,7 @@ import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { Setting } from "../models/Setting.js";
 import { User } from "../models/User.js";
+import { MAX_PLAUSIBLE_NGN_USD } from "../util/fx.js";
 
 function requireAdminOrMiniAdmin(req, res, next) {
   const role = req.user?.role;
@@ -29,6 +30,17 @@ router.post("/fx", async (req, res) => {
   const { fxRateNGNUSD } = req.body || {};
   if (!fxRateNGNUSD || fxRateNGNUSD <= 0)
     return res.status(400).json({ error: "fxRateNGNUSD must be > 0" });
+
+  // The field is USD per ₦1 (~0.0007), not naira per dollar — an easy thing to
+  // get backwards, and entering 1362 here would price every product without an
+  // explicit USD override at 1362 dollars per naira. Refused at the door so it
+  // never reaches the value getFxRate falls back to.
+  if (fxRateNGNUSD >= MAX_PLAUSIBLE_NGN_USD)
+    return res.status(400).json({
+      error:
+        `fxRateNGNUSD is USD per ₦1 (e.g. 0.000734 for ₦1,362/$), so it must ` +
+        `be below ${MAX_PLAUSIBLE_NGN_USD}. Got ${fxRateNGNUSD}.`,
+    });
 
   const s = await Setting.findOneAndUpdate(
     { key: "global" },
