@@ -50,3 +50,8 @@ temp/
 *-service-account*.json
 *serviceaccount*.json
 adlm-ai-*.json
+
+# Rollback snapshots written by the USD price-conversion script — one per run,
+# timestamped. Worth keeping on disk to undo a bad conversion, not worth
+# accumulating in history.
+usd-overrides-backup-*.json
