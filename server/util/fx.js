@@ -23,6 +23,13 @@ let _cache = {
 // USD override was served at one dollar to the naira, and nothing said so.
 const MAX_PLAUSIBLE_NGN_USD = 0.1;
 
+// Last-resort rate, in the same unit as everything else in this file: USD per
+// ₦1, NOT naira per dollar. Exported because callers that wrap getFxRate() in
+// their own catch need a fallback in the right direction — one of them used a
+// bare 1600, which is the naira-per-dollar figure and six orders of magnitude
+// out, and would have quoted a ₦8,000 subscription at $12.8 million.
+export const DEFAULT_FX_NGN_USD = 0.001; // ₦1 ≈ $0.001
+
 /**
  * Fetch the live NGN->USD rate (USD per ₦1).
  *
@@ -100,9 +107,8 @@ export async function getFxRate() {
   } catch {}
 
   // 4. last-resort default (very conservative)
-  const DEFAULT_FX = 0.001; // 1 NGN = $0.001
-  _cache = { fxRateNGNUSD: DEFAULT_FX, fetchedAt: now };
-  return DEFAULT_FX;
+  _cache = { fxRateNGNUSD: DEFAULT_FX_NGN_USD, fetchedAt: now };
+  return DEFAULT_FX_NGN_USD;
 }
 
 /** Convert NGN -> USD using fx unless an explicit USD override is provided. */

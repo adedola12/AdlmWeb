@@ -11,7 +11,7 @@ import { PaidCourse } from "../models/PaidCourse.js";
 import { FreeVideo } from "../models/Learn.js";
 import { Training } from "../models/Training.js";
 import { Freebie } from "../models/Freebie.js";
-import { getFxRate } from "../util/fx.js";
+import { DEFAULT_FX_NGN_USD, getFxRate } from "../util/fx.js";
 import { getEffectivePrices } from "../util/pricing.js";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -63,7 +63,14 @@ function clip(s, n = 220) {
 }
 
 async function build() {
-  const fxRate = await getFxRate().catch(() => 1600);
+  // getFxRate() already falls back internally and does not throw, so this
+  // catch is a belt-and-braces guard — but it has to guard with a rate in the
+  // right unit. It read 1600, the naira-per-dollar figure, where every
+  // consumer here expects USD per ₦1: a ₦8,000/month product would have been
+  // read out to customers at $12.8m. Now that the USD overrides are cleared
+  // and every dollar price Ada quotes comes from this conversion, there is no
+  // stale override left to mask it.
+  const fxRate = await getFxRate().catch(() => DEFAULT_FX_NGN_USD);
 
   const [products, courses, trainings, freeVideos, freebies] = await Promise.all([
     Product.find({ isPublished: true })

@@ -140,14 +140,29 @@ async function anthropicCreate({ system, messages, tools, maxTokens }, opts = {}
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = data?.error?.message || `Anthropic API ${res.status}`;
-      // If the extended TTL is what it objected to, fall back to the standard
-      // 5m cache and remember not to ask again. A pricing optimisation must
-      // never be able to take the agent down.
-      if (extendedTtl && res.status === 400 && looksLikeTtlRejection(msg)) {
-        extendedTtlUnavailable = true;
-        console.warn(
-          `[aiClient] 1h prompt cache rejected (${msg}) — falling back to the 5m cache.`,
-        );
+      // A pricing optimisation must never be able to take the agent down, so
+      // ANY 400 raised while the beta header is on earns one retry without it.
+      // This used to require the message to mention a TTL, which made the
+      // safety net only as good as our guess at Anthropic's wording — reword
+      // the rejection and the retry never fires, so the fallback is missing
+      // exactly when it is needed. Retrying blind costs one cheap round-trip
+      // when the header was innocent, and the real error still surfaces from
+      // the second attempt.
+      //
+      // Only a TTL-shaped complaint disables the header for the rest of the
+      // process. An unrelated 400 must not quietly downgrade every later call
+      // to the pricier 5m cache.
+      if (extendedTtl && res.status === 400) {
+        if (looksLikeTtlRejection(msg)) {
+          extendedTtlUnavailable = true;
+          console.warn(
+            `[aiClient] 1h prompt cache rejected (${msg}) — falling back to the 5m cache.`,
+          );
+        } else {
+          console.warn(
+            `[aiClient] 400 while the 1h cache header was set (${msg}) — retrying once without it.`,
+          );
+        }
         clearTimeout(timer);
         return anthropicCreate({ system, messages, tools, maxTokens }, { extendedTtl: false });
       }
