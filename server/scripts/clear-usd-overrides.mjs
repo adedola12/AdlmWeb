@@ -16,12 +16,25 @@
 //   node server/scripts/clear-usd-overrides.mjs --apply --only rategen,revit
 //   node server/scripts/clear-usd-overrides.mjs --restore <backup.json>
 
-import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
-import { connectDB } from "../db.js";
-import { Product } from "../models/Product.js";
-import { getFxRate, calcUSD } from "../util/fx.js";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+
+// Load server/.env no matter which directory this is run from. `dotenv/config`
+// reads .env relative to the current working directory, so running this from
+// the repo root — which is how the usage line reads — would quietly find no
+// MONGO_URI and fail as though the variable were unset.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(HERE, "..", ".env") });
+
+// Imported dynamically, and deliberately: a static import is hoisted above the
+// line before this comment, and util/fx.js reads FX_SOURCE and FX_TTL_MS at
+// module scope. Loading these after dotenv means they see the real settings
+// rather than their defaults.
+const { connectDB } = await import("../db.js");
+const { Product } = await import("../models/Product.js");
+const { getFxRate, calcUSD } = await import("../util/fx.js");
 
 const USD_FIELDS = [
   ["monthlyUSD", "monthlyNGN"],
