@@ -193,10 +193,6 @@ export default function Purchase() {
   const money = (x) =>
     currency === "USD" ? round2(x) : Math.round(Number(x || 0));
 
-  // Kept for backward compatibility — unused by new tier logic
-  function pickBundleDiscount() { return null; }
-  function discountFixedValue() { return 0; }
-
   // ---------- load products ----------
   React.useEffect(() => {
     (async () => {

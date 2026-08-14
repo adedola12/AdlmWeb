@@ -148,7 +148,7 @@ router.post("/cart", requireAuth, async (req, res) => {
       const installPerSeat = firstTime ? eff.install : 0;
       const totalInstall = installPerSeat * seats;
 
-      const recurring = computeRecurring({ p, eff, periods, seats, currency, fx });
+      const recurring = computeRecurring({ p, eff, periods, seats, currency });
       const lineTotal = recurring + totalInstall;
 
       lines.push({

@@ -44,43 +44,14 @@ export function getEffectivePrices(p, currency, fx) {
   };
 }
 
-// Legacy product.discounts.{sixMonths,oneYear} — applied only as a fallback
-// when the corresponding new tier price (sixMonthNGN/yearlyNGN) is unset,
-// to preserve behavior for older products that haven't migrated.
-export function applyLegacyBundleDiscount(baseRecurring, disc, seats, currency, fx) {
-  if (!disc) return baseRecurring;
-
-  if (disc.type === "percent") {
-    const pct = Number(disc.valueNGN || 0);
-    const factor = Math.max(0, 1 - pct / 100);
-    return toMoney(baseRecurring * factor, currency);
-  }
-
-  if (disc.type === "fixed") {
-    let fixedPerSeat = 0;
-    if (currency === "USD") {
-      fixedPerSeat =
-        disc.valueUSD != null
-          ? Number(disc.valueUSD || 0)
-          : Number(disc.valueNGN || 0) * fx;
-      fixedPerSeat = round2(fixedPerSeat);
-    } else {
-      fixedPerSeat = Math.round(Number(disc.valueNGN || 0));
-    }
-    if (fixedPerSeat > 0) return toMoney(fixedPerSeat * seats, currency);
-  }
-
-  return baseRecurring;
-}
-
 // Tier logic mirroring client/src/pages/Purchase.jsx lineCalc().
 // 1-5 mo  → monthly × periods × seats
-// 6 mo    → sixMonth (or fallback monthly × 6 + legacy sixMonths discount) × seats
+// 6 mo    → sixMonth (or fallback monthly × 6) × seats
 // 7-11 mo → sixMonth + monthly × (periods - 6), all × seats
-// 12 mo   → yearly  (or fallback monthly × 12 + legacy oneYear discount) × seats
+// 12 mo   → yearly  (or fallback monthly × 12) × seats
 // 13+ mo  → yearly + monthly × (periods - 12), all × seats
 // Yearly-billed products skip tier logic and use yearly × periods × seats.
-export function computeRecurring({ p, eff, periods, seats, currency, fx }) {
+export function computeRecurring({ p, eff, periods, seats, currency }) {
   const m = (n) => toMoney(n, currency);
 
   if (p.billingInterval === "yearly") {
@@ -93,13 +64,7 @@ export function computeRecurring({ p, eff, periods, seats, currency, fx }) {
 
   if (periods === 6) {
     if (eff.sixMonth > 0) return m(eff.sixMonth * seats);
-    return applyLegacyBundleDiscount(
-      m(eff.monthly * 6 * seats),
-      p?.discounts?.sixMonths,
-      seats,
-      currency,
-      fx,
-    );
+    return m(eff.monthly * 6 * seats);
   }
 
   if (periods > 6 && periods < 12) {
@@ -110,13 +75,7 @@ export function computeRecurring({ p, eff, periods, seats, currency, fx }) {
 
   if (periods === 12) {
     if (eff.yearly > 0) return m(eff.yearly * seats);
-    return applyLegacyBundleDiscount(
-      m(eff.monthly * 12 * seats),
-      p?.discounts?.oneYear,
-      seats,
-      currency,
-      fx,
-    );
+    return m(eff.monthly * 12 * seats);
   }
 
   const yearBase = eff.yearly > 0 ? eff.yearly : eff.monthly * 12;

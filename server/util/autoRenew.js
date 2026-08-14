@@ -209,7 +209,6 @@ async function chargeEntitlement({ user, ent, product, vatCfg, dryRun }) {
     periods,
     seats,
     currency: "NGN",
-    fx: 1,
   });
   if (!(recurring > 0)) {
     return { status: "skipped", reason: "no-price" };
