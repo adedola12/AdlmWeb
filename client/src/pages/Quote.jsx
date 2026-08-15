@@ -1,5 +1,7 @@
 import React from "react";
 import { API_BASE } from "../config";
+import { readPreloaded } from "../lib/preload.js";
+import PageSeo from "../components/PageSeo.jsx";
 import { Link } from "react-router-dom";
 import { IconCalculator, IconCheck } from "../components/icons.jsx";
 
@@ -9,9 +11,17 @@ const fmt = (n, currency = "NGN") =>
   );
 
 export default function Quote() {
-  const [products, setProducts] = React.useState([]);
+  // The product list is the body of this page: without it the server rendered
+  // the word "Loading products..." and nothing else. Training locations are
+  // still fetched in the browser — they are a dropdown, not page content.
+  const preloadedProducts = readPreloaded("quote:products");
+  const seededProducts = Array.isArray(preloadedProducts?.items)
+    ? preloadedProducts.items
+    : null;
+
+  const [products, setProducts] = React.useState(seededProducts ?? []);
   const [trainingLocations, setTrainingLocations] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = React.useState(!seededProducts);
   const [currency, setCurrency] = React.useState("NGN");
 
   // Selected items: { [productKey]: { selected, qty } }
@@ -205,10 +215,38 @@ export default function Quote() {
     }
   }
 
+  // Lifted out of the main return so the loading branch can show it too. The
+  // heading and the description do not depend on the product list, and gating
+  // them behind the fetch meant the server rendered this page as the words
+  // "Loading products..." and nothing else.
+  const header = (
+    <>
+    <PageSeo path="/quote" crumb="Build a quotation" />
+    <div className="no-print relative overflow-hidden rounded-2xl bg-adlm-navy text-white px-5 py-7 md:px-8 md:py-9 shadow-depth">
+      <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
+      <div aria-hidden="true" className="absolute -top-16 right-8 w-64 h-64 rounded-full bg-adlm-orange/20 blur-3xl animate-float" />
+      <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float-slow" />
+      <div className="relative">
+        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/15 ring-1 ring-adlm-orange/30">
+          Instant estimate
+        </span>
+        <h1 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight">
+          Build your quotation
+        </h1>
+        <p className="mt-2 text-sm md:text-base text-white/70 max-w-2xl">
+          Pick the software you need, set the number of PCs and users, and add
+          physical training. You get an instant estimate you can print or email.
+        </p>
+      </div>
+    </div>
+    </>
+  );
+
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto p-6">
-        <div className="text-slate-500">Loading products...</div>
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        {header}
+        <div className="mt-6 text-slate-500">Loading products...</div>
       </div>
     );
   }
@@ -222,24 +260,7 @@ export default function Quote() {
         }
       `}</style>
 
-      {/* Header */}
-      <div className="no-print relative overflow-hidden rounded-2xl bg-adlm-navy text-white px-5 py-7 md:px-8 md:py-9 shadow-depth">
-        <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
-        <div aria-hidden="true" className="absolute -top-16 right-8 w-64 h-64 rounded-full bg-adlm-orange/20 blur-3xl animate-float" />
-        <div aria-hidden="true" className="absolute -bottom-20 left-1/4 w-64 h-64 rounded-full bg-adlm-blue-600/20 blur-3xl animate-float-slow" />
-        <div className="relative">
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-adlm-orange bg-adlm-orange/15 ring-1 ring-adlm-orange/30">
-            Instant estimate
-          </span>
-          <h1 className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight">
-            Build Your Quotation
-          </h1>
-          <p className="mt-2 text-sm md:text-base text-white/70 max-w-2xl">
-            Pick the software you need, set the number of PCs/users, and add
-            physical training — get an instant estimate you can print or email.
-          </p>
-        </div>
-      </div>
+      {header}
 
       {/* Controls */}
       <div className="no-print mt-6 flex flex-wrap items-end gap-3">

@@ -11,6 +11,8 @@ import { useChangelogs } from "../data/changelogsSource.js";
 import { iconOf, accentOf } from "../data/whatsNewTheme.js";
 import { guideForChangelogSlug } from "../data/guides.js";
 import { Reveal } from "../components/effects.jsx";
+import Seo from "../components/Seo.jsx";
+import { breadcrumbSchema } from "../lib/schema.js";
 
 /* Visual treatment per change type — colour, icon and label. */
 const TYPE_META = {
@@ -175,15 +177,27 @@ export default function WhatsNewProduct() {
     window.scrollTo({ top: 0 });
   }, [slug]);
 
-  React.useEffect(() => {
-    const prev = document.title;
-    document.title = product
-      ? `What's New — ${product.name} | ADLM Studio`
-      : "What's New | ADLM Studio";
-    return () => {
-      document.title = prev;
-    };
-  }, [product]);
+  // Replaces a bare document.title effect, which set a title and nothing else:
+  // no canonical, so every /whats-new/:slug page competed with the others for
+  // the same signals, and no breadcrumb saying which product it belongs to.
+  const seo = product ? (
+    <Seo
+      title={`${product.name} release notes`}
+      description={
+        `Release notes for ${product.name}. Every version, what changed in it, ` +
+        `and when it shipped. Updated with each release from ADLM Studio.`
+      }
+      path={`/whats-new/${String(slug || "").toLowerCase()}`}
+      jsonLd={breadcrumbSchema([
+        { name: "Home", path: "/" },
+        { name: "What's new", path: "/whats-new" },
+        {
+          name: product.name,
+          path: `/whats-new/${String(slug || "").toLowerCase()}`,
+        },
+      ])}
+    />
+  ) : null;
 
   // Still fetching live data and the slug isn't in the bundled seed — wait
   // before deciding it's a 404 (it may be a product added via the admin UI).
@@ -206,6 +220,7 @@ export default function WhatsNewProduct() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      {seo}
       <style>{`@keyframes fade-in-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
       {/* Back link */}

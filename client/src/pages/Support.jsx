@@ -1,6 +1,7 @@
 // src/pages/Support.jsx
 import React from "react";
 import { Link } from "react-router-dom";
+import PageSeo from "../components/PageSeo.jsx";
 import { FaArrowRight, FaInstagram, FaLinkedin, FaWhatsapp, FaXTwitter, FaYoutube } from "../components/icons.jsx";
 
 const WHATSAPP_NUMBER = "2348106503524";
@@ -48,6 +49,8 @@ const socials = [
 export default function Support() {
   return (
     <div className="w-full">
+      <PageSeo path="/support" crumb="Support" />
+
       {/* Hero */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-adlm-navy via-adlm-navy to-adlm-navy-tertiary text-white p-8 md:p-12 shadow-lg">
         <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />

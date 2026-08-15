@@ -22,25 +22,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { STATIC_ROUTES, LANDING_ROUTES } from "./seo-routes.mjs";
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const SITE = "https://www.adlmstudio.net";
 const API = process.env.VITE_API_BASE || "https://api.adlmstudio.net";
 
-/** priority is a hint, not a ranking factor. Kept coarse on purpose. */
-const STATIC_ROUTES = [
-  ["/", "weekly", "1.0"],
-  ["/products", "weekly", "0.9"],
-  ["/learn", "weekly", "0.8"],
-  ["/trainings", "weekly", "0.8"],
-  ["/about", "monthly", "0.7"],
-  ["/testimonials", "monthly", "0.6"],
-  ["/freebies", "monthly", "0.6"],
-  ["/whats-new", "weekly", "0.6"],
-  ["/support", "monthly", "0.4"],
-  ["/quote", "monthly", "0.4"],
-  ["/time-management", "monthly", "0.5"],
-];
+// The route list moved to seo-routes.mjs, which the acceptance test and the
+// IndexNow ping also read. A new page that is live but missing from the sitemap
+// is the classic version of this bug; sharing the list removes the chance.
+//
+// Two routes that used to be here are gone on purpose. /freebies sits behind
+// ProtectedRoute and /time-management behind ProtectedRoute as well, so both
+// were listed for crawlers that can only ever be redirected away from them.
+const ROUTES_WITH_PRIORITY = [...STATIC_ROUTES, ...LANDING_ROUTES];
 
 function iso(d) {
   return new Date(d).toISOString().slice(0, 10);
@@ -96,7 +92,7 @@ async function productUrls() {
 }
 
 const entries = [
-  ...STATIC_ROUTES.map(([loc, changefreq, priority]) => ({
+  ...ROUTES_WITH_PRIORITY.map(([loc, changefreq, priority]) => ({
     loc,
     changefreq,
     priority,

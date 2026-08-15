@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../http";
 import { Link } from "react-router-dom";
+import { readPreloaded } from "../lib/preload.js";
+import PageSeo from "../components/PageSeo.jsx";
 
 function formatDate(dateStr) {
   if (!dateStr) return "";
@@ -138,9 +140,14 @@ function TrainingCard({ training }) {
 }
 
 export default function Trainings() {
-  const [stats, setStats] = useState(null);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Seeded by the server, so the training titles and dates ship inside the HTML
+  // instead of arriving after a round trip. Empty on any route the server did
+  // not render, which leaves the effect below working exactly as before.
+  const preloaded = readPreloaded("trainings:list");
+
+  const [stats, setStats] = useState(preloaded?.stats ?? null);
+  const [items, setItems] = useState(preloaded?.items ?? []);
+  const [loading, setLoading] = useState(!preloaded);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -171,6 +178,8 @@ export default function Trainings() {
 
   return (
     <div className="min-h-screen bg-white">
+      <PageSeo path="/trainings" crumb="Training and events" />
+
       {/* Header Banner */}
       <section className="relative overflow-hidden w-full bg-adlm-navy text-white pt-20 pb-12 px-4 md:px-12 lg:px-24">
         <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />

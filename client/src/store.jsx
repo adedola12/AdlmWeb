@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from "react";
 import { API_BASE } from "./config";
+import { useHydrated } from "./lib/useHydrated.js";
 
 const AuthCtx = React.createContext({
   user: null,
@@ -118,7 +119,22 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  return <AuthCtx.Provider value={{ ...auth, setAuth, clear }}>{children}</AuthCtx.Provider>;
+  // The server renders every page signed out — it has no localStorage and no
+  // session. The browser reads localStorage during its first render, so on a
+  // server-rendered page a signed-in visitor produces different markup than the
+  // HTML being hydrated. React responds by discarding the server-rendered
+  // subtree and rebuilding it, which is a visible flash and, on the nav, throws
+  // away the internal links a crawler was meant to follow.
+  //
+  // Withholding `user` for one frame makes the first client render agree with
+  // the HTML. Gated here rather than in each consumer because Nav, Home and
+  // Products all branch on it and the next one to do so should not have to know
+  // any of this. `accessToken` is deliberately NOT withheld: nothing renders
+  // from it directly, and effects that authenticate a fetch need it on mount.
+  const hydrated = useHydrated();
+  const value = { ...auth, user: hydrated ? auth.user : null, setAuth, clear };
+
+  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 
 export const useAuth = () => React.useContext(AuthCtx);

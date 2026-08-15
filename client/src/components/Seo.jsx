@@ -19,6 +19,7 @@
 
 import React from "react";
 import { useLocation } from "react-router-dom";
+import { pushHead } from "../lib/serverHead.js";
 
 const SITE = "https://www.adlmstudio.net";
 const SITE_NAME = "ADLM Studio";
@@ -75,21 +76,36 @@ export default function Seo({
   // the product grid can produce.
   const canonicalPath = path ?? location.pathname;
 
-  React.useEffect(() => {
-    // "About ADLM Studio | ADLM Studio" reads as a mistake and wastes the ~60
-    // characters Google actually shows.
-    const fullTitle = !title
-      ? SITE_NAME
-      : title.includes(SITE_NAME)
-        ? title
-        : `${title} | ${SITE_NAME}`;
-    const url = `${SITE}${canonicalPath === "/" ? "/" : canonicalPath.replace(/\/+$/, "")}`;
-    const img = image
-      ? image.startsWith("http")
-        ? image
-        : `${SITE}${image}`
-      : DEFAULT_IMAGE;
+  // Derived during render rather than inside the effect, because the server
+  // needs these too and effects do not run under renderToString.
+  //
+  // "About ADLM Studio | ADLM Studio" reads as a mistake and wastes the ~60
+  // characters Google actually shows.
+  const fullTitle = !title
+    ? SITE_NAME
+    : title.includes(SITE_NAME)
+      ? title
+      : `${title} | ${SITE_NAME}`;
+  const url = `${SITE}${canonicalPath === "/" ? "/" : canonicalPath.replace(/\/+$/, "")}`;
+  const img = image
+    ? image.startsWith("http")
+      ? image
+      : `${SITE}${image}`
+    : DEFAULT_IMAGE;
 
+  // Server render: hand the same values to the collector the Vercel function
+  // reads. This is the path that gets JSON-LD into the raw HTML, where a
+  // crawler that does not execute JavaScript can actually see it.
+  if (import.meta.env.SSR) {
+    pushHead({
+      title: fullTitle,
+      description,
+      canonical: url,
+      jsonLd: noindex ? null : jsonLd,
+    });
+  }
+
+  React.useEffect(() => {
     const previousTitle = document.title;
     document.title = fullTitle;
 
@@ -154,7 +170,9 @@ export default function Seo({
         .querySelectorAll(`script[type="application/ld+json"][${OWNED}]`)
         .forEach((n) => n.remove());
     };
-  }, [title, description, canonicalPath, image, type, noindex, jsonLd]);
+    // fullTitle, url and img are plain strings derived from the values above.
+    // Listing them keeps the linter honest without changing when this runs.
+  }, [fullTitle, url, img, image, description, type, noindex, jsonLd]);
 
   return null;
 }

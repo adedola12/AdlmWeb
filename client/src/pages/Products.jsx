@@ -1,12 +1,13 @@
 // src/pages/Products.jsx
 import React from "react";
-import Seo from "../components/Seo.jsx";
+import PageSeo from "../components/PageSeo.jsx";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 import { confirmPriceSanity } from "../lib/priceSanity.js";
+import { readPreloaded } from "../lib/preload.js";
 import { AppTile, Eyebrow } from "../components/brand.jsx";
 import { Reveal, Stagger, StaggerItem } from "../components/effects.jsx";
 import {
@@ -146,9 +147,15 @@ export default function Products() {
   // and the pagination below stays for the day it does not.
   const pageSize = 60;
 
+  // Seeded by the server so the catalogue — every product name, blurb and
+  // price — is in the HTML. Rendered from an effect this page was an empty
+  // grid on arrival, which is the difference between a page about eight
+  // products and a page about nothing.
+  const preloadedList = readPreloaded("products:list");
+
   const [data, setData] = React.useState({
-    items: [],
-    total: 0,
+    items: Array.isArray(preloadedList?.items) ? preloadedList.items : [],
+    total: Number(preloadedList?.total || 0),
     page,
     pageSize,
   });
@@ -163,9 +170,17 @@ export default function Products() {
   const [category, setCategory] = React.useState("All Products");
   const [sortBy, setSortBy] = React.useState("popular");
 
+  // Runs during render, so it has to survive having no localStorage at all:
+  // on the server there is no such global, and in a locked-down browser the
+  // getter throws. Either way 0 is the right answer — the effect below syncs
+  // the real count the moment the page is live.
   const [cartCount, setCartCount] = React.useState(() => {
-    const n = Number(localStorage.getItem("cartCount") || 0);
-    return Number.isFinite(n) ? n : 0;
+    try {
+      const n = Number(localStorage.getItem("cartCount") || 0);
+      return Number.isFinite(n) ? n : 0;
+    } catch {
+      return 0;
+    }
   });
 
   const [showModal, setShowModal] = React.useState(false);
@@ -470,11 +485,7 @@ export default function Products() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-8 md:space-y-12">
-      <Seo
-        title="Products — BIM Plugins & QS Software"
-        description="Quantity takeoff plugins for Revit, ArchiCAD and PlanSwift, automated rate build-ups and cost management tools. Subscription pricing in naira, built for Nigerian quantity surveyors."
-        path="/products"
-      />
+      <PageSeo path="/products" crumb="Products" />
       <style>{style}</style>
 
       <ComingSoonModal show={showModal} onClose={closeModal} />

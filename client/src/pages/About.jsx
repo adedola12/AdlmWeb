@@ -1,6 +1,7 @@
 // src/pages/AboutADLM.jsx
 import React from "react";
-import Seo from "../components/Seo.jsx";
+import PageSeo from "../components/PageSeo.jsx";
+import { organizationSchema } from "../lib/schema.js";
 import { Link } from "react-router-dom";
 import dolapo from "../assets/team/Dola.jpeg";
 import richard from "../assets/team/Richard.jpg";
@@ -121,7 +122,7 @@ function SafeImg({ src, alt = "", className = "" }) {
 
 function JourneyTimeline() {
   const items = [
-    { year: "2019", title: "ADLM Studio was founded" },
+    { year: "2018", title: "ADLM Studio was founded" },
     { year: "2020", title: "Started QS software training" },
     { year: "2022", title: "Launched the PlanSwift plugin" },
     { year: "2024", title: "Launched the Revit plugin for quantity takeoff" },
@@ -271,10 +272,10 @@ export default function AboutADLM() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Seo
-        title="About ADLM Studio"
-        description="A Nigerian ConTech studio digitising quantity surveying end to end — takeoff, rates, bills, programmes and dashboards — with the training and process firms need to adopt it. 800+ AEC professionals trained since 2019."
+      <PageSeo
         path="/about"
+        crumb="About"
+        jsonLd={organizationSchema()}
       />
       <style>{styles}</style>
 
@@ -309,7 +310,7 @@ export default function AboutADLM() {
               {[
                 ["800+", "AEC professionals trained"],
                 ["10", "products in the suite"],
-                ["2019", "building for Nigerian QS"],
+                ["2018", "building for Nigerian QS"],
                 ["NIQS", "Official Technical Partner"],
               ].map(([stat, label]) => (
                 <div key={label}>
