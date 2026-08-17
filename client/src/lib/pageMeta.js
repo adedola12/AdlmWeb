@@ -85,7 +85,9 @@ export const PAGE_META = {
   "/quantity-surveying-software-nigeria": {
     title: "Quantity surveying software in Nigeria",
     description:
-      "Takeoff, rate build-up and cost management software built for Nigerian quantity surveyors. Priced in naira. Used on live projects since 2018.",
+      // Not "used on live projects since 2018". The company was founded in
+      // 2018; the first plugin shipped in 2022, per the About page timeline.
+      "Takeoff, rate build-up and cost management software built for Nigerian quantity surveyors. Priced in naira, by a Lagos firm founded in 2018.",
   },
   "/bim-software-nigeria": {
     title: "BIM software in Nigeria",
