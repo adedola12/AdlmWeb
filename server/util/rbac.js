@@ -15,6 +15,7 @@ export async function loadRoleCache() {
   for (const r of roles) {
     next.set(r.key, {
       isSuperAdmin: !!r.isSuperAdmin,
+      demoMode: !!r.demoMode,
       perms: new Set(r.permissions || []),
     });
   }
@@ -29,9 +30,14 @@ export function getRoleAccess(roleKey) {
 }
 
 // Pure decision: does this access record grant the area? Super-admin → always.
+// A demo role also sees every area, which is only safe because demoModeGuard
+// has already forced the request read-only and put the response through the
+// placeholder masker. Visibility here is visibility of the SCREEN, never of the
+// data or the ability to change it.
 export function decideAccess(access, area) {
   if (!access) return false;
   if (access.isSuperAdmin) return true;
+  if (access.demoMode) return true;
   return access.perms.has(area);
 }
 
@@ -43,12 +49,16 @@ export function isSuperAdminRole(roleKey) {
   return !!getRoleAccess(roleKey)?.isSuperAdmin;
 }
 
+export function isDemoRole(roleKey) {
+  return !!getRoleAccess(roleKey)?.demoMode;
+}
+
 // The full list of area keys a role can see — used to serialize the user's
 // permissions to the client. Super-admin expands to every known area.
 export function rolePermissionList(roleKey, allAreaKeys) {
   const a = getRoleAccess(roleKey);
   if (!a) return [];
-  if (a.isSuperAdmin) return [...allAreaKeys];
+  if (a.isSuperAdmin || a.demoMode) return [...allAreaKeys];
   return [...a.perms];
 }
 
@@ -66,6 +76,18 @@ export async function ensureRolesSeeded() {
       permissions: [...STAFF_GRANTABLE_KEYS],
     },
     { key: "user", name: "User", system: true, isSuperAdmin: false, permissions: [] },
+    // Designer — sees every admin screen, read-only, with all identities and
+    // figures replaced by placeholders. `permissions` stays empty on purpose:
+    // access comes from the demoMode flag (see decideAccess above), so nobody
+    // can widen or narrow it by editing a permission matrix.
+    {
+      key: "designer",
+      name: "Designer (demo data)",
+      system: true,
+      isSuperAdmin: false,
+      demoMode: true,
+      permissions: [],
+    },
   ];
 
   // One query for all three, not one each. This runs on every Lambda cold
@@ -89,6 +111,12 @@ export async function ensureRolesSeeded() {
     }
     if (d.key === "admin" && !existing.isSuperAdmin) {
       existing.isSuperAdmin = true;
+      changed = true;
+    }
+    // Repair the demo flag the same way as the superadmin flag: a built-in
+    // demo role that lost it would silently start serving real data.
+    if (d.demoMode && !existing.demoMode) {
+      existing.demoMode = true;
       changed = true;
     }
     if (changed) await existing.save();

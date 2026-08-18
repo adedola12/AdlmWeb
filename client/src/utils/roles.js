@@ -15,6 +15,12 @@ export const can = (u, area) => {
   return u.role === "mini_admin"; // legacy token fallback
 };
 
+// Read-only demo session (designer / external collaborator). Sees every admin
+// screen with placeholder data; the server refuses any write it attempts.
+// Deliberately NOT folded into isAdmin(): this user must never be treated as
+// having authority, only visibility.
+export const isDemo = (u) => !!u?.demoMode;
+
 // Full administrator (super-admin).
 export const isAdmin = (u) => !!(u?.isSuperAdmin || u?.role === "admin");
 

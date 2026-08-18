@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
-import { rolePermissionList, isSuperAdminRole } from "../util/rbac.js";
+import { rolePermissionList, isSuperAdminRole, isDemoRole } from "../util/rbac.js";
 import { ALL_AREA_KEYS } from "../config/permissions.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
 import { STATES, normalizeState, zoneForState } from "../util/states.js";
@@ -243,6 +243,7 @@ router.get(
       whatsapp: whatsapp || "",
       stepUpEnabled: !!user?.security?.stepUpEnabled,
       isSuperAdmin: isSuperAdminRole(effectiveRole),
+      demoMode: isDemoRole(effectiveRole),
       permissions: rolePermissionList(effectiveRole, ALL_AREA_KEYS),
     });
   }),

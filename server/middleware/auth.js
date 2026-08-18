@@ -5,7 +5,7 @@ import { roleHasArea } from "../util/rbac.js";
 
 const ACCESS_COOKIE = "at";
 
-function getTokenFromReq(req) {
+export function getTokenFromReq(req) {
   // 1) Authorization header
   const auth = req.headers.authorization || "";
   if (auth.startsWith("Bearer ")) return auth.slice(7).trim();
@@ -40,6 +40,12 @@ export function requireAuth(req, res, next) {
 
 export function requireAdmin(req, res, next) {
   try {
+    // A demo session has already been authenticated, forced read-only and
+    // masked by demoModeGuard, so it is admitted to the admin-only routers for
+    // viewing. The guard runs first and unconditionally — see
+    // server/middleware/demoMode.js for why this cannot leak write access.
+    if (req.demoMode) return next();
+
     const token = getTokenFromReq(req);
     if (!token) return safeJson(res, 401, "Unauthorized");
 

@@ -28,6 +28,7 @@ import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import adminRoutes from "./routes/admin.js";
+import { demoModeGuard } from "./middleware/demoMode.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
 import adminCourses from "./routes/adminCourses.js";
 import adminCourseOps from "./routes/admin.courseOps.js";
@@ -319,6 +320,12 @@ app.get("/settings/force-reinstall", async (_req, res) => {
 /* =========================
    ✅ ADMIN ROUTES
    ========================= */
+// MUST stay ahead of every /admin router. Demo roles (designers, external
+// collaborators) are forced read-only and their responses are rewritten with
+// placeholder data here; the per-area gates downstream only admit them because
+// this has already run. See server/middleware/demoMode.js.
+app.use("/admin", demoModeGuard);
+
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes);
 

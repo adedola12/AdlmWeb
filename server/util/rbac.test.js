@@ -21,3 +21,17 @@ test("an unknown role (no access record) is denied everything", () => {
   assert.equal(decideAccess(null, "trainings"), false);
   assert.equal(decideAccess(undefined, "settings"), false);
 });
+
+test("a demo role is granted every area, including admin-exclusive ones", () => {
+  // Safe only because demoModeGuard has already forced the request read-only
+  // and masked the response — this grants sight of the screen, nothing else.
+  const demo = { isSuperAdmin: false, demoMode: true, perms: new Set() };
+  assert.equal(decideAccess(demo, "trainings"), true);
+  assert.equal(decideAccess(demo, "settings"), true);
+  assert.equal(decideAccess(demo, "aiusage"), true);
+});
+
+test("demo access does not depend on the permission matrix", () => {
+  const demo = { isSuperAdmin: false, demoMode: true, perms: new Set(["trainings"]) };
+  assert.equal(decideAccess(demo, "invoices"), true);
+});

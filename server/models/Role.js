@@ -20,6 +20,11 @@ const RoleSchema = new mongoose.Schema(
     system: { type: Boolean, default: false },
     // Superuser — implicitly has every area, immune to permission edits.
     isSuperAdmin: { type: Boolean, default: false },
+    // Demo role — sees every admin area, but strictly read-only and every
+    // response is rewritten with placeholder data. For designers and other
+    // external collaborators who need the screens, not the business.
+    // Enforced by server/middleware/demoMode.js.
+    demoMode: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
