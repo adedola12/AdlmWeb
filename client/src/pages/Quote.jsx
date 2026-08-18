@@ -1,6 +1,7 @@
 import React from "react";
 import { API_BASE } from "../config";
 import { readPreloaded } from "../lib/preload.js";
+import { trackEvent } from "../ga";
 import PageSeo from "../components/PageSeo.jsx";
 import { Link } from "react-router-dom";
 import { IconCalculator, IconCheck } from "../components/icons.jsx";
@@ -206,6 +207,22 @@ export default function Quote() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to send");
+
+      // The end of the funnel every search landing page points at. Without it
+      // GA can show that /revit-quantity-takeoff-plugin got traffic but not
+      // whether any of it asked for a price, which is the only question worth
+      // asking of those pages. Fired after the send succeeds, so a failed
+      // submission is not counted as a lead.
+      trackEvent("generate_lead", {
+        currency,
+        value: Number(subtotal) || 0,
+        // lineItems carry `description`, not a key or a name. Reading it.name
+        // here sent a list of undefineds to GA, which reports as an empty item
+        // list rather than an error.
+        items: lineItems.map((it) => ({ item_name: it.description })),
+        billing_mode: billingMode,
+      });
+
       setSentMsg("Quote sent to " + emailTo);
       setShowEmailForm(false);
     } catch (e) {

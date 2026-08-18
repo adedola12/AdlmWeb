@@ -2,6 +2,7 @@
 import React from "react";
 import { API_BASE } from "./config";
 import { useHydrated } from "./lib/useHydrated.js";
+import { setAnalyticsUser } from "./ga";
 
 const AuthCtx = React.createContext({
   user: null,
@@ -132,6 +133,15 @@ export function AuthProvider({ children }) {
   // any of this. `accessToken` is deliberately NOT withheld: nothing renders
   // from it directly, and effects that authenticate a fetch need it on mount.
   const hydrated = useHydrated();
+
+  // Tell GA4 who this is, so a subscriber on a laptop and the same subscriber
+  // on a phone stop counting as two separate users. Keyed on the account id
+  // only; no email or name is sent, because Google's terms forbid PII in
+  // Analytics. Runs in an effect so it never fires during a server render.
+  React.useEffect(() => {
+    setAnalyticsUser(auth?.user?._id || auth?.user?.id || null);
+  }, [auth?.user?._id, auth?.user?.id]);
+
   const value = { ...auth, user: hydrated ? auth.user : null, setAuth, clear };
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
