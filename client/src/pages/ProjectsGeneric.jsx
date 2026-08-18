@@ -3802,7 +3802,8 @@ export default function ProjectsGeneric() {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: "include",
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok)
+        throw new Error(await errorMessageFrom(res, "Export failed"));
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -3883,7 +3884,8 @@ export default function ProjectsGeneric() {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: "include",
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok)
+        throw new Error(await errorMessageFrom(res, "Export failed"));
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -4923,6 +4925,20 @@ export default function ProjectsGeneric() {
 
   // add near the top with other imports
 
+  // The API answers errors as JSON. Showing the envelope verbatim
+  // ({"error":"Server error"}) is what users were being handed on a failed
+  // export — read the message out of it.
+  async function errorMessageFrom(res, fallback) {
+    const raw = await res.text().catch(() => "");
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed?.error || parsed?.message || fallback;
+    } catch {
+      return raw;
+    }
+  }
+
   // helper
   function filenameFromDisposition(disposition, fallback) {
     const cd = String(disposition || "");
@@ -4954,15 +4970,7 @@ export default function ProjectsGeneric() {
     });
 
     if (!res.ok) {
-      // The API answers errors as JSON — surface the message, not the envelope.
-      const raw = await res.text();
-      let msg = raw;
-      try {
-        msg = JSON.parse(raw)?.error || raw;
-      } catch {
-        /* not JSON — use the body as-is */
-      }
-      throw new Error(msg || failureMessage);
+      throw new Error(await errorMessageFrom(res, failureMessage));
     }
 
     const ct = String(res.headers.get("content-type") || "").toLowerCase();
