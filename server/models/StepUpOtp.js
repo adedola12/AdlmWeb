@@ -14,7 +14,11 @@ const StepUpOtpSchema = new mongoose.Schema(
     attempts: { type: Number, default: 0 },
     requestedFromIp: String,
   },
-  { timestamps: true }
+  // demoTenancy:false — infrastructure, never split per tenant. The auth and
+  // permission layers read this on every request, so scoping it to a demo
+  // tenant would make a demo session resolve nothing and lock itself out.
+  // See server/models/demoTenancy.js.
+  { timestamps: true, demoTenancy: false }
 );
 
 StepUpOtpSchema.index({ userId: 1, usedAt: 1, expiresAt: 1 });

@@ -1,3 +1,6 @@
+// MUST be first: registers the demo-tenancy plugin before any model is
+// compiled. See server/models/demoTenancy.js.
+import "./models/tenancy.bootstrap.js";
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
@@ -14,6 +17,7 @@ import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
 import { ensureRolesSeeded } from "./util/rbac.js";
+import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
 
@@ -522,6 +526,10 @@ export function bootstrap() {
 
   _readyPromise = (async () => {
     validateEnv();
+    // Fail loudly if any model dodged the demo-tenancy plugin. An untenanted
+    // model would serve REAL rows to a demo session, silently — better to
+    // refuse to boot than to leak. Deliberately NOT caught below.
+    assertTenancyApplied();
     await connectDB(process.env.MONGO_URI);
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission

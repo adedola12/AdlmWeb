@@ -1,42 +1,30 @@
 // server/middleware/demoMode.js
 // The gate for demo roles — the roles handed to designers and other external
-// collaborators who need to see every admin screen without seeing the business.
+// collaborators who need to work the admin area without touching the business.
 //
-// Mounted once, on /admin, AHEAD of every admin router. It does four things,
-// in this order, and the order is the security argument:
+// Mounted once, on /admin, AHEAD of every admin router. It resolves the
+// caller's role from the database, then runs the rest of the request inside a
+// demo context (server/util/demoContext.js). From that point the tenancy plugin
+// (server/models/demoTenancy.js) scopes every read and every write to demo
+// rows, so the handlers themselves need no knowledge of any of this.
 //
-//   1. Resolves the caller's CURRENT role from the database. A stale JWT can
-//      therefore never keep demo powers alive after the role is revoked.
-//   2. Blocks every mutating method. A demo session is strictly read-only, so
-//      nothing downstream can write regardless of which gate it uses.
-//   3. Blocks binary responses. The masker in step 4 only reaches JSON; the
-//      invoice and proposal PDF endpoints stream real figures straight from a
-//      buffer, so they are refused outright rather than leaked unmasked.
-//   4. Marks the request so the per-area gates admit it, and wraps res.json so
-//      every payload leaves through the placeholder layer.
-//
-// Step 2 is what makes step 4 safe. Elevating a read-only, masked request to
-// see an admin screen grants visibility and nothing else; the same elevation on
-// a writable request would be a privilege-escalation hole, which is why the
-// method check cannot be moved below the elevation.
+// A demo session is deliberately NOT read-only. Every button works: create,
+// edit, save, delete, the lot — because the point is for a designer to walk the
+// real routing and the real flows, not to look at frozen screens. What makes
+// that safe is the tenancy, not a restriction on verbs. A demo write cannot
+// reach a real row because the query it runs cannot match one.
 import { User } from "../models/User.js";
 import { getTokenFromReq, verifyAccess } from "./auth.js";
 import { isDemoRole } from "../util/rbac.js";
-import { maskPayload } from "../util/demoData.js";
+import { runAsDemo, runWithoutDemo } from "../util/demoContext.js";
 
-const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-
-// Endpoints a demo role must not reach even read-only.
-//   roles      — the UAC. Reading it exposes the permission matrix, which is a
-//                map of how to escalate. Never grantable, masked or not.
-//   audit-log  — the break-glass trail: who did what, with real identities, and
-//                the record that would show tampering.
+// Areas a demo role must not reach even though it may edit everything else.
+//   roles      — the UAC. It is untenanted (the auth layer reads it on every
+//                request), so an edit here would hit the REAL permission
+//                matrix. That is the one write that could escalate privilege.
+//   audit-log  — likewise untenanted, and it is the record that would show
+//                tampering. Nothing to design here either.
 const FORBIDDEN = [/^\/roles(\/|$)/i, /^\/audit-log(\/|$)/i];
-
-function isJsonResponse(res) {
-  const type = res.get("Content-Type");
-  return !type || /json/i.test(type);
-}
 
 export async function demoModeGuard(req, res, next) {
   try {
@@ -56,16 +44,12 @@ export async function demoModeGuard(req, res, next) {
     const uid = String(claims?._id || claims?.id || claims?.sub || "");
     if (!uid) return next();
 
-    const doc = await User.findById(uid).select("role").lean();
+    // Deliberately outside any demo scope: this reads the caller's OWN user
+    // row, which is a real record. It also means a role revocation takes effect
+    // on the next request rather than whenever the token happens to expire.
+    const doc = await runWithoutDemo(() => User.findById(uid).select("role").lean());
     const roleKey = doc?.role || claims?.role || "user";
     if (!isDemoRole(roleKey)) return next();
-
-    if (!READ_METHODS.has(req.method)) {
-      return res.status(403).json({
-        error: "This is a demo account — it can view the admin area but cannot change anything.",
-        code: "DEMO_READ_ONLY",
-      });
-    }
 
     if (FORBIDDEN.some((rx) => rx.test(req.path))) {
       return res.status(403).json({
@@ -80,32 +64,9 @@ export async function demoModeGuard(req, res, next) {
     req.demoMode = true;
     req.userRole = roleKey;
 
-    const sendJson = res.json.bind(res);
-    const sendRaw = res.send.bind(res);
-    let leftAsJson = false;
-
-    res.json = (body) => {
-      leftAsJson = true;
-      return sendJson(maskPayload(body));
-    };
-
-    // Express routes res.json through res.send, so `leftAsJson` distinguishes a
-    // masked JSON payload from a handler streaming a PDF or spreadsheet.
-    res.send = (body) => {
-      if (!leftAsJson && (Buffer.isBuffer(body) || !isJsonResponse(res))) {
-        leftAsJson = true; // the refusal below re-enters res.send; let it pass.
-        res.status(403);
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.removeHeader("Content-Disposition");
-        return sendJson({
-          error: "File downloads are disabled on a demo account.",
-          code: "DEMO_DOWNLOAD_BLOCKED",
-        });
-      }
-      return sendRaw(body);
-    };
-
-    return next();
+    // Everything from here — the routers, the handlers, every query they run —
+    // executes inside the demo tenant.
+    return runAsDemo(() => next());
   } catch (err) {
     console.error("[demoModeGuard] error:", err);
     return res.status(500).json({ error: "Server error" });

@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { User } from "../models/User.js";
 import { verifyStepUp } from "../util/jwt.js";
 import { roleHasArea } from "../util/rbac.js";
+import { runWithoutDemo } from "../util/demoContext.js";
 
 const ACCESS_COOKIE = "at";
 
@@ -78,7 +79,11 @@ export async function requireStepUp(req, res, next) {
     const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
     if (!uid) return safeJson(res, 401, "Unauthorized");
 
-    const doc = await User.findById(uid).select("security").lean();
+    // Outside demo scope: this is the caller's OWN row, which is real even
+    // when their role is a demo one.
+    const doc = await runWithoutDemo(() =>
+      User.findById(uid).select("security").lean(),
+    );
     if (!doc?.security?.stepUpEnabled) return next(); // feature off for this user
 
     const token =
@@ -149,7 +154,11 @@ export function requirePermission(area) {
       const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
       if (!uid) return safeJson(res, 401, "Unauthorized");
 
-      const doc = await User.findById(uid).select("role").lean();
+      // Outside demo scope — see requireStepUp above. Without this a demo
+      // session could not resolve its own role and would 403 everywhere.
+      const doc = await runWithoutDemo(() =>
+        User.findById(uid).select("role").lean(),
+      );
       const roleKey = doc?.role || req.user?.role || "user";
 
       if (roleHasArea(roleKey, area)) {
