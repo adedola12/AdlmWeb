@@ -61,6 +61,10 @@ function isMaterialsTool(tool) {
 // tab except 3D Model and linking.
 const BOQ_IMPORT_ORIGIN = "boq-import";
 
+// Written into every workbook this page exports. The Excel importer rejects a
+// workbook carrying it — see server/util/adlmWorkbook.js for why.
+const ADLM_EXPORT_MARKER = "adlm-export";
+
 // The feature grant. "quiv-boq-import" is the pre-2026-08 key, from when this
 // was Quiv-only — still honoured so existing grants keep working.
 const BOQ_IMPORT_ENTITLEMENTS = ["boq-import", "quiv-boq-import"];
@@ -3798,7 +3802,8 @@ export default function ProjectsGeneric() {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: "include",
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok)
+        throw new Error(await errorMessageFrom(res, "Export failed"));
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -3879,7 +3884,8 @@ export default function ProjectsGeneric() {
         headers: { Authorization: `Bearer ${accessToken}` },
         credentials: "include",
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok)
+        throw new Error(await errorMessageFrom(res, "Export failed"));
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -4591,6 +4597,14 @@ export default function ProjectsGeneric() {
     ];
 
     const wb = XLSX.utils.book_new();
+    // Stamp it as an ADLM export. Mirrors server/util/adlmWorkbook.js: the
+    // Excel importer refuses a workbook we generated, so a download can never
+    // be re-uploaded as a second copy of a project the account already has.
+    wb.Props = {
+      Author: "ADLM Studio",
+      Keywords: ADLM_EXPORT_MARKER,
+      Category: ADLM_EXPORT_MARKER,
+    };
 
     // ── Material & Labour budget breakdown (formula-linked) ─────────────
     // One block per bill line: its material + labour rows with live
@@ -4906,10 +4920,24 @@ export default function ProjectsGeneric() {
     const filename = `${sanitizeFilename(sel?.name || "Project")} - BoQ${
       useTrade ? " (Trade)" : ""
     }.xlsx`;
-    XLSX.writeFile(wb, filename);
+    XLSX.writeFile(wb, filename, { Props: wb.Props });
   }
 
   // add near the top with other imports
+
+  // The API answers errors as JSON. Showing the envelope verbatim
+  // ({"error":"Server error"}) is what users were being handed on a failed
+  // export — read the message out of it.
+  async function errorMessageFrom(res, fallback) {
+    const raw = await res.text().catch(() => "");
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed?.error || parsed?.message || fallback;
+    } catch {
+      return raw;
+    }
+  }
 
   // helper
   function filenameFromDisposition(disposition, fallback) {
@@ -4923,19 +4951,12 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function exportElementalBoQFromBackend(
-    buildingType = "bungalow",
-    foundationType,
-    format = "elemental",
-  ) {
-    if (!selectedId) return;
-
-    const normalizedBuilding = buildingType === "multistorey" ? "multistorey" : "bungalow";
+  // Fetch an .xlsx from the export API and save it. Shared by every workbook
+  // the backend builds, so they all get the same content-type guard (an HTML
+  // error page saved as .xlsx is the one failure users cannot diagnose) and
+  // the same filename handling.
+  async function downloadWorkbook(path, fallbackName, failureMessage) {
     const base = API_BASE || window.location.origin;
-    const qs = new URLSearchParams({ building: normalizedBuilding });
-    if (foundationType) qs.set("foundation", String(foundationType));
-    if (format && format !== "elemental") qs.set("format", String(format));
-    const path = `/projectsboq/${toolNorm}/${selectedId}/export/boq?${qs.toString()}`;
     const absUrl = new URL(path, base).toString();
 
     const res = await fetch(absUrl, {
@@ -4949,13 +4970,10 @@ export default function ProjectsGeneric() {
     });
 
     if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(msg || "Failed to export BoQ");
+      throw new Error(await errorMessageFrom(res, failureMessage));
     }
 
     const ct = String(res.headers.get("content-type") || "").toLowerCase();
-
-    // If we accidentally got HTML/JSON, don't download it as .xlsx
     const looksExcel =
       ct.includes("spreadsheetml.sheet") ||
       ct.includes("application/octet-stream");
@@ -4967,10 +4985,10 @@ export default function ProjectsGeneric() {
     }
 
     const blob = await res.blob();
-    const cd = res.headers.get("content-disposition");
-    const formatLabel = format === "trade" ? "Trade" : "Elemental";
-    const fallbackName = `${sanitizeFilename(sel?.name || "Project")} - ${formatLabel} BOQ.xlsx`;
-    const filename = filenameFromDisposition(cd, fallbackName);
+    const filename = filenameFromDisposition(
+      res.headers.get("content-disposition"),
+      fallbackName,
+    );
 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -4979,6 +4997,43 @@ export default function ProjectsGeneric() {
     a.click();
     a.remove();
     URL.revokeObjectURL(a.href);
+  }
+
+  async function exportElementalBoQFromBackend(
+    buildingType = "bungalow",
+    foundationType,
+    format = "elemental",
+  ) {
+    if (!selectedId) return;
+
+    const normalizedBuilding = buildingType === "multistorey" ? "multistorey" : "bungalow";
+    const qs = new URLSearchParams({ building: normalizedBuilding });
+    if (foundationType) qs.set("foundation", String(foundationType));
+    if (format && format !== "elemental") qs.set("format", String(format));
+
+    const formatLabel = format === "trade" ? "Trade" : "Elemental";
+    await downloadWorkbook(
+      `/projectsboq/${toolNorm}/${selectedId}/export/boq?${qs.toString()}`,
+      `${sanitizeFilename(sel?.name || "Project")} - ${formatLabel} BOQ.xlsx`,
+      "Failed to export BoQ",
+    );
+  }
+
+  // The bill exactly as it is held here — its own sections, subtitles and
+  // totals — with the budget beside it: material, labour and plant on separate
+  // schedules, a schedule of current material prices and a material summary.
+  // This is the export an Excel-imported bill needs; the elemental/trade ones
+  // re-cut the bill against a mapping built for plugin takeoffs.
+  async function exportBillBudgetFromBackend(groupBy = "category") {
+    if (!selectedId) return;
+    const qs = new URLSearchParams();
+    if (groupBy === "trade") qs.set("groupBy", "trade");
+    const query = qs.toString();
+    await downloadWorkbook(
+      `/projectsboq/${toolNorm}/${selectedId}/export/bill-budget${query ? `?${query}` : ""}`,
+      `${sanitizeFilename(sel?.name || "Project")} - Bill & Budget.xlsx`,
+      "Failed to export the bill & budget",
+    );
   }
   React.useEffect(() => {
     load({ keepSelection: true });
@@ -5139,7 +5194,7 @@ export default function ProjectsGeneric() {
                           type="button"
                           onClick={() => boqReimportInputRef.current?.click()}
                           disabled={boqImportBusy}
-                          title="Update this project from a newer copy of its Excel BoQ"
+                          title="Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
                           className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
                         >
                           <FaFileExcel className="text-[12px]" />
@@ -5494,6 +5549,14 @@ export default function ProjectsGeneric() {
                   setExportOpen(false);
                   exportGenericBoQ("trade");
                 }}
+                onExportBillBudget={async (groupBy) => {
+                  setExportOpen(false);
+                  try {
+                    await exportBillBudgetFromBackend(groupBy);
+                  } catch (e) {
+                    setErr(e?.message || "Failed to export the bill & budget");
+                  }
+                }}
                 onExportElementalBoQ={async (buildingType, foundationType, format) => {
                   setExportOpen(false);
                   try {
@@ -5774,13 +5837,20 @@ export default function ProjectsGeneric() {
                 </h3>
                 <p className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
                   Creates a {boqImportBadge} project from an Excel Bill of
-                  Quantities. Categories, planned-vs-actual columns and an
-                  optional Material &amp; Labour sheet are read from the
+                  Quantities. Categories, planned-vs-actual columns and
+                  optional Material &amp; Labour schedules are read from the
                   workbook. Where the workbook has no schedule, one is built
                   for you — cement, sand, granite, blocks, formwork, rebar and
                   labour, priced from your Material Constants and RateGen —
                   and it stays live across the Dashboard, BoQ, Budget and
                   Valuation tabs.
+                </p>
+                <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+                  Upload your own bill, not one exported from here. An ADLM
+                  export is refused: importing it would spend a project slot on
+                  a duplicate of a bill you already have. To update quantities,
+                  re-measure at the source and sync, or edit the bill in the
+                  project itself.
                 </p>
               </div>
               <button
