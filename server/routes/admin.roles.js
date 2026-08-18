@@ -15,7 +15,7 @@ const router = express.Router();
 
 router.use(requireAuth, requireAdmin);
 
-const RESERVED_KEYS = new Set(["admin", "mini_admin", "user"]);
+const RESERVED_KEYS = new Set(["admin", "mini_admin", "user", "design"]);
 
 function slugifyKey(name) {
   return String(name || "")
@@ -27,12 +27,14 @@ function slugifyKey(name) {
 }
 
 function serializeRole(r) {
+  const seesEverything = r.isSuperAdmin || r.designAccess;
   return {
     key: r.key,
     name: r.name,
-    permissions: r.isSuperAdmin ? [...ALL_AREA_KEYS] : r.permissions || [],
+    permissions: seesEverything ? [...ALL_AREA_KEYS] : r.permissions || [],
     system: !!r.system,
     isSuperAdmin: !!r.isSuperAdmin,
+    designAccess: !!r.designAccess,
   };
 }
 
@@ -72,12 +74,16 @@ router.post("/", async (req, res) => {
     }
 
     const permissions = sanitizePermissions(req.body?.permissions);
+    // Design Access replaces the permission matrix rather than adding to it:
+    // the role sees every section, but only ever as placeholder data.
+    const designAccess = req.body?.designAccess === true;
     const role = await Role.create({
       key,
       name,
-      permissions,
+      permissions: designAccess ? [] : permissions,
       system: false,
       isSuperAdmin: false,
+      designAccess,
     });
     await refreshRoleCache();
     res.status(201).json({ role: { ...serializeRole(role), userCount: 0 } });
@@ -106,6 +112,12 @@ router.patch("/:key", async (req, res) => {
     }
     if (Array.isArray(req.body?.permissions)) {
       role.permissions = sanitizePermissions(req.body.permissions);
+    }
+    // The built-in "design" role's flag is fixed — it is the one thing that
+    // makes it safe to hand out. Custom roles can be switched either way.
+    if (typeof req.body?.designAccess === "boolean" && role.key !== "design") {
+      role.designAccess = req.body.designAccess;
+      if (role.designAccess) role.permissions = [];
     }
     await role.save();
     await refreshRoleCache();
@@ -174,7 +186,7 @@ router.get("/area-users", async (_req, res) => {
   try {
     const roles = await Role.find({}).lean();
     const staffRoles = roles.filter(
-      (r) => r.isSuperAdmin || (r.permissions || []).length > 0,
+      (r) => r.isSuperAdmin || r.designAccess || (r.permissions || []).length > 0,
     );
     const holders = await User.find({
       role: { $in: staffRoles.map((r) => r.key) },
@@ -190,7 +202,7 @@ router.get("/area-users", async (_req, res) => {
     for (const u of holders) {
       const r = byRole.get(u.role);
       if (!r) continue;
-      const keys = r.isSuperAdmin ? ALL_AREA_KEYS : r.permissions || [];
+      const keys = r.isSuperAdmin || r.designAccess ? ALL_AREA_KEYS : r.permissions || [];
       for (const k of keys) {
         if (areaUsers[k]) areaUsers[k].push({ email: u.email, role: u.role });
       }

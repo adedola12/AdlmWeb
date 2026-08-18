@@ -27,6 +27,7 @@ import meBillingRoutes from "./routes/me.billing.js";
 import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
+import { designMode } from "./middleware/designMode.js";
 import adminRoutes from "./routes/admin.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
 import adminCourses from "./routes/adminCourses.js";
@@ -319,6 +320,11 @@ app.get("/settings/force-reinstall", async (_req, res) => {
 /* =========================
    ✅ ADMIN ROUTES
    ========================= */
+// Design Access gate. Must stay the FIRST thing mounted on /admin: it is what
+// turns a design role into a look-but-never-touch admin, and anything mounted
+// above it would be served unmasked. See server/middleware/designMode.js.
+app.use("/admin", designMode);
+
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes);
 

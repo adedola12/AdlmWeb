@@ -12,7 +12,7 @@ import { buildWelcomeEmail } from "../util/welcomeEmail.js";
 import { Invoice } from "../models/Invoice.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
-import { rolePermissionList, isSuperAdminRole } from "../util/rbac.js";
+import { rolePermissionList, isSuperAdminRole, isDesignRole } from "../util/rbac.js";
 import { ALL_AREA_KEYS } from "../config/permissions.js";
 import {
   signAccess,
@@ -62,6 +62,9 @@ function buildAuthPayload(user) {
     stepUpEnabled: !!user.security?.stepUpEnabled,
     isSuperAdmin: isSuperAdminRole(user.role),
     permissions: rolePermissionList(user.role, ALL_AREA_KEYS),
+    // Design Access: sees every admin section, but every /admin response is
+    // placeholder data. The client reads this to show the standing banner.
+    designAccess: isDesignRole(user.role),
     // Only true when BOTH the DB flag and the env allowlist agree. Carried in
     // the token so middleware (requireEntitlement, auditGod) can recognise it.
     isGod: isGodUser(user),

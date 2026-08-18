@@ -2,6 +2,7 @@ import React from "react";
 import { Outlet, useLocation, ScrollRestoration } from "react-router-dom";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
+import DesignModeBanner from "./components/DesignModeBanner.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import AiAgent from "./components/AiAgent.jsx";
@@ -63,6 +64,9 @@ export default function App() {
       <AnalyticsTracker />
 
       <Nav />
+
+      {/* Only renders for Design Access sessions, and only on /admin. */}
+      <DesignModeBanner />
 
       <main className="w-full flex-1 px-4 md:px-8 py-4">
         <ErrorBoundary>

@@ -31,6 +31,10 @@ export function requireAuth(req, res, next) {
   try {
     const token = getTokenFromReq(req);
     if (!token) return safeJson(res, 401, "Unauthorized");
+    // designMode has already verified this token and rewritten req.user to
+    // present the design role as an admin. Re-decoding here would clobber that
+    // and lock the designer out of every screen, so keep what it set.
+    if (req.designMode && req.user) return next();
     req.user = verifyAccess(token); // { id, email, role, isAdmin, ... }
     next();
   } catch {
@@ -42,6 +46,8 @@ export function requireAdmin(req, res, next) {
   try {
     const token = getTokenFromReq(req);
     if (!token) return safeJson(res, 401, "Unauthorized");
+
+    if (req.designMode && req.user) return next(); // see requireAuth above
 
     const decoded = verifyAccess(token);
     req.user = decoded;
@@ -143,8 +149,14 @@ export function requirePermission(area) {
       const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
       if (!uid) return safeJson(res, 401, "Unauthorized");
 
-      const doc = await User.findById(uid).select("role").lean();
-      const roleKey = doc?.role || req.user?.role || "user";
+      // designMode (mounted at the /admin boundary) has usually already read
+      // the role from the DB — reuse it rather than paying a second round trip
+      // to Atlas on every admin request.
+      let roleKey = req.resolvedRole;
+      if (!roleKey) {
+        const doc = await User.findById(uid).select("role").lean();
+        roleKey = doc?.role || req.user?.role || "user";
+      }
 
       if (roleHasArea(roleKey, area)) {
         req.userRole = roleKey;

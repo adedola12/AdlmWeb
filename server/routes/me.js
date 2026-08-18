@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
-import { rolePermissionList, isSuperAdminRole } from "../util/rbac.js";
+import { rolePermissionList, isSuperAdminRole, isDesignRole } from "../util/rbac.js";
 import { ALL_AREA_KEYS } from "../config/permissions.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
 import { STATES, normalizeState, zoneForState } from "../util/states.js";
@@ -244,6 +244,7 @@ router.get(
       stepUpEnabled: !!user?.security?.stepUpEnabled,
       isSuperAdmin: isSuperAdminRole(effectiveRole),
       permissions: rolePermissionList(effectiveRole, ALL_AREA_KEYS),
+      designAccess: isDesignRole(effectiveRole),
     });
   }),
 );

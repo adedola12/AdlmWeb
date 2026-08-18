@@ -6,7 +6,7 @@
 import { Role } from "../models/Role.js";
 import { STAFF_GRANTABLE_KEYS } from "../config/permissions.js";
 
-// roleKey -> { isSuperAdmin: boolean, perms: Set<string> }
+// roleKey -> { isSuperAdmin: boolean, designAccess: boolean, perms: Set<string> }
 let roleCache = new Map();
 
 export async function loadRoleCache() {
@@ -15,6 +15,7 @@ export async function loadRoleCache() {
   for (const r of roles) {
     next.set(r.key, {
       isSuperAdmin: !!r.isSuperAdmin,
+      designAccess: !!r.designAccess && !r.isSuperAdmin,
       perms: new Set(r.permissions || []),
     });
   }
@@ -29,9 +30,13 @@ export function getRoleAccess(roleKey) {
 }
 
 // Pure decision: does this access record grant the area? Super-admin → always.
+// Design-access roles also see every area — they are meant to walk the whole
+// admin UI — but everything they receive is masked by designMode.js, so the
+// breadth costs nothing.
 export function decideAccess(access, area) {
   if (!access) return false;
   if (access.isSuperAdmin) return true;
+  if (access.designAccess) return true;
   return access.perms.has(area);
 }
 
@@ -43,12 +48,17 @@ export function isSuperAdminRole(roleKey) {
   return !!getRoleAccess(roleKey)?.isSuperAdmin;
 }
 
+// Does this role browse the admin UI in placeholder-data mode?
+export function isDesignRole(roleKey) {
+  return !!getRoleAccess(roleKey)?.designAccess;
+}
+
 // The full list of area keys a role can see — used to serialize the user's
 // permissions to the client. Super-admin expands to every known area.
 export function rolePermissionList(roleKey, allAreaKeys) {
   const a = getRoleAccess(roleKey);
   if (!a) return [];
-  if (a.isSuperAdmin) return [...allAreaKeys];
+  if (a.isSuperAdmin || a.designAccess) return [...allAreaKeys];
   return [...a.perms];
 }
 
@@ -58,6 +68,14 @@ export function rolePermissionList(roleKey, allAreaKeys) {
 export async function ensureRolesSeeded() {
   const defaults = [
     { key: "admin", name: "Administrator", system: true, isSuperAdmin: true, permissions: [] },
+    {
+      key: "design",
+      name: "Design Access",
+      system: true,
+      isSuperAdmin: false,
+      designAccess: true,
+      permissions: [],
+    },
     {
       key: "mini_admin",
       name: "Mini Admin",
@@ -89,6 +107,10 @@ export async function ensureRolesSeeded() {
     }
     if (d.key === "admin" && !existing.isSuperAdmin) {
       existing.isSuperAdmin = true;
+      changed = true;
+    }
+    if (d.key === "design" && !existing.designAccess) {
+      existing.designAccess = true;
       changed = true;
     }
     if (changed) await existing.save();
