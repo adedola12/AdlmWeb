@@ -31,7 +31,7 @@ summary: Log daily site output, turn it into realistic durations and crew sizes,
 
 ## 1.1.1 — August 2026 — Dark mode, a side menu you can actually read, and MS Project exports that open
 
-Happy new month. August opens with the release Time Pro has been waiting for: the app now has a proper dark mode, the side menu shows its icons and labels instead of blank coloured blocks, and the Microsoft Project export produces a file Project will actually open — priced in your own currency.
+Time Pro gains a proper dark mode, a clearer side menu, and Microsoft Project exports that open straight into Project — priced in your own currency.
 
 ### ✨ New
 

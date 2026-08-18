@@ -76,6 +76,14 @@ function parseReleases(body) {
     flushGroup();
     if (cur) {
       cur.highlight = cur._hl.join(" ").trim();
+      // Every release must carry a highlight, because the highlight is now the
+      // ONLY prose that ships (see stripDetail below). If the note has none,
+      // fall back to the lead sentence of its first bullet rather than
+      // publishing a release with no description at all.
+      if (!cur.highlight) {
+        const first = cur.changes[0]?.items?.[0] || "";
+        cur.highlight = (first.split(/(?<=\.)\s/)[0] || "").trim();
+      }
       if (!cur.highlight) delete cur.highlight;
       delete cur._hl;
       releases.push(cur);
@@ -145,6 +153,21 @@ function buildProduct(file) {
   const status = (meta.status || (releases.length ? "live" : "coming-soon")).toLowerCase();
   const itemCount = releases.reduce((n, r) => n + r.changes.reduce((m, g) => m + g.items.length, 0), 0);
 
+  // WHAT SHIPS TO THE BROWSER
+  // The bullets under each release are our internal record: they name file
+  // paths, environment variables, root causes and the exact shape of past
+  // defects. Publishing them told competitors how the products are built and
+  // read, page after page, as an apology.
+  //
+  // So the site publishes the one-to-two sentence highlight and the change
+  // TYPES (which render as the New / Improved / Fixed pills) — and nothing
+  // else. The bullets stay in src/data/changelogs/*.md as the internal record
+  // and as the source for the user guides; they simply never reach the bundle.
+  const published = releases.map((r) => ({
+    ...r,
+    changes: r.changes.map((g) => ({ type: g.type })),
+  }));
+
   return {
     slug,
     name: meta.name || slug.toUpperCase(),
@@ -159,7 +182,7 @@ function buildProduct(file) {
     latest: releases[0]?.version || null,
     lastUpdated: releases[0]?.date || null,
     itemCount,
-    releases,
+    releases: published,
   };
 }
 

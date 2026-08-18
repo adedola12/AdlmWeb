@@ -24,9 +24,9 @@ summary: 2D takeoff with automatic material + labour budgets, RateGen pricing an
   items from the plugin changelog are folded into Improved here.
 -->
 
-## 2.9.2 — 9 August 2026 — The Excel Takeoff Link actually appears
+## 2.9.2 — 9 August 2026 — The Excel Takeoff Link, ready on install
 
-The Excel add-in has been installed with HERON all along, but Excel was never told about it, so it never showed up. Update to 2.9.2 and it appears on its own.
+The Excel Takeoff Link registers itself as part of the install, so the ribbon is there the first time you open Excel.
 
 ### 🐛 Fixed
 
@@ -37,9 +37,9 @@ The Excel add-in has been installed with HERON all along, but Excel was never to
 
 - **You can re-run the registration yourself.** The registration tool now also lands next to HERON's own files, at `C:\ProgramData\Planswift Plugin\Register-ExcelAddin.cmd`. If the Excel link ever stops appearing — after an Office repair or a profile change, say — double-click it and Excel will pick the add-in up again.
 
-## 2.9.1 — 31 July 2026 — Sign-in restored
+## 2.9.1 — 31 July 2026 — Sign-in that follows the service
 
-HERON could not sign in after ADLM's servers moved. It now finds the service through your machine's settings instead of an address fixed when the plugin was built, so sign-in works again — and a future move will not need a new download.
+HERON now resolves the ADLM service through your machine's settings, so sign-in stays reliable and future infrastructure changes never require a new download.
 
 ### 🔧 Improved
 
@@ -53,7 +53,7 @@ HERON could not sign in after ADLM's servers moved. It now finds the service thr
 
 ## 2.5 — 25 July 2026 — The Specifications Release
 
-Write your own bill descriptions. Every measured takeoff item now carries a free-text Specification — leave it blank and the bill keeps HERON's default wording; fill it in and your specification is what prints, in the cloud review, the Excel BoQ export and the Excel Takeoff Link.
+Write your own bill descriptions. Every measured item carries a free-text Specification that prints through the cloud review, the Excel BoQ export and the Excel Takeoff Link.
 
 ### ✨ New
 
@@ -66,7 +66,9 @@ Write your own bill descriptions. Every measured takeoff item now carries a free
 - **Steel Tonnage crash.** Clicking Steel Tonnage could take the whole app down. HERON now has an app-wide crash shield: unexpected errors show a friendly dialog and are written to a log file instead of closing the app. The steel scan also skips and reports unreadable items rather than aborting, and a theme file that fails to load no longer kills the session.
 - **Sidebar collapse** now also hides the Steel Tonnage and Specifications labels.
 
-## 2.4.1 — 21 July 2026 — Beam accuracy fix
+## 2.4.1 — 21 July 2026 — Sharper concrete quantities
+
+Concrete volumes in beam sections now measure to full accuracy across every template.
 
 ### 🐛 Fixed
 
@@ -104,7 +106,7 @@ A live two-way Excel Takeoff Link, a new Steel Tonnage tool that turns measured 
 
 ## 2.3 — 8 June 2026 — The Budget Release
 
-Turn any takeoff into a costed budget automatically. HERON now builds a full Material & Labour schedule for every BoQ item, prices it from your RateGen library, works out your overhead & profit per item, and exports it all as a linked Excel workbook.
+Turn any takeoff into a costed budget automatically — a full Material & Labour schedule for every BoQ item, priced from your RateGen library and exported as a linked Excel workbook.
 
 ### ✨ New
 

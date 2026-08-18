@@ -36,28 +36,24 @@ const TYPE_META = {
   },
 };
 
-function ChangeGroup({ type, items }) {
+// Renders the New / Improved / Fixed pill for a release.
+//
+// It used to list every change item beneath the pill. Those bullets are our
+// internal record — they name file paths, environment variables and the exact
+// shape of past defects — so the generator no longer publishes them (see the
+// note in scripts/gen-changelogs.mjs). What a reader gets is the release's
+// one-to-two sentence highlight plus these pills; the depth lives in the user
+// guides.
+function ChangeGroup({ type }) {
   const meta = TYPE_META[type] || TYPE_META.new;
   const { Icon } = meta;
   return (
-    <div className="mt-5 first:mt-0">
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.pill}`}
-      >
-        <Icon className="w-3.5 h-3.5" />
-        {meta.label}
-      </span>
-      <ul className="mt-3 space-y-2.5">
-        {items.map((text, i) => (
-          <li key={i} className="flex gap-2.5">
-            <FiCheck className={`mt-0.5 w-4 h-4 flex-shrink-0 ${meta.dot}`} />
-            <span className="text-[15px] leading-relaxed text-slate-700 dark:text-adlm-dark-muted">
-              {text}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.pill}`}
+    >
+      <Icon className="w-3.5 h-3.5" />
+      {meta.label}
+    </span>
   );
 }
 
@@ -94,9 +90,13 @@ function ReleaseCard({ release, accent, index }) {
               {release.highlight}
             </p>
           )}
-          {release.changes?.map((g) => (
-            <ChangeGroup key={g.type} type={g.type} items={g.items} />
-          ))}
+          {release.changes?.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {release.changes.map((g) => (
+                <ChangeGroup key={g.type} type={g.type} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Reveal>

@@ -39,9 +39,9 @@ summary: Model-based quantity takeoff, priced budgets and a dockable workspace �
   ────────────────────────────────────────────────────────────────────────
 -->
 
-## 3.1.7 — 31 July 2026 — Closing the last path to a sign-in failure
+## 3.1.7 — 31 July 2026 — Rock-solid sign-in, everywhere
 
-QUIV was not affected when ADLM's servers moved — it already read the service address from your machine rather than having it built in. This release closes the one remaining case where a QUIV install could have been caught out.
+QUIV signs in reliably on every install, however it was deployed — including machines set up outside the Installer Hub.
 
 ### 🔧 Improved
 
@@ -99,6 +99,9 @@ Our biggest release yet — QUIV moves beyond quantities into full priced budget
 ---
 
 ## 3.0.2 — May 2026 — Unit flexibility & Revit 2027
+
+
+Work in Metric or Imperial and switch between them at any time, with Revit 2027 supported alongside every earlier version.
 
 ### ✨ New
 
