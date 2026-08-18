@@ -57,6 +57,9 @@ export default function AdminLearn() {
       thumbnailUrl: fd.get("thumbnailUrl") || undefined,
       isPublished: fd.get("isPublished") === "on",
       sort: Number(fd.get("sort") || 0),
+      // Left at 0 the server tries YouTube (a no-op without YOUTUBE_API_KEY),
+      // so the marketing tiles can show a real runtime instead of a guess.
+      durationSec: Number(fd.get("durationSec") || 0),
     };
     await apiAuthed(`/admin/learn/free`, {
       token: accessToken,
@@ -234,6 +237,14 @@ export default function AdminLearn() {
             name="thumbnailUrl"
             className="input"
             placeholder="(Optional) Thumbnail URL"
+          />
+          <input
+            name="durationSec"
+            type="number"
+            min="0"
+            className="input"
+            placeholder="Length in seconds (e.g. 761 for 12:41)"
+            title="Filled automatically when YOUTUBE_API_KEY is set"
           />
           <input
             name="sort"

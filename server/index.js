@@ -59,6 +59,8 @@ import changelogsPublic from "./routes/changelogs.js";
 import adminChangelogs from "./routes/admin.changelogs.js";
 import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
+import waitlistPublic from "./routes/waitlist.public.js";
+import latestPublic from "./routes/latest.public.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 import agentRoutes from "./routes/agent.js";
@@ -281,6 +283,10 @@ app.use("/showcase", showcasePublic);
 // Public "What's New" product changelogs (read-only).
 app.use("/changelogs", changelogsPublic);
 app.use("/coupons", couponsPublic);
+// Public marketing-form capture (CIVIQ waitlist, solutions enquiries).
+app.use("/waitlist", waitlistPublic);
+// The "Latest from ADLM" band on the marketing pages.
+app.use("/latest", latestPublic);
 app.use("/helpbot", helpbotRoutes);
 app.use("/agent", agentRoutes);
 // AI cost-intelligence for the desktop plugins (auth required, metered).
@@ -383,8 +389,12 @@ app.use("/admin/roles", adminRoles);
 // catch-all "/admin" so their staff-grantable ("support") and admin-exclusive
 // ("audit") gates apply instead of the catch-all's admin-only middleware.
 import adminSupport from "./routes/admin.support.js";
+import adminWaitlist from "./routes/admin.waitlist.js";
+import adminLatest from "./routes/admin.latest.js";
 import adminAudit from "./routes/admin.audit.js";
 app.use("/admin/support-tickets", adminSupport);
+app.use("/admin/waitlist", adminWaitlist);
+app.use("/admin/latest", adminLatest);
 app.use("/admin/audit-log", adminAudit);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific

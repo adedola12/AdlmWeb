@@ -1,0 +1,104 @@
+// Route element for one staged redesign page.
+//
+// Takes a manifest entry rather than children so the router can be built by
+// mapping over the generated manifest without destructuring a component out of
+// it — which reads as an unused variable to eslint's no-unused-vars.
+//
+// DsShell and every page component are lazy, so the staged redesign costs
+// nothing to visitors on the real pages: the page components come to several
+// hundred KB of JSX across the 25 of them.
+
+import React from "react";
+import { ScrollRestoration, useNavigate } from "react-router-dom";
+import { MAP } from "../lib/dsRoutes.js";
+import { DS_PAGES } from "./pages/manifest.js";
+
+const DsShell = React.lazy(() => import("./DsShell.jsx"));
+
+// Real app path -> staged slug, so the preview can navigate to itself.
+//
+// Links in the ported markup point at the REAL routes, which is correct for
+// when these pages are promoted. While they are staged, though, following one
+// drops you out of the redesign and onto the current page — click QUIV in the
+// new nav and you land on the old product page, which makes the redesign
+// impossible to review as a whole. Inside /preview/* those links are
+// redirected to their staged counterpart; anything without one (trainings,
+// support, the SEO landing pages) still goes to the real route.
+const SLUG_TO_KEY = { home: "index" };
+
+// His page name -> the staged route for it. index.html is served at
+// /preview/home; everything else keeps his own file name as its slug.
+const STAGED = new Map(
+  DS_PAGES.map(({ slug }) => [SLUG_TO_KEY[slug] || slug, `/preview/${slug}`]),
+);
+
+// Fallback for links that carry no data-ds-page (hand-authored pages, and the
+// preview index). Keyed on the resolved app route.
+const PREVIEW_OF = new Map(
+  DS_PAGES.map(({ slug }) => [MAP[SLUG_TO_KEY[slug] || slug], `/preview/${slug}`]).filter(
+    ([real]) => typeof real === "string",
+  ),
+);
+
+/**
+ * @param {object} props
+ * @param {{ Component: React.ComponentType }} props.page  entry from manifest.js
+ */
+export default function DsPreview({ page }) {
+  const navigate = useNavigate();
+  const Page = page.Component;
+
+  const onClickCapture = React.useCallback(
+    (e) => {
+      // Leave modified clicks alone — they mean "open elsewhere".
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      const a = e.target.closest?.("a[href]");
+      if (!a || a.target === "_blank") return;
+
+      const href = a.getAttribute("href");
+      if (!href || !href.startsWith("/")) return;
+
+      const [path, hash] = href.split("#");
+
+      // His own page name, recorded by the porter. This is the authority: it
+      // routes exactly where his site routes, with no judgement about which of
+      // our pages a given page of his corresponds to. The route map is only a
+      // fallback for links that predate the attribute.
+      const hisPage = a.getAttribute("data-ds-page");
+      const staged = (hisPage && STAGED.get(hisPage)) || PREVIEW_OF.get(path);
+      if (!staged) return;
+
+      e.preventDefault();
+      navigate(hash ? `${staged}#${hash}` : staged);
+    },
+    [navigate],
+  );
+
+  // The mobile drawer is built by useDsBehaviours with a native click
+  // listener, which fires before the React handler above — so the drawer needs
+  // the same staged-route mapping handed to it directly.
+  const mapHref = React.useCallback((href, hisPage) => {
+    if (!href || !href.startsWith("/")) return href;
+    const [path, hash] = href.split("#");
+    const staged = (hisPage && STAGED.get(hisPage)) || PREVIEW_OF.get(path);
+    if (!staged) return href;
+    return hash ? `${staged}#${hash}` : staged;
+  }, []);
+
+  return (
+    <div onClickCapture={onClickCapture}>
+      {/* App.jsx renders this for the real routes, but the preview routes are
+          deliberately outside <App /> (see main.jsx) so they never inherited
+          it. Without it a click from halfway down one long page opens the next
+          one already scrolled to that offset. */}
+      <ScrollRestoration />
+      <React.Suspense fallback={null}>
+        <DsShell mapHref={mapHref}>
+          <Page />
+        </DsShell>
+      </React.Suspense>
+    </div>
+  );
+}

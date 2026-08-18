@@ -18,6 +18,11 @@ export const ADMIN_AREAS = [
   { key: "proposals", label: "Proposals", group: "Finance", staffGrantable: true },
   { key: "users", label: "Users", group: "People", staffGrantable: true },
   { key: "support", label: "Support Tickets", group: "Support", staffGrantable: true },
+  // Marketing-form captures: the CIVIQ waitlist and the solutions enquiries.
+  // Staff-grantable — it is a lead list to work, not an entitlement control.
+  { key: "waitlist", label: "Waitlist & Enquiries", group: "People", staffGrantable: true },
+  // The rotating "Latest from ADLM" band on the marketing pages.
+  { key: "latest", label: "Latest from ADLM", group: "Content", staffGrantable: true },
   // The main Admin Hub section pages (Pending, Active subscriptions,
   // Organizations, Storage, Installations, Settings …) and their API. Grant
   // deliberately — it includes purchase approval and entitlement management.

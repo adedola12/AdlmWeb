@@ -1,0 +1,2947 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/site.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* =========================================================
+   ADLM Studio — site styles
+   Lexend · light + dark · navy / blue / orange
+   Card fill + stroke follow the Figma colour styles exactly.
+   ========================================================= */
+:root{
+  --navy-950:#04101F; --navy-900:#071729; --navy-850:#091E39; --navy-800:#0E2A4C;
+  --navy-700:#143A66; --navy-600:#1D4E85; --navy-ink:#020911;
+  --blue-50:#EAF6FF; --blue-100:#CFEAFF; --blue-200:#A5D8FF; --blue-300:#6FC2FF;
+  --blue-400:#45AEFF; --blue-500:#239CFF; --blue-600:#0B7FDB; --blue-700:#0765B0;
+  --blue-800:#08528C;
+  --orange-50:#FDF1E9; --orange-300:#F8AE7E; --orange-400:#F5853F;
+  --orange-500:#E86A27; --orange-600:#C4531A;
+  --ok:#15803D; --ok-d:#4ADE80;
+
+  /* ---------- LIGHT (default) ---------- */
+  --bg:#FFFFFF;
+  --bg-alt:#F4F8FC;
+  --bg-inset:#E9F0F7;
+  --ink:#061423;
+  --ink-2:#46586B;
+  --ink-3:#72859A;
+  --line:#E2EAF2;
+  --line-2:#CFDCE8;
+  --action:#0B7FDB;
+  --action-grad:linear-gradient(180deg,#3FADFF 0%,#1289E6 52%,#0768B6 100%);
+  --action-ink:#FFFFFF;
+  --accent:#E86A27;
+  --dot:rgba(9,30,57,.34);
+  --glow:rgba(35,156,255,.26);
+  --shadow-c:9,30,57;
+  --card-fill:radial-gradient(120% 130% at 50% 0%,#FFFFFF 42%,#EDF4FB 100%);
+  --card-stroke:linear-gradient(100deg,#D3E1EE 0%,#239CFF 50%,#D3E1EE 100%);
+  --frag-fill:linear-gradient(180deg,#FFFFFF,#F5F9FD);
+  --frag-line:#E2EAF2;
+  --frag-k:#5A6C7E; --frag-v:#08192B; --frag-t:#8395A6;
+  --hero-fill:radial-gradient(120% 110% at 50% 0%,#F2F8FF 0%,#FFFFFF 62%);
+  --hero-ink:#061423; --hero-ink2:#46586B;
+
+  --font:"Lexend",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --shell:1200px;
+  --e-fast:cubic-bezier(.22,.61,.36,1);
+  --e-out:cubic-bezier(.16,1,.3,1);
+  --e-soft:cubic-bezier(.33,1,.68,1);
+  --r-btn:10px;
+  --r-card:22px;
+  --r-frame:30px;
+}
+
+
+/* ---------- DARK ---------- */
+:root.dark{
+  --bg:#02080F; --bg-alt:#040D18; --bg-inset:#071729;
+  --ink:#F2F7FC; --ink-2:#AEC2D8; --ink-3:#7E93AC;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --action:#239CFF;
+  --action-grad:linear-gradient(180deg,#7FCBFF 0%,#239CFF 54%,#0B7FDB 100%);
+  --action-ink:#02121F;
+  --dot:rgba(111,194,255,.6); --glow:rgba(35,156,255,.30);
+  --shadow-c:0,0,0;
+  --card-fill:radial-gradient(128% 128% at 50% 6%,#020911 35%,#091E39 100%);
+  --card-stroke:linear-gradient(100deg,#091E39 0%,#239CFF 50%,#091E39 100%);
+  --frag-fill:linear-gradient(180deg,#0A1A2C,#061422);
+  --frag-line:rgba(255,255,255,.10);
+  --frag-k:#9DB3CC; --frag-v:#EAF2FA; --frag-t:#66809D;
+  --hero-fill:radial-gradient(120% 110% at 50% 0%,#0A2540 0%,#02080F 62%);
+  --hero-ink:#F2F7FC; --hero-ink2:#AEC2D8;
+}
+:root.dark{
+  --bg:#02080F; --bg-alt:#040D18; --bg-inset:#071729;
+  --ink:#F2F7FC; --ink-2:#AEC2D8; --ink-3:#7E93AC;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --action:#239CFF;
+  --action-grad:linear-gradient(180deg,#7FCBFF 0%,#239CFF 54%,#0B7FDB 100%);
+  --action-ink:#02121F;
+  --dot:rgba(111,194,255,.6); --glow:rgba(35,156,255,.30);
+  --shadow-c:0,0,0;
+  --card-fill:radial-gradient(128% 128% at 50% 6%,#020911 35%,#091E39 100%);
+  --card-stroke:linear-gradient(100deg,#091E39 0%,#239CFF 50%,#091E39 100%);
+  --frag-fill:linear-gradient(180deg,#0A1A2C,#061422);
+  --frag-line:rgba(255,255,255,.10);
+  --frag-k:#9DB3CC; --frag-v:#EAF2FA; --frag-t:#66809D;
+  --hero-fill:radial-gradient(120% 110% at 50% 0%,#0A2540 0%,#02080F 62%);
+  --hero-ink:#F2F7FC; --hero-ink2:#AEC2D8;
+}
+
+
+/* dark band = a local theme scope, so EVERYTHING inside inherits dark tokens */
+.ds .band-dark{
+  --bg:#040D18; --bg-alt:#02080F; --bg-inset:#071729;
+  --ink:#F2F7FC; --ink-2:#AEC2D8; --ink-3:#7E93AC;
+  --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --action:#239CFF;
+  --action-grad:linear-gradient(180deg,#7FCBFF 0%,#239CFF 54%,#0B7FDB 100%);
+  --action-ink:#02121F;
+  --dot:rgba(111,194,255,.6); --glow:rgba(35,156,255,.30);
+  --shadow-c:0,0,0;
+  --card-fill:radial-gradient(128% 128% at 50% 6%,#020911 35%,#091E39 100%);
+  --card-stroke:linear-gradient(100deg,#091E39 0%,#239CFF 50%,#091E39 100%);
+  --frag-fill:linear-gradient(180deg,#0A1A2C,#061422);
+  --frag-line:rgba(255,255,255,.10);
+  --frag-k:#9DB3CC; --frag-v:#EAF2FA; --frag-t:#66809D;
+  background:#040D18;color:var(--ink-2);
+}
+.ds, .ds *{box-sizing:border-box}
+:root{scroll-behavior:smooth}
+.ds{margin:0;background:var(--bg);color:var(--ink-2);font-family:var(--font);
+  font-size:16px;line-height:1.6;font-weight:300;-webkit-font-smoothing:antialiased;
+  overflow-x:clip}
+
+/* eased theme switch */
+.ds, .ds-card, .ds .frag, .ds .nav, .ds .foot, .ds-btn, .ds .stat, .ds .tbl-wrap, .ds .phone-screen{
+  transition:background-color 420ms var(--e-soft),background-image 420ms var(--e-soft),
+             color 420ms var(--e-soft),border-color 420ms var(--e-soft)}
+.ds img{max-width:100%;display:block}
+.ds .shell{max-width:var(--shell);margin:0 auto;padding:0 32px}
+.ds h1, .ds h2, .ds h3, .ds h4{color:var(--ink);margin:0;font-weight:500;letter-spacing:-.034em;
+  line-height:.97;text-wrap:balance}
+.ds h1{font-size:clamp(42px,6.4vw,78px)}
+.ds h2{font-size:clamp(30px,4.2vw,52px);line-height:1.0;letter-spacing:-.032em}
+.ds h3{font-size:23px;line-height:1.18;letter-spacing:-.02em}
+.ds h4{font-size:17px;line-height:1.3;letter-spacing:-.012em;font-weight:500}
+.ds p{margin:0}
+.ds .grad{background:linear-gradient(94deg,#8FD0FF,#239CFF 46%,#0B7FDB);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.ds .tone{color:var(--ink-3)}
+.ds .eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:11.5px;font-weight:500;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:22px}
+.ds .eyebrow::before{content:"";width:5px;height:5px;border-radius:2px;background:currentColor;
+  box-shadow:0 0 9px 1px currentColor}
+.ds-lede{font-size:18px;line-height:1.55;color:var(--ink-2);font-weight:300}
+.ds .small{font-size:14px;line-height:1.55;color:var(--ink-3)}
+
+
+/* ---------------- ambience ---------------- */
+.ds .amb{position:relative;isolation:isolate}
+.ds .amb>*{position:relative;z-index:2}
+.ds .amb::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:radial-gradient(var(--dot) 1.3px,transparent 1.3px);
+  background-size:22px 22px;opacity:.55;
+  -webkit-mask-image:radial-gradient(ellipse 66% 58% at 50% 26%,#000,transparent 76%);
+  mask-image:radial-gradient(ellipse 66% 58% at 50% 26%,#000,transparent 76%)}
+.ds .amb::after{content:"";position:absolute;z-index:1;inset:-140px 0 auto 0;height:900px;pointer-events:none;
+  background:radial-gradient(ellipse 34% 46% at 8% 34%,var(--glow),transparent 66%),
+             radial-gradient(ellipse 34% 46% at 92% 30%,var(--glow),transparent 66%);
+  animation:breathe2 9s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.7;transform:translateX(-50%) scale(1)}
+                   50%{opacity:1;transform:translateX(-50%) scale(1.08)}}
+@keyframes breathe2{0%,100%{opacity:.62}50%{opacity:1}}
+
+
+/* section easing — soft blend instead of a hard edge */
+.ds .ease-t, .ds .ease-b{position:absolute;left:0;right:0;height:130px;pointer-events:none;z-index:3}
+.ds .ease-t{top:0;background:linear-gradient(to bottom,var(--page-bg,#fff),transparent)}
+.ds .ease-b{bottom:0;background:linear-gradient(to top,var(--page-bg,#fff),transparent)}
+
+
+/* ---------------- nav ---------------- */
+.ds .nav{position:fixed;top:0;left:0;right:0;z-index:90;padding:16px 0;
+  background:transparent;border-bottom:1px solid transparent;
+  transition:background-color 340ms var(--e-soft),backdrop-filter 340ms,
+             border-color 340ms var(--e-soft),padding 340ms var(--e-soft)}
+.ds .nav.stuck{padding:11px 0;background:color-mix(in srgb,var(--bg) 78%,transparent);
+  backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);
+  border-bottom-color:var(--line)}
+.ds .nav-in{display:flex;align-items:center;gap:18px;max-width:var(--shell);margin:0 auto;padding:0 32px}
+.ds .nav-act{display:flex;align-items:center;gap:8px;margin-left:auto}
+.ds .nav img{height:24px;width:auto}
+.ds .logo-l{display:block}
+.ds .logo-d{display:none}
+:root.dark .ds .logo-l{display:none}
+:root.dark .ds .logo-d{display:block}
+:root.dark .ds .logo-l{display:none}
+:root.dark .ds .logo-d{display:block}
+.ds .nav-links{display:flex;gap:26px;list-style:none;margin:0;padding:0;flex:1;justify-content:center}
+.ds .nav-links a{color:var(--ink-2);text-decoration:none;font-size:14.5px;font-weight:300;
+  position:relative;transition:color 200ms var(--e-fast)}
+.ds .nav-links a:hover{color:var(--ink)}
+.ds .nav-links a::before{content:"";position:absolute;left:0;right:100%;bottom:-6px;height:1.5px;
+  background:var(--action);border-radius:2px;transition:right 300ms var(--e-out)}
+.ds .nav-links a:hover::before{right:0}
+.ds .tt{width:38px;height:38px;border-radius:var(--r-btn);border:1px solid var(--line-2);
+  background:color-mix(in srgb,var(--bg) 60%,transparent);color:var(--ink-2);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  backdrop-filter:blur(8px);
+  transition:border-color 240ms var(--e-fast),color 240ms,transform 300ms var(--e-out)}
+.ds .tt:hover{color:var(--ink);border-color:var(--action);transform:translateY(-2px) rotate(-12deg)}
+.ds .tt svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .tt .i-sun{display:none}
+:root.dark .ds .tt .i-sun{display:block}
+:root.dark .ds .tt .i-moon{display:none}
+:root.dark .ds .tt .i-sun{display:block}
+:root.dark .ds .tt .i-moon{display:none}
+
+
+/* ---------------- buttons ---------------- */
+.ds-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  font-family:var(--font);font-size:15px;font-weight:500;letter-spacing:-.008em;
+  padding:13px 24px;border-radius:var(--r-btn);border:1px solid transparent;
+  text-decoration:none;cursor:pointer;white-space:nowrap;overflow:hidden;
+  transition:transform 320ms var(--e-out),box-shadow 320ms var(--e-out),
+             filter 260ms var(--e-fast),border-color 260ms var(--e-fast)}
+.ds-btn:focus-visible{outline:2px solid var(--action);outline-offset:3px}
+.ds-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;transition:transform 320ms var(--e-out)}
+
+/* glass sheen */
+.ds-btn::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,0) 46%)}
+.ds-btn::before{content:"";position:absolute;top:-60%;bottom:-60%;width:38%;left:-70%;pointer-events:none;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);
+  transform:skewX(-18deg);transition:left 700ms var(--e-out)}
+.ds-btn:hover::before{left:130%}
+.ds .btn-p{background-image:var(--action-grad);color:var(--action-ink);
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 8px 24px rgba(35,156,255,.36)}
+.ds .btn-p:hover{transform:translateY(-3px);filter:brightness(1.07);
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 16px 40px rgba(35,156,255,.5)}
+.ds .btn-p:hover svg{transform:translateX(4px)}
+.ds .btn-o{background:color-mix(in srgb,var(--bg) 55%,transparent);color:var(--ink);
+  border-color:var(--line-2);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.ds .btn-o::after{background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 50%)}
+.ds .btn-o:hover{transform:translateY(-3px);border-color:var(--action);
+  box-shadow:0 12px 30px rgba(var(--shadow-c),.14)}
+.ds .btn-a{background-image:linear-gradient(180deg,#F79A5E 0%,#E86A27 54%,#C4531A 100%);color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.42) inset,0 8px 24px rgba(232,106,39,.36)}
+.ds .btn-a:hover{transform:translateY(-3px);filter:brightness(1.06);
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 16px 40px rgba(232,106,39,.48)}
+.ds-btn-sm{font-size:13.5px;padding:9px 16px}
+.ds .btn-full{width:100%}
+
+
+/* ---------------- hero (rounded frame) ---------------- */
+.ds .hero{position:relative;margin:0 14px;border-radius:var(--r-frame);overflow:hidden;
+  background:var(--hero-fill);padding:150px 0 0;text-align:center;isolation:isolate}
+.ds .hero-b{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:radial-gradient(var(--dot) 1.3px,transparent 1.3px);background-size:22px 22px;
+  opacity:.5;
+  -webkit-mask-image:radial-gradient(ellipse 60% 46% at 50% 20%,#000,transparent 74%);
+  mask-image:radial-gradient(ellipse 60% 46% at 50% 20%,#000,transparent 74%)}
+.ds .hero-g{position:absolute;left:50%;top:-300px;width:1300px;height:900px;z-index:0;
+  transform:translateX(-50%);pointer-events:none;
+  background:radial-gradient(ellipse 50% 50% at 50% 50%,var(--glow),transparent 66%);
+  animation:breathe 8s ease-in-out infinite}
+.ds .hero>.shell, .ds .hero>.stage{position:relative;z-index:2}
+.ds .hero h1{margin:0 auto 24px;max-width:19ch;color:var(--hero-ink)}
+.ds .hero .ds-lede{max-width:50ch;margin:0 auto;font-size:18.5px;color:var(--hero-ink2)}
+.ds .hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:36px}
+.ds .hero-note{margin-top:26px;font-size:13.5px;color:var(--ink-3);display:inline-flex;
+  align-items:center;gap:9px}
+.ds .hero-note b{color:var(--hero-ink);font-weight:500}
+.ds .pulse{width:7px;height:7px;border-radius:50%;background:var(--ok-d);
+  box-shadow:0 0 0 0 rgba(74,222,128,.5);animation:pulse 2.6s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 9px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+.ds .w{display:inline-block}
+:root.js .ds .w{opacity:0;transform:translateY(.44em) rotate(1.2deg);
+  animation:wordUp .9s var(--e-out) forwards;animation-delay:calc(var(--i,0)*72ms + 150ms)}
+@keyframes wordUp{to{opacity:1;transform:none}}
+
+
+/* product shot — inside the hero frame, cropped */
+.ds .stage{margin:66px auto 0;width:min(1080px,86%)}
+.ds .stage-in{position:relative;border-radius:14px 14px 0 0;overflow:hidden;
+  height:clamp(230px,29vw,400px);border:1px solid var(--line-2);border-bottom:none;
+  background:#071729;
+  box-shadow:0 -10px 60px rgba(35,156,255,.20),0 34px 80px rgba(var(--shadow-c),.30)}
+.ds .stage-bar{display:flex;align-items:center;gap:7px;padding:11px 16px;
+  border-bottom:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.24)}
+.ds .stage-bar i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.18)}
+.ds .stage-bar span{margin-left:12px;font-size:11.5px;color:#8EA3BC;font-weight:300}
+.ds .stage-in img{width:100%;height:auto}
+
+
+/* ---------------- marquee ---------------- */
+.ds .marq{overflow:hidden;padding:26px 0;background:var(--bg);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
+.ds .marq-track{display:flex;gap:56px;width:max-content;animation:slide 46s linear infinite}
+.ds .marq:hover .marq-track{animation-play-state:paused}
+.ds .marq span{font-size:15px;font-weight:400;color:var(--ink-3);white-space:nowrap}
+@keyframes slide{to{transform:translateX(-50%)}}
+
+
+/* ---------------- sections ---------------- */
+.ds .sec{padding:120px 0;position:relative}
+.ds .sec-half{padding:clamp(56px,7vh,84px) 0;position:relative}
+.ds .sec-sm{padding:82px 0;position:relative}
+.ds .alt{background:var(--bg-alt)}
+.ds .sec-head{max-width:660px;margin-bottom:56px}
+.ds .sec-head.mid{margin-left:auto;margin-right:auto;text-align:center}
+.ds .sec-head p{margin-top:18px}
+.ds .frame{margin:0 14px;border-radius:var(--r-frame);overflow:hidden;position:relative}
+
+
+/* stats */
+.ds .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.ds .stat{padding:30px 26px;border-radius:var(--r-card);background:var(--card-fill);
+  border:1px solid var(--line);position:relative;overflow:hidden;
+  transition:transform 340ms var(--e-out),box-shadow 340ms var(--e-out)}
+.ds .stat:not(.tilt):hover{transform:translateY(-5px)}
+.ds .stat:hover{box-shadow:0 20px 46px rgba(var(--shadow-c),.14)}
+.ds .stat b{display:block;font-size:clamp(34px,4.2vw,48px);font-weight:500;color:var(--ink);
+  letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
+.ds .stat span{display:block;margin-top:10px;font-size:13.5px;color:var(--ink-3);font-weight:300}
+
+
+/* ---------------- CARD: radial fill + gradient stroke ---------------- */
+.ds-card{position:relative;border-radius:var(--r-card);padding:26px;
+  background-image:var(--card-fill);
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.05),0 18px 44px rgba(var(--shadow-c),.09);
+  transition:transform 380ms var(--e-out),box-shadow 380ms var(--e-out)}
+.ds-card::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none;
+  transition:opacity 380ms var(--e-fast),filter 380ms var(--e-fast)}
+.ds-card:not(.tilt):hover{transform:translateY(-6px) scale(1.012)}
+.ds-card:hover{
+  box-shadow:0 4px 10px rgba(var(--shadow-c),.07),0 32px 70px rgba(var(--shadow-c),.18)}
+.ds-card:hover::before{filter:brightness(1.5) saturate(1.3)}
+.ds-card h3, .ds-card h4{margin-bottom:8px}
+.ds-card p{font-size:14.5px;color:var(--ink-3)}
+
+
+/* icons */
+.ds .ico{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;
+  justify-content:center;margin-bottom:18px;flex:none;
+  background:color-mix(in srgb,var(--action) 13%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 30%,transparent);
+  transition:transform 340ms var(--e-out),background 260ms}
+.ds .ico svg{width:19px;height:19px;fill:none;stroke:var(--action);stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .ico-a{background:color-mix(in srgb,var(--accent) 13%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.ds .ico-a svg{stroke:var(--accent)}
+.ds-card:hover .ico, .ds .bento-c:hover .ico{transform:translateY(-3px) scale(1.07)}
+.ds .ico-sm{width:32px;height:32px;border-radius:9px;margin:0}
+.ds .ico-sm svg{width:15px;height:15px}
+
+
+/* ---------------- UI fragment ---------------- */
+.ds .frag{border-radius:14px;padding:16px;background-image:var(--frag-fill);
+  border:1px solid var(--frag-line);box-shadow:0 14px 34px rgba(var(--shadow-c),.14);
+  font-size:12.5px}
+.ds .frag-t{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--frag-t);
+  margin-bottom:11px;font-weight:400}
+.ds .frag-r{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;
+  border-bottom:1px solid var(--frag-line)}
+.ds .frag-r:last-of-type{border-bottom:none}
+.ds .frag-k{color:var(--frag-k);font-weight:300;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .frag-v{color:var(--frag-v);font-weight:400;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ds .frag-sum{display:flex;justify-content:space-between;gap:12px;margin-top:7px;padding-top:10px;
+  border-top:1px solid color-mix(in srgb,var(--action) 55%,transparent);
+  font-weight:500;color:var(--ink)}
+.ds .frag-sum .frag-v{color:var(--action)}
+.ds .bal{color:var(--action)}
+.ds .pre{font-style:italic;color:var(--ink-3);font-size:11.5px;line-height:1.45;padding:8px 0;
+  border-bottom:1px solid var(--frag-line);font-weight:300}
+.ds .pill{display:inline-block;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  padding:3px 8px;border-radius:999px;font-weight:400}
+.ds .pill-b{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.ds .pill-a{background:color-mix(in srgb,var(--action) 16%,transparent);color:var(--action)}
+.ds .pill-d{background:rgba(74,222,128,.16);color:var(--ok)}
+:root.dark .ds .pill-d, .ds .band-dark .pill-d{color:var(--ok-d)}
+.ds .meter{height:5px;border-radius:999px;background:var(--bg-inset);overflow:hidden;flex:1}
+.ds .meter i{display:block;height:100%;border-radius:999px;
+  background:linear-gradient(90deg,var(--blue-600),var(--blue-300))}
+.ds .meter i.done{background:linear-gradient(90deg,#1B9E52,var(--ok-d))}
+.ds .ask{background:color-mix(in srgb,var(--action) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 28%,transparent);border-radius:10px;
+  padding:10px 12px;color:var(--ink);font-size:12.5px;margin-bottom:12px;font-weight:300}
+
+
+/* evidence: fragment overhangs the card, Figma-style */
+.ds .ev{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.ds .ev .ds-card{padding:26px 26px 28px;overflow:visible;margin-top:26px}
+.ds .ev .frag{margin:-46px -34px 24px 18px;position:relative;z-index:3;
+  transition:transform 420ms var(--e-out),box-shadow 420ms var(--e-out)}
+.ds .ev .ds-card:hover .frag{transform:translateY(-6px) translateX(-4px);
+  box-shadow:0 24px 54px rgba(var(--shadow-c),.24)}
+
+
+/* ---------------- bento ---------------- */
+.ds .bento{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.ds .bento-c{position:relative;border-radius:var(--r-card);padding:26px;overflow:hidden;
+  background-image:var(--card-fill);min-height:250px;display:flex;flex-direction:column;
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.05),0 18px 44px rgba(var(--shadow-c),.09);
+  transition:transform 380ms var(--e-out),box-shadow 380ms var(--e-out)}
+.ds .bento-c::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none;transition:filter 380ms}
+.ds .bento-c:not(.tilt):hover{transform:translateY(-6px)}
+.ds .bento-c:hover{box-shadow:0 32px 70px rgba(var(--shadow-c),.20)}
+.ds .bento-c:hover::before{filter:brightness(1.5) saturate(1.3)}
+.ds .bento-c h4{margin:0 0 7px}
+.ds .bento-c p{font-size:14px;color:var(--ink-3);margin:0}
+.ds .bento-c .num{position:absolute;top:20px;right:22px;z-index:5;font-size:12px;color:var(--ink-3);
+  font-weight:400;letter-spacing:.06em}
+.ds .b-2{grid-column:span 2}
+.ds .bento-img{position:absolute;inset:0;z-index:0}
+.ds .bento-img img{width:100%;height:100%;object-fit:cover;
+  transition:transform 900ms var(--e-out)}
+.ds .bento-c:hover .bento-img img{transform:scale(1.06)}
+.ds .bento-img::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(4,13,24,.30) 0%,rgba(4,13,24,.86) 68%,rgba(4,13,24,.96) 100%)}
+.ds .bento-c>*:not(.bento-img):not(.bento-shot):not(.num){position:relative;z-index:2}
+.ds .bento-body{margin-top:auto}
+
+
+/* ---------------- stacking product cards ---------------- */
+.ds .stack{position:relative}
+.ds .stack-item{position:sticky;top:104px;margin-bottom:34px;will-change:transform}
+.ds .pcard{display:grid;grid-template-columns:1.04fr .96fr;gap:52px;align-items:center;
+  border-radius:26px;padding:56px;min-height:520px;position:relative;
+  background-image:var(--card-fill);
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.06),0 30px 70px rgba(var(--shadow-c),.20);
+  transform-origin:center top;
+  transition:box-shadow 420ms var(--e-out)}
+.ds .pcard::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .pcard-name{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.ds .pcard-name h3{font-size:clamp(32px,3.4vw,46px);letter-spacing:-.038em;margin:0;line-height:1}
+.ds .pcard .host{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+  font-weight:500;display:block;margin-bottom:16px}
+.ds .pcard .desc{font-size:16px;line-height:1.55;color:var(--ink-2);max-width:44ch}
+.ds .pfeat{display:grid;grid-template-columns:repeat(2,max-content);gap:14px 28px;margin:28px 0 32px}
+.ds .pfeat div{display:flex;align-items:center;gap:12px;font-size:13.5px;color:var(--ink-2);
+  font-weight:300}
+.ds .pcard-media{position:relative}
+.ds .pcard-art{border-radius:18px;overflow:hidden;border:1px solid var(--line);
+  box-shadow:0 20px 48px rgba(var(--shadow-c),.24);aspect-ratio:4/3.1;background:var(--bg-inset)}
+.ds .pcard-art img{width:100%;height:100%;object-fit:cover;transition:transform 900ms var(--e-out)}
+.ds .pcard:hover .pcard-art img{transform:scale(1.05)}
+.ds .pcard-frag{position:absolute;right:-38px;top:-30px;width:78%;z-index:4;
+  transition:transform 460ms var(--e-out)}
+.ds .pcard:hover .pcard-frag{transform:translateY(-8px)}
+
+
+/* split rows */
+.ds .split{display:grid;grid-template-columns:1fr 1.05fr;gap:68px;align-items:center;padding:76px 0;
+  border-top:1px solid var(--line)}
+.ds .split:first-of-type{border-top:none}
+.ds .split.flip .split-m{order:-1}
+.ds .ticks{list-style:none;margin:22px 0 0;padding:0}
+.ds .ticks li{display:flex;gap:12px;align-items:flex-start;padding:11px 0;font-size:14.5px;
+  color:var(--ink-2);font-weight:300;border-bottom:1px solid var(--line)}
+.ds .ticks li:last-child{border-bottom:none}
+.ds .ticks svg{width:17px;height:17px;flex:none;margin-top:2px;fill:none;stroke:var(--action);
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ds .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.ds .step-n{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:500}
+
+
+/* table */
+.ds .tbl{width:100%;border-collapse:collapse;font-size:14.5px;font-weight:300}
+.ds .tbl-wrap{overflow-x:auto;border-radius:var(--r-card);border:1px solid var(--line);
+  background:var(--bg)}
+.ds .tbl th, .ds .tbl td{text-align:left;padding:15px 20px;border-bottom:1px solid var(--line)}
+.ds .tbl thead th{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:400;background:var(--bg-alt)}
+.ds .tbl tbody tr:last-child td{border-bottom:none}
+.ds .tbl tbody tr{transition:background 240ms}
+.ds .tbl tbody tr:hover{background:color-mix(in srgb,var(--action) 6%,transparent)}
+.ds .tbl td:first-child{color:var(--ink);font-weight:400}
+.ds .tbl .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.ds .tbl .y{color:var(--ok)}
+:root.dark .ds .tbl .y, .ds .band-dark .tbl .y{color:var(--ok-d)}
+
+
+/* plans */
+.ds .plans{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;max-width:840px}
+.ds .plan .amt{font-size:48px;font-weight:500;color:var(--ink);letter-spacing:-.04em;line-height:1;
+  margin:14px 0 6px;font-variant-numeric:tabular-nums}
+.ds .plan .per{font-size:13.5px;color:var(--ink-3);margin-bottom:22px}
+.ds .plan ul{list-style:none;margin:0 0 28px;padding:0}
+.ds .plan li{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--ink-2);
+  padding:6px 0;font-weight:300}
+.ds .plan li svg{width:16px;height:16px;flex:none;margin-top:3px;fill:none;stroke:var(--action);
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ds .ribbon{position:absolute;top:22px;right:22px;font-size:10.5px;letter-spacing:.11em;
+  text-transform:uppercase;padding:5px 11px;border-radius:999px;color:#fff;font-weight:500;
+  background:var(--accent)}
+
+
+/* phone */
+.ds .phone-wrap{display:flex;justify-content:center;position:relative}
+.ds .phone{position:relative;width:300px;filter:drop-shadow(0 34px 70px rgba(var(--shadow-c),.40))}
+.ds .phone-frame{position:relative;z-index:3;width:100%;pointer-events:none}
+.ds .phone-screen{position:absolute;z-index:2;left:3.9%;top:1.95%;width:92.2%;height:96.1%;
+  border-radius:11.8%/5.8%;overflow:hidden;background:var(--bg);
+  padding:11% 6% 5%;display:flex;flex-direction:column}
+.ds .phone-h{font-size:15px;font-weight:500;color:var(--ink);margin-bottom:3px}
+.ds .phone-s{font-size:11.5px;color:var(--ink-3);margin-bottom:14px}
+
+
+/* CTA in a frame with blueprint ground */
+.ds .cta{position:relative;text-align:center;padding:120px 32px;border-radius:var(--r-frame);
+  margin:0 14px;overflow:hidden;background:#040D18}
+.ds .cta-bp{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:
+    linear-gradient(rgba(35,156,255,.14) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(35,156,255,.14) 1px,transparent 1px),
+    linear-gradient(rgba(35,156,255,.07) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(35,156,255,.07) 1px,transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px;
+  -webkit-mask-image:radial-gradient(ellipse 70% 68% at 50% 50%,#000,transparent 78%);
+  mask-image:radial-gradient(ellipse 70% 68% at 50% 50%,#000,transparent 78%)}
+.ds .cta-g{display:none}
+.ds .cta>*{position:relative;z-index:2}
+.ds .cta h2{max-width:16ch;margin:0 auto 20px;color:#F2F7FC}
+.ds .cta .ds-lede{max-width:50ch;margin:0 auto;color:#AEC2D8}
+
+
+/* footer */
+.ds .foot{padding:84px 0 36px;background:var(--bg-alt);border-top:1px solid var(--line);
+  margin-top:14px}
+.ds .foot-top{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:44px;padding-bottom:44px;
+  border-bottom:1px solid var(--line)}
+.ds .foot img{height:25px;margin-bottom:18px}
+.ds .foot h5{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+  margin:0 0 18px;font-weight:500}
+.ds .foot ul{list-style:none;margin:0;padding:0}
+.ds .foot li{margin-bottom:11px}
+.ds .foot a{color:var(--ink-2);text-decoration:none;font-size:14.5px;font-weight:300;
+  transition:color 200ms,padding-left 260ms var(--e-out)}
+.ds .foot a:hover{color:var(--action);padding-left:5px}
+.ds .foot-social{display:flex;gap:10px;margin-top:22px}
+.ds .foot-social a{width:36px;height:36px;border-radius:10px;border:1px solid var(--line-2);
+  display:flex;align-items:center;justify-content:center;padding:0;
+  transition:border-color 240ms,transform 300ms var(--e-out),background 240ms}
+.ds .foot-social a:hover{border-color:var(--action);transform:translateY(-3px);
+  background:color-mix(in srgb,var(--action) 10%,transparent)}
+.ds .foot-social svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .foot-bot{margin-top:30px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px;
+  font-size:13.5px;color:var(--ink-3)}
+.ds .ph{position:relative}
+
+
+/* reveal — once, on first sight */
+:root.js .ds .rise{opacity:0;transform:translateY(26px);
+  transition:opacity 700ms var(--e-out),transform 700ms var(--e-out)}
+:root.js .ds .rise.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+.ds, .ds *{animation:none!important;transition:none!important}
+:root.js .ds .rise{opacity:1;transform:none}
+
+  /* must out-specify `.js .w{opacity:0}` above — a bare `.w` loses to it, and with
+     animations disabled here the word-reveal never runs, so the headline stays
+     invisible for reduced-motion users. */
+:root.js .ds .w{opacity:1;transform:none}
+:root{scroll-behavior:auto}
+}
+@media (max-width:1000px){
+.ds .shell, .ds .nav-in{padding:0 22px}
+.ds .nav-links{display:none}
+.ds .sec{padding:80px 0}
+.ds .stats, .ds .steps, .ds .ev, .ds .bento{grid-template-columns:repeat(2,1fr)}
+.ds .b-2{grid-column:span 2}
+.ds .pcard{grid-template-columns:1fr;gap:32px;padding:32px;min-height:0}
+.ds .pcard-frag{position:static;width:100%;margin-top:18px}
+.ds .stack-item{position:static;margin-bottom:22px;transform:none!important}
+.ds .ev .frag{margin:-40px 0 22px}
+.ds .split{grid-template-columns:1fr;gap:38px;padding:56px 0}
+.ds .split.flip .split-m{order:0}
+.ds .plans{grid-template-columns:1fr}
+.ds .foot-top{grid-template-columns:1fr 1fr}
+.ds .hero{padding-top:120px;margin:0 8px}
+.ds .stage{width:94%}
+}
+@media (max-width:560px){
+.ds .stats, .ds .ev, .ds .steps, .ds .pfeat, .ds .bento{grid-template-columns:1fr}
+.ds .b-2{grid-column:span 1}
+}
+
+
+/* =========================================================
+   v4 — stats frame, carousel, tilt, bento, phone, blending
+   ========================================================= */
+
+
+/* ---- stats: one frame, dividers, icons, counters ---- */
+.ds .statframe{display:grid;grid-template-columns:repeat(4,1fr);border-radius:var(--r-card);
+  background-image:var(--card-fill);position:relative;overflow:hidden;
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.05),0 18px 44px rgba(var(--shadow-c),.09)}
+.ds .statframe::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .statframe .stat{background:none;border:0;box-shadow:none;padding:34px 30px;position:relative}
+.ds .statframe .stat:hover{transform:none;box-shadow:none}
+.ds .statframe .stat+.stat::before{content:"";position:absolute;left:0;top:22%;bottom:22%;width:1px;
+  background:linear-gradient(180deg,transparent,var(--line-2),transparent)}
+.ds .statframe .ico{width:38px;height:38px;border-radius:11px;margin-bottom:16px}
+.ds .statframe .ico svg{width:17px;height:17px}
+.ds .statframe b{font-size:clamp(32px,3.6vw,44px)}
+
+
+/* ---- universal tilt + magnetic pull ---- */
+.ds .tilt{transform-style:preserve-3d;will-change:transform;
+  transition:transform 700ms var(--e-out)}
+
+/* while the pointer is on it, the rAF loop IS the easing — a CSS transition on
+   top of that makes the card lag the cursor. The 700ms above is only for the
+   settle back to rest once `is-live` comes off. */
+.ds .tilt.is-live{transition:none}
+
+
+/* ---- PRODUCTS: horizontal carousel, pinned & centred ---- */
+.ds .pin{position:relative}
+.ds .pin-stage{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:clamp(20px,3.4vh,42px);overflow:hidden}
+.ds .pin-head{text-align:center;max-width:760px;padding:0 24px;flex:none}
+.ds .pin-head h2{margin-bottom:12px}
+.ds .pin-head p{font-size:16.5px;color:var(--ink-3)}
+.ds .ptrack{position:relative;width:min(1060px,88vw);height:clamp(420px,54vh,640px);margin:0 auto}
+.ds .pslide{position:absolute;left:0;top:0;width:100%;height:100%;border-radius:24px;overflow:hidden;
+  isolation:isolate;transform-origin:center center;
+  box-shadow:0 3px 10px rgba(var(--shadow-c),.10),0 34px 80px rgba(var(--shadow-c),.34);
+  transition:transform 700ms var(--e-out),opacity 700ms var(--e-out),filter 700ms var(--e-out);
+  opacity:0;pointer-events:none}
+.ds .pslide.on{opacity:1;pointer-events:auto;filter:none;transform:translateX(0) scale(1)}
+.ds .pslide.prev{opacity:.34;filter:blur(6px);transform:translateX(-13%) scale(.9)}
+.ds .pslide.next{opacity:.34;filter:blur(6px);transform:translateX(13%) scale(.9)}
+.ds .pslide::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none;z-index:4}
+.ds .pslide-bg{position:absolute;inset:0;z-index:0}
+.ds .pslide-bg img{width:100%;height:100%;object-fit:cover}
+
+/* readability scrim over the left half only — art stays clean on the right */
+.ds .pslide-bg::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(100deg,var(--scrim,rgba(2,9,17,.90)) 0%,
+             var(--scrim,rgba(2,9,17,.78)) 38%,transparent 68%)}
+.ds .pslide.light-art{--scrim:rgba(245,249,253,.94)}
+.ds .pslide.light-art .pslide-in{color:#33465A}
+.ds .pslide.light-art h3, .ds .pslide.light-art .pfeat div{color:#08192B}
+.ds .pslide-in{position:relative;z-index:3;height:100%;display:flex;flex-direction:column;
+  justify-content:center;padding:clamp(28px,4vw,58px);max-width:66%;color:#B9CBDE}
+.ds .pslide-in .host{font-size:11px;letter-spacing:.17em;text-transform:uppercase;color:var(--accent);
+  font-weight:500;display:block;margin-bottom:12px}
+.ds .pslide-in h3{font-size:clamp(30px,3.6vw,50px);letter-spacing:-.04em;line-height:1;margin:0 0 14px;
+  color:#fff}
+.ds .pslide-in .desc{font-size:15.5px;line-height:1.55;max-width:56ch;margin-bottom:22px}
+.ds .pslide-in .pfeat{grid-template-columns:repeat(2,max-content);gap:11px 26px;margin:0 0 26px}
+.ds .pslide-in .pfeat div{font-size:12.5px;color:#CBD9E8}
+.ds .pslide-in .ico-sm{width:26px;height:26px;border-radius:8px}
+.ds .pslide-in .ico-sm svg{width:13px;height:13px}
+.ds .pdots{display:flex;gap:8px;justify-content:center;flex:none}
+.ds .pdots i{width:7px;height:7px;border-radius:99px;background:var(--line-2);display:block;
+  transition:width 380ms var(--e-out),background 380ms}
+.ds .pdots i.on{width:26px;background:var(--action)}
+
+
+/* ---- bento: shorter image slot ---- */
+.ds .bento-c.has-img{padding:0;overflow:hidden}
+.ds .bento-c.has-img .bento-shot{position:relative;height:172px;flex:none}
+.ds .bento-c.has-img .bento-shot img{width:100%;height:100%;object-fit:cover;
+  transition:transform 900ms var(--e-out)}
+.ds .bento-c.has-img:hover .bento-shot img{transform:scale(1.06)}
+.ds .bento-c.has-img .bento-pad{padding:22px 24px 26px;position:relative}
+.ds .bento-c.has-img .ico{margin:-40px 0 14px}
+.ds .bento-c.has-img .bento-img{display:none}
+
+
+/* ---- phone: bigger ---- */
+.ds .phone{width:352px}
+.ds .phone-screen{padding:52px 18px 20px}
+.ds .phone-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 0;border-bottom:1px solid var(--frag-line);font-size:12.5px}
+.ds .phone-tabs{display:flex;gap:6px;margin-bottom:14px}
+.ds .phone-tab{font-size:10.5px;padding:5px 10px;border-radius:99px;background:var(--bg-inset);
+  color:var(--ink-3)}
+.ds .phone-tab.on{background:color-mix(in srgb,var(--action) 16%,transparent);color:var(--action)}
+
+
+/* ---- section blending, both themes ---- */
+.ds .blend{position:relative}
+.ds .blend::before, .ds .blend::after{content:"";position:absolute;left:0;right:0;height:120px;
+  pointer-events:none;z-index:5}
+.ds .blend::before{top:0;background:linear-gradient(to bottom,var(--bg),transparent)}
+.ds .blend::after{bottom:0;background:linear-gradient(to top,var(--bg),transparent)}
+.ds .frame{margin:0 14px;border-radius:var(--r-frame);overflow:hidden;position:relative}
+.ds .frame-soft{margin:0 14px;border-radius:var(--r-frame);position:relative;overflow:hidden}
+.ds .frame-soft::before, .ds .frame-soft::after{content:"";position:absolute;left:0;right:0;height:110px;
+  pointer-events:none;z-index:6}
+.ds .frame-soft::before{top:0;background:linear-gradient(to bottom,rgba(4,13,24,.85),transparent)}
+.ds .frame-soft::after{bottom:0;background:linear-gradient(to top,rgba(4,13,24,.85),transparent)}
+@media (max-width:1000px){
+
+  /* The toolkit section is a pinned, scroll-driven carousel on a desktop. On a
+     phone there is no pinning, so the six products have to become six cards you
+     scroll past. This block used to set flex-direction on .ptrack — but .ptrack
+     is not a flex container and .pslide is absolutely positioned, so all six
+     stacked on the same spot and only the last one, CIVIQ, was ever visible.
+     Everything below un-does the absolute positioning properly. */
+.ds .pin{height:auto!important}
+.ds .pin-stage{position:static;height:auto;padding:70px 0;overflow:visible}
+.ds .ptrack{position:static;width:auto;height:auto;margin:0;
+    display:flex;flex-direction:column;gap:18px;padding:0 20px}
+.ds .pslide{position:relative;left:auto;top:auto;width:100%;height:auto;
+    opacity:1!important;filter:none!important;transform:none!important;
+    pointer-events:auto;transition:none;
+    box-shadow:0 2px 8px rgba(var(--shadow-c),.08),0 18px 44px rgba(var(--shadow-c),.22)}
+.ds .pslide::before{display:none}
+          /* the sheen sweep wants a pointer */
+
+  /* art sits behind the whole card now, not just its right-hand side */
+.ds .pslide-bg::after{background:linear-gradient(160deg,var(--scrim,rgba(2,9,17,.93)) 0%,
+    var(--scrim,rgba(2,9,17,.86)) 52%,rgba(2,9,17,.55) 100%)}
+.ds .pslide.light-art .pslide-bg::after{
+    background:linear-gradient(160deg,rgba(245,249,253,.96) 0%,
+    rgba(245,249,253,.90) 52%,rgba(245,249,253,.62) 100%)}
+.ds .pslide-in{height:auto;max-width:100%;justify-content:flex-start;padding:28px 22px 26px}
+.ds .pslide-in h3{font-size:32px}
+.ds .pslide-in .desc{font-size:14.5px;margin-bottom:20px}
+.ds .pslide-in .pfeat{grid-template-columns:1fr;gap:10px;margin:0 0 22px}
+.ds .pdots{display:none}
+.ds .phone{width:300px}
+}
+
+
+/* Excel-sheet fragment (evidence card 2 — deliberately unlike card 1) */
+.ds .xl{border:1px solid var(--frag-line);border-radius:8px;overflow:hidden;margin-bottom:10px}
+.ds .xl-h, .ds .xl-r{display:grid;grid-template-columns:46px 1fr 62px 38px;font-size:11.5px;
+  align-items:center}
+.ds .xl-h{background:var(--bg-inset);color:var(--frag-t);font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase}
+.ds .xl-h span, .ds .xl-r span{padding:7px 8px;border-right:1px solid var(--frag-line);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .xl-h span:last-child, .ds .xl-r span:last-child{border-right:0}
+.ds .xl-r{border-top:1px solid var(--frag-line);color:var(--frag-v)}
+.ds .xl-r span:first-child{color:var(--frag-t)}
+.ds .xl-r span:nth-child(3), .ds .xl-r span:nth-child(4){font-variant-numeric:tabular-nums;text-align:right}
+.ds .xl-p{font-style:italic;color:var(--frag-t)}
+.ds .xl-r.on{background:color-mix(in srgb,var(--action) 10%,transparent);
+  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--action) 55%,transparent)}
+
+
+/* ---- CTA: bring back the dot field + side glows (no centre wash) ---- */
+.ds .cta-g{display:block;position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse 32% 44% at 6% 42%,rgba(35,156,255,.30),transparent 66%),
+             radial-gradient(ellipse 32% 44% at 94% 38%,rgba(35,156,255,.30),transparent 66%);
+  animation:breathe2 9s ease-in-out infinite}
+.ds .cta-dots{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:radial-gradient(rgba(111,194,255,.55) 1.3px,transparent 1.3px);
+  background-size:22px 22px;opacity:.4;
+  -webkit-mask-image:radial-gradient(ellipse 62% 60% at 50% 50%,#000,transparent 76%);
+  mask-image:radial-gradient(ellipse 62% 60% at 50% 50%,#000,transparent 76%)}
+.ds .cta-bp{opacity:.42}
+
+
+/* ---- product slides: sheen + tilt, same language as the buttons ---- */
+.ds .pslide::before{content:"";position:absolute;top:-40%;bottom:-40%;width:26%;left:-40%;z-index:5;
+  pointer-events:none;transform:skewX(-16deg);
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.16),transparent);
+  transition:left 900ms var(--e-out)}
+.ds .pslide.on:hover::before{left:135%}
+.ds .pslide.on{will-change:transform}
+.ds .pslide-tilt{transition:transform 520ms var(--e-out)}
+.ds .pslide-tilt.is-live{transition:transform 120ms linear}
+
+
+/* tilt elements keep their own transform; guard 3D artefacts */
+.ds .tilt{backface-visibility:hidden}
+.ds .bento-c.tilt, .ds-card.tilt, .ds .plan.tilt{will-change:transform}
+
+
+/* phone bottom tab bar — makes the screen read as a full app */
+.ds .phone-nav{margin-top:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;
+  padding-top:12px;border-top:1px solid var(--line)}
+.ds .phone-nav span{display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-size:9.5px;color:var(--ink-3)}
+.ds .phone-nav span.on{color:var(--action)}
+.ds .phone-nav svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+
+
+/* ---- bento: proper 5-tile arrangement (3-col) ----
+   row1: A A B   row2: C D B   row3: E E E                     */
+.ds .bento-5{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:stretch}
+.ds .bento-5 .b-a{grid-column:span 2}
+.ds .bento-5 .b-b{grid-column:span 1;grid-row:span 2}
+.ds .bento-5 .b-e{grid-column:span 3}
+.ds .bento-5 .bento-c{min-height:0}
+.ds .bento-5 .b-b{justify-content:flex-start}
+.ds .bento-5 .b-b .bento-body{margin-top:24px}
+@media (max-width:1000px){
+.ds .bento-5{grid-template-columns:repeat(2,1fr)}
+.ds .bento-5 .b-a, .ds .bento-5 .b-e{grid-column:span 2}
+.ds .bento-5 .b-b{grid-column:span 2;grid-row:auto}
+}
+@media (max-width:560px){
+.ds .bento-5{grid-template-columns:1fr}
+.ds .bento-5 .b-a, .ds .bento-5 .b-e, .ds .bento-5 .b-b{grid-column:span 1}
+}
+
+
+/* =========================================================
+   v5 — FAQ accordion, product gallery, price cards,
+        product-page hero, feature visuals
+   ========================================================= */
+
+
+/* ---- FAQ accordion ---- */
+.ds .faq{max-width:840px;margin:0 auto}
+.ds .faq details{border:1px solid var(--line);border-radius:14px;background-image:var(--card-fill);
+  margin-bottom:12px;overflow:hidden;transition:border-color 260ms var(--e-fast)}
+.ds .faq details[open]{border-color:color-mix(in srgb,var(--action) 45%,transparent)}
+.ds .faq summary{list-style:none;cursor:pointer;padding:20px 56px 20px 22px;position:relative;
+  font-size:16px;font-weight:500;color:var(--ink);line-height:1.35}
+.ds .faq summary::-webkit-details-marker{display:none}
+.ds .faq summary::after{content:"";position:absolute;right:22px;top:50%;width:13px;height:13px;
+  margin-top:-6px;
+  background:linear-gradient(var(--ink-3) 0 0) center/100% 1.6px no-repeat,
+             linear-gradient(var(--ink-3) 0 0) center/1.6px 100% no-repeat;
+  transition:transform 320ms var(--e-out)}
+.ds .faq details[open] summary::after{transform:rotate(135deg)}
+.ds .faq summary:hover{color:var(--action)}
+.ds .faq .faq-a{padding:0 22px 20px;font-size:14.5px;line-height:1.6;color:var(--ink-3);max-width:66ch}
+.ds .faq details[open] .faq-a{animation:faqIn 380ms var(--e-out)}
+@keyframes faqIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+
+/* ---- product gallery ---- */
+.ds .gal{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.ds .gcard{position:relative;border-radius:20px;overflow:hidden;isolation:isolate;min-height:340px;
+  display:flex;flex-direction:column;justify-content:flex-end;padding:26px;
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.08),0 22px 52px rgba(var(--shadow-c),.18);
+  transition:transform 480ms var(--e-out),box-shadow 480ms var(--e-out)}
+.ds .gcard::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;z-index:4;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .gcard-bg{position:absolute;inset:0;z-index:0}
+.ds .gcard-bg img{width:100%;height:100%;object-fit:cover;transition:transform 1000ms var(--e-out)}
+.ds .gcard:hover .gcard-bg img{transform:scale(1.07)}
+.ds .gcard-bg::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(2,9,17,.10) 0%,rgba(2,9,17,.74) 52%,rgba(2,9,17,.95) 100%)}
+.ds .gcard.light-art .gcard-bg::after{
+  background:linear-gradient(180deg,rgba(246,250,253,.05) 0%,rgba(246,250,253,.82) 50%,rgba(246,250,253,.98) 100%)}
+.ds .gcard>*:not(.gcard-bg):not(.gcard-soon){position:relative;z-index:3}
+.ds .gcard .host{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+  font-weight:500;margin-bottom:8px;display:block}
+.ds .gcard h3{font-size:30px;letter-spacing:-.034em;margin:0 0 8px;color:#fff;line-height:1}
+.ds .gcard p{font-size:14px;line-height:1.5;color:#B7C8DA;margin:0 0 16px;max-width:34ch}
+.ds .gcard .gprice{font-size:13px;color:#8EA3BC;margin-bottom:18px}
+.ds .gcard .gprice b{color:#fff;font-size:17px;font-weight:500}
+.ds .gcard.light-art h3{color:#08192B}
+.ds .gcard.light-art p{color:#46586B}
+.ds .gcard.light-art .gprice{color:#5B6C7E}
+.ds .gcard.light-art .gprice b{color:#08192B}
+.ds .gcard .ds-btn{align-self:flex-start}
+.ds .gcard-soon{position:absolute;top:20px;right:20px;z-index:5}
+
+
+/* ---- price cards ---- */
+.ds .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;max-width:1080px;margin:0 auto}
+.ds .pcard2{position:relative;border-radius:20px;overflow:hidden;isolation:isolate;
+  display:flex;flex-direction:column;padding:0;background-image:var(--card-fill);
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.08),0 22px 52px rgba(var(--shadow-c),.16);
+  transition:transform 460ms var(--e-out),box-shadow 460ms var(--e-out)}
+.ds .pcard2::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;z-index:5;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .pcard2-top{position:relative;height:132px;overflow:hidden;flex:none}
+.ds .pcard2-top img{width:100%;height:100%;object-fit:cover;transition:transform 900ms var(--e-out)}
+.ds .pcard2:hover .pcard2-top img{transform:scale(1.08)}
+.ds .pcard2-top::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,transparent 26%,var(--pc-fade,rgba(255,255,255,.94)) 100%)}
+.ds .pcard2-body{padding:0 24px 26px;display:flex;flex-direction:column;flex:1;position:relative;z-index:3}
+.ds .pcard2 .host{font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);
+  font-weight:500;display:block;margin:-16px 0 6px}
+.ds .pcard2 h3{font-size:25px;letter-spacing:-.03em;margin:0 0 5px;line-height:1}
+.ds .pcard2 .blurb{font-size:13.5px;color:var(--ink-3);line-height:1.5;margin-bottom:20px;min-height:44px}
+.ds .pcard2 .amt{font-size:40px;font-weight:500;letter-spacing:-.042em;line-height:1;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.ds .pcard2 .amt small{font-size:14px;font-weight:300;color:var(--ink-3);letter-spacing:0}
+.ds .pcard2 .yr{font-size:13px;color:var(--ink-3);margin:10px 0 4px}
+.ds .pcard2 .yr b{color:var(--action);font-weight:500}
+.ds .pcard2 .inst{font-size:12.5px;color:var(--ink-3);margin-bottom:18px}
+.ds .pcard2 ul{list-style:none;margin:0 0 22px;padding:16px 0 0;border-top:1px solid var(--line)}
+.ds .pcard2 li{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;color:var(--ink-2);
+  padding:5px 0;font-weight:300}
+.ds .pcard2 li svg{width:15px;height:15px;flex:none;margin-top:3px;fill:none;stroke:var(--action);
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ds .pcard2 .ds-btn{margin-top:auto}
+.ds .pc-tag{position:absolute;top:16px;right:16px;z-index:6;font-size:10px;letter-spacing:.11em;
+  text-transform:uppercase;padding:5px 10px;border-radius:999px;background:var(--accent);color:#fff;
+  font-weight:500}
+
+
+/* ---- product page hero ---- */
+.ds .phero{position:relative;margin:14px;border-radius:var(--r-frame);overflow:hidden;
+  min-height:calc(100vh - 28px);display:flex;align-items:center;isolation:isolate}
+.ds .phero-bg{position:absolute;inset:0;z-index:0}
+.ds .phero-bg img{width:100%;height:100%;object-fit:cover}
+.ds .phero-bg::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(100deg,rgba(2,9,17,.96) 0%,rgba(2,9,17,.90) 44%,rgba(2,9,17,.52) 66%,rgba(2,9,17,.08) 88%)}
+.ds .phero.light-art .phero-bg::after{
+  background:linear-gradient(100deg,rgba(246,250,253,.97) 0%,rgba(246,250,253,.92) 44%,rgba(246,250,253,.55) 66%,rgba(246,250,253,.10) 88%)}
+.ds .phero-in{position:relative;z-index:3;max-width:640px;padding:0 clamp(28px,5vw,74px)}
+.ds .phero-in .host{font-size:11.5px;letter-spacing:.17em;text-transform:uppercase;color:var(--accent);
+  font-weight:500;display:block;margin-bottom:16px}
+.ds .phero-in h1{font-size:clamp(38px,5vw,66px);line-height:.98;letter-spacing:-.038em;margin:0 0 20px;
+  color:#fff}
+.ds .phero-in .ds-lede{font-size:17.5px;color:#B9CBDE;max-width:44ch}
+.ds .phero.light-art .phero-in h1{color:#08192B}
+.ds .phero.light-art .phero-in .ds-lede{color:#46586B}
+.ds .phero-note{margin-top:22px;font-size:13px;color:#8EA3BC;display:flex;align-items:center;gap:9px}
+.ds .phero.light-art .phero-note{color:#5B6C7E}
+.ds .phero .hero-cta{justify-content:flex-start}
+
+
+/* ---- feature cards with purpose-built visuals ---- */
+.ds .fgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px}
+.ds .fgrid .f-wide{grid-column:span 2}
+.ds .fcard{border-radius:20px;padding:0;overflow:hidden;background-image:var(--card-fill);
+  position:relative;display:flex;flex-direction:column;
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.06),0 18px 44px rgba(var(--shadow-c),.10);
+  transition:transform 420ms var(--e-out),box-shadow 420ms var(--e-out)}
+.ds .fcard::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;z-index:4;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .fviz{position:relative;height:230px;display:flex;align-items:center;justify-content:center;
+  padding:26px;overflow:hidden;border-bottom:1px solid var(--line);
+  background:radial-gradient(120% 130% at 50% 0%,color-mix(in srgb,var(--action) 14%,transparent),transparent 72%),
+             var(--bg-alt)}
+.ds .fcard-body{padding:22px 24px 26px}
+.ds .fcard h4{font-size:18px;margin:0 0 7px}
+.ds .fcard p{font-size:14px;line-height:1.55;color:var(--ink-3);margin:0}
+
+
+/* viz primitives */
+.ds .vz{position:relative;width:100%;max-width:380px}
+.ds .vz-panel{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:13px 14px;
+  box-shadow:0 10px 26px rgba(var(--shadow-c),.14);font-size:12px}
+.ds .vz-row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;color:var(--ink-2)}
+.ds .vz-row b{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:500}
+.ds .vz-row.hl{color:var(--action)}
+.ds .vz-row.hl b{color:var(--action)}
+.ds .vz-sum{display:flex;justify-content:space-between;padding-top:9px;margin-top:5px;
+  border-top:1px solid color-mix(in srgb,var(--action) 50%,transparent);font-weight:500;color:var(--ink)}
+.ds .vz-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:6px 11px;
+  border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--ink-2);
+  box-shadow:0 6px 16px rgba(var(--shadow-c),.10);white-space:nowrap}
+.ds .vz-chip.on{border-color:var(--action);color:var(--action)}
+.ds .vz-flow{display:flex;align-items:center;gap:12px;width:100%}
+.ds .vz-arrow{flex:1;height:1.5px;background:var(--line-2);position:relative;border-radius:2px}
+.ds .vz-arrow i{position:absolute;top:-3px;width:7px;height:7px;border-radius:50%;background:var(--action);
+  box-shadow:0 0 10px 2px color-mix(in srgb,var(--action) 60%,transparent);
+  animation:flowDot 2.6s var(--e-soft) infinite}
+@keyframes flowDot{0%{left:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{left:100%;opacity:0}}
+.ds .vz-bars{display:flex;align-items:flex-end;gap:9px;height:104px;width:100%}
+.ds .vz-bars i{flex:1;border-radius:5px 5px 0 0;
+  background:color-mix(in srgb,var(--action) 24%,transparent);transform-origin:bottom;
+  animation:barGrow 3s var(--e-soft) infinite alternate}
+.ds .vz-bars i.hot{background:linear-gradient(180deg,var(--action),color-mix(in srgb,var(--action) 40%,transparent))}
+@keyframes barGrow{from{transform:scaleY(.68)}to{transform:scaleY(1)}}
+.ds .vz-scanwrap{position:relative;width:100%;max-width:300px;height:150px;border-radius:10px;
+  border:1px solid var(--line);background:var(--bg);overflow:hidden;
+  box-shadow:0 10px 26px rgba(var(--shadow-c),.14)}
+.ds .vz-scanwrap .ds-grid{position:absolute;inset:0;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:26px 26px;opacity:.8}
+.ds .vz-scan{position:absolute;left:0;right:0;height:2px;background:var(--action);border-radius:2px;
+  box-shadow:0 0 16px 3px color-mix(in srgb,var(--action) 55%,transparent);
+  animation:scan 3.4s var(--e-soft) infinite}
+@keyframes scan{0%,100%{top:10%}50%{top:86%}}
+.ds .vz-stack{position:relative;height:132px;width:100%;max-width:300px}
+.ds .vz-stack .vz-panel{position:absolute;left:50%;width:82%}
+.ds .vz-stack .l1{top:0;opacity:.42;transform:translateX(-50%) scale(.88)}
+.ds .vz-stack .l2{top:24px;opacity:.68;transform:translateX(-50%) scale(.94)}
+.ds .vz-stack .l3{top:50px;transform:translateX(-50%)}
+.ds .vz-ring{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;position:relative;
+  background:conic-gradient(var(--action) 0 78%,color-mix(in srgb,var(--action) 14%,transparent) 78% 100%)}
+.ds .vz-ring::before{content:"";position:absolute;inset:12px;border-radius:50%;background:var(--bg)}
+.ds .vz-ring span{position:relative;font-size:21px;font-weight:500;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.ds .vz-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;max-width:330px}
+.ds .vz-col{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 8px;
+  text-align:center;font-size:11px;color:var(--ink-3);
+  box-shadow:0 6px 16px rgba(var(--shadow-c),.10)}
+.ds .vz-col b{display:block;font-size:15px;color:var(--ink);font-weight:500;margin-top:3px;
+  font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){
+.ds .vz-arrow i, .ds .vz-bars i, .ds .vz-scan{animation:none}
+}
+@media (max-width:1000px){
+.ds .gal, .ds .pgrid, .ds .fgrid{grid-template-columns:repeat(2,1fr)}
+.ds .fgrid .f-wide{grid-column:span 2}
+.ds .phero{min-height:auto;padding:130px 0 84px}
+.ds .phero-in{max-width:100%}
+}
+@media (max-width:640px){
+.ds .gal, .ds .pgrid, .ds .fgrid{grid-template-columns:1fr}
+.ds .fgrid .f-wide{grid-column:span 1}
+}
+
+
+/* =========================================================
+   v6 — mega-menu nav, seamless image blends, chat viz
+   ========================================================= */
+
+
+/* ---- nav dropdowns ---- */
+.ds .nav-links > li{position:relative}
+.ds .nav-links > li > a{display:inline-flex;align-items:center;gap:6px;padding:10px 0}
+.ds .nav-links .caret{width:8px;height:8px;border-right:1.6px solid currentColor;
+  border-bottom:1.6px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.55;
+  transition:transform 260ms var(--e-out),opacity 200ms}
+.ds .nav-links > li:hover .caret, .ds .nav-links > li:focus-within .caret{opacity:1;
+  transform:rotate(225deg) translateY(-4px)}
+.ds .mega{position:absolute;top:100%;left:50%;transform:translate(-50%,10px);
+  min-width:240px;padding:18px;border-radius:16px;z-index:120;
+  background:color-mix(in srgb,var(--bg) 92%,transparent);
+  backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
+  border:1px solid var(--line-2);
+  box-shadow:0 24px 60px rgba(var(--shadow-c),.24);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 220ms var(--e-fast),transform 300ms var(--e-out),visibility 220ms}
+.ds .nav-links > li:hover .mega, .ds .nav-links > li:focus-within .mega{
+  opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0)}
+
+/* hover bridge so the pointer can travel from link to panel */
+.ds .nav-links > li::after{content:"";position:absolute;left:0;right:0;top:100%;height:12px}
+.ds .mega-wide{min-width:640px}
+.ds .mega-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 22px}
+.ds .mega-cols.two{grid-template-columns:repeat(2,1fr)}
+.ds .mega h6{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);
+  margin:0 0 10px;font-weight:500}
+.ds .mega ul{list-style:none;margin:0 0 6px;padding:0}
+.ds .mega li{margin:0}
+.ds .mega a{display:flex;gap:11px;align-items:flex-start;padding:9px 10px;border-radius:10px;
+  text-decoration:none;color:var(--ink-2);font-size:14px;font-weight:300;line-height:1.35;
+  transition:background 200ms var(--e-fast),color 200ms}
+.ds .mega a:hover{background:color-mix(in srgb,var(--action) 10%,transparent);color:var(--ink)}
+.ds .mega a b{display:block;font-weight:500;color:var(--ink);font-size:14px;margin-bottom:1px}
+.ds .mega a span{display:block;font-size:12px;color:var(--ink-3);line-height:1.4}
+.ds .mega .mi{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--action) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 26%,transparent)}
+.ds .mega .mi svg{width:14px;height:14px;fill:none;stroke:var(--action);stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .mega .mi.ds-a{background:color-mix(in srgb,var(--accent) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 26%,transparent)}
+.ds .mega .mi.ds-a svg{stroke:var(--accent)}
+.ds .mega-foot{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);
+  display:flex;gap:10px;flex-wrap:wrap}
+.ds .mega-foot a{padding:7px 12px;border-radius:999px;border:1px solid var(--line-2);font-size:12.5px}
+.ds .mega-foot a:hover{border-color:var(--action)}
+
+
+/* ---- seamless image → card blends (theme-proof: mask, not overlay) ---- */
+.ds .pcard2-top::after{display:none}
+.ds .pcard2-top img{-webkit-mask-image:linear-gradient(180deg,#000 34%,rgba(0,0,0,.55) 72%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 34%,rgba(0,0,0,.55) 72%,transparent 100%)}
+.ds .bento-c.has-img .bento-shot img{
+  -webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 62%,transparent 100%)}
+
+
+/* ---- gallery cards: always a dark scrim, so text is legible in both themes ---- */
+
+/* gallery: scrim + text follow the ARTWORK, not the theme */
+.ds .gcard{background-image:var(--card-fill)}
+.ds .gcard-bg::after{background:linear-gradient(180deg,rgba(2,9,17,.12) 0%,rgba(2,9,17,.72) 44%,rgba(2,9,17,.94) 100%)}
+.ds .gcard.light-art .gcard-bg::after{background:linear-gradient(180deg,rgba(244,249,253,.08) 0%,rgba(244,249,253,.80) 44%,rgba(244,249,253,.97) 100%)}
+.ds .gcard h3{color:#fff}
+.ds .gcard p{color:#B7C8DA}
+.ds .gcard .gprice{color:#8EA3BC}
+.ds .gcard .gprice b{color:#fff}
+.ds .gcard.light-art h3{color:#08192B}
+.ds .gcard.light-art p{color:#46586B}
+.ds .gcard.light-art .gprice{color:#5B6C7E}
+.ds .gcard.light-art .gprice b{color:#08192B}
+
+
+/* ---- split rows: fix the stray rule (first-of-type never matched) ---- */
+.ds .split{border-top:0}
+.ds .split + .split{border-top:1px solid var(--line)}
+
+
+/* ---- product hero: align to the same container as the nav ---- */
+.ds .phero-in{max-width:var(--shell);width:100%;margin:0 auto;padding:0 32px}
+.ds .phero-in > *{max-width:640px}
+.ds .phero-in h1{max-width:15ch}
+
+
+/* ---- AI chat visual ---- */
+.ds .chat{width:100%;max-width:620px;display:flex;flex-direction:column;gap:12px}
+.ds .chat-bar{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--line);
+  border-radius:999px;padding:8px 8px 8px 16px;box-shadow:0 10px 26px rgba(var(--shadow-c),.14)}
+.ds .chat-bar span{flex:1;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.ds .chat-send{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;
+  background-image:var(--action-grad);box-shadow:0 4px 14px rgba(35,156,255,.4)}
+.ds .chat-send svg{width:15px;height:15px;fill:none;stroke:var(--action-ink);stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .chat-reply{display:flex;gap:11px;align-items:flex-start}
+.ds .chat-ai{width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;
+  background-image:var(--action-grad);box-shadow:0 4px 14px rgba(35,156,255,.34)}
+.ds .chat-ai svg{width:15px;height:15px;fill:none;stroke:var(--action-ink);stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .chat-body{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:12px;
+  border-top-left-radius:3px;padding:12px 14px;box-shadow:0 10px 26px rgba(var(--shadow-c),.14)}
+.ds .chat-body .vz-row{padding:5px 0;font-size:12px}
+.ds .chat-tick{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--action);
+  margin-top:8px}
+.ds .chat-tick svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.2}
+.ds .typing{display:inline-flex;gap:3px;align-items:center;margin-left:2px}
+.ds .typing i{width:4px;height:4px;border-radius:50%;background:var(--ink-3);
+  animation:typing 1.4s ease-in-out infinite}
+.ds .typing i:nth-child(2){animation-delay:.2s}
+.ds .typing i:nth-child(3){animation-delay:.4s}
+@keyframes typing{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+
+
+/* ---- compatibility as cards, not a bare table ---- */
+.ds .compat{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.ds .compat-c{border-radius:18px;padding:22px;background-image:var(--card-fill);position:relative;
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.06),0 16px 40px rgba(var(--shadow-c),.10)}
+.ds .compat-c::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .compat-c h6{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+  margin:0 0 12px;font-weight:500}
+.ds .compat-c .big{font-size:22px;font-weight:500;color:var(--ink);letter-spacing:-.026em;
+  line-height:1.15;margin-bottom:10px}
+.ds .compat-tags{display:flex;flex-wrap:wrap;gap:7px}
+.ds .compat-tags span{font-size:11.5px;padding:5px 10px;border-radius:999px;
+  background:color-mix(in srgb,var(--action) 11%,transparent);color:var(--action);
+  border:1px solid color-mix(in srgb,var(--action) 24%,transparent)}
+@media (max-width:1100px){
+.ds .compat{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:1000px){
+.ds .mega{display:none}
+.ds .compat{grid-template-columns:1fr}
+.ds .phero-in{padding:0 22px}
+}
+
+
+/* =========================================================
+   v7 — smooth accordion, chat fix, hero spill, compare table,
+        product icons, bespoke decision visuals
+   ========================================================= */
+
+
+/* ---- FAQ: animate height properly (details won't tween on its own) ---- */
+.ds .faq details{transition:border-color 260ms var(--e-fast),background-color 260ms var(--e-fast)}
+.ds .faq .faq-wrap{display:grid;grid-template-rows:0fr;
+  transition:grid-template-rows 420ms var(--e-out)}
+.ds .faq details[open] .faq-wrap{grid-template-rows:1fr}
+.ds .faq .faq-inner{overflow:hidden;min-height:0}
+.ds .faq .faq-a{padding:0 22px 20px;opacity:0;transform:translateY(-4px);
+  transition:opacity 320ms var(--e-out) 60ms,transform 320ms var(--e-out) 60ms}
+.ds .faq details[open] .faq-a{opacity:1;transform:none}
+.ds .faq details[open] .faq-a{animation:none}
+
+
+/* ---- chat bar: only the text flexes, the button stays round ---- */
+.ds .chat-bar{padding:7px 7px 7px 16px}
+.ds .chat-bar > span{flex:0 0 auto}
+.ds .chat-bar .chat-txt{flex:1 1 auto;min-width:0}
+.ds .chat-send{width:36px;height:36px;flex:0 0 36px;border-radius:50%}
+
+
+/* ---- product hero spills above the viewport so the nav sits on it ---- */
+.ds .phero{margin:0 14px 14px;border-radius:0 0 var(--r-frame) var(--r-frame);
+  min-height:100vh;padding-top:96px}
+
+
+/* ---- product icons ---- */
+.ds .picon{width:52px;height:52px;object-fit:contain;display:block;
+  filter:drop-shadow(0 8px 18px rgba(var(--shadow-c),.30))}
+.ds .picon-lg{width:76px;height:76px}
+.ds .gcard .picon{margin-bottom:14px}
+.ds .pcard2 .picon{position:relative;z-index:6;width:58px;height:58px;margin:-40px 0 18px}
+.ds .pcard2 .pcard2-body{padding-top:0}
+.ds .pcard2 .host{margin:0 0 7px}
+.ds .pcard2 h3{margin:0 0 6px}
+.ds .pcard2 .blurb{margin-bottom:22px}
+
+/* these two source icons carry more internal padding — even them out */
+.ds .picon[src*="ic-heron"], .ds .picon[src*="ic-mep"]{transform:scale(1.18)}
+.ds .ct-prod img[src*="ic-heron"], .ds .ct-prod img[src*="ic-mep"]{transform:scale(1.16)}
+
+
+/* ---- comparison table: tall rows, icons, real weight ---- */
+.ds .ctable{width:100%;border-collapse:separate;border-spacing:0;font-size:14.5px;
+  border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden;
+  background-image:var(--card-fill)}
+.ds .ctable th, .ds .ctable td{padding:22px 20px;border-bottom:1px solid var(--line);vertical-align:middle;
+  text-align:left}
+.ds .ctable thead th{background:var(--bg-alt);padding:24px 20px}
+.ds .ctable tbody tr:last-child th, .ds .ctable tbody tr:last-child td{border-bottom:0}
+.ds .ctable tbody tr{transition:background 240ms var(--e-fast)}
+.ds .ctable tbody tr:hover{background:color-mix(in srgb,var(--action) 5%,transparent)}
+.ds .ctable .rowhead{width:26%;font-weight:400;color:var(--ink);font-size:15px;line-height:1.35}
+.ds .ctable .rowhead small{display:block;font-size:12.5px;color:var(--ink-3);font-weight:300;margin-top:3px}
+.ds .ctable td{color:var(--ink-2);font-weight:300}
+.ds .ct-prod{display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center}
+.ds .ct-prod img{width:44px;height:44px;object-fit:contain;
+  filter:drop-shadow(0 6px 14px rgba(var(--shadow-c),.28))}
+.ds .ct-prod b{font-size:15px;font-weight:500;color:var(--ink);letter-spacing:-.01em}
+.ds .ct-prod span{font-size:11.5px;color:var(--ink-3)}
+.ds .ct-c{text-align:center}
+.ds .ct-yes{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;
+  background:color-mix(in srgb,var(--action) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 32%,transparent)}
+.ds .ct-yes svg{width:13px;height:13px;fill:none;stroke:var(--action);stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .ct-no{display:inline-block;width:16px;height:2px;border-radius:2px;background:var(--line-2)}
+.ds .ct-note{display:block;font-size:12px;color:var(--ink-3);margin-top:6px}
+.ds .ct-price{font-size:19px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .ct-price small{display:block;font-size:12px;color:var(--ink-3);font-weight:300;margin-top:2px}
+.ds .ctable-wrap{overflow-x:auto;border-radius:var(--r-card)}
+
+
+/* ---- bespoke visuals for the "which tool" decision cards ---- */
+.ds .dviz{height:190px;display:flex;align-items:center;justify-content:center;position:relative;
+  border-bottom:1px solid var(--line);overflow:hidden;
+  background:radial-gradient(120% 130% at 50% 0%,color-mix(in srgb,var(--action) 13%,transparent),transparent 72%),
+             var(--bg-alt)}
+
+/* isometric model block */
+.ds .dv-model{position:relative;width:130px;height:112px}
+.ds .dv-model i{position:absolute;border-radius:6px;border:1.5px solid var(--action);
+  background:color-mix(in srgb,var(--action) 12%,transparent)}
+.ds .dv-model i:nth-child(1){left:22px;top:56px;width:86px;height:44px;opacity:.45}
+.ds .dv-model i:nth-child(2){left:14px;top:30px;width:102px;height:44px;opacity:.7}
+.ds .dv-model i:nth-child(3){left:6px;top:4px;width:118px;height:44px;
+  box-shadow:0 0 22px color-mix(in srgb,var(--action) 40%,transparent)}
+
+/* stacked sheets */
+.ds .dv-sheets{position:relative;width:132px;height:120px}
+.ds .dv-sheets i{position:absolute;width:92px;height:104px;border-radius:8px;background:var(--bg);
+  border:1px solid var(--line-2);box-shadow:0 10px 24px rgba(var(--shadow-c),.16)}
+.ds .dv-sheets i:nth-child(1){left:0;top:8px;transform:rotate(-8deg)}
+.ds .dv-sheets i:nth-child(2){left:18px;top:4px;transform:rotate(-2deg)}
+.ds .dv-sheets i:nth-child(3){left:36px;top:0;transform:rotate(5deg);
+  border-color:color-mix(in srgb,var(--action) 55%,transparent)}
+.ds .dv-sheets i:nth-child(3)::after{content:"";position:absolute;left:12px;right:12px;top:18px;height:2px;
+  border-radius:2px;background:var(--action);box-shadow:0 14px 0 color-mix(in srgb,var(--action) 45%,transparent),
+  0 28px 0 color-mix(in srgb,var(--action) 25%,transparent)}
+
+/* price tag / rate */
+.ds .dv-rate{display:flex;align-items:center;gap:14px}
+.ds .dv-rate .tagi{width:60px;height:60px;border-radius:16px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--action) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 32%,transparent)}
+.ds .dv-rate .tagi svg{width:26px;height:26px;fill:none;stroke:var(--action);stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .dv-rate .bars{display:flex;flex-direction:column;gap:7px}
+.ds .dv-rate .bars i{height:9px;border-radius:5px;background:color-mix(in srgb,var(--action) 22%,transparent)}
+.ds .dv-rate .bars i:nth-child(1){width:96px}
+.ds .dv-rate .bars i:nth-child(2){width:70px}
+.ds .dv-rate .bars i:nth-child(3){width:112px;background:var(--action)}
+@media (max-width:1000px){
+.ds .phero{min-height:auto;padding:120px 0 80px;margin:0 8px 8px}
+.ds .ctable .rowhead{width:auto;min-width:180px}
+}
+
+
+/* ---- nav responds to what is BEHIND it, not just the theme ----
+   product pages open on a dark hero even in light mode, so the nav
+   borrows the dark-ground lockup until you scroll past it            */
+.ds .nav.over-dark .logo-l{display:none}
+.ds .nav.over-dark .logo-d{display:block}
+.ds .nav.over-dark .nav-links > li > a{color:#C3D4E8}
+.ds .nav.over-dark .nav-links > li > a:hover{color:#fff}
+.ds .nav.over-dark .tt{color:#C3D4E8;border-color:rgba(255,255,255,.22);
+  background:rgba(255,255,255,.06)}
+.ds .nav.over-dark .tt:hover{color:#fff}
+.ds .nav.over-dark .btn-o{color:#fff;border-color:rgba(255,255,255,.24);
+  background:rgba(255,255,255,.08)}
+
+
+/* =========================================================
+   v8 — extra feature visuals + simple content pages
+   ========================================================= */
+
+
+/* gantt / programme */
+.ds .vz-gantt{display:flex;flex-direction:column;gap:7px;width:100%;max-width:330px}
+.ds .vz-gantt div{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--ink-3)}
+.ds .vz-gantt span{flex:0 0 62px;white-space:nowrap}
+.ds .vz-gantt i{height:11px;border-radius:4px;background:color-mix(in srgb,var(--action) 30%,transparent)}
+.ds .vz-gantt i.hot{background:var(--action)}
+
+
+/* cut / fill */
+.ds .vz-cut{display:flex;align-items:center;justify-content:center;gap:22px;width:100%}
+.ds .vz-cut div{text-align:center;font-size:11px;color:var(--ink-3)}
+.ds .vz-cut b{display:block;font-size:19px;color:var(--ink);font-weight:500;margin-top:5px;
+  font-variant-numeric:tabular-nums}
+.ds .vz-cut .bar{width:52px;border-radius:6px;margin:0 auto}
+.ds .vz-cut .cut .bar{height:54px;background:linear-gradient(180deg,var(--action),transparent)}
+.ds .vz-cut .ds-fill .bar{height:34px;background:linear-gradient(0deg,color-mix(in srgb,var(--accent) 70%,transparent),transparent)}
+
+
+/* road cross-section */
+.ds .vz-road{width:100%;max-width:300px;height:96px;position:relative;border-radius:10px;
+  border:1px solid var(--line);background:var(--bg);overflow:hidden}
+.ds .vz-road i{position:absolute;left:0;right:0;height:2px;background:var(--line-2)}
+.ds .vz-road i.s1{top:34px}
+.ds .vz-road i.s2{top:62px}
+.ds .vz-road b{position:absolute;left:14%;right:14%;top:40px;height:20px;border-radius:3px;
+  background:color-mix(in srgb,var(--action) 26%,transparent);
+  border-top:2px solid var(--action);border-bottom:2px solid var(--action)}
+.ds .vz-road span{position:absolute;right:10px;bottom:8px;font-size:10.5px;color:var(--action)}
+
+
+/* duct run */
+.ds .vz-duct{width:100%;max-width:300px;height:110px;position:relative}
+.ds .vz-duct i{position:absolute;border-radius:4px;background:color-mix(in srgb,var(--action) 26%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 50%,transparent)}
+.ds .vz-duct i:nth-child(1){left:0;top:18px;width:150px;height:16px}
+.ds .vz-duct i:nth-child(2){left:134px;top:18px;width:16px;height:64px}
+.ds .vz-duct i:nth-child(3){left:134px;top:66px;width:140px;height:16px}
+.ds .vz-duct b{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 10px 2px color-mix(in srgb,var(--accent) 55%,transparent)}
+.ds .vz-duct b:nth-of-type(1){left:60px;top:21px}
+.ds .vz-duct b:nth-of-type(2){left:200px;top:69px}
+
+
+/* location chips */
+.ds .vz-locs{display:flex;flex-direction:column;gap:8px;width:100%;max-width:290px}
+.ds .vz-locs div{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;
+  border-radius:9px;background:var(--bg);border:1px solid var(--line);font-size:12px;
+  color:var(--ink-2);box-shadow:0 6px 16px rgba(var(--shadow-c),.08)}
+.ds .vz-locs div.on{border-color:color-mix(in srgb,var(--action) 55%,transparent);color:var(--action)}
+.ds .vz-locs b{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:500}
+.ds .vz-locs div.on b{color:var(--action)}
+
+
+/* sync fan-out */
+.ds .vz-sync{display:flex;align-items:center;gap:14px;width:100%;justify-content:center}
+.ds .vz-sync .hub{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;
+  background-image:var(--action-grad);box-shadow:0 8px 22px rgba(35,156,255,.4)}
+.ds .vz-sync .hub svg{width:24px;height:24px;fill:none;stroke:var(--action-ink);stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .vz-sync .outs{display:flex;flex-direction:column;gap:7px}
+
+
+/* simple prose page (legal, about) */
+.ds .prose{max-width:70ch}
+.ds .prose h3{margin:34px 0 10px}
+.ds .prose p{margin:0 0 14px;color:var(--ink-2);font-size:15.5px;line-height:1.7}
+.ds .prose ul{margin:0 0 16px;padding-left:20px}
+.ds .prose li{color:var(--ink-2);font-size:15.5px;line-height:1.7;margin-bottom:7px}
+.ds .prose li::marker{color:var(--ink-3)}
+.ds .prose .updated{font-size:13px;color:var(--ink-3);margin-bottom:28px}
+
+
+/* timeline */
+.ds .tl{position:relative;padding-left:30px;max-width:640px}
+.ds .tl::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;border-radius:2px;
+  background:linear-gradient(180deg,var(--action),color-mix(in srgb,var(--action) 15%,transparent))}
+.ds .tl div{position:relative;padding:0 0 26px}
+.ds .tl div::before{content:"";position:absolute;left:-30px;top:6px;width:16px;height:16px;
+  border-radius:50%;background:var(--bg);border:2px solid var(--action)}
+.ds .tl b{display:block;font-size:13px;color:var(--action);letter-spacing:.08em;margin-bottom:4px}
+.ds .tl p{margin:0;color:var(--ink-2);font-size:15.5px}
+
+
+/* team */
+.ds .team{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.ds .tcard{text-align:center;padding:26px 20px;border-radius:var(--r-card);
+  background-image:var(--card-fill);position:relative;
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.06),0 16px 40px rgba(var(--shadow-c),.10)}
+.ds .tcard::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .tcard .av{width:62px;height:62px;border-radius:50%;margin:0 auto 14px;display:grid;place-items:center;
+  background-image:var(--action-grad);color:var(--action-ink);font-weight:500;font-size:20px;
+  box-shadow:0 8px 20px rgba(35,156,255,.32)}
+.ds .tcard b{display:block;font-size:16px;color:var(--ink);font-weight:500;margin-bottom:3px}
+.ds .tcard span{font-size:13px;color:var(--ink-3)}
+
+
+/* contact grid */
+.ds .cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.ds .ccard{padding:28px 24px;border-radius:var(--r-card);background-image:var(--card-fill);
+  position:relative;box-shadow:0 2px 6px rgba(var(--shadow-c),.06),0 16px 40px rgba(var(--shadow-c),.10);
+  transition:transform 420ms var(--e-out)}
+.ds .ccard::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .ccard h4{margin:14px 0 6px}
+.ds .ccard p{font-size:14px;color:var(--ink-3);margin:0 0 14px}
+.ds .ccard a{color:var(--action);text-decoration:none;font-size:14.5px}
+.ds .ccard a:hover{text-decoration:underline}
+@media (max-width:1000px){
+.ds .team{grid-template-columns:repeat(2,1fr)}
+.ds .cgrid{grid-template-columns:1fr}
+}
+
+
+/* =========================================================
+   v9 — commerce & auth flow, announcement banner, timeline,
+        media bento, parallax, mega-menu restyle
+   ========================================================= */
+
+
+/* ---------- theme-adaptive favicon is handled in JS ---------- */
+
+
+/* ---------- announcement banner (billboard) ---------- */
+.ds .bill{position:relative;border-radius:20px;overflow:hidden;isolation:isolate;
+  border:1px solid var(--line);background-image:var(--card-fill);
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.08),0 22px 52px rgba(var(--shadow-c),.16);
+  min-height:132px;display:flex;align-items:center}
+.ds .bill::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;z-index:5;
+  background-image:var(--card-stroke);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;pointer-events:none}
+.ds .bill-track{position:relative;width:100%;height:132px}
+.ds .bill-item{position:absolute;inset:0;display:grid;grid-template-columns:112px 1fr auto;
+  gap:20px;align-items:center;padding:18px 24px;opacity:0;transform:translateY(12px);
+  transition:opacity 620ms var(--e-out),transform 620ms var(--e-out);pointer-events:none}
+.ds .bill-item.on{opacity:1;transform:none;pointer-events:auto}
+.ds .bill-media{width:112px;height:96px;border-radius:14px;overflow:hidden;position:relative;
+  background:var(--bg-inset)}
+.ds .bill-media img{width:100%;height:100%;object-fit:cover}
+.ds .bill-copy .tag{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;font-weight:500;color:var(--accent);margin-bottom:7px}
+.ds .bill-copy h4{margin:0 0 4px;font-size:18px;letter-spacing:-.018em}
+.ds .bill-copy p{margin:0;font-size:13.5px;color:var(--ink-3);max-width:62ch}
+.ds .bill-dots{display:flex;gap:6px;position:absolute;right:22px;bottom:14px;z-index:6}
+.ds .bill-dots i{width:6px;height:6px;border-radius:99px;background:var(--line-2);display:block;
+  transition:width 380ms var(--e-out),background 380ms;cursor:pointer}
+.ds .bill-dots i.on{width:20px;background:var(--action)}
+
+
+/* ---------- release timeline ---------- */
+.ds .rel{position:relative;padding-left:36px;max-width:860px;margin:0 auto}
+.ds .rel::before{content:"";position:absolute;left:9px;top:10px;bottom:10px;width:2px;border-radius:2px;
+  background:linear-gradient(180deg,var(--action),color-mix(in srgb,var(--action) 12%,transparent))}
+.ds .rel-item{position:relative;padding:0 0 30px}
+.ds .rel-item::before{content:"";position:absolute;left:-36px;top:8px;width:20px;height:20px;
+  border-radius:50%;background:var(--bg);border:2px solid var(--action);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--action) 12%,transparent)}
+.ds .rel-item.minor::before{border-color:var(--line-2);box-shadow:none}
+.ds .rel-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.ds .rel-head b{font-size:17px;color:var(--ink);font-weight:500;letter-spacing:-.014em}
+.ds .rel-head .ver{font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;
+  border-radius:99px;background:color-mix(in srgb,var(--action) 14%,transparent);color:var(--action);
+  font-weight:500}
+.ds .rel-head .when{font-size:12.5px;color:var(--ink-3)}
+.ds .rel-body{border-radius:14px;padding:18px 20px;background-image:var(--card-fill);
+  border:1px solid var(--line)}
+.ds .rel-body p{margin:0 0 12px;font-size:14.5px;color:var(--ink-2);line-height:1.6}
+.ds .rel-body p:last-child{margin-bottom:0}
+.ds .rel-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.ds .rel-tags span{font-size:11px;padding:4px 10px;border-radius:99px;border:1px solid var(--line-2);
+  color:var(--ink-3)}
+.ds .rel-tags span.new{border-color:color-mix(in srgb,var(--action) 40%,transparent);color:var(--action)}
+.ds .rel-tags span.fix{border-color:color-mix(in srgb,var(--accent) 40%,transparent);color:var(--accent)}
+
+
+/* ---------- commerce ---------- */
+.ds .chk{display:grid;grid-template-columns:1.35fr .9fr;gap:34px;align-items:start}
+.ds .panel{border-radius:var(--r-card);padding:28px;background-image:var(--card-fill);position:relative;
+  border:1px solid var(--line)}
+.ds .panel h3{margin:0 0 6px;font-size:20px}
+.ds .panel .ds-sub{font-size:13.5px;color:var(--ink-3);margin-bottom:22px}
+.ds .line{display:grid;grid-template-columns:60px 1fr auto;gap:16px;align-items:center;padding:18px 0;
+  border-bottom:1px solid var(--line)}
+.ds .line:last-of-type{border-bottom:0}
+.ds .line img{width:60px;height:60px;object-fit:contain}
+.ds .line b{display:block;font-size:16px;color:var(--ink);font-weight:500;margin-bottom:3px}
+.ds .line span{font-size:12.5px;color:var(--ink-3)}
+.ds .line .amt2{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);font-weight:500;
+  font-size:16px;white-space:nowrap}
+.ds .line .amt2 small{display:block;font-size:11.5px;color:var(--ink-3);font-weight:300}
+.ds .qty{display:inline-flex;align-items:center;gap:0;border:1px solid var(--line-2);border-radius:8px;
+  overflow:hidden;margin-top:8px}
+.ds .qty button{width:28px;height:28px;border:0;background:var(--bg);color:var(--ink-2);cursor:pointer;
+  font-size:15px;line-height:1}
+.ds .qty button:hover{background:var(--bg-inset);color:var(--action)}
+.ds .qty span{min-width:34px;text-align:center;font-size:13px;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.ds .sumrow{display:flex;justify-content:space-between;padding:9px 0;font-size:14px;color:var(--ink-2)}
+.ds .sumrow b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:500}
+.ds .sumtot{display:flex;justify-content:space-between;padding-top:14px;margin-top:10px;
+  border-top:1px solid var(--line);font-size:16px;color:var(--ink);font-weight:500}
+.ds .sumtot b{font-size:24px;letter-spacing:-.028em;font-variant-numeric:tabular-nums}
+.ds .toggle2{display:inline-flex;border:1px solid var(--line-2);border-radius:99px;padding:3px;
+  background:var(--bg);margin-bottom:22px}
+.ds .toggle2 button{border:0;background:none;padding:8px 16px;border-radius:99px;font-family:var(--font);
+  font-size:13px;color:var(--ink-3);cursor:pointer;transition:background 240ms,color 240ms}
+.ds .toggle2 button.on{background:var(--action);color:var(--action-ink);font-weight:500}
+.ds .trust{display:flex;flex-wrap:wrap;gap:14px;margin-top:20px;font-size:12.5px;color:var(--ink-3)}
+.ds .trust span{display:inline-flex;align-items:center;gap:6px}
+.ds .trust svg{width:14px;height:14px;fill:none;stroke:var(--ok);stroke-width:2;stroke-linecap:round}
+
+
+/* steps */
+.ds .flowsteps{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:34px;
+  justify-content:center}
+.ds .flowsteps div{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-3)}
+.ds .flowsteps i{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;
+  font-size:12px;background:var(--bg-inset);color:var(--ink-3);border:1px solid var(--line-2)}
+.ds .flowsteps div.on{color:var(--ink)}
+.ds .flowsteps div.on i{background:var(--action);color:var(--action-ink);border-color:var(--action)}
+.ds .flowsteps div.done i{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok);
+  border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
+.ds .flowsteps s{width:24px;height:1px;background:var(--line-2);text-decoration:none}
+
+
+/* forms */
+.ds-field{margin-bottom:16px}
+.ds-field label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px;font-weight:400}
+.ds-field input, .ds-field select{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line-2);
+  background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14.5px;font-weight:300;
+  transition:border-color 200ms,box-shadow 200ms}
+.ds-field input:focus, .ds-field select:focus{outline:none;border-color:var(--action);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 18%,transparent)}
+.ds-field .hint{font-size:11.5px;color:var(--ink-3);margin-top:5px}
+.ds .two-up{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ds .authwrap{max-width:460px;margin:0 auto}
+.ds .authcard{border-radius:var(--r-card);padding:34px;background-image:var(--card-fill);
+  border:1px solid var(--line);position:relative;
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.08),0 22px 52px rgba(var(--shadow-c),.16)}
+.ds .authcard h2{font-size:26px;margin-bottom:6px}
+.ds .authcard .ds-sub{font-size:14px;color:var(--ink-3);margin-bottom:26px}
+.ds .authfoot{text-align:center;font-size:13.5px;color:var(--ink-3);margin-top:22px}
+.ds .authfoot a{color:var(--action);text-decoration:none}
+.ds .divider{display:flex;align-items:center;gap:14px;margin:22px 0;color:var(--ink-3);font-size:12px}
+.ds .divider::before, .ds .divider::after{content:"";flex:1;height:1px;background:var(--line)}
+
+
+/* ---------- media bento (bold imagery) ---------- */
+.ds .mbento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:210px;gap:18px}
+.ds .mtile{position:relative;border-radius:20px;overflow:hidden;isolation:isolate;
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.08),0 20px 46px rgba(var(--shadow-c),.16);
+  transition:transform 520ms var(--e-out)}
+.ds .mtile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  transition:transform 1100ms var(--e-out)}
+.ds .mtile:hover img{transform:scale(1.06)}
+.ds .mtile::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(2,9,17,.18) 0%,rgba(2,9,17,.58) 46%,rgba(2,9,17,.93) 100%)}
+.ds .mtile .mt{position:relative;z-index:3;height:100%;display:flex;flex-direction:column;
+  justify-content:flex-end;padding:22px}
+.ds .mtile .eyebrow{color:var(--orange-300);margin-bottom:7px}
+.ds .mtile h4{color:#fff;font-size:19px;margin:0 0 5px}
+.ds .mtile p{color:#B7C8DA;font-size:13.5px;margin:0}
+.ds .mtile.solid{background-image:var(--card-fill);border:1px solid var(--line)}
+.ds .mtile.solid::after{display:none}
+.ds .mtile.solid h4{color:var(--ink)}
+.ds .mtile.solid p{color:var(--ink-3)}
+.ds .mtile.ds-accent{background:linear-gradient(150deg,var(--orange-500),var(--orange-600))}
+.ds .mtile.ds-accent::after{display:none}
+.ds .mtile.ds-accent h4, .ds .mtile.ds-accent p{color:#fff}
+.ds .mtile.ds-accent .eyebrow{color:rgba(255,255,255,.85)}
+.ds .mtile.brand{background:linear-gradient(150deg,var(--navy-850),var(--navy-950))}
+.ds .mtile.brand::after{display:none}
+.ds .mtile.brand h4{color:#fff}
+.ds .mtile.brand p{color:#9DB3CC}
+.ds .m-w2{grid-column:span 2}
+.ds .m-w3{grid-column:span 3}
+.ds .m-h2{grid-row:span 2}
+.ds .mtile .big{font-size:44px;font-weight:500;letter-spacing:-.04em;color:#fff;line-height:1;
+  margin-bottom:6px;font-variant-numeric:tabular-nums}
+.ds .mtile.solid .big{color:var(--ink)}
+.ds .mtile .mid{position:relative;z-index:3;height:100%;display:flex;flex-direction:column;
+  justify-content:center;align-items:flex-start;padding:26px}
+
+
+/* ---------- parallax image band ---------- */
+.ds .plx{position:relative;overflow:hidden;border-radius:var(--r-frame);margin:0 14px;
+  min-height:520px;display:flex;align-items:center;isolation:isolate}
+.ds .plx-bg{position:absolute;inset:-12% 0;z-index:0;will-change:transform}
+.ds .plx-bg img{width:100%;height:100%;object-fit:cover}
+.ds .plx::after{content:"";position:absolute;inset:0;z-index:1;
+  background:linear-gradient(100deg,rgba(2,9,17,.92) 0%,rgba(2,9,17,.74) 46%,rgba(2,9,17,.34) 100%)}
+.ds .plx-in{position:relative;z-index:3;max-width:var(--shell);margin:0 auto;padding:0 32px;width:100%}
+.ds .plx-in h2, .ds .plx-in .ds-lede{color:#fff}
+.ds .plx-in .ds-lede{color:#B9CBDE;max-width:52ch}
+.ds .plx-in .eyebrow{color:var(--orange-300)}
+
+
+/* ---------- mega menu restyle: dividers + promo ---------- */
+.ds .mega-wide{min-width:760px;padding:0}
+.ds .mega-wide .mega-cols{grid-template-columns:1fr 1fr 1fr;gap:0}
+.ds .mega-wide .mega-cols > div{padding:22px 20px;border-right:1px solid var(--line)}
+.ds .mega-wide .mega-cols > div:last-child{border-right:0}
+.ds .mega-wide .mega-foot{margin:0;padding:16px 20px;border-top:1px solid var(--line)}
+.ds .mega a{border-bottom:1px solid transparent;border-radius:8px}
+.ds .mega li + li a{border-top:1px solid var(--line)}
+.ds .mega-promo{border-radius:12px;padding:16px;background:linear-gradient(150deg,var(--navy-850),var(--navy-950));
+  color:#fff;margin-top:6px;position:relative;overflow:hidden}
+.ds .mega-promo b{display:block;font-size:14px;margin-bottom:6px;color:#fff}
+.ds .mega-promo span{font-size:12.5px;color:#9DB3CC;display:block;margin-bottom:10px}
+.ds .mega-promo a{display:inline-flex;align-items:center;gap:6px;padding:0;color:var(--blue-300);
+  font-size:12.5px;background:none;border:0}
+.ds .mega-promo a:hover{background:none;color:#fff}
+@media (max-width:1000px){
+.ds .chk{grid-template-columns:1fr}
+.ds .mbento{grid-template-columns:repeat(2,1fr);grid-auto-rows:190px}
+.ds .m-w3{grid-column:span 2}
+.ds .plx{min-height:auto;padding:80px 0}
+.ds .bill-item{grid-template-columns:1fr;gap:12px}
+.ds .bill-media{display:none}
+.ds .bill-track, .ds .bill{min-height:150px;height:auto}
+}
+@media (max-width:600px){
+.ds .mbento{grid-template-columns:1fr}
+.ds .m-w2, .ds .m-w3{grid-column:span 1}
+.ds .two-up{grid-template-columns:1fr}
+}
+
+
+/* ---------- lesson filters / play / doc viewer ---------- */
+.ds .filters{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-bottom:30px}
+.ds .filters button{font-family:var(--font);font-size:13px;padding:9px 16px;border-radius:99px;
+  border:1px solid var(--line-2);background:var(--bg);color:var(--ink-2);cursor:pointer;
+  transition:border-color 220ms,color 220ms,background 220ms}
+.ds .filters button:hover{border-color:var(--action);color:var(--ink)}
+.ds .filters button.on{background:var(--action);color:var(--action-ink);border-color:var(--action);
+  font-weight:500}
+.ds .mtile.hide{display:none}
+.ds .playbtn{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;margin-bottom:auto;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(8px);
+  transition:transform 320ms var(--e-out),background 260ms}
+.ds .playbtn svg{width:17px;height:17px;fill:#fff;stroke:none;margin-left:2px}
+.ds .mtile:hover .playbtn{transform:scale(1.12);background:var(--action);border-color:var(--action)}
+.ds .lessons .mt{justify-content:space-between}
+.ds .docviewer{position:fixed;inset:0;z-index:200;background:rgba(2,9,17,.82);
+  backdrop-filter:blur(6px);display:grid;place-items:center;padding:24px}
+.ds .dv-inner{width:min(1000px,100%);height:min(88vh,900px);border-radius:16px;overflow:hidden;
+  background:var(--bg);border:1px solid var(--line-2);display:flex;flex-direction:column;
+  box-shadow:0 40px 90px rgba(0,0,0,.5)}
+.ds .dv-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;
+  border-bottom:1px solid var(--line);background:var(--bg-alt)}
+.ds .dv-bar b{font-size:15px;color:var(--ink);font-weight:500}
+.ds .dv-bar button{border:1px solid var(--line-2);background:var(--bg);color:var(--ink-2);
+  width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:14px}
+.ds .dv-bar button:hover{border-color:var(--action);color:var(--action)}
+.ds .dv-inner iframe{flex:1;width:100%;border:0;background:var(--bg-inset)}
+
+
+/* the hidden attribute must beat any display rule */
+.ds [hidden]{display:none!important}
+
+
+/* ---------- centred hero with a photographic backdrop ---------- */
+.ds .hero-img{position:relative}
+.ds .hero-shot{position:absolute;inset:0;z-index:0;overflow:hidden;border-radius:inherit}
+.ds .hero-shot img{width:100%;height:100%;object-fit:cover;opacity:.5}
+.ds .hero-shot::after{content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse 78% 70% at 50% 34%,var(--bg) 22%,
+             color-mix(in srgb,var(--bg) 72%,transparent) 58%,transparent 100%)}
+.ds .hero-img .shell{position:relative;z-index:3}
+
+
+/* ---------- about: why-row, mosaic, richer team cards ---------- */
+.ds .whyrow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);margin-bottom:36px}
+.ds .whyrow > div{padding:34px 26px;border-right:1px solid var(--line)}
+.ds .whyrow > div:last-child{border-right:0}
+.ds .whyrow h4{margin:18px 0 8px;font-size:17px}
+.ds .whyrow p{font-size:14px;color:var(--ink-3);margin:0}
+.ds .mosaic{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:320px;gap:16px;grid-auto-flow:dense}
+.ds .mosaic .mtile{border-radius:18px}
+.ds .tcard{text-align:left;padding:0;overflow:hidden}
+.ds .tcard .tshot{height:150px;display:grid;place-items:center;
+  background:radial-gradient(120% 130% at 50% 0%,color-mix(in srgb,var(--action) 18%,transparent),transparent 72%),
+             var(--bg-alt);border-bottom:1px solid var(--line)}
+.ds .tcard .av{width:74px;height:74px;font-size:24px;margin:0}
+.ds .tcard b{padding:20px 22px 0;font-size:17px}
+.ds .tcard span{padding:0 22px;display:block}
+.ds .tcard p{padding:10px 22px 0;font-size:13.5px;color:var(--ink-3);margin:0;line-height:1.55}
+.ds .tcard > a{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+  margin:16px 22px 22px;border-radius:9px;border:1px solid var(--line-2);color:var(--ink-3);
+  transition:border-color 220ms,color 220ms,transform 300ms var(--e-out)}
+.ds .tcard > a:hover{border-color:var(--action);color:var(--action);transform:translateY(-2px)}
+.ds .tcard > a svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7}
+@media (max-width:1000px){
+.ds .whyrow{grid-template-columns:1fr 1fr}
+.ds .whyrow > div:nth-child(2n){border-right:0}
+.ds .mosaic{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:600px){
+.ds .whyrow, .ds .mosaic{grid-template-columns:1fr}
+}
+
+
+/* ==================================================================
+   BATCH A — site-wide promo bar, one unified nav panel, hero frame
+   ================================================================== */
+
+
+
+/* ---- ONE panel, contents swap, frame morphs ---- */
+.ds .npanel{position:absolute;top:100%;left:0;right:0;z-index:120;
+  display:flex;justify-content:center;pointer-events:none}
+.ds .nav.np-open .npanel{pointer-events:auto}
+.ds .npanel-fr{width:min(1080px,calc(100% - 64px));height:0;overflow:hidden;
+  border-radius:20px;border:1px solid var(--line-2);
+  background:color-mix(in srgb,var(--bg) 94%,transparent);
+  backdrop-filter:blur(24px) saturate(170%);-webkit-backdrop-filter:blur(24px) saturate(170%);
+  box-shadow:0 30px 70px rgba(var(--shadow-c),.26);
+  opacity:0;visibility:hidden;transform:translateY(-8px) scale(.985);transform-origin:top center;
+  transition:opacity 200ms var(--e-fast),transform 320ms var(--e-out),
+             height 340ms var(--e-out),visibility 200ms}
+.ds .nav.np-open .npanel-fr{opacity:1;visibility:visible;transform:translateY(0) scale(1)}
+.ds .npanel-st{position:relative}
+.ds .npg{position:absolute;top:0;left:0;width:100%;opacity:0;pointer-events:none;
+  transform:translateY(6px);
+  transition:opacity 200ms var(--e-fast),transform 300ms var(--e-out)}
+.ds .npg.on{opacity:1;pointer-events:auto;transform:none}
+.ds .np-body{display:grid;grid-template-columns:1fr 330px;gap:26px;padding:24px 26px}
+.ds .np-cols{display:grid;grid-template-columns:1fr;gap:0 26px}
+.ds .np-cols-2{grid-template-columns:1fr 1fr}
+.ds .np-cols h6{margin:0 0 10px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:500}
+.ds .np-cols ul{list-style:none;margin:0;padding:0}
+.ds .np-cols li a{display:flex;gap:12px;align-items:center;padding:9px 10px;border-radius:11px;
+  text-decoration:none;transition:background-color 200ms var(--e-fast)}
+.ds .np-cols li a:hover{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.ds .np-cols li a b{display:block;font-size:14px;font-weight:500;color:var(--ink);line-height:1.3}
+.ds .np-cols li a > span:last-child > span{display:block;font-size:12.5px;color:var(--ink-3);line-height:1.35}
+.ds .npanel .mi{width:32px;height:32px;border-radius:10px;flex:none;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--action) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 26%,transparent)}
+.ds .npanel .mi svg{width:16px;height:16px;fill:none;stroke:var(--action);stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .npanel .mi.ds-a{background:color-mix(in srgb,var(--accent) 13%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.ds .npanel .mi.ds-a svg{stroke:var(--accent)}
+
+
+/* big image slot inside the panel — photography, not a thumbnail */
+.ds .np-art{position:relative;display:block;border-radius:16px;overflow:hidden;
+  text-decoration:none;isolation:isolate}
+.ds .np-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;
+  transition:transform 900ms var(--e-out)}
+.ds .np-art:hover img{transform:scale(1.05)}
+.ds .np-art::after{content:"";position:absolute;inset:0;z-index:1;
+  background:linear-gradient(to top,rgba(4,12,22,.93) 14%,rgba(4,12,22,.58) 50%,rgba(4,12,22,.14))}
+.ds .np-art-tx{position:relative;z-index:2;display:flex;flex-direction:column;gap:6px;
+  padding:104px 20px 20px}
+.ds .np-art-lg .np-art-tx{padding:150px 20px 22px}
+.ds .np-art-tag{align-self:flex-start;margin-bottom:4px;font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:500;color:#fff;background:rgba(255,255,255,.18);
+  padding:4px 9px;border-radius:999px;backdrop-filter:blur(6px)}
+.ds .np-art-tx b{font-size:17px;font-weight:500;color:#fff;line-height:1.25;letter-spacing:-.012em}
+.ds .np-art-tx > span:last-child{font-size:12.5px;color:#B9CBDE;line-height:1.4}
+.ds .np-foot{display:flex;gap:20px;flex-wrap:wrap;padding:13px 26px;
+  border-top:1px solid var(--line);background:color-mix(in srgb,var(--ink) 3%,transparent)}
+.ds .np-foot a{font-size:13px;color:var(--ink-2);text-decoration:none;
+  transition:color 200ms var(--e-fast)}
+.ds .np-foot a:hover{color:var(--action)}
+
+
+/* ---- hero frame no longer bleeds: inset left, right and bottom ---- */
+.ds .hero{margin:0 14px 14px;border-radius:0 0 var(--r-frame) var(--r-frame)}
+.ds .phero{min-height:calc(100vh - 14px)}
+@media (max-width:1000px){
+.ds .npanel{display:none}
+.ds .phero{min-height:auto}
+}
+@media (max-width:760px){
+.ds .hero{margin:0 8px 8px}
+}
+
+
+/* the light hero fades to the page colour, so the inset alone is invisible —
+   a hairline + lift makes the frame actually read as a frame */
+.ds .hero{border:1px solid var(--line-2);border-top:0;
+  box-shadow:0 24px 60px rgba(var(--shadow-c),.10)}
+
+/* ...and the fill has to differ from the page, or a 14px inset of the same
+   colour reads as no inset at all */
+:root{--hero-fill:radial-gradient(120% 110% at 50% 0%,#E4EFFC 0%,#F5FAFF 62%)}
+:root.dark{--hero-fill:radial-gradient(120% 110% at 50% 0%,#0E3054 0%,#071A2B 62%)}
+:root.dark{--hero-fill:radial-gradient(120% 110% at 50% 0%,#0E3054 0%,#071A2B 62%)}
+
+/* single-column panels give the photography the room instead of a dead gutter */
+.ds .np-body-art{grid-template-columns:1fr 420px}
+
+
+/* ---- promo band ----------------------------------------------------------
+   Was a 132px strip with a 112x96 icon box wedged between the hero and the
+   stats. Now it sits low on the page (above the closing CTA) and follows
+   bextro's split: image and text at equal weight, image at full band height. */
+.ds .promo{padding:40px 0 104px}
+.ds .promo .host{display:block;font-size:11.5px;letter-spacing:.17em;text-transform:uppercase;
+  color:var(--accent);font-weight:500;margin-bottom:18px}
+.ds .promo-fr{position:relative;border-radius:24px;overflow:hidden;isolation:isolate;
+  border:1px solid var(--line-2);background:var(--bg-alt);
+  box-shadow:0 2px 8px rgba(var(--shadow-c),.06),0 28px 70px rgba(var(--shadow-c),.14)}
+.ds .promo-track{position:relative;height:420px}
+.ds .promo-item{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 520ms var(--e-soft),visibility 520ms}
+.ds .promo-item.on{opacity:1;visibility:visible;pointer-events:auto}
+.ds .promo-art{position:relative;overflow:hidden}
+.ds .promo-art img{width:100%;height:100%;object-fit:cover;display:block}
+.ds .promo-art::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 62%,color-mix(in srgb,var(--bg-alt) 70%,transparent))}
+.ds .promo-copy{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:14px;padding:52px 56px}
+.ds .promo-copy .tag{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;
+  letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--accent)}
+.ds .promo-copy h3{margin:0;font-size:clamp(22px,2.1vw,29px);line-height:1.16;letter-spacing:-.026em}
+.ds .promo-copy p{margin:0;font-size:15px;color:var(--ink-3);max-width:46ch;line-height:1.5}
+.ds .promo-copy .ds-btn{margin-top:8px}
+.ds .promo-dots{display:flex;gap:6px;position:absolute;right:26px;bottom:20px;z-index:6}
+.ds .promo-dots i{width:6px;height:6px;border-radius:99px;background:var(--line-2);display:block;
+  cursor:pointer;transition:width 300ms var(--e-out),background-color 300ms var(--e-fast)}
+.ds .promo-dots i.on{width:22px;background:var(--action)}
+@media (max-width:900px){
+.ds .promo{padding:24px 0 72px}
+.ds .promo-track{height:auto;min-height:470px}
+.ds .promo-item{grid-template-columns:1fr;grid-template-rows:210px 1fr}
+.ds .promo-art::after{background:linear-gradient(180deg,transparent 58%,color-mix(in srgb,var(--bg-alt) 74%,transparent))}
+.ds .promo-copy{padding:28px 26px 46px}
+}
+
+
+/* ---- solutions hero: the stat block lives INSIDE the hero -------------------
+   Same .statframe count-up as about, but it now sits on dark hero art, so the
+   card fill is replaced with glass and the type is inverted. Two-up at 640px,
+   because four across that width reads as a cramped strip.                    */
+
+/* The hero block must sit ON the page gutter, not floated at some arbitrary
+   indent. .phero-in becomes the shell container; the copy is constrained inside
+   it, so the headline starts exactly where the nav logo does. */
+.ds .phero-in{max-width:var(--shell);width:100%;margin:0 auto;padding:0 32px;text-align:left}
+.ds .phero-in .host, .ds .phero-in .ds-lede, .ds .phero-in .hero-cta{max-width:620px}
+.ds .phero-in h1{max-width:19ch}
+
+
+/* image with its subject centred -> centre the copy instead */
+.ds .phero.phero-center .phero-in{text-align:center}
+.ds .phero.phero-center .phero-in .host, .ds .phero.phero-center .phero-in h1, .ds .phero.phero-center .phero-in .ds-lede, .ds .phero.phero-center .phero-in .phero-stats{margin-left:auto;margin-right:auto}
+.ds .phero.phero-center .hero-cta{justify-content:center}
+
+
+/* one strip, directly under the content block — not a grid */
+.ds .phero-stats{margin-top:30px;max-width:820px;grid-template-columns:repeat(4,1fr);
+  background-image:none;background:rgba(6,16,28,.46);
+  backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);
+  border:1px solid rgba(255,255,255,.16);box-shadow:0 22px 54px rgba(2,9,17,.34)}
+.ds .phero-stats::before{display:none}
+.ds .phero-stats .stat{padding:16px 18px}
+.ds .phero-stats .stat+.stat::before{background:linear-gradient(180deg,transparent,rgba(255,255,255,.20),transparent)}
+.ds .phero-stats .ico{width:26px;height:26px;border-radius:8px;margin-bottom:9px;
+  background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.18)}
+.ds .phero-stats .ico svg{width:13px;height:13px;stroke:#8FC7FF}
+.ds .phero-stats .ico-a svg{stroke:#FFB183}
+.ds .phero-stats b{font-size:clamp(21px,2vw,27px);color:#fff;line-height:1.05}
+.ds .phero-stats span{color:#B9CBDE;font-size:11.5px;margin-top:4px;line-height:1.25}
+.ds .phero.light-art .phero-stats{background:rgba(255,255,255,.62);
+  border-color:rgba(8,25,43,.12);box-shadow:0 22px 54px rgba(8,25,43,.12)}
+.ds .phero.light-art .phero-stats b{color:#08192B}
+.ds .phero.light-art .phero-stats span{color:#46586B}
+@media (max-width:700px){
+.ds .phero-stats{grid-template-columns:1fr 1fr}
+.ds .phero-stats .stat:nth-child(3), .ds .phero-stats .stat:nth-child(4){border-top:1px solid rgba(255,255,255,.12)}
+.ds .phero-stats .stat:nth-child(3)::before{display:none}
+}
+
+
+/* ---- solutions: message form band (item #5) --------------------------------
+   grovia puts this split low on the page — copy and contact details one side,
+   a stacked form the other. Our tokens, not Webflow's default input styling. */
+.ds .sform-sec{padding-top:96px;padding-bottom:64px}
+.ds .sform{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start}
+.ds .sform-copy h2{margin:10px 0 16px}
+.ds .sform-copy .ds-lede{max-width:44ch}
+.ds .sform-pts{list-style:none;margin:26px 0 0;padding:0;display:grid;gap:12px}
+.ds .sform-pts li{display:flex;align-items:center;gap:12px;font-size:14.5px;color:var(--ink-2)}
+.ds .sform-meta{margin-top:26px;padding-top:20px;border-top:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px}
+.ds .sform-meta a{color:var(--action);text-decoration:none;font-weight:500}
+.ds .sform-meta a:hover{text-decoration:underline}
+.ds .sform-meta span{color:var(--ink-3)}
+.ds .sform-card{border-radius:var(--r-card);padding:32px;background-image:var(--card-fill);
+  border:1px solid var(--line-2);
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.05),0 22px 54px rgba(var(--shadow-c),.10)}
+.ds .sform-card .ds-field:last-of-type{margin-bottom:22px}
+.ds-field .opt{color:var(--ink-3);font-size:11px;letter-spacing:.04em}
+
+/* the base .field rule never covered textarea */
+.ds-field textarea{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line-2);
+  background:var(--bg);color:var(--ink);font:inherit;font-size:14.5px;resize:vertical;
+  min-height:104px;transition:border-color 200ms var(--e-fast),box-shadow 200ms var(--e-fast)}
+.ds-field textarea:focus{outline:none;border-color:var(--action);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 18%,transparent)}
+.ds-field input::placeholder, .ds-field textarea::placeholder{color:var(--ink-3);opacity:.7}
+.ds .sform-note{margin:14px 0 0;font-size:12px;color:var(--ink-3);text-align:center}
+@media (max-width:900px){
+.ds .sform{grid-template-columns:1fr;gap:34px}
+.ds .sform-sec{padding-top:72px}
+.ds .sform-card{padding:24px}
+}
+
+
+/* ---- Batch B: bento + team ------------------------------------------------
+   #6 only two tiles carry text; .m-img tiles are pure supporting imagery, so
+   they lose the scrim and the text padding entirely.                        */
+.ds .mtile.m-img::after{background:linear-gradient(to top,rgba(4,12,22,.34),transparent 52%)}
+.ds .mtile.m-img img{transition:transform 1100ms var(--e-out)}
+.ds .mtile.m-img:hover img{transform:scale(1.07)}
+
+
+/* #8 team portraits — bextro runs these much wider/taller than a 150px strip
+   with a 62px initial in it. NOTE: still initials, not photographs; the image
+   library Richard supplied has no portrait shots. Swap .av for an <img> the
+   moment real headshots exist — the frame is already the right size.        */
+.ds .tcard .tshot{height:270px}
+.ds .tcard .av{width:148px;height:148px;font-size:46px;box-shadow:0 14px 34px rgba(35,156,255,.30)}
+
+
+/* headings: never more than three lines, and a line may carry both colours */
+.ds .sec-head h2{max-width:22ch}
+.ds .sec-head.mid h2{margin-left:auto;margin-right:auto}
+@media (max-width:1000px){
+.ds .tcard .tshot{height:240px}
+.ds .team{grid-template-columns:repeat(2,1fr)}
+}
+
+
+
+/* ---- team: photo frame and copy are separate objects (Richard, 2026-08-13) ----
+   The card used to be one bordered box wrapping image + text. Now the portrait is
+   its own framed block and the copy sits plainly underneath it.                  */
+.ds .tcard{background-image:none;background:none;box-shadow:none;border:0;padding:0;overflow:visible}
+.ds .tcard::after{display:none}
+.ds .tcard .tshot{height:340px;margin-bottom:16px;border-radius:var(--r-card);overflow:hidden;
+  border:1px solid var(--line)}
+.ds .tcard .tshot img{width:100%;height:100%;object-fit:cover;object-position:50% 18%;display:block}
+.ds .tcard b{font-size:17px}
+.ds .tcard p{margin-top:8px}
+.ds .tcard > a{display:inline-grid;place-items:center;width:32px;height:32px;margin-top:12px;
+  border-radius:9px;border:1px solid var(--line-2);color:var(--ink-3)}
+.ds .tcard > a:hover{color:var(--action);border-color:var(--action)}
+@media (max-width:1000px){
+.ds .tcard .tshot{height:300px}
+}
+
+
+/* ---- .m-art: 4-grid tiles that are photography + overlay + text on top ------
+   Richard, 2026-08-13: "the first and third should have an image in the
+   background, an overlay and then the text on it."                          */
+.ds .mtile.m-art::after{background:linear-gradient(to top,rgba(4,12,22,.90) 8%,rgba(4,12,22,.62) 46%,rgba(4,12,22,.30))}
+.ds .mtile.m-art .mt{justify-content:flex-end}
+.ds .mtile.m-art h4{color:#fff;font-size:21px}
+.ds .mtile.m-art p{color:#C6D6E6}
+.ds .mtile.m-art .ico{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.24)}
+.ds .mtile.m-art .ico svg{stroke:#fff}
+@media (max-width:900px){
+.ds .mbento{grid-template-columns:1fr !important;grid-auto-rows:260px !important}
+.ds .mbento .m-w2, .ds .mbento .m-h2{grid-column:auto;grid-row:auto}
+}
+
+
+/* lesson grid reflows smoothly on Load more (item #9) */
+.ds .mtile{will-change:transform}
+.ds .mtile.flip{transition:transform 460ms var(--e-out)}
+.ds .mtile.entering{animation:tileIn 420ms var(--e-out) both}
+@keyframes tileIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+.ds .mtile.flip, .ds .mtile.entering{transition:none;animation:none}
+}
+
+
+/* 4-card sections keep pricing's card size (~345px) rather than shrinking to
+   fit the 1200px shell — Richard: "the size of each card as a good size for
+   any section that has 4 cards".                                           */
+.ds .pgrid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;max-width:none;
+  width:min(1446px,calc(100vw - 64px));margin-left:50%;transform:translateX(-50%)}
+@media (max-width:1180px){
+.ds .pgrid-4{grid-template-columns:repeat(2,1fr);width:min(1080px,calc(100vw - 64px))}
+}
+@media (max-width:760px){
+.ds .pgrid-4{grid-template-columns:1fr;width:min(420px,calc(100vw - 40px))}
+}
+
+
+/* phone status bar — the mockup has to read as an actual handset (H2) */
+.ds .phone-status{display:flex;align-items:center;justify-content:space-between;
+  margin:-34px -2px 14px;padding:0 4px;font-size:11.5px;font-weight:500;color:var(--ink);
+  letter-spacing:-.01em;position:relative;z-index:4}
+.ds .phone-status .ps-r{display:flex;align-items:center;gap:5px}
+.ds .phone-status svg{display:block;fill:currentColor}
+.ds .ps-sig{width:17px;height:11px}
+.ds .ps-wifi{width:15px;height:11px}
+.ds .ps-bat{width:25px;height:12px}
+
+
+/* numbers sit over photography on the image cards, so they need their own ink */
+.ds .bento-c.has-img .num{color:#fff;text-shadow:0 1px 6px rgba(4,12,22,.55)}
+
+
+/* ---- products hero: fills the viewport, CTA clear of the frame edge (P1/P3) --
+   Scoped with .hero-tall so the approved home hero is untouched.            */
+.ds .hero.hero-tall{min-height:calc(100vh - 14px);display:flex;flex-direction:column;
+  justify-content:center;padding:150px 0 116px}
+
+/* a headline that must break at a specific point, not wherever it fits (P2) */
+.ds .h1-lines .ln{display:block}
+@media (max-width:760px){
+.ds .hero.hero-tall{min-height:auto;padding:120px 0 84px}
+}
+
+
+/* ---- product feature bento: 3+3 over 2+2+2 (Q1) -----------------------------
+   Two lead cards carry the wide UI mockups; the second row of three carries the
+   supporting ones. Every card states its job in a label above the title.     */
+.ds .fgrid{grid-template-columns:repeat(6,1fr)}
+.ds .fgrid > .fcard{grid-column:span 2}
+.ds .fgrid > .fcard:nth-child(1), .ds .fgrid > .fcard:nth-child(2){grid-column:span 3}
+.ds .fgrid > .fcard:nth-child(1) .fviz, .ds .fgrid > .fcard:nth-child(2) .fviz{height:288px}
+.ds .fgrid > .fcard:nth-child(n+3) .fviz{height:236px;padding:20px}
+.ds .fcard-tag{display:block;font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:500;color:var(--action);margin-bottom:7px}
+.ds .fcard-body h4{margin-bottom:8px}
+@media (max-width:1100px){
+.ds .fgrid{grid-template-columns:repeat(2,1fr)}
+.ds .fgrid > .fcard, .ds .fgrid > .fcard:nth-child(1), .ds .fgrid > .fcard:nth-child(2){grid-column:span 1}
+.ds .fgrid > .fcard:nth-child(n+3) .fviz{height:230px}
+}
+@media (max-width:700px){
+.ds .fgrid{grid-template-columns:1fr}
+.ds .fgrid > .fcard .fviz{height:210px!important}
+}
+
+/* the row-2 cards are narrower than the mockups were drawn for — scale the whole
+   mock rather than let it clip at the frame edge */
+.ds .fgrid > .fcard:nth-child(n+3) .fviz > *{transform:scale(.82);transform-origin:center center}
+
+
+/* ---- the "output" chain: measurement -> bill line -> certificate -----------
+   Replaces a lopsided two-up where bare blocks sat beside a single card.    */
+.ds .chain{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:0 14px}
+.ds .chain-c{position:relative;display:flex;flex-direction:column;padding:24px 22px 22px;
+  border-radius:18px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.12);
+  backdrop-filter:blur(10px)}
+.ds .chain-n{font-size:11px;letter-spacing:.16em;color:var(--accent);font-weight:500;margin-bottom:10px}
+.ds .chain-c h3{font-size:17px;margin:0 0 14px;color:#fff;letter-spacing:-.012em}
+.ds .chain-c .frag{margin-top:auto;box-shadow:none}
+.ds .chain-link{align-self:center;width:26px;height:1px;position:relative;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.34),transparent)}
+.ds .chain-link::after{content:"";position:absolute;right:0;top:-3px;width:6px;height:6px;
+  border-top:1.4px solid rgba(255,255,255,.5);border-right:1.4px solid rgba(255,255,255,.5);
+  transform:rotate(45deg)}
+.ds .chain-note{margin:22px auto 0;text-align:center;max-width:62ch;font-size:14px;color:#9DB3CC}
+@media (max-width:1000px){
+.ds .chain{grid-template-columns:1fr;gap:14px}
+.ds .chain-link{width:1px;height:22px;justify-self:center;
+    background:linear-gradient(180deg,transparent,rgba(255,255,255,.34),transparent)}
+.ds .chain-link::after{right:auto;left:-3px;top:auto;bottom:0;transform:rotate(135deg)}
+}
+
+
+/* ---- "start from the drawing" — grovia-style expanding picker --------------
+   Was three .fgrid cards with hand-drawn SVGs; the new .fgrid spans made them
+   stack. Own component now: the active card widens and reveals real product
+   imagery, the others stay collapsed to number + title + copy.              */
+.ds .pick{display:flex;gap:18px;align-items:stretch}
+.ds .pick-c{flex:1 1 0;min-width:0;position:relative;overflow:hidden;cursor:pointer;
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:26px;border-radius:20px;min-height:330px;background-image:var(--card-fill);
+  border:1px solid var(--line-2);outline:none;
+  transition:flex 620ms var(--e-out),box-shadow 420ms var(--e-out),border-color 300ms}
+.ds .pick-c.on{flex:2.2 1 0;box-shadow:0 26px 64px rgba(var(--shadow-c),.18);
+  border-color:color-mix(in srgb,var(--action) 34%,transparent)}
+.ds .pick-c:focus-visible{border-color:var(--action)}
+.ds .pick-n{font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums;position:relative;z-index:3}
+.ds .pick-body{margin-top:auto;position:relative;z-index:3;transition:max-width 620ms var(--e-out)}
+.ds .pick-c.on .pick-body{max-width:46%}
+.ds .pick-body h4{margin:0 0 7px;font-size:20px}
+.ds .pick-body p{margin:0;font-size:14px;color:var(--ink-3)}
+.ds .pick-art{position:absolute;right:14px;top:14px;bottom:14px;width:50%;border-radius:15px;
+  overflow:hidden;opacity:0;transform:translateX(14px) scale(.98);pointer-events:none;
+  transition:opacity 480ms var(--e-fast),transform 640ms var(--e-out)}
+.ds .pick-c.on .pick-art{opacity:1;transform:none}
+.ds .pick-art img{width:100%;height:100%;object-fit:cover;display:block}
+@media (max-width:900px){
+.ds .pick{flex-direction:column}
+.ds .pick-c, .ds .pick-c.on{flex:1 1 auto;min-height:0}
+.ds .pick-c.on .pick-body{max-width:100%}
+.ds .pick-art{position:relative;right:auto;top:auto;bottom:auto;width:100%;height:180px;
+    margin-bottom:16px;opacity:1;transform:none}
+}
+
+
+
+/* --- round-2 solutions: problem split + orange tile pattern --- */
+
+/* SOL-1  large image left, headline + intro + three check items right */
+.ds .psplit{display:grid;grid-template-columns:1.18fr 1fr;gap:60px;align-items:center}
+.ds .ps-art{position:relative;border-radius:22px;overflow:hidden;aspect-ratio:4/5;
+  border:1px solid var(--line);background:var(--bg-alt);box-shadow:var(--sh-2,0 18px 46px rgba(4,12,22,.14))}
+.ds .ps-art img{width:100%;height:100%;object-fit:cover;display:block;
+  transition:transform 1100ms var(--e-out)}
+.ds .psplit:hover .ps-art img{transform:scale(1.05)}
+.ds .ps-copy h2{margin:10px 0 0}
+.ds .ps-copy .ds-lede{margin-top:16px;max-width:46ch}
+.ds .ps-list{list-style:none;margin:32px 0 0;padding:0;display:grid;gap:24px}
+.ds .ps-list li{display:flex;gap:16px;align-items:flex-start}
+.ds .ps-ic{flex:none;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--action) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 26%,transparent)}
+.ds .ps-ic svg{width:17px;height:17px;fill:none;stroke:var(--action);stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .ps-list b{display:block;font-size:16.5px;font-weight:500;color:var(--ink);letter-spacing:-.01em}
+.ds .ps-list p{margin:5px 0 0;font-size:14.5px;font-weight:300;color:var(--ink-3);line-height:1.62}
+@media (max-width:900px){
+.ds .psplit{grid-template-columns:1fr;gap:34px}
+.ds .ps-art{aspect-ratio:16/10}
+}
+
+
+/* SOL-2  orange tiles are never flat — dot grid + soft corner light */
+.ds .mtile.ds-accent::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background-image:
+    radial-gradient(circle at 86% 10%,rgba(255,255,255,.20),transparent 56%),
+    radial-gradient(rgba(255,255,255,.24) 1.5px,transparent 1.6px);
+  background-size:100% 100%,22px 22px}
+
+
+
+/* --- round-2: legal hero, auth lead, wide split card --- */
+
+/* LGL-1  legal hero must not fill the viewport — equal space above and below */
+.ds .hero.hero-legal{padding:150px 0 118px}
+.ds .hero.hero-legal .ds-lede{margin-top:4px}
+
+
+/* SGN-1 / SGN-2  wider auth card, bold one-liner at the top */
+.ds .authwrap{max-width:560px}
+.ds .authcard{padding:40px}
+.ds .auth-lead{font-size:20px;line-height:1.32;font-weight:500;color:var(--ink);letter-spacing:-.02em;
+  margin:0 0 22px;padding-bottom:22px;border-bottom:1px solid var(--line)}
+
+
+/* WN-2 / LRN-4  wide split card: copy left, art right */
+.ds .wcard{display:grid;grid-template-columns:1.06fr .94fr;align-items:stretch;
+  border-radius:var(--r-card);overflow:hidden;border:1px solid var(--line);
+  background-image:var(--card-fill);min-height:392px}
+.ds .wcard-copy{padding:44px 46px;display:flex;flex-direction:column;align-items:flex-start;
+  justify-content:center;gap:0}
+.ds .wcard-copy .pill{margin-bottom:14px}
+.ds .wcard-copy .host{margin-bottom:14px}
+.ds .wcard-copy .picon{margin-bottom:16px}
+.ds .wcard-copy h3{font-size:27px;line-height:1.16;letter-spacing:-.028em;margin:0 0 12px;
+  max-width:20ch;color:var(--ink)}
+.ds .wcard-copy p{font-size:15px;font-weight:300;line-height:1.66;color:var(--ink-3);margin:0;
+  max-width:52ch}
+.ds .wcard-copy .ds-btn{margin-top:24px}
+.ds .wcard-copy .wcard-note{font-size:13px;color:var(--ink-3);margin-top:16px}
+.ds .wcard-art{position:relative;overflow:hidden;min-height:320px}
+.ds .wcard-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  transition:transform 1100ms var(--e-out)}
+.ds .wcard:hover .wcard-art img{transform:scale(1.05)}
+.ds .wcard.wcard-dark{border-color:rgba(255,255,255,.12);
+  background-image:linear-gradient(150deg,var(--navy-850),var(--navy-950))}
+.ds .wcard.wcard-dark h3{color:#fff}
+.ds .wcard.wcard-dark p, .ds .wcard.wcard-dark .wcard-note{color:#B7C8DA}
+.ds .wcard.wcard-dark .ico{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.24)}
+.ds .wcard.wcard-dark .ico svg{stroke:#fff}
+@media (max-width:900px){
+.ds .wcard{grid-template-columns:1fr}
+.ds .wcard-art{order:-1;min-height:240px}
+.ds .wcard-copy{padding:32px 26px}
+}
+
+
+/* =========================================================
+   SUBTLE PALETTES  (HIW-4)
+   Four tinted surfaces drawn from the brand ramps, light
+   enough that --ink / --ink-2 body copy stays readable on
+   top of them. Any card can opt in by taking one of the
+   .pal-* classes; the component decides whether to paint
+   the palette at rest or only on hover.
+     --pal-fill  surface
+     --pal-line  1px stroke / hairline
+     --pal-key   the palette's own strong colour (eyebrows,
+                 tick marks, small emphasis)
+     --pal-wash  a flatter version of the fill, for insets
+   ========================================================= */
+:root{
+  --pal-orange-fill:linear-gradient(180deg,#FEF6F0 0%,#FBE6D6 100%);
+  --pal-orange-line:#F5CDAE; --pal-orange-key:#C4531A; --pal-orange-wash:#FDF1E9;
+  --pal-deep-fill:linear-gradient(180deg,#F0F5FC 0%,#DFEAF8 100%);
+  --pal-deep-line:#BACFE9; --pal-deep-key:#08528C; --pal-deep-wash:#EEF3FA;
+  --pal-light-fill:linear-gradient(180deg,#F0FAFF 0%,#DAEFFF 100%);
+  --pal-light-line:#A5D8FF; --pal-light-key:#0B7FDB; --pal-light-wash:#EAF6FF;
+  --pal-grad-fill:linear-gradient(152deg,#EAF5FF 0%,#D8E9FC 48%,#C6DCF6 100%);
+  --pal-grad-line:#AFD0F0; --pal-grad-key:#0765B0; --pal-grad-wash:#E4EFFB;
+}
+:root.dark, .ds .band-dark{
+  --pal-orange-fill:linear-gradient(180deg,#2A1408 0%,#1A0C04 100%);
+  --pal-orange-line:#6B3312; --pal-orange-key:#F8AE7E; --pal-orange-wash:#221006;
+  --pal-deep-fill:linear-gradient(180deg,#0B2542 0%,#05131F 100%);
+  --pal-deep-line:#1D4E85; --pal-deep-key:#6FC2FF; --pal-deep-wash:#091E39;
+  --pal-light-fill:linear-gradient(180deg,#08324F 0%,#04161F 100%);
+  --pal-light-line:#0765B0; --pal-light-key:#A5D8FF; --pal-light-wash:#062637;
+  --pal-grad-fill:linear-gradient(152deg,#123156 0%,#0A1F39 50%,#04101F 100%);
+  --pal-grad-line:#1D4E85; --pal-grad-key:#45AEFF; --pal-grad-wash:#0A1F39;
+}
+:root.dark{
+  --pal-orange-fill:linear-gradient(180deg,#2A1408 0%,#1A0C04 100%);
+  --pal-orange-line:#6B3312; --pal-orange-key:#F8AE7E; --pal-orange-wash:#221006;
+  --pal-deep-fill:linear-gradient(180deg,#0B2542 0%,#05131F 100%);
+  --pal-deep-line:#1D4E85; --pal-deep-key:#6FC2FF; --pal-deep-wash:#091E39;
+  --pal-light-fill:linear-gradient(180deg,#08324F 0%,#04161F 100%);
+  --pal-light-line:#0765B0; --pal-light-key:#A5D8FF; --pal-light-wash:#062637;
+  --pal-grad-fill:linear-gradient(152deg,#123156 0%,#0A1F39 50%,#04101F 100%);
+  --pal-grad-line:#1D4E85; --pal-grad-key:#45AEFF; --pal-grad-wash:#0A1F39;
+}
+.ds .pal-orange{--pal-fill:var(--pal-orange-fill);--pal-line:var(--pal-orange-line);
+  --pal-key:var(--pal-orange-key);--pal-wash:var(--pal-orange-wash)}
+.ds .pal-deep{--pal-fill:var(--pal-deep-fill);--pal-line:var(--pal-deep-line);
+  --pal-key:var(--pal-deep-key);--pal-wash:var(--pal-deep-wash)}
+.ds .pal-light{--pal-fill:var(--pal-light-fill);--pal-line:var(--pal-light-line);
+  --pal-key:var(--pal-light-key);--pal-wash:var(--pal-light-wash)}
+.ds .pal-grad{--pal-fill:var(--pal-grad-fill);--pal-line:var(--pal-grad-line);
+  --pal-key:var(--pal-grad-key);--pal-wash:var(--pal-grad-wash)}
+
+
+/* =========================================================
+   COURSE CARDS  (LRN-3)
+   Icon at the top, copy in the middle, button pinned to the
+   bottom so all four cards read as one row. Each card takes
+   a different subtle palette, painted on hover.
+   ========================================================= */
+.ds .pc-ico{transition:transform 460ms var(--e-out),box-shadow 460ms var(--e-out),
+  background-image 420ms var(--e-soft)}
+.ds .pc-ico .pcard2-body{padding:30px 24px 26px}
+.ds .pc-ico .picon{position:relative;z-index:6;width:66px;height:66px;margin:0 0 20px;
+  transition:transform 520ms var(--e-out)}
+.ds .pc-ico:hover .picon{transform:translateY(-3px) scale(1.06)}
+.ds .pc-ico:hover .picon[src*="ic-heron"], .ds .pc-ico:hover .picon[src*="ic-mep"]{
+  transform:translateY(-3px) scale(1.24)}
+.ds .pc-ico .host{color:var(--ink-3);transition:color 300ms var(--e-soft)}
+.ds .pc-ico .blurb{min-height:40px}
+.ds .pc-ico ul{margin-bottom:24px}
+.ds .pc-ico:hover{background-image:var(--pal-fill);
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.10),0 26px 60px rgba(var(--shadow-c),.20)}
+.ds .pc-ico:hover::after{background-image:linear-gradient(100deg,
+  var(--pal-line) 0%,var(--pal-key) 50%,var(--pal-line) 100%)}
+.ds .pc-ico:hover .host{color:var(--pal-key)}
+.ds .pc-ico:hover li svg{stroke:var(--pal-key)}
+.ds .pc-ico:hover ul{border-top-color:var(--pal-line)}
+.ds .pc-ico li svg, .ds .pc-ico ul{transition:stroke 300ms var(--e-soft),border-color 300ms var(--e-soft)}
+
+/* the mark stands in for "an ADLM instructor comes to you" — flat, so it needs
+   a tile behind it to carry the same weight as the three rendered icons */
+.ds .pc-mark{display:grid;place-items:center;width:66px;height:66px;border-radius:18px;
+  margin:0 0 20px;background:var(--pal-wash);border:1px solid var(--pal-line);
+  transition:transform 520ms var(--e-out)}
+.ds .pc-mark img{width:34px;height:34px;display:block}
+.ds .pc-ico:hover .pc-mark{transform:translateY(-3px) scale(1.06)}
+
+
+/* =========================================================
+   ORBIT  (HIW-2) — the ADLM mark at the centre with the six
+   products in orbit around it: one account, every tool.
+   Every product rides its OWN path: its own radius, its own
+   period and its own starting angle, so the six never lock
+   into a pattern. Each icon sits on an arm that rotates about
+   the centre; the icon itself counter-rotates at the same
+   period so it stays upright while it travels.
+     --r    radius, unitless px
+     --dur  one full revolution
+     --dl   negative delay = the starting angle
+   ========================================================= */
+.ds .orbit-card{text-align:center}
+.ds .orbit-card h4{margin:8px 0 8px}
+.ds .orbit-card p{margin:0 auto;max-width:38ch}
+.ds .orbit{position:relative;width:100%;max-width:480px;aspect-ratio:1;margin:6px auto 22px;
+  --orb-u:1px}
+.ds .orb-ring{position:absolute;top:50%;left:50%;border-radius:50%;
+  border:1px solid var(--orb-line,rgba(255,255,255,.11));transform:translate(-50%,-50%)}
+.ds .orb-r1{width:164px;height:164px}
+.ds .orb-r2{width:208px;height:208px;border-style:dashed;border-color:var(--orb-line-2,rgba(255,255,255,.08))}
+.ds .orb-r3{width:252px;height:252px}
+.ds .orb-r4{width:296px;height:296px;border-style:dashed;border-color:var(--orb-line-2,rgba(255,255,255,.08))}
+.ds .orb-r5{width:340px;height:340px}
+.ds .orb-r6{width:384px;height:384px;border-style:dashed;border-color:var(--orb-line-2,rgba(255,255,255,.08))}
+
+/* the mark is navy-on-transparent, so on the dark band it needs its own
+   light plate — a circle, so it does not compete with the square mark */
+.ds .orb-core{position:absolute;top:50%;left:50%;width:108px;height:108px;border-radius:50%;
+  transform:translate(-50%,-50%);display:grid;place-items:center;z-index:4;
+  background:linear-gradient(180deg,#FFFFFF 0%,#E4EFFA 100%);
+  box-shadow:var(--orb-plate-shadow),0 0 0 1px var(--orb-plate-line) inset}
+.ds .orb-core::before{content:"";position:absolute;inset:-34px;border-radius:50%;z-index:-1;
+  background:radial-gradient(circle,rgba(35,156,255,.32) 0%,rgba(35,156,255,0) 68%);
+  opacity:.85;transition:opacity 520ms var(--e-out),transform 520ms var(--e-out)}
+.ds .orb-core img{position:relative;width:62px;height:62px;display:block}
+.ds .orbit-card:hover .orb-core::before{opacity:1;transform:scale(1.1)}
+
+/* the arm — full-bleed so it turns about the orbit's centre */
+.ds .orb-i{position:absolute;inset:0;animation:orb-rot var(--dur,40s) linear infinite;
+  animation-delay:var(--dl,0s)}
+.ds .orb-o{position:absolute;top:50%;left:50%;width:72px;height:72px;margin:-36px 0 0 -36px;
+  transform:translateX(calc(var(--r) * var(--orb-u)))}
+.ds .orb-o img{width:100%;height:100%;object-fit:contain;display:block;
+  filter:drop-shadow(0 10px 24px rgba(2,9,17,.55));
+  animation:orb-rot var(--dur,40s) linear infinite reverse;animation-delay:var(--dl,0s)}
+
+/* these two source icons carry more internal padding — even them out.
+   `scale` rather than `transform`, which the counter-rotation owns. */
+.ds .orb-o img[src*="ic-heron"], .ds .orb-o img[src*="ic-mep"]{scale:1.18}
+@keyframes orb-rot{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.ds .orbit-card{--orb-line:rgba(9,30,57,.13);--orb-line-2:rgba(9,30,57,.09);
+  --orb-plate-line:rgba(9,30,57,.10);--orb-plate-shadow:0 16px 40px rgba(9,30,57,.16)}
+.ds .band-dark .orbit-card{--orb-line:rgba(255,255,255,.11);--orb-line-2:rgba(255,255,255,.08);
+  --orb-plate-line:rgba(255,255,255,.55);--orb-plate-shadow:0 20px 50px rgba(2,9,17,.55)}
+@media (prefers-reduced-motion:reduce){
+.ds .orb-i, .ds .orb-o img{animation:none}
+
+  /* frozen, the arms all point right — set the resting angles statically */
+.ds .orb-i{transform:rotate(var(--a,0deg))}
+.ds .orb-o img{transform:rotate(calc(-1 * var(--a,0deg)))}
+}
+@media (max-width:820px){
+
+  /* the arms are positioned in px, so every radius, ring and icon has to
+     shrink by the SAME factor or the composition pushes the page wide */
+.ds .orbit{max-width:340px;--orb-u:.62px;overflow:hidden}
+.ds .orb-r1{width:124px;height:124px}
+.ds .orb-r2{width:149px;height:149px}
+.ds .orb-r3{width:175px;height:175px}
+.ds .orb-r4{width:201px;height:201px}
+.ds .orb-r5{width:227px;height:227px}
+.ds .orb-r6{width:253px;height:253px}
+.ds .orb-core{width:68px;height:68px}
+.ds .orb-core img{width:40px;height:40px}
+.ds .orb-core::before{inset:-20px}
+.ds .orb-o{width:46px;height:46px;margin:-23px 0 0 -23px}
+}
+@media (max-width:430px){
+.ds .orbit{max-width:250px;--orb-u:.46px;overflow:hidden}
+.ds .orb-r1{width:92px;height:92px}
+.ds .orb-r2{width:110px;height:110px}
+.ds .orb-r3{width:130px;height:130px}
+.ds .orb-r4{width:149px;height:149px}
+.ds .orb-r5{width:168px;height:168px}
+.ds .orb-r6{width:188px;height:188px}
+.ds .orb-core{width:50px;height:50px}
+.ds .orb-core img{width:29px;height:29px}
+.ds .orb-o{width:38px;height:38px;margin:-19px 0 0 -19px}
+}
+
+
+
+/* =========================================================
+   FREE LESSONS  (LRN-2) — bextro /service-one behaviour.
+   Three lessons are visible; each "Show more" drops the next
+   row of three out from behind the row above. The rows are
+   real elements: the revealing row grows from zero height
+   with overflow clipped, and its tiles start a full tile
+   above their resting place, so they emerge from under the
+   row that is already there.
+   ========================================================= */
+.ds .lgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.ds .lgrid.lrows{display:block}
+          /* JS took over; .lrow children now */
+.ds .lrow{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;position:relative}
+.ds .lrow + .lrow{margin-top:22px}
+.ds .ltile{position:relative;border-radius:20px;overflow:hidden;isolation:isolate;
+  aspect-ratio:16/11;background:var(--navy-900);
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.08),0 20px 46px rgba(var(--shadow-c),.16);
+  transition:transform 520ms var(--e-out),box-shadow 520ms var(--e-out)}
+.ds .ltile:hover{transform:translateY(-4px);
+  box-shadow:0 6px 14px rgba(var(--shadow-c),.10),0 26px 58px rgba(var(--shadow-c),.22)}
+.ds .ltile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  transition:transform 1100ms var(--e-out)}
+.ds .ltile:hover img{transform:scale(1.06)}
+.ds .ltile::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(2,9,17,.16) 0%,rgba(2,9,17,.56) 46%,rgba(2,9,17,.93) 100%)}
+.ds .ltile .lt{position:relative;z-index:3;height:100%;display:flex;flex-direction:column;
+  justify-content:flex-end;padding:22px}
+.ds .ltile .eyebrow{color:var(--orange-300);margin-bottom:7px}
+.ds .ltile h4{color:#fff;font-size:19px;line-height:1.24;margin:0 0 5px}
+.ds .ltile p{color:#B7C8DA;font-size:13.5px;line-height:1.5;margin:0}
+
+/* rows already on screen sit above the one arriving, so the new row is
+   genuinely hidden behind them rather than fading in on top */
+.ds .lrow{z-index:1}
+.ds .lrow.lrow-new{z-index:0;overflow:hidden}
+.ds .lrow.lrow-new .ltile{animation:lrow-emerge 760ms var(--e-out) both;
+  animation-delay:calc(var(--c,0) * 90ms)}
+@keyframes lrow-emerge{
+  from{transform:translateY(-100%);opacity:0}
+  60%{opacity:1}
+  to{transform:translateY(0);opacity:1}
+}
+.ds .lgrid .lrow{transition:height 620ms var(--e-out),margin-top 620ms var(--e-out)}
+.ds .lmore{text-align:center;margin-top:28px}
+.ds .lmore .lcount{display:block;font-size:13px;color:var(--ink-3);margin-top:12px}
+@media (prefers-reduced-motion:reduce){
+.ds .lrow.lrow-new .ltile{animation:none}
+.ds .lgrid .lrow{transition:none}
+}
+@media (max-width:900px){
+.ds .lgrid, .ds .lrow{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:600px){
+.ds .lgrid, .ds .lrow{grid-template-columns:1fr}
+}
+
+
+/* The short photographic hero — same treatment as Solutions and What's New,
+   but it stops well short of the viewport. Used on the Company pages
+   (Customers, Careers, Press), where a full-height hero delays the content
+   people actually came for. */
+.ds .phero.phero-sm{min-height:0;padding:172px 0 104px;align-items:flex-start}
+.ds .phero.phero-sm .phero-in h1{font-size:clamp(36px,4.2vw,56px)}
+@media (max-width:760px){
+.ds .phero.phero-sm{padding:132px 0 76px}
+}
+
+
+/* =========================================================
+   BRAND KIT  (Press) — a sticky index on the left, the
+   detail on the right. Scrolling moves the index from one
+   section to the next; clicking the index jumps to one.
+   Deliberately NOT framed — it sits on the page ground.
+   ========================================================= */
+.ds .bkit{display:grid;grid-template-columns:236px 1fr;gap:64px;align-items:start;margin-top:14px}
+.ds .bkit-nav{position:sticky;top:108px}
+.ds .bkit-nav ol{list-style:none;margin:0;padding:0;counter-reset:bk}
+.ds .bkit-nav li{counter-increment:bk}
+.ds .bkit-nav a{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:11px;
+  font-size:15px;color:var(--ink-3);text-decoration:none;position:relative;
+  transition:color 260ms var(--e-soft),background-color 260ms var(--e-soft)}
+.ds .bkit-nav a::before{content:counter(bk,decimal-leading-zero);font-size:11px;letter-spacing:.08em;
+  color:var(--ink-3);opacity:.6;font-variant-numeric:tabular-nums;transition:color 260ms var(--e-soft)}
+.ds .bkit-nav a::after{content:"";position:absolute;left:0;top:9px;bottom:9px;width:2px;border-radius:2px;
+  background:var(--action);opacity:0;transform:scaleY(.3);transform-origin:center;
+  transition:opacity 300ms var(--e-out),transform 300ms var(--e-out)}
+.ds .bkit-nav a:hover{color:var(--ink-2)}
+.ds .bkit-nav a.on{color:var(--ink);font-weight:500;background:var(--pal-light-wash)}
+.ds .bkit-nav a.on::before{color:var(--action);opacity:1}
+.ds .bkit-nav a.on::after{opacity:1;transform:scaleY(1)}
+.ds .bkit-all{margin-top:22px;width:100%;justify-content:center}
+.ds .bkit-p{scroll-margin-top:104px;padding-bottom:92px;position:relative}
+.ds .bkit-p:last-child{padding-bottom:8px}
+.ds .bkit-n{font-size:11.5px;letter-spacing:.17em;color:var(--accent);font-weight:500;display:block;
+  margin-bottom:10px}
+.ds .bkit-p h3{font-size:34px;letter-spacing:-.035em;line-height:1.05;margin:0 0 14px;color:var(--ink)}
+.ds .bkit-lede{font-size:16.5px;font-weight:300;line-height:1.62;color:var(--ink-2);margin:0 0 28px;
+  max-width:62ch}
+.ds .bkit-h4{font-size:13px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:500;margin:34px 0 12px}
+.ds .bkit-body{font-size:15.5px;font-weight:300;line-height:1.72;color:var(--ink-2);margin:0;max-width:66ch}
+.ds .bkit-note{font-size:14px;font-weight:300;line-height:1.66;color:var(--ink-3);margin:22px 0 0;
+  max-width:62ch}
+.ds .bkit-note code, .ds .bkit-lede code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;
+  background:var(--bg-inset);padding:2px 6px;border-radius:5px;color:var(--ink-2)}
+.ds .bkit-list{list-style:none;margin:0;padding:0;max-width:66ch}
+.ds .bkit-list li{position:relative;padding-left:20px;margin-bottom:10px;font-size:15px;font-weight:300;
+  line-height:1.6;color:var(--ink-2)}
+.ds .bkit-list li::before{content:"";position:absolute;left:2px;top:9px;width:6px;height:6px;
+  border-radius:50%;background:var(--action);opacity:.5}
+
+
+/* previews */
+.ds .bkit-row{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.ds .bkit-tile{margin:0}
+.ds .bkit-art{height:150px;border-radius:16px;display:grid;place-items:center;overflow:hidden;
+  border:1px solid var(--line)}
+.ds .bkit-art img{max-width:72%;max-height:64%;object-fit:contain}
+.ds .bkit-art-l{background:linear-gradient(180deg,#FFFFFF,#F1F6FC)}
+.ds .bkit-art-d{background:linear-gradient(180deg,#0B2542,#04101F);border-color:rgba(255,255,255,.10)}
+.ds .bkit-art-p{padding:0;border:1px solid var(--line)}
+.ds .bkit-art-p img{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:cover}
+.ds .bkit-tile figcaption{display:block;margin-top:12px}
+.ds .bkit-tile figcaption b{display:block;font-size:14.5px;font-weight:500;color:var(--ink)}
+.ds .bkit-tile figcaption span{display:block;font-size:13px;font-weight:300;color:var(--ink-3);margin-top:2px}
+
+
+/* do and do-not */
+.ds .bkit-rules{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:30px}
+.ds .bkit-do, .ds .bkit-dont{border-radius:16px;padding:22px 24px;border:1px solid var(--pal-line)}
+.ds .bkit-do{--pal-line:var(--pal-deep-line);background-image:var(--pal-deep-fill)}
+.ds .bkit-dont{--pal-line:var(--pal-orange-line);background-image:var(--pal-orange-fill)}
+.ds .bkit-do h4, .ds .bkit-dont h4{display:flex;align-items:center;gap:9px;font-size:14.5px;font-weight:500;
+  margin:0 0 12px;color:var(--ink)}
+.ds .bkit-do h4 svg, .ds .bkit-dont h4 svg{width:17px;height:17px;fill:none;stroke-width:2.2;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .bkit-do h4 svg{stroke:var(--pal-deep-key)}
+.ds .bkit-dont h4 svg{stroke:var(--pal-orange-key)}
+.ds .bkit-do ul, .ds .bkit-dont ul{list-style:none;margin:0;padding:0}
+.ds .bkit-do li, .ds .bkit-dont li{font-size:14px;font-weight:300;line-height:1.55;color:var(--ink-2);
+  padding-left:16px;position:relative;margin-bottom:9px}
+.ds .bkit-do li::before, .ds .bkit-dont li::before{content:"";position:absolute;left:0;top:8px;width:5px;
+  height:5px;border-radius:50%;background:currentColor;opacity:.38}
+
+
+/* downloads */
+.ds .bkit-dl{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px}
+.ds .bkit-file{display:flex;align-items:center;gap:13px;padding:14px 16px;border-radius:13px;
+  border:1px solid var(--line);background-image:var(--card-fill);text-decoration:none;
+  transition:border-color 260ms var(--e-soft),transform 260ms var(--e-out)}
+.ds .bkit-file:hover{border-color:var(--action);transform:translateY(-2px)}
+.ds .bkit-ext{flex:none;font-size:10px;letter-spacing:.1em;font-weight:600;color:var(--action);
+  background:var(--pal-light-wash);border-radius:6px;padding:6px 8px}
+.ds .bkit-file > span:nth-child(2){flex:1;min-width:0}
+.ds .bkit-file b{display:block;font-size:14px;font-weight:500;color:var(--ink)}
+.ds .bkit-file b + span{display:block;font-size:12.5px;font-weight:300;color:var(--ink-3);margin-top:1px}
+.ds .bkit-file > svg{width:17px;height:17px;flex:none;fill:none;stroke:var(--ink-3);stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .bkit-file:hover > svg{stroke:var(--action)}
+
+
+/* colour */
+.ds .bkit-sw{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.ds .bkit-sw-sm{margin-top:16px}
+.ds .bkit-chip{display:block;height:82px;border-radius:14px;border:1px solid var(--line);
+  margin-bottom:12px}
+.ds .bkit-sw-sm .bkit-chip{height:52px}
+.ds .bkit-c b{display:block;font-size:14.5px;font-weight:500;color:var(--ink)}
+.ds .bkit-c code{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+  color:var(--ink-3);margin-top:2px}
+.ds .bkit-c > span:last-child{display:block;font-size:12.5px;font-weight:300;color:var(--ink-3);
+  margin-top:6px;line-height:1.45}
+
+
+/* type specimens */
+.ds .bkit-spec{border-top:1px solid var(--line)}
+.ds .bkit-sp{padding:22px 0;border-bottom:1px solid var(--line);display:grid;
+  grid-template-columns:1fr 260px;gap:28px;align-items:baseline}
+.ds .bkit-sp-t{color:var(--ink);display:block}
+.ds .bkit-sp-m{font-size:12.5px;font-weight:300;color:var(--ink-3);line-height:1.5}
+
+
+/* messaging */
+.ds .bkit-quote{margin:0;padding:26px 30px;border-radius:18px;border-left:3px solid var(--accent);
+  background-image:var(--pal-orange-fill);font-size:20px;font-weight:400;line-height:1.5;
+  letter-spacing:-.015em;color:var(--ink);max-width:62ch}
+
+
+/* icons */
+.ds .bkit-icons{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.ds .bkit-ic{display:grid;place-items:center;gap:9px;padding:18px 8px;border-radius:14px;
+  border:1px solid var(--line);background-image:var(--card-fill)}
+.ds .bkit-ic svg{width:24px;height:24px;fill:none;stroke:var(--ink);stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .bkit-ic small{font-size:11px;font-weight:300;color:var(--ink-3)}
+
+
+/* product icons */
+.ds .bkit-prods{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+.ds .bkit-prod{display:grid;place-items:center;gap:6px;padding:20px 8px;border-radius:16px;
+  border:1px solid var(--line);background-image:var(--card-fill);text-decoration:none;
+  transition:transform 300ms var(--e-out),border-color 260ms var(--e-soft)}
+.ds .bkit-prod:hover{transform:translateY(-3px);border-color:var(--action)}
+.ds .bkit-prod img{width:52px;height:52px;object-fit:contain;margin-bottom:6px}
+.ds .bkit-prod img[src*="ic-heron"], .ds .bkit-prod img[src*="ic-mep"]{scale:1.18}
+.ds .bkit-prod b{font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .bkit-prod span{font-size:11.5px;font-weight:300;color:var(--ink-3)}
+@media (max-width:1000px){
+.ds .bkit{grid-template-columns:1fr;gap:26px}
+.ds .bkit-nav{position:static}
+.ds .bkit-nav ol{display:flex;flex-wrap:wrap;gap:6px}
+.ds .bkit-nav a{padding:9px 13px;border:1px solid var(--line);border-radius:999px;font-size:13.5px}
+.ds .bkit-nav a::after{display:none}
+.ds .bkit-all{width:auto}
+.ds .bkit-icons, .ds .bkit-prods{grid-template-columns:repeat(4,1fr)}
+.ds .bkit-sw{grid-template-columns:repeat(2,1fr)}
+.ds .bkit-dl{grid-template-columns:1fr}
+.ds .bkit-sp{grid-template-columns:1fr;gap:8px}
+}
+@media (max-width:640px){
+.ds .bkit-row, .ds .bkit-rules{grid-template-columns:1fr}
+.ds .bkit-icons, .ds .bkit-prods{grid-template-columns:repeat(3,1fr)}
+}
+
+
+/* =========================================================
+   MOBILE NAVIGATION
+   The drawer's contents are cloned from the desktop mega-panel
+   at runtime (see site.js), so there is one source of truth.
+   ========================================================= */
+.ds .burger{display:none;width:40px;height:40px;border-radius:11px;border:1px solid var(--line-2);
+  background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:5px;
+  cursor:pointer;padding:0}
+.ds .burger span{display:block;width:17px;height:1.8px;border-radius:2px;background:var(--ink);
+  transition:transform 320ms var(--e-out),opacity 200ms var(--e-soft)}
+.ds .burger.on span:first-child{transform:translateY(3.4px) rotate(45deg)}
+.ds .burger.on span:last-child{transform:translateY(-3.4px) rotate(-45deg)}
+.ds .mnav{position:fixed;inset:0;z-index:90;background:var(--bg);overflow-y:auto;
+  padding:86px 20px 40px;opacity:0;visibility:hidden;transform:translateY(-8px);
+  transition:opacity 300ms var(--e-soft),transform 360ms var(--e-out),visibility 0s linear 360ms}
+.ds .mnav.on{opacity:1;visibility:visible;transform:none;transition-delay:0s}
+.ds .mnav-in{max-width:520px;margin:0 auto}
+.ds .mnav-flat, .ds .mnav-t{display:flex;align-items:center;justify-content:space-between;width:100%;
+  padding:17px 4px;font-size:19px;font-weight:400;color:var(--ink);text-decoration:none;
+  background:none;border:0;border-bottom:1px solid var(--line);cursor:pointer;font-family:var(--font);
+  text-align:left}
+.ds .mnav-t .caret{transition:transform 320ms var(--e-out)}
+.ds .mnav-sec.on .mnav-t .caret{transform:rotate(180deg)}
+.ds .mnav-sec{border-bottom:1px solid var(--line)}
+.ds .mnav-sec .mnav-t{border-bottom:0}
+.ds .mnav-b{max-height:0;overflow:hidden;transition:max-height 420ms var(--e-out)}
+.ds .mnav-h{display:block;font-size:11px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:500;margin:14px 0 6px;padding-left:4px}
+.ds .mnav-l{display:block;padding:11px 4px 12px;text-decoration:none;border-radius:10px}
+.ds .mnav-l b{display:block;font-size:15.5px;font-weight:500;color:var(--ink)}
+.ds .mnav-l span{display:block;font-size:13px;font-weight:300;color:var(--ink-3);margin-top:2px}
+.ds .mnav-l:active{background:var(--bg-alt)}
+.ds .mnav-sec.on .mnav-b{padding-bottom:14px}
+.ds .mnav-act{display:grid;gap:10px;margin-top:26px}
+.ds .mnav-act .ds-btn{width:100%;justify-content:center;padding:14px 18px}
+@media (max-width:1000px){
+.ds .burger{display:flex}
+.ds .nav-links{display:none}
+.ds .nav-act .ds-btn{display:none}
+}
+@media (min-width:1001px){
+.ds .mnav{display:none}
+}
+
+
+/* four-across card rows that actually collapse — these were inline styles,
+   which no media query can beat */
+.ds .bento.bento-4{grid-template-columns:repeat(4,1fr)}
+.ds .fgrid.fgrid-4{grid-template-columns:repeat(4,1fr)}
+
+/* .fgrid is a 6-column bento on the product pages, where cards 1 and 2 span
+   three columns and the rest span two. A four-across row wants none of that —
+   one card, one column, one image height. */
+.ds .fgrid.fgrid-4 > .fcard, .ds .fgrid.fgrid-4 > .fcard:nth-child(1), .ds .fgrid.fgrid-4 > .fcard:nth-child(2){grid-column:auto}
+.ds .fgrid.fgrid-4 > .fcard .fviz, .ds .fgrid.fgrid-4 > .fcard:nth-child(1) .fviz, .ds .fgrid.fgrid-4 > .fcard:nth-child(2) .fviz, .ds .fgrid.fgrid-4 > .fcard:nth-child(n+3) .fviz{height:184px;padding:0}
+.ds .fgrid.fgrid-4 > .fcard:nth-child(n+3) .fviz > *{transform:none}
+@media (max-width:1100px){
+.ds .bento.bento-4, .ds .fgrid.fgrid-4{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:620px){
+.ds .bento.bento-4, .ds .fgrid.fgrid-4{grid-template-columns:1fr}
+}
+
+
+/* the three-across masonry rows on Learn and the Solutions pages */
+.ds .mbento.mb3{grid-template-columns:repeat(3,1fr);grid-auto-rows:300px}
+@media (max-width:900px){
+.ds .mbento.mb3{grid-template-columns:repeat(2,1fr);grid-auto-rows:260px}
+}
+@media (max-width:620px){
+.ds .mbento.mb3{grid-template-columns:1fr;grid-auto-rows:230px}
+}
+
+
+/* =========================================================
+   ABOUT — "In the room" band and the horizontal timeline
+   ========================================================= */
+
+
+/* The single left-to-right wash left the right-hand half of a busy photo
+   completely unveiled, so faces and projected slide text fought the headline.
+   Two layers now: the reading gradient across, and a floor up from the bottom
+   so the band ends on a solid edge instead of a smear. */
+.ds .plx::after{background:
+  linear-gradient(100deg,rgba(2,9,17,.95) 0%,rgba(2,9,17,.86) 42%,rgba(2,9,17,.58) 72%,rgba(2,9,17,.42) 100%),
+  linear-gradient(to top,rgba(2,9,17,.86) 0%,rgba(2,9,17,.10) 42%,rgba(2,9,17,.30) 100%)}
+.ds .plx-bg img{filter:saturate(.88) contrast(1.04)}
+
+
+/* ---- horizontal timeline ---- */
+.ds .tlh{position:relative}
+.ds .tlh-row{display:grid;grid-template-columns:repeat(6,1fr);gap:20px;position:relative;
+  padding-top:6px}
+
+/* the rail runs behind the nodes, from the first to the last */
+.ds .tlh-row::before{content:"";position:absolute;left:calc(100% / 12);right:calc(100% / 12);
+  top:66px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,var(--line-2) 0%,var(--action) 34%,var(--action) 74%,var(--line-2) 100%);
+  opacity:.55}
+.ds .tlh-i{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:0 4px}
+.ds .tlh-y{font-size:14px;font-weight:500;letter-spacing:.02em;color:var(--action);
+  font-variant-numeric:tabular-nums;margin-bottom:14px}
+.ds .tlh-node{position:relative;z-index:2;width:46px;height:46px;border-radius:50%;
+  display:grid;place-items:center;background:var(--bg);
+  border:2px solid var(--action);margin-bottom:18px;
+  box-shadow:0 0 0 6px var(--bg),0 8px 20px rgba(var(--shadow-c),.10);
+  transition:transform 380ms var(--e-out)}
+.ds .tlh-node img{width:30px;height:30px;object-fit:contain;display:block}
+.ds .tlh-node img[src*="ic-heron"]{scale:1.18}
+
+/* the years without a product get a plain filled dot, not an empty ring */
+.ds .tlh-node:empty{width:16px;height:16px;background:var(--action);border-width:0;
+  box-shadow:0 0 0 5px var(--bg),0 0 0 7px var(--line-2);margin:15px 0 33px}
+.ds .tlh-i:hover .tlh-node{transform:translateY(-3px)}
+.ds .tlh-i b{display:block;font-size:15.5px;font-weight:500;color:var(--ink);margin-bottom:6px;
+  letter-spacing:-.01em}
+.ds .tlh-i p{font-size:13.5px;font-weight:300;line-height:1.55;color:var(--ink-3);margin:0;
+  max-width:24ch}
+@media (max-width:980px){
+.ds .tlh-row{grid-template-columns:repeat(3,1fr);row-gap:38px}
+.ds .tlh-row::before{display:none}
+}
+@media (max-width:620px){
+
+  /* back to a vertical list, but a proper one — rail on the left, node on it */
+.ds .tlh-row{grid-template-columns:1fr;row-gap:0;padding-left:34px}
+.ds .tlh-row::before{display:block;left:16px;right:auto;top:8px;bottom:8px;width:2px;height:auto;
+    background:linear-gradient(180deg,var(--line-2),var(--action) 34%,var(--action) 74%,var(--line-2))}
+.ds .tlh-i{flex-direction:row;flex-wrap:wrap;align-items:flex-start;text-align:left;
+    padding:0 0 26px;column-gap:12px}
+.ds .tlh-y{order:1;margin:0 0 4px}
+.ds .tlh-node{position:absolute;left:-34px;top:0;margin:0}
+.ds .tlh-node:empty{left:-27px;top:6px;margin:0}
+.ds .tlh-i b{order:2;flex-basis:100%;margin-bottom:4px}
+.ds .tlh-i p{order:3;flex-basis:100%;max-width:none}
+}
+
+
+/* cart + payment states */
+.ds .line.line-off{opacity:.45}
+.ds .qty button[disabled]{opacity:.35;cursor:not-allowed}
+.ds-btn.btn-dis{opacity:.45;pointer-events:none}
+.ds .bankbox{border:1px solid var(--line);border-radius:14px;padding:6px 16px;margin:4px 0 14px;
+  background-image:var(--pal-light-fill)}
+.ds .bankrow{display:flex;justify-content:space-between;gap:16px;padding:11px 0;font-size:14px;
+  border-bottom:1px solid var(--pal-light-line)}
+.ds .bankrow:last-child{border-bottom:0}
+.ds .bankrow span{color:var(--ink-3);font-weight:300}
+.ds .bankrow b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+
+
+/* =========================================================
+   EVENTS INDEX (Learn) — the real breakdown from the live
+   trainings page, and every one of the thirty sessions.
+   ========================================================= */
+.ds .evstats{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin:38px 0 30px;
+  border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden;
+  background-image:var(--card-fill)}
+.ds .evstat{padding:24px 20px;text-align:center;border-right:1px solid var(--line)}
+.ds .evstat:last-child{border-right:0}
+.ds .evstat b{display:block;font-size:34px;font-weight:500;letter-spacing:-.04em;color:var(--ink);
+  line-height:1;font-variant-numeric:tabular-nums}
+.ds .evstat span{display:block;font-size:12.5px;font-weight:300;color:var(--ink-3);margin-top:8px}
+.ds .evlist{list-style:none;margin:22px 0 0;padding:0;border-top:1px solid var(--line)}
+.ds .evlist li{display:grid;grid-template-columns:96px 116px 1fr 250px 92px;gap:18px;
+  align-items:center;padding:15px 8px;border-bottom:1px solid var(--line)}
+.ds .evhead{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:500;padding-top:10px;padding-bottom:10px}
+.ds .evrow{transition:background-color 220ms var(--e-soft)}
+.ds .evrow:hover{background:var(--bg-alt)}
+.ds .evrow.hide{display:none}
+.ds .ev-when{font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums;font-weight:300}
+.ds .ev-tag{justify-self:start;font-size:11px;font-weight:500;letter-spacing:.03em;padding:5px 10px;
+  border-radius:999px;white-space:nowrap}
+.ds .ev-online{background:var(--pal-light-wash);color:var(--pal-light-key)}
+.ds .ev-office{background:var(--pal-orange-wash);color:var(--pal-orange-key)}
+.ds .ev-conference{background:var(--pal-deep-wash);color:var(--pal-deep-key)}
+.ds .ev-title{font-size:14.5px;color:var(--ink);font-weight:400;line-height:1.4}
+.ds .ev-loc{font-size:13px;color:var(--ink-3);font-weight:300;line-height:1.4}
+.ds .ev-att{text-align:right;font-size:14px;color:var(--ink-2);font-weight:500;
+  font-variant-numeric:tabular-nums}
+.ds .evhead span:last-child{text-align:right}
+@media (max-width:1000px){
+.ds .evstats{grid-template-columns:repeat(3,1fr)}
+.ds .evstat{border-bottom:1px solid var(--line)}
+.ds .evstat:nth-child(n+4){border-bottom:0}
+.ds .evstat:nth-child(3){border-right:0}
+.ds .evlist li{grid-template-columns:88px 104px 1fr 78px;gap:12px}
+.ds .ev-loc{display:none}
+.ds .evhead span:nth-child(4){display:none}
+}
+@media (max-width:680px){
+.ds .evstats{grid-template-columns:repeat(2,1fr)}
+.ds .evstat, .ds .evstat:nth-child(3){border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.ds .evstat:nth-child(2n){border-right:0}
+.ds .evstat:last-child{grid-column:1 / -1;border-bottom:0;border-right:0}
+.ds .evlist li{grid-template-columns:1fr 74px;gap:6px 12px;padding:15px 4px}
+.ds .evlist .evhead{display:none}
+.ds .ev-when{grid-column:1;order:1;font-size:12px}
+.ds .ev-tag{grid-column:2;order:2;justify-self:end}
+.ds .ev-title{grid-column:1 / -1;order:3}
+.ds .ev-att{grid-column:1 / -1;order:4;text-align:left;font-size:12.5px;color:var(--ink-3);
+    font-weight:300}
+.ds .ev-att::after{content:" attended"}
+}
+
+
+/* =========================================================
+   PHONE PASS 2
+   Three things that were a shrunk desktop rather than a
+   phone layout, and one that was simply broken.
+   ========================================================= */
+
+
+/* ---- the hero's "Trusted by" line ----
+   It was an inline-flex row, which makes every run of text between the two
+   <b> tags its own flex item. Five items, each wrapping on its own, is what
+   produced the staggered ladder on a phone. It is a sentence; it should flow
+   like one. */
+.ds .hero-note{display:inline-block;line-height:1.75}
+.ds .hero-note b{white-space:nowrap}
+.ds .pulse{display:inline-block;vertical-align:middle;margin-right:9px;position:relative;top:-1px}
+
+
+/* ---- the eyebrow above every section heading ----
+   Same flex problem as the line above. The little square is a ::before, so it
+   is a flex item beside the text; once the text wraps to two lines the square
+   is centred against both of them and drifts off on its own. Inline, it simply
+   sits at the head of the first line and travels with it. */
+@media (max-width:640px){
+.ds .eyebrow{display:block;line-height:1.65}
+.ds .eyebrow::before{display:inline-block;vertical-align:middle;margin-right:9px;
+    position:relative;top:-1px}
+}
+
+
+/* ---- the four statistics ----
+   Two-by-two was the desktop grid with two columns taken away: tall, airy, and
+   with half the labels wrapping and half not. On a phone they read better as a
+   list — icon, number, label, one per line, nothing wrapping. */
+@media (max-width:1000px){
+.ds .statframe{grid-template-columns:1fr 1fr}
+.ds .statframe .stat + .stat::before{display:none}
+}
+@media (max-width:640px){
+.ds .statframe{grid-template-columns:1fr;padding:4px 2px}
+.ds .statframe .stat{display:grid;grid-template-columns:36px 1fr;align-items:center;
+    column-gap:15px;row-gap:1px;padding:15px 18px;text-align:left}
+.ds .statframe .stat + .stat{border-top:1px solid var(--line)}
+.ds .statframe .ico{grid-row:1 / 3;grid-column:1;margin:0;width:36px;height:36px;border-radius:11px}
+.ds .statframe .ico svg{width:16px;height:16px}
+.ds .statframe b{grid-column:2;font-size:26px;line-height:1.1}
+.ds .statframe .stat > span{grid-column:2;font-size:13px;color:var(--ink-3)}
+}
+
+
+/* ---- the drawer ----
+   It painted straight over the bar: no logo, and no visible way back out. The
+   z-index was a red herring — the drawer is a child of <nav>, so it covers its
+   own parent's contents whatever number you give it. Lifting the bar's row
+   above its sibling is what actually fixes it. The bar also goes solid, so the
+   logo and the close button read against the drawer behind them. */
+.ds .mnav-open .nav{background:var(--bg);border-bottom-color:var(--line)}
+.ds .mnav-open .nav.stuck{background:var(--bg)}
+
+/* both live inside <nav>, which already sits above the page, so these two only
+   have to be ordered against each other */
+.ds .mnav{z-index:1}
+.ds .mnav-open .nav > .nav-in{position:relative;z-index:2}
+
+
+/* the chevron only existed as `.nav-links .caret`, so in the drawer it was an
+   empty <i> — five rows that expand with nothing to say they expand */
+.ds .mnav-t{gap:14px}
+.ds .mnav-t .caret{width:9px;height:9px;flex:none;margin-right:5px;
+  border-right:1.7px solid var(--ink-3);border-bottom:1.7px solid var(--ink-3);
+  transform:rotate(45deg) translate(-2px,-2px)}
+.ds .mnav-sec.on .mnav-t .caret{transform:rotate(-135deg) translate(-2px,-2px)}
+
+
+/* the two buttons go to the foot of the drawer instead of leaving a long void */
+.ds .mnav-in{display:flex;flex-direction:column;min-height:calc(100dvh - 126px)}
+.ds .mnav-act{margin-top:auto;padding-top:30px}
+
+
+/* ================================================================ QUOTATION
+   The builder reuses the cart's line, stepper and summary language, because a
+   quotation and a cart are the same act at different levels of commitment. Only
+   what is genuinely new is written here. */
+.ds .qt-build{display:grid;gap:22px}
+.ds .qt-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
+  gap:14px;margin-bottom:6px}
+.ds .qt-cur{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-3)}
+.ds .qt-cur select{font-family:var(--font);font-size:13px;color:var(--ink);background:var(--bg);
+  border:1px solid var(--line-2);border-radius:9px;padding:8px 10px;cursor:pointer}
+.ds .qt-dot{width:60px;height:60px;border-radius:14px;display:grid;place-items:center;
+  background:var(--bg-inset);color:var(--action)}
+.ds .qt-dot svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7}
+.ds .qt-none{color:var(--ink-3);font-style:normal;font-weight:300}
+.ds .qt-flag{color:var(--action)}
+.ds .qt-q{font-style:normal;color:var(--ink-3)}
+.ds .qt-hr{height:1px;background:var(--line);margin:14px 0 6px}
+.ds .qt-big{padding-top:6px;font-size:16px;color:var(--ink)}
+.ds .qt-big b{font-size:20px;font-weight:500}
+.ds .qt-note{margin:14px 0 0;font-size:12px;line-height:1.5;color:var(--ink-3)}
+.ds .qt-empty{margin:0;font-size:14px;line-height:1.55;color:var(--ink-3)}
+.ds .qt-panel{position:sticky;top:104px}
+.ds .qt-form{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ds .qt-form label{display:grid;gap:6px;font-size:12.5px;color:var(--ink-3)}
+.ds .qt-form label.wide{grid-column:1 / -1}
+.ds .qt-form input, .ds .qt-form textarea{font-family:var(--font);font-size:14px;color:var(--ink);
+  background:var(--bg);border:1px solid var(--line-2);border-radius:10px;padding:11px 13px;
+  resize:vertical}
+.ds .qt-form input:focus, .ds .qt-form textarea:focus{outline:0;border-color:var(--action)}
+
+
+/* the document itself, over the page */
+.ds .qt-doc{position:fixed;inset:0;z-index:900;display:flex;flex-direction:column;
+  background:rgba(4,12,22,.62);backdrop-filter:blur(3px)}
+.ds .qt-doc-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:14px 22px;background:var(--bg);border-bottom:1px solid var(--line);flex:none}
+.ds .qt-doc-bar b{font-size:15px;font-weight:500;color:var(--ink)}
+.ds .qt-doc-bar > div{display:flex;gap:10px}
+.ds .qt-doc-scroll{flex:1;overflow:auto}
+.ds .bento-c > .ds-btn{margin-top:16px;align-self:flex-start}
+@media (max-width:900px){
+.ds .qt-panel{position:static}
+.ds .qt-form{grid-template-columns:1fr}
+}
+@media print{
+.ds .qt-doc{position:static;background:none;backdrop-filter:none}
+}

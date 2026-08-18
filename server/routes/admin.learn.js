@@ -2,6 +2,7 @@
 import express from "express";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { FreeVideo, PaidCourseVideo } from "../models/Learn.js";
+import { fetchDurationSec } from "../util/youtubeDuration.js";
 
 const router = express.Router();
 
@@ -38,10 +39,17 @@ router.post(
       return res.status(400).json({ error: "title and youtubeId required" });
     }
 
+    const id = String(youtubeId).trim();
+    // Typed-in duration wins; otherwise ask YouTube, which is a no-op unless
+    // YOUTUBE_API_KEY is configured.
+    const typed = Number(req.body?.durationSec) || 0;
+    const durationSec = typed || (await fetchDurationSec(id));
+
     const doc = await FreeVideo.create({
       title: String(title).trim(),
-      youtubeId: String(youtubeId).trim(),
+      youtubeId: id,
       thumbnailUrl: thumbnailUrl ? String(thumbnailUrl).trim() : "",
+      durationSec,
       isPublished: !!isPublished,
       sort: Number(sort) || 0,
     });
@@ -65,6 +73,11 @@ router.patch(
       item.thumbnailUrl = thumbnailUrl ? String(thumbnailUrl).trim() : "";
     if (isPublished !== undefined) item.isPublished = !!isPublished;
     if (sort !== undefined) item.sort = Number(sort) || 0;
+    if (req.body?.durationSec !== undefined) {
+      item.durationSec = Number(req.body.durationSec) || 0;
+    }
+    // Still unknown and the video id changed? Try YouTube once.
+    if (!item.durationSec) item.durationSec = await fetchDurationSec(item.youtubeId);
 
     await item.save();
     res.json({ ok: true, item });
@@ -142,6 +155,11 @@ router.patch(
     if (description !== undefined) item.description = String(description || "");
     if (isPublished !== undefined) item.isPublished = !!isPublished;
     if (sort !== undefined) item.sort = Number(sort) || 0;
+    if (req.body?.durationSec !== undefined) {
+      item.durationSec = Number(req.body.durationSec) || 0;
+    }
+    // Still unknown and the video id changed? Try YouTube once.
+    if (!item.durationSec) item.durationSec = await fetchDurationSec(item.youtubeId);
 
     await item.save();
     res.json({ ok: true, item });

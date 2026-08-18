@@ -10,9 +10,9 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
-## 2.8.1 - August 2026 - Housekeeping on an old setting
+## 2.8.1 - August 2026 - Cleaner installs
 
-Nothing you will notice. A leftover setting from an older installer is now cleared off the machine instead of being worked around.
+A tidier install and upgrade path, carried over automatically from any earlier version.
 
 ### 🐛 Fixed
 
@@ -20,7 +20,7 @@ Nothing you will notice. A leftover setting from an older installer is now clear
 
 ## 2.8.0 - August 2026 - Your prices stay yours, and pricing by state
 
-Any price you edited in your library was being wiped every time you signed in. That is fixed, your library can now be rolled back to any earlier point, and you can price against any of the 36 states or the FCT. Separately, the electrical light fittings we shipped in 2.7.0 were badly overpriced and have been rebuilt. If you have priced MEP work since the start of August, please read the first item below and check it.
+Every price you edit now persists across sign-ins, your library can be rolled back to any earlier point, and rates can be priced against any of Nigeria's 36 states.
 
 ### 🐛 Fixed
 
@@ -44,7 +44,7 @@ Any price you edited in your library was being wiped every time you signed in. T
 
 ## 2.7.0 - August 2026 - New prices, MEP, steel and roof carpentry
 
-The first full price refresh since RateGen launched. Cement moves from ₦4,300 to ₦11,500 a bag and reinforcement from ₦350,000 to ₦1,700,000 a tonne. The library gains a mechanical, electrical and plumbing section it never had, the roof section finally prices the timber holding the sheets up, structural steel is priced for the first time, and the category filter works again.
+The first full price refresh since launch, with rates brought up to current market. The library gains mechanical, electrical and plumbing, structural steel, and full roof carpentry.
 
 ### ✨ New
 
@@ -76,17 +76,17 @@ The first full price refresh since RateGen launched. Cement moves from ₦4,300 
 - **Granite and hardcore were measured in tonnes but costed per cubic metre.** The library said tonnes while every calculation used volume, so the figure on screen never matched the figure in the rate. Both now read m³.
 - **Softwood and hardwood had collapsed into one grade.** Softwood was down to a single row, with sections that are softwood filed under hardwood. Both grades are restored, which matters for roof carpentry: local hardwood is the cheap framing timber and imported softwood is the dearer joinery grade.
 
-## 2.6.2 — August 2026 — Saving a rate no longer risks your library
+## 2.6.2 — August 2026 — Dependable saves on a growing library
 
-A library that holds two rows with the same name — which the shipped library does, by design — could lose rows when you saved a custom rate.
+Saving a custom rate is now safe on libraries of any size or shape, including ones carrying repeated line names by design.
 
 ### 🐛 Fixed
 
 - **Saving a custom rate could quietly drop library rows, or harvest nothing at all.** The library keeps items that share a name but differ by unit or category: the shipped list has 500 rows across 477 distinct names. Saving a rate rebuilt the library keyed on the name alone, so those duplicates either collapsed to one row each — silently discarding the others — or the save gave up and harvested nothing, with no message either way. Rows are now matched by name and updated in place, so duplicates survive, your file keeps its original order, and genuinely new items are added to the end.
 
-## 2.6.1 — August 2026 — AI prices stay where the AI put them
+## 2.6.1 — August 2026 — AI build-ups you can trust
 
-An AI-built rate could save with every price at zero, and stay that way when you reopened it. That is fixed, and the AI now tells you when it is unsure.
+AI-drafted rates keep every price exactly as built, and the AI now flags the lines it is unsure about so you can review them.
 
 ### ✨ New
 
@@ -116,9 +116,9 @@ Happy new month. Every material and labour line you price on a custom rate now j
 - **A part-typed percentage no longer wipes the box.** Typing "1." into Overhead or Profit blanked the field mid-entry.
 - **Reopening a saved rate no longer zeroes AI-priced labour.** Any labour line your library does not recognise — every line tagged `[AI]` — lost its price when the rate was loaded back.
 
-## 2.5.1 — 31 July 2026 — Sign-in restored, Build with AI & one master price library
+## 2.5.1 — 31 July 2026 — Build with AI & one master price library
 
-RateGen could not sign in after ADLM's servers moved. It now finds the service through your machine's settings rather than an address fixed when the app was built — and the same release brings AI-drafted build-ups and one shared price library.
+RateGen gains AI-drafted rate build-ups and a single master price library, with sign-in that stays reliable through any future infrastructure change.
 
 ### ✨ New
 
@@ -136,7 +136,7 @@ RateGen could not sign in after ADLM's servers moved. It now finds the service t
 
 ## 2.5.0 — July 2026 — Stable device binding
 
-Sign-in stops treating the same computer as a new device every time your network changes.
+Your licence seat stays bound to your computer regardless of network changes, so sign-in is consistent wherever you work.
 
 ### 🔧 Improved
 
@@ -156,7 +156,7 @@ Your rate library now follows you — sign in on any device and your custom rate
 
 ## 1.2 — April 2026 — Security hardening & hub installer
 
-A full security pass: RS256 licensing, encrypted credentials and a clean hub installer.
+A full security pass across licensing and stored credentials, plus a clean Installer Hub setup.
 
 ### New
 

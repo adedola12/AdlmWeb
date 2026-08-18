@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Profile picture placeholder">
+  <defs>
+    <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef2f7"/>
+      <stop offset="1" stop-color="#dde4ee"/>
+    </linearGradient>
+    <clipPath id="ac"><rect width="96" height="96" rx="26"/></clipPath>
+  </defs>
+  <g clip-path="url(#ac)">
+    <rect width="96" height="96" fill="url(#ag)"/>
+    <circle cx="48" cy="38" r="15" fill="#a9b6c8"/>
+    <path d="M12 96c0-18.8 16.1-30 36-30s36 11.2 36 30z" fill="#a9b6c8"/>
+  </g>
+</svg>
