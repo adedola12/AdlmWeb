@@ -3,6 +3,7 @@ import express from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { exportElementalBoQ } from "../util/elementalBoqExporter.js";
+import { exportBillAndBudget } from "../util/billBudgetExporter.js";
 import { resolveMergedProject } from "../services/projectMerge.js";
 
 const router = express.Router();
@@ -149,7 +150,94 @@ async function findProjectDoc({ tool, id, userId }) {
   return null;
 }
 
-/* -------------------- route -------------------- */
+/* -------------------- routes -------------------- */
+
+// Shared by both export routes: resolve the project, or answer 404.
+async function loadProjectForExport(req, res) {
+  const tool = String(req.params.tool || "")
+    .trim()
+    .toLowerCase();
+  const id = String(req.params.id || "").trim();
+
+  if (!tool || !id) {
+    res.status(400).json({ error: "tool and id are required" });
+    return null;
+  }
+
+  const project = await findProjectDoc({ tool, id, userId: req.user?._id });
+  if (!project) {
+    res.status(404).json({
+      error:
+        "Project not found (or not owned by this user). Check your collection/model naming.",
+    });
+    return null;
+  }
+  return { project, tool };
+}
+
+// XLSX is a ZIP, so a valid workbook starts with "PK". Catches an exporter that
+// silently produced HTML or JSON before the browser saves it as .xlsx.
+function sendWorkbook(res, out) {
+  const buf = Buffer.isBuffer(out.buffer) ? out.buffer : Buffer.from(out.buffer);
+  if (buf.length < 2 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
+    return res.status(500).json({
+      error: "Exporter did not generate a valid XLSX (zip) file.",
+    });
+  }
+
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+  res.setHeader("Content-Disposition", `attachment; filename="${out.filename}"`);
+  return res.status(200).end(buf);
+}
+
+/**
+ * GET /projectsboq/:tool/:id/export/bill-budget
+ *
+ * The bill AS MEASURED plus its budget: the project's own sections, preamble
+ * subtitles, order and totals, with the material / labour / plant build-up on
+ * separate schedules, a schedule of current material prices and a material
+ * summary. Unlike /export/boq this does not re-cut the bill against the
+ * elemental or trade mapping, which is what an imported bill needs — its
+ * descriptions are a QS's, not a plugin's, so mapping them dropped the whole
+ * bill into "Other items".
+ */
+router.get(
+  "/:tool/:id/export/bill-budget",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const loaded = await loadProjectForExport(req, res);
+    if (!loaded) return undefined;
+    const { project } = loaded;
+
+    const groupBy = ["trade", "work-section"].includes(
+      String(req.query.groupBy || "").trim().toLowerCase(),
+    )
+      ? "trade"
+      : "category";
+
+    const out = await exportBillAndBudget({
+      projectName: project.name || "Project",
+      clientName: project.clientName || project.contract?.clientName || "",
+      items: project.items || [],
+      budgetItems: project.budgetItems || [],
+      materialItems: project.materialItems || [],
+      provisionalSums: project.provisionalSums || [],
+      variations: project.variations || [],
+      preliminaryItems: project.preliminaryItems || [],
+      preliminaryPercent: Number(project.contract?.preliminaryPercent) || 0,
+      groupBy,
+    });
+
+    return sendWorkbook(res, out);
+  }),
+);
+
+
 /**
  * GET /projectsboq/:tool/:id/export/boq
  */
