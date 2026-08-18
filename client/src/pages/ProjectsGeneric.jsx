@@ -61,6 +61,10 @@ function isMaterialsTool(tool) {
 // tab except 3D Model and linking.
 const BOQ_IMPORT_ORIGIN = "boq-import";
 
+// Written into every workbook this page exports. The Excel importer rejects a
+// workbook carrying it — see server/util/adlmWorkbook.js for why.
+const ADLM_EXPORT_MARKER = "adlm-export";
+
 // The feature grant. "quiv-boq-import" is the pre-2026-08 key, from when this
 // was Quiv-only — still honoured so existing grants keep working.
 const BOQ_IMPORT_ENTITLEMENTS = ["boq-import", "quiv-boq-import"];
@@ -4591,6 +4595,14 @@ export default function ProjectsGeneric() {
     ];
 
     const wb = XLSX.utils.book_new();
+    // Stamp it as an ADLM export. Mirrors server/util/adlmWorkbook.js: the
+    // Excel importer refuses a workbook we generated, so a download can never
+    // be re-uploaded as a second copy of a project the account already has.
+    wb.Props = {
+      Author: "ADLM Studio",
+      Keywords: ADLM_EXPORT_MARKER,
+      Category: ADLM_EXPORT_MARKER,
+    };
 
     // ── Material & Labour budget breakdown (formula-linked) ─────────────
     // One block per bill line: its material + labour rows with live
@@ -4906,7 +4918,7 @@ export default function ProjectsGeneric() {
     const filename = `${sanitizeFilename(sel?.name || "Project")} - BoQ${
       useTrade ? " (Trade)" : ""
     }.xlsx`;
-    XLSX.writeFile(wb, filename);
+    XLSX.writeFile(wb, filename, { Props: wb.Props });
   }
 
   // add near the top with other imports
@@ -5174,7 +5186,7 @@ export default function ProjectsGeneric() {
                           type="button"
                           onClick={() => boqReimportInputRef.current?.click()}
                           disabled={boqImportBusy}
-                          title="Update this project from a newer copy of its Excel BoQ"
+                          title="Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
                           className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
                         >
                           <FaFileExcel className="text-[12px]" />
@@ -5817,13 +5829,20 @@ export default function ProjectsGeneric() {
                 </h3>
                 <p className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
                   Creates a {boqImportBadge} project from an Excel Bill of
-                  Quantities. Categories, planned-vs-actual columns and an
-                  optional Material &amp; Labour sheet are read from the
+                  Quantities. Categories, planned-vs-actual columns and
+                  optional Material &amp; Labour schedules are read from the
                   workbook. Where the workbook has no schedule, one is built
                   for you: cement, sand, granite, blocks, formwork, rebar and
                   labour, priced from your Material Constants and RateGen: 
                   and it stays live across the Dashboard, BoQ, Budget and
                   Valuation tabs.
+                </p>
+                <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+                  Upload your own bill, not one exported from here. An ADLM
+                  export is refused: importing it would spend a project slot on
+                  a duplicate of a bill you already have. To update quantities,
+                  re-measure at the source and sync, or edit the bill in the
+                  project itself.
                 </p>
               </div>
               <button

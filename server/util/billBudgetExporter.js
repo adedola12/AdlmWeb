@@ -8,13 +8,16 @@
 // workbook rarely matches the mapping, so the elemental export dropped every
 // line into "Other items" and lost the structure the QS had uploaded.
 //
-// The workbook is deliberately re-importable: sheet names, header captions
-// ("Bill S/N", "Component", "Description", "Unit", "Qty", "Rate", "Overhead %",
-// "Profit %") and the Subtotal / TOTAL wording are the ones boqExcelImport.js
-// recognises, and every formula is written with its computed result cached, so
-// a reader that does not evaluate formulas still sees the right numbers. The
-// bill and the three resource schedules therefore survive a download → edit in
-// Excel → re-upload round trip with the bill↔budget linkage intact.
+// The workbook is a REPORT, and is stamped as one (see util/adlmWorkbook.js):
+// the Excel importer refuses it, so nobody can turn a download into a second
+// copy of a project they already have. Quantities are changed where they are
+// measured — the source model, or the bill in this project — and re-exported.
+//
+// Its layout still follows the importer's conventions (header captions, the
+// Subtotal / TOTAL wording, section rows that are neither merged nor styled
+// like something they are not), because that is simply how a bill reads. Every
+// formula is written with its computed result cached, so a reader that does not
+// evaluate formulas still sees the right numbers.
 //
 // Sheets
 //   Cover                        project, client, contents, headline totals
@@ -36,12 +39,7 @@
 
 import ExcelJS from "exceljs";
 
-// Stamped into the workbook's keywords so boqExcelImport can tell one of our
-// own exports from a QS's workbook. Preliminaries / provisional sums /
-// variations are measured work in a real bill, but in OUR workbook they are a
-// re-statement of arrays the project already holds — re-importing them as bill
-// lines would double count them.
-export const ADLM_EXPORT_MARKER = "adlm-bill-budget";
+import { ADLM_EXPORT_COVER_NOTE, stampAdlmWorkbook } from "./adlmWorkbook.js";
 
 /* ── formatting constants ─────────────────────────────────────────────── */
 
@@ -1018,12 +1016,20 @@ function fillCoverSheet(ws, {
   ws.addRow([]);
   const note = ws.addRow([
     null,
-    "Every total here is a live formula — re-price a rate and the subtotals, sheet totals and this cover recalculate. The bill and the material / labour / plant schedules are laid out the way ADLM's Excel import reads them, so an edited copy can be uploaded straight back into the project.",
+    "Every total here is a live formula — re-price a rate and the subtotals, sheet totals and this cover recalculate. This workbook is a report: to change quantities, re-measure in the source model and sync, or edit the bill in the project itself, then export again. Uploading it through Excel import is refused, so a download can never become a duplicate project.",
   ]);
   ws.mergeCells(note.number, 2, note.number, 3);
   note.getCell(2).alignment = { wrapText: true, vertical: "top" };
   note.getCell(2).font = { size: 9, italic: true, color: { argb: "FF64748B" } };
-  note.height = 58;
+  note.height = 70;
+
+  // The visible half of the export stamp — see util/adlmWorkbook.js. Kept on
+  // the cover so the file is still recognisable if its document properties are
+  // stripped by a conversion.
+  const stamp = ws.addRow([null, ADLM_EXPORT_COVER_NOTE]);
+  ws.mergeCells(stamp.number, 2, stamp.number, 3);
+  stamp.getCell(2).alignment = { wrapText: true, vertical: "top" };
+  stamp.getCell(2).font = { size: 8, color: { argb: "FF94A3B8" } };
 }
 
 /* ── public API ───────────────────────────────────────────────────────── */
@@ -1065,8 +1071,7 @@ export async function exportBillAndBudget({
   const budget = indexBudget(items, budgetSource);
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "ADLM Studio";
-  workbook.keywords = ADLM_EXPORT_MARKER;
+  stampAdlmWorkbook(workbook);
   workbook.calcProperties.fullCalcOnLoad = true;
 
   // Created first so it stays the leftmost tab; filled last, once every total
