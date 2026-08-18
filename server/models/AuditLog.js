@@ -29,7 +29,11 @@ const AuditLogSchema = new mongoose.Schema(
     // Anything else worth keeping (free-form).
     meta: { type: mongoose.Schema.Types.Mixed, default: null },
   },
-  { timestamps: true },
+  // demoTenancy:false — infrastructure, never split per tenant. The auth and
+  // permission layers read this on every request, so scoping it to a demo
+  // tenant would make a demo session resolve nothing and lock itself out.
+  // See server/models/demoTenancy.js.
+  { timestamps: true, demoTenancy: false },
 );
 
 AuditLogSchema.index({ createdAt: -1 });

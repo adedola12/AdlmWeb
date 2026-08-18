@@ -2,10 +2,11 @@ import jwt from "jsonwebtoken";
 import { User } from "../models/User.js";
 import { verifyStepUp } from "../util/jwt.js";
 import { roleHasArea } from "../util/rbac.js";
+import { runWithoutDemo } from "../util/demoContext.js";
 
 const ACCESS_COOKIE = "at";
 
-function getTokenFromReq(req) {
+export function getTokenFromReq(req) {
   // 1) Authorization header
   const auth = req.headers.authorization || "";
   if (auth.startsWith("Bearer ")) return auth.slice(7).trim();
@@ -40,6 +41,12 @@ export function requireAuth(req, res, next) {
 
 export function requireAdmin(req, res, next) {
   try {
+    // A demo session has already been authenticated, forced read-only and
+    // masked by demoModeGuard, so it is admitted to the admin-only routers for
+    // viewing. The guard runs first and unconditionally — see
+    // server/middleware/demoMode.js for why this cannot leak write access.
+    if (req.demoMode) return next();
+
     const token = getTokenFromReq(req);
     if (!token) return safeJson(res, 401, "Unauthorized");
 
@@ -72,7 +79,11 @@ export async function requireStepUp(req, res, next) {
     const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
     if (!uid) return safeJson(res, 401, "Unauthorized");
 
-    const doc = await User.findById(uid).select("security").lean();
+    // Outside demo scope: this is the caller's OWN row, which is real even
+    // when their role is a demo one.
+    const doc = await runWithoutDemo(() =>
+      User.findById(uid).select("security").lean(),
+    );
     if (!doc?.security?.stepUpEnabled) return next(); // feature off for this user
 
     const token =
@@ -143,7 +154,11 @@ export function requirePermission(area) {
       const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
       if (!uid) return safeJson(res, 401, "Unauthorized");
 
-      const doc = await User.findById(uid).select("role").lean();
+      // Outside demo scope — see requireStepUp above. Without this a demo
+      // session could not resolve its own role and would 403 everywhere.
+      const doc = await runWithoutDemo(() =>
+        User.findById(uid).select("role").lean(),
+      );
       const roleKey = doc?.role || req.user?.role || "user";
 
       if (roleHasArea(roleKey, area)) {

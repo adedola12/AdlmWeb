@@ -12,6 +12,9 @@ import { PlaybackSession } from "../models/PlaybackSession.js";
 import { Quiz, QuizAttempt } from "../models/Quiz.js";
 
 function requireAdmin(req, res, next) {
+  // Read-only, placeholder-masked demo sessions (server/middleware/demoMode.js)
+  // may view admin screens; every mutating method is already blocked upstream.
+  if (req.demoMode) return next();
   if (req.user?.role === "admin") return next();
   return res.status(403).json({ error: "Admin only" });
 }

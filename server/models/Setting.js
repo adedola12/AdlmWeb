@@ -48,7 +48,11 @@ const SettingSchema = new mongoose.Schema(
       default: "Adedolapo Quasim · Founder, ADLM Studio",
     },
   },
-  { timestamps: true }
+  // demoTenancy:false — infrastructure, never split per tenant. The auth and
+  // permission layers read this on every request, so scoping it to a demo
+  // tenant would make a demo session resolve nothing and lock itself out.
+  // See server/models/demoTenancy.js.
+  { timestamps: true, demoTenancy: false }
 );
 
 export const Setting = mongoose.model("Setting", SettingSchema);

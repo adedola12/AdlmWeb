@@ -4,12 +4,15 @@ import { Setting } from "../models/Setting.js";
 import { User } from "../models/User.js";
 
 function requireAdminOrMiniAdmin(req, res, next) {
+  // See server/middleware/demoMode.js — read-only, masked demo sessions view only.
+  if (req.demoMode) return next();
   const role = req.user?.role;
   if (role === "admin" || role === "mini_admin") return next();
   return res.status(403).json({ error: "Admin or Mini-Admin only" });
 }
 
 function requireAdminOnly(req, res, next) {
+  if (req.demoMode) return next();
   const role = req.user?.role;
   if (role === "admin") return next();
   return res.status(403).json({ error: "Admin only" });

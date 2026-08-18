@@ -1,3 +1,6 @@
+// MUST be first: registers the demo-tenancy plugin before any model is
+// compiled. See server/models/demoTenancy.js.
+import "./models/tenancy.bootstrap.js";
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
@@ -14,6 +17,7 @@ import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
 import { ensureRolesSeeded } from "./util/rbac.js";
+import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
 
@@ -28,6 +32,7 @@ import materialConstantsRoutes from "./routes/materialConstants.js";
 import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import adminRoutes from "./routes/admin.js";
+import { demoModeGuard } from "./middleware/demoMode.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
 import adminCourses from "./routes/adminCourses.js";
 import adminCourseOps from "./routes/admin.courseOps.js";
@@ -319,6 +324,12 @@ app.get("/settings/force-reinstall", async (_req, res) => {
 /* =========================
    ✅ ADMIN ROUTES
    ========================= */
+// MUST stay ahead of every /admin router. Demo roles (designers, external
+// collaborators) are forced read-only and their responses are rewritten with
+// placeholder data here; the per-area gates downstream only admit them because
+// this has already run. See server/middleware/demoMode.js.
+app.use("/admin", demoModeGuard);
+
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes);
 
@@ -515,6 +526,10 @@ export function bootstrap() {
 
   _readyPromise = (async () => {
     validateEnv();
+    // Fail loudly if any model dodged the demo-tenancy plugin. An untenanted
+    // model would serve REAL rows to a demo session, silently — better to
+    // refuse to boot than to leak. Deliberately NOT caught below.
+    assertTenancyApplied();
     await connectDB(process.env.MONGO_URI);
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission

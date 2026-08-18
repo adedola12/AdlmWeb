@@ -15,7 +15,7 @@ const router = express.Router();
 
 router.use(requireAuth, requireAdmin);
 
-const RESERVED_KEYS = new Set(["admin", "mini_admin", "user"]);
+const RESERVED_KEYS = new Set(["admin", "mini_admin", "user", "designer"]);
 
 function slugifyKey(name) {
   return String(name || "")
@@ -30,9 +30,13 @@ function serializeRole(r) {
   return {
     key: r.key,
     name: r.name,
-    permissions: r.isSuperAdmin ? [...ALL_AREA_KEYS] : r.permissions || [],
+    // A demo role's reach is the whole admin area (read-only, masked), so it
+    // serializes like the super-admin rather than from a permission matrix.
+    permissions:
+      r.isSuperAdmin || r.demoMode ? [...ALL_AREA_KEYS] : r.permissions || [],
     system: !!r.system,
     isSuperAdmin: !!r.isSuperAdmin,
+    demoMode: !!r.demoMode,
   };
 }
 
@@ -72,12 +76,16 @@ router.post("/", async (req, res) => {
     }
 
     const permissions = sanitizePermissions(req.body?.permissions);
+    // A demo role ignores the permission matrix entirely — it is defined by
+    // being read-only and masked, not by which areas were ticked.
+    const demoMode = req.body?.demoMode === true;
     const role = await Role.create({
       key,
       name,
-      permissions,
+      permissions: demoMode ? [] : permissions,
       system: false,
       isSuperAdmin: false,
+      demoMode,
     });
     await refreshRoleCache();
     res.status(201).json({ role: { ...serializeRole(role), userCount: 0 } });
@@ -104,7 +112,10 @@ router.patch("/:key", async (req, res) => {
     if (!role.system && typeof req.body?.name === "string" && req.body.name.trim()) {
       role.name = req.body.name.trim();
     }
-    if (Array.isArray(req.body?.permissions)) {
+    // Permissions are meaningless on a demo role, and the demoMode flag itself
+    // is immutable: flipping it off would turn every existing holder's session
+    // into a live-data admin session without anyone re-granting anything.
+    if (!role.demoMode && Array.isArray(req.body?.permissions)) {
       role.permissions = sanitizePermissions(req.body.permissions);
     }
     await role.save();
