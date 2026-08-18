@@ -4923,19 +4923,12 @@ export default function ProjectsGeneric() {
     }
   }
 
-  async function exportElementalBoQFromBackend(
-    buildingType = "bungalow",
-    foundationType,
-    format = "elemental",
-  ) {
-    if (!selectedId) return;
-
-    const normalizedBuilding = buildingType === "multistorey" ? "multistorey" : "bungalow";
+  // Fetch an .xlsx from the export API and save it. Shared by every workbook
+  // the backend builds, so they all get the same content-type guard (an HTML
+  // error page saved as .xlsx is the one failure users cannot diagnose) and
+  // the same filename handling.
+  async function downloadWorkbook(path, fallbackName, failureMessage) {
     const base = API_BASE || window.location.origin;
-    const qs = new URLSearchParams({ building: normalizedBuilding });
-    if (foundationType) qs.set("foundation", String(foundationType));
-    if (format && format !== "elemental") qs.set("format", String(format));
-    const path = `/projectsboq/${toolNorm}/${selectedId}/export/boq?${qs.toString()}`;
     const absUrl = new URL(path, base).toString();
 
     const res = await fetch(absUrl, {
@@ -4949,13 +4942,18 @@ export default function ProjectsGeneric() {
     });
 
     if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(msg || "Failed to export BoQ");
+      // The API answers errors as JSON — surface the message, not the envelope.
+      const raw = await res.text();
+      let msg = raw;
+      try {
+        msg = JSON.parse(raw)?.error || raw;
+      } catch {
+        /* not JSON — use the body as-is */
+      }
+      throw new Error(msg || failureMessage);
     }
 
     const ct = String(res.headers.get("content-type") || "").toLowerCase();
-
-    // If we accidentally got HTML/JSON, don't download it as .xlsx
     const looksExcel =
       ct.includes("spreadsheetml.sheet") ||
       ct.includes("application/octet-stream");
@@ -4967,10 +4965,10 @@ export default function ProjectsGeneric() {
     }
 
     const blob = await res.blob();
-    const cd = res.headers.get("content-disposition");
-    const formatLabel = format === "trade" ? "Trade" : "Elemental";
-    const fallbackName = `${sanitizeFilename(sel?.name || "Project")} - ${formatLabel} BOQ.xlsx`;
-    const filename = filenameFromDisposition(cd, fallbackName);
+    const filename = filenameFromDisposition(
+      res.headers.get("content-disposition"),
+      fallbackName,
+    );
 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -4979,6 +4977,43 @@ export default function ProjectsGeneric() {
     a.click();
     a.remove();
     URL.revokeObjectURL(a.href);
+  }
+
+  async function exportElementalBoQFromBackend(
+    buildingType = "bungalow",
+    foundationType,
+    format = "elemental",
+  ) {
+    if (!selectedId) return;
+
+    const normalizedBuilding = buildingType === "multistorey" ? "multistorey" : "bungalow";
+    const qs = new URLSearchParams({ building: normalizedBuilding });
+    if (foundationType) qs.set("foundation", String(foundationType));
+    if (format && format !== "elemental") qs.set("format", String(format));
+
+    const formatLabel = format === "trade" ? "Trade" : "Elemental";
+    await downloadWorkbook(
+      `/projectsboq/${toolNorm}/${selectedId}/export/boq?${qs.toString()}`,
+      `${sanitizeFilename(sel?.name || "Project")} - ${formatLabel} BOQ.xlsx`,
+      "Failed to export BoQ",
+    );
+  }
+
+  // The bill exactly as it is held here — its own sections, subtitles and
+  // totals — with the budget beside it: material, labour and plant on separate
+  // schedules, a schedule of current material prices and a material summary.
+  // This is the export an Excel-imported bill needs; the elemental/trade ones
+  // re-cut the bill against a mapping built for plugin takeoffs.
+  async function exportBillBudgetFromBackend(groupBy = "category") {
+    if (!selectedId) return;
+    const qs = new URLSearchParams();
+    if (groupBy === "trade") qs.set("groupBy", "trade");
+    const query = qs.toString();
+    await downloadWorkbook(
+      `/projectsboq/${toolNorm}/${selectedId}/export/bill-budget${query ? `?${query}` : ""}`,
+      `${sanitizeFilename(sel?.name || "Project")} - Bill & Budget.xlsx`,
+      "Failed to export the bill & budget",
+    );
   }
   React.useEffect(() => {
     load({ keepSelection: true });
@@ -5493,6 +5528,14 @@ export default function ProjectsGeneric() {
                 onExportGenericTradeBoQ={() => {
                   setExportOpen(false);
                   exportGenericBoQ("trade");
+                }}
+                onExportBillBudget={async (groupBy) => {
+                  setExportOpen(false);
+                  try {
+                    await exportBillBudgetFromBackend(groupBy);
+                  } catch (e) {
+                    setErr(e?.message || "Failed to export the bill & budget");
+                  }
                 }}
                 onExportElementalBoQ={async (buildingType, foundationType, format) => {
                   setExportOpen(false);

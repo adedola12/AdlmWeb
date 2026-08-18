@@ -364,16 +364,36 @@ function importError(message) {
 
 // ── sheet classification ────────────────────────────────────────────────────
 
-const SKIP_SHEET_RE = /cover|summary|milestone|read ?me|instruction|note/i;
-const SCHEDULE_SHEET_RE = /material|labour|labor/i;
+// Roll-up / reference sheets. Their numbers are already counted on the pages
+// they collect, so importing them would double the bill.
+const SKIP_SHEET_RE = /cover|summary|milestone|read ?me|instruction|note|collection|prices?\b/i;
+// Resource build-up sheets (the budget), not measured work.
+const SCHEDULE_SHEET_RE = /material|labour|labor|plant|equipment/i;
+
+// Sheets that carry measured work in a QS's own workbook — a real bill really
+// does measure preliminaries on a PRELIMINARIES page — but that in OUR export
+// (see util/billBudgetExporter.js) merely restate arrays the project already
+// holds outside items[]. Re-importing those would count them twice, so they
+// are skipped in a workbook we generated, and only in one.
+const ADLM_EXPORT_MARKER = "adlm-bill-budget";
+const ADLM_RESTATED_SHEET_RE = /preliminar|provisional|variation/i;
+
+function isAdlmExport(workbook) {
+  const meta = [workbook?.keywords, workbook?.category, workbook?.subject]
+    .map((v) => String(v || "").toLowerCase())
+    .join(" ");
+  return meta.includes(ADLM_EXPORT_MARKER);
+}
 
 function classifySheets(workbook) {
   const bills = [];
   const schedules = [];
+  const restatedSkip = isAdlmExport(workbook);
   for (const ws of workbook.worksheets || []) {
     if (ws.state && ws.state !== "visible") continue; // hidden/veryHidden
     const name = String(ws.name || "");
     if (SKIP_SHEET_RE.test(name)) continue;
+    if (restatedSkip && ADLM_RESTATED_SHEET_RE.test(name)) continue;
     if (SCHEDULE_SHEET_RE.test(name)) {
       const header = findHeader(ws, scheduleRoleFor);
       if (header) schedules.push({ ws, header });
