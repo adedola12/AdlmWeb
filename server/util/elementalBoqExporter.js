@@ -18,6 +18,8 @@
 //     line in the General Summary.
 
 import ExcelJS from "exceljs";
+
+import { ADLM_EXPORT_COVER_NOTE, stampAdlmWorkbook } from "./adlmWorkbook.js";
 import dayjs from "dayjs";
 import fs from "fs";
 import path from "path";
@@ -1200,6 +1202,14 @@ function writeCoverSheet(workbook, {
     row.getCell(3).font = { size: 9, color: { argb: "FF6B7280" } };
     ws.mergeCells(row.number, 3, row.number, 6);
   }
+
+  // The visible half of the export stamp (see util/adlmWorkbook.js). An
+  // exported bill is a report: the Excel importer refuses it rather than let a
+  // download become a duplicate project.
+  gap(1);
+  const stamp = ws.addRow([null, ADLM_EXPORT_COVER_NOTE]);
+  ws.mergeCells(stamp.number, 2, stamp.number, 6);
+  stamp.getCell(2).font = { size: 8, color: { argb: "FF9CA3AF" } };
 }
 
 function writeUnmappedSheet(workbook, projectItems, matchedSet) {
@@ -1830,6 +1840,7 @@ export async function exportElementalBoQ({
   const ft = bt === "multistorey" ? normalizeFoundationType(foundationType) : "pad";
 
   const workbook = new ExcelJS.Workbook();
+  stampAdlmWorkbook(workbook);
   workbook.calcProperties.fullCalcOnLoad = true;
 
   writeCoverSheet(workbook, {

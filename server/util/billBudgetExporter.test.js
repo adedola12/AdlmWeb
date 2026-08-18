@@ -209,7 +209,7 @@ test("the schedule of current prices drives the material summary", async () => {
   assert.equal(valueAt(wb, "Material Summary", `F${total}`), sumOf("Material"));
 });
 
-test("survives the round trip back through the importer", async () => {
+test("is refused by the importer, so a download cannot become a second project", async () => {
   const { out } = await build({
     provisionalSums: [{ description: "Borehole", amount: 2_500_000 }],
     variations: [{ reference: "VO-01", description: "Extra window", qty: 4, unit: "no", rate: 180_000 }],
@@ -217,33 +217,35 @@ test("survives the round trip back through the importer", async () => {
     preliminaryPercent: 5,
   });
 
-  const re = await parseBoqWorkbook(out.buffer);
+  await assert.rejects(
+    () => parseBoqWorkbook(out.buffer),
+    (err) => {
+      assert.equal(err.code, "ADLM_EXPORT_NOT_IMPORTABLE");
+      assert.equal(err.statusCode, 400);
+      // The message has to say where an update actually starts.
+      assert.match(err.message, /re-measure in the source model/i);
+      return true;
+    },
+  );
+});
 
-  // The bill comes back line for line, section for section, subtitle for
-  // subtitle — and preliminaries / provisional sums / variations do NOT come
-  // back as measured lines, because the project already holds them.
-  assert.equal(re.items.length, ITEMS.length);
-  assert.deepEqual(re.categories, ["Substructure", "Frame"]);
-  assert.equal(
-    re.items.reduce((a, i) => a + i.qty * i.rate, 0),
-    MEASURED,
-  );
-  assert.deepEqual(
-    re.items.map((i) => i.takeoffLine),
-    ITEMS.map((i) => i.takeoffLine || ""),
-  );
+test("is still refused when the document properties have been stripped", async () => {
+  const { out } = await build();
 
-  // The build-up comes back whole, with its material / labour / plant split
-  // and its overhead and profit intact.
-  assert.equal(re.budgetItems.length, BUDGET.length);
-  assert.equal(
-    re.budgetItems.reduce((a, b) => a + b.qty * b.rate, 0),
-    BUDGET.reduce((a, b) => a + b.qty * b.rate, 0),
+  // A conversion (Sheets, a converter, some export pipelines) can drop
+  // docProps entirely. The visible cover stamp is the second line of defence.
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(out.buffer);
+  wb.keywords = "";
+  wb.category = "";
+  wb.subject = "";
+  wb.creator = "Someone Else";
+  const stripped = await wb.xlsx.writeBuffer();
+
+  await assert.rejects(
+    () => parseBoqWorkbook(Buffer.from(stripped)),
+    (err) => err.code === "ADLM_EXPORT_NOT_IMPORTABLE",
   );
-  const plant = re.budgetItems.find((b) => b.description === "Concrete mixer hire");
-  assert.equal(plant.componentKind, "Plant");
-  assert.equal(plant.overheadPercent, 8);
-  assert.equal(plant.profitPercent, 12);
 });
 
 test("exports a bill that has no budget behind it yet", async () => {
