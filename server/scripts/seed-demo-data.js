@@ -37,10 +37,10 @@ const COLLECTIONS = [
   "Invoice",
   "Proposal",
   "SupportTicket",
-  "Changelog",
-  "Showcase",
+  "ChangelogProduct",
+  "Testimonial",
   "Freebie",
-  "Learn",
+  "FreeVideo",
   "Coupon",
   "Lead",
 ];
@@ -129,8 +129,6 @@ async function wipe(dryRun) {
   for (const name of COLLECTIONS) {
     const Model = mongoose.models[name];
     if (!Model) continue;
-    // Inside the demo tenant, so this can only ever match demo rows — an empty
-    // filter here is scoped by the plugin, never a full-collection delete.
     // The filter is EXPLICIT rather than left to the tenancy plugin. This is a
     // destructive operation against production, and nothing destructive should
     // depend on ambient context being intact: if the scope were ever lost, an
