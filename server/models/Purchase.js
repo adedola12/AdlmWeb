@@ -136,6 +136,35 @@ const PurchaseSchema = new mongoose.Schema(
     paystackRef: { type: String, trim: true },
     paid: { type: Boolean, default: false },
 
+    // How the buyer chose to settle. Recorded because the three routes need
+    // different handling downstream: a card purchase is verified by Paystack,
+    // a transfer is verified by a human against the receipt below, and an
+    // invoice request is not a payment at all yet.
+    paymentMethod: {
+      type: String,
+      enum: ["card", "transfer", "invoice"],
+      default: "card",
+      index: true,
+    },
+
+    // Proof of a bank transfer, uploaded by the buyer.
+    //
+    // Before this, a buyer who paid by transfer was asked to send the receipt
+    // over WhatsApp — which meant the evidence for a purchase lived in a
+    // personal chat thread, could not be found from the order, and was lost
+    // when a phone changed. It belongs on the purchase.
+    paymentProof: {
+      url: { type: String, trim: true, default: "" },
+      publicId: { type: String, trim: true, default: "" },
+      filename: { type: String, trim: true, default: "" },
+      bytes: { type: Number, default: 0 },
+      uploadedAt: { type: Date, default: null },
+    },
+
+    // Set once the "a purchase needs verifying" alert has gone out, so a
+    // retry, a second receipt upload or a restart cannot send it twice.
+    adminNotifiedAt: { type: Date, default: null },
+
     // Buyer ticked "auto-renew" at checkout — applyEntitlements copies the
     // flag onto the granted entitlements once the purchase is paid.
     autoRenewRequested: { type: Boolean, default: false },

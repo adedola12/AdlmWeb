@@ -86,3 +86,40 @@
   max-width: 76pt;
   line-height: 1.3;
 }
+
+/* Checkout: the receipt upload and the status line. Neither exists in his
+ * build — his form posts nowhere and proof of a transfer went over WhatsApp. */
+.ds .chk-receipt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.ds .chk-receipt label {
+  cursor: pointer;
+  flex: none;
+}
+
+.ds .chk-msg {
+  margin-top: 14px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.ds .chk-msg.is-ok {
+  background: color-mix(in srgb, var(--action) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--action) 34%, transparent);
+  color: var(--ink);
+}
+
+.ds .chk-msg.is-err {
+  background: color-mix(in srgb, #e5484d 12%, transparent);
+  border: 1px solid color-mix(in srgb, #e5484d 38%, transparent);
+  color: var(--ink);
+}

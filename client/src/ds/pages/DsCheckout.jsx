@@ -3,8 +3,10 @@
 // Re-run the script to pick up his changes; hand edits here are lost.
 import React from "react";
 import { Link } from "react-router-dom";
+import DsCheckoutWire from "../DsCheckoutWire.jsx";
 
 export default function DsCheckout() {
+  const DsCheckoutSlot = <DsCheckoutWire />;
   return (
     <>
       <section className="sec" style={{ paddingTop: "150px" }}>
@@ -79,169 +81,7 @@ export default function DsCheckout() {
               <p className="ds-sub">
                 Used for your invoice and licence records.
               </p>
-              {" "}
-              <form onsubmit="return false">
-                {" "}
-                <div className="ds-field">
-                  <label htmlFor="co">
-                    Company or practice
-                  </label>
-                  <input id="co" type="text" autoComplete="organization" />
-                </div>
-                {" "}
-                <div className="two-up">
-                  {" "}
-                  <div className="ds-field">
-                    <label htmlFor="ci">
-                      City
-                    </label>
-                    <input id="ci" type="text" autoComplete="address-level2" />
-                  </div>
-                  {" "}
-                  <div className="ds-field">
-                    <label htmlFor="cn">
-                      Country
-                    </label>
-                    {" "}
-                    <select id="cn">
-                      <option>
-                        Nigeria
-                      </option>
-                      <option>
-                        Ghana
-                      </option>
-                      <option>
-                        Kenya
-                      </option>
-                      {" "}
-                      <option>
-                        United Kingdom
-                      </option>
-                      <option>
-                        Other
-                      </option>
-                    </select>
-                  </div>
-                  {" "}
-                </div>
-                {" "}
-                <div className="ds-field">
-                  <label htmlFor="tx">
-                    Tax ID (optional)
-                  </label>
-                  <input id="tx" type="text" />
-                  {" "}
-                  <p className="hint">
-                    Added to your invoice if supplied.
-                  </p>
-                </div>
-                {" "}
-                <h3 style={{ marginTop: "28px" }}>
-                  Pay with
-                </h3>
-                {" "}
-                <p className="ds-sub">
-                  Choose how you'd like to settle this.
-                </p>
-                {" "}
-                <div className="toggle2" id="pay-toggle" role="group" aria-label="Payment method">
-                  {" "}
-                  <button type="button" className="on" data-pay="card">
-                    Card · Paystack
-                  </button>
-                  {" "}
-                  <button type="button" data-pay="transfer">
-                    Bank transfer
-                  </button>
-                  {" "}
-                  <button type="button" data-pay="invoice">
-                    Request invoice
-                  </button>
-                  {" "}
-                </div>
-                {" "}
-                <div className="paypane" data-pane="card">
-                  {" "}
-                  <p className="small">
-                    You'll be handed to Paystack to enter your card details, then returned here. Your licences activate the moment the payment clears.
-                  </p>
-                  {" "}
-                </div>
-                {" "}
-                <div className="paypane" data-pane="transfer" hidden={true}>
-                  {" "}
-                  <div className="bankbox">
-                    {" "}
-                    <div className="bankrow">
-                      <span>
-                        Bank
-                      </span>
-                      <b>
-                        Guaranty Trust Bank
-                      </b>
-                    </div>
-                    {" "}
-                    <div className="bankrow">
-                      <span>
-                        Account name
-                      </span>
-                      <b>
-                        ADLM Studio Ltd
-                      </b>
-                    </div>
-                    {" "}
-                    <div className="bankrow">
-                      <span>
-                        Account number
-                      </span>
-                      <b>
-                        0123456789
-                      </b>
-                    </div>
-                    {" "}
-                    <div className="bankrow">
-                      <span>
-                        Reference
-                      </span>
-                      <b id="pay-ref">
-                        ADLM-2026-0000
-                      </b>
-                    </div>
-                    {" "}
-                    <div className="bankrow">
-                      <span>
-                        Amount
-                      </span>
-                      <b data-total="">
-                        ₦207,475
-                      </b>
-                    </div>
-                    {" "}
-                  </div>
-                  {" "}
-                  <p className="small">
-                    Transfer the exact amount and quote the reference. Licences are activated once the transfer lands — usually the same working day.
-                  </p>
-                  {" "}
-                </div>
-                {" "}
-                <div className="paypane" data-pane="invoice" hidden={true}>
-                  {" "}
-                  <p className="small">
-                    We'll email a proforma invoice to your billing contact, payable by transfer within 14 days. This is usually the easier route for a firm buying several seats, and it ends with exactly the same licences.
-                  </p>
-                  {" "}
-                </div>
-                {" "}
-                <Link to="/checkout/thanks" data-ds-page="thanks" className="ds-btn btn-p btn-full" style={{ marginTop: "22px" }} id="pay-go">
-                  Pay{" "}
-                  <span data-total="">
-                    ₦207,475
-                  </span>
-                </Link>
-                {" "}
-              </form>
-              {" "}
+              {" "}{DsCheckoutSlot}{" "}
             </div>
             {" "}
             <div className="panel rise">

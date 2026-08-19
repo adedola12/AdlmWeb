@@ -13,6 +13,9 @@ import {
   computeRecurring,
 } from "../util/pricing.js";
 import { saveCardAuthorization } from "../util/paymentMethods.js";
+import multer from "multer";
+import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
+import { notifyAdminOfPurchase } from "../util/purchaseAlert.js";
 
 const router = express.Router();
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
@@ -298,6 +301,9 @@ router.post("/cart", requireAuth, async (req, res) => {
       storageAddons,
       status: "pending",
       autoRenewRequested,
+      paymentMethod: PAYMENT_METHODS.has(String(req.body?.paymentMethod))
+        ? String(req.body.paymentMethod)
+        : "card",
 
       coupon: couponRes.coupon
         ? {
@@ -311,6 +317,21 @@ router.post("/cart", requireAuth, async (req, res) => {
           }
         : undefined,
     });
+
+    // Transfers and invoice requests need a human before the licence
+    // activates, so tell the team now rather than waiting for someone to open
+    // the admin list. Deliberately not awaited into the response: the buyer
+    // should not wait on our SMTP, and a failed alert must not fail the order.
+    if (purchase.paymentMethod !== "card") {
+      notifyAdminOfPurchase(purchase, { reason: "new" }).then((sent) => {
+        if (sent) {
+          Purchase.updateOne(
+            { _id: purchase._id },
+            { $set: { adminNotifiedAt: new Date() } },
+          ).catch(() => {});
+        }
+      });
+    }
 
     return res.json({
       ok: true,
@@ -520,6 +541,93 @@ router.get("/bank-details", requireAuth, (_req, res) => {
     accountNumber: process.env.BANK_ACCOUNT_NUMBER || "1634998770",
     accountName: process.env.BANK_ACCOUNT_NAME || "ADLM Studio",
     bankName: process.env.BANK_NAME || "Access Bank",
+  });
+});
+
+// Which methods a buyer may choose. Kept beside the route rather than only in
+// the schema so an unknown value is rejected at the door.
+const PAYMENT_METHODS = new Set(["card", "transfer", "invoice"]);
+
+// Receipt upload for a bank transfer.
+//
+// One file, images or PDF, 8MB. Memory storage so the buffer goes straight to
+// Cloudinary without touching disk — the same shape support.js uses for
+// screenshots.
+const uploadReceipt = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(png|jpe?g|webp|heic|heif)$|^application\/pdf$/i.test(file.mimetype);
+    cb(ok ? null : new Error("Upload a photo or a PDF of the receipt."), ok);
+  },
+}).single("receipt");
+
+/**
+ * POST /purchase/:id/receipt
+ *
+ * Replaces "send the receipt to us on WhatsApp". The proof now lives on the
+ * order, so whoever approves it can see the evidence without leaving the
+ * admin, and it is still there when a phone is replaced.
+ */
+router.post("/:id/receipt", requireAuth, (req, res) => {
+  uploadReceipt(req, res, async (err) => {
+    if (err) {
+      const msg =
+        err.code === "LIMIT_FILE_SIZE"
+          ? "That file is larger than 8MB — please upload a smaller photo."
+          : err.message || "That file could not be read.";
+      return res.status(400).json({ error: msg });
+    }
+    if (!req.file) return res.status(400).json({ error: "No receipt was attached." });
+
+    try {
+      const p = await Purchase.findById(req.params.id);
+      if (!p) return res.status(404).json({ error: "Purchase not found" });
+      if (String(p.userId) !== String(req.user._id)) {
+        return res.status(403).json({ error: "Not allowed" });
+      }
+      // An approved order is settled; a new receipt against it is either a
+      // mistake or an attempt to overwrite the evidence for a decision that
+      // has already been made.
+      if (p.status !== "pending") {
+        return res.status(400).json({ error: "This purchase has already been decided." });
+      }
+
+      const isPdf = /pdf$/i.test(req.file.mimetype);
+      const up = await uploadBufferToCloudinary(req.file.buffer, {
+        folder: process.env.CLOUDINARY_RECEIPTS_FOLDER || "adlm/receipts",
+        resourceType: isPdf ? "raw" : "image",
+      });
+
+      p.paymentProof = {
+        url: up.secure_url,
+        publicId: up.public_id,
+        filename: req.file.originalname || "",
+        bytes: req.file.size || 0,
+        uploadedAt: new Date(),
+      };
+      // Uploading the receipt IS the buyer saying they have paid.
+      if (!p.userConfirmedAt) p.userConfirmedAt = new Date();
+      if (p.paymentMethod === "card") p.paymentMethod = "transfer";
+      await p.save();
+
+      const sent = await notifyAdminOfPurchase(p, { reason: "receipt" });
+      if (sent) {
+        p.adminNotifiedAt = new Date();
+        await p.save();
+      }
+
+      return res.json({
+        ok: true,
+        receiptUrl: up.secure_url,
+        message: "Receipt received. We will confirm your licence shortly.",
+      });
+    } catch (e) {
+      console.error("[purchase] receipt upload failed:", e?.message || e);
+      return res
+        .status(500)
+        .json({ error: "We could not save that receipt — please try again." });
+    }
   });
 });
 
