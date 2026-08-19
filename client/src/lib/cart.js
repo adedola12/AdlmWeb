@@ -96,3 +96,31 @@ export function addProductToCart(p, months = 1) {
 
   return totalQty;
 }
+
+/**
+ * Everything about an order that is not a line item: which licence type it is,
+ * the organisation it is for, the currency it was priced in, and any on-site
+ * training class chosen.
+ *
+ * Purchase.jsx has carried a private copy of these two since before the
+ * quotation builder existed. They live here now because a second writer —
+ * "Buy these now" — has to agree with it exactly, and two private copies of
+ * the same localStorage key is how they stop agreeing.
+ *
+ * Callers merge rather than replace: the quotation sets currency and training,
+ * the purchase page sets licenseType and org, and neither should erase the
+ * other's fields.
+ */
+export function readCartMeta() {
+  try {
+    const m = JSON.parse(localStorage.getItem("cartMeta") || "{}");
+    return m && typeof m === "object" ? m : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeCartMeta(meta) {
+  localStorage.setItem("cartMeta", JSON.stringify(meta || {}));
+  return meta;
+}

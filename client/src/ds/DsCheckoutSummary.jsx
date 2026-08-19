@@ -11,7 +11,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config.js";
-import { readCartItems } from "../lib/cart.js";
+import { readCartItems, readCartMeta } from "../lib/cart.js";
+import { termTotalNGN, unitPrices } from "../lib/termPricing.js";
 
 const fmt = (n, currency = "NGN") =>
   new Intl.NumberFormat(currency === "USD" ? "en-US" : "en-NG", {
@@ -23,9 +24,25 @@ const fmt = (n, currency = "NGN") =>
 export default function DsCheckoutSummary() {
   const [items, setItems] = React.useState([]);
   const [products, setProducts] = React.useState(null);
+  // On-site training is not a catalogue product, so it is not a cart line —
+  // it travels on cartMeta. It still has to appear here, or the panel quietly
+  // omits the largest figure on the order.
+  const [training, setTraining] = React.useState(null);
 
   React.useEffect(() => {
     setItems(readCartItems());
+    const chosen = readCartMeta()?.training;
+    if (chosen?.locationId) {
+      fetch(`${API_BASE}/training-locations`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          const loc = (d?.locations || []).find(
+            (l) => String(l._id) === String(chosen.locationId),
+          );
+          if (loc) setTraining({ loc, bimInstall: !!chosen.bimInstall });
+        })
+        .catch(() => {});
+    }
     let alive = true;
     fetch(`${API_BASE}/products`)
       .then((r) => (r.ok ? r.json() : null))
@@ -47,21 +64,27 @@ export default function DsCheckoutSummary() {
         const p = products?.[key] || null;
         const seats = Math.max(1, parseInt(it.seats ?? 1, 10) || 1);
         const periods = Math.max(1, parseInt(it.periods ?? it.qty ?? 1, 10) || 1);
-        // Yearly is the price the builder quotes and the one the cart is
-        // filled at; a product with no yearly figure falls back to monthly
-        // rather than rendering a zero.
-        const yearly = Number(p?.price?.yearlyNGN) || 0;
-        const monthly = Number(p?.price?.monthlyNGN) || 0;
-        const unit = yearly || monthly;
+
+        // termTotalNGN, not price x periods.
+        //
+        // A monthly-billed product is priced in tiers — six months has its own
+        // figure, twelve months uses the yearly one — and the yearly price IS
+        // twelve months. Multiplying it by twelve periods put QUIV at
+        // ₦12,000,000 on this panel. This is the same helper the purchase page
+        // uses and it mirrors the server's computeRecurring, so the three
+        // cannot disagree.
+        const term = p ? termTotalNGN(p, periods) : 0;
+        const install = p && it.firstTime ? Number(unitPrices(p).install) || 0 : 0;
+
         return {
           key,
           name: p?.name || key,
           seats,
           periods,
-          unit,
-          amount: unit * seats * periods,
-          // Unknown until the catalogue answers — shown as such rather than
-          // as ₦0, which reads like a free licence.
+          amount: (term + install) * seats,
+          recurring: term * seats,
+          // Unknown until the catalogue answers — shown as such rather than as
+          // ₦0, which reads like a free licence.
           known: !!p,
         };
       }),
@@ -69,7 +92,10 @@ export default function DsCheckoutSummary() {
   );
 
   const seatTotal = rows.reduce((n, r) => n + r.seats, 0);
-  const renewal = rows.reduce((n, r) => n + (r.known ? r.unit * r.seats : 0), 0);
+  const renewal = rows.reduce((n, r) => n + (r.known ? r.recurring : 0), 0);
+  const yearly = items.every(
+    (it) => Math.max(1, parseInt(it.periods ?? it.qty ?? 1, 10) || 1) >= 12,
+  );
   const priced = rows.every((r) => r.known);
 
   if (!items.length) {
@@ -94,7 +120,8 @@ export default function DsCheckoutSummary() {
     <>
       <p className="sub">
         {seatTotal} seat{seatTotal === 1 ? "" : "s"} across {rows.length} product
-        {rows.length === 1 ? "" : "s"}.
+        {rows.length === 1 ? "" : "s"}
+        {training ? ", with on-site training" : ""}.
       </p>
 
       <div>
@@ -107,12 +134,30 @@ export default function DsCheckoutSummary() {
             <b>{r.known ? fmt(r.amount) : "—"}</b>
           </div>
         ))}
+
+        {training && (
+          <>
+            <div className="sumrow">
+              <span>
+                On-site training
+                <i className="qt-q"> · {training.loc.city}</i>
+              </span>
+              <b>{fmt(training.loc.trainingCostNGN)}</b>
+            </div>
+            {training.bimInstall && Number(training.loc.bimInstallCostNGN) > 0 && (
+              <div className="sumrow">
+                <span>CAD set-up on site</span>
+                <b>{fmt(training.loc.bimInstallCostNGN)}</b>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <p className="small" style={{ marginTop: "16px" }}>
         {priced ? (
           <>
-            Then {fmt(renewal)} yearly until cancelled.{" "}
+            Then {fmt(renewal)} {yearly ? "yearly" : "monthly"} until cancelled.{" "}
           </>
         ) : (
           <>Prices are confirmed on the next step. </>

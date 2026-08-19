@@ -21,7 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
-import { readCartItems } from "../lib/cart.js";
+import { readCartItems, readCartMeta } from "../lib/cart.js";
 
 const METHODS = [
   { key: "card", label: "Card · Paystack" },
@@ -43,15 +43,25 @@ export default function DsCheckoutWire() {
   // Read on mount rather than frozen into initial state: arriving here from
   // the quotation builder writes the cart immediately before this renders.
   const [items, setItems] = React.useState(() => readCartItems());
+  const [meta, setMeta] = React.useState(() => readCartMeta());
   React.useEffect(() => {
     setItems(readCartItems());
+    setMeta(readCartMeta());
   }, []);
-  const [currency, setCurrency] = React.useState("NGN");
-  const [billing, setBilling] = React.useState({
-    company: "",
-    city: "",
-    country: "Nigeria",
-    taxId: "",
+
+  // The quotation already decided these. Arriving here having priced six
+  // products in dollars and then being charged in naira, or having chosen an
+  // Abuja training class that silently vanished, is exactly the kind of drift
+  // that makes a quotation worthless.
+  const [currency, setCurrency] = React.useState(() => readCartMeta().currency || "NGN");
+  const [billing, setBilling] = React.useState(() => {
+    const m = readCartMeta();
+    return {
+      company: m?.org?.name || "",
+      city: "",
+      country: "Nigeria",
+      taxId: "",
+    };
   });
   const [method, setMethod] = React.useState("card");
 
@@ -80,18 +90,33 @@ export default function DsCheckoutWire() {
       })),
       licenseType: billing.company ? "organization" : "personal",
       organization: billing.company
-        ? { name: billing.company, email: user?.email || "", phone: "" }
+        ? {
+            name: billing.company,
+            email: meta?.org?.email || user?.email || "",
+            phone: meta?.org?.phone || "",
+          }
         : null,
       autoRenew: false,
       paymentMethod: method,
     };
+
+    // On-site training rides along from the quotation. The server only accepts
+    // it on an organization purchase, which is what having a company name
+    // means here.
+    if (payload.licenseType === "organization" && meta?.training?.locationId) {
+      payload.physicalTraining = {
+        requested: true,
+        locationId: meta.training.locationId,
+        bimInstallRequested: !!meta.training.bimInstall,
+      };
+    }
     return apiAuthed("/purchase/cart", {
       token: accessToken,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-  }, [accessToken, billing.company, currency, items, method, user?.email]);
+  }, [accessToken, billing.company, currency, items, meta, method, user?.email]);
 
   const onPay = async () => {
     setMsg(null);

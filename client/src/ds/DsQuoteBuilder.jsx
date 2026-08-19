@@ -25,7 +25,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../config.js";
 import { QRCodeSVG } from "qrcode.react";
-import { readCartItems, writeCartItems } from "../lib/cart.js";
+import { readCartItems, writeCartItems, readCartMeta, writeCartMeta } from "../lib/cart.js";
 import { renderToStaticMarkup } from "react-dom/server";
 const DsQuoteDoc = React.lazy(() => import("./DsQuoteDoc.jsx"));
 
@@ -329,24 +329,61 @@ export default function DsQuoteBuilder() {
   // seats that carries it and the period count stays one.
   const buyThese = React.useCallback(() => {
     const picks = Object.entries(qty).filter(([, n]) => n > 0);
-    if (picks.length) {
-      // Merge rather than overwrite: a cart filled from /products should not
-      // be silently discarded because someone also priced something here.
-      const existing = readCartItems();
-      const byKey = new Map(existing.map((it) => [String(it.productKey), it]));
-      for (const [key, seats] of picks) {
-        byKey.set(key, {
-          ...(byKey.get(key) || {}),
-          productKey: key,
-          qty: 1,
-          seats,
-          firstTime: false,
-        });
-      }
-      writeCartItems([...byKey.values()]);
+    if (!picks.length) return;
+
+    // Yearly is TWELVE periods, not one.
+    //
+    // Every product in the catalogue is billingInterval "monthly", and both
+    // the server and the purchase page price a monthly product in tiers:
+    // periods < 6 is monthly x n, periods === 12 uses the yearly figure. So a
+    // yearly quotation written as periods 1 would be charged as a single
+    // month — QUIV at ₦50,000 against a quotation that says ₦500,000, and a
+    // licence lasting a month instead of a year.
+    const periods = bill === "yearly" ? 12 : 1;
+
+    // Merge rather than overwrite: a cart filled from /products should not be
+    // silently discarded because someone also priced something here.
+    const existing = readCartItems();
+    const byKey = new Map(existing.map((it) => [String(it.productKey), it]));
+    for (const [key, seats] of picks) {
+      byKey.set(key, {
+        ...(byKey.get(key) || {}),
+        productKey: key,
+        qty: periods,
+        periods,
+        seats,
+        // The quotation charges the installation fee on every product that
+        // has one, so the cart has to agree or the totals diverge.
+        firstTime: true,
+      });
     }
-    navigate("/purchase");
-  }, [qty, navigate]);
+    writeCartItems([...byKey.values()]);
+
+    // Everything else the quotation decided, so the payment page does not ask
+    // again. cartMeta already carries licenseType and org for the purchase
+    // page; currency and the on-site training class are added alongside.
+    writeCartMeta({
+      ...readCartMeta(),
+      currency: cur,
+      billing: bill,
+      licenseType: firm.org ? "organization" : "personal",
+      org: firm.org
+        ? { name: firm.org, email: firm.email || "", phone: firm.phone || "" }
+        : { name: "", email: "", phone: "" },
+      training: siteId ? { locationId: siteId, bimInstall } : null,
+    });
+
+    // Straight to payment. The selection IS the cart step — asking someone to
+    // pick the same six products again on the way to paying for them is the
+    // thing this button exists to avoid.
+    //
+    // Resolved from where the builder is running rather than hardcoded, for
+    // the same reason as the QR: while the redesign is staged its checkout
+    // lives at /preview/checkout, and /checkout is not a route yet. On the
+    // real site the working payment page is /purchase.
+    const staged = window.location.pathname.startsWith("/preview/");
+    navigate(staged ? "/preview/checkout" : "/purchase");
+  }, [qty, bill, cur, siteId, bimInstall, firm, navigate]);
 
   // The QR that goes on the signature line. It points at /quote carrying the
   // same selection, so scanning the printed page reopens the quotation with
