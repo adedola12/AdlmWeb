@@ -19,6 +19,8 @@ import { ActivityLog } from "../models/ActivityLog.js";
 import { sendMail } from "../util/mailer.js";
 import { resolveUserGuideUrl } from "../util/userGuide.js";
 import { isGodUser } from "../util/godAccount.js";
+import bcrypt from "bcryptjs";
+import { validatePasswordStrength } from "../util/passwordPolicy.js";
 
 const router = express.Router();
 
@@ -1803,6 +1805,110 @@ router.get(
       email: user?.email || "",
       organizationName: user?.organizationName || "",
       accountType: user?.accountType || "personal",
+    });
+  }),
+);
+
+/**
+ * POST /me/password  { currentPassword?, newPassword }
+ *
+ * Set the password an account signs in to the desktop software with.
+ *
+ * This exists because of a gap that only shows up on the Windows side. QUIV,
+ * HERON, RateGen, Revit MEP, Time Pro and CIVIQ all authenticate through
+ * POST /auth/login with an email and a password. Someone who created their
+ * ADLM account with Google or Microsoft has no password at all, so every one
+ * of those plugins would reject them with "Invalid credentials" — on an
+ * account that is perfectly valid and may well be paid up.
+ *
+ * Two shapes, and the difference matters:
+ *
+ *   * No password yet (a social account). currentPassword is not required,
+ *     because there is nothing to prove — the bearer token already proves who
+ *     they are, and demanding a password they do not have would be a locked
+ *     door with no key.
+ *   * Changing an existing one. currentPassword IS required, so a stolen or
+ *     borrowed session cannot silently take the account over by rewriting the
+ *     credential the desktop apps trust.
+ */
+router.post(
+  "/password",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const newPassword = String(req.body?.newPassword || "");
+    const currentPassword = String(req.body?.currentPassword || "");
+
+    const weak = validatePasswordStrength(newPassword);
+    if (weak) return res.status(400).json({ error: weak, code: "WEAK_PASSWORD" });
+
+    const user = await User.findById(req.user._id).select(
+      "passwordHash email disabled isGod googleId microsoftId",
+    );
+    if (!user) return res.status(404).json({ error: "User missing" });
+    if (user.disabled) {
+      return res.status(403).json({ error: "Account disabled. Please contact support." });
+    }
+
+    const hadPassword = !!user.passwordHash;
+
+    if (hadPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          error: "Enter your current password to change it.",
+          code: "CURRENT_PASSWORD_REQUIRED",
+        });
+      }
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!ok) {
+        return res.status(401).json({ error: "That current password is not right." });
+      }
+      if (currentPassword === newPassword) {
+        return res
+          .status(400)
+          .json({ error: "That is the password you already have." });
+      }
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    // Deliberately NOT revoking existing refresh tokens.
+    //
+    // On a first-time set there is nothing to revoke and signing the person
+    // out of the browser they are standing in would be baffling. On a change,
+    // revoking everywhere is a defensible policy but a different decision from
+    // this one, and doing it silently here would sign out the desktop plugins
+    // mid-session. Worth deciding deliberately rather than as a side effect.
+    return res.json({
+      ok: true,
+      created: !hadPassword,
+      message: hadPassword
+        ? "Password changed. Use it the next time you sign in."
+        : "Password set. You can now sign in to the ADLM desktop software with it.",
+    });
+  }),
+);
+
+/**
+ * GET /me/password/status
+ *
+ * Whether this account can sign in to the desktop software at all, and how it
+ * was created. The website uses it to decide whether to prompt.
+ */
+router.get(
+  "/password/status",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id)
+      .select("passwordHash googleId microsoftId")
+      .lean();
+    if (!user) return res.status(404).json({ error: "User missing" });
+    res.json({
+      hasPassword: !!user.passwordHash,
+      providers: {
+        google: !!user.googleId,
+        microsoft: !!user.microsoftId,
+      },
     });
   }),
 );

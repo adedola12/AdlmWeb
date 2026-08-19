@@ -170,6 +170,12 @@ app.use(
           "https://js.paystack.co",
           "https://checkout.flutterwave.com",
           "https://www.googletagmanager.com",
+          // Sign in with Google, and Microsoft's MSAL. Both are loaded on
+          // demand by components/SocialSignIn.jsx; without them here the
+          // scripts are blocked and the buttons simply never appear, with the
+          // only clue a CSP violation in the console.
+          "https://accounts.google.com",
+          "https://alcdn.msauth.net",
         ],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
@@ -183,8 +189,15 @@ app.use(
           "https://www.google-analytics.com",
           "https://region1.google-analytics.com",
           "https://stats.g.doubleclick.net",
+          // The token endpoints the two sign-in libraries call.
+          "https://accounts.google.com",
+          "https://login.microsoftonline.com",
         ],
         frameSrc: [
+          // Google renders its button and its one-tap prompt in an iframe, and
+          // MSAL's popup flow needs its own frame ancestry.
+          "https://accounts.google.com",
+          "https://login.microsoftonline.com",
           "https://js.paystack.co",
           "https://checkout.flutterwave.com",
           "https://www.googletagmanager.com",

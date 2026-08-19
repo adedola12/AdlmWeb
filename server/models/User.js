@@ -123,7 +123,24 @@ const UserSchema = new mongoose.Schema(
     // drift apart.
     state: { type: String, default: null, trim: true, lowercase: true },
 
+    // Empty for an account created through Google or Microsoft, because
+    // there is no password to hash. That is not a loose end to tidy up: the
+    // desktop plugins sign in through POST /auth/login with an ADLM password,
+    // so a social-only account cannot use QUIV, HERON or any of the others
+    // until the person sets one. See POST /me/password, and the prompt the
+    // website shows them after a social sign-in.
     passwordHash: { type: String, default: "" },
+
+    // Subject claims from the identity providers, NOT emails.
+    //
+    // The provider's `sub` is the stable identifier; an email address can be
+    // changed by its owner and reassigned by a workspace administrator, so
+    // matching on email alone would eventually hand one person's ADLM account
+    // to whoever inherited their address. Email is used only to LINK a social
+    // login to an existing account on first use, and only when the provider
+    // says it has verified it.
+    googleId: { type: String, default: null, index: true, sparse: true },
+    microsoftId: { type: String, default: null, index: true, sparse: true },
 
     // Role key — references a Role.key (see server/models/Role.js). No enum so
     // admins can create custom roles; validated against existing roles on

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { trackEvent } from "../ga";
+import SocialSignIn from "../components/SocialSignIn.jsx";
 import { IconEye, IconEyeOff } from "../components/icons.jsx";
 
 // Password field with a show/hide eye toggle. The toggle is a type="button"
@@ -320,6 +321,11 @@ export default function Login() {
           </button>
         </div>
       </form>
+
+      {/* Google and Microsoft. Renders nothing at all when neither is
+          configured, so an environment without the client ids shows the plain
+          password form rather than a broken "or" divider. */}
+      <SocialSignIn next={next} onError={setErr} />
 
       {/* forgot password panel */}
       {showForgot && (

@@ -27,6 +27,11 @@ import {
 import { getPrivateKey, getKid } from "../util/jwks.js";
 import { isGodUser, isGodEmail } from "../util/godAccount.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
+import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import {
+  verifySocialIdentity,
+  configuredProviders,
+} from "../util/socialIdentity.js";
 
 const router = express.Router();
 
@@ -121,18 +126,8 @@ function activeDevices(entitlement) {
   return (entitlement?.devices || []).filter((device) => !device.revokedAt);
 }
 
-// Password complexity policy — enforced on signup and password reset.
-// Minimum 8 chars, at least one letter and one number.
-function validatePasswordStrength(password) {
-  const pw = String(password || "");
-  if (pw.length < 8) {
-    return "Password must be at least 8 characters.";
-  }
-  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
-    return "Password must contain at least one letter and one number.";
-  }
-  return null;
-}
+// Password complexity lives in util/passwordPolicy.js — see the note there
+// on why it is not defined in each route that sets a password.
 
 // Fingerprint v1→v2 migration: clients sending x-adlm-fp-version >= 2 that
 // don't match any existing device may transparently replace the user's
@@ -1260,5 +1255,149 @@ const _retiredAppLookup = async (req, res) => {
     res.status(500).json({ error: "Lookup failed" });
   }
 };
+
+/**
+ * GET /auth/providers
+ *
+ * Which social buttons can actually work. The page asks before drawing them,
+ * because a "Continue with Microsoft" button that fails on click because no
+ * client id is configured is worse than no button.
+ */
+router.get("/providers", (_req, res) => res.json(configuredProviders()));
+
+/**
+ * POST /auth/social  { provider, credential }
+ *
+ * Sign in, or create an account, from a Google or Microsoft ID token.
+ *
+ * The token is the only input trusted — see util/socialIdentity.js. Anything
+ * else in the body is ignored.
+ *
+ * Matching, in order:
+ *   1. The provider subject we have already stored. This is the durable link.
+ *   2. The verified email, which LINKS the provider to an existing account —
+ *      somebody who signed up with a password and now clicks the Google button
+ *      should land in their own account, not a duplicate.
+ *   3. Otherwise a new account.
+ *
+ * A social account has no password, and the desktop plugins need one, so the
+ * response says so and the website prompts for it.
+ */
+router.post("/social", authLimiter, async (req, res) => {
+  try {
+    await ensureDb();
+
+    const provider = String(req.body?.provider || "").trim().toLowerCase();
+    let identity;
+    try {
+      identity = await verifySocialIdentity(provider, req.body?.credential);
+    } catch (e) {
+      // Deliberately not echoed verbatim to the client beyond a short reason:
+      // the detail is useful to us and to an attacker in equal measure.
+      console.warn("[/auth/social] rejected:", e?.message || e);
+      return res.status(401).json({
+        error: "That sign-in could not be verified. Please try again.",
+      });
+    }
+
+    const field = provider === "google" ? "googleId" : "microsoftId";
+    let user = await User.findOne({ [field]: identity.subject });
+    let created = false;
+
+    if (!user) {
+      user = await User.findOne({ email: identity.email });
+
+      if (user) {
+        // Linking an existing account. Safe only because the provider has
+        // verified the address; socialIdentity.js refuses a token that says
+        // otherwise.
+        user[field] = identity.subject;
+      } else {
+        // A username has to be unique, and the local part of an email often
+        // is not, so fall back to a suffixed one rather than failing the
+        // sign-in on a collision.
+        const base = identity.email.split("@")[0].toLowerCase();
+        let username = base;
+        for (let i = 0; i < 5 && (await User.exists({ username })); i += 1) {
+          username = `${base}${crypto.randomInt(100, 9999)}`;
+        }
+
+        user = new User({
+          email: identity.email,
+          username,
+          // No passwordHash. See the note on that field in models/User.js.
+          passwordHash: "",
+          role: "user",
+          firstName: identity.firstName,
+          lastName: identity.lastName,
+          [field]: identity.subject,
+          entitlements: [],
+        });
+        created = true;
+      }
+    }
+
+    if (user.disabled) {
+      return res
+        .status(403)
+        .json({ error: "Account disabled. Please contact support." });
+    }
+
+    // A God account must never be reachable without the OTP flow, and a social
+    // provider cannot satisfy that. Refuse rather than quietly downgrade the
+    // protection on the one account that most needs it.
+    if (isGodUser(user)) {
+      return res.status(403).json({
+        error: "This account must sign in with its password.",
+        code: "PASSWORD_REQUIRED",
+      });
+    }
+
+    // Fill in a name we did not have. Never overwrite one the person set.
+    if (!user.firstName && identity.firstName) user.firstName = identity.firstName;
+    if (!user.lastName && identity.lastName) user.lastName = identity.lastName;
+
+    await user.save();
+
+    if (created) {
+      try {
+        const { subject, html } = buildWelcomeEmail({
+          firstName: user.firstName,
+          lastName: user.lastName,
+        });
+        await sendMail({ to: user.email, subject, html });
+        user.welcomeEmailSentAt = new Date();
+        await user.save();
+      } catch (mailErr) {
+        console.error("[/auth/social] welcome mail error:", mailErr);
+      }
+    }
+
+    const payload = buildAuthPayload(user);
+    const accessToken = signAccess(payload);
+    const refreshToken = signRefresh({ sub: payload._id });
+
+    await Refresh.create({
+      userId: user._id,
+      token: refreshToken,
+      ua: req.headers["user-agent"] || "",
+      ip: req.ip,
+    });
+
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
+    return res.json({
+      accessToken,
+      user: payload,
+      created,
+      provider,
+      // The website turns this into "set a password so you can sign in to the
+      // desktop apps". It is the whole reason a social user needs one.
+      needsPassword: !user.passwordHash,
+    });
+  } catch (err) {
+    console.error("[/auth/social] error:", err);
+    return res.status(500).json({ error: "Sign-in failed" });
+  }
+});
 
 export default router;
