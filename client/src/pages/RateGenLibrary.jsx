@@ -179,6 +179,15 @@ function LibraryTable({ rows, editable = false, kind = "material", onSave, savin
               <td className="px-4 py-3 text-slate-700">{row.sn ?? "-"}</td>
               <td className="px-4 py-3 font-medium text-slate-900">
                 {row.description || "-"}
+                {/* The estimator's own specification, written in the desktop app.
+                    Sits under the description rather than in its own column: it
+                    is prose of any length, and a column would either truncate it
+                    or wreck the table on the rows that have none. */}
+                {row.note ? (
+                  <p className="mt-1 max-w-prose whitespace-pre-line text-xs font-normal text-slate-500">
+                    {row.note}
+                  </p>
+                ) : null}
               </td>
               <td className="px-4 py-3 text-slate-700">{row.unit || "-"}</td>
               <td className="px-4 py-3 text-slate-700">
@@ -634,7 +643,9 @@ export default function RateGenLibrary() {
       return rows.filter((row) =>
         matchesSearch(
           row,
-          ["description", "unit", "category", "sn"],
+          // note included so a search finds a rate by what it does, not only by
+          // what it is called — the note is often where the useful words are.
+          ["description", "unit", "category", "sn", "note"],
           trimmedSearch,
         ),
       );
