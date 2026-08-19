@@ -58,3 +58,7 @@ adlm-ai-*.json
 # server needs. Already-tracked files are not affected by an ignore rule, but
 # spelling the exception out keeps the next .env.example from being swallowed.
 !.env.example
+
+# Timestamped backups written by the maintenance scripts in server/scripts.
+# Generated data, regenerated on demand — not source.
+server/scripts/*.backup.*.json

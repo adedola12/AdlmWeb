@@ -16,6 +16,7 @@ import { saveCardAuthorization } from "../util/paymentMethods.js";
 import multer from "multer";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { notifyAdminOfPurchase } from "../util/purchaseAlert.js";
+import { sendProformaInvoice } from "../util/proformaInvoice.js";
 
 const router = express.Router();
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
@@ -371,6 +372,17 @@ router.post("/cart", requireAuth, async (req, res) => {
       });
     }
 
+    // "Request invoice" said we would email a proforma invoice to the billing
+    // contact, and nothing sent one. It goes to the billing email the buyer
+    // gave, falling back to the account it was ordered from.
+    let invoiceSentTo = null;
+    if (purchase.paymentMethod === "invoice") {
+      invoiceSentTo = String(
+        purchase.organization?.email || purchase.email || req.user?.email || "",
+      ).trim();
+      if (invoiceSentTo) sendProformaInvoice(purchase, invoiceSentTo);
+    }
+
     return res.json({
       ok: true,
       purchaseId: purchase._id,
@@ -381,7 +393,12 @@ router.post("/cart", requireAuth, async (req, res) => {
       vatAmount,
       vatLabel,
       total: totalWithVat,
+      // Same figure under the name the rest of the app uses for it. The
+      // checkout panel read `totalAmount`, found nothing, and rendered a Pay
+      // button with no amount on it and a bank box with no Amount row.
+      totalAmount: totalWithVat,
       currency,
+      invoiceSentTo,
       coupon: purchase.coupon?.code ? { code: purchase.coupon.code } : null,
       paystack: null,
       message:

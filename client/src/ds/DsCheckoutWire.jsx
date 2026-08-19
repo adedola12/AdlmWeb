@@ -49,6 +49,14 @@ export default function DsCheckoutWire() {
     setMeta(readCartMeta());
   }, []);
 
+  // Default the billing contact to the signed-in address, but leave it
+  // editable: the person buying is often not the person who pays the invoice.
+  React.useEffect(() => {
+    if (user?.email) {
+      setBilling((b) => (b.email ? b : { ...b, email: user.email }));
+    }
+  }, [user?.email]);
+
   // Spot a not-yet-sellable line on arrival, not on the way back from a failed
   // order.
   //
@@ -92,6 +100,7 @@ export default function DsCheckoutWire() {
     const m = readCartMeta();
     return {
       company: m?.org?.name || "",
+      email: m?.org?.email || "",
       city: "",
       country: "Nigeria",
       taxId: "",
@@ -114,7 +123,10 @@ export default function DsCheckoutWire() {
   const [guest, setGuest] = React.useState({ name: "", email: "" });
   const fileRef = React.useRef(null);
 
-  const total = order?.totalAmount ?? null;
+  // The server answers with `total`; `totalAmount` was added alongside it so
+  // both names work. Reading only the latter left the Pay button with no
+  // figure on it and the bank box with no Amount row.
+  const total = order?.totalAmount ?? order?.total ?? null;
 
   // ── create the order ─────────────────────────────────────────────────────
   const createOrder = React.useCallback(async () => {
@@ -134,7 +146,7 @@ export default function DsCheckoutWire() {
       organization: billing.company
         ? {
             name: billing.company,
-            email: meta?.org?.email || user?.email || "",
+            email: billing.email || meta?.org?.email || user?.email || "",
             phone: meta?.org?.phone || "",
           }
         : null,
@@ -158,7 +170,11 @@ export default function DsCheckoutWire() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-  }, [accessToken, billing.company, currency, items, meta, method, user?.email]);
+    // `billing` whole, not billing.company alone. Listing one field of it meant
+    // the callback closed over a stale copy of the rest: typing a billing email
+    // and pressing the button sent the previous value, so the invoice went to
+    // the wrong address while the screen said it had gone to the right one.
+  }, [accessToken, billing, currency, items, meta, method, user?.email]);
 
   const onPay = async () => {
     setMsg(null);
@@ -171,6 +187,13 @@ export default function DsCheckoutWire() {
     }
     if (!items.length) {
       setMsg({ kind: "err", text: "Your cart is empty." });
+      return;
+    }
+    if (method === "invoice" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billing.email.trim())) {
+      setMsg({
+        kind: "err",
+        text: "Add a billing email — that is where the invoice goes.",
+      });
       return;
     }
 
@@ -209,9 +232,10 @@ export default function DsCheckoutWire() {
 
       setMsg({
         kind: "ok",
-        text:
-          "Request received. We will email a proforma invoice to your billing contact, " +
-          "payable by transfer within 14 days.",
+        text: out.invoiceSentTo
+          ? `Proforma invoice sent to ${out.invoiceSentTo}, payable by transfer within 14 days. ` +
+            "The bank details are on it, and your licences activate once the payment clears."
+          : "Request received — we will send the proforma invoice shortly.",
       });
     } catch (e) {
       // A line we cannot sell yet must not cost us the rest of the order.
@@ -340,6 +364,15 @@ export default function DsCheckoutWire() {
     <>
       <h3>Billing details</h3>
       {field("co", "Company or practice", "company", { autoComplete: "organization" })}
+      {field("bmail", "Billing email", "email", {
+        type: "email",
+        autoComplete: "email",
+        inputMode: "email",
+        placeholder: "accounts@firm.com",
+      })}
+      <p className="small">
+        Where the invoice and the receipt go. Defaults to the address you signed in with.
+      </p>
       <div className="frow">
         {field("ci", "City", "city", { autoComplete: "address-level2" })}
         <div className="ds-field">
