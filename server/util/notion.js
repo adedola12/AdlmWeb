@@ -340,3 +340,207 @@ export async function syncLeadToNotion(lead) {
 
   return result;
 }
+
+/* ────────────────────────── renewal follow-up calls ─────────────────────── */
+
+// Where a follow-up sits in the pipeline, by why they are being called.
+function followUpStage(followUp) {
+  const reasons = Array.isArray(followUp?.reasons) ? followUp.reasons : [];
+  if (reasons.includes("pending")) return "Payment Pending";
+  return "Renewal Due";
+}
+
+// What the CRM should say about the follow-up after a given call outcome.
+// Notion creates a select option it has not seen before, so these names do not
+// have to be pre-configured in the database.
+const OUTCOME_TO_STATUS = {
+  reached: "Contacted",
+  renewed: "Closed - Won",
+  callback: "Scheduled",
+  not_interested: "Closed - Lost",
+  no_answer: "Attempted",
+  voicemail: "Attempted",
+  wrong_number: "Unreachable",
+  unreachable: "Unreachable",
+};
+
+// One-line description of what the person has outstanding, used as the CRM
+// note so whoever opens the contact in Notion sees the reason without having
+// to come back to the admin screen.
+function followUpSummary(followUp) {
+  const bits = [];
+
+  for (const p of followUp?.products || []) {
+    const when = p?.expiresAt
+      ? new Date(p.expiresAt).toISOString().slice(0, 10)
+      : "";
+    bits.push(
+      `${p?.productName || p?.productKey} expired${when ? ` ${when}` : ""}` +
+        (p?.daysOverdue ? ` (${p.daysOverdue} days ago)` : ""),
+    );
+  }
+
+  for (const q of followUp?.purchases || []) {
+    const amount = q?.total
+      ? `${q.currency === "USD" ? "$" : "₦"}${Number(q.total).toLocaleString()}`
+      : "";
+    bits.push(
+      `Unpaid order: ${q?.items || "—"}${amount ? ` — ${amount}` : ""}` +
+        (q?.ageDays ? `, ${q.ageDays} days old` : "") +
+        (q?.hasReceipt ? ", receipt uploaded" : ""),
+    );
+  }
+
+  return bits.join(". ") || "Renewal follow-up.";
+}
+
+/**
+ * Upsert the CRM contact for someone on the renewal call list.
+ *
+ * Reuses findCrmContact so a person who is already in the CRM as a proposal
+ * client or an AI-agent lead gets their existing page advanced, not a second
+ * row created — the whole point of pushing this list to Notion is that the
+ * sales team works ONE contact record per human.
+ *
+ * Never throws — returns the `notion` sub-document to persist on the FollowUp.
+ * Dormant until NOTION_API_KEY is configured.
+ */
+export async function syncFollowUpToNotion(followUp) {
+  const result = {
+    contactPageId: followUp?.notion?.contactPageId || "",
+    lastSyncedAt: followUp?.notion?.lastSyncedAt || null,
+    lastError: "",
+  };
+
+  if (!notionEnabled()) return result; // dormant
+
+  try {
+    const name =
+      [followUp.firstName, followUp.lastName]
+        .map((s) => String(s || "").trim())
+        .filter(Boolean)
+        .join(" ") ||
+      followUp.email ||
+      "ADLM customer";
+
+    let contactId = result.contactPageId;
+    if (!contactId) {
+      contactId = await findCrmContact({
+        email: followUp.email,
+        phone: followUp.phone,
+      });
+    }
+
+    // Only the pipeline fields move on an existing contact. Notes there may
+    // have been written by a human and are not ours to overwrite.
+    const shared = {
+      Stage: select(followUpStage(followUp)),
+      "Activity Type": select("Call"),
+      "Follow-Up Status": select(
+        OUTCOME_TO_STATUS[followUp.lastOutcome] || "Scheduled",
+      ),
+      "Follow-Up Channel": select(followUp.phone ? "Phone" : "Email"),
+    };
+    if (followUp.nextFollowUpAt) {
+      shared["Next Follow-Up Date"] = dateOnly(followUp.nextFollowUpAt);
+    }
+    if (followUp.lastCalledAt) {
+      shared["Last Contacted"] = dateOnly(followUp.lastCalledAt);
+    }
+
+    if (contactId) {
+      await notionApi(`/pages/${contactId}`, {
+        method: "PATCH",
+        body: { properties: shared },
+      });
+    } else {
+      const props = {
+        ...shared,
+        Name: title(name),
+        Notes: richText(followUpSummary(followUp)),
+      };
+      if (followUp.email) props.Email = { email: followUp.email };
+      if (followUp.phone)
+        props["Phone / WhatsApp"] = { phone_number: followUp.phone };
+      if (followUp.firmName) props.Company = richText(followUp.firmName);
+      props.Category = select("Customer");
+
+      const created = await notionApi(`/pages`, {
+        method: "POST",
+        body: { parent: { database_id: crmDbId() }, properties: props },
+      });
+      contactId = created?.id || "";
+    }
+
+    result.contactPageId = contactId;
+    result.lastSyncedAt = new Date();
+    result.lastError = "";
+  } catch (e) {
+    result.lastError = String(e?.message || e).slice(0, 500);
+    console.error("[notion] follow-up sync failed:", result.lastError);
+  }
+
+  return result;
+}
+
+/**
+ * Append one logged call to the Notion Activity Log.
+ *
+ * A new page per call, never an update: the value of this database is that it
+ * is a chronological record of attempts, so the third "no answer" must not
+ * silently replace the first two.
+ *
+ * Returns the created page id, or "" when Notion is off or the push failed.
+ * Never throws — a CRM outage must not lose the call the person just logged.
+ */
+export async function logFollowUpCallToNotion(followUp, call) {
+  if (!notionEnabled()) return "";
+
+  try {
+    const who =
+      [followUp.firstName, followUp.lastName]
+        .map((s) => String(s || "").trim())
+        .filter(Boolean)
+        .join(" ") ||
+      followUp.email ||
+      "Customer";
+
+    const outcomeLabel = String(call?.outcome || "")
+      .replace(/_/g, " ")
+      .replace(/^\w/, (c) => c.toUpperCase());
+
+    const summary =
+      `${outcomeLabel}${call?.byName ? ` — called by ${call.byName}` : ""}. ` +
+      `${followUpSummary(followUp)}` +
+      (call?.note ? ` Notes: ${call.note}` : "");
+
+    const props = {
+      Title: title(`Follow-up call — ${who}`),
+      Type: select(call?.channel === "whatsapp" ? "WhatsApp" : "Call"),
+      Date: dateOnly(call?.at || new Date()),
+      Summary: richText(summary),
+      "Next Action": richText(
+        call?.outcome === "renewed"
+          ? "Renewed — confirm the entitlement was applied"
+          : call?.outcome === "not_interested"
+            ? "Closed — no further calls"
+            : "Call again",
+      ),
+    };
+    if (call?.nextFollowUpAt) {
+      props["Next Action Date"] = dateOnly(call.nextFollowUpAt);
+    }
+
+    const created = await notionApi(`/pages`, {
+      method: "POST",
+      body: { parent: { database_id: activityDbId() }, properties: props },
+    });
+    return created?.id || "";
+  } catch (e) {
+    console.error(
+      "[notion] follow-up call log failed:",
+      String(e?.message || e).slice(0, 500),
+    );
+    return "";
+  }
+}

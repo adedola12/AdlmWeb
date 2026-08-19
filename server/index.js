@@ -399,10 +399,12 @@ import adminSupport from "./routes/admin.support.js";
 import adminWaitlist from "./routes/admin.waitlist.js";
 import adminLatest from "./routes/admin.latest.js";
 import adminAudit from "./routes/admin.audit.js";
+import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
 app.use("/admin/latest", adminLatest);
 app.use("/admin/audit-log", adminAudit);
+app.use("/admin/followups", adminFollowUps);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin

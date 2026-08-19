@@ -21,6 +21,11 @@ export const ADMIN_AREAS = [
   // Marketing-form captures: the CIVIQ waitlist and the solutions enquiries.
   // Staff-grantable — it is a lead list to work, not an entitlement control.
   { key: "waitlist", label: "Waitlist & Enquiries", group: "People", staffGrantable: true },
+  // The renewal call desk: expired subscriptions and unapproved purchases, with
+  // a call log. Staff-grantable and deliberately separate from "users" — the
+  // person making the calls needs a phone number and a notepad, not the user
+  // directory, and nothing on that screen can change an entitlement.
+  { key: "followups", label: "Follow-Up Calls", group: "People", staffGrantable: true },
   // The rotating "Latest from ADLM" band on the marketing pages.
   { key: "latest", label: "Latest from ADLM", group: "Content", staffGrantable: true },
   // The main Admin Hub section pages (Pending, Active subscriptions,

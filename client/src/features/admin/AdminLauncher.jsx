@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../store.jsx";
 import { can } from "../../utils/roles.js";
 import { Reveal } from "../../components/effects.jsx";
-import { FiActivity, FiBell, FiBookOpen, FiBox, FiCalendar, FiCheckSquare, FiClipboard, FiCpu, FiDollarSign, FiFileText, FiGift, FiHelpCircle, FiImage, FiLifeBuoy, FiMapPin, FiPlayCircle, FiPlusSquare, FiShield, FiShoppingCart, FiStar, FiTag, FiUsers } from "../../components/icons.jsx";
+import { IconPhone, FiActivity, FiBell, FiBookOpen, FiBox, FiCalendar, FiCheckSquare, FiClipboard, FiCpu, FiDollarSign, FiFileText, FiGift, FiHelpCircle, FiImage, FiLifeBuoy, FiMapPin, FiPlayCircle, FiPlusSquare, FiShield, FiShoppingCart, FiStar, FiTag, FiUsers } from "../../components/icons.jsx";
 
 // area = the permission key that gates the card (see server/config/permissions.js)
 const TOOLS = [
@@ -34,6 +34,7 @@ const TOOLS = [
   { area: "support", to: "/admin/support-tickets", label: "Support Tickets", desc: "User help requests & AnyDesk", icon: FiLifeBuoy },
   { area: "latest", to: "/admin/latest", label: "Latest from ADLM", desc: "The rotating band on the marketing pages", icon: FiBell },
   { area: "waitlist", to: "/admin/waitlist", label: "Waitlist & Enquiries", desc: "CIVIQ waitlist & solutions leads", icon: FiUsers },
+  { area: "followups", to: "/admin/follow-ups", label: "Follow-Up Calls", desc: "Expired subscriptions & unpaid orders to chase", icon: IconPhone },
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },
   { area: "aiusage", to: "/admin/ai-usage", label: "AI Usage", desc: "AI spend, quotas & AWS credit", icon: FiCpu },
 ];

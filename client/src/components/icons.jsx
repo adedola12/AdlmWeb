@@ -35,6 +35,7 @@ import {
   BubbleChatIcon,
   BugIcon,
   Calendar03Icon,
+  Call02Icon,
   Cancel01Icon,
   CancelCircleIcon,
   ChartBarLineIcon,
@@ -316,6 +317,7 @@ export const IconLink = make(Link01Icon, "IconLink");
 export const IconLock = make(LockIcon, "IconLock");
 export const IconMenu = make(Menu01Icon, "IconMenu");
 export const IconMoon = make(Moon02Icon, "IconMoon");
+export const IconPhone = make(Call02Icon, "IconPhone");
 export const IconPlayCircle = make(PlayCircleIcon, "IconPlayCircle");
 export const IconPlaySquare = make(PlaySquareIcon, "IconPlaySquare");
 export const IconPlus = make(Add01Icon, "IconPlus");
