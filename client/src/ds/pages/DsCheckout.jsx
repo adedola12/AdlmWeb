@@ -2,11 +2,12 @@
 // Ported from RichardEnoch/adlm-studio-site src/checkout.html
 // Re-run the script to pick up his changes; hand edits here are lost.
 import React from "react";
-import { Link } from "react-router-dom";
 import DsCheckoutWire from "../DsCheckoutWire.jsx";
+import DsCheckoutSummary from "../DsCheckoutSummary.jsx";
 
 export default function DsCheckout() {
   const DsCheckoutSlot = <DsCheckoutWire />;
+  const DsCheckoutSummarySlot = <DsCheckoutSummary />;
   return (
     <>
       <section className="sec" style={{ paddingTop: "150px" }}>
@@ -89,25 +90,7 @@ export default function DsCheckout() {
               <h3>
                 Order summary
               </h3>
-              {" "}
-              <p className="ds-sub" id="ord-note">
-                5 seats across 3 products.
-              </p>
-              {" "}
-              <div id="ord-rows">
-              </div>
-              {" "}
-              <p className="small" style={{ marginTop: "16px" }}>
-                Then{" "}
-                <span id="ord-renew">
-                  ₦128,000 monthly
-                </span>
-                {" "}until cancelled.{" "}
-                <Link to="/purchase" data-ds-page="cart" style={{ color: "var(--action)" }}>
-                  Edit cart
-                </Link>
-              </p>
-              {" "}
+              {" "}{DsCheckoutSummarySlot}{" "}
               <div className="trust">
                 {" "}
                 <span>

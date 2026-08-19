@@ -22,9 +22,10 @@
 // the setting rather than hardcoded at 7.5%.
 
 import React from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../config.js";
 import { QRCodeSVG } from "qrcode.react";
+import { readCartItems, writeCartItems } from "../lib/cart.js";
 import { renderToStaticMarkup } from "react-dom/server";
 const DsQuoteDoc = React.lazy(() => import("./DsQuoteDoc.jsx"));
 
@@ -130,6 +131,7 @@ export default function DsQuoteBuilder() {
   const [cur, setCur] = React.useState(initial.cur);
   const [firm, setFirm] = React.useState({ org: "", person: "", email: "", phone: "", addr: "" });
   const [showDoc, setShowDoc] = React.useState(false);
+  const navigate = useNavigate();
 
   // On-site training. His build leaves this "On enquiry" — the note says it is
   // quoted once we know the city and the size of the team, which is exactly
@@ -313,6 +315,38 @@ export default function DsQuoteBuilder() {
   }, [qty, bill, priceOf, inCur, sites, siteId, bimInstall, cur, vatRate]);
 
   const picked = calc.rows.length > 0;
+
+  // "Buy these now" has to carry the selection across.
+  //
+  // It was a plain link to /purchase, which is why the cart looked empty on
+  // the other side: picking six products in the builder wrote nothing
+  // anywhere, so checkout read an untouched cart and said so. The quotation
+  // and the cart were two separate ideas of what the customer wanted.
+  //
+  // The shape is the cart's own — { productKey, qty, seats, firstTime } —
+  // because Purchase.jsx reads `periods ?? qty` for the billing periods and
+  // `seats` for the PCs. In this builder the stepper counts PCs, so it is
+  // seats that carries it and the period count stays one.
+  const buyThese = React.useCallback(() => {
+    const picks = Object.entries(qty).filter(([, n]) => n > 0);
+    if (picks.length) {
+      // Merge rather than overwrite: a cart filled from /products should not
+      // be silently discarded because someone also priced something here.
+      const existing = readCartItems();
+      const byKey = new Map(existing.map((it) => [String(it.productKey), it]));
+      for (const [key, seats] of picks) {
+        byKey.set(key, {
+          ...(byKey.get(key) || {}),
+          productKey: key,
+          qty: 1,
+          seats,
+          firstTime: false,
+        });
+      }
+      writeCartItems([...byKey.values()]);
+    }
+    navigate("/purchase");
+  }, [qty, navigate]);
 
   // The QR that goes on the signature line. It points at /quote carrying the
   // same selection, so scanning the printed page reopens the quotation with
@@ -720,9 +754,14 @@ export default function DsQuoteBuilder() {
             >
               See the quotation
             </button>
-            <Link to="/purchase" className="ds-btn btn-o btn-full" style={{ marginTop: "10px" }}>
+            <button
+              type="button"
+              className="ds-btn btn-o btn-full"
+              style={{ marginTop: "10px" }}
+              onClick={buyThese}
+            >
               Buy these now
-            </Link>
+            </button>
             <div className="trust">
               <span>
                 <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>Valid for 30 days

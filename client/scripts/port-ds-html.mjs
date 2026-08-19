@@ -294,6 +294,10 @@ const courseEdit = (name, key) => ({
 const SLOTS = {
   DsPromoSlot: { component: "DsPromoLive", from: "../DsPromoLive.jsx" },
   DsCheckoutSlot: { component: "DsCheckoutWire", from: "../DsCheckoutWire.jsx" },
+  DsCheckoutSummarySlot: {
+    component: "DsCheckoutSummary",
+    from: "../DsCheckoutSummary.jsx",
+  },
 };
 
 const PAGE_EDITS = {
@@ -305,6 +309,14 @@ const PAGE_EDITS = {
     {
       findRe: /<form onsubmit="return false">[\s\S]*?<\/form>/,
       replace: "@@DsCheckoutSlot@@",
+    },
+    // His order summary states a sample order — "5 seats across 3 products",
+    // "Then ₦128,000 monthly until cancelled" — beside the control that takes
+    // the money, and the #ord-rows div his script never fills. Replaced by the
+    // real cart. His <h3> and the trust badges below it are left alone.
+    {
+      findRe: /<p class="sub" id="ord-note">[\s\S]*?Edit cart<\/a><\/p>/,
+      replace: "@@DsCheckoutSummarySlot@@",
     },
   ],
   "src/quiv.html": [releaseEdit("quiv"), ...priceEdits("₦50,000", "Or ₦500,000")],

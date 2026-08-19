@@ -40,7 +40,12 @@ export default function DsCheckoutWire() {
   const { user, accessToken } = useAuth();
   const navigate = useNavigate();
 
-  const [items] = React.useState(() => readCartItems());
+  // Read on mount rather than frozen into initial state: arriving here from
+  // the quotation builder writes the cart immediately before this renders.
+  const [items, setItems] = React.useState(() => readCartItems());
+  React.useEffect(() => {
+    setItems(readCartItems());
+  }, []);
   const [currency, setCurrency] = React.useState("NGN");
   const [billing, setBilling] = React.useState({
     company: "",
@@ -63,10 +68,14 @@ export default function DsCheckoutWire() {
   const createOrder = React.useCallback(async () => {
     const payload = {
       currency,
+      // The cart's own shape, read exactly as Purchase.jsx reads it:
+      // addProductToCart writes { productKey, qty, firstTime } and nothing
+      // else, so a mapping that looked for `periods` and `months` found
+      // neither and sent 1 of everything regardless of what was in the cart.
       items: items.map((e) => ({
-        productKey: e.productKey || e.key,
-        seats: Math.max(1, Number(e.seats) || 1),
-        periods: Math.max(1, Number(e.periods || e.months) || 1),
+        productKey: String(e.productKey || e.key || "").trim(),
+        seats: Math.max(1, parseInt(e.seats ?? 1, 10) || 1),
+        periods: Math.max(1, parseInt(e.periods ?? e.qty ?? 1, 10) || 1),
         firstTime: !!e.firstTime,
       })),
       licenseType: billing.company ? "organization" : "personal",
