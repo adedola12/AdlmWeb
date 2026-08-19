@@ -10,6 +10,34 @@ order: 5
 summary: Defensible rate build-ups with location-based pricing and a cloud-synced rate library.
 ---
 
+## 2.9.0 - August 2026 - What a rate is meant to produce
+
+Every labour and plant rate now shows what the item is and what it produces in a day, so a day rate can be checked against the work it has to cover. Cloud sync is fixed, and the library is easier to move around.
+
+### 🐛 Fixed
+
+- **Sync was failing on master prices, and would not say why.** The dialog read "Master prices: FAIL" and nothing else, so there was no way to tell a server problem from a bad password from a broken row. The reason was in the error the whole time and the app was throwing it away. It now reports what actually happened, for the rates and compute steps too.
+- **The cause was two copies of the same row in your library.** When your prices synced, any item you had priced yourself was added again alongside the published one instead of updating it, so the library ended up with pairs that were identical apart from a blank category. Six pairs had built up. The sync then could not tell the two apart and stopped. Duplicates clear themselves on your next sync, and a price you set now updates the row it belongs to.
+- **Signing in could show a "Zone Sync" error.** Same duplicate rows, reached a different way. Fixed by the same change.
+- **The library could name the wrong location.** It read "Lagos, priced from south west rates" for an account whose profile said Imo. Nothing was mispriced: the prices were always fetched for the right place. The sync is what learns your location, and the sentence on screen was only re-read when you first opened the library, so it kept the old state over the new prices until you navigated away and back.
+- **Dark mode hid text.** Material Name and Labour Item were invisible in dark mode, and invisible again in light mode in any view first opened while dark. Those columns were painted with a colour that is fixed when the screen loads and never follows a theme change. The Save button in the price popups had the same fault, dark grey on a dark blue button.
+- **The bottom row of every rate table was cut in half**, in all ten sections.
+- **Roller names were misspelled, and a grader named a machine that does not exist.** "Vibratory whelled roller" is now wheeled, "Pneumatic tired roller" is now tyred, and both vibratory rollers now read tonnes like every other range in the library. "Grader (Cat 1406)" is a Cat 140G: Caterpillar has never made a 1406. Older installs keep pricing correctly against the new names, so nothing you have built goes to zero.
+
+### ✨ New
+
+- **What the item is, and what it produces.** Open any labour or plant rate and there is now a panel at the foot of it: what the machine or trade is, its expected output, what that output assumes, and what it burns in fuel or who staffs it. A D6 dozer shifts 150 to 250 m3 an hour at a 30 m haul. A 250 kVA generator burns 25 to 50 litres an hour, which at today's diesel price can cost more in a day than the set does to hire. All 84 rates are covered.
+- **Every output is a range, with the assumption written next to it.** This is deliberate. Published sources disagree by a factor of two on the same machine, because soil, haul distance, layer depth and gang size move the figure far more than the choice of machine does. A single tidy number would look more authoritative and be less true, so you get the range and the conditions it rests on, and it says on its face that it is a sense check rather than a guarantee.
+- **Record your own specification for rates you add.** Rates you add yourself had a price and nothing behind it. There is now a notes field in the labour popup for what the item is and what it does, and it shows on the RateGen page on the website beside the rate. Site search finds it too, so you can search by what something does and not only by what you called it.
+- **Screenshots carry the ADLM mark.** A screenshot or snip taken from RateGen comes out with the ADLM Rate Generator mark tiled faintly across it. Nothing is drawn on your screen while you work, and the figures stay readable in the image. It covers screenshots taken to the clipboard, which is the usual way a price list gets shared. A photograph of the monitor is not something any software can mark.
+
+### 🔧 Improved
+
+- **Labour and plant now have 24 categories instead of 3.** The filter offered Labour, Plant and Small Plant and nothing finer, so it could only ever narrow 84 rows to 41. Trades are split by discipline and plant by what it does: earthmoving, compaction, lifting, haulage, power generation and the rest. Nothing moved bucket, so what was Plant is still under Plant.
+- **The library sorts by size rather than by spelling.** "10 to 20 tonnes" used to sort above "2.7 to 10 tonnes" because 1 comes before 2, and the generators ran 1.5, 10, 125, 150, 200, 250, 27, 50. Sizes now read in order, for materials as well.
+- **Room for the rate tables.** The welcome banner can be collapsed from the header, which roughly doubles the rows on screen, and the app remembers the choice. This was the change a user asked for directly: they could not see more than one line of a rate table at a time and resizing the window did not help.
+- **Sign out is now coloured**, so it is not one of a column of identical looking links.
+
 ## 2.8.1 - August 2026 - Cleaner installs
 
 A tidier install and upgrade path, carried over automatically from any earlier version.
