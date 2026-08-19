@@ -1,9 +1,10 @@
 // server/scripts/seed-demo-data.js
 // Builds the fake dataset a demo session works against.
 //
-//   node scripts/seed-demo-data.js            # default spread
-//   node scripts/seed-demo-data.js --per 20   # rows per collection
-//   node scripts/seed-demo-data.js --wipe     # remove demo rows, seed nothing
+//   node scripts/seed-demo-data.js             # default spread
+//   node scripts/seed-demo-data.js --per 20    # rows per collection
+//   node scripts/seed-demo-data.js --wipe      # remove demo rows, seed nothing
+//   node scripts/seed-demo-data.js --dry-run   # report only, write nothing
 //
 // Rows are CLONED from real ones and put through the placeholder masker on the
 // way, rather than hand-written as fixtures. Two reasons:
@@ -72,7 +73,7 @@ function getPath(doc, path) {
   return path.split(".").reduce((n, part) => (n == null ? n : n[part]), doc);
 }
 
-async function seedCollection(modelName, perCollection) {
+async function seedCollection(modelName, perCollection, dryRun) {
   const Model = mongoose.models[modelName];
   if (!Model) {
     console.warn(`  ! ${modelName}: no such model, skipped`);
@@ -100,6 +101,20 @@ async function seedCollection(modelName, perCollection) {
     return masked;
   });
 
+  if (dryRun) {
+    // Validate against the real schema without touching the database, so a
+    // clone that could never have been inserted is reported now rather than
+    // half way through writing to production.
+    const invalid = [];
+    for (const [i, clone] of clones.entries()) {
+      const err = new Model(clone).validateSync();
+      if (err) invalid.push(`#${i + 1} ${Object.keys(err.errors || {}).join(", ")}`);
+    }
+    const note = invalid.length ? `  (${invalid.length} would fail: ${invalid[0]})` : "";
+    console.log(`  · ${modelName}: would insert ${clones.length}${note}`);
+    return clones.length;
+  }
+
   // Inside the demo tenant: insertMany stamps isDemo on every row.
   const inserted = await runAsDemo(() =>
     Model.insertMany(clones, { ordered: false, rawResult: false }),
@@ -108,13 +123,19 @@ async function seedCollection(modelName, perCollection) {
   return inserted.length;
 }
 
-async function wipe() {
+async function wipe(dryRun) {
   let total = 0;
   for (const name of COLLECTIONS) {
     const Model = mongoose.models[name];
     if (!Model) continue;
     // Inside the demo tenant, so this can only ever match demo rows — an empty
     // filter here is scoped by the plugin, never a full-collection delete.
+    if (dryRun) {
+      const n = await runAsDemo(() => Model.countDocuments({}));
+      if (n) console.log(`  · ${name}: would remove ${n}`);
+      total += n;
+      continue;
+    }
     const { deletedCount } = await runAsDemo(() => Model.deleteMany({}));
     if (deletedCount) console.log(`  ✗ ${name}: removed ${deletedCount}`);
     total += deletedCount || 0;
@@ -125,6 +146,7 @@ async function wipe() {
 async function main() {
   const perCollection = Number(arg("per", 15));
   const wipeOnly = process.argv.includes("--wipe");
+  const dryRun = process.argv.includes("--dry-run");
 
   await connectDB(process.env.MONGO_URI);
 
@@ -138,11 +160,13 @@ async function main() {
     await import(pathToFileURL(join(modelsDir, file)).href);
   }
 
+  if (dryRun) console.log("\nDRY RUN — nothing will be written.");
+
   console.log("\nClearing existing demo rows…");
-  await wipe();
+  await wipe(dryRun);
 
   if (wipeOnly) {
-    console.log("\nDone (wipe only).\n");
+    console.log(`\nDone (wipe only${dryRun ? ", dry run" : ""}).\n`);
     await mongoose.disconnect();
     return;
   }
@@ -151,7 +175,7 @@ async function main() {
   let total = 0;
   for (const name of COLLECTIONS) {
     try {
-      total += await seedCollection(name, perCollection);
+      total += await seedCollection(name, perCollection, dryRun);
     } catch (err) {
       // One collection failing (a validator this clone cannot satisfy, say)
       // must not abandon the rest of the seed half-finished.
@@ -159,7 +183,9 @@ async function main() {
     }
   }
 
-  console.log(`\nSeeded ${total} demo rows.\n`);
+  console.log(
+    dryRun ? `\nWould seed ${total} demo rows. Nothing written.\n` : `\nSeeded ${total} demo rows.\n`,
+  );
   await mongoose.disconnect();
 }
 
