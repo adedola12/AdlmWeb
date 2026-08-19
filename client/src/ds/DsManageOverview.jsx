@@ -77,11 +77,25 @@ export default function DsManageOverview() {
   }, [accessToken]);
 
   const view = React.useMemo(() => {
-    if (!summary) return null;
+    if (!summary || !catalogue) return null;
 
     const ents = summary.entitlements || [];
-    const licences = ents.filter((e) => !e.isCourse);
     const courses = ents.filter((e) => e.isCourse);
+
+    // A feature grant is not a licensed product.
+    //
+    // "boq-import" and "ai" are switches on an existing product, granted by an
+    // admin. They have no catalogue row, no seats to install and nothing to
+    // renew — so counting them inflated Products active, added a phantom seat
+    // to Seats in use, and produced "1 of your 1 boq-import seat is not
+    // installed anywhere", which is not a thing anybody can act on.
+    //
+    // Having no catalogue row is exactly what distinguishes them, and the
+    // catalogue is already loaded for pricing. Until it arrives nothing is
+    // classified, which is why this waits for it.
+    const isProduct = (e) => !!catalogue?.[e.productKey];
+    const licences = ents.filter((e) => !e.isCourse && isProduct(e));
+    const grants = ents.filter((e) => !e.isCourse && !isProduct(e));
     const active = licences.filter((e) => e.status === "active");
 
     // Seats: how many machines are actually bound against how many were bought.
@@ -144,6 +158,7 @@ export default function DsManageOverview() {
 
     return {
       licences,
+      grants,
       active,
       courses,
       seatsOwned,
@@ -156,7 +171,10 @@ export default function DsManageOverview() {
     };
   }, [summary, catalogue]);
 
-  const firstName = (user?.name || user?.email || "").split(/[\s@]/)[0] || "there";
+  // buildAuthPayload sends firstName; there is no `name` field, so reading one
+  // fell through to the email and greeted somebody as "dolapo836".
+  const firstName =
+    user?.firstName?.trim() || (user?.email || "").split("@")[0] || "there";
   const org = user?.organizationName || "";
 
   if (failed) {
@@ -182,8 +200,9 @@ export default function DsManageOverview() {
             {greeting()}, {firstName}
           </h1>
           <p>
-            {org ? `${org}: ` : ""}
-            everything you are licensed for, and anything that needs you.
+            {org
+              ? `${org} — everything the practice is licensed for, and anything that needs you.`
+              : "Everything you are licensed for, and anything that needs you."}
           </p>
         </div>
         <div className="dsh-acts">
@@ -303,6 +322,27 @@ export default function DsManageOverview() {
               })}
             </div>
           </section>
+
+          {view.grants.length > 0 && (
+            <section className="dsh-panel">
+              <div className="dsh-ph">
+                <h2>Feature access</h2>
+              </div>
+              <div className="dsh-body">
+                <p className="sub">
+                  Switched on for this account by ADLM. Nothing to install and nothing to
+                  renew — they work inside the products you already have.
+                </p>
+                {view.grants.map((g) => (
+                  <div className="dsh-note" key={g.productKey}>
+                    <span className="dot" />
+                    <span>{g.productName || g.productKey}</span>
+                    <span className="act">{g.status === "active" ? "Active" : g.status}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
 
         <div>
@@ -317,7 +357,7 @@ export default function DsManageOverview() {
                 view.attention.map((a, i) => (
                   <div className="dsh-note" key={`${a.kind}-${i}`}>
                     <span className={`dot ${a.kind === "warn" ? "warn" : ""}`} />
-                    <span>{a.text}</span>
+                    <span>{a.text} </span>
                     <span className="act">
                       <Link to={a.to}>{a.action}</Link>
                     </span>

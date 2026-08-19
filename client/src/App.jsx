@@ -16,6 +16,11 @@ export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
   const location = useLocation();
 
+  // Screens that render inside his app frame — rail, app bar, own scroll
+  // container. They supply their own chrome and their own padding, so the
+  // marketing nav, the footer and the page gutter all step aside.
+  const appShellRoute = /^\/(manage|work)(\/|$)/.test(location.pathname);
+
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
 
@@ -63,18 +68,23 @@ export default function App() {
           single-page app, almost every pageview was missing. */}
       <AnalyticsTracker />
 
-      <Nav />
+      {/* The signed-in app carries his rail and app bar instead. Leaving the
+          marketing nav above it puts "Book a demo" over somebody's dashboard,
+          and the two sets of navigation compete for the same job. His own
+          build does exactly that; it is on the snag list for him rather than
+          reproduced here. */}
+      {!appShellRoute && <Nav />}
 
       {/* Only renders for Design Access sessions, and only on /admin. */}
       <DesignModeBanner />
 
-      <main className="w-full flex-1 px-4 md:px-8 py-4">
+      <main className={appShellRoute ? "w-full flex-1" : "w-full flex-1 px-4 md:px-8 py-4"}>
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
       </main>
 
-      <Footer />
+      {!appShellRoute && <Footer />}
       <AiAgent />
 
       {/* New-page navigations start at the top; the browser back/forward
