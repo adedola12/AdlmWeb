@@ -1741,6 +1741,72 @@ router.post(
 );
 
 /**
+ * GET /me/devices
+ *
+ * The machines this account has activated, one row per machine rather than
+ * one per entitlement.
+ *
+ * /me/summary already carries a `devices` array on each entitlement, but it
+ * only fills it once every seat is taken — a deliberate choice, because the
+ * desktop clients read `devices.length > 0` as "no seats left" and populating
+ * it early would lock people out of an install they are entitled to. That
+ * makes it useless for showing somebody their own machines, which is what the
+ * Team and Settings screens do.
+ *
+ * So this returns them unconditionally, keyed by fingerprint, with the list of
+ * products each machine holds a seat on. A fingerprint is a machine id we
+ * issued, not hardware data, and it is the caller's own account either way.
+ */
+router.get(
+  "/devices",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id, { entitlements: 1 });
+    if (!user) return res.status(404).json({ error: "User missing" });
+
+    await ensureUserEntitlementsMigrated(user);
+
+    const byPrint = new Map();
+
+    for (const ent of user.entitlements || []) {
+      const key = ent.productKey;
+      for (const d of activeDevices(ent)) {
+        const print = String(d.fingerprint || "");
+        if (!print) continue;
+
+        const row = byPrint.get(print) || {
+          fingerprint: print,
+          name: d.name || "",
+          boundAt: d.boundAt || null,
+          lastSeenAt: d.lastSeenAt || null,
+          products: [],
+        };
+
+        row.products.push(key);
+        // A machine's name and last-seen are per-entitlement rows for the same
+        // device; keep the most recent of each so one stale row cannot make an
+        // active machine look abandoned.
+        if (!row.name && d.name) row.name = d.name;
+        if (d.lastSeenAt && (!row.lastSeenAt || d.lastSeenAt > row.lastSeenAt)) {
+          row.lastSeenAt = d.lastSeenAt;
+        }
+        if (d.boundAt && (!row.boundAt || d.boundAt < row.boundAt)) {
+          row.boundAt = d.boundAt;
+        }
+
+        byPrint.set(print, row);
+      }
+    }
+
+    const devices = Array.from(byPrint.values()).sort(
+      (a, b) => new Date(b.lastSeenAt || 0) - new Date(a.lastSeenAt || 0),
+    );
+
+    return res.json({ ok: true, devices });
+  }),
+);
+
+/**
  * GET /me/rail
  *
  * The counts the signed-in rail shows beside each item — projects, rate

@@ -100,7 +100,11 @@ export default function DsManageOverview() {
 
     // Seats: how many machines are actually bound against how many were bought.
     const seatsOwned = licences.reduce((n, e) => n + (Number(e.seats) || 1), 0);
-    const seatsUsed = licences.reduce((n, e) => n + (e.devices?.length || 0), 0);
+    // `seatsUsed` from the API, not `devices.length`. The devices array is
+    // only sent once every seat is taken — the desktop clients read it as the
+    // "no seats left" signal — so counting it made a half-used licence look
+    // like an unused one. `seatsUsed` is the count itself and is always sent.
+    const seatsUsed = licences.reduce((n, e) => n + (Number(e.seatsUsed) || 0), 0);
 
     // Next charge: the soonest expiry among active licences, and what those
     // renewing on that date cost. Computed from the catalogue rather than
@@ -136,7 +140,7 @@ export default function DsManageOverview() {
     }
     for (const e of licences) {
       const owned = Number(e.seats) || 1;
-      const used = e.devices?.length || 0;
+      const used = Number(e.seatsUsed) || 0;
       if (owned > used) {
         attention.push({
           kind: "idle",
@@ -290,7 +294,7 @@ export default function DsManageOverview() {
               )}
               {view.licences.map((e) => {
                 const owned = Number(e.seats) || 1;
-                const used = e.devices?.length || 0;
+                const used = Number(e.seatsUsed) || 0;
                 const install = view.installations.find(
                   (i) => i.installationProductKey === e.productKey,
                 );

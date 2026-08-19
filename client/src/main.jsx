@@ -81,6 +81,11 @@ import AuthCallback from "./pages/AuthCallback.jsx";
 // His Manage overview. Lazy because it pulls in the app shell and ~91KB of his
 // dashboard CSS, which no marketing visitor should pay for.
 const ManageOverview = React.lazy(() => import("./pages/ManageOverview.jsx"));
+const ManageProducts = React.lazy(() => import("./pages/ManageProducts.jsx"));
+const ManageTeam = React.lazy(() => import("./pages/ManageTeam.jsx"));
+const ManageBilling = React.lazy(() => import("./pages/ManageBilling.jsx"));
+const ManageDownloads = React.lazy(() => import("./pages/ManageDownloads.jsx"));
+const ManageSettings = React.lazy(() => import("./pages/ManageSettings.jsx"));
 import UserInvoice from "./pages/UserInvoice.jsx";
 
 // ✅ QUIV for ArchiCAD
@@ -233,6 +238,23 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      // The rest of the Manage section. Every one of these is already a
+      // destination in the rail, so a missing route here is a dead link on
+      // every app screen rather than a page nobody reaches.
+      ...[
+        { path: "manage/products", el: <ManageProducts /> },
+        { path: "manage/team", el: <ManageTeam /> },
+        { path: "manage/billing", el: <ManageBilling /> },
+        { path: "manage/downloads", el: <ManageDownloads /> },
+        { path: "manage/settings", el: <ManageSettings /> },
+      ].map(({ path, el }) => ({
+        path,
+        element: (
+          <ProtectedRoute>
+            <React.Suspense fallback={null}>{el}</React.Suspense>
+          </ProtectedRoute>
+        ),
+      })),
       {
         // Where Google, Microsoft and Autodesk send the browser back to. Public
         // on purpose: the person is by definition not signed in yet when they

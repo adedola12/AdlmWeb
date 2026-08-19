@@ -105,7 +105,13 @@ export default function DsAppShell({ children, title = "", page = "" }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [drawer, menu]);
 
-  const name = user?.name || user?.email || "";
+  // buildAuthPayload sends firstName/lastName, never a joined `name`. Reading
+  // one fell through to the email, so the top bar greeted people by the left
+  // half of their address.
+  const name =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    user?.email ||
+    "";
   const org = user?.organizationName || "";
 
   // A count of 0 is a real answer and his design has no empty state for the
