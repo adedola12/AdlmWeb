@@ -31,6 +31,7 @@ import { validatePasswordStrength } from "../util/passwordPolicy.js";
 import {
   verifySocialIdentity,
   configuredProviders,
+  exchangeCodeForIdToken,
   PROVIDER_FIELD,
 } from "../util/socialIdentity.js";
 
@@ -1289,9 +1290,23 @@ router.post("/social", authLimiter, async (req, res) => {
     await ensureDb();
 
     const provider = String(req.body?.provider || "").trim().toLowerCase();
+
     let identity;
     try {
-      identity = await verifySocialIdentity(provider, req.body?.credential);
+      // Two ways in. `code` is the normal one: the browser ran the redirect and
+      // hands back what the provider gave it, and the exchange happens here
+      // because Google's web client requires a secret that must never reach a
+      // browser. `credential` stays supported for a provider that returns an
+      // ID token directly.
+      let credential = req.body?.credential;
+      if (!credential && req.body?.code) {
+        credential = await exchangeCodeForIdToken(provider, {
+          code: String(req.body.code),
+          codeVerifier: String(req.body.codeVerifier || ""),
+          redirectUri: String(req.body.redirectUri || ""),
+        });
+      }
+      identity = await verifySocialIdentity(provider, credential);
     } catch (e) {
       // Deliberately not echoed verbatim to the client beyond a short reason:
       // the detail is useful to us and to an attacker in equal measure.

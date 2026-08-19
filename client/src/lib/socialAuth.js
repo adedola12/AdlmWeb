@@ -14,9 +14,15 @@
 //   * One code path to get right. Every provider returns an id_token which the
 //     server verifies the same way.
 //
-// PKCE means no client secret is involved: the browser proves it started the
-// exchange by producing the verifier whose hash it sent up front. That is what
-// makes a public client safe here.
+// The browser starts the flow and receives the code. It does NOT exchange it:
+// that happens on the server, because Google's web client is a confidential
+// client and requires the secret even with PKCE — Google has no SPA client type
+// the way Azure does, and "client_secret is missing" is Google saying so. The
+// secret must never reach a browser, and doing the exchange server-side also
+// means the provider's ID token never exists in the page.
+//
+// PKCE still earns its place: the verifier proves the code is being redeemed
+// for the browser that started the flow, so an intercepted code is useless.
 
 const STORE = "adlm.social.pkce";
 
@@ -62,7 +68,6 @@ export async function startSocialAuth(provider, endpoint, { next = "/dashboard",
       state,
       next,
       connect,
-      token: endpoint.token,
       clientId: endpoint.clientId,
     }),
   );
@@ -87,7 +92,7 @@ export async function startSocialAuth(provider, endpoint, { next = "/dashboard",
  * Complete the exchange after the provider redirects back.
  *
  * @param {URLSearchParams} params  the query the provider sent
- * @returns {Promise<{provider: string, idToken: string, next: string, connect: boolean}>}
+ * @returns {Promise<{provider: string, code: string, codeVerifier: string, redirectUri: string, next: string, connect: boolean}>}
  */
 export async function finishSocialAuth(params) {
   const raw = sessionStorage.getItem(STORE);
@@ -109,33 +114,13 @@ export async function finishSocialAuth(params) {
   const code = params.get("code");
   if (!code) throw new Error("The provider returned no authorisation code.");
 
-  // A public client sends its id in the body and no secret at all; the
-  // verifier is what proves this is the browser that began the exchange.
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    code,
-    client_id: saved.clientId,
-    redirect_uri: redirectUri(),
-    code_verifier: saved.verifier,
-  });
-
-  const res = await fetch(saved.token, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error_description || data.error || "The sign-in exchange failed.");
-  }
-  if (!data.id_token) {
-    throw new Error("The provider returned no identity token.");
-  }
-
+  // Everything the server needs to finish it. The verifier travels with the
+  // code so the server can prove the exchange belongs to this browser.
   return {
     provider: saved.provider,
-    idToken: data.id_token,
+    code,
+    codeVerifier: saved.verifier,
+    redirectUri: redirectUri(),
     next: saved.next || "/dashboard",
     connect: !!saved.connect,
   };

@@ -23,6 +23,7 @@ import bcrypt from "bcryptjs";
 import { validatePasswordStrength } from "../util/passwordPolicy.js";
 import {
   verifySocialIdentity,
+  exchangeCodeForIdToken,
   PROVIDER_FIELD,
   configuredProviders,
 } from "../util/socialIdentity.js";
@@ -1979,7 +1980,15 @@ router.post(
 
     let identity;
     try {
-      identity = await verifySocialIdentity(provider, req.body?.credential);
+      let credential = req.body?.credential;
+      if (!credential && req.body?.code) {
+        credential = await exchangeCodeForIdToken(provider, {
+          code: String(req.body.code),
+          codeVerifier: String(req.body.codeVerifier || ""),
+          redirectUri: String(req.body.redirectUri || ""),
+        });
+      }
+      identity = await verifySocialIdentity(provider, credential);
     } catch (e) {
       console.warn("[/me/social/connect] rejected:", e?.message || e);
       return res

@@ -30,14 +30,15 @@ export default function AuthCallback() {
 
     (async () => {
       try {
-        const { provider, idToken, next, connect } = await finishSocialAuth(params);
+        const { provider, code, codeVerifier, redirectUri, next, connect } =
+          await finishSocialAuth(params);
 
         if (connect) {
           await apiAuthed("/me/social/connect", {
             token: accessToken,
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ provider, credential: idToken }),
+            body: JSON.stringify({ provider, code, codeVerifier, redirectUri }),
           });
           nav(`${next}?connected=${provider}`, { replace: true });
           return;
@@ -46,7 +47,7 @@ export default function AuthCallback() {
         const res = await api("/auth/social", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, credential: idToken }),
+          body: JSON.stringify({ provider, code, codeVerifier, redirectUri }),
         });
         setAuth({ user: res.user, accessToken: res.accessToken, licenseToken: null });
         trackEvent("login", { method: provider });

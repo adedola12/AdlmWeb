@@ -35,6 +35,91 @@ export const googleClientId = () => String(process.env.GOOGLE_CLIENT_ID || "").t
 export const microsoftClientId = () => String(process.env.MICROSOFT_CLIENT_ID || "").trim();
 export const autodeskClientId = () => String(process.env.AUTODESK_CLIENT_ID || "").trim();
 
+// Secrets, for the providers that insist on one.
+//
+// Google's "Web application" client is a CONFIDENTIAL client: it requires the
+// secret to exchange an authorization code even when PKCE is used, and Google
+// offers no public/SPA client type for browsers the way Azure does. So the
+// exchange cannot happen in the browser — "client_secret is missing" is Google
+// saying exactly that.
+//
+// Microsoft's SPA registration needs no secret, and sending one would be
+// rejected. Hence optional, per provider.
+export const providerSecret = (provider) =>
+  ({
+    google: String(process.env.GOOGLE_CLIENT_SECRET || "").trim(),
+    microsoft: String(process.env.MICROSOFT_CLIENT_SECRET || "").trim(),
+    autodesk: String(process.env.AUTODESK_CLIENT_SECRET || "").trim(),
+  })[provider] || "";
+
+// Where each provider's authorization and token endpoints live. Used by the
+// server-side exchange, and published (without secrets) so the browser knows
+// where to send somebody.
+export function providerEndpoints() {
+  const tenant = MS_TENANT();
+  return {
+    google: {
+      clientId: googleClientId(),
+      authorize: "https://accounts.google.com/o/oauth2/v2/auth",
+      token: "https://oauth2.googleapis.com/token",
+      scope: "openid email profile",
+    },
+    microsoft: {
+      clientId: microsoftClientId(),
+      authorize: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
+      token: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+      scope: "openid email profile",
+    },
+    autodesk: {
+      clientId: autodeskClientId(),
+      authorize: "https://developer.api.autodesk.com/authentication/v2/authorize",
+      token: "https://developer.api.autodesk.com/authentication/v2/token",
+      scope: "openid user-profile:read",
+    },
+  };
+}
+
+/**
+ * Trade an authorization code for the provider's ID token.
+ *
+ * Done here rather than in the browser for two reasons: Google requires the
+ * client secret, which must never reach a browser, and doing it server-side
+ * means the ID token never exists in the page at all.
+ *
+ * @param {"google"|"microsoft"|"autodesk"} provider
+ * @param {{code: string, codeVerifier: string, redirectUri: string}} params
+ * @returns {Promise<string>} the id_token
+ */
+export async function exchangeCodeForIdToken(provider, { code, codeVerifier, redirectUri }) {
+  const ep = providerEndpoints()[provider];
+  if (!ep?.clientId) throw new Error(`${provider} sign-in is not configured.`);
+
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: ep.clientId,
+    redirect_uri: redirectUri,
+    code_verifier: codeVerifier,
+  });
+  const secret = providerSecret(provider);
+  if (secret) body.set("client_secret", secret);
+
+  const res = await fetch(ep.token, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    // Logged in full for us; the caller returns something short to the browser.
+    console.warn(`[social] ${provider} token exchange failed:`, data.error, data.error_description);
+    throw new Error(data.error_description || data.error || "The sign-in exchange failed.");
+  }
+  if (!data.id_token) throw new Error("The provider returned no identity token.");
+  return data.id_token;
+}
+
 // Where each OIDC provider publishes its metadata. Discovery is used rather
 // than hardcoded key URLs, so a provider moving its JWKS does not break sign-in.
 const DISCOVERY = {
@@ -60,40 +145,26 @@ export const PROVIDER_FIELD = {
  * ID token flows, verified against the providers' published public keys.
  */
 export function configuredProviders() {
-  const google = googleClientId();
-  const microsoft = microsoftClientId();
-  const autodesk = autodeskClientId();
-  const tenant = MS_TENANT();
+  const ep = providerEndpoints();
+  const on = (p) => !!ep[p].clientId;
+  // Only what the browser needs to START the redirect. The token endpoint is
+  // deliberately NOT here any more: the exchange happens on the server, so the
+  // browser has no business knowing where it goes.
+  const pub = (p) =>
+    on(p) && {
+      clientId: ep[p].clientId,
+      authorize: ep[p].authorize,
+      scope: ep[p].scope,
+    };
 
-  // The browser runs the same authorization-code + PKCE flow against all three,
-  // so each needs its endpoints. Publishing them here rather than hardcoding
-  // them in the client keeps one source, and means a tenant change is a
-  // server-side setting rather than a rebuild.
   return {
-    google: !!google,
-    microsoft: !!microsoft,
-    autodesk: !!autodesk,
+    google: on("google"),
+    microsoft: on("microsoft"),
+    autodesk: on("autodesk"),
     endpoints: {
-      google: google && {
-        clientId: google,
-        authorize: "https://accounts.google.com/o/oauth2/v2/auth",
-        token: "https://oauth2.googleapis.com/token",
-        scope: "openid email profile",
-      },
-      microsoft: microsoft && {
-        clientId: microsoft,
-        authorize: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
-        token: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-        scope: "openid email profile",
-      },
-      autodesk: autodesk && {
-        clientId: autodesk,
-        authorize: "https://developer.api.autodesk.com/authentication/v2/authorize",
-        token: "https://developer.api.autodesk.com/authentication/v2/token",
-        // Autodesk needs a resource scope alongside openid or it declines to
-        // issue a profile; user-profile:read is the narrowest that works.
-        scope: "openid user-profile:read",
-      },
+      google: pub("google"),
+      microsoft: pub("microsoft"),
+      autodesk: pub("autodesk"),
     },
   };
 }
