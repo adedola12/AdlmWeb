@@ -115,9 +115,10 @@ async function seedCollection(modelName, perCollection, dryRun) {
     return clones.length;
   }
 
-  // Inside the demo tenant: insertMany stamps isDemo on every row.
-  const inserted = await runAsDemo(() =>
-    Model.insertMany(clones, { ordered: false, rawResult: false }),
+  // Awaited INSIDE runAsDemo — see the warning in util/demoContext.js. Handing
+  // the lazy query back out would run it with the scope already unwound.
+  const inserted = await runAsDemo(async () =>
+    await Model.insertMany(clones, { ordered: false, rawResult: false }),
   );
   console.log(`  ✓ ${modelName}: ${inserted.length}`);
   return inserted.length;
@@ -130,13 +131,20 @@ async function wipe(dryRun) {
     if (!Model) continue;
     // Inside the demo tenant, so this can only ever match demo rows — an empty
     // filter here is scoped by the plugin, never a full-collection delete.
+    // The filter is EXPLICIT rather than left to the tenancy plugin. This is a
+    // destructive operation against production, and nothing destructive should
+    // depend on ambient context being intact: if the scope were ever lost, an
+    // empty filter deletes the entire collection. `{ isDemo: true }` cannot,
+    // whatever the context says. Belt and braces, and the braces are the belt.
     if (dryRun) {
-      const n = await runAsDemo(() => Model.countDocuments({}));
+      const n = await runAsDemo(async () => await Model.countDocuments({ isDemo: true }));
       if (n) console.log(`  · ${name}: would remove ${n}`);
       total += n;
       continue;
     }
-    const { deletedCount } = await runAsDemo(() => Model.deleteMany({}));
+    const { deletedCount } = await runAsDemo(
+      async () => await Model.deleteMany({ isDemo: true }),
+    );
     if (deletedCount) console.log(`  ✗ ${name}: removed ${deletedCount}`);
     total += deletedCount || 0;
   }
@@ -156,7 +164,12 @@ async function main() {
   const { fileURLToPath, pathToFileURL } = await import("node:url");
   const { dirname, join } = await import("node:path");
   const modelsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "models");
-  for (const file of readdirSync(modelsDir).filter((f) => f.endsWith(".js"))) {
+  const modelFiles = readdirSync(modelsDir).filter(
+    // .test.js lives alongside the models, and importing one runs its suite —
+    // which tried to spin up a second mongoose connection mid-seed.
+    (f) => f.endsWith(".js") && !f.endsWith(".test.js"),
+  );
+  for (const file of modelFiles) {
     await import(pathToFileURL(join(modelsDir, file)).href);
   }
 

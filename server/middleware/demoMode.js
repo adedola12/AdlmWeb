@@ -16,7 +16,7 @@
 import { User } from "../models/User.js";
 import { getTokenFromReq, verifyAccess } from "./auth.js";
 import { isDemoRole } from "../util/rbac.js";
-import { runAsDemo, runWithoutDemo } from "../util/demoContext.js";
+import { runAsDemo, withoutDemo } from "../util/demoContext.js";
 
 // Areas a demo role must not reach even though it may edit everything else.
 //   roles      — the UAC. It is untenanted (the auth layer reads it on every
@@ -47,7 +47,7 @@ export async function demoModeGuard(req, res, next) {
     // Deliberately outside any demo scope: this reads the caller's OWN user
     // row, which is a real record. It also means a role revocation takes effect
     // on the next request rather than whenever the token happens to expire.
-    const doc = await runWithoutDemo(() => User.findById(uid).select("role").lean());
+    const doc = await withoutDemo(() => User.findById(uid).select("role").lean());
     const roleKey = doc?.role || claims?.role || "user";
     if (!isDemoRole(roleKey)) return next();
 
