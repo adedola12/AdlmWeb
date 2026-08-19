@@ -141,6 +141,7 @@ const UserSchema = new mongoose.Schema(
     // says it has verified it.
     googleId: { type: String, default: null, index: true, sparse: true },
     microsoftId: { type: String, default: null, index: true, sparse: true },
+    autodeskId: { type: String, default: null, index: true, sparse: true },
 
     // Role key — references a Role.key (see server/models/Role.js). No enum so
     // admins can create custom roles; validated against existing roles on

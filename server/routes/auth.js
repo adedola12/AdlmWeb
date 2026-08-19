@@ -31,6 +31,7 @@ import { validatePasswordStrength } from "../util/passwordPolicy.js";
 import {
   verifySocialIdentity,
   configuredProviders,
+  PROVIDER_FIELD,
 } from "../util/socialIdentity.js";
 
 const router = express.Router();
@@ -1300,7 +1301,8 @@ router.post("/social", authLimiter, async (req, res) => {
       });
     }
 
-    const field = provider === "google" ? "googleId" : "microsoftId";
+    const field = PROVIDER_FIELD[provider];
+    if (!field) return res.status(400).json({ error: "Unknown sign-in provider." });
     let user = await User.findOne({ [field]: identity.subject });
     let created = false;
 

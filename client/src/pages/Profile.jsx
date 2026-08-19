@@ -8,6 +8,7 @@ import AccountActivity from "../features/account/AccountActivity.jsx";
 import Billing from "../features/account/Billing.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
 import DesktopPasswordCard from "../components/DesktopPasswordCard.jsx";
+import ConnectedAccounts from "../components/ConnectedAccounts.jsx";
 
 export default function Profile() {
   // A social sign-in lands here with ?setPassword=1, because the account it
@@ -524,6 +525,8 @@ export default function Profile() {
           software uses. Suppressed when the copy above is already showing it,
           so the page never has two of the same form. */}
       {!askingForPassword && <DesktopPasswordCard />}
+
+      <ConnectedAccounts />
 
       {/* SECURITY + ADMIN CARD */}
       <div className="card">

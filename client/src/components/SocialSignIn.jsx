@@ -1,200 +1,137 @@
-// "Continue with Google" and "Continue with Microsoft".
+// "Continue with Google / Microsoft / Autodesk".
 //
-// One component for both the sign-in and the create-account pages, because to
-// the providers there is no difference: the same button either finds the
-// account or makes it, and having two copies would mean two chances for them
-// to drift.
+// One component for signing in, creating an account, and connecting a provider
+// to an account that already exists — to the providers those are the same
+// journey, and three copies would be three chances to drift.
 //
-// The provider SDKs are loaded on demand, not in index.html. They are third
-// party scripts on the critical path of a page most visitors never open, and
-// a visitor who signs in with a password should not be paying for Google's
-// script to load, nor be identified to Google in order to read the form.
+// The buttons are ours, carrying each company's real mark, so the three read
+// as one set. See lib/socialAuth.js for why there is no vendor SDK behind
+// them.
 //
-// Buttons are only drawn for providers the server says are configured — a
-// "Continue with Microsoft" that fails on click because no client id is set is
-// worse than no button at all.
+// Only providers the server says are configured are drawn. A button that fails
+// on click because no client id is set is worse than no button.
 
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
-import { useAuth } from "../store.jsx";
-import { trackEvent } from "../ga";
+import { startSocialAuth } from "../lib/socialAuth.js";
 
-const GOOGLE_SRC = "https://accounts.google.com/gsi/client";
-const MS_SRC = "https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js";
+// The official marks, as SVG so they stay sharp and need no network request.
+const LOGOS = {
+  google: (
+    <svg viewBox="0 0 18 18" className="w-[18px] h-[18px]" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.35 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.96 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.65 3.58 9 3.58z"
+      />
+    </svg>
+  ),
+  microsoft: (
+    <svg viewBox="0 0 21 21" className="w-[18px] h-[18px]" aria-hidden="true">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+    </svg>
+  ),
+  // Autodesk's mark is a single-colour wordmark rather than a coloured glyph,
+  // so it takes currentColor and reads correctly in both themes.
+  autodesk: (
+    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" aria-hidden="true">
+      <path fill="currentColor" d="M3.6 17.4 14.1 6.6h6.3v10.8H3.6zm11.7-8.7-7.1 7.3h11V8.7h-3.9z" />
+    </svg>
+  ),
+};
 
-/** Load a script once, and hand every later caller the same promise. */
-const loaded = new Map();
-function loadScript(src) {
-  if (!loaded.has(src)) {
-    loaded.set(
-      src,
-      new Promise((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = src;
-        s.async = true;
-        s.defer = true;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error("That sign-in service could not be reached."));
-        document.head.appendChild(s);
-      }),
-    );
-  }
-  return loaded.get(src);
-}
+const LABEL = {
+  google: "Google",
+  microsoft: "Microsoft",
+  autodesk: "Autodesk",
+};
+
+const ORDER = ["google", "microsoft", "autodesk"];
 
 /**
  * @param {object} props
- * @param {string} [props.next]   where to go once signed in
+ * @param {string} [props.next]      where to go once signed in
+ * @param {boolean} [props.connect]  connect to the signed-in account instead
  * @param {(msg: string) => void} [props.onError]
+ * @param {string[]} [props.only]    restrict to these providers
+ * @param {boolean} [props.divider]  draw the "or" rule above the buttons
  */
-export default function SocialSignIn({ next = "/dashboard", onError }) {
-  const { setAuth } = useAuth();
-  const nav = useNavigate();
-
+export default function SocialSignIn({
+  next = "/dashboard",
+  connect = false,
+  onError,
+  only = null,
+  divider = true,
+}) {
   const [providers, setProviders] = React.useState(null);
   const [busy, setBusy] = React.useState("");
-  const googleBtn = React.useRef(null);
-
-  const fail = React.useCallback(
-    (msg) => {
-      setBusy("");
-      if (onError) onError(msg);
-    },
-    [onError],
-  );
+  useNavigate(); // the redirect leaves the SPA; kept so the hook order is stable
 
   React.useEffect(() => {
     let alive = true;
     api("/auth/providers")
       .then((p) => alive && setProviders(p))
-      .catch(() => alive && setProviders({ google: false, microsoft: false }));
+      .catch(() => alive && setProviders({ endpoints: {} }));
     return () => {
       alive = false;
     };
   }, []);
 
-  // Hand the verified token to our server and take the session it returns.
-  const complete = React.useCallback(
-    async (provider, credential) => {
-      setBusy(provider);
-      try {
-        const res = await api("/auth/social", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ provider, credential }),
-        });
-        setAuth({ user: res.user, accessToken: res.accessToken, licenseToken: null });
-        trackEvent("login", { method: provider });
-
-        // A social account has no password, and every Windows plugin signs in
-        // with one. Send them somewhere that says so rather than leaving them
-        // to discover it when QUIV rejects them.
-        nav(res.needsPassword ? "/profile?setPassword=1" : next, { replace: true });
-      } catch (e) {
-        fail(e.message || "That sign-in did not complete.");
-      }
-    },
-    [setAuth, nav, next, fail],
-  );
-
-  // ── Google ───────────────────────────────────────────────────────────────
-  React.useEffect(() => {
-    if (!providers?.google || !googleBtn.current) return;
-    let alive = true;
-
-    (async () => {
-      try {
-        await loadScript(GOOGLE_SRC);
-        if (!alive || !window.google?.accounts?.id) return;
-
-        // The client id is public by design: it identifies the application,
-        // it authorises nothing, and Google's own button embeds it in the
-        // page. The token it produces is verified server-side.
-        const clientId = providers.googleClientId;
-        if (!clientId || !alive) return;
-
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: ({ credential }) => complete("google", credential),
-        });
-        window.google.accounts.id.renderButton(googleBtn.current, {
-          type: "standard",
-          theme: "outline",
-          size: "large",
-          text: "continue_with",
-          width: 320,
-        });
-      } catch (e) {
-        fail(e.message);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [providers, complete, fail]);
-
-  // ── Microsoft ────────────────────────────────────────────────────────────
-  const microsoft = async () => {
-    setBusy("microsoft");
+  const go = async (provider) => {
+    setBusy(provider);
     try {
-      await loadScript(MS_SRC);
-      if (!window.msal) throw new Error("The Microsoft sign-in library did not load.");
-
-      const app = new window.msal.PublicClientApplication({
-        auth: {
-          clientId: providers.microsoftClientId,
-          authority: `https://login.microsoftonline.com/${providers.microsoftTenant || "common"}`,
-          redirectUri: window.location.origin,
-        },
-        cache: { cacheLocation: "sessionStorage" },
-      });
-      if (app.initialize) await app.initialize();
-
-      // openid + profile + email is all we ask for. Anything wider would be a
-      // consent screen listing permissions we have no use for, on a button
-      // whose only job is to establish who somebody is.
-      const result = await app.loginPopup({ scopes: ["openid", "profile", "email"] });
-      const idToken = result?.idToken;
-      if (!idToken) throw new Error("Microsoft returned no sign-in token.");
-      await complete("microsoft", idToken);
+      await startSocialAuth(provider, providers.endpoints[provider], { next, connect });
     } catch (e) {
-      // Closing the popup is a choice, not a failure worth shouting about.
-      const cancelled = /user_cancelled|popup_window_error|closed/i.test(e?.message || "");
-      fail(cancelled ? "" : e.message || "That sign-in did not complete.");
+      setBusy("");
+      if (onError) onError(e.message || "That sign-in could not be started.");
     }
   };
 
-  if (!providers || (!providers.google && !providers.microsoft)) return null;
+  const shown = ORDER.filter(
+    (p) => providers?.[p] && providers.endpoints?.[p] && (!only || only.includes(p)),
+  );
+  if (!providers || !shown.length) return null;
 
   return (
     <div className="mt-6">
-      <div className="flex items-center gap-3 text-xs text-slate-500">
-        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
-        or
-        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
-      </div>
+      {divider && (
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+          or
+          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+        </div>
+      )}
 
-      <div className="mt-4 space-y-2">
-        {providers.google && <div ref={googleBtn} className="flex justify-center" />}
-
-        {providers.microsoft && (
+      <div className={`${divider ? "mt-4" : ""} space-y-2`}>
+        {shown.map((p) => (
           <button
+            key={p}
             type="button"
-            onClick={microsoft}
+            onClick={() => go(p)}
             disabled={!!busy}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border border-slate-300 dark:border-slate-600 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-md border border-slate-300 dark:border-slate-600 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-60 transition-colors"
           >
-            <svg viewBox="0 0 21 21" className="w-4 h-4" aria-hidden="true">
-              <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-              <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-              <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-              <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-            </svg>
-            {busy === "microsoft" ? "One moment…" : "Continue with Microsoft"}
+            {LOGOS[p]}
+            {busy === p
+              ? "Redirecting…"
+              : `${connect ? "Connect" : "Continue with"} ${LABEL[p]}`}
           </button>
-        )}
+        ))}
       </div>
     </div>
   );

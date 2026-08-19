@@ -21,6 +21,11 @@ import { resolveUserGuideUrl } from "../util/userGuide.js";
 import { isGodUser } from "../util/godAccount.js";
 import bcrypt from "bcryptjs";
 import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import {
+  verifySocialIdentity,
+  PROVIDER_FIELD,
+  configuredProviders,
+} from "../util/socialIdentity.js";
 
 const router = express.Router();
 
@@ -1910,6 +1915,144 @@ router.get(
         microsoft: !!user.microsoftId,
       },
     });
+  }),
+);
+
+/**
+ * GET /me/social
+ *
+ * Which providers this account is connected to, and which could be connected.
+ * Drives the "Connected accounts" panel in the profile.
+ */
+router.get(
+  "/social",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id)
+      .select("googleId microsoftId autodeskId passwordHash email")
+      .lean();
+    if (!user) return res.status(404).json({ error: "User missing" });
+
+    const available = configuredProviders();
+    res.json({
+      email: user.email,
+      hasPassword: !!user.passwordHash,
+      connected: {
+        google: !!user.googleId,
+        microsoft: !!user.microsoftId,
+        autodesk: !!user.autodeskId,
+      },
+      available: {
+        google: available.google,
+        microsoft: available.microsoft,
+        autodesk: available.autodesk,
+      },
+    });
+  }),
+);
+
+/**
+ * POST /me/social/connect  { provider, credential }
+ *
+ * Attach a Google, Microsoft or Autodesk account to the one already signed in,
+ * so a later click on that button lands here instead of creating a second
+ * account.
+ *
+ * The token is verified exactly as it is at sign-in — being signed in already
+ * is permission to connect something, not permission to skip proving what is
+ * being connected.
+ *
+ * The email is NOT required to match. Plenty of people sign in to ADLM with a
+ * work address and hold an Autodesk or Microsoft account under a personal one,
+ * and refusing that would be refusing the normal case. What is refused is a
+ * provider account already attached to a DIFFERENT ADLM user, because that is
+ * the one situation where connecting would quietly take something away from
+ * somebody else.
+ */
+router.post(
+  "/social/connect",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const provider = String(req.body?.provider || "").trim().toLowerCase();
+    const field = PROVIDER_FIELD[provider];
+    if (!field) return res.status(400).json({ error: "Unknown sign-in provider." });
+
+    let identity;
+    try {
+      identity = await verifySocialIdentity(provider, req.body?.credential);
+    } catch (e) {
+      console.warn("[/me/social/connect] rejected:", e?.message || e);
+      return res
+        .status(401)
+        .json({ error: "That account could not be verified. Please try again." });
+    }
+
+    const takenBy = await User.findOne({ [field]: identity.subject })
+      .select("_id")
+      .lean();
+    if (takenBy && String(takenBy._id) !== String(req.user._id)) {
+      return res.status(409).json({
+        error: `That ${provider} account is already connected to another ADLM account.`,
+        code: "ALREADY_LINKED",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User missing" });
+
+    user[field] = identity.subject;
+    if (!user.firstName && identity.firstName) user.firstName = identity.firstName;
+    if (!user.lastName && identity.lastName) user.lastName = identity.lastName;
+    await user.save();
+
+    res.json({
+      ok: true,
+      provider,
+      connectedEmail: identity.email,
+      message: `Connected. You can now sign in with ${provider}.`,
+    });
+  }),
+);
+
+/**
+ * DELETE /me/social/:provider
+ *
+ * Disconnect a provider.
+ *
+ * Refused when it is the only way in. Removing the last provider from an
+ * account that has no password locks the owner out of their own account with
+ * one click, and no amount of confirmation copy makes that a reasonable thing
+ * to allow — so it is not allowed until a password exists.
+ */
+router.delete(
+  "/social/:provider",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const provider = String(req.params.provider || "").trim().toLowerCase();
+    const field = PROVIDER_FIELD[provider];
+    if (!field) return res.status(400).json({ error: "Unknown sign-in provider." });
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User missing" });
+    if (!user[field]) {
+      return res.status(400).json({ error: `No ${provider} account is connected.` });
+    }
+
+    const others = Object.entries(PROVIDER_FIELD).filter(
+      ([key, f]) => key !== provider && !!user[f],
+    );
+    if (!user.passwordHash && others.length === 0) {
+      return res.status(400).json({
+        error:
+          "That is the only way into this account. Set a password first, then " +
+          "you can disconnect it.",
+        code: "LAST_CREDENTIAL",
+      });
+    }
+
+    user[field] = null;
+    await user.save();
+    res.json({ ok: true, provider, message: `Disconnected your ${provider} account.` });
   }),
 );
 

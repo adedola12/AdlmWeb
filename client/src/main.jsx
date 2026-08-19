@@ -76,6 +76,7 @@ import MaterialConstants from "./pages/MaterialConstants.jsx";
 import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import Receipt from "./pages/Receipt.jsx";
 import OrderDetail from "./pages/OrderDetail.jsx";
+import AuthCallback from "./pages/AuthCallback.jsx";
 import UserInvoice from "./pages/UserInvoice.jsx";
 
 // ✅ QUIV for ArchiCAD
@@ -214,6 +215,14 @@ const router = createBrowserRouter([
             <Freebies />
           </ProtectedRoute>
         ),
+      },
+      {
+        // Where Google, Microsoft and Autodesk send the browser back to. Public
+        // on purpose: the person is by definition not signed in yet when they
+        // arrive here from a sign-in, and what makes it safe is the PKCE state
+        // held in the tab, not a session.
+        path: "auth/callback",
+        element: <AuthCallback />,
       },
       {
         // An order before it is paid: what was bought, what it costs, where to
