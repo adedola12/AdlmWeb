@@ -1,5 +1,5 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { Setting } from "../models/Setting.js";
 import { User } from "../models/User.js";
 
@@ -9,13 +9,6 @@ function requireAdminOrMiniAdmin(req, res, next) {
   const role = req.user?.role;
   if (role === "admin" || role === "mini_admin") return next();
   return res.status(403).json({ error: "Admin or Mini-Admin only" });
-}
-
-function requireAdminOnly(req, res, next) {
-  if (req.demoMode) return next();
-  const role = req.user?.role;
-  if (role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
 }
 
 const router = express.Router();
@@ -124,7 +117,7 @@ const DEFAULT_REINSTALL_MESSAGE =
 
 // POST trigger global reinstall: revoke ALL active devices and set the broadcast message.
 // Admin only — this signs out every active install fleet-wide.
-router.post("/force-reinstall", requireAdminOnly, async (req, res) => {
+router.post("/force-reinstall", requireAdmin, async (req, res) => {
   const customMessage =
     typeof req.body?.message === "string" ? req.body.message.trim() : "";
   const message = customMessage || DEFAULT_REINSTALL_MESSAGE;
@@ -229,7 +222,7 @@ router.post("/vat", async (req, res) => {
 });
 
 // POST clear the active reinstall broadcast (admin only). Does not re-bind any devices.
-router.post("/force-reinstall/clear", requireAdminOnly, async (_req, res) => {
+router.post("/force-reinstall/clear", requireAdmin, async (_req, res) => {
   const s = await Setting.findOneAndUpdate(
     { key: "global" },
     { forceReinstallActive: false },
