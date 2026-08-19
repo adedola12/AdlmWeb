@@ -82,13 +82,34 @@ export default function SocialSignIn({
   const [busy, setBusy] = React.useState("");
   useNavigate(); // the redirect leaves the SPA; kept so the hook order is stable
 
+  // Ask the server which providers are configured, and retry once if it does
+  // not answer.
+  //
+  // A single failed call used to remove every social button for the rest of
+  // that page load, silently — which is exactly what happened while the API
+  // was restarting: the page looked like a build with no social sign-in at
+  // all, rather than one that could not reach its own server for a moment.
   React.useEffect(() => {
     let alive = true;
-    api("/auth/providers")
-      .then((p) => alive && setProviders(p))
-      .catch(() => alive && setProviders({ endpoints: {} }));
+    let timer = null;
+
+    const ask = (attempt = 0) =>
+      api("/auth/providers")
+        .then((p) => alive && setProviders(p))
+        .catch(() => {
+          if (!alive) return;
+          if (attempt === 0) {
+            timer = setTimeout(() => ask(1), 1500);
+            return;
+          }
+          // Twice is enough to distinguish a restart from a real absence.
+          setProviders({ endpoints: {} });
+        });
+
+    ask();
     return () => {
       alive = false;
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
