@@ -13,6 +13,7 @@
 // which is the house style for transactional mail here.
 
 import { sendMail } from "./mailer.js";
+import { payoutAccount } from "./payoutAccount.js";
 
 const WEB = () =>
   String(
@@ -123,11 +124,8 @@ export function buildProformaInvoice(purchase) {
       Number(purchase.totalBeforeDiscount) ||
       Math.max(Number(purchase.totalAmount || 0) - Number(purchase.vatAmount || 0), 0);
 
-    const bank = {
-      number: process.env.BANK_ACCOUNT_NUMBER || "1634998770",
-      name: process.env.BANK_ACCOUNT_NAME || "ADLM Studio",
-      bank: process.env.BANK_NAME || "Access Bank",
-    };
+    const acct = payoutAccount();
+    const bank = { number: acct.accountNumber, name: acct.accountName, bank: acct.bankName };
 
     const vatRow =
       Number(purchase.vatAmount) > 0

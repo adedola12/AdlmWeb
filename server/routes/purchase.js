@@ -17,6 +17,7 @@ import multer from "multer";
 import { uploadBufferToCloudinary } from "../utils/cloudinaryUpload.js";
 import { notifyAdminOfPurchase } from "../util/purchaseAlert.js";
 import { sendProformaInvoice } from "../util/proformaInvoice.js";
+import { payoutAccount } from "../util/payoutAccount.js";
 
 const router = express.Router();
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
@@ -592,11 +593,7 @@ router.post("/:id/paystack/init", requireAuth, async (req, res) => {
 
 // Bank details served from env — keeps sensitive data out of frontend source
 router.get("/bank-details", requireAuth, (_req, res) => {
-  res.json({
-    accountNumber: process.env.BANK_ACCOUNT_NUMBER || "1634998770",
-    accountName: process.env.BANK_ACCOUNT_NAME || "ADLM Studio",
-    bankName: process.env.BANK_NAME || "Access Bank",
-  });
+  res.json(payoutAccount());
 });
 
 // Which methods a buyer may choose. Kept beside the route rather than only in
