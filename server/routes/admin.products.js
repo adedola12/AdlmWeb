@@ -1,17 +1,12 @@
 import express from "express";
 import mongoose from "mongoose";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { Product } from "../models/Product.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import {
   findImplausibleUSD,
   describeImplausibleUSD,
 } from "../util/priceSanity.js";
-
-function requireAdmin(req, res, next) {
-  if (req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);

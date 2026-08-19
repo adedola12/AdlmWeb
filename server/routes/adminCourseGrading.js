@@ -1,19 +1,11 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { CourseSubmission } from "../models/CourseSubmission.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { User } from "../models/User.js";
 import PDFDocument from "pdfkit";
 import cloudinary from "../utils/cloudinaryConfig.js";
-
-function requireAdmin(req, res, next) {
-  // Read-only, placeholder-masked demo sessions (server/middleware/demoMode.js)
-  // may view admin screens; every mutating method is already blocked upstream.
-  if (req.demoMode) return next();
-  if (req.user?.role === "admin") return next();
-  return res.status(403).json({ error: "Admin only" });
-}
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
