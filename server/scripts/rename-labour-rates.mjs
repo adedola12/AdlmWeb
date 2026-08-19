@@ -40,11 +40,11 @@ const RESTORE_FILE = restoreAt >= 0 ? args[restoreAt + 1] : null;
 // "Static steel wheeled roller - (2.7 to 6 tonnes)" keeps its stray dash too:
 // that is formatting, not spelling.
 const RENAMES = {
-  // Every other parenthetical range in the catalogue reads "tonnes"; these two
-  // read "tons". Earlier passes of this script (whelled -> wheeled, tired ->
-  // tyred) are in git history and in their own backup files.
-  "Vibratory wheeled roller (8 to 10 tons)": "Vibratory wheeled roller (8 to 10 tonnes)",
-  "Vibratory wheeled roller (10 to 20 tons)": "Vibratory wheeled roller (10 to 20 tonnes)",
+  // "1406" is not a Caterpillar grader; the range is 140G / 140H / 14M. It is
+  // "140G" with the G read as a 6 — a 150 hp, 12 ft moldboard machine built
+  // 1987-95 and common secondhand in West Africa. Nothing in the desktop looks
+  // this one up by name, so no build-up can be zeroed by the change.
+  "Grader (Cat 1406)": "Grader (Cat 140G)",
 };
 
 const uri = process.env.RATEGEN_MONGO_URI || process.env.MONGO_URI || "";

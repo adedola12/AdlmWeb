@@ -42,7 +42,7 @@ export default function DsCustomers() {
           </h1>
           {" "}
           <p className="ds-lede">
-            Institutions, firms and universities across Nigeria — and the events where most of them first met the tools.
+            Institutions, firms and universities across Nigeria, and the events where most of them first met the tools.
           </p>
           {" "}
           <div className="hero-cta">
@@ -172,7 +172,7 @@ export default function DsCustomers() {
                   </h4>
                   {" "}
                   <p>
-                    Panel on cost versus sustainability in building projects, Landmark Centre, Lagos —{" "}
+                    Panel on cost versus sustainability in building projects, Landmark Centre, Lagos:{" "}
                     <strong>
                       1,480 attendees
                     </strong>
@@ -194,7 +194,7 @@ export default function DsCustomers() {
                   </h4>
                   {" "}
                   <p>
-                    Rivers, Cross River, Ogun and the NIQS Foundation — including a three-day workshop on AI in quantity surveying,{" "}
+                    Rivers, Cross River, Ogun and the NIQS Foundation: including a three-day workshop on AI in quantity surveying,{" "}
                     <strong>
                       200 attendees
                     </strong>

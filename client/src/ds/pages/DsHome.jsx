@@ -54,7 +54,7 @@ export default function DsHome() {
           </h1>
           {" "}
           <p className="ds-lede">
-            BIM takeoff plugins, defensible rate build-ups and hands-on training — built for how Quantity Surveyors actually work.
+            BIM takeoff plugins, defensible rate build-ups and hands-on training: built for how Quantity Surveyors actually work.
           </p>
           {" "}
           <div className="hero-cta">
@@ -97,7 +97,7 @@ export default function DsHome() {
               <i>
               </i>
               <span>
-                QUIV — Moremi Estate Block A
+                QUIV, Moremi Estate Block A
               </span>
             </div>
             {" "}
@@ -329,7 +329,7 @@ export default function DsHome() {
                   {" "}
                   <div className="frag-r">
                     <span className="frag-k">
-                      Labour — blocklayer gang
+                      Labour, blocklayer gang
                     </span>
                     <span className="frag-v">
                       ₦524,600
@@ -458,7 +458,7 @@ export default function DsHome() {
                 </h4>
                 {" "}
                 <p>
-                  Model type names become an SMM-style preamble and a terse measured description — not raw strings in a spreadsheet.
+                  Model type names become an SMM-style preamble and a terse measured description, not raw strings in a spreadsheet.
                 </p>
                 {" "}
               </article>
@@ -576,7 +576,7 @@ export default function DsHome() {
                 </h3>
                 {" "}
                 <p className="desc">
-                  Measures every element in your Revit model, builds a structured bill of quantities, and prices it against your own rate library — inside a dockable panel.
+                  Measures every element in your Revit model, builds a structured bill of quantities, and prices it against your own rate library: inside a dockable panel.
                 </p>
                 {" "}
                 <div className="pfeat">
@@ -944,7 +944,7 @@ export default function DsHome() {
                 </h3>
                 {" "}
                 <p className="desc">
-                  Model-based takeoff for roads, drainage and earthworks, measured directly inside Civil 3D. In active development — release notes go live with the first build.
+                  Model-based takeoff for roads, drainage and earthworks, measured directly inside Civil 3D. In active development, release notes go live with the first build.
                 </p>
                 {" "}
                 <div className="pfeat">
@@ -1566,7 +1566,7 @@ export default function DsHome() {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run QUIV against one of your live projects — your drawings, not a demo file.
+          We'll run QUIV against one of your live projects, your drawings, not a demo file.
         </p>
         {" "}
         <div className="hero-cta">

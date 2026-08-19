@@ -165,7 +165,7 @@ export default function DsSolutionsProfessionals() {
               </h2>
               {" "}
               <p className="ds-lede">
-                On your own, every part of the practice is yours — the rates, the software bill, and the backup nobody else is doing.
+                On your own, every part of the practice is yours: the rates, the software bill, and the backup nobody else is doing.
               </p>
               {" "}
               <ul className="ps-list">
@@ -274,7 +274,7 @@ export default function DsSolutionsProfessionals() {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "44ch" }}>
-                  From ₦2,000 a month. Yearly billing costs ten months, so two are free — and you can start without talking to anyone.
+                  From ₦2,000 a month. Yearly billing costs ten months, so two are free, and you can start without talking to anyone.
                 </p>
               </div>
               {" "}
@@ -411,7 +411,7 @@ export default function DsSolutionsProfessionals() {
               </summary>
               {" "}
               <div className="faq-a">
-                HERON plus RateGen — roughly ₦190,000 a year for one PC — covers measuring flat drawings and pricing them properly.
+                HERON plus RateGen, roughly ₦190,000 a year for one PC: covers measuring flat drawings and pricing them properly.
               </div>
               {" "}
             </details>
@@ -478,7 +478,7 @@ export default function DsSolutionsProfessionals() {
               </h2>
               {" "}
               <p className="ds-lede">
-                Tell us what you measure and what you hand over. We will point you at the one licence that covers it — or tell you that you do not need us.
+                Tell us what you measure and what you hand over. We will point you at the one licence that covers it, or tell you that you do not need us.
               </p>
               {" "}
               <ul className="sform-pts">

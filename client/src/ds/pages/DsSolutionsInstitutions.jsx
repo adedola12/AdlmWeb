@@ -54,7 +54,7 @@ export default function DsSolutionsInstitutions() {
           </h1>
           {" "}
           <p className="ds-lede">
-            Chapter workshops, university programmes and departmental training — delivered on site, on your own projects.
+            Chapter workshops, university programmes and departmental training: delivered on site, on your own projects.
           </p>
           {" "}
           <div className="hero-cta">
@@ -273,7 +273,7 @@ export default function DsSolutionsInstitutions() {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "44ch" }}>
-                  Structured across sessions with practical tasks between them and a defined outcome — the NIQS Foundation ran two full days.
+                  Structured across sessions with practical tasks between them and a defined outcome, the NIQS Foundation ran two full days.
                 </p>
                 {" "}
               </div>
@@ -478,7 +478,7 @@ export default function DsSolutionsInstitutions() {
               </h2>
               {" "}
               <p className="ds-lede">
-                Chapter workshops, departmental training and university programmes — delivered on site, on your own projects.
+                Chapter workshops, departmental training and university programmes: delivered on site, on your own projects.
               </p>
               {" "}
               <ul className="sform-pts">

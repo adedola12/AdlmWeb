@@ -510,7 +510,7 @@ export default function DsDashProducts() {
                 </h1>
                 {" "}
                 <p>
-                  Three of seven in the subscription. The rest are listed so you can see what the account could cover — nothing here is charged until you add it.
+                  Three of seven in the subscription. The rest are listed so you can see what the account could cover, nothing here is charged until you add it.
                 </p>
                 {" "}
               </div>
@@ -577,7 +577,7 @@ export default function DsDashProducts() {
                 </div>
                 {" "}
                 <p>
-                  Measurement inside Revit — per-element quantities, a structured bill and a margin view, on Tunde's and Chidi's machines.
+                  Measurement inside Revit, per-element quantities, a structured bill and a margin view, on Tunde's and Chidi's machines.
                 </p>
                 {" "}
                 <div className="foot2">
@@ -690,7 +690,7 @@ export default function DsDashProducts() {
                 </div>
                 {" "}
                 <p>
-                  Services quantities from the Revit model — duct and pipe runs by length, fittings counted separately, the way a services bill is actually written.
+                  Services quantities from the Revit model, duct and pipe runs by length, fittings counted separately, the way a services bill is actually written.
                 </p>
                 {" "}
                 <div className="foot2">
@@ -760,7 +760,7 @@ export default function DsDashProducts() {
                 </div>
                 {" "}
                 <p>
-                  Corridor quantities, earthworks and drainage inside Civil 3D. No shipping build yet — join the waitlist and you will hear the day the first one lands.
+                  Corridor quantities, earthworks and drainage inside Civil 3D. No shipping build yet. Join the waitlist and you will hear the day the first one lands.
                 </p>
                 {" "}
                 <div className="foot2">
@@ -797,7 +797,7 @@ export default function DsDashProducts() {
                 </div>
                 {" "}
                 <p>
-                  Check a budget or adjust a rate from site. It signs in with this same account — no extra seat, nothing to buy.
+                  Check a budget or adjust a rate from site. It signs in with this same account, no extra seat, nothing to buy.
                 </p>
                 {" "}
                 <div className="foot2">

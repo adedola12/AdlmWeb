@@ -553,7 +553,7 @@ export default function DsDashLearning() {
                     <b>
                       Master architectural quantity takeoff
                     </b>
-                    {" "}— Revit · 12:41
+                    , Revit · 12:41
                   </div>
                   <span className="ago">
                     3d
@@ -567,7 +567,7 @@ export default function DsDashLearning() {
                     <b>
                       Generate a BoQ in minutes
                     </b>
-                    {" "}— Revit · 15:02
+                    , Revit · 15:02
                   </div>
                   <span className="ago">
                     3d
@@ -581,7 +581,7 @@ export default function DsDashLearning() {
                     <b>
                       Foundation takeoff tutorial
                     </b>
-                    {" "}— PlanSwift · 11:27
+                    , PlanSwift · 11:27
                   </div>
                   <span className="ago">
                     1w

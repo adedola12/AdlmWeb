@@ -153,7 +153,7 @@ export default function DsWhatsNewPage({ d }) {
               </h3>
               {" "}
               <p>
-                Corridor quantities, earthworks volumes and drainage runs, measured inside Civil 3D. There is no shipping build yet — release notes appear the day the first one lands.
+                Corridor quantities, earthworks volumes and drainage runs, measured inside Civil 3D. There is no shipping build yet, release notes appear the day the first one lands.
               </p>
               {" "}
               <p className="wcard-note">

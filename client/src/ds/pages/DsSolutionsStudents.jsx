@@ -339,7 +339,7 @@ export default function DsSolutionsStudents() {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "44ch" }}>
-                  Top projects each cohort are featured on ADLM channels — credibility before your first job.
+                  Top projects each cohort are featured on ADLM channels, credibility before your first job.
                 </p>
                 {" "}
               </div>
@@ -367,7 +367,7 @@ export default function DsSolutionsStudents() {
           <h2>
             JABU, Rivers State,{" "}
             <span className="grad">
-              Yaba Tech — and yours
+              Yaba Tech, and yours
             </span>
           </h2>
           {" "}
@@ -411,7 +411,7 @@ export default function DsSolutionsStudents() {
               </summary>
               {" "}
               <div className="faq-a">
-                Talk to us — cohort pricing for a university group is usually very different from the list price.
+                Talk to us, cohort pricing for a university group is usually very different from the list price.
               </div>
               {" "}
             </details>

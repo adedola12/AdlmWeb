@@ -510,7 +510,7 @@ export default function DsWorkProjects() {
                 </h1>
                 {" "}
                 <p>
-                  A project is where extracted quantities live. QUIV measures the Revit model, HERON takes off the drawings you were given, Revit MEP handles services — and all three land here against the same rate library.
+                  A project is where extracted quantities live. QUIV measures the Revit model, HERON takes off the drawings you were given, Revit MEP handles services, and all three land here against the same rate library.
                 </p>
                 {" "}
               </div>

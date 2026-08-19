@@ -99,7 +99,7 @@ export default function DsLearnPage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Structured roadmaps that end in a capstone project and a certificate — not a folder of videos.
+              Structured roadmaps that end in a capstone project and a certificate, not a folder of videos.
             </p>
             {" "}
           </div>
@@ -416,7 +416,7 @@ export default function DsLearnPage({ d }) {
                 </h3>
                 {" "}
                 <p>
-                  Every course ends in a capstone you actually build — a coordinated model, a priced bill, a programme. Pass the assessment and your certificate is issued to your ADLM account, with your name on it and something real to show behind it.
+                  Every course ends in a capstone you actually build, a coordinated model, a priced bill, a programme. Pass the assessment and your certificate is issued to your ADLM account, with your name on it and something real to show behind it.
                 </p>
                 {" "}
                 <a href="#courses" className="ds-btn btn-p ds-btn-sm">
@@ -798,7 +798,7 @@ export default function DsLearnPage({ d }) {
               </h3>
               {" "}
               <p>
-                Cost versus sustainability in building projects — a panel on lifecycle cost and BIM-driven takeoff.
+                Cost versus sustainability in building projects, a panel on lifecycle cost and BIM-driven takeoff.
               </p>
               {" "}
               <p className="gprice">
@@ -1097,7 +1097,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-title">
-                Numbers That Build — planning with Microsoft Project
+                Numbers That Build, planning with Microsoft Project
               </span>
               {" "}
               <span className="ev-loc">
@@ -1121,7 +1121,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-title">
-                Cost vs Sustainability — The Big 5 Construct Nigeria
+                Cost vs Sustainability, The Big 5 Construct Nigeria
               </span>
               {" "}
               <span className="ev-loc">
@@ -1153,7 +1153,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-att">
-                —
+                ,{" "}
               </span>
               {" "}
             </li>
@@ -1241,7 +1241,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-title">
-                Three-day workshop — NIQS Rivers State Chapter
+                Three-day workshop, NIQS Rivers State Chapter
               </span>
               {" "}
               <span className="ev-loc">
@@ -1289,7 +1289,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-title">
-                ConTech Nigeria 2024 — AEC technology event
+                ConTech Nigeria 2024, AEC technology event
               </span>
               {" "}
               <span className="ev-loc">
@@ -1489,7 +1489,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-att">
-                —
+                ,{" "}
               </span>
               {" "}
             </li>
@@ -1609,7 +1609,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-att">
-                —
+                ,{" "}
               </span>
               {" "}
             </li>
@@ -1657,7 +1657,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-att">
-                —
+                ,{" "}
               </span>
               {" "}
             </li>
@@ -1681,7 +1681,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-att">
-                —
+                ,{" "}
               </span>
               {" "}
             </li>
@@ -1705,7 +1705,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-att">
-                —
+                ,{" "}
               </span>
               {" "}
             </li>
@@ -1729,7 +1729,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-att">
-                —
+                ,{" "}
               </span>
               {" "}
             </li>
@@ -1753,7 +1753,7 @@ export default function DsLearnPage({ d }) {
               </span>
               {" "}
               <span className="ev-att">
-                —
+                ,{" "}
               </span>
               {" "}
             </li>
@@ -1946,7 +1946,7 @@ export default function DsLearnPage({ d }) {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "46ch" }}>
-                  The combined book — the Hub end to end, then HERON: scaling drawings, measuring, pricing and export.
+                  The combined book, the Hub end to end, then HERON: scaling drawings, measuring, pricing and export.
                 </p>
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
@@ -2032,7 +2032,7 @@ export default function DsLearnPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                No, but you will get more out of it if you do. Course licences and product licences are priced separately — ask and we'll quote both together.
+                No, but you will get more out of it if you do. Course licences and product licences are priced separately. Ask and we'll quote both together.
               </div>
               {" "}
             </details>
@@ -2056,7 +2056,7 @@ export default function DsLearnPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes. On-site training is our oldest business — thirty events so far, including NIQS chapters and government agencies.
+                Yes. On-site training is our oldest business, thirty events so far, including NIQS chapters and government agencies.
               </div>
               {" "}
             </details>

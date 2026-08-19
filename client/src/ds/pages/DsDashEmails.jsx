@@ -510,7 +510,7 @@ export default function DsDashEmails() {
                 </h1>
                 {" "}
                 <p>
-                  Every message the studio sends, built from one frame. Tables and inline styles, because Outlook and Gmail are not browsers — and every mark is a hosted PNG for the same reason.
+                  Every message the studio sends, built from one frame. Tables and inline styles, because Outlook and Gmail are not browsers, and every mark is a hosted PNG for the same reason.
                 </p>
                 {" "}
               </div>

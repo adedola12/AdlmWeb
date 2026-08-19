@@ -176,7 +176,7 @@ export default function DsRateGenPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  A rate is never a number you typed. It is materials, waste, labour output and a margin — each editable, each visible, each defensible in a meeting.
+                  A rate is never a number you typed. It is materials, waste, labour output and a margin: each editable, each visible, each defensible in a meeting.
                 </p>
                 {" "}
               </div>
@@ -294,7 +294,7 @@ export default function DsRateGenPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  The same specification costs differently in the South West and the North East. Set your geopolitical zone once, on your ADLM profile, and every rate you see is priced through it — in naira, dollars or five other currencies.
+                  The same specification costs differently in the South West and the North East. Set your geopolitical zone once, on your ADLM profile, and every rate you see is priced through it: in naira, dollars or five other currencies.
                 </p>
                 {" "}
               </div>
@@ -421,7 +421,7 @@ export default function DsRateGenPage({ d }) {
                         <svg viewBox="0 0 24 24">
                           <use href="#i-check" />
                         </svg>
-                        All items from your library — edit before saving
+                        All items from your library, edit before saving
                       </span>
                       {" "}
                     </div>
@@ -441,7 +441,7 @@ export default function DsRateGenPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Describe an item of work in plain English and RateGen proposes a build-up from your own library — which you then check, edit and own. It suggests; you decide.
+                  Describe an item of work in plain English and RateGen proposes a build-up from your own library, which you then check, edit and own. It suggests; you decide.
                 </p>
                 {" "}
               </div>
@@ -765,7 +765,7 @@ export default function DsRateGenPage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Every release, in plain English — what shipped, what improved, what was fixed.
+              Every release, in plain English: what shipped, what improved, what was fixed.
             </p>
             {" "}
           </div>
@@ -811,7 +811,7 @@ export default function DsRateGenPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                No. It prices. Measuring is QUIV, HERON or Revit MEP — RateGen is the library they all read from.
+                No. It prices. Measuring is QUIV, HERON or Revit MEP: RateGen is the library they all read from.
               </div>
               {" "}
             </details>
@@ -875,7 +875,7 @@ export default function DsRateGenPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run RateGen against one of your live jobs — your drawings, your rates, your bill format.
+          We'll run RateGen against one of your live jobs, your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">

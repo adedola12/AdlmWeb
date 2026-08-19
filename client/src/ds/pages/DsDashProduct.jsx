@@ -517,7 +517,7 @@ export default function DsDashProduct() {
                   </h1>
                   {" "}
                   <p data-p="blurb">
-                    Measurement inside Revit — per-element quantities, a structured bill of quantities and a margin view, without leaving the model.
+                    Measurement inside Revit, per-element quantities, a structured bill of quantities and a margin view, without leaving the model.
                   </p>
                   {" "}
                 </div>
@@ -578,7 +578,7 @@ export default function DsDashProduct() {
                 </b>
                 {" "}
                 <p className="ds-sub" data-p="verNote">
-                  The latest build — nothing to do
+                  The latest build, nothing to do
                 </p>
                 {" "}
               </div>

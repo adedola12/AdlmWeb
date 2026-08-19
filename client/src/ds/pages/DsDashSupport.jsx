@@ -710,7 +710,7 @@ export default function DsDashSupport() {
                       <div className="acc-body">
                         <div>
                           <p>
-                            The library was syncing to the account, not to that machine — CHIDI-LT01 had not signed in since the seat moved. Signing in once pulled the whole library down. Closed 4 July.
+                            The library was syncing to the account, not to that machine: CHIDI-LT01 had not signed in since the seat moved. Signing in once pulled the whole library down. Closed 4 July.
                           </p>
                         </div>
                       </div>
@@ -783,7 +783,7 @@ export default function DsDashSupport() {
                           <b>
                             Moving a licence to a new laptop
                           </b>
-                          {" "}— do it from Team &amp; seats, no ticket needed
+                          , do it from Team &amp; seats, no ticket needed
                         </div>
                       </li>
                       {" "}
@@ -794,7 +794,7 @@ export default function DsDashSupport() {
                           <b>
                             Activation says the machine changed
                           </b>
-                          {" "}— a rebuilt PC counts as a new device
+                          , a rebuilt PC counts as a new device
                         </div>
                       </li>
                       {" "}
@@ -805,7 +805,7 @@ export default function DsDashSupport() {
                           <b>
                             The Hub cannot sign in
                           </b>
-                          {" "}— update to v3.1.7, which fixed the fallback address
+                          , update to v3.1.7, which fixed the fallback address
                         </div>
                       </li>
                       {" "}
@@ -816,7 +816,7 @@ export default function DsDashSupport() {
                           <b>
                             Adding a product mid-month
                           </b>
-                          {" "}— it is pro-rated onto the next invoice
+                          . It is pro-rated onto the next invoice
                         </div>
                       </li>
                       {" "}

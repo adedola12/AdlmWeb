@@ -214,7 +214,7 @@ export default function DsHeronPage({ d }) {
                     {" "}
                     <div className="vz-row hl">
                       <span>
-                        Labour — gang of 6
+                        Labour, gang of 6
                       </span>
                       <b>
                         ₦486,200
@@ -730,7 +730,7 @@ export default function DsHeronPage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Every release, in plain English — what shipped, what improved, what was fixed.
+              Every release, in plain English: what shipped, what improved, what was fixed.
             </p>
             {" "}
           </div>
@@ -788,7 +788,7 @@ export default function DsHeronPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes — scale from any dimension you can read on the sheet. HERON works from a known length rather than a stated ratio.
+                Yes, scale from any dimension you can read on the sheet. HERON works from a known length rather than a stated ratio.
               </div>
               {" "}
             </details>
@@ -812,7 +812,7 @@ export default function DsHeronPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes. The export is an ordinary workbook with live formulas — anyone can open it.
+                Yes. The export is an ordinary workbook with live formulas. Anyone can open it.
               </div>
               {" "}
             </details>
@@ -840,7 +840,7 @@ export default function DsHeronPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run HERON against one of your live jobs — your drawings, your rates, your bill format.
+          We'll run HERON against one of your live jobs, your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">

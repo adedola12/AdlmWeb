@@ -54,7 +54,7 @@ export default function DsTimeProPage({ d }) {
           </h1>
           {" "}
           <p className="ds-lede">
-            Log the output, get durations you can defend — then export the programme.
+            Log the output, get durations you can defend, then export the programme.
           </p>
           {" "}
           <div className="hero-cta">
@@ -283,7 +283,7 @@ export default function DsTimeProPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Give it a quantity and it tells you how long that takes your team, and what crew gets it done by a date — arithmetic you can show the client.
+                  Give it a quantity and it tells you how long that takes your team, and what crew gets it done by a date: arithmetic you can show the client.
                 </p>
                 {" "}
               </div>
@@ -351,7 +351,7 @@ export default function DsTimeProPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Export a programme that opens first time, with durations already priced — no retyping the schedule into a planning tool afterwards.
+                  Export a programme that opens first time, with durations already priced, no retyping the schedule into a planning tool afterwards.
                 </p>
                 {" "}
               </div>
@@ -408,7 +408,7 @@ export default function DsTimeProPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  When a delay claim arrives, the daily log is already there — what was done, by how many people, in what weather. Evidence rather than recollection.
+                  When a delay claim arrives, the daily log is already there: what was done, by how many people, in what weather. Evidence rather than recollection.
                 </p>
                 {" "}
               </div>
@@ -741,7 +741,7 @@ export default function DsTimeProPage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Every release, in plain English — what shipped, what improved, what was fixed.
+              Every release, in plain English: what shipped, what improved, what was fixed.
             </p>
             {" "}
           </div>
@@ -787,7 +787,7 @@ export default function DsTimeProPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                No. It produces the durations and exports a programme — Microsoft Project stays where you plan and track.
+                No. It produces the durations and exports a programme, Microsoft Project stays where you plan and track.
               </div>
               {" "}
             </details>
@@ -851,7 +851,7 @@ export default function DsTimeProPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run Time Pro against one of your live jobs — your drawings, your rates, your bill format.
+          We'll run Time Pro against one of your live jobs, your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">

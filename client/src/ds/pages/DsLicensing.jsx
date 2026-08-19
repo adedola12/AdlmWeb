@@ -65,7 +65,7 @@ export default function DsLicensing() {
             </h3>
             {" "}
             <p>
-              A licence activates one machine at a time. One person with a desktop and a laptop needs either two seats or the discipline to use one machine at a time — activation follows the device.
+              A licence activates one machine at a time. One person with a desktop and a laptop needs either two seats or the discipline to use one machine at a time, activation follows the device.
             </p>
             {" "}
             <h3>

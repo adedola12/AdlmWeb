@@ -1,3 +1,4 @@
+import { dedash } from "./dedash.mjs";
 // HTML -> JSX for the design-system port.
 //
 // Handles exactly the shapes that appear in RichardEnoch/adlm-studio-site: the
@@ -148,6 +149,12 @@ function withTokens(text, escape) {
 function escapeText(text) {
   if (!text) return "";
 
+  // Em dashes come out of the copy here, at the one point every text node
+  // passes through — so attributes, hrefs and class names cannot be touched by
+  // it, and a re-run of the porter cannot reintroduce them. See lib/dedash.mjs
+  // for which mark replaces the dash and why it varies.
+  text = dedash(text);
+
   const escape = (s) => s.replace(/[{}]/g, (c) => `{"${c}"}`).replace(/>/g, "&gt;");
 
   // Any whitespace-only run becomes one explicit space. HTML collapses such a
@@ -189,8 +196,15 @@ function parseAttrs(raw) {
 }
 
 // Render one attribute to JSX source. Returns null to drop it entirely.
+// Attributes a reader actually reads: shown in the field, on hover, or by a
+// screen reader. Copy in these gets the same dash treatment as body text —
+// missing them left "Search rates, materials, gangs — or a description" sitting
+// in a placeholder after every visible dash had gone.
+const PROSE_ATTRS = new Set(["placeholder", "title", "alt", "aria-label"]);
+
 function renderAttr(name, value, tag, ctx) {
   const jsxName = ATTR[name] || name;
+  if (PROSE_ATTRS.has(name) && typeof value === "string") value = dedash(value);
 
   if (name === "class") {
     return `className="${renameClassAttr(value)}"`;

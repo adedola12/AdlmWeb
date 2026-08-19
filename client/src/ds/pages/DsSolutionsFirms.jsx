@@ -165,7 +165,7 @@ export default function DsSolutionsFirms() {
               </h2>
               {" "}
               <p className="ds-lede">
-                At firm scale the measuring is rarely what breaks. It is everything around it — six surveyors, six spreadsheets, and no single version of a rate anyone can point at.
+                At firm scale the measuring is rarely what breaks. It is everything around it, six surveyors, six spreadsheets, and no single version of a rate anyone can point at.
               </p>
               {" "}
               <ul className="ps-list">
@@ -339,7 +339,7 @@ export default function DsSolutionsFirms() {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "44ch" }}>
-                  On-site training on your own projects, so the method lands with the tool — thirty events delivered so far.
+                  On-site training on your own projects, so the method lands with the tool: thirty events delivered so far.
                 </p>
                 {" "}
               </div>
@@ -423,7 +423,7 @@ export default function DsSolutionsFirms() {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes — you should. The built-in library is a starting point; most firms replace it with their own within weeks.
+                Yes. You should. The built-in library is a starting point; most firms replace it with their own within weeks.
               </div>
               {" "}
             </details>

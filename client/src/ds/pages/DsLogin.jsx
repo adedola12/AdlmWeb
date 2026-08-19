@@ -27,7 +27,7 @@ export default function DsLogin() {
             </h2>
             {" "}
             <p>
-              Your licences, your rate library and every project measured against it — reachable from Revit, from the Installer Hub, from a browser and from your phone.
+              Your licences, your rate library and every project measured against it: reachable from Revit, from the Installer Hub, from a browser and from your phone.
             </p>
             {" "}
             <ul className="auth2-pts">

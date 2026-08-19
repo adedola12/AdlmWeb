@@ -773,7 +773,7 @@ export default function DsDashSettings() {
                     </div>
                     {" "}
                     <p style={{ margin: "14px 0 0", fontSize: "12.5px", fontWeight: "300", color: "var(--ink-3)", lineHeight: "1.6" }}>
-                      {" "}Signing a machine out here frees its activation immediately — useful when a laptop is replaced or leaves the practice.
+                      {" "}Signing a machine out here frees its activation immediately, useful when a laptop is replaced or leaves the practice.
                     </p>
                     {" "}
                   </div>

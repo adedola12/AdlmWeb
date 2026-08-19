@@ -57,7 +57,7 @@ export default function DsPrivacy() {
             </h3>
             {" "}
             <p>
-              An ADLM account holds your name, email, WhatsApp number and the licences you own. When you use the products, project data — takeoffs, budgets, rate libraries — syncs to that account so it is available on any machine you sign into.
+              An ADLM account holds your name, email, WhatsApp number and the licences you own. When you use the products, project data: takeoffs, budgets, rate libraries: syncs to that account so it is available on any machine you sign into.
             </p>
             {" "}
             <h3>
@@ -93,7 +93,7 @@ export default function DsPrivacy() {
             </h3>
             {" "}
             <p>
-              Card payments are processed by Paystack. We do not store card numbers on our systems — the transaction is initialised on our server and completed with Paystack directly.
+              Card payments are processed by Paystack. We do not store card numbers on our systems, the transaction is initialised on our server and completed with Paystack directly.
             </p>
             {" "}
             <h3>
@@ -101,7 +101,7 @@ export default function DsPrivacy() {
             </h3>
             {" "}
             <p>
-              Exports are ordinary files — Excel workbooks, PDFs, MS Project files — that open without our software. You can request a copy of your account data, or its deletion, by writing to admin@adlmstudio.net. Deleting an account removes the synced project data with it.
+              Exports are ordinary files, Excel workbooks, PDFs, MS Project files: that open without our software. You can request a copy of your account data, or its deletion, by writing to admin@adlmstudio.net. Deleting an account removes the synced project data with it.
             </p>
             {" "}
             <h3>
@@ -117,7 +117,7 @@ export default function DsPrivacy() {
             </h3>
             {" "}
             <p>
-              This website uses Google Tag Manager to understand which pages are useful. That is website analytics only — it is not connected to your project data.
+              This website uses Google Tag Manager to understand which pages are useful. That is website analytics only. It is not connected to your project data.
             </p>
             {" "}
             <h3>

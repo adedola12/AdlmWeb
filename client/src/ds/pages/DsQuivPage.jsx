@@ -56,7 +56,7 @@ export default function DsQuivPage({ d }) {
           </h1>
           {" "}
           <p className="ds-lede">
-            Measure every element. Build a structured bill. Price it against your own rate library — without leaving Revit.
+            Measure every element. Build a structured bill. Price it against your own rate library, without leaving Revit.
           </p>
           {" "}
           <div className="hero-cta">
@@ -265,7 +265,7 @@ export default function DsQuivPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Rates decompose into the named materials behind them, plus one balancing line for waste and sundries. The build-up adds back up to exactly what you priced — no silent drift.
+                  Rates decompose into the named materials behind them, plus one balancing line for waste and sundries. The build-up adds back up to exactly what you priced, no silent drift.
                 </p>
                 {" "}
               </div>
@@ -317,7 +317,7 @@ export default function DsQuivPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Validates the model before you measure it — unplaced rooms, duplicated elements, missing type parameters. Catches them here rather than in the bill.
+                  Validates the model before you measure it, unplaced rooms, duplicated elements, missing type parameters. Catches them here rather than in the bill.
                 </p>
                 {" "}
               </div>
@@ -496,7 +496,7 @@ export default function DsQuivPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Type what you want measured. QUIV maps it to the right module and level, measures it with the same engines you would use by hand, and highlights those elements in your view — it never invents a quantity.
+                  Type what you want measured. QUIV maps it to the right module and level, measures it with the same engines you would use by hand, and highlights those elements in your view: it never invents a quantity.
                 </p>
                 {" "}
               </div>
@@ -855,7 +855,7 @@ export default function DsQuivPage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Every release, in plain English — what shipped, what improved, what was fixed.
+              Every release, in plain English: what shipped, what improved, what was fixed.
             </p>
             {" "}
           </div>
@@ -901,7 +901,7 @@ export default function DsQuivPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                The Model Checker runs first and tells you what will cause bad quantities — unplaced rooms, duplicates, missing type parameters — before you measure.
+                The Model Checker runs first and tells you what will cause bad quantities, unplaced rooms, duplicates, missing type parameters, before you measure.
               </div>
               {" "}
             </details>
@@ -913,7 +913,7 @@ export default function DsQuivPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                To measure, no. To price, effectively yes — QUIV reads rates from RateGen. You can type rates manually, but then you lose the build-up behind them.
+                To measure, no. To price, effectively yes: QUIV reads rates from RateGen. You can type rates manually, but then you lose the build-up behind them.
               </div>
               {" "}
             </details>
@@ -925,7 +925,7 @@ export default function DsQuivPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Supported builds are 2024, 2026 and 2027. If you are on 2025, talk to us — the Installer Hub can usually place a compatible build.
+                Supported builds are 2024, 2026 and 2027. If you are on 2025, talk to us: the Installer Hub can usually place a compatible build.
               </div>
               {" "}
             </details>

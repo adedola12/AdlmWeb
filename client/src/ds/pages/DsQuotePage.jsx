@@ -25,7 +25,7 @@ export default function DsQuotePage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Set how many PCs each licence covers, add training if you need it, and take away a proper quotation — the same document you would have waited two days for.
+              Set how many PCs each licence covers, add training if you need it, and take away a proper quotation: the same document you would have waited two days for.
             </p>
             {" "}
           </div>
@@ -122,7 +122,7 @@ export default function DsQuotePage({ d }) {
             <Link to="/contact" data-ds-page="contact" style={{ color: "var(--action)" }}>
               Talk to us
             </Link>
-            {" "}— volumes above ten are priced by agreement.
+            , volumes above ten are priced by agreement.
           </p>
           {" "}
         </div>

@@ -510,7 +510,7 @@ export default function DsDashHome() {
                 </h1>
                 {" "}
                 <p>
-                  Adeyemi &amp; Partners — everything the practice is licensed for, and the three things worth your attention this week.
+                  Adeyemi &amp; Partners, everything the practice is licensed for, and the three things worth your attention this week.
                 </p>
                 {" "}
               </div>
@@ -851,7 +851,7 @@ export default function DsDashHome() {
                           </b>
                           {" "}
                           <p>
-                            Enrolled 12 days ago and still on lesson zero. The seat is Chidi's — a nudge usually does it.
+                            Enrolled 12 days ago and still on lesson zero. The seat is Chidi's, a nudge usually does it.
                           </p>
                           {" "}
                         </div>
@@ -922,7 +922,7 @@ export default function DsDashHome() {
                           <b>
                             Certificate issued
                           </b>
-                          {" "}— BIM for Building Works, Ifeoma Nwachukwu
+                          , BIM for Building Works, Ifeoma Nwachukwu
                         </div>
                         <span className="ago">
                           2d
@@ -950,7 +950,7 @@ export default function DsDashHome() {
                           <b>
                             Seat assigned
                           </b>
-                          {" "}— RateGen to Chidi Okafor
+                          , RateGen to Chidi Okafor
                         </div>
                         <span className="ago">
                           5d
@@ -964,7 +964,7 @@ export default function DsDashHome() {
                           <b>
                             Invoice paid
                           </b>
-                          {" "}— ₦137,600 on card ending 4417
+                          , ₦137,600 on card ending 4417
                         </div>
                         <span className="ago">
                           7 Aug

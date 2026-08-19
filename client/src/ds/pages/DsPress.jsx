@@ -199,7 +199,7 @@ export default function DsPress() {
             </h2>
             {" "}
             <p className="ds-lede">
-              Everything you need to write about us or put our mark on a slide. Pick a section on the left, or just keep scrolling — the list follows you down.
+              Everything you need to write about us or put our mark on a slide. Pick a section on the left, or just keep scrolling: the list follows you down.
             </p>
             {" "}
           </div>
@@ -275,7 +275,7 @@ export default function DsPress() {
                 </h3>
                 {" "}
                 <p className="bkit-lede">
-                  The ADLM Studio identity is a mark and a wordmark. Use the supplied files — please do not redraw either of them, and do not set “ADLM Studio” in another typeface and call it the logo.
+                  The ADLM Studio identity is a mark and a wordmark. Use the supplied files, please do not redraw either of them, and do not set “ADLM Studio” in another typeface and call it the logo.
                 </p>
                 {" "}
                 <div className="bkit-row">
@@ -475,7 +475,7 @@ export default function DsPress() {
                 </h3>
                 {" "}
                 <p className="bkit-lede">
-                  Three colours carry the brand. Navy is the ground, blue is the action, orange is the accent — and orange is used sparingly, on one thing at a time.
+                  Three colours carry the brand. Navy is the ground, blue is the action, orange is the accent, and orange is used sparingly, on one thing at a time.
                 </p>
                 {" "}
                 <div className="bkit-sw">
@@ -710,7 +710,7 @@ export default function DsPress() {
                 </h3>
                 {" "}
                 <p className="bkit-lede">
-                  Real sites, real drawings, real rooms. Our photography is Nigerian construction — scaffolding, rebar, site offices, training halls — not stock handshakes and not glass towers that could be anywhere.
+                  Real sites, real drawings, real rooms. Our photography is Nigerian construction, scaffolding, rebar, site offices, training halls, not stock handshakes and not glass towers that could be anywhere.
                 </p>
                 {" "}
                 <div className="bkit-row">
@@ -775,7 +775,7 @@ export default function DsPress() {
                   </li>
                   {" "}
                   <li>
-                    Never stretch an image to fit — crop it. Faces and drawings both suffer.
+                    Never stretch an image to fit, crop it. Faces and drawings both suffer.
                   </li>
                   {" "}
                   <li>
@@ -815,7 +815,7 @@ export default function DsPress() {
                 </h4>
                 {" "}
                 <p className="bkit-body">
-                  ADLM Studio builds quantity surveying software for the African construction market. Its products — QUIV, HERON, RateGen, Revit MEP and Time Pro — dock into Revit and PlanSwift so quantity surveyors can measure, price and programme work without leaving the drawing. Alongside the software, ADLM runs certificated BIM training: 30 events and more than 3,100 professionals trained since 2022, across NIQS chapters, universities, practices and government agencies. The company was founded in 2019 and works from Lagos, Nigeria.
+                  ADLM Studio builds quantity surveying software for the African construction market. Its products, QUIV, HERON, RateGen, Revit MEP and Time Pro: dock into Revit and PlanSwift so quantity surveyors can measure, price and programme work without leaving the drawing. Alongside the software, ADLM runs certificated BIM training: 30 events and more than 3,100 professionals trained since 2022, across NIQS chapters, universities, practices and government agencies. The company was founded in 2019 and works from Lagos, Nigeria.
                 </p>
                 {" "}
                 <h4 className="bkit-h4">
@@ -833,7 +833,7 @@ export default function DsPress() {
                   </li>
                   {" "}
                   <li>
-                    British spelling — “programme”, “licence” as a noun, “organisation”.
+                    British spelling, “programme”, “licence” as a noun, “organisation”.
                   </li>
                   {" "}
                   <li>
@@ -871,7 +871,7 @@ export default function DsPress() {
                     <b>
                       Time Pro
                     </b>
-                    {" "}are not — RateGen is one word, Time Pro is two.
+                    {" "}are not, RateGen is one word, Time Pro is two.
                   </li>
                   {" "}
                   <li>
@@ -1027,7 +1027,7 @@ export default function DsPress() {
                 </div>
                 {" "}
                 <p className="bkit-note">
-                  Icons carry meaning, not decoration — one per card, at the top, in a tinted tile. Orange tiles mark the one thing in a group that matters most.
+                  Icons carry meaning, not decoration: one per card, at the top, in a tinted tile. Orange tiles mark the one thing in a group that matters most.
                 </p>
                 {" "}
               </article>
@@ -1045,7 +1045,7 @@ export default function DsPress() {
                 </h3>
                 {" "}
                 <p className="bkit-lede">
-                  Each product has a rendered icon. They are three-dimensional and lit from above, so they need room — do not crowd them or sit them on a busy photograph.
+                  Each product has a rendered icon. They are three-dimensional and lit from above, so they need room: do not crowd them or sit them on a busy photograph.
                 </p>
                 {" "}
                 <div className="bkit-prods">
@@ -1113,7 +1113,7 @@ export default function DsPress() {
                 </div>
                 {" "}
                 <p className="bkit-note">
-                  Product screenshots, UI stills and higher-resolution renders are available on request — tell us the publication and the deadline and we will send the right crop rather than a folder.
+                  Product screenshots, UI stills and higher-resolution renders are available on request. Tell us the publication and the deadline and we will send the right crop rather than a folder.
                 </p>
                 {" "}
                 <div className="bkit-dl">

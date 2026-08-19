@@ -42,7 +42,7 @@ export default function DsContact() {
           </h1>
           {" "}
           <p className="ds-lede">
-            Sales, support, training or press — pick the route that fits and you'll reach the right person.
+            Sales, support, training or press. Pick the route that fits and you'll reach the right person.
           </p>
           {" "}
           <div className="hero-cta">
@@ -155,7 +155,7 @@ export default function DsContact() {
                 </h2>
                 {" "}
                 <p className="ds-lede" style={{ marginTop: "18px" }}>
-                  Support runs Monday to Friday, 9am–6pm WAT. If you are in West Africa, that is your working day — not a queue behind another time zone.
+                  Support runs Monday to Friday, 9am–6pm WAT. If you are in West Africa, that is your working day, not a queue behind another time zone.
                 </p>
                 {" "}
                 <ul className="ticks">
@@ -171,7 +171,7 @@ export default function DsContact() {
                     <svg viewBox="0 0 24 24">
                       <use href="#i-check" />
                     </svg>
-                    +234 810 650 3524 — WhatsApp preferred
+                    +234 810 650 3524, WhatsApp preferred
                   </li>
                   {" "}
                   <li>
@@ -289,7 +289,7 @@ export default function DsContact() {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes — that is how we prefer to do it. Send a model or a set of drawings and we'll run the tool against them.
+                Yes. That is how we prefer to do it. Send a model or a set of drawings and we'll run the tool against them.
               </div>
               {" "}
             </details>
@@ -313,7 +313,7 @@ export default function DsContact() {
               </summary>
               {" "}
               <div className="faq-a">
-                Through support. Include the product version and what you were doing — release notes for every fix go on the What's New page.
+                Through support. Include the product version and what you were doing, release notes for every fix go on the What's New page.
               </div>
               {" "}
             </details>

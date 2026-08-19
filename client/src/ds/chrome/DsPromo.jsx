@@ -32,7 +32,7 @@ export default function DsPromo() {
                   </span>
                   {" "}
                   <h3>
-                    Time Pro 1.1.0 — dark mode and MS Project exports that open first time
+                    Time Pro 1.1.0, dark mode and MS Project exports that open first time
                   </h3>
                   {" "}
                   <p>
@@ -60,7 +60,7 @@ export default function DsPromo() {
                   </span>
                   {" "}
                   <h3>
-                    BIM for Building Works — enrolment open
+                    BIM for Building Works, enrolment open
                   </h3>
                   {" "}
                   <p>

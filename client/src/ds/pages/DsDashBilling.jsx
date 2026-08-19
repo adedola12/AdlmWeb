@@ -747,7 +747,7 @@ export default function DsDashBilling() {
                           </td>
                           {" "}
                           <td>
-                            Aug — Sep
+                            Aug, Sep
                           </td>
                           <td className="num">
                             ₦137,600
@@ -777,7 +777,7 @@ export default function DsDashBilling() {
                           </td>
                           {" "}
                           <td>
-                            Jul — Aug
+                            Jul, Aug
                           </td>
                           <td className="num">
                             ₦137,600
@@ -807,7 +807,7 @@ export default function DsDashBilling() {
                           </td>
                           {" "}
                           <td>
-                            Jun — Jul
+                            Jun, Jul
                           </td>
                           <td className="num">
                             ₦107,500
@@ -837,7 +837,7 @@ export default function DsDashBilling() {
                           </td>
                           {" "}
                           <td>
-                            May — Jun
+                            May, Jun
                           </td>
                           <td className="num">
                             ₦107,500
@@ -876,7 +876,7 @@ export default function DsDashBilling() {
                   </h3>
                   {" "}
                   <p>
-                    Same seats, same products, billed once. Two months free against what this account pays now —{" "}
+                    Same seats, same products, billed once. Two months free against what this account pays now,{" "}
                     <b data-year-was="" style={{ fontWeight: "500", color: "#fff" }}>
                       ₦1,536,000
                     </b>
@@ -997,7 +997,7 @@ export default function DsDashBilling() {
                           TIN
                         </span>
                         <b>
-                          —
+                          ,{" "}
                         </b>
                       </div>
                       {" "}

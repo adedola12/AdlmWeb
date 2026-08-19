@@ -510,7 +510,7 @@ export default function DsWorkLibrary() {
                 </h1>
                 {" "}
                 <p>
-                  One library for the practice. Change a rate here and it reaches QUIV, HERON and Revit MEP through this account — and every project already priced with it.
+                  One library for the practice. Change a rate here and it reaches QUIV, HERON and Revit MEP through this account, and every project already priced with it.
                 </p>
                 {" "}
               </div>
@@ -536,7 +536,7 @@ export default function DsWorkLibrary() {
                   <use href="#hi-search" />
                 </svg>
                 {" "}
-                <input type="search" id="lib-q" placeholder="Search rates, materials, gangs — or a description" aria-label="Search the library" autoComplete="off" />
+                <input type="search" id="lib-q" placeholder="Search rates, materials, gangs, or a description" aria-label="Search the library" autoComplete="off" />
                 {" "}
               </label>
               {" "}

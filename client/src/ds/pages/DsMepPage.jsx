@@ -50,7 +50,7 @@ export default function DsMepPage({ d }) {
           </h1>
           {" "}
           <p className="ds-lede">
-            Ductwork, pipework, electrical and plumbing — from the model, in one workspace.
+            Ductwork, pipework, electrical and plumbing: from the model, in one workspace.
           </p>
           {" "}
           <div className="hero-cta">
@@ -407,7 +407,7 @@ export default function DsMepPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  The panel sits inside Revit next to the services model, so you measure while looking at the thing you are measuring — and the layout reflows when you dock it narrow.
+                  The panel sits inside Revit next to the services model, so you measure while looking at the thing you are measuring, and the layout reflows when you dock it narrow.
                 </p>
                 {" "}
               </div>
@@ -440,7 +440,7 @@ export default function DsMepPage({ d }) {
               </h2>
               {" "}
               <p className="ds-lede">
-                One model, one rate library, one summary — so the totals actually agree.
+                One model, one rate library, one summary, so the totals actually agree.
               </p>
               {" "}
             </div>
@@ -722,7 +722,7 @@ export default function DsMepPage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Every release, in plain English — what shipped, what improved, what was fixed.
+              Every release, in plain English: what shipped, what improved, what was fixed.
             </p>
             {" "}
           </div>
@@ -756,7 +756,7 @@ export default function DsMepPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes — separate licence, same workspace. QUIV measures the building fabric, Revit MEP measures the services. Many teams run both.
+                Yes, separate licence, same workspace. QUIV measures the building fabric, Revit MEP measures the services. Many teams run both.
               </div>
               {" "}
             </details>
@@ -792,7 +792,7 @@ export default function DsMepPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Not in this plugin — that is Navisworks. Revit MEP is measurement and cost, and it is covered in the MEP course.
+                Not in this plugin. That is Navisworks. Revit MEP is measurement and cost, and it is covered in the MEP course.
               </div>
               {" "}
             </details>
@@ -832,7 +832,7 @@ export default function DsMepPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run Revit MEP against one of your live jobs — your drawings, your rates, your bill format.
+          We'll run Revit MEP against one of your live jobs, your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">

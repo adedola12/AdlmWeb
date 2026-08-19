@@ -58,7 +58,7 @@ export default function DsAda() {
           </h1>
           {" "}
           <p className="ds-lede">
-            Ada is not something you buy. She is the chat on this website before you have an account, and the assistant inside it afterwards — reading your rates, your gangs and your projects, and nothing else.
+            Ada is not something you buy. She is the chat on this website before you have an account, and the assistant inside it afterwards: reading your rates, your gangs and your projects, and nothing else.
           </p>
           {" "}
           <div className="hero-cta">
@@ -139,7 +139,7 @@ export default function DsAda() {
               </h4>
               {" "}
               <p>
-                A proposal sits on screen until you accept it. Ada cannot change a rate, a quantity or a bill on her own — she can only put a draft in front of you.
+                A proposal sits on screen until you accept it. Ada cannot change a rate, a quantity or a bill on her own. She can only put a draft in front of you.
               </p>
               {" "}
             </article>
@@ -175,7 +175,7 @@ export default function DsAda() {
               </h4>
               {" "}
               <p>
-                Ask what something costs and she gives you the number and the build-up under it, with a link straight to the rate — the same argument you would make yourself.
+                Ask what something costs and she gives you the number and the build-up under it, with a link straight to the rate: the same argument you would make yourself.
               </p>
               {" "}
             </article>
@@ -294,7 +294,7 @@ export default function DsAda() {
                 </h4>
                 {" "}
                 <p>
-                  Before you change a material price, see everything that moves with it — and every project already priced on it.
+                  Before you change a material price, see everything that moves with it, and every project already priced on it.
                 </p>
                 {" "}
               </div>
@@ -388,7 +388,7 @@ export default function DsAda() {
                 </h4>
                 {" "}
                 <p>
-                  Quantities from QUIV and HERON, priced by your library as it stands this morning — not as it stood at tender.
+                  Quantities from QUIV and HERON, priced by your library as it stands this morning, not as it stood at tender.
                 </p>
                 {" "}
               </div>
@@ -419,7 +419,7 @@ export default function DsAda() {
             </h2>
             {" "}
             <p className="ds-lede">
-              She answers questions on this website, she sits in your dashboard, and she is a panel inside the products you already have — and she knows which one you are in.
+              She answers questions on this website, she sits in your dashboard, and she is a panel inside the products you already have, and she knows which one you are in.
             </p>
             {" "}
           </div>
@@ -493,7 +493,7 @@ export default function DsAda() {
               </h4>
               {" "}
               <p>
-                Which machine holds a seat, what an update changes, what the next invoice covers — answered rather than hunted for.
+                Which machine holds a seat, what an update changes, what the next invoice covers: answered rather than hunted for.
               </p>
               {" "}
             </article>
@@ -548,7 +548,7 @@ export default function DsAda() {
               {" "}
               <div className="faq-a">
                 <p>
-                  No. She can only assemble components that already exist in your library. If nothing matches what you asked for, she says so — she does not fill the gap with a plausible-looking number.
+                  No. She can only assemble components that already exist in your library. If nothing matches what you asked for, she says so. She does not fill the gap with a plausible-looking number.
                 </p>
               </div>
               {" "}

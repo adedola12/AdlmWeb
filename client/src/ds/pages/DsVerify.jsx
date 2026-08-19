@@ -27,7 +27,7 @@ export default function DsVerify() {
             </h2>
             {" "}
             <p>
-              We check the address before you pay, because everything you buy is issued to it — the licence, the invoices, and any certificate you earn.
+              We check the address before you pay, because everything you buy is issued to it: the licence, the invoices, and any certificate you earn.
             </p>
             {" "}
             <ul className="auth2-pts">
@@ -148,7 +148,7 @@ export default function DsVerify() {
             </p>
             {" "}
             <p className="authfoot">
-              Check your spam folder before asking us — it is almost always there. Still stuck?{" "}
+              Check your spam folder before asking us. It is almost always there. Still stuck?{" "}
               <Link to="/contact#support" data-ds-page="contact">
                 Contact support
               </Link>

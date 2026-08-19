@@ -510,7 +510,7 @@ export default function DsDashDownloads() {
                 </h1>
                 {" "}
                 <p>
-                  The Hub is the short way — it reads this account and installs only what the subscription covers. The standalone installers are here for machines that cannot run it.
+                  The Hub is the short way. It reads this account and installs only what the subscription covers. The standalone installers are here for machines that cannot run it.
                 </p>
                 {" "}
               </div>
@@ -801,7 +801,7 @@ export default function DsDashDownloads() {
                       <div className="acc-body">
                         <div>
                           <p style={{ paddingLeft: "27px", marginTop: "10px" }}>
-                            The panel registers itself with the host application during install. If Revit is open, the registration is written but not picked up until the next launch — which is what July's missing-panel ticket turned out to be.
+                            The panel registers itself with the host application during install. If Revit is open, the registration is written but not picked up until the next launch, which is what July's missing-panel ticket turned out to be.
                           </p>
                         </div>
                       </div>

@@ -50,7 +50,7 @@ export default function DsCiviqPage({ d }) {
           </h1>
           {" "}
           <p className="ds-lede">
-            Roads, drainage and earthworks — measured in Civil 3D, priced from the same library.
+            Roads, drainage and earthworks: measured in Civil 3D, priced from the same library.
           </p>
           {" "}
           <div className="hero-cta">
@@ -260,7 +260,7 @@ export default function DsCiviqPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Pipe runs measured by diameter and depth, with manholes, gullies and chambers counted as structures — the way a drainage bill is actually written.
+                  Pipe runs measured by diameter and depth, with manholes, gullies and chambers counted as structures: the way a drainage bill is actually written.
                 </p>
                 {" "}
               </div>
@@ -377,7 +377,7 @@ export default function DsCiviqPage({ d }) {
                 </span>
                 {" "}
                 <h4>
-                  In development — and honest about it
+                  In development, and honest about it
                 </h4>
                 {" "}
                 <p>
@@ -414,7 +414,7 @@ export default function DsCiviqPage({ d }) {
               </h2>
               {" "}
               <p className="ds-lede">
-                Chainage, layers, structures — the vocabulary of an infrastructure bill.
+                Chainage, layers, structures: the vocabulary of an infrastructure bill.
               </p>
               {" "}
             </div>
@@ -714,7 +714,7 @@ export default function DsCiviqPage({ d }) {
             </h2>
             {" "}
             <p className="ds-lede">
-              Every release, in plain English — what shipped, what improved, what was fixed.
+              Every release, in plain English: what shipped, what improved, what was fixed.
             </p>
             {" "}
           </div>
@@ -760,7 +760,7 @@ export default function DsCiviqPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                No — it is indicative and may change before release.
+                No. It is indicative and may change before release.
               </div>
               {" "}
             </details>
@@ -784,7 +784,7 @@ export default function DsCiviqPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                To price, yes — the same as the other tools. Measuring will work on its own.
+                To price, yes: the same as the other tools. Measuring will work on its own.
               </div>
               {" "}
             </details>
@@ -856,7 +856,7 @@ export default function DsCiviqPage({ d }) {
                       <use href="#i-cloud" />
                     </svg>
                   </span>
-                  No drip campaign — one email, when it matters
+                  No drip campaign, one email, when it matters
                 </li>
                 {" "}
               </ul>

@@ -62,7 +62,7 @@ export default function DsAbout() {
           </h1>
           {" "}
           <p className="ds-lede">
-            A Nigerian ConTech studio making quantity surveying software and teaching people to use it — because we were the people who needed it.
+            A Nigerian ConTech studio making quantity surveying software and teaching people to use it, because we were the people who needed it.
           </p>
           {" "}
           <div className="hero-cta">
@@ -416,7 +416,7 @@ export default function DsAbout() {
                 </b>
                 {" "}
                 <p>
-                  The PlanSwift plugin — 2D takeoff, and the first product.
+                  The PlanSwift plugin, 2D takeoff, and the first product.
                 </p>
                 {" "}
               </article>
@@ -646,7 +646,7 @@ export default function DsAbout() {
               </summary>
               {" "}
               <div className="faq-a">
-                Lagos, Nigeria. Support runs Monday to Friday, 9am–6pm WAT — the same working day as most of our clients.
+                Lagos, Nigeria. Support runs Monday to Friday, 9am–6pm WAT: the same working day as most of our clients.
               </div>
               {" "}
             </details>
@@ -686,7 +686,7 @@ export default function DsAbout() {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes — that is where ADLM started. An instructor comes to your office, or we run it online. See the{" "}
+                Yes. That is where ADLM started. An instructor comes to your office, or we run it online. See the{" "}
                 <Link to="/learn" data-ds-page="learn" style={{ color: "var(--action)" }}>
                   Learn page
                 </Link>
