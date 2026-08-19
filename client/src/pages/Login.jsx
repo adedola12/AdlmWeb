@@ -5,6 +5,7 @@ import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { trackEvent } from "../ga";
 import SocialSignIn from "../components/SocialSignIn.jsx";
+import { AFTER_SIGN_IN } from "../lib/afterSignIn.js";
 import { IconEye, IconEyeOff } from "../components/icons.jsx";
 
 // Password field with a show/hide eye toggle. The toggle is a type="button"
@@ -52,7 +53,7 @@ function PasswordInput({
 export default function Login() {
   const nav = useNavigate();
   const [qs] = useSearchParams();
-  const next = qs.get("next") || "/";
+  const next = qs.get("next") || AFTER_SIGN_IN;
   const { setAuth } = useAuth();
 
   const [email, setEmail] = React.useState("");

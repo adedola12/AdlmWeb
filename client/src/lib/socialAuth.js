@@ -24,6 +24,8 @@
 // PKCE still earns its place: the verifier proves the code is being redeemed
 // for the browser that started the flow, so an intercepted code is useless.
 
+import { AFTER_SIGN_IN } from "./afterSignIn.js";
+
 const STORE = "adlm.social.pkce";
 
 const b64url = (bytes) =>
@@ -54,7 +56,7 @@ export const redirectUri = () => `${window.location.origin}/auth/callback`;
  * @param {boolean} [opts.connect] connecting to the signed-in account rather
  *                                 than signing in
  */
-export async function startSocialAuth(provider, endpoint, { next = "/dashboard", connect = false } = {}) {
+export async function startSocialAuth(provider, endpoint, { next = AFTER_SIGN_IN, connect = false } = {}) {
   const verifier = randomString();
   const state = randomString(16);
 
@@ -121,7 +123,7 @@ export async function finishSocialAuth(params) {
     code,
     codeVerifier: saved.verifier,
     redirectUri: redirectUri(),
-    next: saved.next || "/dashboard",
+    next: saved.next || AFTER_SIGN_IN,
     connect: !!saved.connect,
   };
 }

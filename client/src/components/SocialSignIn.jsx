@@ -15,6 +15,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { startSocialAuth } from "../lib/socialAuth.js";
+import { AFTER_SIGN_IN } from "../lib/afterSignIn.js";
 
 // The official marks, as SVG so they stay sharp and need no network request.
 const LOGOS = {
@@ -72,7 +73,7 @@ const ORDER = ["google", "microsoft", "autodesk"];
  * @param {boolean} [props.divider]  draw the "or" rule above the buttons
  */
 export default function SocialSignIn({
-  next = "/dashboard",
+  next = AFTER_SIGN_IN,
   connect = false,
   onError,
   only = null,

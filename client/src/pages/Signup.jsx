@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { trackEvent } from "../ga";
 import SocialSignIn from "../components/SocialSignIn.jsx";
+import { AFTER_SIGN_IN } from "../lib/afterSignIn.js";
 
 export default function Signup() {
   const nav = useNavigate();
@@ -50,7 +51,7 @@ export default function Signup() {
       // a signup, and counting attempts here would inflate the only number
       // anyone checks on this page.
       trackEvent("sign_up", { method: "password" });
-      nav("/");
+      nav(AFTER_SIGN_IN);
     } catch (e) {
       setErr(e.message || "Signup failed");
     } finally {
