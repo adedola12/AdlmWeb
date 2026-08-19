@@ -24,6 +24,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config.js";
+import { QRCodeSVG } from "qrcode.react";
+import { renderToStaticMarkup } from "react-dom/server";
 const DsQuoteDoc = React.lazy(() => import("./DsQuoteDoc.jsx"));
 
 // VAT, as his document renderer applies it.
@@ -77,12 +79,56 @@ const FMT = {
   USD: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }),
 };
 
+// The selection, as URL parameters.
+//
+// Deliberately NOT the customer's details. The QR on the quotation is a link
+// anyone holding the paper can scan, so what it carries has to be safe to hand
+// around: the products, the billing period, the currency and the training
+// class. The organisation, contact, email, mobile and address stay on the
+// device that typed them — a printed quotation with somebody's phone number
+// encoded into a scannable square is a leak, not a convenience.
+function readSelection(search) {
+  const p = new URLSearchParams(search);
+  const qty = {};
+  (p.get("q") || "").split(",").forEach((pair) => {
+    const [k, n] = pair.split(":");
+    const v = Number(n);
+    if (k && Number.isFinite(v) && v > 0) qty[k] = Math.min(v, 999);
+  });
+  return {
+    qty,
+    bill: p.get("b") === "monthly" ? "monthly" : "yearly",
+    cur: p.get("c") === "USD" ? "USD" : "NGN",
+    siteId: /^[a-f0-9]{24}$/i.test(p.get("t") || "") ? p.get("t") : "",
+    bimInstall: p.get("bim") === "1",
+  };
+}
+
+function selectionQuery({ qty, bill, cur, siteId, bimInstall }) {
+  const p = new URLSearchParams();
+  const items = Object.entries(qty)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${k}:${n}`)
+    .join(",");
+  if (items) p.set("q", items);
+  p.set("b", bill);
+  p.set("c", cur);
+  if (siteId) p.set("t", siteId);
+  if (bimInstall) p.set("bim", "1");
+  return p.toString();
+}
+
 export default function DsQuoteBuilder() {
+  // Read once, at first render, so a scanned link opens on the same selection.
+  const initial = React.useMemo(
+    () => readSelection(typeof window === "undefined" ? "" : window.location.search),
+    [],
+  );
   const [prices, setPrices] = React.useState(null);
-  const [qty, setQty] = React.useState({});
-  const [bill, setBill] = React.useState("yearly");
-  const [cur, setCur] = React.useState("NGN");
-  const [firm, setFirm] = React.useState({ org: "", person: "", email: "", addr: "" });
+  const [qty, setQty] = React.useState(initial.qty);
+  const [bill, setBill] = React.useState(initial.bill);
+  const [cur, setCur] = React.useState(initial.cur);
+  const [firm, setFirm] = React.useState({ org: "", person: "", email: "", phone: "", addr: "" });
   const [showDoc, setShowDoc] = React.useState(false);
 
   // On-site training. His build leaves this "On enquiry" — the note says it is
@@ -90,8 +136,8 @@ export default function DsQuoteBuilder() {
   // what the training-location table already records: every row is a city and
   // a participant band with a real price behind it. So it can be quoted here.
   const [sites, setSites] = React.useState([]);
-  const [siteId, setSiteId] = React.useState("");
-  const [bimInstall, setBimInstall] = React.useState(false);
+  const [siteId, setSiteId] = React.useState(initial.siteId);
+  const [bimInstall, setBimInstall] = React.useState(initial.bimInstall);
 
   // VAT is a setting, not a constant. Checkout reads it from the same place
   // before it charges, so the quotation has to as well or the two disagree.
@@ -257,11 +303,45 @@ export default function DsQuoteBuilder() {
     }
 
     const net = licences + install + onsite;
-    const vat = Math.round(net * vatRate);
-    return { rows, licences, install, net, vat, total: net + vat, enquiry };
+    // Naira is quoted whole; dollars are not. Rounding both to whole units
+    // made $128.76 carry $10.00 of VAT instead of $9.66 — and routes/purchase.js
+    // uses round2 for USD, so the cart would have disagreed with the paper.
+    const round = (x) =>
+      cur === "USD" ? Math.round((x + Number.EPSILON) * 100) / 100 : Math.round(x);
+    const vat = round(net * vatRate);
+    return { rows, licences, install, net, vat, total: round(net + vat), enquiry };
   }, [qty, bill, priceOf, inCur, sites, siteId, bimInstall, cur, vatRate]);
 
   const picked = calc.rows.length > 0;
+
+  // The QR that goes on the signature line. It points at /quote carrying the
+  // same selection, so scanning the printed page reopens the quotation with
+  // every line already picked — which is what makes the paper actionable
+  // rather than a dead end.
+  //
+  // Rendered to a string because the document engine builds HTML, not React,
+  // and pagination re-creates the foot row from markup — a portal into it
+  // would not survive that.
+  const quoteUrl = React.useMemo(() => {
+    const query = selectionQuery({ qty, bill, cur, siteId, bimInstall });
+    if (typeof window === "undefined") return "https://adlmstudio.net/quote";
+    // The builder's own path, not a hardcoded /quote. Today /quote still serves
+    // the previous quotation page, which knows nothing about these parameters,
+    // so a QR pointing there would scan to a page that ignores the selection.
+    // Using the current path means the code works while this is staged under
+    // /preview and keeps working, without an edit, the day it is promoted onto
+    // /quote for real.
+    const path = window.location.pathname.replace(/\/+$/, "") || "/quote";
+    return `${window.location.origin}${path}${query ? `?${query}` : ""}`;
+  }, [qty, bill, cur, siteId, bimInstall]);
+
+  const qrSvg = React.useMemo(
+    () =>
+      renderToStaticMarkup(
+        <QRCodeSVG value={quoteUrl} size={128} level="M" marginSize={0} bgColor="#ffffff" fgColor="#091E39" />,
+      ),
+    [quoteUrl],
+  );
 
   // His spec(), reproduced. The document is the deliverable — a procurement
   // file needs the full description, the unit, the rate and the amount, which
@@ -287,6 +367,7 @@ export default function DsQuoteBuilder() {
       });
     }
     if (firm.email) to.push(firm.email);
+    if (firm.phone) to.push(firm.phone);
     const addressee = to.length ? to : ["To be confirmed"];
 
     const rows = calc.rows.map((r, i) => ({
@@ -358,10 +439,15 @@ export default function DsQuoteBuilder() {
         { type: "heading", level: 2, text: "Terms" },
         { type: "bullets", items: terms },
         { type: "payment" },
-        { type: "signature", label: "For ADLM Studio" },
+        {
+          type: "signature",
+          label: "For ADLM Studio",
+          qr: qrSvg,
+          qrCaption: "Scan to open this quotation",
+        },
       ],
     };
-  }, [calc, firm, bill, cur, money, vatRate]);
+  }, [calc, firm, bill, cur, money, vatRate, qrSvg]);
 
   return (
     <>
@@ -450,9 +536,18 @@ export default function DsQuoteBuilder() {
                   : 0;
                 return (
                   <div className={site ? "line" : "line line-off"} key={id}>
+                    {/* His .line is a three-column grid — 60px, 1fr, auto —
+                        and .qt-dot is what occupies the first column on a
+                        training row, where a product row has its icon. Leaving
+                        it out did not just lose the glyph: the text block moved
+                        into the 60px column and every label wrapped one word
+                        per line. */}
+                    <span className="qt-dot">
+                      <svg viewBox="0 0 24 24"><use href="#i-play" /></svg>
+                    </span>
                     <div>
                       <b>{t.name}</b>
-                      <span>An ADLM instructor at your office &middot; priced by city and team size</span>
+                      <span>An ADLM instructor at your office</span>
                       <div className="qt-site">
                         <select
                           value={siteId}
@@ -499,6 +594,9 @@ export default function DsQuoteBuilder() {
               const unit = inCur(priceOf(t.key), "yr");
               return (
                 <div className={n ? "line" : "line line-off"} key={id}>
+                  <span className="qt-dot">
+                    <svg viewBox="0 0 24 24"><use href="#i-play" /></svg>
+                  </span>
                   <div>
                     <b>{t.name}</b>
                     <span>{t.sub}</span>
@@ -543,6 +641,11 @@ export default function DsQuoteBuilder() {
               Email
               <input type="email" autoComplete="email" placeholder="you@firm.com"
                 value={firm.email} onChange={(e) => setFirm({ ...firm, email: e.target.value })} />
+            </label>
+            <label>
+              Mobile
+              <input type="tel" autoComplete="tel" inputMode="tel" placeholder="0801 234 5678"
+                value={firm.phone} onChange={(e) => setFirm({ ...firm, phone: e.target.value })} />
             </label>
             <label className="wide">
               Address

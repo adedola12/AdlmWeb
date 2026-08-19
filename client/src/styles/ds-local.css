@@ -53,3 +53,36 @@
   accent-color: var(--action);
   flex: none;
 }
+
+/* The QR beside the signature. Ours, not his — his signature block is the
+ * signature alone. Sized in points like the rest of the sheet so it prints at
+ * a scannable size rather than a screen-pixel size that shrinks on paper. */
+.ds .doc-signrow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 18pt;
+}
+
+.ds .doc-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4pt;
+  flex: none;
+}
+
+.ds .doc-qr svg {
+  width: 54pt;
+  height: 54pt;
+  display: block;
+}
+
+.ds .doc-qr span {
+  font-size: 6.2pt;
+  color: var(--doc-navy);
+  opacity: 0.72;
+  text-align: center;
+  max-width: 76pt;
+  line-height: 1.3;
+}

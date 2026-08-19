@@ -292,13 +292,21 @@ const BLOCKS = {
       `<div>Bank: ${esc(bank.bank)}</div></div>`
     );
   },
+  // OURS, not his: an optional QR beside the signature. `qr` is trusted markup
+  // (an <svg> built by the caller), so it is the one value here that is not
+  // escaped — everything a reader supplies still goes through esc().
   signature: (b, ctx) => {
     const img = b.image || ctx.brand.signature;
-    return (
+    const sign =
       '<div class="doc-sign">' +
       (img ? `<img src="${esc(img)}" alt="">` : '<div style="height:32.5pt"></div>') +
       '<div class="doc-line"></div>' +
-      `<div class="doc-cap">${esc(b.label || "Authorized signature")}</div></div>`
+      `<div class="doc-cap">${esc(b.label || "Authorized signature")}</div></div>`;
+    if (!b.qr) return sign;
+    return (
+      `<div class="doc-signrow">${sign}` +
+      `<div class="doc-qr">${b.qr}` +
+      `<span>${esc(b.qrCaption || "Scan to open this quotation")}</span></div></div>`
     );
   },
 };
