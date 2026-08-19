@@ -75,6 +75,7 @@ import ServiceConstants from "./pages/ServiceConstants.jsx";
 import MaterialConstants from "./pages/MaterialConstants.jsx";
 import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import Receipt from "./pages/Receipt.jsx";
+import OrderDetail from "./pages/OrderDetail.jsx";
 import UserInvoice from "./pages/UserInvoice.jsx";
 
 // ✅ QUIV for ArchiCAD
@@ -211,6 +212,18 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <Freebies />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        // An order before it is paid: what was bought, what it costs, where to
+        // pay it and where the receipt goes. The proforma invoice links here —
+        // /receipt/:id refuses until the order is approved, which a proforma
+        // by definition is not.
+        path: "order/:id",
+        element: (
+          <ProtectedRoute>
+            <OrderDetail />
           </ProtectedRoute>
         ),
       },

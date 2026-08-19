@@ -188,7 +188,7 @@ export function buildProformaInvoice(purchase) {
             </div>
 
             <p style="margin-top:18px">
-              <a href="${WEB()}/purchase" style="display:inline-block;padding:10px 24px;background:#091E39;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">
+              <a href="${WEB()}/order/${encodeURIComponent(id)}" style="display:inline-block;padding:10px 24px;background:#091E39;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">
                 Open your order
               </a>
             </p>
@@ -206,7 +206,7 @@ export function buildProformaInvoice(purchase) {
         `Proforma invoice ${ref}\n` +
         `Total due ${money(purchase.totalAmount, currency)}, payable by ${dueStr}\n\n` +
         `${bank.bank} / ${bank.name} / ${bank.number}\nQuote reference ${ref}\n\n` +
-        `${WEB()}/purchase`,
+        `${WEB()}/order/${encodeURIComponent(id)}`,
     };
   }
 }

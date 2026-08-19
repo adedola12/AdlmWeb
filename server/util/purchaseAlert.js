@@ -134,7 +134,7 @@ export function buildPurchaseAlert(purchase, { reason = "new" } = {}) {
         ${lines ? `<table style="border-collapse:collapse;width:100%;margin-top:14px;font-size:13px">${lines}</table>` : ""}
         ${proof}
         <p style="margin:18px 0 0">
-          <a href="${WEB()}/admin/purchases" style="color:#239CFF">Open it in the admin</a>
+          <a href="${WEB()}/admin/pending" style="color:#239CFF">Open it in the admin</a>
         </p>
         <p style="margin:18px 0 0;color:#888;font-size:12px">
           The licence does not activate until this is approved.
@@ -152,7 +152,7 @@ export function buildPurchaseAlert(purchase, { reason = "new" } = {}) {
         `Order ${id}\nBuyer ${purchase.email || "—"}\n` +
         `Total ${fmt(purchase.totalAmount, currency)}\n` +
         (purchase.paymentProof?.url ? `Receipt: ${purchase.paymentProof.url}\n` : "No receipt yet\n") +
-        `${WEB()}/admin/purchases`,
+        `${WEB()}/admin/pending`,
     };
   }
 }
