@@ -78,6 +78,9 @@ import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import Receipt from "./pages/Receipt.jsx";
 import OrderDetail from "./pages/OrderDetail.jsx";
 import AuthCallback from "./pages/AuthCallback.jsx";
+// His Manage overview. Lazy because it pulls in the app shell and ~91KB of his
+// dashboard CSS, which no marketing visitor should pay for.
+const ManageOverview = React.lazy(() => import("./pages/ManageOverview.jsx"));
 import UserInvoice from "./pages/UserInvoice.jsx";
 
 // ✅ QUIV for ArchiCAD
@@ -214,6 +217,19 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <Freebies />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        // His Manage overview — what /dashboard becomes when the makeover
+        // lands. Added alongside rather than over it: /dashboard keeps working
+        // and keeps its data until this one is proven on real accounts.
+        path: "manage",
+        element: (
+          <ProtectedRoute>
+            <React.Suspense fallback={null}>
+              <ManageOverview />
+            </React.Suspense>
           </ProtectedRoute>
         ),
       },
