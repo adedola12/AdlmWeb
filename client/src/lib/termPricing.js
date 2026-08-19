@@ -22,8 +22,22 @@ function effective(base, discounted) {
   return d > 0 && d < b ? d : b;
 }
 
-export function unitPrices(p) {
+export function unitPrices(p, currency = "NGN") {
   const pr = p?.price || {};
+  // The catalogue carries a full USD column beside the naira one. Reading only
+  // the naira fields meant a checkout placed in dollars showed naira figures
+  // beside a dollar total — the panel said ₦1,710,000 while the invoice
+  // charged $1,455.77, for the same order.
+  if (String(currency).toUpperCase() === "USD") {
+    return {
+      monthly: effective(pr.monthlyUSD, pr.discountedMonthlyUSD),
+      sixMonth: effective(pr.sixMonthUSD, pr.discountedSixMonthUSD),
+      yearly: effective(pr.yearlyUSD, pr.discountedYearlyUSD),
+      install: num(pr.installUSD),
+      listMonthly: num(pr.monthlyUSD),
+      listYearly: num(pr.yearlyUSD),
+    };
+  }
   return {
     monthly: effective(pr.monthlyNGN, pr.discountedMonthlyNGN),
     sixMonth: effective(pr.sixMonthNGN, pr.discountedSixMonthNGN),
@@ -34,9 +48,14 @@ export function unitPrices(p) {
   };
 }
 
-/** Total recurring charge in NGN for `months` of `p`, one seat. */
-export function termTotalNGN(p, months) {
-  const u = unitPrices(p);
+/**
+ * Total recurring charge for `months` of `p`, one seat, in `currency`.
+ *
+ * The tiering is the server's: computeRecurring in util, and the same ladder
+ * the purchase page walks. Only the price column changes.
+ */
+export function termTotal(p, months, currency = "NGN") {
+  const u = unitPrices(p, currency);
   const m = Math.max(1, parseInt(months, 10) || 1);
 
   if (p?.billingInterval === "yearly") return u.yearly * m;
@@ -49,6 +68,11 @@ export function termTotalNGN(p, months) {
   if (m === 12) return u.yearly > 0 ? u.yearly : u.monthly * 12;
   const year = u.yearly > 0 ? u.yearly : u.monthly * 12;
   return year + u.monthly * (m - 12);
+}
+
+/** Naira, the common case. Kept so existing callers need no edit. */
+export function termTotalNGN(p, months) {
+  return termTotal(p, months, "NGN");
 }
 
 /**

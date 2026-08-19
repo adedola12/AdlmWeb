@@ -58,22 +58,46 @@ const LABEL = {
 export async function notifyAdminOfPurchase(purchase, { reason = "new" } = {}) {
   try {
     if (!purchase) return false;
-
-    const method = purchase.paymentMethod || "card";
     // Card orders are verified by Paystack, not by us.
-    if (method === "card") return false;
+    if ((purchase.paymentMethod || "card") === "card") return false;
+    const built = buildPurchaseAlert(purchase, { reason });
+    await sendMail({ to: RECIPIENTS(), ...built });
+    return true;
+  } catch (e) {
+    console.error("[purchaseAlert] could not send:", e?.message || e);
+    return false;
+  }
+}
+
+/**
+ * The alert itself, separated from sending it.
+ *
+ * Split out for the same reason as the invoice: the first version named every
+ * line by its raw product key and priced each at zero, and a test that only
+ * asserted the mail was accepted would have called that a pass.
+ *
+ * @param {object} purchase
+ * @param {{reason?: "new"|"receipt"}} [opts]
+ * @returns {{subject: string, html: string, text: string}}
+ */
+export function buildPurchaseAlert(purchase, { reason = "new" } = {}) {
+  {
+    const method = purchase.paymentMethod || "card";
 
     const id = String(purchase._id || "");
     const currency = purchase.currency || "NGN";
+    // LineSchema's own field names — `name`, `qty`, `subtotal` — not the
+    // productName/quantity/lineTotal this guessed at first, which rendered
+    // every row as a bare product key with a zero beside it.
     const lines = (purchase.lines || [])
       .map(
         (l) =>
           `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${esc(
-            l.productName || l.productKey || "Item",
+            l.name || l.productKey || "Item",
           )}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${
-            l.quantity || 1
+            Number(l.qty) || 1
           }</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${esc(
-            fmt(l.lineTotal ?? l.amount ?? 0, currency),
+            fmt(l.subtotal, currency),
           )}</td></tr>`,
       )
       .join("");
@@ -117,8 +141,7 @@ export async function notifyAdminOfPurchase(purchase, { reason = "new" } = {}) {
         </p>
       </div>`;
 
-    await sendMail({
-      to: RECIPIENTS(),
+    return {
       subject:
         reason === "receipt"
           ? `Receipt uploaded — order ${id.slice(-6)} (${fmt(purchase.totalAmount, currency)})`
@@ -130,11 +153,7 @@ export async function notifyAdminOfPurchase(purchase, { reason = "new" } = {}) {
         `Total ${fmt(purchase.totalAmount, currency)}\n` +
         (purchase.paymentProof?.url ? `Receipt: ${purchase.paymentProof.url}\n` : "No receipt yet\n") +
         `${WEB()}/admin/purchases`,
-    });
-    return true;
-  } catch (e) {
-    console.error("[purchaseAlert] could not send:", e?.message || e);
-    return false;
+    };
   }
 }
 

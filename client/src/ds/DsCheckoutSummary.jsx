@@ -12,7 +12,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config.js";
 import { readCartItems, readCartMeta, CART_CHANGED } from "../lib/cart.js";
-import { termTotalNGN, unitPrices } from "../lib/termPricing.js";
+import { termTotal, unitPrices } from "../lib/termPricing.js";
 
 const fmt = (n, currency = "NGN") =>
   new Intl.NumberFormat(currency === "USD" ? "en-US" : "en-NG", {
@@ -28,12 +28,19 @@ export default function DsCheckoutSummary() {
   // it travels on cartMeta. It still has to appear here, or the panel quietly
   // omits the largest figure on the order.
   const [training, setTraining] = React.useState(null);
+  // The order is placed in whatever currency the quotation chose. Formatting
+  // this panel in naira regardless put ₦1,710,000 beside an invoice charging
+  // $1,455.77 for the same basket.
+  const [currency, setCurrency] = React.useState(() => readCartMeta().currency || "NGN");
 
   // Re-read whenever the cart is written, not only on mount: the form beside
   // this panel drops lines it cannot sell, and a summary that kept showing them
   // would name a price the order does not include.
   React.useEffect(() => {
-    const sync = () => setItems(readCartItems());
+    const sync = () => {
+      setItems(readCartItems());
+      setCurrency(readCartMeta().currency || "NGN");
+    };
     window.addEventListener(CART_CHANGED, sync);
     return () => window.removeEventListener(CART_CHANGED, sync);
   }, []);
@@ -82,8 +89,9 @@ export default function DsCheckoutSummary() {
         // ₦12,000,000 on this panel. This is the same helper the purchase page
         // uses and it mirrors the server's computeRecurring, so the three
         // cannot disagree.
-        const term = p ? termTotalNGN(p, periods) : 0;
-        const install = p && it.firstTime ? Number(unitPrices(p).install) || 0 : 0;
+        const term = p ? termTotal(p, periods, currency) : 0;
+        const install =
+          p && it.firstTime ? Number(unitPrices(p, currency).install) || 0 : 0;
 
         return {
           key,
@@ -97,7 +105,7 @@ export default function DsCheckoutSummary() {
           known: !!p,
         };
       }),
-    [items, products],
+    [items, products, currency],
   );
 
   const seatTotal = rows.reduce((n, r) => n + r.seats, 0);
@@ -106,6 +114,15 @@ export default function DsCheckoutSummary() {
     (it) => Math.max(1, parseInt(it.periods ?? it.qty ?? 1, 10) || 1) >= 12,
   );
   const priced = rows.every((r) => r.known);
+
+  // Training locations carry both columns too.
+  const usd = String(currency).toUpperCase() === "USD";
+  const trainingFee = training
+    ? Number(usd ? training.loc.trainingCostUSD : training.loc.trainingCostNGN) || 0
+    : 0;
+  const trainingBim = training
+    ? Number(usd ? training.loc.bimInstallCostUSD : training.loc.bimInstallCostNGN) || 0
+    : 0;
 
   if (!items.length) {
     return (
@@ -140,7 +157,7 @@ export default function DsCheckoutSummary() {
               {r.name}
               <i className="qt-q"> × {r.seats}</i>
             </span>
-            <b>{r.known ? fmt(r.amount) : "—"}</b>
+            <b>{r.known ? fmt(r.amount, currency) : "—"}</b>
           </div>
         ))}
 
@@ -151,12 +168,12 @@ export default function DsCheckoutSummary() {
                 On-site training
                 <i className="qt-q"> · {training.loc.city}</i>
               </span>
-              <b>{fmt(training.loc.trainingCostNGN)}</b>
+              <b>{fmt(trainingFee, currency)}</b>
             </div>
-            {training.bimInstall && Number(training.loc.bimInstallCostNGN) > 0 && (
+            {training.bimInstall && trainingBim > 0 && (
               <div className="sumrow">
                 <span>CAD set-up on site</span>
-                <b>{fmt(training.loc.bimInstallCostNGN)}</b>
+                <b>{fmt(trainingBim, currency)}</b>
               </div>
             )}
           </>
@@ -166,7 +183,7 @@ export default function DsCheckoutSummary() {
       <p className="small" style={{ marginTop: "16px" }}>
         {priced ? (
           <>
-            Then {fmt(renewal)} {yearly ? "yearly" : "monthly"} until cancelled.{" "}
+            Then {fmt(renewal, currency)} {yearly ? "yearly" : "monthly"} until cancelled.{" "}
           </>
         ) : (
           <>Prices are confirmed on the next step. </>

@@ -47,7 +47,28 @@ export async function sendProformaInvoice(purchase, to) {
   try {
     const email = String(to || "").trim();
     if (!purchase || !email) return false;
+    const { subject, html, text } = buildProformaInvoice(purchase);
+    await sendMail({ to: email, subject, html, text });
+    return true;
+  } catch (e) {
+    console.error("[proformaInvoice] could not send:", e?.message || e);
+    return false;
+  }
+}
 
+/**
+ * The document itself, separated from sending it.
+ *
+ * Split out so it can be rendered and checked without a mail server — the
+ * first version of this went out with every description reading as a raw
+ * product key and every amount as zero, which a test that only asserted
+ * "the mail was accepted" would have passed.
+ *
+ * @param {object} purchase
+ * @returns {{subject: string, html: string, text: string}}
+ */
+export function buildProformaInvoice(purchase) {
+  {
     const currency = purchase.currency || "NGN";
     const id = String(purchase._id || "");
     // The same short reference the bank-transfer panel shows, so the payment
@@ -60,18 +81,47 @@ export async function sendProformaInvoice(purchase, to) {
       year: "numeric",
     });
 
+    // The field names are LineSchema's, checked against models/Purchase.js
+    // rather than guessed: `name` (not productName), `qty` for seats (not
+    // quantity), and `subtotal` for the line total in the order's currency
+    // (not lineTotal). Guessing them printed every description as a raw
+    // product key — "revit", "planswift" — and every amount as zero, on a
+    // document asking a firm's accounts department for money.
     const rows = (purchase.lines || [])
       .map((l, i) => {
-        const qty = l.quantity ?? l.seats ?? 1;
-        const amount = l.lineTotal ?? l.amount ?? 0;
+        const seats = Number(l.qty) || 1;
+        const periods = Number(l.periods) || 1;
+        // "2 seats · 12 months" says more than a bare number, and it is the
+        // detail an accounts department checks the invoice against.
+        const detail = [
+          `${seats} seat${seats === 1 ? "" : "s"}`,
+          l.billingInterval === "yearly"
+            ? `${periods} year${periods === 1 ? "" : "s"}`
+            : `${periods} month${periods === 1 ? "" : "s"}`,
+        ].join(" · ");
+        const install = Number(l.install) || 0;
         return `<tr style="border-bottom:1px solid #eee;background:${i % 2 ? "#f7f9fb" : "#fff"}">
-            <td style="padding:8px 10px;font-size:13px">${i + 1}.</td>
-            <td style="padding:8px 10px;font-size:13px">${esc(l.productName || l.productKey || "Item")}</td>
-            <td style="padding:8px 10px;font-size:13px;text-align:center">${esc(qty)}</td>
-            <td style="padding:8px 10px;font-size:13px;text-align:right">${esc(money(amount, currency))}</td>
+            <td style="padding:8px 10px;font-size:13px;vertical-align:top">${i + 1}.</td>
+            <td style="padding:8px 10px;font-size:13px">
+              ${esc(l.name || l.productKey || "Item")}
+              <div style="color:#777;font-size:11.5px">${esc(detail)}${
+                install > 0 ? ` · includes ${esc(money(install, currency))} installation` : ""
+              }</div>
+            </td>
+            <td style="padding:8px 10px;font-size:13px;text-align:center;vertical-align:top">${esc(seats)}</td>
+            <td style="padding:8px 10px;font-size:13px;text-align:right;vertical-align:top">${esc(
+              money(l.subtotal, currency),
+            )}</td>
           </tr>`;
       })
       .join("");
+
+    // Subtotal is the pre-VAT figure. Falling back to totalAmount printed the
+    // VAT-inclusive total on the Subtotal row, so the document appeared to add
+    // VAT twice.
+    const subtotalShown =
+      Number(purchase.totalBeforeDiscount) ||
+      Math.max(Number(purchase.totalAmount || 0) - Number(purchase.vatAmount || 0), 0);
 
     const bank = {
       number: process.env.BANK_ACCOUNT_NUMBER || "1634998770",
@@ -85,8 +135,7 @@ export async function sendProformaInvoice(purchase, to) {
              <td style="padding:3px 0;text-align:right">${esc(money(purchase.vatAmount, currency))}</td></tr>`
         : "";
 
-    await sendMail({
-      to: email,
+    return {
       subject: `Proforma invoice ${ref} — ${money(purchase.totalAmount, currency)}`,
       html: `
         <div style="max-width:600px;margin:0 auto;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#262626">
@@ -117,7 +166,7 @@ export async function sendProformaInvoice(purchase, to) {
 
             <table style="width:100%;font-size:13px">
               <tr><td style="padding:3px 0;color:#666">Subtotal</td>
-                  <td style="padding:3px 0;text-align:right">${esc(money(purchase.totalBeforeDiscount || purchase.totalAmount, currency))}</td></tr>
+                  <td style="padding:3px 0;text-align:right">${esc(money(subtotalShown, currency))}</td></tr>
               ${vatRow}
               <tr><td style="padding:8px 0;font-weight:700">Total due</td>
                   <td style="padding:8px 0;text-align:right;font-weight:700;font-size:16px">${esc(money(purchase.totalAmount, currency))}</td></tr>
@@ -158,11 +207,7 @@ export async function sendProformaInvoice(purchase, to) {
         `Total due ${money(purchase.totalAmount, currency)}, payable by ${dueStr}\n\n` +
         `${bank.bank} / ${bank.name} / ${bank.number}\nQuote reference ${ref}\n\n` +
         `${WEB()}/purchase`,
-    });
-    return true;
-  } catch (e) {
-    console.error("[proformaInvoice] could not send:", e?.message || e);
-    return false;
+    };
   }
 }
 
