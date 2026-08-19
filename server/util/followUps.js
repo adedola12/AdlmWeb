@@ -27,20 +27,42 @@ import { FollowUp } from "../models/FollowUp.js";
  *
  * The stored status alone is not enough: nothing rewrites "active" to
  * "expired" the moment a date passes, so an entitlement can sit at "active"
- * with an expiry two months in the past. This is the same rule
- * admin.usersLite.js applies, kept in step deliberately — the two screens
- * disagreeing about who is expired would be worse than the duplication.
+ * with an expiry two months in the past.
+ *
+ * This mirrors `effectiveEntStatus` in client/src/pages/Admin.jsx and
+ * `normalizeSubStatus` in admin.usersLite.js, deliberately: a past expiry
+ * beats whatever is stored for EVERY status except "disabled". An earlier
+ * version of this counted only a stored "active" as churn, on the theory
+ * that a never-activated entitlement means nobody lost anything — but an
+ * expiry date is only ever written when access is GRANTED or renewed, so
+ * "inactive with a past expiry" is a lapsed customer, not an unused row. The
+ * practical effect of getting this wrong was a call list that read empty while
+ * the Subscriptions tab showed dozens of expired rows.
  */
 export function effectiveStatus(ent, now = dayjs()) {
-  const raw = String(ent?.status || "inactive").toLowerCase();
-  const exp = ent?.expiresAt ? dayjs(ent.expiresAt) : null;
-
+  const raw = String(ent?.status || "").toLowerCase() || "active";
   if (raw === "disabled") return "disabled";
-  if (!exp || !exp.isValid()) return raw === "active" ? "active" : "inactive";
-  if (exp.isAfter(now)) return raw === "active" ? "active" : "inactive";
-  // Expiry has passed. An entitlement that was never activated is "inactive"
-  // rather than churn — nobody lost anything, so it is not a renewal call.
-  return raw === "active" ? "expired" : "inactive";
+
+  // endOf("day") to match the admin screens: an entitlement is not overdue
+  // until its expiry DAY is over, so both surfaces agree on the day count.
+  const exp = ent?.expiresAt ? dayjs(ent.expiresAt).endOf("day") : null;
+  if (exp && exp.isValid() && exp.isBefore(now)) return "expired";
+
+  // Still in date. A stored "expired" that has not actually lapsed is live —
+  // same quirk the admin screens honour, kept so the two never disagree.
+  return raw === "inactive" ? "inactive" : "active";
+}
+
+/**
+ * Whole days since an entitlement lapsed, counted the way the admin
+ * Subscriptions tab counts them (getDaysLeft in Admin.jsx) so "Expired 236d"
+ * means the same number on both screens.
+ */
+export function daysOverdue(expiresAt, now = dayjs()) {
+  if (!expiresAt) return 0;
+  const end = dayjs(expiresAt).endOf("day");
+  if (!end.isValid() || !end.isBefore(now)) return 0;
+  return Math.max(Math.ceil(now.diff(end, "hour") / 24), 0);
 }
 
 const fullNameOf = (u) =>
@@ -145,18 +167,15 @@ export async function collectCandidates({
       }
       if (st !== "expired") continue;
 
-      const daysOverdue = Math.max(
-        0,
-        now.startOf("day").diff(dayjs(e.expiresAt).startOf("day"), "day"),
-      );
-      if (expiredWithinDays > 0 && daysOverdue > expiredWithinDays) continue;
+      const overdue = daysOverdue(e.expiresAt, now);
+      if (expiredWithinDays > 0 && overdue > expiredWithinDays) continue;
 
       const key = String(e.productKey || "").trim().toLowerCase();
       expired.push({
         productKey: key,
         productName: names.get(key) || key || "—",
         expiresAt: e.expiresAt || null,
-        daysOverdue,
+        daysOverdue: overdue,
         seats: Number(e.seats || 1),
         licenseType: String(e.licenseType || "personal"),
         organizationName: String(e.organizationName || ""),
