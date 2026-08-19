@@ -151,7 +151,12 @@ export async function fetchMasterMaterials(zoneKey, stateKey) {
     "MaterialPrice",
     stateKey
   ).sort((a, b) =>
-    String(a.MaterialName || "").localeCompare(String(b.MaterialName || ""))
+    // Same numeric collation as labour: materials name sizes too, and "0.55mm"
+    // against "0.70mm" or "16mm2" against "4mm2" has the same problem.
+    String(a.MaterialName || "").localeCompare(String(b.MaterialName || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    })
   );
 
   return selected.map((d, i) => ({
@@ -193,7 +198,15 @@ export async function fetchMasterLabour(zoneKey, stateKey) {
     "LabourPrice",
     stateKey
   ).sort((a, b) =>
-    String(a.LabourName || "").localeCompare(String(b.LabourName || ""))
+    // Numeric collation, so sizes read in order. A plain compare is character
+    // by character, which puts "(10 to 20 tonnes)" above "(2.7 to 10 tonnes)"
+    // because "1" precedes "2", and scatters the generators as 1.5, 10, 125,
+    // 150, 200, 250, 27, 50. Comparing digit runs as numbers sorts a catalogue
+    // that names its sizes the way this one does.
+    String(a.LabourName || "").localeCompare(String(b.LabourName || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    })
   );
 
   return selected.map((d, i) => ({
