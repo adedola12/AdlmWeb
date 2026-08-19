@@ -251,7 +251,7 @@ export default function DsDownloads() {
             <section className="dsh-panel">
               <div className="dsh-ph">
                 <h2>Not in the subscription</h2>
-                <Link className="more" to="/pricing">
+                <Link className="more" to="/products">
                   See pricing
                 </Link>
               </div>

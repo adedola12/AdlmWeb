@@ -394,8 +394,8 @@ export default function DsSettings() {
                 <Link className="btn btn-o btn-sm" to="/profile">
                   Activity log
                 </Link>
-                <Link className="btn btn-o btn-sm" to="/privacy">
-                  Privacy
+                <Link className="btn btn-o btn-sm" to="/support/request">
+                  Ask for an export
                 </Link>
               </div>
             </div>

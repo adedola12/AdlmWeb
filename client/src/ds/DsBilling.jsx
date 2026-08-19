@@ -470,7 +470,7 @@ export default function DsBilling() {
                 Licences run to the end of the period you have paid for. Your rate library and
                 project data stay in the account whether or not a licence is active.
               </p>
-              <Link className="btn btn-o btn-sm btn-full" to="/contact" style={{ marginTop: 16 }}>
+              <Link className="btn btn-o btn-sm btn-full" to="/support/request" style={{ marginTop: 16 }}>
                 Talk to us first
               </Link>
             </div>

@@ -153,10 +153,10 @@ export default function DsProducts() {
           </p>
         </div>
         <div className="dsh-acts">
-          <Link className="btn btn-o btn-sm" to="/pricing">
+          <Link className="btn btn-o btn-sm" to="/products">
             See pricing
           </Link>
-          <Link className="btn btn-p btn-sm" to="/contact">
+          <Link className="btn btn-p btn-sm" to="/support/request">
             Talk to us about seats
           </Link>
         </div>

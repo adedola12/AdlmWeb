@@ -223,7 +223,7 @@ export default function DsTeam() {
                 bought against that account. If you need several people under one bill, tell us
                 what you need and we will set it up by hand in the meantime.
               </p>
-              <Link className="btn btn-o btn-sm" to="/contact" style={{ marginTop: 16 }}>
+              <Link className="btn btn-o btn-sm" to="/support/request" style={{ marginTop: 16 }}>
                 Talk to us about a practice account
               </Link>
             </div>
