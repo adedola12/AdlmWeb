@@ -381,7 +381,7 @@ export default function Receipt() {
           </div>
 
           <div className="mt-6 pt-4 border-t text-xs text-slate-500">
-            © {new Date().getFullYear()} ADLM Studio — All rights reserved.
+            © {new Date().getFullYear()} ADLM Studio, All rights reserved.
           </div>
         </div>
       </div>

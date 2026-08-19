@@ -148,7 +148,7 @@ export default function Purchase() {
           navigate(`/receipt/${out.purchaseId}`, { replace: true });
         } else {
           setMsg(
-            "We couldn't confirm the payment yet. If you were debited, it will be confirmed automatically — check your dashboard shortly.",
+            "We couldn't confirm the payment yet. If you were debited, it will be confirmed automatically. Check your dashboard shortly.",
           );
         }
       } catch (e) {
@@ -183,7 +183,7 @@ export default function Purchase() {
             label: j?.label || "VAT",
           });
         }
-      } catch { /* ignore — checkout still works without VAT preview */ }
+      } catch { /* ignore, checkout still works without VAT preview */ }
     })();
   }, []);
 
@@ -283,7 +283,7 @@ export default function Purchase() {
     setCurrency("NGN"); // storage is billed in NGN only
     setCart((c) => {
       const cur = c[forKey] || { periods: 1, seats: 1, firstTime: false };
-      if (cur.storageBlocks) return c; // already set — don't clobber
+      if (cur.storageBlocks) return c; // already set, don't clobber
       return { ...c, [forKey]: { ...cur, storageBlocks: 1 } };
     });
   }, [qs]);
@@ -849,14 +849,14 @@ export default function Purchase() {
               navigate(`/receipt/${out.purchaseId || pendingPurchaseId}`);
             } else {
               setMsg(
-                "We couldn't confirm the payment yet. If you were debited, it will be confirmed automatically — check your dashboard shortly.",
+                "We couldn't confirm the payment yet. If you were debited, it will be confirmed automatically. Check your dashboard shortly.",
               );
             }
           } catch (e) {
             setMsg(e.message || "Payment confirmation failed");
           }
         },
-        onCancel: () => setMsg("Payment cancelled — you have not been charged."),
+        onCancel: () => setMsg("Payment cancelled. You have not been charged."),
       });
     } catch (e) {
       setMsg(e.message || "Could not start card payment");
@@ -959,7 +959,7 @@ export default function Purchase() {
             </div>
           </div>
 
-          {/* Animated persona scene — morphs with the selected license type.
+          {/* Animated persona scene, morphs with the selected license type.
               Real 3D when supported; SVG scene as instant / reduced-motion fallback. */}
           {use3D ? (
             <React.Suspense
@@ -1060,7 +1060,7 @@ export default function Purchase() {
                     value={selectedLocationId}
                     onChange={(e) => setSelectedLocationId(e.target.value)}
                   >
-                    <option value="">— Select location —</option>
+                    <option value="">. Select location, </option>
                     {trainingLocations.map((loc) => (
                       <option key={loc._id} value={loc._id}>
                         {loc.name}
@@ -1117,7 +1117,7 @@ export default function Purchase() {
 
       {/* Products (vertical list) · Configurator (middle) · Summary (right) */}
       <div className="grid lg:grid-cols-[260px_1fr_340px] gap-5 items-start">
-        {/* LEFT — vertical product list */}
+        {/* LEFT, vertical product list */}
         <aside className="lg:sticky lg:top-20">
           <div className="text-sm font-semibold text-slate-900 dark:text-white mb-2">
             Products
@@ -1167,7 +1167,7 @@ export default function Purchase() {
           </div>
         </aside>
 
-        {/* MIDDLE — configurator for the active product */}
+        {/* MIDDLE, configurator for the active product */}
         <section ref={configRef} className="scroll-mt-24">
           {(() => {
             const p = activeKey
@@ -1183,7 +1183,7 @@ export default function Purchase() {
                     Pick a product to configure
                   </div>
                   <div className="mt-1 text-sm text-slate-500 max-w-sm mx-auto">
-                    Choose one from the list to set duration, seats and install —
+                    Choose one from the list to set duration, seats and install: 
                     then add it to your order.
                   </div>
                 </div>
@@ -1405,7 +1405,7 @@ export default function Purchase() {
           })()}
         </section>
 
-        {/* RIGHT — sticky live summary */}
+        {/* RIGHT, sticky live summary */}
         <aside ref={summaryRef} className="lg:sticky lg:top-20 scroll-mt-24">
           <div className="card">
             <h2 className="font-semibold mb-2">Summary</h2>
@@ -1466,7 +1466,7 @@ export default function Purchase() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate">
-                          Physical Training — {selectedLocation.name}
+                          Physical Training, {selectedLocation.name}
                         </div>
                         <div className="text-xs text-slate-500">
                           {selectedLocation.durationDays || 1} day(s)
@@ -1534,7 +1534,7 @@ export default function Purchase() {
                   </div>
                 </div>
 
-                {/* Auto-renew opt-in — card payments only, so NGN orders only */}
+                {/* Auto-renew opt-in: card payments only, so NGN orders only */}
                 {(anyStorageInCart ? "NGN" : currency) === "NGN" && (
                   <label className="mt-4 flex items-start gap-2 cursor-pointer rounded-xl border p-3 text-sm">
                     <input
@@ -1598,7 +1598,7 @@ export default function Purchase() {
                       className="block underline text-xs text-slate-500 mt-2"
                       onClick={() => setShowForeignCard(true)}
                     >
-                      I have a Nigerian card — let me pay by card anyway
+                      I have a Nigerian card. Let me pay by card anyway
                     </button>
                   </div>
                 ) : (
@@ -1613,18 +1613,18 @@ export default function Purchase() {
                     <div className="text-xs text-slate-500 text-center mt-2">
                       {foreignBuyer
                         ? "Only Nigerian-issued cards clear reliably here. If yours is declined, use bank transfer below."
-                        : "Foreign cards are charged in Naira — your bank converts the amount. You may be asked for an OTP by your bank."}
+                        : "Foreign cards are charged in Naira, your bank converts the amount. You may be asked for an OTP by your bank."}
                     </div>
                     {autoRenew && (
                       <div className="text-xs text-emerald-700 text-center mt-1">
-                        Auto-renew is on — this card will be saved for future
+                        Auto-renew is on. This card will be saved for future
                         renewals (you can remove it from your profile).
                       </div>
                     )}
                   </>
                 )}
                 <div className="text-center text-xs text-slate-400 my-3">
-                  — or pay by bank transfer —
+, or pay by bank transfer, 
                 </div>
               </div>
             ) : (
@@ -1651,7 +1651,7 @@ export default function Purchase() {
                     >
                       {submitting
                         ? "Switching…"
-                        : "I have a Nigerian card — switch to NGN & pay by card"}
+                        : "I have a Nigerian card. Switch to NGN & pay by card"}
                     </button>
                   </>
                 ) : (
@@ -1659,7 +1659,7 @@ export default function Purchase() {
                     <div className="font-medium mb-1">
                       Paying by card from outside Nigeria?
                     </div>
-                    Card payments are charged in Nigerian Naira (NGN) — your bank
+                    Card payments are charged in Nigerian Naira (NGN), your bank
                     converts to your local currency automatically. Switch your
                     order to NGN to pay by card.
                     <button
@@ -1675,7 +1675,7 @@ export default function Purchase() {
                   </>
                 )}
                 <div className="text-center text-xs text-slate-400 my-3">
-                  — or pay by bank transfer below —
+, or pay by bank transfer below, 
                 </div>
               </div>
             )}

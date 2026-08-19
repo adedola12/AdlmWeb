@@ -174,7 +174,7 @@ export default function UserInvoice() {
         </div>
       </div>
 
-      {/* Invoice preview — identical to admin */}
+      {/* Invoice preview, identical to admin */}
       <InvoicePreviewPage
         form={invoice}
         subtotal={subtotal}

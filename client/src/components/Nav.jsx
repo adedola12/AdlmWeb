@@ -66,7 +66,7 @@ function DesktopLink({ to, children }) {
       }`}
     >
       {children}
-      {/* Active indicator — brand gradient underline, layout-stable */}
+      {/* Active indicator: brand gradient underline, layout-stable */}
       <span
         aria-hidden="true"
         className={`pointer-events-none absolute left-3 right-3 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-adlm-orange to-amber-400 transition-all duration-300 origin-left ${
@@ -154,7 +154,7 @@ export default function Nav() {
   return (
     <>
       {/* Fixed (not sticky) so the navbar always covers the FULL viewport
-          width — sticky only locks vertically, which meant wide BoQ tables
+          width: sticky only locks vertically, which meant wide BoQ tables
           that cause horizontal page scroll would expose the navbar's right
           edge and let table cells bleed through to its right. Fixed +
           inset-x-0 keeps the navbar pinned to both viewport edges no matter
@@ -231,7 +231,7 @@ export default function Nav() {
             )}
           </div>
 
-          {/* Mobile hamburger — 44px touch target (Apple HIG) */}
+          {/* Mobile hamburger, 44px touch target (Apple HIG) */}
           <button
             className="md:hidden flex-shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-xl text-white border border-white/10 bg-white/5 hover:bg-white/10 active:bg-white/20 transition-colors"
             onClick={() => setOpen(true)}

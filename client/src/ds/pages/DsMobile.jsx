@@ -90,7 +90,7 @@ export default function DsMobile() {
               </h2>
               {" "}
               <p className="ds-lede" style={{ marginTop: "18px" }}>
-                Measuring needs the model or the sheet, and a machine that can open it. Everything after that, adjusting a rate, checking a budget, reviewing quantities someone else extracted: needs none of it.
+                Measuring needs the model or the sheet, and a machine that can open it. Everything after that: adjusting a rate, checking a budget, reviewing quantities someone else extracted: needs none of it.
               </p>
               {" "}
               <ul className="ticks">

@@ -1799,7 +1799,7 @@ export default function ProjectsGeneric() {
       if (r.changed) parts.push(`${r.changed} task${r.changed === 1 ? "" : "s"} moved`);
       if (r.anchored) parts.push(`${r.anchored} anchored at start`);
       if (r.cycles) parts.push(`${r.cycles} cycle(s) detected`);
-      setNotice(parts.length ? `Rescheduled — ${parts.join(", ")}.` : "Rescheduled.");
+      setNotice(parts.length ? `Rescheduled, ${parts.join(", ")}.` : "Rescheduled.");
     } catch (e) {
       setPmImportError(e?.message || "Failed to reschedule tasks.");
     }
@@ -2173,8 +2173,8 @@ export default function ProjectsGeneric() {
         "",
         summary,
         "",
-        "OK — separate buildings; each gets its own sheet in the exported bill",
-        "Cancel — disciplines of one structure (architectural + structural)",
+        "OK: separate buildings; each gets its own sheet in the exported bill",
+        "Cancel: disciplines of one structure (architectural + structural)",
       ].join("\n"),
     );
     const name = window.prompt(
@@ -3651,7 +3651,7 @@ export default function ProjectsGeneric() {
       } else {
         // Fallback for legacy unprotected locks — keep the confirmation prompt.
         if (!window.confirm(
-          "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely — variations will no longer be auto-tracked until you lock again.",
+          "Unlock this contract? Once unlocked, the team can edit item qty and descriptions freely: variations will no longer be auto-tracked until you lock again.",
         )) return null;
       }
     }
@@ -3899,7 +3899,7 @@ export default function ProjectsGeneric() {
     if (!["architectural", "structural", "mep"].includes(discipline)) return null;
     const MAX = 100 * 1024 * 1024;
     if (file.size > MAX) {
-      setErr(`File is ${(file.size / 1024 / 1024).toFixed(1)} MB — limit is 100 MB.`);
+      setErr(`File is ${(file.size / 1024 / 1024).toFixed(1)} MB, limit is 100 MB.`);
       return null;
     }
     setModelUploadBusy((prev) => ({ ...prev, [discipline]: true }));
@@ -3969,7 +3969,7 @@ export default function ProjectsGeneric() {
             ? payload.sampleMissing.slice(0, 8).join(", ")
             : "";
           throw new Error(
-            `Wrong or outdated ${discipline} model — it is missing ` +
+            `Wrong or outdated ${discipline} model. It is missing ` +
               `${payload.missingCount} of ${payload.requiredCount} element(s) your ` +
               `${discipline} quantities were measured from` +
               `${sample ? ` (e.g. IDs ${sample}…)` : ""}. ` +
@@ -3984,7 +3984,7 @@ export default function ProjectsGeneric() {
         const v = result.validation || result.model.validation;
         if (v?.status === "valid") {
           setNotice(
-            `${discipline} model verified — all ${v.matchedCount}/${v.requiredCount} ` +
+            `${discipline} model verified, all ${v.matchedCount}/${v.requiredCount} ` +
               `quantity elements found.`,
           );
         } else if (v?.status === "no-quantities") {
@@ -3993,7 +3993,7 @@ export default function ProjectsGeneric() {
           );
         } else if (v?.status === "unchecked") {
           setNotice(
-            `${discipline} model uploaded (fragments — not Element-ID checked).`,
+            `${discipline} model uploaded (fragments, not Element-ID checked).`,
           );
         } else {
           setNotice(`${discipline} model uploaded.`);
@@ -4858,7 +4858,7 @@ export default function ProjectsGeneric() {
         );
         return [cat, rows.length, Number(subtotal.toFixed(2))];
       }),
-      ["Measured work — subtotal", computedAll.length, Number(grossAmount.toFixed(2))],
+      ["Measured work: subtotal", computedAll.length, Number(grossAmount.toFixed(2))],
       ...(provTotal > 0
         ? [["Provisional sums", cleanedProvSums.length, Number(provTotal.toFixed(2))]]
         : []),
@@ -5052,7 +5052,7 @@ export default function ProjectsGeneric() {
   return (
     <div className="min-h-screen p-4 md:p-6">
       <div className={`mx-auto flex flex-col gap-4 ${sel ? "max-w-[1700px]" : "max-w-7xl md:flex-row"}`}>
-        {/* SIDEBAR — vertical while browsing; collapses to a slim
+        {/* SIDEBAR, vertical while browsing; collapses to a slim
             horizontal bar once a project is open so the data tables get
             the full width of the screen. */}
         <aside className={sel ? "w-full" : "md:w-[260px]"}>
@@ -5165,7 +5165,7 @@ export default function ProjectsGeneric() {
             </div>
           ) : (
           <div className="card !p-0 overflow-hidden md:sticky md:top-6">
-            {/* Identity band — tells the user exactly which tool & mode
+            {/* Identity band, tells the user exactly which tool & mode
                 they're in, so the rest of the sidebar is purely navigation. */}
             <div className="relative overflow-hidden bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 p-4 text-white">
               <div
@@ -5191,7 +5191,7 @@ export default function ProjectsGeneric() {
             </div>
 
             <div className="space-y-4 p-3">
-              {/* Group 1 — Mode: switch between Takeoffs and Materials for
+              {/* Group 1, Mode: switch between Takeoffs and Materials for
                   the same tool. A segmented control reads as "pick one",
                   unlike the old stack of identical bordered links. */}
               {showRevitToggle && (
@@ -5228,7 +5228,7 @@ export default function ProjectsGeneric() {
                 </div>
               )}
 
-              {/* Group 2 — Navigate: leave the tool or refresh the list.
+              {/* Group 2, Navigate: leave the tool or refresh the list.
                   "Back to projects" lives on the project header itself,
                   so it isn't duplicated here. */}
               <div>
@@ -5261,7 +5261,7 @@ export default function ProjectsGeneric() {
                   {toolNorm === "revit" && (
                     <Link
                       to="/pm-tracker"
-                      title="PM Tracker — standalone project schedules (QUIV)"
+                      title="PM Tracker, standalone project schedules (QUIV)"
                       className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
                     >
                       <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
@@ -5280,7 +5280,7 @@ export default function ProjectsGeneric() {
                         setBoqImportErr("");
                         setBoqImportOpen(true);
                       }}
-                      title="Create a project from an Excel Bill of Quantities — the material & labour schedule is built for you"
+                      title="Create a project from an Excel Bill of Quantities, the material & labour schedule is built for you"
                       className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
                     >
                       <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -5292,11 +5292,11 @@ export default function ProjectsGeneric() {
                       </span>
                     </button>
                   )}
-                  {/* Portfolio Dashboard sits last — it's the cross-product
+                  {/* Portfolio Dashboard sits last, it's the cross-product
                       roll-up you leave the tool for, so it anchors the group. */}
                   <Link
                     to="/portfolio-dashboard"
-                    title="Portfolio dashboard — all projects"
+                    title="Portfolio dashboard, all projects"
                     className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
                   >
                     <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
@@ -5777,8 +5777,8 @@ export default function ProjectsGeneric() {
                   Quantities. Categories, planned-vs-actual columns and an
                   optional Material &amp; Labour sheet are read from the
                   workbook. Where the workbook has no schedule, one is built
-                  for you — cement, sand, granite, blocks, formwork, rebar and
-                  labour, priced from your Material Constants and RateGen —
+                  for you: cement, sand, granite, blocks, formwork, rebar and
+                  labour, priced from your Material Constants and RateGen: 
                   and it stays live across the Dashboard, BoQ, Budget and
                   Valuation tabs.
                 </p>

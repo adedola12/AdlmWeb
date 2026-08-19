@@ -50,7 +50,7 @@ export default function ActivityReport({ report }) {
         kicker="Project Activity Report"
         title={report.user?.name || "Activity Log"}
         accent="Log"
-        lede={`A record of every logged action across your projects — creations, contract locks, variations, rate changes, collaborator activity, models and schedule — as at ${dayjs(report.generatedAt).format("DD MMMM YYYY")}.`}
+        lede={`A record of every logged action across your projects: creations, contract locks, variations, rate changes, collaborator activity, models and schedule: as at ${dayjs(report.generatedAt).format("DD MMMM YYYY")}.`}
         metaPairs={[
           { label: "Account", value: report.user?.name || report.user?.email },
           { label: "Organization", value: report.user?.firm || "—" },

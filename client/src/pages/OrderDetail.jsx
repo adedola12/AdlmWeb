@@ -212,7 +212,7 @@ export default function OrderDetail() {
                 >
                   View it
                 </a>{" "}
-                — we will confirm your licence shortly.
+. We will confirm your licence shortly.
               </p>
             ) : (
               <p className="text-sm text-slate-600 dark:text-slate-400">

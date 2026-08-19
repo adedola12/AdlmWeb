@@ -756,7 +756,7 @@ export default function DsMepPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes, separate licence, same workspace. QUIV measures the building fabric, Revit MEP measures the services. Many teams run both.
+                Yes: separate licence, same workspace. QUIV measures the building fabric, Revit MEP measures the services. Many teams run both.
               </div>
               {" "}
             </details>
@@ -832,7 +832,7 @@ export default function DsMepPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run Revit MEP against one of your live jobs, your drawings, your rates, your bill format.
+          We'll run Revit MEP against one of your live jobs: your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">

@@ -154,7 +154,7 @@ export default function Quote() {
 
   if (wantsTraining && trainingCost > 0) {
     lineItems.push({
-      description: `Physical Training — ${selectedLocation?.name || ""}`,
+      description: `Physical Training, ${selectedLocation?.name || ""}`,
       qty: 1,
       unitPrice: trainingCost,
       total: trainingCost,
@@ -163,7 +163,7 @@ export default function Quote() {
 
   if (wantsTraining && wantsBimInstall && bimCost > 0) {
     lineItems.push({
-      description: `BIM Software Installation — ${selectedLocation?.name || ""}`,
+      description: `BIM Software Installation, ${selectedLocation?.name || ""}`,
       qty: 1,
       unitPrice: bimCost,
       total: bimCost,

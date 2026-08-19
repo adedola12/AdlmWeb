@@ -294,7 +294,7 @@ export default function DsHowItWorks() {
                   </h4>
                   {" "}
                   <p>
-                    Your ADLM sign-in sits at the centre. Everything your subscription covers, six products and counting, installs, updates and licenses itself from it.
+                    Your ADLM sign-in sits at the centre. Everything your subscription covers: six products and counting: installs, updates and licenses itself from it.
                   </p>
                   {" "}
                 </div>

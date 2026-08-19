@@ -130,7 +130,7 @@ export default function MaterialConstants() {
           </Link>
         </div>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          The factors behind every material &amp; labour schedule — how many bags
+          The factors behind every material &amp; labour schedule, how many bags
           of cement go into a cubic metre, how many blocks into a square metre,
           what the labour costs per unit. Change one and every schedule you
           generate afterwards follows it.

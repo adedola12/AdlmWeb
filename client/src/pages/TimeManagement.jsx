@@ -162,7 +162,7 @@ export default function TimeManagement() {
           </p>
           <h1 className="text-2xl sm:text-3xl font-bold">Time Log</h1>
           <p className="mt-1 text-white/60 text-sm">
-            Track labour hours, trades, and site conditions — synced across desktop and web.
+            Track labour hours, trades, and site conditions: synced across desktop and web.
           </p>
         </div>
       </div>
@@ -248,7 +248,7 @@ export default function TimeManagement() {
               <p className="text-3xl mb-2">🗂</p>
               <p className="text-slate-500 dark:text-slate-400 text-sm">
                 {tasks.length === 0
-                  ? "No tasks yet — add your first task to get started."
+                  ? "No tasks yet. Add your first task to get started."
                   : "No tasks match your filter."}
               </p>
             </div>

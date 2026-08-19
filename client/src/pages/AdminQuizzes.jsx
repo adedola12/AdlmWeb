@@ -116,7 +116,7 @@ function QuestionEditor({ question, index, onChange, onRemove, canRemove }) {
       <textarea
         className="input mt-2 w-full"
         rows={2}
-        placeholder="Explanation — shown after submission, right or wrong. This is where the teaching happens."
+        placeholder="Explanation: shown after submission, right or wrong. This is where the teaching happens."
         value={question.explanation}
         onChange={(e) => set({ explanation: e.target.value })}
       />
@@ -229,7 +229,7 @@ export default function AdminQuizzes() {
       });
       setMsg(
         payload.isPublished
-          ? "Saved and published — students can take it now."
+          ? "Saved and published, students can take it now."
           : "Saved as a draft. Tick Published when it is ready.",
       );
       await load();
@@ -413,7 +413,7 @@ export default function AdminQuizzes() {
                   checked={draft.isPublished}
                   onChange={(e) => setDraftField({ isPublished: e.target.checked })}
                 />
-                Published — students can see and take it
+                Published, students can see and take it
               </label>
 
               <div className="mt-4 space-y-3">

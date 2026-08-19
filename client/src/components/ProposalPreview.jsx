@@ -223,7 +223,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
     <div className="adlm-proposal" ref={previewRef}>
       <style>{PROPOSAL_CSS}</style>
 
-      {/* ============ PAGE 1 — COVER ============ */}
+      {/* ============ PAGE 1, COVER ============ */}
       <div className="page">
         <div className="cover">
           <ADLMMark />
@@ -235,7 +235,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
           </h1>
           <p className="lede">
             A proposal to move your QS team from manual practice to a
-            standardised, always-current digital workflow — powered by ADLM's
+            standardised, always-current digital workflow: powered by ADLM's
             QS software suite, training, and ongoing support.
           </p>
 
@@ -279,11 +279,11 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
         </div>
       </div>
 
-      {/* ============ PAGE 2 — SUMMARY + WHO + CHALLENGE ============ */}
+      {/* ============ PAGE 2, SUMMARY + WHO + CHALLENGE ============ */}
       <div className="page">
         <div className="pad">
           <section className="section-block">
-            <div className="sec-k">01 — Executive Summary</div>
+            <div className="sec-k">01, Executive Summary</div>
             <h2>Why this matters now</h2>
             {execParas.length ? (
               execParas.map((para, i) => (
@@ -302,14 +302,14 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
           </section>
 
           <section className="section-block">
-            <div className="sec-k">02 — Who We Are</div>
+            <div className="sec-k">02, Who We Are</div>
             <h2>ADLM Studio</h2>
             <p>
               ADLM Studio (Academy for Digital Learning &amp; Mastery Studios,
               RC 7440343) is a Nigerian ConTech and BIM company building
               proprietary quantity surveying and BIM software for the African
               AEC market. We bridge the gap between traditional construction
-              practice and digital project delivery — through software
+              practice and digital project delivery, through software
               engineered around Nigerian QS standards (BESMM 4R, NRM, CESMM4),
               and hands-on training trusted by leading construction firms,
               consultancies and institutions including NIQS and the Young QS
@@ -319,7 +319,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
               <div className="card">
                 <div className="n">BUILT FOR NIGERIA</div>
                 <p>
-                  Software aligned to BESMM 4R / NRM / CESMM4 — not adapted
+                  Software aligned to BESMM 4R / NRM / CESMM4, not adapted
                   foreign tools.
                 </p>
               </div>
@@ -334,7 +334,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
           </section>
 
           <section className="section-block">
-            <div className="sec-k">03 — The Challenge</div>
+            <div className="sec-k">03, The Challenge</div>
             <h2>What manual QS practice costs a firm</h2>
             <div className="grid2">
               <div className="card">
@@ -347,7 +347,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
               <div className="card">
                 <div className="n">INCONSISTENT OUTPUT</div>
                 <p>
-                  Every QS works differently — no firm-wide standard, formats
+                  Every QS works differently, no firm-wide standard, formats
                   or rate basis.
                 </p>
               </div>
@@ -361,7 +361,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
               <div className="card">
                 <div className="n">KEY-PERSON RISK</div>
                 <p>
-                  Knowledge lives in individuals, not systems — exposure when
+                  Knowledge lives in individuals, not systems: exposure when
                   staff turn over.
                 </p>
               </div>
@@ -370,11 +370,11 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
         </div>
       </div>
 
-      {/* ============ PAGE 3 — SOLUTION + SUITE + TRAINING ============ */}
+      {/* ============ PAGE 3, SOLUTION + SUITE + TRAINING ============ */}
       <div className="page">
         <div className="pad">
           <section className="section-block">
-            <div className="sec-k">04 — The ADLM Solution</div>
+            <div className="sec-k">04, The ADLM Solution</div>
             <h2>One integrated QS digital backbone</h2>
             <p>
               Our software suite shares a single live rate engine, so every
@@ -419,7 +419,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
           </section>
 
           <section className="section-block">
-            <div className="sec-k">05 — Implementation</div>
+            <div className="sec-k">05, Implementation</div>
             <h2>How the transformation runs</h2>
             <div className="road">
               <div className="step">
@@ -447,14 +447,14 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
         </div>
       </div>
 
-      {/* ============ PAGE 4 — PROGRAMME TIERS ============ */}
+      {/* ============ PAGE 4, PROGRAMME TIERS ============ */}
       <div className="page">
         <div className="pad">
           <section>
-            <div className="sec-k">06 — The Transformation Programme</div>
+            <div className="sec-k">06, The Transformation Programme</div>
             <h2>Annual partnership tiers</h2>
             <p>
-              Every tier is a single annual programme — software seats, team
+              Every tier is a single annual programme: software seats, team
               training and new-staff onboarding, the firm standardisation
               layer, priority support, and quarterly market-rate updates.
             </p>
@@ -500,11 +500,11 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
         </div>
       </div>
 
-      {/* ============ PAGE 5 — QUOTATION ============ */}
+      {/* ============ PAGE 5, QUOTATION ============ */}
       <div className="page">
         <div className="pad">
           <section>
-            <div className="sec-k">07 — Investment &amp; Quotation</div>
+            <div className="sec-k">07, Investment &amp; Quotation</div>
             <h2>Quotation</h2>
 
             <div className="inv-meta">
@@ -586,7 +586,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
             </table>
 
             <div className="paybox">
-              <b>Payment</b> — Bank transfer to: <b>ADLM STUDIO</b> · Access
+              <b>Payment</b>, Bank transfer to: <b>ADLM STUDIO</b> · Access
               Bank · <b>1634998770</b>
               <br />
               Please use{" "}
@@ -603,7 +603,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
             ) : null}
 
             <div className="sec-k" style={{ marginTop: 30 }}>
-              08 — Acceptance &amp; Next Steps
+              08, Acceptance &amp; Next Steps
             </div>
             <h2>To proceed</h2>
             <p>
@@ -614,13 +614,13 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
             <div className="accept">
               <div>
                 <div className="sign">
-                  Authorised for {firm} — name, signature &amp; date
+                  Authorised for {firm}: name, signature &amp; date
                 </div>
               </div>
               <div>
                 {verifyUrl ? (
                   <div className="adlm-auth">
-                    <div className="auth-h">Authorised — ADLM Studio</div>
+                    <div className="auth-h">Authorised, ADLM Studio</div>
                     <div className="auth-qrs">
                       <div className="qr-box">
                         <QRCodeSVG
@@ -654,7 +654,7 @@ export default function ProposalPreview({ proposal = {}, previewRef }) {
                 ) : (
                   <div className="sign">
                     {proposal.preparedBy ||
-                      "Adedolapo Quasim — Founder, ADLM Studio"}
+                      "Adedolapo Quasim: Founder, ADLM Studio"}
                   </div>
                 )}
               </div>

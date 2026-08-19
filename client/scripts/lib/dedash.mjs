@@ -30,11 +30,11 @@ const SUBJECT =
 
 // ...followed closely by a verb.
 const VERB =
-  /^\s*\S+\s+(is|are|was|were|has|have|had|does|do|did|can|could|will|would|should|must|may|might|says|said|reads|shows|means|makes|takes|gives|goes|comes|keeps|stays|sits|runs|works|costs|counts|carries|needs|wants|knows|gets|puts|sends|opens|closes|starts|stops|holds|leaves|lets|becomes|remains|looks|feels|seems|turns|brings|writes|prices|measures|installs|activates|renews|expires)\b/i;
+  /^\s*(?:\S+\s+){1,3}(is|are|was|were|has|have|had|does|do|did|can|could|will|would|should|must|may|might|says|said|reads|shows|means|makes|takes|gives|goes|comes|keeps|stays|sits|runs|works|costs|counts|carries|needs|wants|knows|gets|puts|sends|opens|closes|starts|stops|holds|leaves|lets|becomes|remains|looks|feels|seems|turns|brings|writes|prices|measures|installs|activates|renews|expires|keep|run|work|cost|count|carry|need|want|know|get|put|send|open|close|start|stop|hold|leave|let|become|remain|look|feel|seem|turn|bring|write|price|measure|install|activate|renew|expire|stay|sit|go|come|take|give|make|show|mean|read|say)\b/i;
 
 // An instruction stands alone too, and opens with a bare verb.
 const IMPERATIVE =
-  /^(pick|see|choose|start|book|tell|upload|ask|read|use|get|try|take|send|open|call|visit|download|install|check|bring|keep|let|make|find|talk|write|price|measure|compare|explore|learn|join|sign|buy|watch)\b/i;
+  /^(pick|see|choose|start|book|tell|upload|ask|read|use|get|try|take|send|open|call|visit|download|install|check|bring|keep|let|make|find|talk|write|price|measure|compare|explore|learn|join|sign|buy|watch|unlock|add|remove|edit|save|enter|select|review|confirm|contact|drag|drop|click|tap|scroll|switch|swap|rename|delete|export|import|print|share|copy|paste|set|clear|reset|apply|submit|update|manage)\b/i;
 
 /**
  * @param {string} text  prose that may contain em dashes
@@ -72,7 +72,10 @@ export function dedash(text) {
 
     let mark;
     if (standsAlone) mark = ". ";
-    else if (!carriesOn && sentence.includes(",")) mark = ": ";
+    // A colon when either half is a list: "Tell me what you do — estimating,
+    // take-off, BIM" is an enumeration, and a comma buries its first item
+    // among the rest.
+    else if (!carriesOn && (sentence.includes(",") || /^[^.!?]*,/.test(after))) mark = ": ";
     else mark = ", ";
 
     out += before + mark;

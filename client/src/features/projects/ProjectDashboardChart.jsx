@@ -161,7 +161,7 @@ export default function ProjectDashboardChart({
           </div>
         </div>
 
-        {/* Segmented control — reads as one clean control, not loose pills. */}
+        {/* Segmented control: reads as one clean control, not loose pills. */}
         <div className="inline-flex shrink-0 rounded-xl border border-slate-200 dark:border-adlm-dark-border bg-slate-100 dark:bg-white/5 p-1">
           {CHART_MODES.map((mode) => {
             const active = chartMode === mode.id;

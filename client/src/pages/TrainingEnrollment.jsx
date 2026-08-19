@@ -117,7 +117,7 @@ export default function TrainingEnrollment() {
         <div>
           <h1 className="text-2xl font-bold">{training.title}</h1>
           <p className="text-gray-600 mt-1">
-            {fmtDate(training.startAt)} — {fmtDate(training.endAt)}
+            {fmtDate(training.startAt)}, {fmtDate(training.endAt)}
           </p>
         </div>
         <Link
@@ -299,7 +299,7 @@ export default function TrainingEnrollment() {
             <div className="text-gray-700">
               <div>
                 <span className="font-semibold">Training Date:</span>{" "}
-                {fmtDate(training.startAt)} — {fmtDate(training.endAt)}
+                {fmtDate(training.startAt)}, {fmtDate(training.endAt)}
               </div>
               <div className="mt-1">
                 <span className="font-semibold">Location:</span>{" "}

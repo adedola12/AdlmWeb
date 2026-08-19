@@ -840,7 +840,7 @@ export default function DsHeronPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run HERON against one of your live jobs, your drawings, your rates, your bill format.
+          We'll run HERON against one of your live jobs: your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">

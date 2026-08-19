@@ -59,7 +59,7 @@ export default function App() {
 
       {/* Mounted in the root layout so it sees every route change.
           It existed before this and was never rendered anywhere, which meant
-          GA recorded the first page of a session and nothing after it — in a
+          GA recorded the first page of a session and nothing after it, in a
           single-page app, almost every pageview was missing. */}
       <AnalyticsTracker />
 
@@ -87,7 +87,7 @@ export default function App() {
         open={showVideo}
         onClose={closeVideo}
         videoId={VIDEO_ID}
-        title="Welcome to ADLM — quick intro"
+        title="Welcome to ADLM, quick intro"
         maxSeconds={MAX_SECONDS}
         closeOnOutsideClick={true}
         hideControls={false}

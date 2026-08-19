@@ -133,7 +133,7 @@ function Overlays({ label, guarded }) {
       <div className={`secure-guard ${guarded ? "is-active" : ""}`} aria-hidden={!guarded}>
         <span className="secure-guard__msg">
           <IconLock className="w-4 h-4" />
-          Protected content — paused
+          Protected content, paused
         </span>
       </div>
     </>

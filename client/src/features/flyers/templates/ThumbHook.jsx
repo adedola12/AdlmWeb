@@ -68,7 +68,7 @@ export default function ThumbHook({ flyer, accent, days, palette }) {
         )}
       </div>
 
-      {/* Main hook text block — vertically centred, left-aligned */}
+      {/* Main hook text block: vertically centred, left-aligned */}
       <div
         style={{
           position: "absolute",
@@ -83,7 +83,7 @@ export default function ThumbHook({ flyer, accent, days, palette }) {
           zIndex: 1,
         }}
       >
-        {/* First word(s) — giant accent */}
+        {/* First word(s), giant accent */}
         <div
           style={{
             fontFamily: FONT_DISPLAY,
@@ -98,7 +98,7 @@ export default function ThumbHook({ flyer, accent, days, palette }) {
           {accentWords}
         </div>
 
-        {/* Remaining words — large, palette text */}
+        {/* Remaining words: large, palette text */}
         {restWords && (
           <div
             style={{

@@ -586,7 +586,7 @@ export default function ProductDetail() {
           {/* Buy panel */}
           <Reveal className="lg:flex-1 min-w-0" y={16} delay={80}>
             {/* getCategory falls back to the literal "General" because Product
-                has no category field — an eyebrow reading "GENERAL" tells the
+                has no category field, an eyebrow reading "GENERAL" tells the
                 visitor nothing and looks like a placeholder someone forgot. */}
             <Eyebrow tone="blue">
               {isCourse
@@ -606,7 +606,7 @@ export default function ProductDetail() {
 
             {isComingSoon && (
               <div className="mt-4 inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30">
-                Coming soon — not yet available for purchase
+                Coming soon, not yet available for purchase
               </div>
             )}
 
@@ -740,7 +740,7 @@ export default function ProductDetail() {
                     }
                     className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-adlm-blue-200 dark:border-adlm-blue-700/40 bg-adlm-blue-50 dark:bg-adlm-blue-700/10 px-3 py-2 text-xs font-semibold text-adlm-blue-700 dark:text-adlm-blue-300 hover:bg-adlm-blue-100 dark:hover:bg-adlm-blue-700/20 transition"
                   >
-                    Add 10 project slots — {ngn(storageUpgradeNGN)}
+                    Add 10 project slots, {ngn(storageUpgradeNGN)}
                   </button>
                 )}
               </div>
@@ -826,7 +826,7 @@ export default function ProductDetail() {
                   }
                   className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-adlm-blue-700 text-white text-sm font-semibold hover:bg-adlm-blue-600 transition shadow-md"
                 >
-                  Add 10 slots — {ngn(storageUpgradeNGN)}
+                  Add 10 slots, {ngn(storageUpgradeNGN)}
                 </button>
               )}
             </div>
@@ -895,7 +895,7 @@ export default function ProductDetail() {
             <Link to="/support" className="font-semibold text-adlm-blue-700 dark:text-adlm-blue-400 hover:underline">
               Ask us directly
             </Link>{" "}
-            — we would rather answer than have you guess.
+. We would rather answer than have you guess.
           </Reveal>
         </section>
 

@@ -510,7 +510,7 @@ export default function DsDashProducts() {
                 </h1>
                 {" "}
                 <p>
-                  Three of seven in the subscription. The rest are listed so you can see what the account could cover, nothing here is charged until you add it.
+                  Three of seven in the subscription. The rest are listed so you can see what the account could cover. Nothing here is charged until you add it.
                 </p>
                 {" "}
               </div>
@@ -577,7 +577,7 @@ export default function DsDashProducts() {
                 </div>
                 {" "}
                 <p>
-                  Measurement inside Revit, per-element quantities, a structured bill and a margin view, on Tunde's and Chidi's machines.
+                  Measurement inside Revit: per-element quantities, a structured bill and a margin view, on Tunde's and Chidi's machines.
                 </p>
                 {" "}
                 <div className="foot2">
@@ -690,7 +690,7 @@ export default function DsDashProducts() {
                 </div>
                 {" "}
                 <p>
-                  Services quantities from the Revit model, duct and pipe runs by length, fittings counted separately, the way a services bill is actually written.
+                  Services quantities from the Revit model: duct and pipe runs by length, fittings counted separately, the way a services bill is actually written.
                 </p>
                 {" "}
                 <div className="foot2">

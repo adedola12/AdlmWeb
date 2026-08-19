@@ -50,7 +50,7 @@ export default function ThumbFeatures({ flyer, accent, days, palette }) {
         )}
       </div>
 
-      {/* ── Centre hero zone — icon with glow + feature pills ── */}
+      {/* ── Centre hero zone, icon with glow + feature pills ── */}
       <div
         style={{
           position: "absolute",
@@ -86,7 +86,7 @@ export default function ThumbFeatures({ flyer, accent, days, palette }) {
           />
         </div>
 
-        {/* Feature pills — 2-col grid */}
+        {/* Feature pills, 2-col grid */}
         {bullets.length > 0 && (
           <div
             style={{

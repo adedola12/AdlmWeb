@@ -187,7 +187,7 @@ function CreditPanel({ credit, onSave, saving }) {
 
       {!credit.totalUsd ? (
         <div className="text-sm rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 px-3 py-2 ring-1 ring-amber-500/20">
-          No credit total set yet — enter the AWS grant amount to see the runway.
+          No credit total set yet. Enter the AWS grant amount to see the runway.
           Spend so far: <b>{usd(credit.spentUsd)}</b>.
         </div>
       ) : (
@@ -413,7 +413,7 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
         ) : null}
       </div>
 
-      {/* Master switch — deliberately the loudest control on the card. */}
+      {/* Master switch, deliberately the loudest control on the card. */}
       <div
         className={`rounded-lg p-3 ring-1 ${
           off
@@ -438,14 +438,14 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
         </label>
         <p className="text-[11px] text-slate-600 dark:text-adlm-dark-muted mt-1 ml-6.5">
           {isDefault
-            ? "Untick to stop every AI call instantly — guests, users, and anyone holding their own allowance. Tick to bring it all back. Nothing else needs changing."
+            ? "Untick to stop every AI call instantly: guests, users, and anyone holding their own allowance. Tick to bring it all back. Nothing else needs changing."
             : "Only affects this account. The platform switch overrides it."}
         </p>
       </div>
 
       <div className={off ? "opacity-40 pointer-events-none" : ""}>
         <div className="text-xs font-semibold mb-1">
-          Monthly allowance — all features combined{" "}
+          Monthly allowance, all features combined{" "}
           <span className="font-normal text-slate-500">(0 = unlimited)</span>
         </div>
         <LimitFields value={form.total} onChange={(t) => setForm({ ...form, total: t })} />
@@ -460,7 +460,7 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
           <div className="text-xs font-semibold">
             Anonymous visitors{" "}
             <span className="font-normal text-slate-500">
-              — one shared budget across all guests, not per guest
+: one shared budget across all guests, not per guest
             </span>
           </div>
           <LimitFields
@@ -469,7 +469,7 @@ function AllocationForm({ title, subtitle, features, value, onSave, onReset, sav
           />
           <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
             Which features a guest may reach at all. The paid QS tools are signed-in-only by
-            default — that restriction is what turns a curious visitor into an account.
+            default. That restriction is what turns a curious visitor into an account.
           </div>
           {features.map((f) => {
             const on = guestFeatureOn(f.key);
@@ -773,7 +773,7 @@ export default function AdminAiUsage() {
             AI Usage &amp; Credit
           </h1>
           <p className="text-sm text-slate-600 dark:text-adlm-dark-muted">
-            Every AI call on the platform — what it cost, who spent it, and how much AWS credit is
+            Every AI call on the platform: what it cost, who spent it, and how much AWS credit is
             left.
           </p>
         </div>
@@ -840,14 +840,14 @@ export default function AdminAiUsage() {
       {offFeatures.length ? (
         <div className="rounded-2xl px-4 py-3 bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-500/20 text-sm">
           <b className="text-amber-800 dark:text-amber-300">Switched off platform-wide:</b>{" "}
-          {offFeatures.join(", ")} — these refuse calls for every user, including anyone with their
+          {offFeatures.join(", ")}: these refuse calls for every user, including anyone with their
           own allowance.
         </div>
       ) : null}
 
       <CreditPanel credit={credit} onSave={saveCredit} saving={saving} />
 
-      {/* KPIs — always the selected window */}
+      {/* KPIs, always the selected window */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Kpi label="Spend (window)" value={usd4(t?.costUsd)} sub={`${num(t?.calls)} model calls`} />
         <Kpi label="Tokens" value={compact(t?.tokens)} sub={`${compact(t?.inputTokens)} in · ${compact(t?.outputTokens)} out`} />
@@ -862,7 +862,7 @@ export default function AdminAiUsage() {
           tone={t?.errors ? "text-red-600 dark:text-red-400" : ""}
           sub={t?.calls ? `${((t.errors / t.calls) * 100).toFixed(1)}% of calls` : ""}
         />
-        {/* Prompt caching only pays off when reads outweigh writes — a write
+        {/* Prompt caching only pays off when reads outweigh writes. A write
             costs 1.25x the input rate, a read 0.1x. This is the tile that
             says whether it's earning its keep. */}
         <Kpi
@@ -1003,7 +1003,7 @@ export default function AdminAiUsage() {
             <div>
               <h2 className="font-semibold">Usage &amp; allocation per user</h2>
               <p className="text-xs text-slate-500 dark:text-adlm-dark-muted">
-                Usage is for the current calendar month — the same window allocations reset on.
+                Usage is for the current calendar month, the same window allocations reset on.
               </p>
             </div>
             <div className="flex gap-2">
@@ -1086,7 +1086,7 @@ export default function AdminAiUsage() {
                 align: "right",
                 render: (r) => {
                   const b = r.byFeature?.[f.key];
-                  if (!b) return <span className="text-slate-400">—</span>;
+                  if (!b) return <span className="text-slate-400">, </span>;
                   return (
                     <div>
                       <div>{num(b.calls)}</div>
@@ -1188,7 +1188,7 @@ export default function AdminAiUsage() {
             <h3 className="font-semibold mb-2">Per-user overrides ({userAllocs.length})</h3>
             <Table
               rows={userAllocs.map((a) => ({ ...a, _key: a._id }))}
-              empty="No per-user overrides — everyone is on the platform default."
+              empty="No per-user overrides, everyone is on the platform default."
               columns={[
                 { key: "email", label: "User", render: (a) => a.email || String(a.userId) },
                 {
@@ -1347,7 +1347,7 @@ export default function AdminAiUsage() {
         >
           <div className="w-full max-w-2xl my-8">
             <AllocationForm
-              title={`Allowance — ${editUser.email || editUser.userId}`}
+              title={`Allowance, ${editUser.email || editUser.userId}`}
               subtitle="Overrides the platform default for this account only. 0 means unlimited; untick 'AI enabled' to switch AI off entirely for them."
               features={features}
               value={editUser.allocation}

@@ -1243,7 +1243,7 @@ export default function DsPricingPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes, yearly costs the equivalent of ten months, so two are free. On QUIV that is {d.revit.saving} saved a year, per PC.
+                Yes: yearly costs the equivalent of ten months, so two are free. On QUIV that is {d.revit.saving} saved a year, per PC.
               </div>
               {" "}
             </details>

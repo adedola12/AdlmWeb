@@ -222,7 +222,7 @@ export default function Learn() {
             Learn BIM, QS &amp; Cost Management
           </h1>
           <p className="mt-2 text-sm md:text-base text-white/70 max-w-2xl">
-            Free YouTube lessons and in-depth paid courses with certificates —
+            Free YouTube lessons and in-depth paid courses with certificates, 
             learn at your own pace, anywhere.
           </p>
         </div>

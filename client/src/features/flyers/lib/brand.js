@@ -5,11 +5,11 @@
 // These mirror the values in client/tailwind.config.js so the flyers feel
 // native to the rest of the site.
 
-export const NAVY = "#05111f"; // adlm.navy.DEFAULT — page/canvas base
+export const NAVY = "#05111f"; // adlm.navy.DEFAULT, page/canvas base
 export const NAVY_DEEP = "#040d18"; // adlm.navy.deep
 export const NAVY_MID = "#061528"; // adlm.navy.mid
 export const NAVY_TERTIARY = "#091e39"; // adlm.navy.tertiary
-export const ORANGE = "#E86A27"; // adlm.orange — primary accent (was NIQS gold)
+export const ORANGE = "#E86A27"; // adlm.orange, primary accent (was NIQS gold)
 export const BLUE = "#005be3"; // adlm.blue.700
 export const BLUE_BRIGHT = "#36a3ff"; // adlm.blue.500
 export const WHITE = "#FFFFFF";

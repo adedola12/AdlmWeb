@@ -438,7 +438,7 @@ export default function ProjectOpenView({
           ) : null}
           {!canSeeRates ? (
             <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
-              <FaLock /> Rates hidden — a RateGen subscription is required to view
+              <FaLock /> Rates hidden. A RateGen subscription is required to view
               rates.
             </span>
           ) : null}
@@ -596,7 +596,7 @@ export default function ProjectOpenView({
                 <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   Elemental BoQ
                   <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
-                    — grouped by building element
+, grouped by building element
                   </span>
                 </div>
                 <button
@@ -627,7 +627,7 @@ export default function ProjectOpenView({
                 <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   Trade BoQ
                   <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
-                    — grouped by work section (NRM2-style)
+, grouped by work section (NRM2-style)
                   </span>
                 </div>
                 <button
@@ -654,7 +654,7 @@ export default function ProjectOpenView({
                 <div className="border-t bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                   Milestone BoQ
                   <span className="ml-1 font-normal normal-case text-[9px] text-slate-400">
-                    — one priceable bill per construction stage
+, one priceable bill per construction stage
                   </span>
                 </div>
                 <button
@@ -663,7 +663,7 @@ export default function ProjectOpenView({
                   onClick={() =>
                     onExportElementalBoQ?.("bungalow", undefined, "milestone")
                   }
-                  title="Substructure, ground floor, roof — each a bill of its own that can be priced, valued and paid against"
+                  title="Substructure, ground floor, roof: each a bill of its own that can be priced, valued and paid against"
                 >
                   Bungalow (Milestone format)
                 </button>
@@ -673,7 +673,7 @@ export default function ProjectOpenView({
                   onClick={() =>
                     onExportElementalBoQ?.("multistorey", undefined, "milestone")
                   }
-                  title="One bill per storey, in the order the building goes up — the basis for a payment schedule"
+                  title="One bill per storey, in the order the building goes up: the basis for a payment schedule"
                 >
                   Multi-storey (Milestone format)
                 </button>
@@ -847,7 +847,7 @@ export default function ProjectOpenView({
               this project.
             </div>
 
-            {/* Valuation basis — value the job by the bill line, or derive
+            {/* Valuation basis: value the job by the bill line, or derive
                 it from each line's material & labour breakdown. */}
             <div className="mt-4">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-adlm-dark-muted">
@@ -879,7 +879,7 @@ export default function ProjectOpenView({
               </div>
               <div className="mt-1 text-[11px] text-slate-500 dark:text-adlm-dark-muted">
                 {(valuationSettings?.basis || "boq") === "budget"
-                  ? "Each bill line is valued from its material & labour breakdown — mark procurement on the Budget tab. Save to apply."
+                  ? "Each bill line is valued from its material & labour breakdown, mark procurement on the Budget tab. Save to apply."
                   : "Each bill line is valued by its own % complete on the Bill of Quantity tab."}
               </div>
             </div>
@@ -1087,7 +1087,7 @@ export default function ProjectOpenView({
           </div>
           <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
             {mergeInfo.partType === "building"
-              ? "This order is the order the buildings appear as sheets in the exported bill — put Main Building first and External Works last."
+              ? "This order is the order the buildings appear as sheets in the exported bill, put Main Building first and External Works last."
               : "This order is the order the disciplines appear in the combined bill."}
           </div>
           <ol className="mt-3 space-y-1.5">

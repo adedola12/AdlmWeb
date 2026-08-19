@@ -165,7 +165,7 @@ export default function DsSolutionsFirms() {
               </h2>
               {" "}
               <p className="ds-lede">
-                At firm scale the measuring is rarely what breaks. It is everything around it, six surveyors, six spreadsheets, and no single version of a rate anyone can point at.
+                At firm scale the measuring is rarely what breaks. It is everything around it: six surveyors, six spreadsheets, and no single version of a rate anyone can point at.
               </p>
               {" "}
               <ul className="ps-list">

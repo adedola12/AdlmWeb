@@ -67,7 +67,7 @@ export function when(iso) {
 const ADLM = {
   name: "ADLM Studio",
   logo: "/ds/logo-light.svg",
-  mark: "/ds/mark.svg", // icon only — the watermark is never the lockup
+  mark: "/ds/mark.svg", // icon only. The watermark is never the lockup
   site: "www.adlmstudio.net",
   social: "ADLM Studio",
   bank: { account: "1634998770", name: "ADLM Studio", bank: "Access Bank" },

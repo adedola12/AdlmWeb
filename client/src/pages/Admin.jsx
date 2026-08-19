@@ -91,7 +91,7 @@ function putFileWithProgress(url, file, contentType, onProgress) {
     xhr.onerror = () =>
       reject(
         new Error(
-          "Upload failed — the browser could not reach R2. This is usually a missing CORS rule on the bucket.",
+          "Upload failed. The browser could not reach R2. This is usually a missing CORS rule on the bucket.",
         ),
       );
     xhr.onabort = () => reject(new Error("Upload cancelled"));
@@ -229,7 +229,7 @@ function getDaysLeft(expiresAt) {
 
 function timeLeftBadge(expiresAt) {
   const d = getDaysLeft(expiresAt);
-  if (d == null) return <span className="text-xs text-slate-500">—</span>;
+  if (d == null) return <span className="text-xs text-slate-500">, </span>;
 
   if (d < 0) return <Badge label={`Expired ${Math.abs(d)}d`} tone="red" />;
   if (d === 0) return <Badge label="Expires today" tone="red" />;
@@ -1247,7 +1247,7 @@ export default function Admin({ section = null }) {
           setIhVideoDraft(res.secure_url);
           setIhMsg("Video uploaded! Click Save to apply.");
         } else {
-          setIhMsg("Upload failed — no URL returned");
+          setIhMsg("Upload failed, no URL returned");
         }
       } catch (err) {
         setIhMsg(err?.message || "Upload failed");
@@ -1321,7 +1321,7 @@ export default function Admin({ section = null }) {
             `APK uploaded (SHA-256 ${(res.sha256 || "").slice(0, 12)}…). Click Save to apply.`,
           );
         } else {
-          setSettingsMsg("Upload failed — no URL returned");
+          setSettingsMsg("Upload failed, no URL returned");
         }
       } catch (err) {
         setSettingsMsg(err?.message || "APK upload failed");
@@ -2416,7 +2416,7 @@ export default function Admin({ section = null }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-semibold">Admin</h1>
 
-          {/* Hub controls only — every tool shortcut lives in the launcher grid
+          {/* Hub controls only, every tool shortcut lives in the launcher grid
               above, so we no longer duplicate them here. */}
           <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
             <input
@@ -2430,7 +2430,7 @@ export default function Admin({ section = null }) {
               Refresh
             </button>
 
-            {/* ✅ Expiry reminders — grouped so the daily tool stays one click
+            {/* ✅ Expiry reminders, grouped so the daily tool stays one click
                 away without crowding the toolbar. */}
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-adlm-dark-border px-2.5 py-1.5">
               <span className="text-xs font-medium text-slate-500 dark:text-adlm-dark-muted whitespace-nowrap">
@@ -2508,7 +2508,7 @@ export default function Admin({ section = null }) {
                   ? "border-adlm-blue-700 text-adlm-blue-700"
                   : "border-transparent text-slate-600 hover:text-slate-800"
               }`}
-              title="Organization accounts — software held, devices in use, subscription durations & expiries"
+              title="Organization accounts: software held, devices in use, subscription durations & expiries"
             >
               Organizations ({organizationsCount})
             </button>
@@ -3239,13 +3239,13 @@ export default function Admin({ section = null }) {
       {/* ------------------ active tab ------------------ */}
       {tab === "active" && (
         <>
-        {/* BoQ Import & M&L Schedule — admin-granted feature access (UAC).
+        {/* BoQ Import & M&L Schedule, admin-granted feature access (UAC).
             Not a purchasable product: this panel is the only way users get it. */}
         <div className="card mb-4">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-[260px]">
               <h2 className="font-semibold">
-                BoQ Import &amp; M&amp;L Schedule — Feature Access
+                BoQ Import &amp; M&amp;L Schedule, Feature Access
               </h2>
               <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
                 Unlocks Excel Bill-of-Quantities import on the{" "}
@@ -3255,7 +3255,7 @@ export default function Admin({ section = null }) {
                 constants library). Imported projects appear on the user's main
                 projects page and count toward their storage limit. Only
                 accounts with an <b>active QUIV, Heron or MEP subscription</b>{" "}
-                are eligible — other accounts are rejected by the server. A user
+                are eligible, other accounts are rejected by the server. A user
                 can only import bills for the products they actually subscribe
                 to, and access pauses automatically if that subscription lapses.
               </p>
@@ -3476,7 +3476,7 @@ export default function Admin({ section = null }) {
             <div className="flex items-center gap-3">
               <div className="text-xs text-slate-500">
                 Software held, seats vs bound devices, subscription duration &
-                expiry — grouped by organization.
+                expiry, grouped by organization.
               </div>
               <button className="btn btn-sm" onClick={loadOrganizations}>
                 Refresh
@@ -3630,7 +3630,7 @@ export default function Admin({ section = null }) {
                           <tr className="border-b bg-slate-50/60 dark:bg-white/5">
                             <td colSpan={8} className="py-3 px-3">
                               <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                                Software — {org.organizationName}
+                                Software, {org.organizationName}
                               </div>
                               {(org.contacts || []).length ? (
                                 <div className="mb-2 text-xs text-slate-600 dark:text-adlm-dark-muted">
@@ -4340,7 +4340,7 @@ export default function Admin({ section = null }) {
                         {instStatus === "complete" && (
                           <button
                             className="px-3 py-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-sm hover:bg-amber-100 transition"
-                            title="Mark as uninstalled — reverses the installation status"
+                            title="Mark as uninstalled, reverses the installation status"
                             onClick={async () => {
                               setMsg("");
                               try {
@@ -4363,7 +4363,7 @@ export default function Admin({ section = null }) {
                         {instStatus === "uninstalled" && (
                           <button
                             className="btn"
-                            title="Revert to pending — allows re-installation"
+                            title="Revert to pending, allows re-installation"
                             onClick={async () => {
                               setMsg("");
                               try {
@@ -4966,7 +4966,7 @@ export default function Admin({ section = null }) {
             <div className="relative mb-3">
               <input
                 className="input w-full"
-                placeholder="Add user — search by name or email…"
+                placeholder="Add user, search by name or email…"
                 value={classroomQuery}
                 onChange={(e) => setClassroomQuery(e.target.value)}
                 autoFocus={pendingMembers.length === 0}
@@ -5030,7 +5030,7 @@ export default function Admin({ section = null }) {
             <label className="block text-sm font-medium mb-1">
               Classroom URL{" "}
               <span className="text-xs font-normal text-slate-500">
-                (optional — overrides code if set)
+                (optional, overrides code if set)
               </span>
             </label>
             <input
@@ -5279,7 +5279,7 @@ export default function Admin({ section = null }) {
                     Installer Hub Download URL
                   </label>
                   <p className="text-xs text-slate-500 mb-2">
-                    Upload the Hub setup file (.exe / .msi / .zip / .msix) directly — small files go to Cloudinary, larger ones to Cloudflare R2 — or paste a hosted URL.
+                    Upload the Hub setup file (.exe / .msi / .zip / .msix) directly: small files go to Cloudinary, larger ones to Cloudflare R2, or paste a hosted URL.
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     <input
@@ -5406,7 +5406,7 @@ export default function Admin({ section = null }) {
               </div>
             </div>
 
-            {/* Force Global Reinstall — DANGER ZONE */}
+            {/* Force Global Reinstall, DANGER ZONE */}
             <div className="border-t pt-6">
               <h3 className="font-semibold text-base mb-1 text-red-700">
                 Force Global Reinstall (Danger Zone)

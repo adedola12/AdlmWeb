@@ -80,7 +80,7 @@ export default function Footer() {
 
   const openNotAvailable = (label = "This page") => {
     setModalInfo({
-      title: "Sorry — page not available",
+      title: "Sorry: page not available",
       message: `${label} isn’t available yet. Please explore our products while we finish this section.`,
     });
     setShowComingSoonModal(true);
@@ -88,7 +88,7 @@ export default function Footer() {
 
   return (
     <footer className="relative overflow-hidden bg-adlm-navy text-white">
-      {/* Premium top edge — brand gradient hairline + soft glow */}
+      {/* Premium top edge, brand gradient hairline + soft glow */}
       <div aria-hidden="true" className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-adlm-orange/70 to-transparent" />
       <div aria-hidden="true" className="absolute -top-24 left-1/2 -translate-x-1/2 w-[40rem] h-48 bg-adlm-blue-600/10 blur-3xl rounded-full" />
       <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-40 mask-radial" />

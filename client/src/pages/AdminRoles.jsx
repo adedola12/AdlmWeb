@@ -373,7 +373,7 @@ export default function AdminRoles() {
               </p>
             ) : null}
 
-            {/* Per-role member list — expanded from the count link in a role row. */}
+            {/* Per-role member list, expanded from the count link in a role row. */}
             {expandedRole
               ? (() => {
                   const role = roles.find((r) => r.key === expandedRole);
@@ -463,7 +463,7 @@ export default function AdminRoles() {
               : null}
           </Reveal>
 
-          {/* ── Access by section — who holds each admin area (via role) ── */}
+          {/* ── Access by section, who holds each admin area (via role) ── */}
           <Reveal as="div" className="card mt-6" delay={40}>
             <h2 className="font-semibold mb-1 flex items-center gap-2">
               <FiUsers className="w-4 h-4 text-adlm-blue-700" /> Access by

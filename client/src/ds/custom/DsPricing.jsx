@@ -92,7 +92,7 @@ export default function DsPricing() {
         // His sentence, rebuilt: "or ₦500,000 a year — save ₦100,000".
         yearLine: (
           <>
-            or <b>{money(p.yr)}</b> a year — save {money(saving)}
+            or <b>{money(p.yr)}</b> a year. Save {money(saving)}
           </>
         ),
         // His two shapes: a fee, or none at all.

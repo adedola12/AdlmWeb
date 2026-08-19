@@ -20,7 +20,7 @@ export default function useArchicadUnits() {
         if (alive && val === "imperial") setUnitsState("imperial");
         if (alive && val === "metric") setUnitsState("metric");
       })
-      .catch(() => {}); // preference is cosmetic — never block the page on it
+      .catch(() => {}); // preference is cosmetic, never block the page on it
     return () => {
       alive = false;
     };

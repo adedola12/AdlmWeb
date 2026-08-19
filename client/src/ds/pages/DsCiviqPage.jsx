@@ -856,7 +856,7 @@ export default function DsCiviqPage({ d }) {
                       <use href="#i-cloud" />
                     </svg>
                   </span>
-                  No drip campaign, one email, when it matters
+                  No drip campaign: one email, when it matters
                 </li>
                 {" "}
               </ul>

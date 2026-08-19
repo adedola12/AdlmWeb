@@ -132,7 +132,7 @@ function HeaderSettingsModal({
           />
           {wbsFinishStr ? (
             <span className="mt-1 block text-[10px] text-slate-400">
-              WBS extends to <strong className="text-slate-600">{wbsFinishStr}</strong> — finish auto-fills from this when you change start.
+              WBS extends to <strong className="text-slate-600">{wbsFinishStr}</strong>, finish auto-fills from this when you change start.
             </span>
           ) : null}
         </label>
@@ -177,7 +177,7 @@ function HeaderSettingsModal({
             </span>
           )}
         </label>
-        {/* Cascade toggle — only relevant when the start date has actually
+        {/* Cascade toggle, only relevant when the start date has actually
             changed. Visible at all times so the option is discoverable, but
             disabled (and ignored) when start is unchanged. */}
         <label
@@ -635,7 +635,7 @@ export default function ProjectManagementTab({
         }}
       />
 
-      {/* Reset link — kept tiny since it's destructive */}
+      {/* Reset link, kept tiny since it's destructive */}
       {viewMode === "dashboard" ? (
         <div className="text-right">
           <button

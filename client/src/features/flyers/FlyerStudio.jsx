@@ -183,7 +183,7 @@ export default function FlyerStudio({ accessToken }) {
 
     if (!usedNames.size) {
       setBulkLabel("");
-      setMsg(`Export failed — none of the ${chosen.length} flyers could be rendered.`);
+      setMsg(`Export failed, none of the ${chosen.length} flyers could be rendered.`);
       return;
     }
 

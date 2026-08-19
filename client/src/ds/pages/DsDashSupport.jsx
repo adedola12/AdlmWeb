@@ -783,7 +783,7 @@ export default function DsDashSupport() {
                           <b>
                             Moving a licence to a new laptop
                           </b>
-                          , do it from Team &amp; seats, no ticket needed
+                          : do it from Team &amp; seats, no ticket needed
                         </div>
                       </li>
                       {" "}
@@ -794,7 +794,7 @@ export default function DsDashSupport() {
                           <b>
                             Activation says the machine changed
                           </b>
-                          , a rebuilt PC counts as a new device
+                          . A rebuilt PC counts as a new device
                         </div>
                       </li>
                       {" "}
@@ -805,7 +805,7 @@ export default function DsDashSupport() {
                           <b>
                             The Hub cannot sign in
                           </b>
-                          , update to v3.1.7, which fixed the fallback address
+                          . Update to v3.1.7, which fixed the fallback address
                         </div>
                       </li>
                       {" "}

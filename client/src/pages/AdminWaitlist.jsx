@@ -162,7 +162,7 @@ export default function AdminWaitlist() {
         />
 
         {/* Fetched rather than linked. A plain <a href> cannot carry the
-            Authorization header, so it would 401 — and putting the token in
+            Authorization header, so it would 401, and putting the token in
             the query string instead would leak it into browser history and
             server logs. Fetch it with the header, then hand the browser a
             blob to save. */}

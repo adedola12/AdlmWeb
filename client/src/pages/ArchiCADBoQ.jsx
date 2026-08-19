@@ -113,7 +113,7 @@ export default function ArchiCADBoQ() {
         token: accessToken,
       }).catch(() => null);
       if (vers) setVersions(unwrapList(vers));
-      setNotice("Rates reapplied — a new version was created.");
+      setNotice("Rates reapplied. A new version was created.");
     } catch (e) {
       setErr(e?.message || "Failed to reapply rates.");
     } finally {
@@ -279,7 +279,7 @@ export default function ArchiCADBoQ() {
         {readOnly ? (
           <div className="flex items-center gap-2 rounded-adlm-lg border border-adlm-blue-600/40 bg-adlm-blue-600/10 px-4 py-3 text-sm font-medium text-adlm-blue-700 dark:text-adlm-blue-300">
             <FaHistory />
-            Viewing old version{viewedVersion ? ` v${viewedVersion.versionNumber}` : ""} —
+            Viewing old version{viewedVersion ? ` v${viewedVersion.versionNumber}` : ""}, 
             read-only.{" "}
             <button
               type="button"
@@ -318,7 +318,7 @@ export default function ArchiCADBoQ() {
                   >
                     {iss?.guid || "unknown element"}
                   </Link>{" "}
-                  ({iss?.quivType || "element"}) — {iss?.field || "field"}:{" "}
+                  ({iss?.quivType || "element"}), {iss?.field || "field"}:{" "}
                   {iss?.reason || "flagged"}
                 </li>
               ))}

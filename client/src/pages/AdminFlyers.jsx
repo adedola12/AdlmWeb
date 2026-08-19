@@ -15,7 +15,7 @@ export default function AdminFlyers() {
           Flyer Engine
         </h1>
         <p className="text-sm text-slate-500 dark:text-adlm-dark-muted">
-          Create on-brand ADLM flyers — announcements, countdowns, launches, and event promos.
+          Create on-brand ADLM flyers: announcements, countdowns, launches, and event promos.
         </p>
       </div>
 

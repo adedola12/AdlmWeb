@@ -446,7 +446,7 @@ export default function CollaboratorsModal({
                             <FaQrcode /> Download QR
                           </button>
                           <p className="text-[10px] text-slate-400">
-                            Anyone who opens this link can join — still subject to
+                            Anyone who opens this link can join, still subject to
                             this code's access level, email and use limits.
                           </p>
                         </div>

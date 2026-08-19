@@ -117,7 +117,7 @@ export default function SectionRail({
 
   return (
     <>
-      {/* Docked rail — visible on xl+ screens, sticky alongside content.
+      {/* Docked rail: visible on xl+ screens, sticky alongside content.
           On smaller viewports it's hidden; the floating button below
           takes over. */}
       <aside
@@ -246,7 +246,7 @@ export default function SectionRail({
         </div>
       </aside>
 
-      {/* Floating "Sections" pill — visible below xl breakpoint, opens
+      {/* Floating "Sections" pill: visible below xl breakpoint, opens
           a drawer with the same section list. Mirrors the desktop rail
           so mobile/tablet users get the same instant-jump UX. */}
       <div className="xl:hidden fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">

@@ -192,7 +192,7 @@ export default function DsCheckoutWire() {
     if (method === "invoice" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billing.email.trim())) {
       setMsg({
         kind: "err",
-        text: "Add a billing email — that is where the invoice goes.",
+        text: "Add a billing email. That is where the invoice goes.",
       });
       return;
     }
@@ -235,7 +235,7 @@ export default function DsCheckoutWire() {
         text: out.invoiceSentTo
           ? `Proforma invoice sent to ${out.invoiceSentTo}, payable by transfer within 14 days. ` +
             "The bank details are on it, and your licences activate once the payment clears."
-          : "Request received — we will send the proforma invoice shortly.",
+          : "Request received. We will send the proforma invoice shortly.",
       });
     } catch (e) {
       // A line we cannot sell yet must not cost us the rest of the order.
@@ -261,7 +261,7 @@ export default function DsCheckoutWire() {
               .map((u) => u.name)
               .join(", ")} ${blocked.length === 1 ? "is" : "are"} not on sale yet, so ${
               blocked.length === 1 ? "it has" : "they have"
-            } been left off. Everything else is ready — press ${
+            } been left off. Everything else is ready, press ${
               method === "card" ? "Pay" : "the button"
             } again to continue.`,
           });
@@ -273,7 +273,7 @@ export default function DsCheckoutWire() {
         }
         return;
       }
-      setMsg({ kind: "err", text: e.message || "That did not go through — please try again." });
+      setMsg({ kind: "err", text: e.message || "That did not go through: please try again." });
     } finally {
       setBusy(false);
     }
@@ -457,7 +457,7 @@ export default function DsCheckoutWire() {
           )}
           <p className="small">
             Transfer the exact amount and quote the reference. Licences are activated once we have
-            checked the transfer against your receipt — usually the same working day.
+            checked the transfer against your receipt, usually the same working day.
           </p>
 
           {order && (
@@ -476,7 +476,7 @@ export default function DsCheckoutWire() {
               <span className="small">
                 {receipt ? (
                   <a href={receipt} target="_blank" rel="noreferrer">
-                    Receipt uploaded — view it
+                    Receipt uploaded, view it
                   </a>
                 ) : (
                   "A photo or PDF, up to 8MB. No need to send it anywhere else."
@@ -507,7 +507,7 @@ export default function DsCheckoutWire() {
             We are building{" "}
             {pending.length === 1 ? "it" : "them"} now and will price{" "}
             {pending.length === 1 ? "it" : "them"} at release. Join the waitlist and you will hear
-            first — early access, and the launch price.
+            first: early access, and the launch price.
           </p>
           {joined ? (
             <p className="small">You are on the list. We will be in touch.</p>

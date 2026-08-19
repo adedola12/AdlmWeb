@@ -599,20 +599,20 @@ export default function ProjectBudgetTab({
           Material &amp; Labour breakdown
         </div>
         <div className="mt-1 text-sm text-slate-600 dark:text-adlm-dark-muted">
-          The build-up of each bill item — its materials and labour shown
-          together — arranged in the same order and sections as your Bill of
+          The build-up of each bill item, its materials and labour shown
+          together, arranged in the same order and sections as your Bill of
           Quantity. Price each row (type a rate, paste a <code>=</code>formula,
           or pull from RateGen) and set Overhead &amp; Profit; the
           <b> Bill Rate = Material + Labour + O&amp;P</b> flows up to the BoQ.
         </div>
         <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
           A bill item is only complete when <b>every</b> line below it is
-          marked procured/done — buying the materials isn’t enough until the
+          marked procured/done, buying the materials isn’t enough until the
           labour is done too.{" "}
           {canEdit
             ? "Tick a line to mark it procured, or use “Mark all” for a whole bill item."
             : contractLocked
-              ? "The contract is locked, so per-line procurement marking is frozen — but bill items you mark complete on the Bill of Quantity now show as done here."
+              ? "The contract is locked, so per-line procurement marking is frozen, but bill items you mark complete on the Bill of Quantity now show as done here."
               : sourceLines.length === 0
                 ? "Re-save this project from the plugin to load its material & labour breakdown."
                 : "You have view-only access, so procurement marking is disabled."}
@@ -675,7 +675,7 @@ export default function ProjectBudgetTab({
             Global Overhead &amp; Profit
           </span>
           <span className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-            one rate for every item — overrides each item’s own O&amp;P
+            one rate for every item, overrides each item’s own O&amp;P
           </span>
           <label className="inline-flex items-center gap-1 text-slate-600 dark:text-adlm-dark-muted">
             O/H
@@ -740,7 +740,7 @@ export default function ProjectBudgetTab({
             Material &amp; Labour schedule
           </span>
           <span className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-            built from the bill using your constants — your prices and
+            built from the bill using your constants. Your prices and
             procurement marks are kept
           </span>
           <button
@@ -784,7 +784,7 @@ export default function ProjectBudgetTab({
                 Procurement buy schedule
               </div>
               <div className="text-[11px] text-slate-500 dark:text-adlm-dark-muted">
-                What to buy &amp; when — materials timed off the Program of
+                What to buy &amp; when, materials timed off the Program of
                 Works. {scheduledCount} of {buyRows.length} dated.
               </div>
             </div>
@@ -869,7 +869,7 @@ export default function ProjectBudgetTab({
                           </span>
                         ) : (
                           <span className="text-slate-300 dark:text-adlm-dark-dim">
-                            —
+, 
                           </span>
                         )}
                       </td>
@@ -906,7 +906,7 @@ export default function ProjectBudgetTab({
               </div>
             ) : null}
 
-            {/* Search mode — flat results showing each resource's work item + section. */}
+            {/* Search mode, flat results showing each resource's work item + section. */}
             {q ? (
               searchResults.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 dark:border-adlm-dark-border bg-slate-50 dark:bg-white/5 p-8 text-center text-sm text-slate-500 dark:text-adlm-dark-muted">
@@ -981,7 +981,7 @@ export default function ProjectBudgetTab({
                                   <span className={`font-semibold ${doneTone}`}>✓</span>
                                 ) : (
                                   <span className="text-slate-300 dark:text-adlm-dark-dim">
-                                    —
+, 
                                   </span>
                                 )}
                               </td>
@@ -1276,7 +1276,7 @@ export default function ProjectBudgetTab({
                                       </span>
                                     ) : (
                                       <span className="text-slate-300 dark:text-adlm-dark-dim">
-                                        —
+, 
                                       </span>
                                     )}
                                   </td>

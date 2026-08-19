@@ -484,7 +484,7 @@ export default function AdminAddRate() {
         // persisting (e.g. an SPA/catch-all fallback) reporting false success.
         if (!res || res.ok !== true || !res.item) {
           throw new Error(
-            res?.error || res?.message || "Update failed — unexpected server response."
+            res?.error || res?.message || "Update failed, unexpected server response."
           );
         }
 
@@ -502,7 +502,7 @@ export default function AdminAddRate() {
 
         if (!res || res.ok !== true || !res.item) {
           throw new Error(
-            res?.error || res?.message || "Save failed — unexpected server response."
+            res?.error || res?.message || "Save failed, unexpected server response."
           );
         }
 
@@ -594,7 +594,7 @@ export default function AdminAddRate() {
               onChange={(e) => setSectionKey(e.target.value)}
               disabled={saving}
             >
-              <option value="">— All sections (no filter) —</option>
+              <option value="">, All sections (no filter), </option>
               {SECTIONS.map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}

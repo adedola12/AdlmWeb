@@ -104,7 +104,7 @@ export default function ModuleQuiz({ sku, moduleCode }) {
           }`}
         >
           <div className="font-medium">
-            {result.passed ? "Passed" : "Not passed yet"} — {result.score}% (
+            {result.passed ? "Passed" : "Not passed yet"}, {result.score}% (
             {result.correctCount}/{result.totalQuestions})
           </div>
         </div>

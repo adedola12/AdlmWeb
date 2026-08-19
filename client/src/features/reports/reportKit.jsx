@@ -211,7 +211,7 @@ export function ReportPage({ docTitle, docSub, pageNo, pageCount, children }) {
         {children}
         <div className="page-foot">
           <span>
-            <b>ADLM</b> <span className="s">Studio</span> — adlmstudio.net
+            <b>ADLM</b> <span className="s">Studio</span>, adlmstudio.net
           </span>
           <span>{dayjs().format("DD MMM YYYY")}</span>
           <span>

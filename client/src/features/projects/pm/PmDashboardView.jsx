@@ -187,12 +187,12 @@ function OverdueBars({ overdueByPriority, tasksByPriority }) {
               </span>
             </div>
             <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-              {/* Total tasks bar — lighter shade */}
+              {/* Total tasks bar, lighter shade */}
               <div
                 className={`absolute inset-y-0 left-0 ${totalShades[k]} rounded-full transition-all`}
                 style={{ width: `${(total / max) * 100}%` }}
               />
-              {/* Overdue overlay — darker shade, drawn on top */}
+              {/* Overdue overlay: darker shade, drawn on top */}
               {overdue > 0 ? (
                 <div
                   className={`absolute inset-y-0 left-0 ${overdueShades[k]} rounded-full transition-all`}
@@ -211,7 +211,7 @@ function OverdueBars({ overdueByPriority, tasksByPriority }) {
       ) : null}
       {!hasAnyTask ? (
         <div className="text-[10px] text-slate-400 italic text-center py-2">
-          No tasks yet — add one to populate priority breakdown.
+          No tasks yet. Add one to populate priority breakdown.
         </div>
       ) : null}
     </div>
@@ -345,7 +345,7 @@ function BalanceIndicator({ balance }) {
       // less than the agreed contract → that's a saving, not a gap.
       icon: FaCheckCircle,
       title: "Forecast saving",
-      detail: `PM baseline is ₦${fmtMoneyDec(Math.abs(diff))} (${Math.abs(pct).toFixed(1)}%) below ${balance?.contractLocked ? "contract sum" : "BoQ total"} — project is forecast to come in under contract.`,
+      detail: `PM baseline is ₦${fmtMoneyDec(Math.abs(diff))} (${Math.abs(pct).toFixed(1)}%) below ${balance?.contractLocked ? "contract sum" : "BoQ total"}, project is forecast to come in under contract.`,
       bg: "from-emerald-50 to-emerald-100 dark:from-emerald-900/40 dark:to-emerald-800/30",
       border: "border-emerald-300 dark:border-emerald-700",
       text: "text-emerald-800 dark:text-emerald-200",
@@ -384,7 +384,7 @@ function BalanceIndicator({ balance }) {
           <div className={`font-semibold ${c.text}`}>{c.title}</div>
           <div className={`mt-0.5 text-xs ${c.text} opacity-90`}>{c.detail}</div>
           {/* When every task is BoQ-linked, the manual baseline tile
-              just shows ₦0 and adds noise — hide it. The grid collapses
+              just shows ₦0 and adds noise, hide it. The grid collapses
               from 4 → 3 columns to fill the space cleanly. */}
           <div
             className={`mt-3 grid gap-2 text-[11px] ${
@@ -578,7 +578,7 @@ export default function PmDashboardView({
         </div>
       </div>
 
-      {/* Empty-state onboarding banner — shown when there are no tasks at
+      {/* Empty-state onboarding banner, shown when there are no tasks at
           all. Replaces the silent "0 / 0 / ₦0" tiles below with an actual
           first-time-user prompt. Dismissed implicitly by adding any task. */}
       {hasNoTasks ? (
@@ -644,7 +644,7 @@ export default function PmDashboardView({
         </div>
       ) : null}
 
-      {/* Project-start banner — non-blocking nudge when tasks exist but the
+      {/* Project-start banner, non-blocking nudge when tasks exist but the
           project's start date hasn't been set. Without a start the Burndown
           can't render and the Reschedule action errors out. */}
       {!hasNoTasks && hasNoProjectStart ? (
@@ -666,7 +666,7 @@ export default function PmDashboardView({
         </div>
       ) : null}
 
-      {/* Action strip — adapts to WBS state. Once tasks have been
+      {/* Action strip, adapts to WBS state. Once tasks have been
           linked to BoQ items, hide "Generate from BoQ" (it'd just
           create duplicates), and rename "Import MS Project" →
           "Update MS Project" so the user understands re-imports are
@@ -712,7 +712,7 @@ export default function PmDashboardView({
         <input ref={fileRef} type="file" accept=".xml,.mpp" className="hidden" onChange={onFile} />
       </div>
 
-      {/* Import progress bar — shown while an upload is in flight */}
+      {/* Import progress bar, shown while an upload is in flight */}
       {importing && importProgress > 0 ? (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
@@ -728,7 +728,7 @@ export default function PmDashboardView({
         </div>
       ) : null}
 
-      {/* Clear-imports row — hidden once tasks are linked to BoQ so
+      {/* Clear-imports row, hidden once tasks are linked to BoQ so
           users can't accidentally nuke their wired-up WBS. They can
           still reset via the Reset PM data button if they really
           need to start over. */}
@@ -819,7 +819,7 @@ export default function PmDashboardView({
       {/* Balance indicator */}
       <BalanceIndicator balance={balance} />
 
-      {/* WBS status & priority strip — compact at-a-glance row showing
+      {/* WBS status & priority strip, compact at-a-glance row showing
           how the work is distributed across status + priority buckets.
           Surfaces the priority breakdown that was previously hidden
           behind "Overdue by priority" (which read 0 until tasks
@@ -836,7 +836,7 @@ export default function PmDashboardView({
         criticalPathPending={safeNum(dashboard?.criticalPathPending)}
       />
 
-      {/* Contract movement — variations + provisional flow, with
+      {/* Contract movement: variations + provisional flow, with
           execution status and forecast impact. Drives the user's awareness
           of whether the project is going as scheduled AND as budgeted. */}
       <ContractMovementPanel dashboard={dashboard} />
@@ -864,10 +864,10 @@ export default function PmDashboardView({
         </ChartCard>
       </div>
 
-      {/* BoQ progress heatmap — full-width to give it room */}
+      {/* BoQ progress heatmap, full-width to give it room */}
       <PmBoqHeatmap boqItems={dashboard?.boqItems || []} />
 
-      {/* BoQ ↔ WBS coverage reconciliation — surfaces unlinked /
+      {/* BoQ ↔ WBS coverage reconciliation, surfaces unlinked /
           under-allocated / double-counted BoQ entries so the user knows
           immediately whether the WBS faithfully executes the BoQ. */}
       <BoqCoveragePanel
@@ -1035,7 +1035,7 @@ function ContractMovementPanel({ dashboard }) {
         />
       </div>
 
-      {/* Visual variance bar — quick "are we tracking?" read */}
+      {/* Visual variance bar, quick "are we tracking?" read */}
       {bac > 0 ? (
         <div className="px-4 pb-4">
           <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
@@ -1045,7 +1045,7 @@ function ContractMovementPanel({ dashboard }) {
           <div className="relative h-4 w-full rounded-full bg-slate-100 overflow-hidden">
             {/* Baseline as the full 100% reference */}
             <div className="absolute inset-y-0 left-0 right-0 bg-slate-200" />
-            {/* Forecast bar — width shows EAC vs BAC, capped at 130% so
+            {/* Forecast bar: width shows EAC vs BAC, capped at 130% so
                 massive overruns still render readably. */}
             <div
               className={`absolute inset-y-0 left-0 transition-all ${
@@ -1053,7 +1053,7 @@ function ContractMovementPanel({ dashboard }) {
               }`}
               style={{ width: `${Math.min(130, (eac / bac) * 100)}%` }}
             />
-            {/* Baseline marker — a vertical line at 100% to anchor the eye */}
+            {/* Baseline marker, a vertical line at 100% to anchor the eye */}
             <div className="absolute inset-y-0 left-[76.92%] w-px bg-white/80" style={{ left: `${Math.min(100, 100 * bac / Math.max(bac, eac))}%` }} />
           </div>
           <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
@@ -1129,7 +1129,7 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
     if (coverage.underAllocatedCount > 0) {
       parts.push(`${coverage.underAllocatedCount} under-allocated`);
     }
-    headerMsg = `${parts.join(" + ")}. WBS does not yet execute the full BoQ — EV and SPI will under-state.`;
+    headerMsg = `${parts.join(" + ")}. WBS does not yet execute the full BoQ, EV and SPI will under-state.`;
   }
 
   // Single-stack segmented coverage bar widths (% of total amount).
@@ -1156,7 +1156,7 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
         </div>
       </div>
 
-      {/* Stat tiles — one per coverage bucket */}
+      {/* Stat tiles, one per coverage bucket */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
         <CoverageStat
           icon={FaCheckCircle}
@@ -1257,14 +1257,14 @@ function BoqCoveragePanel({ coverage, onViewDetails }) {
         </div>
       </div>
 
-      {/* Offender lists — only render the sections with actual issues so
+      {/* Offender lists, only render the sections with actual issues so
           a healthy project shows just the green stat tiles + bar. */}
       {(coverage.topOver?.length > 0 ||
         coverage.topUnlinked?.length > 0 ||
         coverage.topUnder?.length > 0 ||
         coverage.staleLinkTasks?.length > 0) ? (
         <div className="border-t border-slate-100 px-4 py-3 space-y-3">
-          {/* Stale links — highest priority because the task's baseline
+          {/* Stale links, highest priority because the task's baseline
               silently drops to ₦0 until the user re-links. */}
           {coverage.staleLinkTasks?.length > 0 ? (
             <StaleLinksPanel tasks={coverage.staleLinkTasks} />
@@ -1606,7 +1606,7 @@ function WbsHealthStrip({
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-      {/* Critical-path banner — only shown when MS Project import
+      {/* Critical-path banner, only shown when MS Project import
           flagged at least one task. Surfaces the schedule risk
           up-front: "8 critical-path tasks · 6 still pending" gives the
           user a fast read on the bottleneck size before they scroll
@@ -1622,8 +1622,8 @@ function WbsHealthStrip({
               </div>
               <div className="text-[10px] text-rose-700/80 dark:text-rose-300/80">
                 {criticalPathPending > 0
-                  ? `${criticalPathPending} still pending — any delay slips the project finish date`
-                  : "All critical-path tasks complete — schedule risk has cleared"}
+                  ? `${criticalPathPending} still pending, any delay slips the project finish date`
+                  : "All critical-path tasks complete, schedule risk has cleared"}
               </div>
             </div>
           </div>

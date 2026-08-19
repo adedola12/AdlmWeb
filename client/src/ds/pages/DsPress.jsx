@@ -275,7 +275,7 @@ export default function DsPress() {
                 </h3>
                 {" "}
                 <p className="bkit-lede">
-                  The ADLM Studio identity is a mark and a wordmark. Use the supplied files, please do not redraw either of them, and do not set “ADLM Studio” in another typeface and call it the logo.
+                  The ADLM Studio identity is a mark and a wordmark. Use the supplied files: please do not redraw either of them, and do not set “ADLM Studio” in another typeface and call it the logo.
                 </p>
                 {" "}
                 <div className="bkit-row">
@@ -710,7 +710,7 @@ export default function DsPress() {
                 </h3>
                 {" "}
                 <p className="bkit-lede">
-                  Real sites, real drawings, real rooms. Our photography is Nigerian construction, scaffolding, rebar, site offices, training halls, not stock handshakes and not glass towers that could be anywhere.
+                  Real sites, real drawings, real rooms. Our photography is Nigerian construction: scaffolding, rebar, site offices, training halls, not stock handshakes and not glass towers that could be anywhere.
                 </p>
                 {" "}
                 <div className="bkit-row">
@@ -815,7 +815,7 @@ export default function DsPress() {
                 </h4>
                 {" "}
                 <p className="bkit-body">
-                  ADLM Studio builds quantity surveying software for the African construction market. Its products, QUIV, HERON, RateGen, Revit MEP and Time Pro: dock into Revit and PlanSwift so quantity surveyors can measure, price and programme work without leaving the drawing. Alongside the software, ADLM runs certificated BIM training: 30 events and more than 3,100 professionals trained since 2022, across NIQS chapters, universities, practices and government agencies. The company was founded in 2019 and works from Lagos, Nigeria.
+                  ADLM Studio builds quantity surveying software for the African construction market. Its products: QUIV, HERON, RateGen, Revit MEP and Time Pro: dock into Revit and PlanSwift so quantity surveyors can measure, price and programme work without leaving the drawing. Alongside the software, ADLM runs certificated BIM training: 30 events and more than 3,100 professionals trained since 2022, across NIQS chapters, universities, practices and government agencies. The company was founded in 2019 and works from Lagos, Nigeria.
                 </p>
                 {" "}
                 <h4 className="bkit-h4">
@@ -833,7 +833,7 @@ export default function DsPress() {
                   </li>
                   {" "}
                   <li>
-                    British spelling, “programme”, “licence” as a noun, “organisation”.
+                    British spelling: “programme”, “licence” as a noun, “organisation”.
                   </li>
                   {" "}
                   <li>
@@ -871,7 +871,7 @@ export default function DsPress() {
                     <b>
                       Time Pro
                     </b>
-                    {" "}are not, RateGen is one word, Time Pro is two.
+                    {" "}are not: RateGen is one word, Time Pro is two.
                   </li>
                   {" "}
                   <li>

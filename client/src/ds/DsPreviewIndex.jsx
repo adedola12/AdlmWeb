@@ -24,7 +24,7 @@ const GROUPS = [
   { title: "Company & legal", slugs: ["careers", "press", "privacy", "terms", "licensing"] },
   {
     title: "Auth & commerce",
-    note: "Staged for review only — the real routes keep their own logic and backends.",
+    note: "Staged for review only. The real routes keep their own logic and backends.",
     slugs: ["login", "signup", "verify", "cart", "checkout", "thanks", "account"],
   },
   {

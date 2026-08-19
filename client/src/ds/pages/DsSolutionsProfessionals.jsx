@@ -411,7 +411,7 @@ export default function DsSolutionsProfessionals() {
               </summary>
               {" "}
               <div className="faq-a">
-                HERON plus RateGen, roughly ₦190,000 a year for one PC: covers measuring flat drawings and pricing them properly.
+                HERON plus RateGen: roughly ₦190,000 a year for one PC: covers measuring flat drawings and pricing them properly.
               </div>
               {" "}
             </details>

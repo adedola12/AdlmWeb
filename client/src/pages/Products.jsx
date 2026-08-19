@@ -389,7 +389,7 @@ export default function Products() {
       // Same guard as the full editor: a Naira figure in a USD box would
       // otherwise save without comment.
       if (!confirmPriceSanity(payload)) {
-        setMsg("Not saved — check the USD prices.");
+        setMsg("Not saved. Check the USD prices.");
         return;
       }
 
@@ -501,7 +501,7 @@ export default function Products() {
             Software, Plugins &amp; Training
           </h1>
           <p className="mt-3 text-sm md:text-base leading-relaxed text-white/70 max-w-2xl">
-            Everything a modern Quantity Surveyor needs — instant rate build-ups,
+            Everything a modern Quantity Surveyor needs: instant rate build-ups,
             2D/3D take-off plugins, and hands-on professional training.
           </p>
           <div className="mt-4 flex flex-wrap gap-2.5">

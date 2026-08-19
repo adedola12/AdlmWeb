@@ -13,7 +13,7 @@ import { FaPaperPlane, FaRegCommentDots, FaTimes } from "./icons.jsx";
 const SUPPORT_WHATSAPP = "2348106503524";
 const SESSION_KEY = "adlm_agent_session";
 const GREETING =
-  "Hi 👋 I'm Ada, ADLM's product specialist. Tell me what you do — estimating, take-off, BIM, training — and I'll point you to the right tool and price. What are you working on?";
+  "Hi 👋 I'm Ada, ADLM's product specialist. Tell me what you do: estimating, take-off, BIM, training, and I'll point you to the right tool and price. What are you working on?";
 const SUGGESTIONS = [
   "I do rate build-ups / BOQs",
   "Take-off from Revit drawings",
@@ -122,7 +122,7 @@ export default function AiAgent() {
       const json = await res.json().catch(() => ({}));
       const reply =
         json?.reply ||
-        "Sorry — I couldn't process that. Please try again or reach us on WhatsApp.";
+        "Sorry, I couldn't process that. Please try again or reach us on WhatsApp.";
       push({ role: "assistant", text: reply, actions: json?.actions || [] });
     } catch {
       push({
@@ -169,7 +169,7 @@ export default function AiAgent() {
           bg-gradient-to-br from-adlm-blue-700 to-adlm-navy text-white hover:brightness-110
           active:scale-95 transition-transform ring-1 ring-white/15"
         aria-label={open ? "Close ADLM assistant" : "Open ADLM assistant"}
-        title={open ? "Close assistant" : "Ask Ada — ADLM assistant"}
+        title={open ? "Close assistant" : "Ask Ada, ADLM assistant"}
       >
         {open ? <FaTimes className="text-lg" /> : <FaRegCommentDots className="text-lg" />}
         {!open && <span className="text-sm font-semibold">Ask Ada</span>}
@@ -189,7 +189,7 @@ export default function AiAgent() {
             <div className="leading-tight">
               <div className="font-semibold">Ada · ADLM Assistant</div>
               <div className="text-[11px] opacity-80">
-                Products, pricing, trainings — ask anything
+                Products, pricing, trainings. Ask anything
               </div>
             </div>
           </div>

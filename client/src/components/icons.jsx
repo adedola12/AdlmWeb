@@ -291,7 +291,7 @@ export const FiZap = make(FlashIcon, "FiZap");
 
 /* ── Semantic names ───────────────────────────────────────────────────────
    These replaced hand-drawn inline <svg> blocks. Prefer these over the
-   react-icons aliases above when adding anything new — the aliases only
+   react-icons aliases above when adding anything new, the aliases only
    exist so the library swap could be done without touching any JSX. */
 export const IconAlertCircle = make(Alert01Icon, "IconAlertCircle");
 export const IconAlertTriangle = make(Alert02Icon, "IconAlertTriangle");

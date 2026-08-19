@@ -851,7 +851,7 @@ export default function DsTimeProPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run Time Pro against one of your live jobs, your drawings, your rates, your bill format.
+          We'll run Time Pro against one of your live jobs: your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">

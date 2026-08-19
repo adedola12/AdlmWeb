@@ -566,7 +566,7 @@ export default function DsDashTeam() {
                           <th style={{ minWidth: "290px" }}>
                             Seats held{" "}
                             <span style={{ textTransform: "none", letterSpacing: "0", fontWeight: "300" }}>
-                              , click one to assign or free it
+                              . Click one to assign or free it
                             </span>
                           </th>
                           <th>
@@ -875,7 +875,7 @@ export default function DsDashTeam() {
                       </div>
                       {" "}
                       <p className="small" style={{ color: "var(--ink-3)", fontSize: "12.5px" }}>
-                        They set their own password. Nothing is charged, both spare seats are already on the invoice.
+                        They set their own password. Nothing is charged. Both spare seats are already on the invoice.
                       </p>
                       {" "}
                     </form>

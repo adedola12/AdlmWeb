@@ -231,14 +231,14 @@ export default function DsQuoteBuilder() {
       const unit = inCur(price, bill === "yearly" ? "yr" : "mo");
       licences += unit * n;
       rows.push({
-        desc: `${p.name} licence — ${p.sub} (${bill === "yearly" ? "yearly" : "monthly"})`,
+        desc: `${p.name} licence, ${p.sub} (${bill === "yearly" ? "yearly" : "monthly"})`,
         qty: n, unit: "PC", rate: unit, amount: unit * n,
       });
       const fee = inCur(price, "install");
       if (fee) {
         install += fee * n;
         rows.push({
-          desc: `${p.name} installation — one-time setup in your CAD environment`,
+          desc: `${p.name} installation: one-time setup in your CAD environment`,
           qty: n, unit: "PC", rate: fee, amount: fee * n,
         });
       }
@@ -253,7 +253,7 @@ export default function DsQuoteBuilder() {
       if (!t.key) continue;
       const unit = inCur(priceOf(t.key), "yr");
       licences += unit * n;
-      rows.push({ desc: `${t.name} — ${t.sub}`, qty: n, unit: "seat", rate: unit, amount: unit * n });
+      rows.push({ desc: `${t.name}, ${t.sub}`, qty: n, unit: "seat", rate: unit, amount: unit * n });
     }
 
     // On-site training, priced exactly the way routes/purchase.js prices it:
@@ -275,7 +275,7 @@ export default function DsQuoteBuilder() {
       const days = site.durationDays || 1;
       if (fee > 0) {
         rows.push({
-          desc: `On-site training — ${site.name} · ${days} day${days === 1 ? "" : "s"}`,
+          desc: `On-site training, ${site.name} · ${days} day${days === 1 ? "" : "s"}`,
           qty: 1,
           unit: "class",
           rate: fee,
@@ -286,7 +286,7 @@ export default function DsQuoteBuilder() {
         // USD columns are mostly unset, so it goes on enquiry rather than nil.
         enquiry += 1;
         rows.push({
-          desc: `On-site training — ${site.name} · ${days} day${days === 1 ? "" : "s"}`,
+          desc: `On-site training, ${site.name} · ${days} day${days === 1 ? "" : "s"}`,
           qty: 1,
           unit: "class",
           rate: null,
@@ -295,7 +295,7 @@ export default function DsQuoteBuilder() {
       }
       if (bim > 0) {
         rows.push({
-          desc: "BIM install — set-up of the CAD environment on site",
+          desc: "BIM install. Set-up of the CAD environment on site",
           qty: 1,
           unit: "visit",
           rate: bim,
@@ -607,7 +607,7 @@ export default function DsQuoteBuilder() {
                   : 0;
                 return (
                   <div className={site ? "line" : "line line-off"} key={id}>
-                    {/* His .line is a three-column grid — 60px, 1fr, auto —
+                    {/* His .line is a three-column grid: 60px, 1fr, auto: 
                         and .qt-dot is what occupies the first column on a
                         training row, where a product row has its icon. Leaving
                         it out did not just lose the glyph: the text block moved
@@ -737,8 +737,8 @@ export default function DsQuoteBuilder() {
             <>
               {/* His markup exactly: one .sumrow per line, the quantity
                   inline in <i class="qt-q">, and the description truncated at
-                  the em-dash. That truncation is the whole point — the row
-                  description carries the full "QUIV licence — 3D takeoff ·
+                  the em-dash. That truncation is the whole point, the row
+                  description carries the full "QUIV licence, 3D takeoff ·
                   Autodesk Revit (yearly)" for the printed quotation, but the
                   summary panel shows only "QUIV licence × 1". Rendering the
                   long form here, in a two-column table meant for the compare

@@ -69,7 +69,7 @@ function ProgressOverviewCard({
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-depth p-5">
-      {/* Header description sits above the chart at all widths now —
+      {/* Header description sits above the chart at all widths now, 
           previously it was inline at lg+ which ate horizontal space and
           made the 3 stat cards crammed under the donut. */}
       <div className="mb-4">

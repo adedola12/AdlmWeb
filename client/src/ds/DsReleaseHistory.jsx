@@ -76,7 +76,7 @@ export default function DsReleaseHistory({ slug, limit = 3 }) {
         <h4>Nothing shipped yet</h4>
         <p style={{ marginBottom: "22px", maxWidth: "52ch", marginLeft: "auto", marginRight: "auto" }}>
           {product?.name || "This product"} is in active development. Release notes will appear here
-          the day the first build lands — join the waitlist and we&apos;ll tell you.
+          the day the first build lands. Join the waitlist and we&apos;ll tell you.
         </p>
         <a className="ds-btn btn-p" href="#waitlist">
           Join the waitlist

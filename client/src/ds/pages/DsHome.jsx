@@ -1566,7 +1566,7 @@ export default function DsHome() {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run QUIV against one of your live projects, your drawings, not a demo file.
+          We'll run QUIV against one of your live projects: your drawings, not a demo file.
         </p>
         {" "}
         <div className="hero-cta">

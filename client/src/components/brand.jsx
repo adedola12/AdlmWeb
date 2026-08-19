@@ -47,7 +47,7 @@ export function Eyebrow({ as = "p", tone = "muted", className = "", children }) 
    The signature treatment: heavy weight, white outline, soft drop shadow.
 
    Used ONCE per page, as a hero. It is sized for a 1080×1350 flyer, and at
-   1440px wide it shouts — see §7 of BRAND_SYSTEM.md. `paint-order: stroke` is
+   1440px wide it shouts. See §7 of BRAND_SYSTEM.md. `paint-order: stroke` is
    what keeps the outline outside the glyph instead of eating into it; without
    it the letterforms thin out and the weight is lost. */
 export function StickerHeading({
@@ -74,7 +74,7 @@ export function StickerHeading({
 }
 
 /* ── Hexagon field ────────────────────────────────────────────────────────
-   Corporate mode's default texture. Pale, large, low contrast — it should
+   Corporate mode's default texture. Pale, large, low contrast. It should
    never be the thing you notice. An inline SVG pattern rather than an image
    so it costs no request and recolours with the theme. */
 export function HexField({ className = "", opacity = 0.5, size = 96 }) {
@@ -101,7 +101,7 @@ export function HexField({ className = "", opacity = 0.5, size = 96 }) {
    podium beneath it.
 
    The float and the glow run on deliberately different periods so they never
-   peak together — synchronised, they read as one pulsing element rather than
+   peak together: synchronised, they read as one pulsing element rather than
    an object hanging in light. Both are decorative, so under reduced motion
    they stop outright rather than degrading to something faster. */
 export function GlowTile({
@@ -145,7 +145,7 @@ export function GlowTile({
    How every product is presented on the flyers: a bevelled, glossy rounded
    square sitting on a pale hexagon ground with light pooled underneath.
 
-   This is the presentation shell only — whatever the product actually shows
+   This is the presentation shell only, whatever the product actually shows
    (a poster, a hover-to-play preview, an icon) goes in as children, so the
    treatment is shared without the shell knowing anything about media.
 
@@ -177,7 +177,7 @@ export function AppTile({ children, className = "", ground = true, glow = true, 
         {ground && <HexField opacity={0.12} size={72} />}
 
         {/* The tile face. The ring plus the top highlight is what reads as a
-            bevel — a shadow alone just looks like a floating rectangle. */}
+            bevel, a shadow alone just looks like a floating rectangle. */}
         <div className="relative rounded-xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-[0_6px_16px_-6px_rgba(5,17,31,.45)]">
           {children}
           <div

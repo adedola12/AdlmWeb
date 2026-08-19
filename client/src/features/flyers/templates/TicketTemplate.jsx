@@ -75,7 +75,7 @@ export default function TicketTemplate({ flyer, accent, days, palette }) {
         )}
       </div>
 
-      {/* ── MIDDLE: the hero — a horizontal white ticket/coupon ── */}
+      {/* ── MIDDLE: the hero, a horizontal white ticket/coupon ── */}
       <div
         style={{
           flex: 1,
@@ -100,7 +100,7 @@ export default function TicketTemplate({ flyer, accent, days, palette }) {
             overflow: "visible",
           }}
         >
-          {/* LEFT panel — course title + meta */}
+          {/* LEFT panel, course title + meta */}
           <div
             style={{
               flex: 1.6,
@@ -149,7 +149,7 @@ export default function TicketTemplate({ flyer, accent, days, palette }) {
             )}
           </div>
 
-          {/* PERFORATION — dashed divider with notch half-circles top & bottom */}
+          {/* PERFORATION, dashed divider with notch half-circles top & bottom */}
           <div
             style={{
               position: "relative",
@@ -158,7 +158,7 @@ export default function TicketTemplate({ flyer, accent, days, palette }) {
               flexShrink: 0,
             }}
           >
-            {/* top notch — a small circle that nips the edge */}
+            {/* top notch, a small circle that nips the edge */}
             <span
               style={{
                 position: "absolute",
@@ -184,7 +184,7 @@ export default function TicketTemplate({ flyer, accent, days, palette }) {
             />
           </div>
 
-          {/* RIGHT panel — barcode (with code number under it) */}
+          {/* RIGHT panel, barcode (with code number under it) */}
           <div
             style={{
               flex: 1,
@@ -216,7 +216,7 @@ export default function TicketTemplate({ flyer, accent, days, palette }) {
               0 123456 789111
             </span>
 
-            {/* PRICE SEAL — red disc + gold ring, overlapping the perforation */}
+            {/* PRICE SEAL: red disc + gold ring, overlapping the perforation */}
             <div
               style={{
                 position: "absolute",

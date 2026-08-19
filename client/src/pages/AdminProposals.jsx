@@ -97,7 +97,7 @@ function parseTierPrice(s) {
 
 const DEFAULT_EXEC_SUMMARY =
   "Across the Nigerian built environment, an estimated 95% of QS and construction practice is still carried out manually. The firms that move first to a structured digital workflow win on tender speed, pricing accuracy, and client confidence.\n\n" +
-  "ADLM Studio proposes a single annual partnership that takes your firm's entire quantity surveying function digital and keeps it there — combining purpose-built QS software, structured team training, a firm-wide standardisation layer, and continuous support and market-rate updates. This is a managed transformation programme designed to compound in value every year.";
+  "ADLM Studio proposes a single annual partnership that takes your firm's entire quantity surveying function digital and keeps it there: combining purpose-built QS software, structured team training, a firm-wide standardisation layer, and continuous support and market-rate updates. This is a managed transformation programme designed to compound in value every year.";
 
 const DEFAULT_TERMS =
   "This proposal is valid until the date stated above. Programmes may be invoiced annually or quarterly by agreement. Final tier and seat count are confirmed after the workflow audit. Payment by bank transfer to ADLM Studio · Access Bank · 1634998770.";
@@ -275,11 +275,11 @@ export default function AdminProposals() {
       if (!t.name) continue;
       opts.push({
         value: `tier:${t.name}`,
-        label: `Programme — ${t.name} Tier`,
+        label: `Programme, ${t.name} Tier`,
         group: "Programme Tiers",
         priceNGN: parseTierPrice(t.price),
         priceUSD: 0,
-        description: `ADLM Digital Transformation — ${t.name} Tier`,
+        description: `ADLM Digital Transformation, ${t.name} Tier`,
         term: "Annual",
       });
     }
@@ -298,7 +298,7 @@ export default function AdminProposals() {
           group: "Software Products",
           priceNGN: yrNGN,
           priceUSD: yrUSD,
-          description: `${p.name} — annual licence (per seat)`,
+          description: `${p.name}: annual licence (per seat)`,
           term: "Annual",
         });
       const moNGN = Number(p.price?.monthlyNGN || 0);
@@ -310,18 +310,18 @@ export default function AdminProposals() {
           group: "Software Products",
           priceNGN: moNGN,
           priceUSD: moUSD,
-          description: `${p.name} — monthly licence (per seat)`,
+          description: `${p.name}: monthly licence (per seat)`,
           term: "Monthly",
         });
     }
     for (const loc of catalog?.locations || []) {
       opts.push({
         value: `training:${loc._id}`,
-        label: `Physical Training — ${loc.name}${loc.city ? ` (${loc.city})` : ""}`,
+        label: `Physical Training, ${loc.name}${loc.city ? ` (${loc.city})` : ""}`,
         group: "Physical Training",
         priceNGN: Number(loc.trainingCostNGN || 0),
         priceUSD: Number(loc.trainingCostUSD || 0),
-        description: `Physical Training — ${loc.name}`,
+        description: `Physical Training, ${loc.name}`,
         term: "One-off",
       });
       if (
@@ -330,11 +330,11 @@ export default function AdminProposals() {
       )
         opts.push({
           value: `bim:${loc._id}`,
-          label: `BIM Software Install — ${loc.name}`,
+          label: `BIM Software Install, ${loc.name}`,
           group: "Physical Training",
           priceNGN: Number(loc.bimInstallCostNGN || 0),
           priceUSD: Number(loc.bimInstallCostUSD || 0),
-          description: `BIM Software Installation — ${loc.name}`,
+          description: `BIM Software Installation, ${loc.name}`,
           term: "One-off",
         });
     }
@@ -585,7 +585,7 @@ export default function AdminProposals() {
       load();
       const note =
         saved?.notion?.lastError
-          ? " (Notion sync issue — check NOTION_API_KEY)"
+          ? " (Notion sync issue. Check NOTION_API_KEY)"
           : saved?.notion?.lastSyncedAt
             ? " · synced to Notion CRM"
             : "";
@@ -663,7 +663,7 @@ export default function AdminProposals() {
           <div>
             <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight"><span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400" />Digital Transformation Proposals</h1>
             <p className="text-sm text-slate-500">
-              Build, download, and send client proposals — auto-logged to the
+              Build, download, and send client proposals: auto-logged to the
               ADLM Notion CRM.
             </p>
           </div>
@@ -731,7 +731,7 @@ export default function AdminProposals() {
                     ) : p.notion?.lastSyncedAt ? (
                       <span className="text-xs text-emerald-600">✓ synced</span>
                     ) : (
-                      <span className="text-xs text-slate-400">—</span>
+                      <span className="text-xs text-slate-400">, </span>
                     )}
                   </td>
                   <td className="py-2 pr-3">
@@ -1018,7 +1018,7 @@ export default function AdminProposals() {
           <div className="text-sm font-semibold mb-1">
             ADLM Software Suite{" "}
             <span className="text-xs font-normal text-slate-500">
-              — pulled live from website products
+, pulled live from website products
             </span>
           </div>
           {catalogError && (
@@ -1041,7 +1041,7 @@ export default function AdminProposals() {
                     value={row.productKey || ""}
                     onChange={(e) => selectSuiteProduct(idx, e.target.value)}
                   >
-                    <option value="">— Custom row —</option>
+                    <option value="">, Custom row, </option>
                     {(catalog?.products || []).map((p) => (
                       <option key={p.key || p._id} value={p.key || p._id}>
                         {p.name}
@@ -1094,7 +1094,7 @@ export default function AdminProposals() {
             ))}
             {form.suite.length === 0 && (
               <div className="text-xs text-slate-400">
-                No suite rows yet — add one below.
+                No suite rows yet. Add one below.
               </div>
             )}
           </div>
@@ -1256,7 +1256,7 @@ export default function AdminProposals() {
                     value={item.source || ""}
                     onChange={(e) => selectLineSource(idx, e.target.value)}
                   >
-                    <option value="">— Custom item —</option>
+                    <option value="">, Custom item, </option>
                     {["Programme Tiers", "Software Products", "Physical Training"].map(
                       (g) => {
                         const inGroup = lineItemOptions.filter(

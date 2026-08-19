@@ -170,7 +170,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
       <div className="dsh">
         <DsAppSprite />
 
-        {/* The rail is his markup; the click handler is his too — following a
+        {/* The rail is his markup; the click handler is his too, following a
             link inside the drawer should not leave it open behind the screen
             that replaces it.
 

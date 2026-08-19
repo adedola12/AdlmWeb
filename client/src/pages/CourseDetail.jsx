@@ -505,7 +505,7 @@ export default function CourseDetail() {
                 </div>
                 <p className="mx-auto mt-2 max-w-md text-sm text-amber-800">
                   Your plan allows {playbackBlocked.limit || 2} streams at a time.
-                  Close the lecture on the other device and reload this page — the
+                  Close the lecture on the other device and reload this page, the
                   seat frees itself about a minute and a half after playback stops.
                 </p>
               </div>
@@ -543,7 +543,7 @@ export default function CourseDetail() {
           )}
           <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 dark:text-adlm-dark-dim">
             <IconLock className="w-3.5 h-3.5" />
-            Protected stream — watermarked to your account. Recording or sharing is prohibited.
+            Protected stream, watermarked to your account. Recording or sharing is prohibited.
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -633,7 +633,7 @@ export default function CourseDetail() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-medium">Start here — course intro</div>
+                    <div className="font-medium">Start here, course intro</div>
                     <div className="mt-1 text-xs text-slate-500">
                       How the programme runs
                     </div>

@@ -416,7 +416,7 @@ export default function DsLearnPage({ d }) {
                 </h3>
                 {" "}
                 <p>
-                  Every course ends in a capstone you actually build, a coordinated model, a priced bill, a programme. Pass the assessment and your certificate is issued to your ADLM account, with your name on it and something real to show behind it.
+                  Every course ends in a capstone you actually build: a coordinated model, a priced bill, a programme. Pass the assessment and your certificate is issued to your ADLM account, with your name on it and something real to show behind it.
                 </p>
                 {" "}
                 <a href="#courses" className="ds-btn btn-p ds-btn-sm">
@@ -1946,7 +1946,7 @@ export default function DsLearnPage({ d }) {
                 </h4>
                 {" "}
                 <p style={{ maxWidth: "46ch" }}>
-                  The combined book, the Hub end to end, then HERON: scaling drawings, measuring, pricing and export.
+                  The combined book: the Hub end to end, then HERON: scaling drawings, measuring, pricing and export.
                 </p>
                 {" "}
                 <div style={{ display: "flex", gap: "9px", marginTop: "16px" }}>
@@ -2056,7 +2056,7 @@ export default function DsLearnPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Yes. On-site training is our oldest business, thirty events so far, including NIQS chapters and government agencies.
+                Yes. On-site training is our oldest business: thirty events so far, including NIQS chapters and government agencies.
               </div>
               {" "}
             </details>

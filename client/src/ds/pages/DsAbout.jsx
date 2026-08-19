@@ -416,7 +416,7 @@ export default function DsAbout() {
                 </b>
                 {" "}
                 <p>
-                  The PlanSwift plugin, 2D takeoff, and the first product.
+                  The PlanSwift plugin: 2D takeoff, and the first product.
                 </p>
                 {" "}
               </article>

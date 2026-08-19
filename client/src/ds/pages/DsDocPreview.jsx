@@ -78,7 +78,7 @@ export default function DsDocPreview() {
           </div>
           {" "}
           <p className="docp-note">
-            {" "}What you see is the document. There is no separate print version, printing uses these same sheets at A4, which is why the preview is drawn in points.{" "}
+            {" "}What you see is the document. There is no separate print version: printing uses these same sheets at A4, which is why the preview is drawn in points.{" "}
           </p>
           {" "}
         </aside>

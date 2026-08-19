@@ -208,7 +208,7 @@ function exportExcel(rows, totals) {
   const wb = XLSX.utils.book_new();
 
   const wsSummary = XLSX.utils.aoa_to_sheet([
-    ["ADLM Studio — Portfolio Dashboard", "", "", dayjs().format("DD MMM YYYY HH:mm")],
+    ["ADLM Studio: Portfolio Dashboard", "", "", dayjs().format("DD MMM YYYY HH:mm")],
     [],
     ["Metric", "Value"],
     ["Total Projects",       totals.projectCount],
@@ -480,7 +480,7 @@ export default function PortfolioDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* BoQ vs Completed horizontal bars */}
             <div className="lg:col-span-2 rounded-2xl border border-slate-200 dark:border-adlm-dark-border bg-white dark:bg-adlm-dark-panel shadow-sm p-5">
-              <div className="text-sm font-semibold text-slate-700 dark:text-adlm-dark-text mb-1">BoQ Total vs Completed — by Product</div>
+              <div className="text-sm font-semibold text-slate-700 dark:text-adlm-dark-text mb-1">BoQ Total vs Completed, by Product</div>
               <div className="text-xs text-slate-400 mb-4">Solid = completed · Faint = BoQ total · Thin below = remaining</div>
               {loading
                 ? <div className="h-32 animate-pulse rounded-xl bg-slate-100 dark:bg-white/10" />

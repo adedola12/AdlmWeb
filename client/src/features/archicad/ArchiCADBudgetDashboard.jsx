@@ -48,7 +48,7 @@ function CategoryBarChart({ categories, currency }) {
   if (!entries.length) {
     return (
       <div className="rounded-adlm border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-adlm-dark-border dark:text-adlm-dark-muted">
-        No costed lines yet — the category chart appears once the BoQ is priced.
+        No costed lines yet, the category chart appears once the BoQ is priced.
       </div>
     );
   }

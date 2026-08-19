@@ -196,7 +196,7 @@ export default function DsThanks() {
                   <svg viewBox="0 0 24 24">
                     <use href="#i-check" />
                   </svg>
-                  Open Revit or PlanSwift, the panel is already there
+                  Open Revit or PlanSwift. The panel is already there
                 </li>
                 {" "}
               </ul>

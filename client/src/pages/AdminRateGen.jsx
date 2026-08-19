@@ -361,7 +361,7 @@ export default function AdminRateGen() {
       {/* ---------- Pagination ---------- */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
         <div className="opacity-70">
-          Showing <b>{pagedRows.length}</b> of <b>{rows.length}</b> items — page{" "}
+          Showing <b>{pagedRows.length}</b> of <b>{rows.length}</b> items, page{" "}
           <b>{page}</b> / <b>{totalPages}</b>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">

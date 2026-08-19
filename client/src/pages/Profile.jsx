@@ -445,7 +445,7 @@ export default function Profile() {
               value={stateKey || ""}
               onChange={(e) => setStateKey(e.target.value)}
             >
-              <option value="">— Select state —</option>
+              <option value="">. Select state, </option>
               {stateOptions.map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}
@@ -479,7 +479,7 @@ export default function Profile() {
                 value={zone || ""}
                 onChange={(e) => setZone(e.target.value)}
               >
-                <option value="">— Select zone —</option>
+                <option value="">. Select zone, </option>
                 {zoneOptions.map((z) => (
                   <option key={z.key} value={z.key}>
                     {z.label}
@@ -548,7 +548,7 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* ADMIN TOOLS — permission-aware launcher (replaces the old flat list).
+      {/* ADMIN TOOLS, permission-aware launcher (replaces the old flat list).
           Each card is gated by the user's role permissions via can(). */}
       {staff && (
         <div className="card">

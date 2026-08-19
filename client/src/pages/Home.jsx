@@ -151,7 +151,7 @@ export default function Home() {
         }
       `}</style>
 
-      {/* ══════════ HERO — Full-width modern SaaS ══════════ */}
+      {/* ══════════ HERO, Full-width modern SaaS ══════════ */}
       <section
         ref={heroRef}
         onMouseMove={onHeroMove}
@@ -171,13 +171,13 @@ export default function Home() {
           aria-hidden="true"
         />
 
-        {/* Blueprint grid — on-brand for AEC/QS, faded toward edges */}
+        {/* Blueprint grid: on-brand for AEC/QS, faded toward edges */}
         <div
           className="absolute inset-0 grid-overlay mask-radial opacity-60"
           aria-hidden="true"
         />
 
-        {/* Decorative floating shapes — wrappers do pointer parallax,
+        {/* Decorative floating shapes: wrappers do pointer parallax,
             inner blobs do the idle float so the two transforms compose. */}
         <div
           className="absolute top-20 right-[10%]"
@@ -214,19 +214,19 @@ export default function Home() {
         <div className="relative z-10 flex-1 flex items-center">
           <div className="w-full max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 py-16 sm:py-20">
             <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-              {/* Left — Text + CTA.
+              {/* Left, Text + CTA.
 
                   Entrances run through <Stagger>, not the old
                   `opacity-0 motion-safe:animate-[…]` pairing. That pairing was
                   a live bug: `.opacity-0` applies unconditionally while the
                   animation sits inside @media(prefers-reduced-motion:
                   no-preference), so a visitor with reduce-motion on never got
-                  the animation that was supposed to reveal the text — the whole
+                  the animation that was supposed to reveal the text, the whole
                   hero rendered at zero opacity, permanently. */}
               <Stagger gap={0.09}>
                 {/* Eyebrow rather than the old orange pill. Orange is the
                     interrupt in this system and there is already one on the
-                    page — the primary CTA below. Two orange elements at
+                    page, the primary CTA below. Two orange elements at
                     different sizes is the thing the collateral never does. */}
                 <StaggerItem>
                   <div className="mb-6 inline-flex items-center gap-2">
@@ -290,13 +290,13 @@ export default function Home() {
                 </StaggerItem>
               </Stagger>
 
-              {/* Right — the hero's subject.
+              {/* Right, the hero's subject.
 
                   Product mode portrays one lit object floating over a podium.
                   The four cards stay (they carry real information) but now read
                   as a single cluster hanging in light rather than four separate
                   panes: one shared podium glow, one slow float, tilt on each.
-                  No hexagon field here — hexagons are the corporate-mode
+                  No hexagon field here, hexagons are the corporate-mode
                   texture, and this composition is product mode. */}
               <Reveal delay={420} className="hidden lg:block">
                 <GlowTile className="w-full" glow="#005be3">
@@ -328,7 +328,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Stats ribbon — floating glass card at the bottom of the hero */}
+        {/* Stats ribbon, floating glass card at the bottom of the hero */}
         <div className="relative z-10 px-5 sm:px-8 lg:px-12 pb-8">
           <div className="max-w-7xl mx-auto">
             <div className="grid grid-cols-2 sm:grid-cols-4 rounded-2xl glass-dark shadow-depth-lg overflow-hidden divide-x divide-white/10 [&>*:nth-child(n+3)]:border-t [&>*:nth-child(n+3)]:border-white/10 sm:[&>*]:border-t-0">
@@ -383,7 +383,7 @@ export default function Home() {
 
       <FeaturedTrainingBanner />
 
-      {/* WHY CHOOSE — premium bento grid */}
+      {/* WHY CHOOSE, premium bento grid */}
       <section className="relative mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-24 pb-12 sm:pb-16">
         <Reveal className="max-w-3xl mx-auto text-center">
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider text-adlm-orange bg-adlm-orange/10 border border-adlm-orange/20">
@@ -395,7 +395,7 @@ export default function Home() {
           </h2>
           <p className="mt-4 text-slate-600 dark:text-slate-300 leading-relaxed">
             At <b className="text-adlm-navy dark:text-white">ADLM Studio</b>, we’re not just talking
-            about the future — we’re building it. Our tools make valuation tracking, construction
+            about the future, we’re building it. Our tools make valuation tracking, construction
             cost management, and payment certificate preparation smoother, faster, and more efficient.
           </p>
         </Reveal>
@@ -405,21 +405,21 @@ export default function Home() {
             delay={0}
             accent="orange"
             title="Smarter Takeoff Tools"
-            text="Say goodbye to costly errors and manual stress. With our 2D & 3D takeoff software and powerful plugins, quantity surveyors achieve faster, more accurate quantification and cost estimation — with confidence."
+            text="Say goodbye to costly errors and manual stress. With our 2D & 3D takeoff software and powerful plugins, quantity surveyors achieve faster, more accurate quantification and cost estimation: with confidence."
             icon={IconUsers}
           />
           <BentoCard
             delay={90}
             accent="blue"
             title="BIM-Focused Training"
-            text="We don’t just give you tools — we show you how to use them. Through hands-on sessions and BIM-focused learning, ADLM Studio helps QS professionals move into modern digital workflows with ease, confidence, and real-world skill."
+            text="We don’t just give you tools. We show you how to use them. Through hands-on sessions and BIM-focused learning, ADLM Studio helps QS professionals move into modern digital workflows with ease, confidence, and real-world skill."
             icon={IconGraduation}
           />
           <BentoCard
             delay={180}
             accent="orange"
             title="Valuation & Cost Management"
-            text="Track valuations, manage construction costs, and prepare payment certificates in one place — with the history, updates, and audit trails you can defend to clients, auditors, or management."
+            text="Track valuations, manage construction costs, and prepare payment certificates in one place: with the history, updates, and audit trails you can defend to clients, auditors, or management."
             icon={IconShieldCheck}
           />
         </div>
@@ -445,7 +445,7 @@ export default function Home() {
           </h3>
           <p className="mt-3 text-white/80 max-w-2xl mx-auto">
             Join hundreds of QS professionals using ADLM to deliver accurate
-            results — every time.
+            results, every time.
           </p>
           <div className="mt-8">
             <Link

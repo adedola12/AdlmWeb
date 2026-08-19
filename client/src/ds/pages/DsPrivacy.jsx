@@ -93,7 +93,7 @@ export default function DsPrivacy() {
             </h3>
             {" "}
             <p>
-              Card payments are processed by Paystack. We do not store card numbers on our systems, the transaction is initialised on our server and completed with Paystack directly.
+              Card payments are processed by Paystack. We do not store card numbers on our systems. The transaction is initialised on our server and completed with Paystack directly.
             </p>
             {" "}
             <h3>
@@ -101,7 +101,7 @@ export default function DsPrivacy() {
             </h3>
             {" "}
             <p>
-              Exports are ordinary files, Excel workbooks, PDFs, MS Project files: that open without our software. You can request a copy of your account data, or its deletion, by writing to admin@adlmstudio.net. Deleting an account removes the synced project data with it.
+              Exports are ordinary files: Excel workbooks, PDFs, MS Project files. That open without our software. You can request a copy of your account data, or its deletion, by writing to admin@adlmstudio.net. Deleting an account removes the synced project data with it.
             </p>
             {" "}
             <h3>

@@ -25,7 +25,7 @@ export default function DesignModeBanner() {
         <FiShield className="w-3.5 h-3.5" />
       </span>
       <p className="text-[12px] md:text-[13px] leading-snug">
-        <span className="font-semibold">Design Access</span> — every figure, name
+        <span className="font-semibold">Design Access</span>: every figure, name
         and record on this screen is placeholder data. Saving is simulated and
         changes nothing.
       </p>

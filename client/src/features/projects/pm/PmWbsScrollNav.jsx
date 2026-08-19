@@ -78,9 +78,9 @@ export default function PmWbsScrollNav({
 
   return (
     <>
-      {/* Action buttons — bottom-right corner, always visible */}
+      {/* Action buttons: bottom-right corner, always visible */}
       <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
-        {/* Scroll progress indicator — small vertical bar shows where you are */}
+        {/* Scroll progress indicator, small vertical bar shows where you are */}
         <div
           className="hidden sm:block h-24 w-1 rounded-full bg-slate-200 overflow-hidden"
           title={`${scrollPct.toFixed(0)}% scrolled`}
@@ -125,7 +125,7 @@ export default function PmWbsScrollNav({
         </button>
       </div>
 
-      {/* Sections drawer — slides in from the right when open */}
+      {/* Sections drawer, slides in from the right when open */}
       {open ? (
         <div
           className="fixed inset-0 z-50 flex justify-end"

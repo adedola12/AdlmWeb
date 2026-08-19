@@ -14,7 +14,7 @@ export default function PmMppHelperModal({
   open,
   errorMessage = "",
   onClose,
-  onPickXml, // optional — fires a file picker scoped to .xml
+  onPickXml, // optional: fires a file picker scoped to .xml
 }) {
   const fileRef = React.useRef(null);
 
@@ -59,7 +59,7 @@ export default function PmMppHelperModal({
                 Quick conversion
               </div>
               <div className="text-lg font-bold leading-tight">
-                Convert your .mpp to XML — it takes 10 seconds
+                Convert your .mpp to XML. It takes 10 seconds
               </div>
               <div className="mt-1 text-[12px] opacity-90">
                 Native .mpp parsing isn't enabled on this server yet. MS Project
@@ -112,7 +112,7 @@ export default function PmMppHelperModal({
             <FaShieldAlt className="mt-0.5 shrink-0" />
             <div>
               <strong>Same data, no compromise.</strong> The XML export is
-              Microsoft's documented Project XML schema — every field we use
+              Microsoft's documented Project XML schema, every field we use
               (tasks, predecessors, baseline cost, dates, % complete) is
               preserved 1:1.
             </div>

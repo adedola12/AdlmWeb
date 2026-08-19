@@ -344,7 +344,7 @@ export default function AdminCourses() {
         setSwDraft((prev) => ({ ...prev, installVideoUrl: res.secure_url }));
         setSwMsg("Install video uploaded.");
       } else {
-        setSwMsg("Upload failed — no URL returned");
+        setSwMsg("Upload failed, no URL returned");
       }
     } catch (err) {
       setSwMsg(err?.message || "Video upload failed");
@@ -956,7 +956,7 @@ export default function AdminCourses() {
                   value={swPickerId}
                   onChange={(e) => setSwPickerId(e.target.value)}
                 >
-                  <option value="">— Add from software library —</option>
+                  <option value="">. Add from software library, </option>
                   {softwares
                     .filter((s) => !draft.softwareIds.includes(String(s._id)))
                     .map((s) => (

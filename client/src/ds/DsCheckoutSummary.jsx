@@ -132,7 +132,7 @@ export default function DsCheckoutSummary() {
           <Link to="/products" style={{ color: "var(--action)" }}>
             Choose your licences
           </Link>{" "}
-          — or price them first on the{" "}
+, or price them first on the{" "}
           <Link to="/quote" style={{ color: "var(--action)" }}>
             quotation builder
           </Link>

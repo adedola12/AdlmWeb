@@ -118,7 +118,7 @@ export default function AdminLatest() {
             className={FIELD}
             value={draft.title}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-            placeholder="Time Pro 1.1.1 — dark mode and MS Project exports"
+            placeholder="Time Pro 1.1.1, dark mode and MS Project exports"
             required
           />
         </label>
@@ -205,7 +205,7 @@ export default function AdminLatest() {
 
       {status === "ready" && items.length === 0 && (
         <p className="text-slate-500">
-          Nothing curated yet — the band is showing its built-in items.
+          Nothing curated yet. The band is showing its built-in items.
         </p>
       )}
 

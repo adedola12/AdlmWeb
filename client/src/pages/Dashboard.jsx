@@ -382,7 +382,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen p-4 md:p-6">
       {/* noindex: this is a signed-in page, personal to one user, and already
-          blocked in robots.txt. The title matters anyway — it is what shows in
+          blocked in robots.txt. The title matters anyway. It is what shows in
           GA4 under "Views by Page title", and without it every signed-in page
           reports as the generic site title. */}
       <Seo
@@ -630,7 +630,7 @@ export default function Dashboard() {
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Illustrated, step-by-step PDFs for the products on your
-                  subscription — every screen, from sign-in to a finished bill.
+                  subscription: every screen, from sign-in to a finished bill.
                 </p>
               </div>
             </div>
@@ -1186,7 +1186,7 @@ function LearningTab({
                           </a>
                         ) : (
                           <span className="text-xs text-amber-700">
-                            No classroom link configured yet — ask admin.
+                            No classroom link configured yet. Ask admin.
                           </span>
                         )}
                         <button
@@ -1822,7 +1822,7 @@ export function InstallationsTab({
                         ))}
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-600">—</div>
+                      <div className="text-sm text-slate-600">, </div>
                     )}
                   </div>
 
@@ -1849,7 +1849,7 @@ export function InstallationsTab({
                         ))}
                       </ul>
                     ) : (
-                      <div className="text-sm text-slate-600">—</div>
+                      <div className="text-sm text-slate-600">, </div>
                     )}
                   </div>
 
@@ -2033,7 +2033,7 @@ export function InstallationsTab({
                             >
                               Installer Hub user guide
                             </a>{" "}
-                            — sign-in to first install, with pictures of every screen
+. Sign-in to first install, with pictures of every screen
                           </li>
                         ) : null}
                         <li>

@@ -473,7 +473,7 @@ export default function DsProducts() {
                     <strong>
                       QUIV
                     </strong>
-                    , the element ID stays on the bill line, so any query has an answer.
+                    . The element ID stays on the bill line, so any query has an answer.
                   </p>
                   {" "}
                 </div>
@@ -571,7 +571,7 @@ export default function DsProducts() {
               </summary>
               {" "}
               <div className="faq-a">
-                No. Most people buy one takeoff tool plus RateGen, the takeoff tool measures, RateGen prices. Add others when the work demands it.
+                No. Most people buy one takeoff tool plus RateGen. The takeoff tool measures, RateGen prices. Add others when the work demands it.
               </div>
               {" "}
             </details>
@@ -647,7 +647,7 @@ export default function DsProducts() {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run the toolkit against one of your live jobs, your drawings, your rates.
+          We'll run the toolkit against one of your live jobs: your drawings, your rates.
         </p>
         {" "}
         <div className="hero-cta">

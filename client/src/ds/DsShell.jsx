@@ -39,7 +39,7 @@ export default function DsShell({ children, mapHref }) {
       {/* Every form in his markup is `action="thanks" method="get"` and sends
           nothing anywhere. Wiring it here rather than per page means each
           ported form is live the moment its page is staged, and the wrapper
-          only acts on the topics it knows — anything else is left alone. */}
+          only acts on the topics it knows, anything else is left alone. */}
       <WaitlistForm>{children}</WaitlistForm>
       <DsFooter />
     </div>

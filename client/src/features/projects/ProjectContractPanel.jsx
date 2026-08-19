@@ -87,7 +87,7 @@ function CertificatesSection({
           </div>
           <div className="text-[11px] text-slate-500">
             Each certificate is numbered and carries its own cumulative, less-previous,
-            retention, VAT and WHT values — ready for Architect / QS / Client sign-off.
+            retention, VAT and WHT values: ready for Architect / QS / Client sign-off.
           </div>
         </div>
         <button
@@ -342,10 +342,10 @@ function FinalAccountSection({
           <div className="text-sm font-semibold text-slate-900">Final Account</div>
           <div className="text-[11px] text-slate-500">
             {isFinalized
-              ? `Finalized on ${formatDate(finalAccount.finalizedAt)} — all project data is frozen.`
+              ? `Finalized on ${formatDate(finalAccount.finalizedAt)}, all project data is frozen.`
               : contractLocked
                 ? "Preview of the closing settlement based on current data."
-                : "Pre-lock preview — savings / over-run only start tracking after the contract is locked."}
+                : "Pre-lock preview, savings / over-run only start tracking after the contract is locked."}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -404,7 +404,7 @@ function FinalAccountSection({
             {money(view.preliminaryFinal)}
           </div>
         </div>
-        {/* Contingency + Tax — only render when set so old projects
+        {/* Contingency + Tax, only render when set so old projects
             without these values don't show ₦0 stub tiles. */}
         {safeNum(view.contingencyFinal) > 0 || contingencyPercent > 0 ? (
           <div>
@@ -447,7 +447,7 @@ function FinalAccountSection({
             </div>
           ) : null}
         </div>
-        {/* Actual spent — surfaces the live actuals figure so users can
+        {/* Actual spent, surfaces the live actuals figure so users can
             see what their over-run is being calculated against. */}
         <div>
           <div className="text-slate-500 dark:text-slate-400">Actual spent to date</div>
@@ -489,7 +489,7 @@ function FinalAccountSection({
             </div>
           ) : safeNum(view.actualSpent) === 0 && safeNum(view.savingsValue) === 0 ? (
             <div className="mt-0.5 text-[10px] text-slate-400">
-              No actual spend yet — no over-run.
+              No actual spend yet, no over-run.
             </div>
           ) : null}
         </div>
@@ -550,7 +550,7 @@ function ModelStatus({ discipline, model, busy, onUpload, onDelete, disabled, al
                 const map = {
                   valid: [
                     "bg-emerald-100 text-emerald-800",
-                    `✓ Verified — ${v.matchedCount}/${v.requiredCount} quantity elements found`,
+                    `✓ Verified, ${v.matchedCount}/${v.requiredCount} quantity elements found`,
                   ],
                   "no-quantities": [
                     "bg-slate-200 text-slate-600",
@@ -719,7 +719,7 @@ function ModelsPanel({
           type="button"
           onClick={() => setShowManual((v) => !v)}
           className="text-slate-500 hover:text-slate-700 hover:underline"
-          title="Rarely needed — the plugin auto-pushes. Use if you have an IFC from elsewhere."
+          title="Rarely needed, the plugin auto-pushes. Use if you have an IFC from elsewhere."
         >
           {showManual ? "Hide manual upload" : "Advanced: manual upload"}
         </button>
@@ -838,8 +838,8 @@ export default function ProjectContractPanel({
             {collapsed && collapsedSummary
               ? collapsedSummary
               : hideModels
-                ? "Certificates and final account — everything a QS needs after contract award."
-                : "Certificates, final account and BIM models — everything a QS needs after contract award."}
+                ? "Certificates and final account. Everything a QS needs after contract award."
+                : "Certificates, final account and BIM models. Everything a QS needs after contract award."}
           </div>
         </div>
         {/* Collapse / expand toggle. Persists in localStorage so the

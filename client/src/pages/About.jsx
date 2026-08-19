@@ -222,14 +222,14 @@ export default function AboutADLM() {
     },
     {
       title: "Customer First",
-      desc: "Built with Nigerian QS workflows in mind—BESMM4R, NRM2, local pricing & realities.",
+      desc: "Built with Nigerian QS workflows in mind: BESMM4R, NRM2, local pricing & realities.",
       icon: (
         <IconUsers className="w-5 h-5" />
       ),
     },
     {
       title: "Innovation",
-      desc: "From Revit & PlanSwift plugins to RateGen & COBie tools—ship, learn, iterate.",
+      desc: "From Revit & PlanSwift plugins to RateGen & COBie tools: ship, learn, iterate.",
       icon: (
         <IconSparkle className="w-5 h-5" />
       ),
@@ -298,8 +298,8 @@ export default function AboutADLM() {
           <Reveal delay={120}>
             <p className="mt-4 max-w-2xl text-blue-100">
               ADLM is a Nigerian ConTech studio that digitises quantity surveying
-              end to end — model-based takeoff, rate build-ups, bills,
-              programmes and dashboards — and puts the whole workflow on one
+              end to end: model-based takeoff, rate build-ups, bills,
+              programmes and dashboards, and puts the whole workflow on one
               platform. We do not sell a tool and leave. We bring firms the
               software, the training and the process together, so the change
               actually holds.
@@ -348,9 +348,9 @@ export default function AboutADLM() {
             <div className="rounded-xl bg-white p-6 ring-1 ring-slate-200 shadow-depth">
               <h3 className="text-xl font-semibold">Our Mission</h3>
               <p className="mt-2 text-slate-600">
-                To digitise the quantity surveying process for African firms —
+                To digitise the quantity surveying process for African firms, 
                 improving <b>accuracy, productivity and workflow</b> from
-                model-based takeoff through rate build-up, bills and handover —
+                model-based takeoff through rate build-up, bills and handover: 
                 and to make that change stick by pairing every tool with the{" "}
                 <b>training and process</b> a firm needs to adopt it.
               </p>
@@ -361,7 +361,7 @@ export default function AboutADLM() {
               <h3 className="text-xl font-semibold">Our Vision</h3>
               <p className="mt-2 text-slate-600">
                 To become the leading ConTech ecosystem for the
-                continent—connecting{" "}
+                continent, connecting{" "}
                 <b>BIM, AI, and local market intelligence</b>
                 so every QS can deliver world-class results anywhere in Nigeria
                 and beyond.
@@ -399,7 +399,7 @@ export default function AboutADLM() {
         </div>
       </section>
 
-      {/* STRENGTHS — what actually differentiates ADLM.
+      {/* STRENGTHS, what actually differentiates ADLM.
 
           Every claim here is one we can stand behind publicly. Client work is
           described, never named: naming a firm on a public page needs that
@@ -442,7 +442,7 @@ export default function AboutADLM() {
             },
             {
               title: "AI where it earns its place",
-              body: "Cost intelligence, bill checking and rate build-up support are metered into every subscription — used where it saves a quantity surveyor real time, not bolted on as a demo.",
+              body: "Cost intelligence, bill checking and rate build-up support are metered into every subscription: used where it saves a quantity surveyor real time, not bolted on as a demo.",
             },
           ].map((s) => (
             <StaggerItem key={s.title}>
@@ -459,7 +459,7 @@ export default function AboutADLM() {
         </Stagger>
       </section>
 
-      {/* JOURNEY / TIMELINE — FIXED */}
+      {/* JOURNEY / TIMELINE, FIXED */}
       <section className="max-w-6xl mx-auto px-4 py-14">
         <JourneyTimeline />
       </section>

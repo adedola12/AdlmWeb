@@ -79,8 +79,8 @@ function ActivityTab({
         <div className="text-sm text-slate-500 py-6">Loading activity…</div>
       ) : !items.length ? (
         <div className="text-sm text-slate-500 py-6">
-          No activity yet. Actions on your projects — creating them, locking contracts,
-          variations, rate edits, collaborators, models and schedule changes — will appear here.
+          No activity yet. Actions on your projects: creating them, locking contracts,
+          variations, rate edits, collaborators, models and schedule changes: will appear here.
         </div>
       ) : (
         <ul className="space-y-2">

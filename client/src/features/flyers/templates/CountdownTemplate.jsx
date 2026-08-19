@@ -23,7 +23,7 @@ export default function CountdownTemplate({ flyer, accent, days, palette }) {
           </>
         ) : (
           <span style={{ display: "block", fontSize: 40, fontWeight: 600, color: palette.textFaint, lineHeight: 1.1 }}>
-            — set a launch date —
+. Set a launch date, 
           </span>
         )}
       </div>

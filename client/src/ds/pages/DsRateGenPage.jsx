@@ -421,7 +421,7 @@ export default function DsRateGenPage({ d }) {
                         <svg viewBox="0 0 24 24">
                           <use href="#i-check" />
                         </svg>
-                        All items from your library, edit before saving
+                        All items from your library. Edit before saving
                       </span>
                       {" "}
                     </div>
@@ -875,7 +875,7 @@ export default function DsRateGenPage({ d }) {
         </h2>
         {" "}
         <p className="ds-lede">
-          We'll run RateGen against one of your live jobs, your drawings, your rates, your bill format.
+          We'll run RateGen against one of your live jobs: your drawings, your rates, your bill format.
         </p>
         {" "}
         <div className="hero-cta">

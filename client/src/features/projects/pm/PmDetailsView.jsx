@@ -232,7 +232,7 @@ function TaskTable({
 
   return (
     <div className="flex gap-4">
-      {/* Docked section rail — sticky on xl+ screens, falls back to a
+      {/* Docked section rail: sticky on xl+ screens, falls back to a
           floating pill on smaller screens. All jumps are instant
           (behavior: "auto") so the user doesn't get the dizzy feel of
           smooth-scrolling across a 200-row WBS. */}
@@ -285,7 +285,7 @@ function TaskTable({
             <th className="px-3 py-2 font-semibold" style={{ minWidth: 280 }}>Name</th>
             <th className="px-3 py-2 font-semibold whitespace-nowrap" style={{ width: 110 }}>Start</th>
             <th className="px-3 py-2 font-semibold whitespace-nowrap" style={{ width: 110 }}>Finish</th>
-            {/* Days column — planned / actual / variance. Single
+            {/* Days column, planned / actual / variance. Single
                 column keeps the table compact; the cell renders three
                 small lines stacked. */}
             <th className="px-3 py-2 font-semibold text-right whitespace-nowrap" style={{ width: 110 }}>
@@ -420,7 +420,7 @@ function TaskTable({
                             ◆ Milestone
                           </span>
                         ) : null}
-                        {/* Critical path badge — set by the MS Project
+                        {/* Critical path badge. Set by the MS Project
                             importer when MSPDI reports Critical=1 (zero
                             slack). Surfaces in rose so users can see at
                             a glance which tasks have no scheduling
@@ -432,13 +432,13 @@ function TaskTable({
                             title={
                               safeNum(task.totalSlackDays) > 0
                                 ? `On critical path · ${safeNum(task.totalSlackDays)}d total slack`
-                                : "On critical path · zero slack — any delay slips the project finish"
+                                : "On critical path · zero slack, any delay slips the project finish"
                             }
                           >
                             🔥 Critical path
                           </span>
                         ) : null}
-                        {/* Near-critical hint — non-critical tasks with
+                        {/* Near-critical hint, non-critical tasks with
                             very tight slack get a low-key amber chip so
                             users know they should watch them too. */}
                         {!isSummary &&
@@ -447,7 +447,7 @@ function TaskTable({
                         safeNum(task.totalSlackDays) <= 1 ? (
                           <span
                             className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-amber-700"
-                            title={`Only ${safeNum(task.totalSlackDays).toFixed(1)}d of slack — near critical`}
+                            title={`Only ${safeNum(task.totalSlackDays).toFixed(1)}d of slack, near critical`}
                           >
                             ⚠ Tight slack
                           </span>
@@ -472,7 +472,7 @@ function TaskTable({
                 <td className={`px-3 py-2 align-top text-xs whitespace-nowrap ${isSummary ? "font-semibold text-slate-900" : "text-slate-700"}`}>
                   {fmtDateDisplay(displayEnd)}
                 </td>
-                {/* Days cell — planned (from durationDays) on top, actual
+                {/* Days cell: planned (from durationDays) on top, actual
                     (editable on leaves; rolled up on summaries) below,
                     variance pill at the bottom. Hidden bookkeeping note:
                     the server derives actualDurationDays from
@@ -532,7 +532,7 @@ function TaskTable({
                             }`}
                             title={
                               variance > 0
-                                ? `Slip — task ran ${variance}d longer than planned`
+                                ? `Slip, task ran ${variance}d longer than planned`
                                 : variance < 0
                                   ? `Finished ${Math.abs(variance)}d early`
                                   : "On schedule"
@@ -591,7 +591,7 @@ function TaskTable({
                 </td>
                 <td className="px-3 py-2 align-top">
                   {isSummary ? (
-                    <span className="text-[10px] text-slate-400">—</span>
+                    <span className="text-[10px] text-slate-400">, </span>
                   ) : (
                     <PriorityBadge priority={task.priority} />
                   )}
@@ -614,14 +614,14 @@ function TaskTable({
                 </td>
                 <td className="px-3 py-2 align-top text-xs text-slate-700">
                   {isSummary ? (
-                    <span className="text-[10px] text-slate-400">—</span>
+                    <span className="text-[10px] text-slate-400">, </span>
                   ) : (
-                    task.assignedTo || <span className="italic text-slate-400">—</span>
+                    task.assignedTo || <span className="italic text-slate-400">, </span>
                   )}
                 </td>
                 <td className="px-3 py-2 align-top text-right">
                   <div className="inline-flex items-center gap-1">
-                    {/* Summary tasks are read-only — their values come from
+                    {/* Summary tasks are read-only. Their values come from
                         their leaf children. Editing or deleting them would
                         leave orphan rows and a corrupted hierarchy. To make
                         a summary editable, delete every child first; the
@@ -640,7 +640,7 @@ function TaskTable({
                       onClick={() => !isSummary && onDeleteTask?.(task.taskId)}
                       disabled={isSummary}
                       className={`rounded p-1.5 ${isSummary ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:bg-rose-50 hover:text-rose-600"}`}
-                      title={isSummary ? "Delete child tasks first — summary rows can't be removed while they have descendants." : "Delete"}
+                      title={isSummary ? "Delete child tasks first, summary rows can't be removed while they have descendants." : "Delete"}
                     >
                       <FaTrash className="text-xs" />
                     </button>
@@ -709,10 +709,10 @@ function RiskTable({ risks, onEditRisk, onDeleteRisk, onAddRisk }) {
                 <StatusBadge status={risk.status} />
               </td>
               <td className="px-3 py-2 align-top text-xs text-slate-700">
-                {risk.owner || <span className="italic text-slate-400">—</span>}
+                {risk.owner || <span className="italic text-slate-400">, </span>}
               </td>
               <td className="px-3 py-2 align-top text-xs text-slate-700 whitespace-normal break-words">
-                {risk.mitigation || <span className="italic text-slate-400">—</span>}
+                {risk.mitigation || <span className="italic text-slate-400">, </span>}
               </td>
               <td className="px-3 py-2 align-top text-right">
                 <div className="inline-flex items-center gap-1">
@@ -791,10 +791,10 @@ function IssueTable({ issues, onEditIssue, onDeleteIssue, onAddIssue }) {
                 <StatusBadge status={issue.status} />
               </td>
               <td className="px-3 py-2 align-top text-xs text-slate-700">
-                {issue.owner || <span className="italic text-slate-400">—</span>}
+                {issue.owner || <span className="italic text-slate-400">, </span>}
               </td>
               <td className="px-3 py-2 align-top text-xs text-slate-700 whitespace-normal break-words">
-                {issue.notes || <span className="italic text-slate-400">—</span>}
+                {issue.notes || <span className="italic text-slate-400">, </span>}
               </td>
               <td className="px-3 py-2 align-top text-[10px] text-slate-500 whitespace-nowrap">
                 {fmtDateDisplay(issue.openedAt)}
@@ -915,7 +915,7 @@ export default function PmDetailsView({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Export to calendar — downloads the schedule as a .ics file.
+          {/* Export to calendar, downloads the schedule as a .ics file.
               Drop into Google Calendar / Outlook / Apple Calendar via the
               app's "Import calendar" flow. Filename = project name. */}
           {onExportCalendar ? (
@@ -929,7 +929,7 @@ export default function PmDetailsView({
               Export calendar
             </button>
           ) : null}
-          {/* Reschedule — explicit re-cascade. Useful after manually editing
+          {/* Reschedule, explicit re-cascade. Useful after manually editing
               durations or adding predecessor links, without having to bump
               the project start to trigger the auto-cascade. */}
           {onReschedule ? (
@@ -943,7 +943,7 @@ export default function PmDetailsView({
               Reschedule
             </button>
           ) : null}
-          {/* Delete-imports — only visible when MS Project tasks exist, so
+          {/* Delete-imports, only visible when MS Project tasks exist, so
               the destructive control doesn't appear on a clean slate. */}
           {importedTaskCount > 0 && onClearImports ? (
             <button

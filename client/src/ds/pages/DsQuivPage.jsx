@@ -317,7 +317,7 @@ export default function DsQuivPage({ d }) {
                 </h4>
                 {" "}
                 <p>
-                  Validates the model before you measure it, unplaced rooms, duplicated elements, missing type parameters. Catches them here rather than in the bill.
+                  Validates the model before you measure it: unplaced rooms, duplicated elements, missing type parameters. Catches them here rather than in the bill.
                 </p>
                 {" "}
               </div>
@@ -901,7 +901,7 @@ export default function DsQuivPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                The Model Checker runs first and tells you what will cause bad quantities, unplaced rooms, duplicates, missing type parameters, before you measure.
+                The Model Checker runs first and tells you what will cause bad quantities: unplaced rooms, duplicates, missing type parameters, before you measure.
               </div>
               {" "}
             </details>
@@ -925,7 +925,7 @@ export default function DsQuivPage({ d }) {
               </summary>
               {" "}
               <div className="faq-a">
-                Supported builds are 2024, 2026 and 2027. If you are on 2025, talk to us: the Installer Hub can usually place a compatible build.
+                Supported builds are 2024, 2026 and 2027. If you are on 2025, talk to us. The Installer Hub can usually place a compatible build.
               </div>
               {" "}
             </details>
