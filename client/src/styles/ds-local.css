@@ -1,0 +1,55 @@
+/* Hand-authored additions to the ported design system.
+ *
+ * Everything else under src/styles/ds*.css is generated from Richard's
+ * stylesheets and must not be edited — a re-run of scripts/port-ds-css.mjs
+ * would discard the change. This file is where a control that exists in our
+ * build but not in his gets its styling, written in his idiom and using his
+ * tokens so it does not read as a bolt-on.
+ *
+ * Scoped under .ds by hand, for the same reason the generated sheets are:
+ * nothing here may reach a page that has not opted in.
+ */
+
+/* On-site training: his tile leaves this "On enquiry", because his static
+ * build has no way to know the price. Ours does — every training location is
+ * a city and a participant band with a real fee — so the stepper is replaced
+ * by a select and an optional add-on. */
+.ds .qt-site {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ds .qt-site select {
+  width: 100%;
+  max-width: 340px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.ds .qt-site select:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.ds .qt-bim {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.ds .qt-bim input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--action);
+  flex: none;
+}

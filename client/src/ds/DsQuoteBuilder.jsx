@@ -3,7 +3,7 @@
 // Ported from his assets/js/quote.js. The markup is his, unchanged: .qt-build /
 // .panel / .toggle2 / .line / .qty / .amt2 / .qt-form / .qt-panel / .trust.
 // The behaviour is the same too — pick quantities, switch billing period, watch
-// the summary update, then print the quotation.
+// the summary update, then open the quotation as a real document (adlmDoc.js).
 //
 // WHAT CHANGED, AND WHY IT MATTERED
 // His catalogue was a literal in the script, and it had already drifted from
@@ -13,13 +13,18 @@
 // document with our number on it. So every figure here comes from
 // GET /products, and the fallbacks are the catalogue's values rather than his.
 //
-// The one deliberate gap is his, kept: on-site training carries no rate. It is
-// quoted on enquiry, and the quotation says so on its face rather than
-// inventing a number or dropping the line.
+// His one gap is now closed. He leaves on-site training "on enquiry" because a
+// static build cannot know the price — but we already hold it: every training
+// location is a city and a participant band with a real fee behind it, which
+// is exactly the "city and size of the team" his note asks for. It is priced
+// here the same way routes/purchase.js prices it, so the quotation cannot
+// promise a figure checkout then disagrees with. Same reason VAT is read from
+// the setting rather than hardcoded at 7.5%.
 
 import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config.js";
+const DsQuoteDoc = React.lazy(() => import("./DsQuoteDoc.jsx"));
 
 // VAT, as his document renderer applies it.
 const VAT = 0.075;
@@ -62,6 +67,11 @@ const FALLBACK = {
   BIMMEP: { yr: 105000 },
 };
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 const FMT = {
   NGN: new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }),
   USD: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }),
@@ -74,6 +84,18 @@ export default function DsQuoteBuilder() {
   const [cur, setCur] = React.useState("NGN");
   const [firm, setFirm] = React.useState({ org: "", person: "", email: "", addr: "" });
   const [showDoc, setShowDoc] = React.useState(false);
+
+  // On-site training. His build leaves this "On enquiry" — the note says it is
+  // quoted once we know the city and the size of the team, which is exactly
+  // what the training-location table already records: every row is a city and
+  // a participant band with a real price behind it. So it can be quoted here.
+  const [sites, setSites] = React.useState([]);
+  const [siteId, setSiteId] = React.useState("");
+  const [bimInstall, setBimInstall] = React.useState(false);
+
+  // VAT is a setting, not a constant. Checkout reads it from the same place
+  // before it charges, so the quotation has to as well or the two disagree.
+  const [vatRate, setVatRate] = React.useState(VAT);
 
   React.useEffect(() => {
     let alive = true;
@@ -100,6 +122,26 @@ export default function DsQuoteBuilder() {
         if (alive) setPrices(FALLBACK);
       }
     })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/training-locations`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => alive && Array.isArray(d?.locations) && setSites(d.locations))
+      .catch(() => {});
+    fetch(`${API_BASE}/settings/vat`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((v) => {
+        if (!alive || !v) return;
+        // applyToQuotes can be off on its own, in which case a quotation shows
+        // no VAT line even though purchases carry one.
+        setVatRate(v.enabled && v.applyToQuotes ? Number(v.percent || 0) / 100 : 0);
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -158,22 +200,168 @@ export default function DsQuoteBuilder() {
       const id = t.key || t.id;
       const n = qty[id] || 0;
       if (!n) continue;
-      if (!t.key) {
-        enquiry += n;
-        rows.push({ desc: `${t.name} — ${t.sub}`, qty: n, unit: "day", rate: null, amount: null });
-        continue;
-      }
+      // On-site training has no catalogue row; it is priced off the chosen
+      // location below, so the tile itself contributes nothing here.
+      if (!t.key) continue;
       const unit = inCur(priceOf(t.key), "yr");
       licences += unit * n;
       rows.push({ desc: `${t.name} — ${t.sub}`, qty: n, unit: "seat", rate: unit, amount: unit * n });
     }
 
-    const net = licences + install;
-    const vat = Math.round(net * VAT);
+    // On-site training, priced exactly the way routes/purchase.js prices it:
+    // a flat fee for the chosen location — the participant band is part of the
+    // location row, which is how "number of users" is already modelled — plus
+    // the optional BIM install. Quoting it any other way would put a number on
+    // the quotation that checkout then disagrees with.
+    const site = sites.find((l) => String(l._id) === siteId) || null;
+    let onsite = 0;
+    if (site) {
+      const fee =
+        cur === "USD" ? Number(site.trainingCostUSD || 0) : Number(site.trainingCostNGN || 0);
+      const bim = bimInstall
+        ? cur === "USD"
+          ? Number(site.bimInstallCostUSD || 0)
+          : Number(site.bimInstallCostNGN || 0)
+        : 0;
+      onsite = fee + bim;
+      const days = site.durationDays || 1;
+      if (fee > 0) {
+        rows.push({
+          desc: `On-site training — ${site.name} · ${days} day${days === 1 ? "" : "s"}`,
+          qty: 1,
+          unit: "class",
+          rate: fee,
+          amount: fee,
+        });
+      } else {
+        // A location with no price in this currency is not a free class — the
+        // USD columns are mostly unset, so it goes on enquiry rather than nil.
+        enquiry += 1;
+        rows.push({
+          desc: `On-site training — ${site.name} · ${days} day${days === 1 ? "" : "s"}`,
+          qty: 1,
+          unit: "class",
+          rate: null,
+          amount: null,
+        });
+      }
+      if (bim > 0) {
+        rows.push({
+          desc: "BIM install — set-up of the CAD environment on site",
+          qty: 1,
+          unit: "visit",
+          rate: bim,
+          amount: bim,
+        });
+      }
+    }
+
+    const net = licences + install + onsite;
+    const vat = Math.round(net * vatRate);
     return { rows, licences, install, net, vat, total: net + vat, enquiry };
-  }, [qty, bill, priceOf, inCur]);
+  }, [qty, bill, priceOf, inCur, sites, siteId, bimInstall, cur, vatRate]);
 
   const picked = calc.rows.length > 0;
+
+  // His spec(), reproduced. The document is the deliverable — a procurement
+  // file needs the full description, the unit, the rate and the amount, which
+  // is why the summary panel truncates at the em-dash and this does not.
+  const docSpec = React.useMemo(() => {
+    const today = new Date();
+    const until = new Date(today.getTime() + 30 * 864e5);
+    const longDate = (d) =>
+      `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    const isoDate = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    // QUO- is not in his engine's prefix table and he built the number in the
+    // page rather than the engine, noting it as an ask. Same here.
+    const number = `QUO-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+
+    const to = [];
+    if (firm.org) to.push(`${firm.org},`);
+    if (firm.person) to.push(`${firm.person},`);
+    if (firm.addr) {
+      firm.addr.split(/\n|,\s*/).forEach((l) => {
+        if (l.trim()) to.push(l.trim());
+      });
+    }
+    if (firm.email) to.push(firm.email);
+    const addressee = to.length ? to : ["To be confirmed"];
+
+    const rows = calc.rows.map((r, i) => ({
+      cells: [
+        `${i + 1}.`,
+        r.desc,
+        r.qty,
+        r.unit,
+        r.rate == null ? "On enquiry" : money(r.rate),
+        r.amount == null ? "On enquiry" : money(r.amount),
+      ],
+      unpriced: r.amount == null,
+    }));
+
+    const totalRows = [
+      ["Subtotal", money(calc.net), "quiet"],
+      ...(vatRate > 0
+        ? [[`VAT · ${(vatRate * 100).toFixed(1).replace(/\.0$/, "")}%`, money(calc.vat), "quiet"]]
+        : []),
+      ["Total", money(calc.total)],
+    ];
+    if (calc.enquiry) {
+      totalRows.push([
+        "Items on enquiry",
+        `${calc.enquiry} line${calc.enquiry > 1 ? "s" : ""}`,
+        "quiet",
+      ]);
+    }
+
+    const terms = [
+      "Valid for 30 days from the date above.",
+      bill === "yearly"
+        ? "Yearly licences are billed once and run for twelve months from activation."
+        : "Monthly licences are billed on the same day each month and can be cancelled at any time.",
+      "Licences are per PC and are assigned from your ADLM account.",
+      "Installation fees are charged once, per PC, at first setup.",
+    ];
+    if (calc.enquiry) {
+      terms.push("Lines marked on enquiry are quoted separately and are not in the total.");
+    }
+
+    return {
+      template: "invoice",
+      title: "Quotation",
+      number,
+      date: isoDate(today),
+      to: addressee,
+      toLabel: "QUOTATION FOR:",
+      meta: [
+        `Valid until ${longDate(until)}`,
+        bill === "yearly" ? "Billed yearly" : "Billed monthly",
+        `Priced in ${cur}`,
+      ],
+      metaLabel: "TERMS:",
+      blocks: [
+        {
+          type: "table",
+          columns: [
+            { label: "S/N", align: "right", width: "7%" },
+            { label: "DESCRIPTION", align: "left", width: "46%" },
+            { label: "QTY.", align: "right", width: "9%" },
+            { label: "UNIT", width: "9%" },
+            { label: "RATE", align: "right", width: "14.5%" },
+            { label: "AMOUNT", align: "right", width: "14.5%" },
+          ],
+          rows,
+        },
+        { type: "totals", rows: totalRows },
+        { type: "heading", level: 2, text: "Terms" },
+        { type: "bullets", items: terms },
+        { type: "payment" },
+        { type: "signature", label: "For ADLM Studio" },
+      ],
+    };
+  }, [calc, firm, bill, cur, money, vatRate]);
 
   return (
     <>
@@ -194,8 +382,8 @@ export default function DsQuoteBuilder() {
             <label className="qt-cur">
               <span>Show me in</span>
               <select value={cur} onChange={(e) => setCur(e.target.value)} aria-label="Currency">
-                <option value="NGN">Naira (₦)</option>
-                <option value="USD">Dollars ($)</option>
+                <option value="NGN">NGN · Nigerian naira</option>
+                <option value="USD">USD · US dollar</option>
               </select>
             </label>
           </div>
@@ -237,14 +425,78 @@ export default function DsQuoteBuilder() {
         <div className="panel rise">
           <h3>Training</h3>
           <p className="ds-sub">
-            Courses are per seat, per year. On-site training is quoted once we know the city and the
-            size of the team.
+            Courses are per seat, per year. On-site training is priced by city and team size, and
+            the class runs for the number of days shown.
           </p>
           <div id="qt-train">
             {TRAINING.map((t) => {
               const id = t.key || t.id;
+
+              // On-site training is not a counter — it is a city and a team
+              // size, which together name a row in the training-location
+              // table. His tile shape is kept; what sits inside it is a pair
+              // of selects instead of the +/- stepper.
+              if (!t.key) {
+                const site = sites.find((l) => String(l._id) === siteId) || null;
+                const fee = site
+                  ? cur === "USD"
+                    ? Number(site.trainingCostUSD || 0)
+                    : Number(site.trainingCostNGN || 0)
+                  : 0;
+                const bim = site
+                  ? cur === "USD"
+                    ? Number(site.bimInstallCostUSD || 0)
+                    : Number(site.bimInstallCostNGN || 0)
+                  : 0;
+                return (
+                  <div className={site ? "line" : "line line-off"} key={id}>
+                    <div>
+                      <b>{t.name}</b>
+                      <span>An ADLM instructor at your office &middot; priced by city and team size</span>
+                      <div className="qt-site">
+                        <select
+                          value={siteId}
+                          onChange={(e) => setSiteId(e.target.value)}
+                          aria-label="Where, and how many people"
+                        >
+                          <option value="">Choose a city and team size</option>
+                          {sites.map((l) => (
+                            <option key={l._id} value={l._id}>
+                              {l.name}
+                              {l.durationDays ? ` · ${l.durationDays} days` : ""}
+                            </option>
+                          ))}
+                        </select>
+                        {site && bim > 0 && (
+                          <label className="qt-bim">
+                            <input
+                              type="checkbox"
+                              checked={bimInstall}
+                              onChange={(e) => setBimInstall(e.target.checked)}
+                            />
+                            Set up the CAD environment on site (+{money(bim)})
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                    <div className="amt2">
+                      <span>
+                        {!site ? "On enquiry" : fee > 0 ? money(fee + (bimInstall ? bim : 0)) : "On enquiry"}
+                      </span>
+                      <small>
+                        {!site
+                          ? "Pick the city and the size of the team"
+                          : fee > 0
+                            ? `${site.city} · ${site.durationDays || 1} days, one class`
+                            : "Not priced in this currency yet"}
+                      </small>
+                    </div>
+                  </div>
+                );
+              }
+
               const n = qty[id] || 0;
-              const unit = t.key ? inCur(priceOf(t.key), "yr") : null;
+              const unit = inCur(priceOf(t.key), "yr");
               return (
                 <div className={n ? "line" : "line line-off"} key={id}>
                   <div>
@@ -279,12 +531,12 @@ export default function DsQuoteBuilder() {
           <div className="qt-form">
             <label>
               Organisation
-              <input type="text" autoComplete="organization" placeholder="Adeyemi &amp; Partners"
+              <input type="text" autoComplete="organization" placeholder="Your firm’s name"
                 value={firm.org} onChange={(e) => setFirm({ ...firm, org: e.target.value })} />
             </label>
             <label>
               Contact
-              <input type="text" autoComplete="name" placeholder="QS Babajide Gbajumo"
+              <input type="text" autoComplete="name" placeholder="Name of the person to address it to"
                 value={firm.person} onChange={(e) => setFirm({ ...firm, person: e.target.value })} />
             </label>
             <label>
@@ -294,7 +546,7 @@ export default function DsQuoteBuilder() {
             </label>
             <label className="wide">
               Address
-              <textarea rows="2" placeholder="10A Onipinla Ln, off Adeniyi Jones, Ogba, Ikeja, Lagos"
+              <textarea rows="2" placeholder="Street, area, city"
                 value={firm.addr} onChange={(e) => setFirm({ ...firm, addr: e.target.value })} />
             </label>
           </div>
@@ -309,37 +561,46 @@ export default function DsQuoteBuilder() {
           {!picked && <p className="ds-sub">Pick a licence or a course and the quotation builds itself.</p>}
           {picked && (
             <>
-              <table className="ctable">
-                <tbody>
-                  {calc.rows.map((r) => (
-                    <tr key={r.desc}>
-                      <th className="rowhead" scope="row">
-                        {r.desc}
-                        <small>
-                          {r.qty} {r.unit}
-                          {r.rate != null ? ` × ${money(r.rate)}` : ""}
-                        </small>
-                      </th>
-                      <td className="num">{r.amount == null ? "On enquiry" : money(r.amount)}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <th className="rowhead" scope="row">Subtotal</th>
-                    <td className="num">{money(calc.net)}</td>
-                  </tr>
-                  <tr>
-                    <th className="rowhead" scope="row">VAT at 7.5%</th>
-                    <td className="num">{money(calc.vat)}</td>
-                  </tr>
-                  <tr>
-                    <th className="rowhead" scope="row"><b>Total</b></th>
-                    <td className="num"><b>{money(calc.total)}</b></td>
-                  </tr>
-                </tbody>
-              </table>
+              {/* His markup exactly: one .sumrow per line, the quantity
+                  inline in <i class="qt-q">, and the description truncated at
+                  the em-dash. That truncation is the whole point — the row
+                  description carries the full "QUIV licence — 3D takeoff ·
+                  Autodesk Revit (yearly)" for the printed quotation, but the
+                  summary panel shows only "QUIV licence × 1". Rendering the
+                  long form here, in a two-column table meant for the compare
+                  grid, wrapped every line into a five-line block. */}
+              {calc.rows.map((r) => (
+                <div className="sumrow" key={r.desc}>
+                  <span>
+                    {r.desc.split(" — ")[0]}
+                    <i className="qt-q"> × {r.qty}</i>
+                  </span>
+                  <b>
+                    {r.amount == null ? (
+                      <em className="qt-none">On enquiry</em>
+                    ) : (
+                      money(r.amount)
+                    )}
+                  </b>
+                </div>
+              ))}
+              <div className="qt-hr" />
+              <div className="sumrow">
+                <span>Subtotal</span>
+                <b>{money(calc.net)}</b>
+              </div>
+              <div className="sumrow">
+                <span>VAT · 7.5%</span>
+                <b>{money(calc.vat)}</b>
+              </div>
+              <div className="sumrow qt-big">
+                <span>Total</span>
+                <b>{money(calc.total)}</b>
+              </div>
               {calc.enquiry > 0 && (
-                <p className="ds-sub" style={{ marginTop: "12px" }}>
-                  On-site training is quoted on enquiry and is not included in the total above.
+                <p className="qt-note">
+                  On-site training is quoted once we know the city and the size of the team, so it
+                  is listed on the quotation without an amount.
                 </p>
               )}
             </>
@@ -352,11 +613,7 @@ export default function DsQuoteBuilder() {
               type="button"
               className="ds-btn btn-p btn-full"
               style={{ marginTop: "22px" }}
-              onClick={() => {
-                setShowDoc(true);
-                // Let the quotation paint before the print dialog opens.
-                setTimeout(() => window.print(), 120);
-              }}
+              onClick={() => setShowDoc(true)}
             >
               See the quotation
             </button>
@@ -378,12 +635,9 @@ export default function DsQuoteBuilder() {
         )}
 
         {showDoc && (
-          <p className="ds-sub" style={{ marginTop: "14px" }}>
-            The quotation was sent to your printer — choose “Save as PDF” there to keep a copy.{" "}
-            <button type="button" className="ds-a" onClick={() => setShowDoc(false)}>
-              Dismiss
-            </button>
-          </p>
+          <React.Suspense fallback={null}>
+            <DsQuoteDoc spec={docSpec} onClose={() => setShowDoc(false)} />
+          </React.Suspense>
         )}
       </div>
     </>

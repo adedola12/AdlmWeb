@@ -106,7 +106,7 @@ export default function DsPreview({ page }) {
   // does, and is on the snag list for him rather than reproduced here.
   const isApp = APP_SCREEN.test(page.slug);
   const Shell = isApp ? DsAppShell : DsShell;
-  const shellProps = isApp ? { title: page.title } : { mapHref };
+  const shellProps = isApp ? { title: page.title, page: page.slug } : { mapHref };
 
   return (
     <div onClickCapture={onClickCapture}>

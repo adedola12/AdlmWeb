@@ -51,8 +51,11 @@ function initialsOf(text, fallback) {
  * @param {string} [props.title]            top-bar title; his dash.js reads it
  *                                          off document.title, which a SPA does
  *                                          not have per screen
+ * @param {string} [props.page]              his page name for the current
+ *                                          screen, when the route it lives at
+ *                                          is not the one the rail links to
  */
-export default function DsAppShell({ children, title = "" }) {
+export default function DsAppShell({ children, title = "", page = "" }) {
   const { user, accessToken, clear } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -126,8 +129,12 @@ export default function DsAppShell({ children, title = "" }) {
     team: "",
   };
 
-  // His dash.js marks the current item with `.on` by comparing file names.
-  // Ours compares routes: exact match, or a parent whose section this is.
+  // His dash.js marks the current item with `.on` by comparing his page names.
+  // Two things have to match here, because the rail is used from two places:
+  // on a real route the current path is what identifies the screen, but under
+  // /preview/* the path is /preview/<slug> while the rail links at /manage/*,
+  // and comparing those marks nothing at all. His page name — which the porter
+  // records on every link as data-ds-page — identifies the screen in both.
   const railRef = React.useRef(null);
   React.useEffect(() => {
     const root = railRef.current;
@@ -135,12 +142,14 @@ export default function DsAppShell({ children, title = "" }) {
     const here = location.pathname;
     root.querySelectorAll("a[href]").forEach((a) => {
       const to = a.getAttribute("href");
-      const on = to === here || (to !== "/" && here.startsWith(`${to}/`));
+      const on = page
+        ? a.getAttribute("data-ds-page") === page
+        : to === here || (to !== "/" && here.startsWith(`${to}/`));
       a.classList.toggle("on", on);
       if (on) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });
-  }, [location.pathname, counts]);
+  }, [location.pathname, page, counts]);
 
   // Below 1000px his rail is a fixed drawer that slides in on `.open`. The
   // class has to land on .dsh-rail itself — the host above renders as

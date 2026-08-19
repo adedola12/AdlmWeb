@@ -11,6 +11,7 @@ import "./index.css";
 // is inert until a page opts in by wrapping its content in <div className="ds">
 // — see client/scripts/port-ds-css.mjs for why it is scoped that way.
 import "./styles/ds.css";
+import "./styles/ds-local.css";
 
 // Apply the saved theme class BEFORE React mounts so users on dark mode
 // don't see a brief flash of light UI on reload.
