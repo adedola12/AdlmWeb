@@ -298,9 +298,31 @@ const SLOTS = {
     component: "DsCheckoutSummary",
     from: "../DsCheckoutSummary.jsx",
   },
+  DsSocialSlot: {
+    component: "SocialSignIn",
+    from: "../../components/SocialSignIn.jsx",
+  },
 };
 
 const PAGE_EDITS = {
+  // His social buttons are two dead links — <a href="dash-home"> and
+  // <a href="verify"> — with no logo on either and no Autodesk at all. They
+  // are replaced by the live component, which draws each provider's real mark,
+  // runs the PKCE flow and only renders the providers that are configured.
+  // His own divider goes with them, because the component draws its own.
+  "src/login.html": [
+    {
+      findRe: /<div class="divider">or<\/div>\s*<div class="auth2-alt">[\s\S]*?<\/div>/,
+      replace: "@@DsSocialSlot@@",
+    },
+  ],
+  "src/signup.html": [
+    {
+      findRe: /<div class="divider">or<\/div>\s*<div class="auth2-alt">[\s\S]*?<\/div>/,
+      replace: "@@DsSocialSlot@@",
+    },
+  ],
+
   // His checkout form posts nowhere: the "Pay" control is <a href="thanks">,
   // so no order was ever created — and the bank box is filled in with an
   // account that is not ours. The whole form is replaced by the live one,

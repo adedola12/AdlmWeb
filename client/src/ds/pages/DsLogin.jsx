@@ -3,8 +3,10 @@
 // Re-run the script to pick up his changes; hand edits here are lost.
 import React from "react";
 import { Link } from "react-router-dom";
+import SocialSignIn from "../../components/SocialSignIn.jsx";
 
 export default function DsLogin() {
+  const DsSocialSlot = <SocialSignIn />;
   return (
     <>
       <section className="auth2">
@@ -103,23 +105,7 @@ export default function DsLogin() {
               </button>
               {" "}
             </form>
-            {" "}
-            <div className="divider">
-              or
-            </div>
-            {" "}
-            <div className="auth2-alt">
-              {" "}
-              <Link className="ds-btn btn-o btn-full" to="/manage" data-ds-page="dash-home">
-                Continue with Google
-              </Link>
-              {" "}
-              <Link className="ds-btn btn-o btn-full" to="/manage" data-ds-page="dash-home">
-                Continue with Microsoft
-              </Link>
-              {" "}
-            </div>
-            {" "}
+            {" "}{DsSocialSlot}{" "}
             <p className="authfoot">
               Trouble signing in?{" "}
               <Link to="/contact#support" data-ds-page="contact">

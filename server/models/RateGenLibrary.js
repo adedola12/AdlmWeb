@@ -21,6 +21,11 @@ const RateItemSchema = new mongoose.Schema(
     unit: String,
     price: Number,
     category: { type: String, default: "" },
+    // The estimator's own specification for a rate they added: what the item is
+    // and what it produces. The shipped catalogue carries this for the published
+    // rates, and a rate someone adds themselves had nowhere to say it, which
+    // made their own additions the only ones on screen without a basis.
+    note: { type: String, trim: true, default: "" },
   },
   { _id: false }
 );
