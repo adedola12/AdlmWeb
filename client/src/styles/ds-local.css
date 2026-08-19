@@ -123,3 +123,24 @@
   border: 1px solid color-mix(in srgb, #e5484d 38%, transparent);
   color: var(--ink);
 }
+
+/* A product in the basket that is not finished yet. Not an error: the buyer
+ * did nothing wrong, and the sale for everything else is still live. Styled
+ * as a note rather than a failure for that reason. */
+.ds .chk-soon {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--action) 30%, transparent);
+  background: color-mix(in srgb, var(--action) 8%, transparent);
+}
+
+.ds .chk-soon b {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.ds .chk-soon p {
+  margin-bottom: 10px;
+}

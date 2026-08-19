@@ -16,11 +16,23 @@ export function readCartItems() {
   }
 }
 
+// Name of the event fired whenever the cart is written.
+//
+// The checkout form and the order summary beside it are separate components
+// reading the same localStorage key, and localStorage's own `storage` event
+// only fires in OTHER tabs. Without this, dropping a not-yet-sellable line
+// from the form left it sitting in the summary — the panel claiming a product
+// and a price the order no longer contained.
+export const CART_CHANGED = "adlm:cart-changed";
+
 export function writeCartItems(items) {
   const safe = Array.isArray(items) ? items : [];
   localStorage.setItem("cartItems", JSON.stringify(safe));
   const totalQty = safe.reduce((sum, it) => sum + Number(it.qty || 0), 0);
   localStorage.setItem("cartCount", String(totalQty));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CART_CHANGED));
+  }
   return totalQty;
 }
 
@@ -122,5 +134,8 @@ export function readCartMeta() {
 
 export function writeCartMeta(meta) {
   localStorage.setItem("cartMeta", JSON.stringify(meta || {}));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CART_CHANGED));
+  }
   return meta;
 }

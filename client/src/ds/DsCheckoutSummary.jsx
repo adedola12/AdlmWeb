@@ -11,7 +11,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { API_BASE } from "../config.js";
-import { readCartItems, readCartMeta } from "../lib/cart.js";
+import { readCartItems, readCartMeta, CART_CHANGED } from "../lib/cart.js";
 import { termTotalNGN, unitPrices } from "../lib/termPricing.js";
 
 const fmt = (n, currency = "NGN") =>
@@ -28,6 +28,15 @@ export default function DsCheckoutSummary() {
   // it travels on cartMeta. It still has to appear here, or the panel quietly
   // omits the largest figure on the order.
   const [training, setTraining] = React.useState(null);
+
+  // Re-read whenever the cart is written, not only on mount: the form beside
+  // this panel drops lines it cannot sell, and a summary that kept showing them
+  // would name a price the order does not include.
+  React.useEffect(() => {
+    const sync = () => setItems(readCartItems());
+    window.addEventListener(CART_CHANGED, sync);
+    return () => window.removeEventListener(CART_CHANGED, sync);
+  }, []);
 
   React.useEffect(() => {
     setItems(readCartItems());

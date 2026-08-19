@@ -110,13 +110,47 @@ router.post("/cart", requireAuth, async (req, res) => {
     const keys = [...new Set(items.map((i) => i.productKey).filter(Boolean))];
     if (!keys.length) return res.status(400).json({ error: "Invalid items" });
 
-    const products = await Product.find({
-      key: { $in: keys },
-      isPublished: true,
-      isComingSoon: { $ne: true },
-    }).lean();
+    // Fetched without the sellability filter, then filtered here, so the
+    // reason a line cannot be bought is known rather than inferred.
+    // "Invalid product: civil3d" was true but useless: CIVIQ is a real product
+    // that we are still building, and telling a buyer their basket is invalid
+    // when the honest answer is "that one is not finished yet" loses the sale
+    // and the waitlist signup with it.
+    const found = await Product.find({ key: { $in: keys } })
+      .lean();
 
-    const byKey = Object.fromEntries(products.map((p) => [p.key, p]));
+    const sellable = found.filter((p) => p.isPublished && !p.isComingSoon);
+    const byKey = Object.fromEntries(sellable.map((p) => [p.key, p]));
+    const products = sellable;
+
+    // Anything the buyer asked for that cannot be sold today, with the reason.
+    // Returned as data so the client can act on it — drop the line, explain the
+    // build status, offer the waitlist — instead of parsing an error string.
+    const unavailable = [];
+    for (const key of keys) {
+      if (byKey[key]) continue;
+      const p = found.find((x) => x.key === key) || null;
+      unavailable.push({
+        key,
+        name: p?.name || key,
+        reason: !p ? "unknown" : p.isComingSoon ? "coming_soon" : "unpublished",
+      });
+    }
+
+    if (unavailable.length) {
+      const soon = unavailable.filter((u) => u.reason === "coming_soon");
+      return res.status(400).json({
+        error:
+          soon.length === unavailable.length
+            ? `${soon.map((u) => u.name).join(", ")} ${
+                soon.length === 1 ? "is" : "are"
+              } still in development and cannot be bought yet.`
+            : `Some items cannot be bought: ${unavailable
+                .map((u) => u.name)
+                .join(", ")}.`,
+        unavailable,
+      });
+    }
     const fx = await getFxRate();
 
     const lines = [];
@@ -126,10 +160,14 @@ router.post("/cart", requireAuth, async (req, res) => {
 
     for (const i of items) {
       const p = byKey[i.productKey];
-      if (!p)
-        return res
-          .status(400)
-          .json({ error: `Invalid product: ${i.productKey}` });
+      // Unreachable now that `unavailable` is computed above — kept so a future
+      // change to that block cannot let an unpriced line through silently.
+      if (!p) {
+        return res.status(400).json({
+          error: `That product is not available to buy right now.`,
+          unavailable: [{ key: i.productKey, name: i.productKey, reason: "unknown" }],
+        });
+      }
 
       const seats = Math.max(parseInt(i.seats ?? i.qty ?? 1, 10) || 1, 1);
       const minSeats = minOrgSeatsFor(p.key);

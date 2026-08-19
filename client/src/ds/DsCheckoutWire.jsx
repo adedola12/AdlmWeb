@@ -21,7 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
-import { readCartItems, readCartMeta } from "../lib/cart.js";
+import { readCartItems, readCartMeta, writeCartItems } from "../lib/cart.js";
 
 const METHODS = [
   { key: "card", label: "Card · Paystack" },
@@ -70,6 +70,10 @@ export default function DsCheckoutWire() {
   const [order, setOrder] = React.useState(null); // { purchaseId, totalAmount, ... }
   const [bank, setBank] = React.useState(null);
   const [receipt, setReceipt] = React.useState(null); // uploaded URL
+  // Products the buyer picked that we cannot sell yet. CIVIQ is the live case:
+  // a real product, still being built, that the catalogue marks isComingSoon.
+  const [pending, setPending] = React.useState([]);
+  const [joined, setJoined] = React.useState(false);
   const fileRef = React.useRef(null);
 
   const total = order?.totalAmount ?? null;
@@ -172,7 +176,72 @@ export default function DsCheckoutWire() {
           "payable by transfer within 14 days.",
       });
     } catch (e) {
+      // A line we cannot sell yet must not cost us the rest of the order.
+      //
+      // The server used to answer "Invalid product: civil3d", which is true
+      // and useless: CIVIQ is a real product we are still building, and
+      // telling someone their basket is invalid loses the sale AND the
+      // waitlist signup. It now names what cannot be bought and why, so the
+      // line can be lifted out, explained, and the remaining items paid for.
+      const blocked = Array.isArray(e.data?.unavailable) ? e.data.unavailable : [];
+      const soon = blocked.filter((u) => u.reason === "coming_soon");
+      if (blocked.length) {
+        const drop = new Set(blocked.map((u) => String(u.key)));
+        const kept = readCartItems().filter((it) => !drop.has(String(it.productKey)));
+        writeCartItems(kept);
+        setItems(kept);
+        setPending(soon.length ? soon : blocked);
+
+        if (kept.length) {
+          setMsg({
+            kind: "ok",
+            text: `${blocked
+              .map((u) => u.name)
+              .join(", ")} ${blocked.length === 1 ? "is" : "are"} not on sale yet, so ${
+              blocked.length === 1 ? "it has" : "they have"
+            } been left off. Everything else is ready — press ${
+              method === "card" ? "Pay" : "the button"
+            } again to continue.`,
+          });
+        } else {
+          setMsg({
+            kind: "ok",
+            text: "That was the only item in your cart, so there is nothing to pay for yet.",
+          });
+        }
+        return;
+      }
       setMsg({ kind: "err", text: e.message || "That did not go through — please try again." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Join the waitlist for a product that is not finished. Uses the same
+  // endpoint and the same topic string as his CIVIQ form, so these land in one
+  // list in the admin rather than a second bucket nobody works.
+  const joinWaitlist = async () => {
+    setBusy(true);
+    try {
+      await fetch(`${API_BASE}/waitlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: "CIVIQ waitlist",
+          name: user?.name || billing.company || user?.email || "",
+          email: user?.email || meta?.org?.email || "",
+          org: billing.company || meta?.org?.name || "",
+          civil3d: pending.map((u) => u.name).join(", "),
+          message: "Asked for it at checkout.",
+          sourcePath: window.location.pathname,
+        }),
+      }).then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || "We could not add you to the list.");
+      });
+      setJoined(true);
+    } catch (err) {
+      setMsg({ kind: "err", text: err.message });
     } finally {
       setBusy(false);
     }
@@ -346,6 +415,33 @@ export default function DsCheckoutWire() {
             14 days. This is usually the easier route for a firm buying several seats, and it ends
             with exactly the same licences.
           </p>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="chk-soon">
+          <b>
+            {pending.map((u) => u.name).join(", ")}{" "}
+            {pending.length === 1 ? "is" : "are"} still in development
+          </b>
+          <p className="small">
+            We are building{" "}
+            {pending.length === 1 ? "it" : "them"} now and will price{" "}
+            {pending.length === 1 ? "it" : "them"} at release. Join the waitlist and you will hear
+            first — early access, and the launch price.
+          </p>
+          {joined ? (
+            <p className="small">You are on the list. We will be in touch.</p>
+          ) : (
+            <button
+              type="button"
+              className="ds-btn btn-o ds-btn-sm"
+              disabled={busy || !(user?.email || meta?.org?.email)}
+              onClick={joinWaitlist}
+            >
+              Join the waitlist
+            </button>
+          )}
         </div>
       )}
 
