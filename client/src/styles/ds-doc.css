@@ -1,0 +1,398 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/doc.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* ADLM document engine — the page frame, the type scale, the table, the totals.
+   One renderer produces every document, so this file is the only place a document
+   is shaped. Nothing here may be overridden per template except through the
+   variables at the top.
+
+   Measurements are in points and come from Figma file FLTuUcIqyEE7Ysw6SVnhoR:
+   invoice 337:55, letterhead/report 412:316. The page is A4 at 595 × 842pt, so
+   one Figma pixel is one point and the numbers transfer exactly.
+
+   Owned by the document session. See DOCUMENTS.md §9.                          */
+:root{
+  /* brand — Figma variables, unchanged */
+  --doc-navy:#091E39;         /* headings, table header, totals bars */
+  --doc-blue:#239CFF;         /* the rules top and bottom */
+  --doc-blue-700:#005BE3;     /* links */
+  --doc-orange:#E86A27;       /* the logo lockup only, never a document accent */
+  --doc-band:#E9F5FF;         /* header band, zebra rows */
+  --doc-band-soft:#F6FBFF;    /* the left tab */
+  --doc-surface:#FAFAFA;
+  --doc-line:#E0E2E7;
+
+  /* ink */
+  --doc-ink:#1E2A3A;          /* table cells */
+  --doc-body:#3D5169;         /* body copy */
+  --doc-meta:#6C819A;         /* captions, page numbers */
+
+  /* page */
+  --doc-w:210mm;    /* 595.28pt — the Figma frame is 595 wide */
+  --doc-h:297mm;    /* 841.89pt — never 842pt, or each sheet spills a blank page */
+
+  /* content insets — overridden per template on .doc-sheet */
+  --doc-top:154pt;
+  --doc-right:51pt;
+  --doc-bottom:62pt;
+  --doc-left:52pt;
+  --doc-gutter:115pt;         /* body column. Only the address and tables leave it */
+
+  /* type */
+  --doc-size:10pt;
+  --doc-lh:16pt;
+  --doc-table-size:8.8pt;
+  --doc-table-pad:9.4pt;
+}
+
+
+/* ---------------------------------------------------------------- the sheet */
+
+/* Identity lives on the sheet so one frame can be ADLM's or a practice's. The
+   renderer sets these three per document; everything else derives from them. */
+.ds .doc-sheet{
+  --doc-navy:#091E39;
+  --doc-blue:#239CFF;
+  --doc-band:#E9F5FF;
+  --doc-band-soft:#F6FBFF;
+  position:relative;
+  width:var(--doc-w);
+  height:var(--doc-h);
+  overflow:hidden;
+  background:#fff;
+  color:var(--doc-body);
+  font-family:'Lexend',system-ui,sans-serif;
+  font-size:var(--doc-size);
+  font-weight:300;
+  line-height:var(--doc-lh);
+  -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;   /* every figure in a costing document */
+}
+.ds .doc-sheet *{box-sizing:border-box}
+
+
+/* the invoice runs edge to edge and carries no header band */
+.ds .doc-sheet.doc-invoice{
+  --doc-top:64pt; --doc-right:36pt; --doc-bottom:74pt; --doc-left:35pt;
+  --doc-gutter:0pt;
+  --doc-table-size:10pt;
+  --doc-table-pad:10pt;
+}
+
+
+/* ---------------------------------------------------------------- the frame
+   Drawn once per sheet. Every page in a document carries an identical copy,
+   which is what makes page 3 look like page 1 in print as well as on screen. */
+.ds .doc-frame{position:absolute;inset:0;pointer-events:none}
+
+
+/* the blue rules, flush to both edges, full bleed */
+.ds .doc-frame::before, .ds .doc-frame::after{
+  content:"";position:absolute;left:0;right:0;height:3pt;background:var(--doc-blue)
+}
+.ds .doc-frame::before{top:0}
+.ds .doc-frame::after{bottom:0}
+
+
+/* the hairline that sits just above the bottom rule */
+.ds .doc-rule{position:absolute;left:38pt;right:33pt;top:794pt;height:.5pt;background:var(--doc-line)}
+
+
+/* header band — content pages only */
+.ds .doc-band{position:absolute;left:0;right:0;top:5pt;height:112pt;background:var(--doc-band)}
+.ds .doc-head{position:absolute;left:51pt;right:51pt;top:48pt;
+  display:flex;align-items:center;justify-content:space-between}
+.ds .doc-head img.doc-logo{height:26.6pt;width:auto;display:block}
+.ds .doc-word{font-weight:600;letter-spacing:-.03em;color:var(--doc-navy);line-height:1;
+  white-space:nowrap}
+.ds .doc-head .doc-contact{display:flex;flex-direction:column;gap:4.9pt;align-items:flex-start}
+.ds .doc-head .doc-contact div{display:flex;align-items:center;gap:2pt;
+  font-size:7.1pt;font-weight:500;line-height:1;color:var(--doc-navy);letter-spacing:-.43pt}
+.ds .doc-head .doc-contact svg{width:7.8pt;height:7.8pt;flex:none;fill:currentColor}
+.ds .doc-head .doc-social{display:flex;gap:3.4pt;align-items:center;margin-right:1.8pt}
+
+
+/* the pale tab that runs off the left edge */
+.ds .doc-tab{position:absolute;left:0;width:168pt;height:35pt;
+  background:var(--doc-band-soft);border-radius:0 20pt 20pt 0}
+.ds .doc-sheet.doc-invoice .doc-tab{background:#FBFBFB;top:77pt}
+.ds .doc-sheet:not(.doc-invoice) .doc-tab{top:179pt}
+
+
+/* ---------------------------------------------------------------- watermarks
+   Geometric, so they are drawn rather than fetched: the Figma exports expire.
+   All of it is near-white. If any of it competes with a figure, it is wrong. */
+.ds .doc-mark{position:absolute;pointer-events:none}
+.ds .doc-mark.doc-m-arc{                       /* the big pale ellipse, top right */
+  right:-51pt;top:-108pt;width:197pt;height:197pt;border-radius:50%;
+  border:14pt solid rgba(9,30,57,.045)}
+.ds .doc-mark.doc-m-ring{                      /* large circle outline, bottom right */
+  left:470pt;top:803pt;width:100pt;height:100pt;border-radius:50%;
+  border:11pt solid rgba(9,30,57,.06)}
+.ds .doc-mark.doc-m-dot{                       /* small circle, right edge */
+  left:546pt;top:356pt;width:54pt;height:54pt;border-radius:50%;
+  border:8pt solid rgba(9,30,57,.05)}
+.ds .doc-mark.doc-m-grid{                      /* 5 × 3 dot grid under the header */
+  left:537pt;width:51pt;height:33pt;
+  background-image:radial-gradient(rgba(9,30,57,.10) 1.4pt,transparent 1.5pt);
+  background-size:18pt 13pt}
+.ds .doc-sheet.doc-invoice .doc-m-grid{top:120pt}
+.ds .doc-sheet:not(.doc-invoice) .doc-m-grid{top:106pt}
+.ds .doc-mark.doc-m-x{                         /* the × marks, bottom left */
+  left:21pt;top:636pt;width:9pt;height:41pt;
+  background-image:
+    linear-gradient(45deg,transparent 45%,rgba(9,30,57,.13) 45%,rgba(9,30,57,.13) 55%,transparent 55%),
+    linear-gradient(-45deg,transparent 45%,rgba(9,30,57,.13) 45%,rgba(9,30,57,.13) 55%,transparent 55%);
+  background-size:9pt 9pt;background-repeat:repeat-y}
+.ds .doc-sheet.doc-invoice .doc-m-logo{display:none}
+.ds .doc-mark.doc-m-logo{                      /* the watermark logo, bottom left */
+  left:15pt;top:599pt;width:213.6pt;height:213.6pt;opacity:.035}
+.ds .doc-mark.doc-m-logo img{width:100%;height:100%;object-fit:contain}
+
+
+/* ---------------------------------------------------------------- content */
+.ds .doc-body{position:absolute;
+  top:var(--doc-top);right:var(--doc-right);bottom:var(--doc-bottom);left:var(--doc-left)}
+
+
+/* body copy sits in a narrow column; tables break out of it and run the full
+   width. This is the most characteristic thing about the layout — keep it. */
+.ds .doc-body > *{margin-left:var(--doc-gutter)}
+.ds .doc-body > .doc-table-wrap, .ds .doc-body > .doc-hr, .ds .doc-body > .doc-foot-row, .ds .doc-body > .doc-addr{margin-left:0}
+
+/* same specificity as the break-out rule above, or it wins and pins the bar left */
+.ds .doc-body > .doc-totals{margin-left:auto}
+
+
+/* ---------------------------------------------------------------- blocks */
+.ds .doc-h{margin:0 0 14pt var(--doc-gutter);font-size:10pt;font-weight:600;line-height:16pt;
+  color:#303030;letter-spacing:-.2pt}
+.ds .doc-h.doc-h-1{font-weight:700;text-transform:uppercase;line-height:1.45;margin-bottom:18pt}
+.ds .doc-h.doc-c{text-align:center}
+.ds .doc-h + .doc-h{margin-top:-6pt}
+
+/* a heading that follows body copy needs the space above it, not just below */
+.ds .doc-p + .doc-h, .ds .doc-ul + .doc-h, .ds .doc-table-wrap + .doc-h{margin-top:16pt}
+.ds .doc-p{margin:0 0 13pt var(--doc-gutter);font-size:10pt;font-weight:300;line-height:16pt;
+  color:#303030;letter-spacing:-.2pt;text-align:justify}
+.ds .doc-ul{margin:0 0 15pt var(--doc-gutter);padding-left:15pt;list-style:disc}
+.ds .doc-ul li{margin-bottom:6pt;font-size:10pt;font-weight:300;line-height:16pt;
+  color:#303030;letter-spacing:-.2pt;text-align:justify}
+.ds .doc-hr{height:.5pt;background:var(--doc-line);margin:12pt 0}
+.ds .doc-spacer{height:12pt}
+.ds .doc-addr{display:flex;align-items:flex-start;justify-content:space-between;gap:30pt;
+  margin-bottom:34pt}
+                 /* air between the address and the body */
+.ds .doc-addr .doc-kv{margin:0}
+.ds .doc-date{flex:none;font-size:10pt;font-weight:500;color:#3E3E3E;letter-spacing:-.2pt;
+  padding-top:1pt}
+
+
+/* key/value pairs — the bill-to block, dates, references */
+.ds .doc-kv{display:flex;gap:6pt;margin:0 0 10pt var(--doc-gutter);font-size:10pt}
+.ds .doc-kv .doc-k{font-weight:600;color:#3E3E3E;white-space:nowrap}
+.ds .doc-kv .doc-v{font-weight:500;color:#3E3E3E;line-height:1.394;letter-spacing:-.2pt}
+.ds .doc-kv .doc-v div{display:block}
+
+
+/* ---------------------------------------------------------------- the table */
+.ds .doc-table-wrap{margin:0 0 18pt}
+.ds .doc-table{width:100%;border-collapse:collapse;table-layout:fixed;
+  font-size:var(--doc-table-size);letter-spacing:-.06em}
+.ds .doc-table thead th{
+  background:var(--doc-navy);color:#fff;font-weight:600;text-align:center;
+  padding:var(--doc-table-pad);line-height:1.2;letter-spacing:-.1em}
+.ds .doc-table thead th:first-child{border-radius:4.7pt 0 0 0}
+.ds .doc-table thead th:last-child{border-radius:0 4.7pt 0 0}
+.ds .doc-table thead th.doc-l{text-align:left}
+.ds .doc-table thead th.doc-r{text-align:right}
+.ds .doc-table tbody td{
+  padding:var(--doc-table-pad);color:#303030;font-weight:400;vertical-align:top;
+  line-height:1.35;text-align:center}
+.ds .doc-table tbody td.doc-l{text-align:left}
+.ds .doc-table tbody td.doc-r{text-align:right}
+.ds .doc-table tbody tr:nth-child(even) td{background:var(--doc-band)}
+.ds .doc-table tbody tr:nth-child(odd) td{background:#fff}
+
+/* a trade heading inside a bill of quantities */
+.ds .doc-table tbody tr.doc-group td{
+  background:var(--doc-surface);font-weight:600;color:var(--doc-navy);text-align:left;
+  border-top:.5pt solid var(--doc-line)}
+
+/* the subtotal that closes a trade */
+.ds .doc-table tbody tr.doc-sub td{
+  background:#fff;font-weight:600;color:var(--doc-navy);
+  border-top:.5pt solid var(--doc-line)}
+
+/* measured but unpriced — it must look unpriced, never like zero */
+.ds .doc-table tbody tr.doc-unpriced td{color:var(--doc-meta);font-style:normal}
+.ds .doc-table tbody tr.doc-unpriced td.doc-r{letter-spacing:0}
+
+
+/* ---------------------------------------------------------------- totals */
+.ds .doc-totals{width:246pt;margin-left:auto;display:flex;flex-direction:column;gap:2.8pt}
+.ds .doc-sheet.doc-invoice .doc-totals{width:262pt;gap:3pt}
+.ds .doc-totals .doc-bar{
+  background:var(--doc-navy);border-radius:3.8pt;
+  display:flex;align-items:center;justify-content:space-between;
+  min-height:30pt;padding:4.7pt 18.8pt;color:#fff}
+.ds .doc-sheet.doc-invoice .doc-totals .doc-bar{min-height:32pt;padding:5pt 20pt}
+.ds .doc-totals .doc-bar span{padding:4.7pt 9.4pt;font-size:var(--doc-table-size);font-weight:600}
+.ds .doc-totals .doc-bar .doc-amt{white-space:nowrap}
+
+/* a lighter box: the same bar, outlined rather than filled, so the eye lands on the
+   one figure that is owed rather than on three of equal weight */
+.ds .doc-totals .doc-bar.doc-soft{background:var(--doc-band);color:var(--doc-navy);
+  border:.75pt solid color-mix(in srgb,var(--doc-navy) 22%,transparent)}
+.ds .doc-totals .doc-bar.doc-soft span{font-weight:400}
+.ds .doc-totals .doc-bar.doc-soft .doc-amt{font-weight:500}
+
+
+/* a quiet row for a subtotal or a tax line, so the navy is reserved for money owed */
+.ds .doc-totals .doc-bar.doc-quiet{
+  background:transparent;color:var(--doc-navy);min-height:0;padding:0 18.8pt;
+  border-bottom:.5pt solid var(--doc-line);border-radius:0}
+.ds .doc-totals .doc-bar.doc-quiet span{font-weight:400;padding:5pt 9.4pt}
+
+
+/* ---------------------------------------------------------------- payment + signature */
+.ds .doc-foot-row{position:absolute;left:0;right:0;bottom:0;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:40pt}
+.ds .doc-pay{font-size:11pt;line-height:1.28;color:var(--doc-navy)}
+.ds .doc-pay b{display:block;font-weight:600}
+.ds .doc-pay div{font-weight:300}
+.ds .doc-sign{width:162.5pt;text-align:center}
+.ds .doc-body > .doc-sign{margin-left:var(--doc-gutter);margin-top:6pt}
+.ds .doc-sign img{display:block;height:32.5pt;width:auto;margin:0 auto}
+.ds .doc-sign .doc-line{height:.75pt;background:#3E3E3E;margin-top:1pt}
+.ds .doc-sign .doc-cap{margin-top:3pt;font-size:7.7pt;color:#444;font-weight:400}
+
+
+/* ---------------------------------------------------------------- page foot */
+.ds .doc-pagefoot{position:absolute;left:52pt;right:51pt;top:800pt;
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:7pt;font-weight:300;color:var(--doc-meta)}
+.ds .doc-pagefoot .doc-credit{letter-spacing:.01em}
+
+
+/* ---------------------------------------------------------------- invoice head */
+.ds .doc-invhead{display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:17pt}
+.ds .doc-invhead img.doc-logo{height:24pt;width:auto;display:block}
+.ds .doc-invhead .doc-title{text-align:right}
+.ds .doc-invhead .doc-title b{display:block;font-size:32pt;font-weight:700;line-height:1;
+  color:var(--doc-navy);letter-spacing:-2.56pt}
+.ds .doc-invhead .doc-title span{display:block;margin-top:4pt;font-size:10pt;font-weight:400;
+  color:#3E3E3E;letter-spacing:-.5pt}
+
+
+/* a receipt says so, loudly enough to be read and quietly enough to print */
+.ds .doc-stamp{position:absolute;right:52pt;top:300pt;transform:rotate(-14deg);
+  border:2.5pt solid rgba(18,161,80,.55);color:rgba(18,161,80,.75);
+  border-radius:6pt;padding:6pt 18pt;font-size:24pt;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;pointer-events:none}
+
+
+/* ================================================================ screen
+   The preview is the document — there is no separate print version. On screen
+   the sheets are simply stacked on a grey ground and scaled to fit.          */
+.ds .doc-stage{background:#8A8F98;padding:24px;display:flex;flex-direction:column;
+  align-items:center;gap:20px;min-height:100%}
+.ds .doc-stage .doc-sheet{box-shadow:0 10px 40px rgba(4,12,22,.28);flex:none}
+.ds .doc-zoom{transform-origin:top center}
+@media print{
+@page{size:A4;margin:0}
+:root, .ds{margin:0;padding:0;background:#fff;width:auto;height:auto;overflow:visible}
+.ds .nav, .ds .npanel, .ds .mnav, .ds .promo, .ds .foot, .ds footer, .ds .doc-noprint{display:none !important}
+.ds .ds *{visibility:hidden}
+.ds .doc-stage, .ds .doc-stage *{visibility:visible}
+.ds .doc-stage{background:#fff;padding:0;gap:0;display:block;min-height:0}
+.ds .doc-stage .doc-sheet{box-shadow:none;margin:0;break-after:page;page-break-after:always;
+    break-inside:avoid;page-break-inside:avoid;width:210mm;height:296.8mm}
+.ds .doc-stage .doc-sheet:last-child{break-after:auto;page-break-after:auto}
+.ds .doc-zoom{transform:none !important}
+
+  /* the preview is an app shell: full height, nothing scrolls but the stage.
+     All of that has to be unwound for print, and it out-specifies a bare
+     html,body reset — which is why a three-page bill printed as one page. */
+:root.doc-app, :root.doc-app body{height:auto;overflow:visible}
+.ds .docp{display:block;height:auto;overflow:visible}
+.ds .docp-side, .ds .docp-bar{display:none}
+.ds .docp-main{display:block;overflow:visible}
+.ds .docp-main .doc-stage{overflow:visible}
+
+
+  /* a table that is split across sheets repeats its header on each one */
+.ds .doc-table thead{display:table-header-group}
+.ds .doc-table tr{break-inside:avoid;page-break-inside:avoid}
+.ds .doc-noprint{display:none !important}
+}
+@media screen{
+
+  /* the shared nav and footer are injected into every built page; a document
+     screen is an application surface and shows neither */
+:root.doc-app, :root.doc-app body{height:100%;overflow:hidden}
+.ds .doc-app .nav, .ds .doc-app .npanel, .ds .doc-app .mnav, .ds .doc-app .promo, .ds .doc-app > .foot, .ds .doc-app > footer{display:none}
+
+
+  /* ================================================================ preview screen
+     Chrome around the document, never part of it. Everything here is doc-noprint
+     or outside .doc-stage, so a print carries the sheets and nothing else.     */
+.ds .docp{display:grid;grid-template-columns:264px 1fr;height:100dvh;overflow:hidden;
+    background:var(--bg-alt,#F4F6F9);font-family:Lexend,system-ui,sans-serif}
+.ds .docp-side{border-right:1px solid var(--line,#E0E2E7);background:var(--bg,#fff);
+    padding:0 14px 24px;overflow-y:auto}
+.ds .docp-brandbar{padding:20px 8px 16px;border-bottom:1px solid var(--line,#E0E2E7);
+    margin:0 -14px 16px;padding-left:22px;padding-right:22px}
+.ds .docp-brandbar b{display:block;font-size:15px;font-weight:500;color:var(--ink,#091E39)}
+.ds .docp-brandbar span{display:block;margin-top:2px;font-size:12px;font-weight:300;
+    color:var(--ink-3,#6C819A)}
+.ds .docp-grp{font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;font-weight:500;
+    color:var(--ink-3,#6C819A);padding:0 8px;margin:18px 0 8px}
+.ds .docp-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.ds .docp-list button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+    border:0;background:none;cursor:pointer;font:inherit;font-size:13.5px;
+    color:var(--ink-2,#3D5169);padding:8px 10px;border-radius:10px;
+    transition:background 180ms ease,color 180ms ease}
+.ds .docp-list button:hover{background:#E9F5FF;color:var(--ink,#091E39)}
+.ds .docp-list button.on{background:#E9F5FF;color:#005BE3;font-weight:500}
+.ds .docp-list .n{flex:none;width:18px;height:18px;border-radius:6px;display:grid;
+    place-items:center;font-size:10px;font-weight:500;background:rgba(9,30,57,.06);
+    color:var(--ink-3,#6C819A)}
+.ds .docp-list button.on .n{background:#239CFF;color:#fff}
+.ds .docp-seg{display:flex;gap:2px;padding:3px;border-radius:11px;
+    border:1px solid var(--line,#E0E2E7);background:var(--bg-alt,#F4F6F9)}
+.ds .docp-seg button{flex:1 1 auto;padding:6px 8px;border:0;border-radius:8px;background:none;
+    cursor:pointer;font:inherit;font-size:11.5px;color:var(--ink-3,#6C819A);white-space:nowrap}
+.ds .docp-seg button.on{background:#fff;color:var(--ink,#091E39);font-weight:500;
+    box-shadow:0 1px 3px rgba(4,12,22,.1)}
+.ds .docp-note{margin:10px 8px 0;font-size:11.5px;font-weight:300;line-height:1.55;
+    color:var(--ink-3,#6C819A)}
+.ds .docp-acts{margin-top:18px}
+.ds .docp-main{min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.ds .docp-bar{flex:none;display:flex;align-items:flex-end;justify-content:space-between;
+    gap:24px;padding:20px 28px 16px;border-bottom:1px solid var(--line,#E0E2E7);
+    background:var(--bg,#fff)}
+.ds .docp-bar h1{margin:0;font-size:22px;font-weight:500;letter-spacing:-.03em;
+    color:var(--ink,#091E39)}
+.ds .docp-bar p{margin:5px 0 0;font-size:13px;font-weight:300;color:var(--ink-3,#6C819A);
+    max-width:64ch}
+.ds .docp-count{flex:none;font-size:12px;color:var(--ink-3,#6C819A);
+    font-variant-numeric:tabular-nums}
+.ds .docp-main .doc-stage{flex:1 1 auto;overflow-y:auto}
+@media (max-width:900px){
+.ds .docp{grid-template-columns:1fr}
+.ds .docp-side{display:none}
+}
+}
+
+
+/* --- fonts: generated by tools/mkdocfonts.js, do not hand-edit below --- */

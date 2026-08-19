@@ -65,7 +65,7 @@ export default function DsLogin() {
               </Link>
             </p>
             {" "}
-            <form action="/dashboard" method="get">
+            <form action="/manage" method="get">
               {" "}
               <div className="ds-field">
                 <label htmlFor="le">
@@ -110,11 +110,11 @@ export default function DsLogin() {
             {" "}
             <div className="auth2-alt">
               {" "}
-              <Link className="ds-btn btn-o btn-full" to="/dashboard" data-ds-page="dash-home">
+              <Link className="ds-btn btn-o btn-full" to="/manage" data-ds-page="dash-home">
                 Continue with Google
               </Link>
               {" "}
-              <Link className="ds-btn btn-o btn-full" to="/dashboard" data-ds-page="dash-home">
+              <Link className="ds-btn btn-o btn-full" to="/manage" data-ds-page="dash-home">
                 Continue with Microsoft
               </Link>
               {" "}

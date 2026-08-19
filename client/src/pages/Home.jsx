@@ -231,7 +231,10 @@ export default function Home() {
                 <StaggerItem>
                   <div className="mb-6 inline-flex items-center gap-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-adlm-blue-500" />
-                    <Eyebrow tone="onDark">Trusted by 1,000+ QS Professionals</Eyebrow>
+                    {/* 800+ is the figure the About page and the company
+                        profile both carry. This said 1,000+, which is the kind
+                        of discrepancy a firm finds during diligence. */}
+                    <Eyebrow tone="onDark">Trusted by 800+ QS Professionals</Eyebrow>
                   </div>
                 </StaggerItem>
 

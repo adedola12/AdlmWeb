@@ -1,0 +1,745 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/dash.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* ADLM dashboard — the signed-in hub.
+   Isolated from site.css on purpose: the marketing session edits that file concurrently.
+   Everything here is scoped under .dash (set on <body> by dash.js) or .dsh-* classes,
+   so nothing in this file can reach a marketing page.
+   Tokens are borrowed from site.css — do not redefine them here.               */
+:root{ --dash-rail:264px; --dash-bar:64px; }
+
+
+/* ---------------------------------------------------------------- frame
+   The dashboard is an application shell, not a page in the marketing flow.
+   It owns the viewport: nothing outside .dsh scrolls, and only the main
+   column moves. The marketing chrome build.js injects is hidden outright —
+   its jobs (logo home, account menu) move into the rail and the app bar.  */
+:root.dash-root, :root.dash-root body{height:100%;overflow:hidden}
+.ds .dash{background:var(--bg-alt)}
+
+/* the marketing chrome only — scoped to direct children, because the modal has a
+   <footer> of its own and a bare `.dash footer` swallowed it */
+.ds .dash .nav, .ds .dash .npanel, .ds .dash .mnav, .ds .dash .promo, .ds .dash > .foot, .ds .dash > footer{display:none}
+.ds .dsh{height:100dvh;display:grid;grid-template-columns:var(--dash-rail) 1fr;
+  overflow:hidden;background:var(--bg-alt)}
+.ds .dsh-main{min-width:0;min-height:0;height:100%;overflow-y:auto;overscroll-behavior:contain;
+  background:var(--bg)}
+.ds .dsh-main::-webkit-scrollbar{width:10px}
+.ds .dsh-main::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:10px}
+.ds .dsh-in{max-width:none;padding:28px 36px 72px}
+   /* Richard: the dashboard fills the viewport */
+
+
+/* ---------------------------------------------------------------- app bar */
+.ds .dsh-top{position:sticky;top:0;z-index:70;height:var(--dash-bar);flex:none;
+  display:flex;align-items:center;gap:14px;padding:0 36px;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);
+  border-bottom:1px solid var(--line)}
+.ds .dsh-top .ttl{font-size:15px;font-weight:500;letter-spacing:-.012em;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .dsh-top .sp{margin-left:auto}
+.ds .dsh-burger{display:none;flex:none;width:36px;height:36px;border-radius:11px;cursor:pointer;
+  border:1px solid var(--line);background-image:var(--card-fill);
+  align-items:center;justify-content:center;color:var(--ink-2)}
+.ds .dsh-burger svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round}
+.ds .dsh-search{position:relative;flex:0 1 300px;min-width:0}
+.ds .dsh-search input{width:100%;height:36px;border-radius:11px;border:1px solid var(--line);
+  background:var(--bg-alt);color:var(--ink);font:inherit;font-size:13px;font-weight:300;
+  padding:0 12px 0 34px;transition:border-color 220ms var(--e-out)}
+.ds .dsh-search input::placeholder{color:var(--ink-3)}
+.ds .dsh-search input:focus{outline:none;border-color:var(--action)}
+.ds .dsh-search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);
+  width:15px;height:15px;fill:none;stroke:var(--ink-3);stroke-width:1.9;stroke-linecap:round;
+  pointer-events:none}
+.ds .dsh-bell{position:relative;flex:none;width:36px;height:36px;border-radius:11px;cursor:pointer;
+  border:1px solid var(--line);background-image:var(--card-fill);display:grid;place-items:center;
+  color:var(--ink-2);transition:border-color 220ms var(--e-out)}
+.ds .dsh-bell:hover{border-color:var(--line-2)}
+.ds .dsh-bell svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .dsh-bell .n{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:999px;
+  background:var(--accent);color:#fff;font-size:10px;font-weight:600;line-height:16px;
+  padding:0 4px;font-variant-numeric:tabular-nums}
+.ds .dsh-acc{position:relative;flex:none}
+
+
+/* ---------------------------------------------------------------- side nav */
+.ds .dsh-rail{position:relative;z-index:60;height:100%;min-height:0;
+  display:flex;flex-direction:column;
+  background:var(--bg-alt);border-right:1px solid var(--line);
+  overflow-y:auto;overscroll-behavior:contain;padding:0 14px 28px}
+.ds .dsh-brand{position:sticky;top:0;z-index:2;flex:none;display:flex;align-items:center;
+  height:var(--dash-bar);margin:0 -14px 14px;padding:0 20px;
+  background:var(--bg-alt);border-bottom:1px solid var(--line)}
+.ds .dsh-brand img{height:26px;width:auto}
+.ds .dsh-rail::-webkit-scrollbar{width:8px}
+.ds .dsh-rail::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px}
+
+
+/* account switcher */
+.ds .dsh-acct{display:flex;align-items:center;gap:11px;width:100%;text-align:left;cursor:pointer;
+  padding:11px 12px;margin-bottom:18px;border-radius:14px;border:1px solid var(--line);
+  background-image:var(--card-fill);transition:border-color 220ms var(--e-out)}
+.ds .dsh-acct:hover{border-color:var(--line-2)}
+.ds .dsh-avi{width:34px;height:34px;flex:none;border-radius:11px;display:grid;place-items:center;
+  font-size:12.5px;font-weight:600;letter-spacing:.02em;color:#fff;
+  background:linear-gradient(150deg,var(--navy-850),var(--navy-950))}
+.ds .dsh-acct b{display:block;font-size:13.5px;font-weight:500;color:var(--ink);line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .dsh-acct span{display:block;font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.ds .dsh-acct .caret{margin-left:auto;flex:none;opacity:.5}
+.ds .dsh-grp{font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:500;padding:0 12px;margin:20px 0 8px}
+.ds .dsh-nav{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.ds .dsh-nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:11px;
+  font-size:14px;font-weight:400;color:var(--ink-2);text-decoration:none;position:relative;
+  transition:background 200ms var(--e-out),color 200ms var(--e-out)}
+.ds .dsh-nav a:hover{background:var(--pal-light-wash);color:var(--ink)}
+.ds .dsh-nav a svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.75}
+.ds .dsh-nav a.on{background:var(--pal-light-wash);color:var(--pal-light-key);font-weight:500}
+.ds .dsh-nav a.on svg{opacity:1}
+.ds .dsh-nav a.on::before{content:"";position:absolute;left:-14px;top:7px;bottom:7px;width:3px;
+  border-radius:0 3px 3px 0;background:var(--action)}
+.ds .dsh-nav .tail{margin-left:auto;font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+
+/* product sub-list */
+.ds .dsh-sub{list-style:none;margin:2px 0 2px;padding:0 0 0 12px;display:grid;gap:1px}
+.ds .dsh-sub a{padding:7px 10px;font-size:13.5px;border-radius:10px;gap:10px}
+.ds .dsh-sub img{width:22px;height:22px;flex:none;object-fit:contain}
+.ds .dsh-sub a.off{color:var(--ink-3)}
+.ds .dsh-sub a.off img{filter:grayscale(1);opacity:.42}
+.ds .dsh-sub a.off:hover{color:var(--ink-2)}
+.ds .dsh-sub .add{margin-left:auto;font-size:11px;color:var(--action);opacity:0;
+  transition:opacity 200ms var(--e-out)}
+.ds .dsh-sub a.off:hover .add{opacity:1}
+.ds .dsh-sub .soon{margin-left:auto;font-size:10px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--ink-3)}
+.ds .dsh-rule{height:1px;background:var(--line);margin:20px 12px}
+
+
+/* ---------------------------------------------------------------- signed-in header */
+.ds .dash .nav-act .ds-btn{display:none}
+.ds .dsh-me{display:flex;align-items:center;gap:9px;padding:5px 12px 5px 6px;border-radius:999px;
+  border:1px solid var(--line);background-image:var(--card-fill);cursor:pointer;
+  font-size:13px;color:var(--ink);transition:border-color 220ms var(--e-out)}
+.ds .dsh-me:hover{border-color:var(--line-2)}
+.ds .dsh-me .dsh-avi{width:28px;height:28px;border-radius:9px;font-size:11px}
+.ds .dsh-menu{position:absolute;top:calc(100% + 10px);right:0;min-width:216px;z-index:95;
+  border-radius:16px;border:1px solid var(--line);background:var(--bg);
+  box-shadow:0 22px 60px rgba(4,12,22,.20);padding:8px;
+  opacity:0;visibility:hidden;transform:translateY(-6px);
+  transition:opacity 200ms var(--e-out),transform 200ms var(--e-out),visibility 200ms}
+.ds .dsh-menu.on{opacity:1;visibility:visible;transform:none}
+.ds .dsh-menu .who{padding:10px 12px 12px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.ds .dsh-menu .who b{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-menu .who span{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
+.ds .dsh-menu a{display:block;padding:9px 12px;border-radius:10px;font-size:13.5px;
+  color:var(--ink-2);text-decoration:none}
+.ds .dsh-menu a:hover{background:var(--pal-light-wash);color:var(--ink)}
+.ds .dsh-menu a.out{color:var(--ink-3)}
+.ds .nav-act{position:relative}
+
+
+/* ---------------------------------------------------------------- page head */
+.ds .dsh-head{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;
+  margin-bottom:30px;flex-wrap:wrap}
+.ds .dsh-head h1{font-size:31px;font-weight:500;letter-spacing:-.032em;line-height:1.1;margin:0;
+  color:var(--ink)}
+.ds .dsh-head p{margin:9px 0 0;font-size:14.5px;font-weight:300;color:var(--ink-3);max-width:62ch}
+.ds .dsh-head .when{font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ds .dsh-acts{display:flex;gap:10px;flex-wrap:wrap}
+
+
+/* ---------------------------------------------------------------- stat tiles */
+.ds .dsh-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:26px}
+.ds .dsh-stat{position:relative;border-radius:16px;border:1px solid var(--line);padding:18px 20px;
+  background-image:var(--card-fill);overflow:hidden}
+.ds .dsh-stat .k{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:8px}
+.ds .dsh-stat .k svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .dsh-stat b{display:block;font-size:29px;font-weight:500;letter-spacing:-.035em;color:var(--ink);
+  margin-top:10px;line-height:1;font-variant-numeric:tabular-nums}
+.ds .dsh-stat .u{font-size:13px;color:var(--ink-3);margin-left:5px;font-weight:300;letter-spacing:0}
+.ds .dsh-stat .ds-sub{font-size:12px;color:var(--ink-3);margin-top:8px}
+.ds .dsh-stat.pal-on{background-image:var(--pal-light-fill);border-color:var(--pal-light-line)}
+.ds .dsh-stat.pal-on .k, .ds .dsh-stat.pal-on .ds-sub{color:var(--pal-light-key)}
+.ds .dsh-stat.warn{background-image:var(--pal-orange-fill);border-color:var(--pal-orange-line)}
+.ds .dsh-stat.warn .k, .ds .dsh-stat.warn .ds-sub{color:var(--pal-orange-key)}
+
+
+/* ---------------------------------------------------------------- panels */
+.ds .dsh-cols{display:grid;grid-template-columns:1.55fr 1fr;gap:20px;align-items:start}
+.ds .dsh-panel{border-radius:18px;border:1px solid var(--line);background-image:var(--card-fill);
+  overflow:hidden}
+.ds .dsh-panel + .dsh-panel{margin-top:20px}
+.ds .dsh-ph{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:18px 22px;border-bottom:1px solid var(--line)}
+.ds .dsh-ph h2{font-size:15.5px;font-weight:500;letter-spacing:-.01em;margin:0;color:var(--ink)}
+.ds .dsh-ph .more{font-size:12.5px;color:var(--action);text-decoration:none}
+.ds .dsh-ph .more:hover{text-decoration:underline}
+.ds .dsh-body{padding:8px 22px 20px}
+
+
+/* product rows */
+.ds .dsh-prod{display:flex;align-items:center;gap:14px;padding:15px 0;
+  border-bottom:1px solid var(--line)}
+.ds .dsh-prod:last-child{border-bottom:none}
+.ds .dsh-prod > img{width:38px;height:38px;flex:none;object-fit:contain}
+.ds .dsh-prod .nm{min-width:0;flex:1 1 auto}
+.ds .dsh-prod .nm b{display:block;font-size:14.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-prod .nm span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px;
+  font-variant-numeric:tabular-nums}
+.ds .dsh-prod .seats{font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+.ds .dsh-prod .go{display:flex;align-items:center;gap:8px;flex:none}
+
+
+/* attention list */
+.ds .dsh-att{list-style:none;margin:0;padding:0}
+.ds .dsh-att li{display:flex;gap:13px;align-items:flex-start;padding:14px 0;
+  border-bottom:1px solid var(--line)}
+.ds .dsh-att li:last-child{border-bottom:none}
+.ds .dsh-att .dot{width:26px;height:26px;flex:none;border-radius:9px;display:grid;place-items:center;
+  background:var(--pal-light-wash)}
+.ds .dsh-att .dot svg{width:14px;height:14px;fill:none;stroke:var(--pal-light-key);stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .dsh-att li.warn .dot{background:var(--pal-orange-wash)}
+.ds .dsh-att li.warn .dot svg{stroke:var(--pal-orange-key)}
+.ds .dsh-att b{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-att p{margin:3px 0 0;font-size:12.5px;font-weight:300;color:var(--ink-3);line-height:1.55}
+.ds .dsh-att a.act{margin-left:auto;flex:none;font-size:12.5px;color:var(--action);
+  text-decoration:none;white-space:nowrap}
+.ds .dsh-att a.act:hover{text-decoration:underline}
+
+
+/* activity feed */
+.ds .dsh-feed{list-style:none;margin:0;padding:0}
+.ds .dsh-feed li{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);
+  font-size:13px;color:var(--ink-2);font-weight:300;line-height:1.5}
+.ds .dsh-feed li:last-child{border-bottom:none}
+.ds .dsh-feed .tick{width:7px;height:7px;flex:none;border-radius:50%;margin-top:6px;
+  background:var(--action)}
+.ds .dsh-feed .tick.ds-a{background:var(--accent)}
+.ds .dsh-feed .tick.g{background:var(--ok,#12A150)}
+.ds .dsh-feed b{font-weight:500;color:var(--ink)}
+.ds .dsh-feed .ago{margin-left:auto;flex:none;font-size:11.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums}
+
+
+/* installer hub band */
+.ds .dsh-hub{border-radius:18px;overflow:hidden;position:relative;padding:26px 28px;
+  background:linear-gradient(140deg,var(--navy-850),var(--navy-950));
+  border:1px solid rgba(255,255,255,.10)}
+.ds .dsh-hub::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(circle at 88% 8%,rgba(35,156,255,.30),transparent 58%),
+    radial-gradient(rgba(255,255,255,.10) 1.4px,transparent 1.5px);
+  background-size:100% 100%,22px 22px}
+.ds .dsh-hub > *{position:relative;z-index:2}
+.ds .dsh-hub h3{font-size:18px;font-weight:500;letter-spacing:-.02em;margin:0 0 8px;color:#fff}
+.ds .dsh-hub p{margin:0 0 18px;font-size:13.5px;font-weight:300;color:#B7C8DA;line-height:1.6}
+.ds .dsh-hub .meta{margin-top:14px;font-size:11.5px;color:#8EA3BC;
+  font-variant-numeric:tabular-nums}
+
+
+/* course progress */
+.ds .dsh-course{padding:14px 0;border-bottom:1px solid var(--line)}
+.ds .dsh-course:last-child{border-bottom:none}
+.ds .dsh-course .top{display:flex;align-items:baseline;justify-content:space-between;gap:14px}
+.ds .dsh-course b{font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-course .pc{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ds .dsh-bar{height:6px;border-radius:6px;background:var(--line);margin-top:9px;overflow:hidden}
+.ds .dsh-bar i{display:block;height:100%;border-radius:6px;
+  background:linear-gradient(90deg,var(--action),var(--blue-400,#5CB8FF))}
+.ds .dsh-course p{margin:8px 0 0;font-size:12.5px;font-weight:300;color:var(--ink-3)}
+
+
+/* ---------------------------------------------------------------- responsive */
+@media (max-width:1180px){
+.ds .dsh-stats{grid-template-columns:repeat(2,1fr)}
+.ds .dsh-cols{grid-template-columns:1fr}
+}
+
+/* Below 1000px the rail leaves the grid and becomes a drawer behind the app-bar button. */
+@media (max-width:1000px){
+.ds .dsh{grid-template-columns:1fr}
+.ds .dsh-rail{position:fixed;top:0;left:0;bottom:0;width:var(--dash-rail);z-index:90;
+    transform:translateX(-100%);transition:transform 280ms var(--e-out);
+    box-shadow:0 0 60px rgba(4,12,22,.28)}
+.ds .dsh-rail.open{transform:none}
+.ds .dsh-scrim{position:fixed;inset:0;z-index:80;background:rgba(4,12,22,.42);
+    opacity:0;visibility:hidden;transition:opacity 240ms var(--e-out),visibility 240ms}
+.ds .dsh-scrim.on{opacity:1;visibility:visible}
+.ds .dsh-burger{display:flex}
+.ds .dsh-top{padding:0 20px}
+.ds .dsh-in{padding:24px 20px 56px}
+.ds .dsh-search{display:none}
+}
+
+
+/* ================================================================ pages 4-9 */
+
+
+/* product grid — dash-products */
+.ds .dsh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+.ds .dsh-card{position:relative;border-radius:18px;border:1px solid var(--line);padding:22px;
+  background-image:var(--card-fill);display:flex;flex-direction:column;min-height:238px;
+  transition:border-color 260ms var(--e-out),transform 260ms var(--e-out)}
+.ds .dsh-card:hover{border-color:var(--line-2);transform:translateY(-3px)}
+.ds .dsh-card .top{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+.ds .dsh-card img.picon{width:42px;height:42px;flex:none;object-fit:contain}
+.ds .dsh-card h3{font-size:17px;font-weight:500;letter-spacing:-.02em;margin:0;color:var(--ink)}
+.ds .dsh-card .ver{font-size:12.5px;color:var(--ink-3);margin-top:3px;
+  font-variant-numeric:tabular-nums;display:block}
+.ds .dsh-card > p{margin:0 0 16px;font-size:13.5px;font-weight:300;line-height:1.6;color:var(--ink-3)}
+.ds .dsh-card .foot2{margin-top:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ds .dsh-card .pill{margin-left:auto}
+.ds .dsh-card.off{background-image:none;background:var(--bg-alt);border-style:dashed}
+.ds .dsh-card.off img.picon{filter:grayscale(1);opacity:.5}
+.ds .dsh-card.off h3{color:var(--ink-2)}
+.ds .dsh-card .price{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.ds .dsh-card .price b{font-weight:500;color:var(--ink)}
+
+
+/* two-column page body */
+.ds .dsh-two{display:grid;grid-template-columns:1.6fr 1fr;gap:20px;align-items:start}
+.ds .dsh-three{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+
+
+/* key / value rows — billing, settings, one product */
+.ds .dsh-kv{display:grid;gap:0}
+.ds .dsh-kv > div{display:flex;align-items:baseline;justify-content:space-between;gap:20px;
+  padding:13px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.ds .dsh-kv > div:last-child{border-bottom:none}
+.ds .dsh-kv span{color:var(--ink-3);font-weight:300}
+.ds .dsh-kv b{font-weight:500;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+
+
+/* seat / product chips */
+.ds .dsh-chips{display:flex;gap:6px;flex-wrap:wrap}
+.ds .dsh-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 5px;
+  border-radius:999px;border:1px solid var(--line);background:var(--bg);
+  font-size:11.5px;color:var(--ink-2)}
+.ds .dsh-chip img{width:16px;height:16px;object-fit:contain}
+.ds .dsh-chip.none{padding:4px 10px;color:var(--ink-3);border-style:dashed}
+
+
+/* tables inside panels — .tbl comes from site.css, this is the dashboard skin */
+.ds .dsh-panel .tbl-wrap{border:0;border-radius:0;background:transparent}
+.ds .dsh-panel .tbl thead th{background:transparent;border-bottom:1px solid var(--line);
+  padding:10px 22px}
+.ds .dsh-panel .tbl td, .ds .dsh-panel .tbl th{padding:14px 22px}
+.ds .dsh-panel .tbl tbody tr:last-child td{border-bottom:none}
+.ds .dsh-who{display:flex;align-items:center;gap:11px}
+.ds .dsh-who .dsh-avi{width:32px;height:32px;border-radius:10px;font-size:11px}
+.ds .dsh-who b{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-who span{display:block;font-size:12px;color:var(--ink-3)}
+
+
+/* seat meter */
+.ds .dsh-meter{display:grid;gap:14px}
+.ds .dsh-meter .row{display:grid;gap:7px}
+.ds .dsh-meter .lab{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-size:13px;color:var(--ink-2)}
+.ds .dsh-meter .lab b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ds .dsh-meter .track{height:7px;border-radius:7px;background:var(--line);overflow:hidden}
+.ds .dsh-meter .track i{display:block;height:100%;border-radius:7px;background:var(--action)}
+.ds .dsh-meter .track i.full{background:var(--accent)}
+
+
+/* download rows */
+.ds .dsh-dl{display:flex;align-items:center;gap:16px;padding:16px 0;
+  border-bottom:1px solid var(--line)}
+.ds .dsh-dl:last-child{border-bottom:none}
+.ds .dsh-dl > img{width:36px;height:36px;flex:none;object-fit:contain}
+.ds .dsh-dl .ic{width:36px;height:36px;flex:none;border-radius:11px;display:grid;place-items:center;
+  background:var(--pal-light-wash)}
+.ds .dsh-dl .ic svg{width:17px;height:17px;fill:none;stroke:var(--pal-light-key);stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.ds .dsh-dl .nm{flex:1 1 auto;min-width:0}
+.ds .dsh-dl .nm b{display:block;font-size:14px;font-weight:500;color:var(--ink)}
+.ds .dsh-dl .nm span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px;
+  font-variant-numeric:tabular-nums}
+
+
+/* release notes */
+.ds .dsh-rel{position:relative;padding:0 0 0 26px;margin:0;list-style:none}
+.ds .dsh-rel::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:1px;
+  background:var(--line)}
+.ds .dsh-rel li{position:relative;padding:0 0 20px}
+.ds .dsh-rel li:last-child{padding-bottom:2px}
+.ds .dsh-rel li::before{content:"";position:absolute;left:-24px;top:5px;width:9px;height:9px;
+  border-radius:50%;background:var(--bg);border:2px solid var(--line-2)}
+.ds .dsh-rel li.now::before{border-color:var(--action);background:var(--action)}
+.ds .dsh-rel .v{font-size:13px;font-weight:500;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.ds .dsh-rel .d{font-size:11.5px;color:var(--ink-3);margin-left:8px}
+.ds .dsh-rel p{margin:5px 0 0;font-size:13px;font-weight:300;line-height:1.6;color:var(--ink-3)}
+
+
+/* support ticket list */
+.ds .dsh-tkt{display:flex;align-items:center;gap:14px;padding:15px 0;
+  border-bottom:1px solid var(--line)}
+.ds .dsh-tkt:last-child{border-bottom:none}
+.ds .dsh-tkt .ref{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;
+  width:96px;flex:none}
+.ds .dsh-tkt .nm{flex:1 1 auto;min-width:0;font-size:13.5px;color:var(--ink)}
+.ds .dsh-tkt .nm span{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
+
+
+/* settings blocks */
+.ds .dsh-form{display:grid;gap:16px;max-width:520px}
+.ds .dsh-form .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ds .dsh-toggle{display:flex;align-items:flex-start;gap:13px;padding:14px 0;
+  border-bottom:1px solid var(--line)}
+.ds .dsh-toggle:last-of-type{border-bottom:none}
+.ds .dsh-toggle input{margin-top:3px;width:16px;height:16px;flex:none;accent-color:var(--action)}
+.ds .dsh-toggle b{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .dsh-toggle p{margin:3px 0 0;font-size:12.5px;font-weight:300;color:var(--ink-3);line-height:1.55}
+@media (max-width:1180px){
+.ds .dsh-two, .ds .dsh-three{grid-template-columns:1fr}
+}
+
+
+/* ---------------------------------------------------------------- phones
+   The panel grids collapsed to one column below 1180px, but a grid track
+   is min-width:auto, so a track still sized itself to the widest unbreakable
+   row inside it and pushed the whole page sideways — dash-billing came out
+   685px wide on a 375px screen. Everything below either lets a track shrink
+   or gives the rows inside it somewhere to wrap to.                        */
+@media (max-width:1000px){
+.ds .dsh-cols > *, .ds .dsh-two > *, .ds .dsh-three > *, .ds .dsh-grid > *, .ds .dsh-panel, .ds .dsh-body, .ds .dsh-ph, .ds .tbl-wrap{min-width:0}
+
+
+  /* headers: the "View all" link drops under the title rather than pushing it */
+.ds .dsh-ph{flex-wrap:wrap;gap:6px 14px;padding:16px 18px}
+.ds .dsh-body{padding:6px 18px 18px}
+
+
+  /* product rows: icon + name hold the first line, seats and the button the second */
+.ds .dsh-prod{flex-wrap:wrap;gap:10px 12px}
+.ds .dsh-prod .nm{flex:1 1 150px}
+.ds .dsh-prod .seats{order:3;flex:1 1 auto}
+.ds .dsh-prod .go{order:4;margin-left:auto}
+
+
+  /* key/value rows: long values wrap instead of holding the row open */
+.ds .dsh-kv > div{gap:8px 16px;flex-wrap:wrap}
+.ds .dsh-kv b{text-align:left;overflow-wrap:anywhere}
+
+
+  /* tables inside a panel scroll in their own box, not the page */
+.ds .dsh-panel .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+
+  /* the dated line in a panel header is the other thing that will not break */
+.ds .dsh-ph .when{flex:1 1 100%;order:3}
+}
+
+
+/* ================================================================ controls
+   Everything here is driven by the data attributes in dash.js. A static
+   prototype still has to respond when Richard clicks it.                   */
+
+
+/* segmented filter / tab strip */
+.ds .dsh-seg{display:inline-flex;gap:2px;padding:3px;border-radius:12px;border:1px solid var(--line);
+  background:var(--bg-alt)}
+.ds .dsh-seg button{padding:6px 13px;border-radius:9px;border:0;background:none;cursor:pointer;
+  font:inherit;font-size:12.5px;font-weight:400;color:var(--ink-3);
+  transition:background 200ms var(--e-out),color 200ms var(--e-out)}
+.ds .dsh-seg button:hover{color:var(--ink)}
+.ds .dsh-seg button.on{background:var(--bg);color:var(--ink);font-weight:500;
+  box-shadow:0 1px 3px rgba(4,12,22,.10)}
+
+
+/* accordion row */
+
+/* the button form resets itself; a head that is already a styled row (.dsh-tkt,
+   .dsh-course) keeps its own layout and only gains the pointer */
+.ds [data-acc] [data-acc-h]{cursor:pointer}
+.ds button[data-acc-h]{width:100%;text-align:left;border:0;background:none;
+  font:inherit;color:inherit;padding:0;display:flex;align-items:center;gap:13px}
+.ds [data-acc] .acc-car{margin-left:auto;flex:none;width:16px;height:16px;fill:none;
+  stroke:var(--ink-3);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;
+  transition:transform 240ms var(--e-out)}
+.ds [data-acc].open .acc-car{transform:rotate(180deg)}
+.ds [data-acc] .acc-body{display:grid;grid-template-rows:0fr;
+  transition:grid-template-rows 300ms var(--e-soft)}
+.ds [data-acc].open .acc-body{grid-template-rows:1fr}
+.ds [data-acc] .acc-body > div{overflow:hidden;min-height:0}
+.ds [data-acc] .acc-body p{margin:12px 0 0;font-size:12.5px;font-weight:300;color:var(--ink-3);
+  line-height:1.65}
+
+
+/* stepper */
+.ds .dsh-step{display:inline-flex;align-items:center;gap:2px;border-radius:9px;
+  border:1px solid var(--line);background:var(--bg-alt);padding:2px}
+.ds .dsh-step button{width:22px;height:22px;border:0;border-radius:7px;background:none;cursor:pointer;
+  color:var(--ink-2);font:inherit;font-size:14px;line-height:1;display:grid;place-items:center;
+  transition:background 180ms var(--e-out)}
+.ds .dsh-step button:hover:not(:disabled){background:var(--pal-light-wash);color:var(--pal-light-key)}
+.ds .dsh-step button:disabled{opacity:.3;cursor:not-allowed}
+.ds .dsh-step .n{min-width:20px;text-align:center;font-size:12.5px;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+
+
+/* seat chips that can be clicked on and off */
+.ds button.dsh-chip{cursor:pointer;font:inherit;transition:background 200ms var(--e-out),
+  border-color 200ms var(--e-out),color 200ms var(--e-out),opacity 200ms var(--e-out)}
+.ds button.dsh-chip{background:none;border:1px dashed var(--line-2);color:var(--ink-3)}
+.ds button.dsh-chip img{filter:grayscale(1);opacity:.4;transition:filter 200ms var(--e-out),
+  opacity 200ms var(--e-out)}
+.ds button.dsh-chip:hover:not(:disabled){border-color:var(--action);color:var(--ink-2)}
+.ds button.dsh-chip.on{border-style:solid;border-color:var(--pal-light-line);
+  background:var(--pal-light-wash);color:var(--pal-light-key);font-weight:500}
+.ds button.dsh-chip.on img{filter:none;opacity:1}
+.ds button.dsh-chip:disabled{opacity:.32;cursor:not-allowed}
+
+
+/* the toggle rows on settings say what they did */
+.ds .dsh-toggle .said{margin-left:auto;flex:none;font-style:normal;font-size:11px;font-weight:500;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);align-self:center}
+.ds .dsh-toggle .said.flash{animation:dsh-said 1.6s var(--e-out)}
+@keyframes dsh-said{0%{color:var(--action)}70%{color:var(--action)}100%{color:var(--ink-3)}}
+
+
+/* rail: the Products group folds. The caret sits over the row rather than inside
+   the link — a button nested in an anchor is invalid and swallows the navigation. */
+.ds .dsh-nav li.has-grp{position:relative}
+.ds .dsh-nav li.has-grp > a{padding-right:34px}
+.ds .dsh-nav li.has-grp > a .tail{margin-right:22px}
+.ds .dsh-nav .grp-car{position:absolute;top:6px;right:6px;width:26px;height:26px;border:0;border-radius:8px;
+  background:none;cursor:pointer;color:var(--ink-3);display:grid;place-items:center;
+  transition:background 180ms var(--e-out)}
+.ds .dsh-nav .grp-car:hover{background:var(--pal-light-wash);color:var(--ink)}
+.ds .dsh-nav .grp-car svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;transition:transform 260ms var(--e-out)}
+.ds li.shut .grp-car svg{transform:rotate(-90deg)}
+.ds li.shut .dsh-sub{display:none}
+
+
+/* dismiss control on the attention list */
+.ds .dsh-x{flex:none;width:24px;height:24px;border:0;border-radius:8px;background:none;cursor:pointer;
+  color:var(--ink-3);display:grid;place-items:center;opacity:0;
+  transition:opacity 200ms var(--e-out),background 200ms var(--e-out)}
+.ds .dsh-att li:hover .dsh-x{opacity:1}
+.ds .dsh-x:hover{background:var(--pal-light-wash);color:var(--ink)}
+.ds .dsh-x svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+
+
+/* a billing line carries a stepper between its label and its amount */
+.ds .dsh-kv > div[data-line]{align-items:center}
+.ds .dsh-kv > div[data-line] .dsh-step{margin-left:auto}
+.ds .dsh-kv > div[data-line] > b{min-width:88px}
+
+
+/* the week list a course opens to */
+.ds .dsh-weeks{list-style:none;margin:14px 0 2px;padding:0;display:grid;gap:0}
+.ds .dsh-weeks li{display:flex;align-items:center;gap:12px;padding:9px 0;font-size:12.5px;
+  font-weight:300;color:var(--ink-3);border-bottom:1px solid var(--line)}
+.ds .dsh-weeks li:last-child{border-bottom:none}
+.ds .dsh-weeks .wk{flex:none;width:56px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink-3)}
+.ds .dsh-weeks li.done{color:var(--ink-2)}
+.ds .dsh-weeks li.done .wk{color:var(--pal-light-key)}
+.ds .dsh-weeks li.now{color:var(--ink);font-weight:400}
+.ds .dsh-weeks li.now .wk{color:var(--action);font-weight:500}
+.ds .dsh-course .top .acc-car{margin-left:12px}
+.ds [data-acc]:last-child .dsh-tkt{border-bottom:none}
+
+
+/* the seat chips read as one row per member, not a stack */
+.ds td .dsh-chips{flex-wrap:nowrap;align-items:center}
+
+
+/* ================================================================ icons
+   All dashboard icons are HugeIcons, stamped into each page as a sprite by
+   tools/mkdash.js. The symbol carries stroke-width 1.5 — CSS beats a
+   presentation attribute, so nothing here may set stroke-width unless it
+   means to override the whole set.                                        */
+.ds .dsh-nav a svg, .ds .dsh-top svg, .ds .dsh-att .dot svg, .ds .dsh-dl .ic svg, .ds .dsh-stat .k svg, .ds .dsh-notes .ic svg, .ds .mk-ic svg, .ds .acc-car{stroke-width:1.5px}
+.ds .dsh-burger svg, .ds .dsh-bell svg{stroke-width:1.6px}
+
+
+/* ================================================================ notifications */
+.ds .dsh-notif{position:relative;flex:none}
+.ds .dsh-drop{position:absolute;top:calc(100% + 10px);right:0;z-index:95;
+  border-radius:18px;border:1px solid var(--line);background:var(--bg);
+  box-shadow:0 26px 70px rgba(4,12,22,.22);
+  opacity:0;visibility:hidden;transform:translateY(-8px);
+  transition:opacity 220ms var(--e-out),transform 220ms var(--e-out),visibility 220ms}
+.ds .dsh-drop.on{opacity:1;visibility:visible;transform:none}
+.ds .dsh-notes{width:396px;max-width:calc(100vw - 32px);overflow:hidden}
+.ds .dsh-notes .hd{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:15px 18px;border-bottom:1px solid var(--line)}
+.ds .dsh-notes .hd b{font-size:14px;font-weight:500;color:var(--ink)}
+.ds .dsh-notes .lnk{border:0;background:none;cursor:pointer;font:inherit;font-size:12px;
+  color:var(--action);padding:0}
+.ds .dsh-notes .lnk:hover{text-decoration:underline}
+.ds .dsh-notes .ls{max-height:min(58vh,430px);overflow-y:auto;overscroll-behavior:contain}
+.ds .dsh-notes .nt{display:flex;gap:12px;padding:14px 18px;text-decoration:none;
+  border-bottom:1px solid var(--line);position:relative;
+  transition:background 180ms var(--e-out)}
+.ds .dsh-notes .nt:last-child{border-bottom:none}
+.ds .dsh-notes .nt:hover{background:var(--pal-light-wash)}
+.ds .dsh-notes .nt.unread::after{content:"";position:absolute;top:19px;right:16px;
+  width:7px;height:7px;border-radius:50%;background:var(--action)}
+.ds .dsh-notes .ic{flex:none;width:32px;height:32px;border-radius:11px;display:grid;
+  place-items:center;background:var(--pal-light-wash);color:var(--pal-light-key)}
+.ds .dsh-notes .nt.warn .ic{background:var(--pal-orange-wash);color:var(--pal-orange-key)}
+.ds .dsh-notes .ic svg{width:16px;height:16px;fill:none;stroke:currentColor}
+.ds .dsh-notes .tx{min-width:0;padding-right:14px}
+.ds .dsh-notes .tx b{display:block;font-size:13px;font-weight:400;color:var(--ink-2);
+  line-height:1.4}
+.ds .dsh-notes .nt.unread .tx b{font-weight:500;color:var(--ink)}
+.ds .dsh-notes .tx > span{display:block;font-size:12px;font-weight:300;color:var(--ink-3);
+  line-height:1.5;margin-top:3px}
+.ds .dsh-notes .tx .mt{margin-top:7px;font-size:11px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums}
+.ds .dsh-notes .nt:hover .mt{color:var(--action)}
+.ds .dsh-notes .ft{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:12px 18px;border-top:1px solid var(--line);background:var(--bg-alt)}
+.ds .dsh-notes .ft span{font-size:11.5px;font-weight:300;color:var(--ink-3)}
+
+
+/* ================================================================ modal
+   The rule is that nothing throws you out of the dashboard. Where a control used
+   to link to the marketing site, the substance of that page opens in here.   */
+:root.mk-open, :root.mk-open body{overflow:hidden}
+.ds .dsh-modal{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:28px}
+.ds .mk-scrim{position:absolute;inset:0;background:rgba(4,12,22,.52);
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  opacity:0;transition:opacity 240ms var(--e-out)}
+.ds .dsh-modal.on .mk-scrim{opacity:1}
+.ds .mk-card{position:relative;z-index:2;width:min(720px,100%);max-height:min(86vh,760px);
+  display:flex;flex-direction:column;border-radius:22px;border:1px solid var(--line);
+  background:var(--bg);box-shadow:0 40px 110px rgba(4,12,22,.34);overflow:hidden;
+  opacity:0;transform:translateY(14px) scale(.985);
+  transition:opacity 260ms var(--e-out),transform 300ms var(--e-soft)}
+.ds .dsh-modal.on .mk-card{opacity:1;transform:none}
+.ds .mk-card header{display:flex;align-items:flex-start;gap:14px;padding:24px 26px 20px;
+  border-bottom:1px solid var(--line)}
+.ds .mk-ic{flex:none;width:42px;height:42px;border-radius:14px;display:grid;place-items:center;
+  background:var(--pal-light-wash);color:var(--pal-light-key)}
+.ds .mk-ic svg{width:21px;height:21px;fill:none;stroke:currentColor}
+.ds .mk-hd{min-width:0;flex:1 1 auto;padding-top:2px}
+.ds .mk-hd b{display:block;font-size:19px;font-weight:500;letter-spacing:-.024em;color:var(--ink);
+  line-height:1.2}
+.ds .mk-sub{display:block;font-size:12.5px;font-weight:300;color:var(--ink-3);margin-top:5px}
+.ds .mk-x{flex:none;width:34px;height:34px;border-radius:11px;border:1px solid var(--line);
+  background-image:var(--card-fill);cursor:pointer;color:var(--ink-2);display:grid;
+  place-items:center;transition:border-color 200ms var(--e-out),color 200ms var(--e-out)}
+.ds .mk-x:hover{border-color:var(--line-2);color:var(--ink)}
+.ds .mk-x svg{width:16px;height:16px;fill:none;stroke:currentColor}
+.ds .mk-body{flex:1 1 auto;padding:22px 26px 26px;overflow-y:auto;overscroll-behavior:contain}
+.ds .mk-body p{margin:0 0 14px;font-size:14px;font-weight:300;line-height:1.68;color:var(--ink-2)}
+.ds .mk-body p:last-child{margin-bottom:0}
+.ds .mk-body b{font-weight:500;color:var(--ink)}
+.ds .mk-note{padding:14px 16px;border-radius:13px;background:var(--bg-alt);
+  border:1px solid var(--line);font-size:13px !important}
+.ds .mk-list{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:11px}
+.ds .mk-list li{display:flex;gap:11px;align-items:flex-start;font-size:13.5px;font-weight:300;
+  line-height:1.6;color:var(--ink-2)}
+.ds .mk-list li svg{flex:none;width:17px;height:17px;margin-top:2px;fill:none;
+  stroke:var(--pal-light-key);stroke-width:1.5px}
+.ds .mk-price{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:13px 0;
+  border-bottom:1px solid var(--line)}
+.ds .mk-price b{font-size:20px;font-weight:500;letter-spacing:-.03em;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.ds .mk-price b small{font-size:12.5px;font-weight:300;color:var(--ink-3);letter-spacing:0}
+.ds .mk-price > span{font-size:13px;color:var(--ink-2)}
+.ds .mk-price em{margin-left:auto;font-style:normal;font-size:12px;color:var(--ink-3)}
+.ds .mk-kv{display:grid;gap:0;margin-top:6px}
+.ds .mk-kv > div{display:flex;align-items:baseline;justify-content:space-between;gap:20px;
+  padding:12px 0;border-bottom:1px solid var(--line)}
+.ds .mk-kv > div:last-child{border-bottom:none}
+.ds .mk-kv span{font-size:13px;font-weight:300;color:var(--ink-3)}
+.ds .mk-kv b{font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .mk-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 26px;
+  border-top:1px solid var(--line);background:var(--bg-alt)}
+.ds .mk-out{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
+  color:var(--ink-3);text-decoration:none}
+.ds .mk-out:hover{color:var(--action)}
+.ds .mk-out svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5px}
+
+
+/* CIVIQ and Mobile are buttons in the rail (they open a modal rather than leaving),
+   so they need the same rules the anchors get. Scoped to .dsh-sub li > button so it
+   cannot reach the group caret, which is a button too. */
+.ds .dsh-sub li > button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  border:0;background:none;cursor:pointer;font:inherit;position:relative;
+  padding:7px 10px;border-radius:10px;font-size:13.5px;font-weight:400;color:var(--ink-2);
+  transition:background 200ms var(--e-out),color 200ms var(--e-out)}
+.ds .dsh-sub li > button:hover{background:var(--pal-light-wash);color:var(--ink)}
+.ds .dsh-sub li > button img{width:22px;height:22px;flex:none;object-fit:contain}
+.ds .dsh-sub li > button.off{color:var(--ink-3)}
+.ds .dsh-sub li > button.off img{filter:grayscale(1);opacity:.42}
+.ds .dsh-sub li > button.off:hover{color:var(--ink-2)}
+
+
+/* ================================================================ small screens */
+@media (max-width:720px){
+:root{ --dash-bar:58px }
+.ds .dsh-top{gap:10px;padding:0 16px}
+.ds .dsh-top .ttl{font-size:14.5px}
+.ds .dsh-in{padding:20px 16px 48px}
+.ds .dsh-head{gap:16px;margin-bottom:22px}
+.ds .dsh-head h1{font-size:25px}
+.ds .dsh-head p{font-size:13.5px}
+.ds .dsh-acts{width:100%}
+.ds .dsh-acts .ds-btn{flex:1 1 auto;justify-content:center}
+.ds .dsh-stats{grid-template-columns:1fr;gap:12px;margin-bottom:20px}
+.ds .dsh-stat{padding:16px 18px}
+.ds .dsh-stat b{font-size:25px}
+.ds .dsh-two, .ds .dsh-three, .ds .dsh-cols{grid-template-columns:1fr}
+.ds .dsh-panel{margin-top:16px}
+.ds .dsh-ph{padding:15px 18px;flex-wrap:wrap;gap:10px}
+.ds .dsh-body{padding:6px 18px 18px}
+.ds .dsh-grid{grid-template-columns:1fr}
+.ds .dsh-hub{padding:22px 20px}
+
+  /* a segmented control scrolls sideways rather than wrapping into two rows */
+.ds .dsh-seg{display:flex;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.ds .dsh-seg::-webkit-scrollbar{display:none}
+.ds .dsh-seg button{white-space:nowrap;flex:none}
+
+  /* tables keep their shape and scroll inside the panel */
+.ds .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.ds .dsh-panel .tbl{min-width:560px}
+.ds td .dsh-chips{flex-wrap:wrap}
+.ds .dsh-prod{flex-wrap:wrap;gap:10px 12px}
+.ds .dsh-prod .go, .ds .dsh-prod .seats{margin-left:52px}
+.ds .dsh-dl{flex-wrap:wrap}
+.ds .dsh-att li{flex-wrap:wrap}
+.ds .dsh-att a.act{margin-left:39px}
+.ds .dsh-x{opacity:1}
+                  /* no hover on touch — always show the dismiss */
+.ds .dsh-form .two{grid-template-columns:1fr}
+.ds .dsh-kv > div[data-line]{flex-wrap:nowrap;gap:10px}
+.ds .dsh-kv > div[data-line] > b{min-width:0}
+
+  /* the drawer takes most of the screen but leaves a strip of context */
+.ds .dsh-rail{width:min(300px,86vw)}
+.ds .dsh-notes{position:fixed;top:calc(var(--dash-bar) + 8px);right:12px;left:12px;
+    width:auto;max-width:none}
+.ds .dsh-modal{padding:0}
+.ds .mk-card{width:100%;max-height:100dvh;height:100dvh;border-radius:0;border:0}
+.ds .mk-card header{padding:18px 18px 16px}
+.ds .mk-hd b{font-size:17px}
+.ds .mk-body{padding:18px}
+.ds .mk-foot{padding:14px 18px;gap:10px}
+.ds .mk-foot .ds-btn{flex:1 1 auto;justify-content:center}
+.ds .mk-out{margin-left:0;width:100%;justify-content:center;padding-top:4px}
+}

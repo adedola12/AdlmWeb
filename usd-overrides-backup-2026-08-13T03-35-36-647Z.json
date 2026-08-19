@@ -1,0 +1,77 @@
+{
+  "takenAt": "2026-08-13T03:35:36.647Z",
+  "fxRateNGNUSD": 0.000735,
+  "products": [
+    {
+      "key": "bimbld",
+      "name": "BIM Course on Building Works",
+      "cleared": {
+        "yearlyUSD": 149.99
+      }
+    },
+    {
+      "key": "BIMMEP",
+      "name": "BIM Course on Building Services (MEP and HVAC)",
+      "cleared": {
+        "yearlyUSD": 99.98
+      }
+    },
+    {
+      "key": "civil3d",
+      "name": "CIVIQ: Civil3D TakeOff Software",
+      "cleared": {
+        "monthlyUSD": 120,
+        "yearlyUSD": 1000,
+        "installUSD": 30
+      }
+    },
+    {
+      "key": "mep",
+      "name": "Revit MEP Plugin",
+      "cleared": {
+        "monthlyUSD": 15,
+        "sixMonthUSD": 60,
+        "yearlyUSD": 120,
+        "installUSD": 6
+      }
+    },
+    {
+      "key": "planswift",
+      "name": "HERON: PlanSwift / 2D Drawings QS Software",
+      "cleared": {
+        "monthlyUSD": 10,
+        "sixMonthUSD": 50,
+        "yearlyUSD": 100,
+        "installUSD": 5
+      }
+    },
+    {
+      "key": "qs-takeoff",
+      "name": "ADLM Time Pro",
+      "cleared": {
+        "monthlyUSD": 5,
+        "yearlyUSD": 50
+      }
+    },
+    {
+      "key": "rategen",
+      "name": "RateGen",
+      "cleared": {
+        "monthlyUSD": 10,
+        "sixMonthUSD": 45,
+        "yearlyUSD": 100,
+        "installUSD": 0
+      }
+    },
+    {
+      "key": "revit",
+      "name": "QUIV: 3D Model QS Software",
+      "cleared": {
+        "monthlyUSD": 30,
+        "sixMonthUSD": 171,
+        "yearlyUSD": 200,
+        "installUSD": 25
+      }
+    }
+  ]
+}

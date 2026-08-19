@@ -34,7 +34,7 @@ export default function DsAccount() {
             {" "}
             <div className="hero-cta" style={{ justifyContent: "center", marginTop: "26px" }}>
               {" "}
-              <Link to="/dashboard" data-ds-page="dash-home" className="ds-btn btn-p">
+              <Link to="/manage" data-ds-page="dash-home" className="ds-btn btn-p">
                 Open the dashboard
               </Link>
               {" "}

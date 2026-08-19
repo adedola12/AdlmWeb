@@ -13,6 +13,8 @@ import { Purchase } from "../models/Purchase.js";
 import { Setting } from "../models/Setting.js";
 import { Invoice } from "../models/Invoice.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { ActivityLog } from "../models/ActivityLog.js";
 import { sendMail } from "../util/mailer.js";
 import { resolveUserGuideUrl } from "../util/userGuide.js";
@@ -1727,6 +1729,81 @@ router.post(
     });
 
     return res.json({ ok: true, message: `Invitation sent to ${email}` });
+  }),
+);
+
+/**
+ * GET /me/rail
+ *
+ * The counts the signed-in rail shows beside each item — projects, rate
+ * library, certificates, seats, team. In the design these were sample
+ * figures typed into the markup ("Projects 2", "Rate library 13"); this is
+ * where the real ones come from.
+ *
+ * One endpoint rather than five, because the rail is on every app screen and
+ * five round trips per navigation to draw six small numbers is not worth it.
+ * Every count is best-effort: a rail badge is decoration, and a failure in
+ * one collection must not be able to blank the navigation.
+ */
+router.get(
+  "/rail",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+
+    const zero = (p) => p.catch(() => 0);
+
+    const [projects, rateLib, certificates, user] = await Promise.all([
+      zero(
+        TakeoffProject.countDocuments({
+          $or: [{ userId }, { "collaborators.userId": userId }],
+        }),
+      ),
+      zero(
+        RateGenLibrary.findOne({ userId })
+          .select("customRates")
+          .lean()
+          .then((doc) => (doc?.customRates || []).length),
+      ),
+      zero(
+        CourseEnrollment.countDocuments({
+          userId,
+          certificateUrl: { $exists: true, $nin: [null, ""] },
+        }),
+      ),
+      User.findById(userId, {
+        name: 1,
+        email: 1,
+        accountType: 1,
+        organizationName: 1,
+        entitlements: 1,
+      })
+        .lean()
+        .catch(() => null),
+    ]);
+
+    // "Products & seats" counts what this account actually holds against the
+    // catalogue, so the rail reads "3 of 7" the way his design does — but with
+    // 7 being however many products we sell today, not a number frozen into
+    // the markup.
+    const owned = new Set(
+      (user?.entitlements || []).map((e) => e.productKey).filter(Boolean),
+    );
+    const catalogue = await Product.countDocuments({ isCourse: { $ne: true } }).catch(
+      () => 0,
+    );
+
+    res.json({
+      projects,
+      rates: rateLib,
+      certificates,
+      productsOwned: owned.size,
+      productsTotal: catalogue,
+      name: user?.name || "",
+      email: user?.email || "",
+      organizationName: user?.organizationName || "",
+      accountType: user?.accountType || "personal",
+    });
   }),
 );
 

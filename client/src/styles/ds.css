@@ -120,7 +120,7 @@
   overflow-x:clip}
 
 /* eased theme switch */
-.ds, .ds-card, .ds .frag, .ds .nav, .ds .foot, .ds-btn, .ds .stat, .ds .tbl-wrap, .ds .phone-screen{
+.ds, .ds .ds-card, .ds .frag, .ds .nav, .ds .foot, .ds .ds-btn, .ds .stat, .ds .tbl-wrap, .ds .phone-screen{
   transition:background-color 420ms var(--e-soft),background-image 420ms var(--e-soft),
              color 420ms var(--e-soft),border-color 420ms var(--e-soft)}
 .ds img{max-width:100%;display:block}
@@ -139,7 +139,7 @@
   letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:22px}
 .ds .eyebrow::before{content:"";width:5px;height:5px;border-radius:2px;background:currentColor;
   box-shadow:0 0 9px 1px currentColor}
-.ds-lede{font-size:18px;line-height:1.55;color:var(--ink-2);font-weight:300}
+.ds .ds-lede{font-size:18px;line-height:1.55;color:var(--ink-2);font-weight:300}
 .ds .small{font-size:14px;line-height:1.55;color:var(--ink-3)}
 
 
@@ -206,23 +206,23 @@
 
 
 /* ---------------- buttons ---------------- */
-.ds-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:9px;
+.ds .ds-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:9px;
   font-family:var(--font);font-size:15px;font-weight:500;letter-spacing:-.008em;
   padding:13px 24px;border-radius:var(--r-btn);border:1px solid transparent;
   text-decoration:none;cursor:pointer;white-space:nowrap;overflow:hidden;
   transition:transform 320ms var(--e-out),box-shadow 320ms var(--e-out),
              filter 260ms var(--e-fast),border-color 260ms var(--e-fast)}
-.ds-btn:focus-visible{outline:2px solid var(--action);outline-offset:3px}
-.ds-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;
+.ds .ds-btn:focus-visible{outline:2px solid var(--action);outline-offset:3px}
+.ds .ds-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round;transition:transform 320ms var(--e-out)}
 
 /* glass sheen */
-.ds-btn::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+.ds .ds-btn::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,0) 46%)}
-.ds-btn::before{content:"";position:absolute;top:-60%;bottom:-60%;width:38%;left:-70%;pointer-events:none;
+.ds .ds-btn::before{content:"";position:absolute;top:-60%;bottom:-60%;width:38%;left:-70%;pointer-events:none;
   background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);
   transform:skewX(-18deg);transition:left 700ms var(--e-out)}
-.ds-btn:hover::before{left:130%}
+.ds .ds-btn:hover::before{left:130%}
 .ds .btn-p{background-image:var(--action-grad);color:var(--action-ink);
   box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 8px 24px rgba(35,156,255,.36)}
 .ds .btn-p:hover{transform:translateY(-3px);filter:brightness(1.07);
@@ -237,7 +237,7 @@
   box-shadow:0 1px 0 rgba(255,255,255,.42) inset,0 8px 24px rgba(232,106,39,.36)}
 .ds .btn-a:hover{transform:translateY(-3px);filter:brightness(1.06);
   box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 16px 40px rgba(232,106,39,.48)}
-.ds-btn-sm{font-size:13.5px;padding:9px 16px}
+.ds .ds-btn-sm{font-size:13.5px;padding:9px 16px}
 .ds .btn-full{width:100%}
 
 
@@ -316,22 +316,22 @@
 
 
 /* ---------------- CARD: radial fill + gradient stroke ---------------- */
-.ds-card{position:relative;border-radius:var(--r-card);padding:26px;
+.ds .ds-card{position:relative;border-radius:var(--r-card);padding:26px;
   background-image:var(--card-fill);
   box-shadow:0 2px 6px rgba(var(--shadow-c),.05),0 18px 44px rgba(var(--shadow-c),.09);
   transition:transform 380ms var(--e-out),box-shadow 380ms var(--e-out)}
-.ds-card::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+.ds .ds-card::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
   background-image:var(--card-stroke);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
   -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
   mask-composite:exclude;pointer-events:none;
   transition:opacity 380ms var(--e-fast),filter 380ms var(--e-fast)}
-.ds-card:not(.tilt):hover{transform:translateY(-6px) scale(1.012)}
-.ds-card:hover{
+.ds .ds-card:not(.tilt):hover{transform:translateY(-6px) scale(1.012)}
+.ds .ds-card:hover{
   box-shadow:0 4px 10px rgba(var(--shadow-c),.07),0 32px 70px rgba(var(--shadow-c),.18)}
-.ds-card:hover::before{filter:brightness(1.5) saturate(1.3)}
-.ds-card h3, .ds-card h4{margin-bottom:8px}
-.ds-card p{font-size:14.5px;color:var(--ink-3)}
+.ds .ds-card:hover::before{filter:brightness(1.5) saturate(1.3)}
+.ds .ds-card h3, .ds .ds-card h4{margin-bottom:8px}
+.ds .ds-card p{font-size:14.5px;color:var(--ink-3)}
 
 
 /* icons */
@@ -345,7 +345,7 @@
 .ds .ico-a{background:color-mix(in srgb,var(--accent) 13%,transparent);
   border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
 .ds .ico-a svg{stroke:var(--accent)}
-.ds-card:hover .ico, .ds .bento-c:hover .ico{transform:translateY(-3px) scale(1.07)}
+.ds .ds-card:hover .ico, .ds .bento-c:hover .ico{transform:translateY(-3px) scale(1.07)}
 .ds .ico-sm{width:32px;height:32px;border-radius:9px;margin:0}
 .ds .ico-sm svg{width:15px;height:15px}
 
@@ -783,7 +783,7 @@
 
 /* tilt elements keep their own transform; guard 3D artefacts */
 .ds .tilt{backface-visibility:hidden}
-.ds .bento-c.tilt, .ds-card.tilt, .ds .plan.tilt{will-change:transform}
+.ds .bento-c.tilt, .ds .ds-card.tilt, .ds .plan.tilt{will-change:transform}
 
 
 /* phone bottom tab bar — makes the screen read as a full app */
@@ -1544,14 +1544,14 @@
 
 
 /* forms */
-.ds-field{margin-bottom:16px}
-.ds-field label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px;font-weight:400}
-.ds-field input, .ds-field select{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line-2);
+.ds .ds-field{margin-bottom:16px}
+.ds .ds-field label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px;font-weight:400}
+.ds .ds-field input, .ds .ds-field select{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line-2);
   background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14.5px;font-weight:300;
   transition:border-color 200ms,box-shadow 200ms}
-.ds-field input:focus, .ds-field select:focus{outline:none;border-color:var(--action);
+.ds .ds-field input:focus, .ds .ds-field select:focus{outline:none;border-color:var(--action);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 18%,transparent)}
-.ds-field .hint{font-size:11.5px;color:var(--ink-3);margin-top:5px}
+.ds .ds-field .hint{font-size:11.5px;color:var(--ink-3);margin-top:5px}
 .ds .two-up{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .ds .authwrap{max-width:460px;margin:0 auto}
 .ds .authcard{border-radius:var(--r-card);padding:34px;background-image:var(--card-fill);
@@ -1917,15 +1917,15 @@
   border:1px solid var(--line-2);
   box-shadow:0 2px 6px rgba(var(--shadow-c),.05),0 22px 54px rgba(var(--shadow-c),.10)}
 .ds .sform-card .ds-field:last-of-type{margin-bottom:22px}
-.ds-field .opt{color:var(--ink-3);font-size:11px;letter-spacing:.04em}
+.ds .ds-field .opt{color:var(--ink-3);font-size:11px;letter-spacing:.04em}
 
 /* the base .field rule never covered textarea */
-.ds-field textarea{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line-2);
+.ds .ds-field textarea{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line-2);
   background:var(--bg);color:var(--ink);font:inherit;font-size:14.5px;resize:vertical;
   min-height:104px;transition:border-color 200ms var(--e-fast),box-shadow 200ms var(--e-fast)}
-.ds-field textarea:focus{outline:none;border-color:var(--action);
+.ds .ds-field textarea:focus{outline:none;border-color:var(--action);
   box-shadow:0 0 0 3px color-mix(in srgb,var(--action) 18%,transparent)}
-.ds-field input::placeholder, .ds-field textarea::placeholder{color:var(--ink-3);opacity:.7}
+.ds .ds-field input::placeholder, .ds .ds-field textarea::placeholder{color:var(--ink-3);opacity:.7}
 .ds .sform-note{margin:14px 0 0;font-size:12px;color:var(--ink-3);text-align:center}
 @media (max-width:900px){
 .ds .sform{grid-template-columns:1fr;gap:34px}
@@ -2754,7 +2754,7 @@
 /* cart + payment states */
 .ds .line.line-off{opacity:.45}
 .ds .qty button[disabled]{opacity:.35;cursor:not-allowed}
-.ds-btn.btn-dis{opacity:.45;pointer-events:none}
+.ds .ds-btn.btn-dis{opacity:.45;pointer-events:none}
 .ds .bankbox{border:1px solid var(--line);border-radius:14px;padding:6px 16px;margin:4px 0 14px;
   background-image:var(--pal-light-fill)}
 .ds .bankrow{display:flex;justify-content:space-between;gap:16px;padding:11px 0;font-size:14px;

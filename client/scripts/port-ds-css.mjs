@@ -28,11 +28,23 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT = path.resolve(here, "..");
-const SRC = path.resolve(
-  CLIENT,
-  "../../ADLMWebNewUI/site/assets/css/site.css",
-);
-const OUT = path.join(CLIENT, "src/styles/ds.css");
+// His stylesheets, and what each one dresses. site.css is the marketing site;
+// the other five are loaded only by the pages that need them, and porting just
+// site.css left every app screen, every auth screen and the document renderer
+// with no styles of their own at all. Each is ported to its own file and
+// imported where it is used, so a visitor to the marketing pages does not
+// download 400 KB of dashboard CSS to look at the home page.
+const SHEETS = [
+  { in: "site.css", out: "ds.css" },
+  { in: "dash.css", out: "ds-dash.css" },
+  { in: "work.css", out: "ds-work.css" },
+  { in: "learn.css", out: "ds-learn.css" },
+  { in: "auth.css", out: "ds-auth.css" },
+  { in: "doc.css", out: "ds-doc.css" },
+];
+
+const CSS_DIR = path.resolve(CLIENT, "../../ADLMWebNewUI/site/assets/css");
+const OUT_DIR = path.join(CLIENT, "src/styles");
 
 // The ten class names that exist on both sides. Renamed in the ported CSS so
 // neither system can win by load order. The same map is applied to his markup
@@ -137,7 +149,13 @@ function scopeOne(selector) {
   }
 
   // Already scoped (shouldn't happen, but keeps re-runs idempotent).
-  if (sel.startsWith(".ds")) return sel;
+  //
+  // The boundary matters: a bare startsWith(".ds") also swallows every class
+  // that merely begins with those letters, and his app sheets are built almost
+  // entirely out of .dsh-* — so dash.css came through with 385 of its 450
+  // rules unscoped, which is to say not applied at all. Only ".ds" itself, or
+  // ".ds" followed by a separator, counts as scoped.
+  if (/^\.ds(?![\w-])/.test(sel)) return sel;
 
   return `.ds ${sel}`;
 }
@@ -358,20 +376,30 @@ function transform(css) {
 // ── run ───────────────────────────────────────────────────────────────────
 
 function main() {
-  if (!fs.existsSync(SRC)) {
+  if (!fs.existsSync(CSS_DIR)) {
     console.error(
-      `[port-ds-css] source not found: ${SRC}\n` +
+      `[port-ds-css] source not found: ${CSS_DIR}
+` +
         "Clone RichardEnoch/adlm-studio-site next to this repo as ADLMWebNewUI.",
     );
     process.exit(1);
   }
 
-  const raw = fs.readFileSync(SRC, "utf8");
-  const ported = transform(raw);
+  fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  const header = `/* GENERATED — do not edit by hand.
+  for (const sheet of SHEETS) {
+    const src = path.join(CSS_DIR, sheet.in);
+    if (!fs.existsSync(src)) {
+      console.error(`[port-ds-css] missing sheet: ${src}`);
+      process.exit(1);
+    }
+
+    const raw = fs.readFileSync(src, "utf8");
+    const ported = transform(raw);
+
+    const header = `/* GENERATED — do not edit by hand.
  *
- * Ported from RichardEnoch/adlm-studio-site  site/assets/css/site.css
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/${sheet.in}
  * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
  * changes; hand edits here are lost.
  *
@@ -383,11 +411,14 @@ function main() {
  */
 `;
 
-  fs.mkdirSync(path.dirname(OUT), { recursive: true });
-  fs.writeFileSync(OUT, `${header}\n${ported}\n`, "utf8");
+    const out = path.join(OUT_DIR, sheet.out);
+    fs.writeFileSync(out, `${header}
+${ported}
+`, "utf8");
+    const size = (t) => `${(Buffer.byteLength(t) / 1024).toFixed(1)} KB`;
+    console.log(`[port-ds-css] ${sheet.in} ${size(raw)} -> ${sheet.out} ${size(ported)}`);
+  }
 
-  const kb = (s) => `${(Buffer.byteLength(s) / 1024).toFixed(1)} KB`;
-  console.log(`[port-ds-css] ${kb(raw)} in -> ${kb(ported)} out  (${OUT})`);
   if (unscopedCombinators.length) {
     console.warn(
       `[port-ds-css] ${unscopedCombinators.length} selector(s) could not take the .ds scope:\n  ` +

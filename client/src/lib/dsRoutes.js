@@ -66,22 +66,35 @@ export const MAP = {
   thanks: "/checkout/thanks",
   account: "/profile",
 
-  // ── app screens: restyled in place, his prototypes are reference only ───
-  "dash-home": "/dashboard",
-  "dash-products": "/products",
+  // ── the signed-in app ───────────────────────────────────────────────────
+  // These were pointed at our three big pages — /dashboard, /learn, /profile —
+  // which collapsed 16 of his rail items onto 3 routes and made half the rail
+  // navigate to the page it was already on. His app is not one dashboard: it
+  // is a Work surface and a Manage surface, each with its own screens, and the
+  // rail only makes sense if they exist. They do now.
+  //
+  // Nothing was taken away to do it. /dashboard, /profile and /learn keep
+  // working exactly as before and keep their own data; the new routes are
+  // additional. Which of the two becomes canonical is a decision for when the
+  // redesign is promoted off /preview, not one to make by breaking a URL.
+  "dash-home": "/manage",
+  "dash-products": "/manage/products",
   "dash-product": "/product/:key",
-  "dash-billing": "/profile",
-  "dash-downloads": "/dashboard",
-  "dash-learning": "/learn",
-  "dash-course": "/learn/course/:sku",
-  "dash-certificates": "/learn",
-  "dash-settings": "/profile",
+  "dash-billing": "/manage/billing",
+  "dash-downloads": "/manage/downloads",
+  "dash-settings": "/manage/settings",
+  "dash-team": "/manage/team",
   "dash-support": "/support",
-  "dash-team": "/profile",
+  "dash-learning": "/learning",
+  "dash-certificates": "/learning/certificates",
+  "dash-course": "/learn/course/:sku",
   "dash-emails": null, // an internal email preview harness, not a public route
-  "work-home": "/dashboard",
-  "work-projects": "/revit-projects",
+  "work-home": "/work",
+  "work-projects": "/work/projects",
   "work-project": "/projects/:tool",
+  // Rate library and Programme are RateGen and Time Pro under his names — the
+  // screens exist, so these keep pointing at the real ones rather than growing
+  // a second copy.
   "work-library": "/rategen",
   "work-rate": "/rategen",
   "work-programme": "/time-management",

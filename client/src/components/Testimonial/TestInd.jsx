@@ -68,10 +68,12 @@ const TestInd = () => {
           </span>
         </div>
 
-        {/* Subtitle */}
+        {/* Subtitle. This was template copy naming "ConstructTech", a company
+            that is not this one, and it shipped on every render. Same class of
+            defect as the one already fixed in TestHero. */}
         <p className="mt-2 text-xs md:text-sm text-slate-600 max-w-2xl mx-auto">
-          Leading construction companies worldwide rely on ConstructTech for
-          their technology needs
+          Contractors, consultancies and quantity surveying firms across Nigeria
+          run ADLM Studio software on live projects.
         </p>
 
         {/* Company grid */}

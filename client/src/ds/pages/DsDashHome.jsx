@@ -235,7 +235,7 @@ export default function DsDashHome() {
         {" "}
         <aside className="dsh-rail" aria-label="ADLM Studio">
           {" "}
-          <Link className="dsh-brand" to="/dashboard" data-ds-page="work-home" aria-label="ADLM Studio">
+          <Link className="dsh-brand" to="/work" data-ds-page="work-home" aria-label="ADLM Studio">
             {" "}
             <img className="logo-l" src="/ds/logo-light.svg" alt="ADLM Studio" />
             {" "}
@@ -290,7 +290,7 @@ export default function DsDashHome() {
           <ul className="dsh-nav">
             {" "}
             <li>
-              <Link to="/dashboard" data-ds-page="work-home">
+              <Link to="/work" data-ds-page="work-home">
                 <svg viewBox="0 0 24 24">
                   <use href="#wi-home" />
                 </svg>
@@ -299,7 +299,7 @@ export default function DsDashHome() {
             </li>
             {" "}
             <li>
-              <Link to="/revit-projects" data-ds-page="work-projects">
+              <Link to="/work/projects" data-ds-page="work-projects">
                 <svg viewBox="0 0 24 24">
                   <use href="#wi-projects" />
                 </svg>
@@ -355,7 +355,7 @@ export default function DsDashHome() {
           <ul className="dsh-nav">
             {" "}
             <li>
-              <Link to="/learn" data-ds-page="dash-learning">
+              <Link to="/learning" data-ds-page="dash-learning">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-learning" />
                 </svg>
@@ -364,7 +364,7 @@ export default function DsDashHome() {
             </li>
             {" "}
             <li>
-              <Link to="/learn" data-ds-page="dash-certificates">
+              <Link to="/learning/certificates" data-ds-page="dash-certificates">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-cert" />
                 </svg>
@@ -385,7 +385,7 @@ export default function DsDashHome() {
             </li>
             {" "}
             <li>
-              <Link to="/dashboard" data-ds-page="dash-downloads">
+              <Link to="/manage/downloads" data-ds-page="dash-downloads">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-doc" />
                 </svg>
@@ -408,7 +408,7 @@ export default function DsDashHome() {
           <ul className="dsh-nav">
             {" "}
             <li>
-              <Link to="/dashboard" data-ds-page="dash-home">
+              <Link to="/manage" data-ds-page="dash-home">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-overview" />
                 </svg>
@@ -417,7 +417,7 @@ export default function DsDashHome() {
             </li>
             {" "}
             <li>
-              <Link to="/products" data-ds-page="dash-products">
+              <Link to="/manage/products" data-ds-page="dash-products">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-products" />
                 </svg>
@@ -429,7 +429,7 @@ export default function DsDashHome() {
             </li>
             {" "}
             <li>
-              <Link to="/profile" data-ds-page="dash-team">
+              <Link to="/manage/team" data-ds-page="dash-team">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-team" />
                 </svg>
@@ -441,7 +441,7 @@ export default function DsDashHome() {
             </li>
             {" "}
             <li>
-              <Link to="/profile" data-ds-page="dash-billing">
+              <Link to="/manage/billing" data-ds-page="dash-billing">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-billing" />
                 </svg>
@@ -450,7 +450,7 @@ export default function DsDashHome() {
             </li>
             {" "}
             <li>
-              <Link to="/dashboard" data-ds-page="dash-downloads">
+              <Link to="/manage/downloads" data-ds-page="dash-downloads">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-downloads" />
                 </svg>
@@ -475,7 +475,7 @@ export default function DsDashHome() {
           <ul className="dsh-nav">
             {" "}
             <li>
-              <Link to="/profile" data-ds-page="dash-settings">
+              <Link to="/manage/settings" data-ds-page="dash-settings">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-settings" />
                 </svg>
@@ -623,7 +623,7 @@ export default function DsDashHome() {
                       Your products
                     </h2>
                     {" "}
-                    <Link className="more" to="/products" data-ds-page="dash-products">
+                    <Link className="more" to="/manage/products" data-ds-page="dash-products">
                       All products
                     </Link>
                     {" "}
@@ -711,7 +711,7 @@ export default function DsDashHome() {
                       </span>
                       {" "}
                       <span className="go">
-                        <Link className="ds-btn btn-p ds-btn-sm" to="/dashboard" data-ds-page="dash-downloads">
+                        <Link className="ds-btn btn-p ds-btn-sm" to="/manage/downloads" data-ds-page="dash-downloads">
                           Update
                         </Link>
                       </span>
@@ -760,7 +760,7 @@ export default function DsDashHome() {
                           {" "}
                         </div>
                         {" "}
-                        <Link className="act" to="/dashboard" data-ds-page="dash-downloads">
+                        <Link className="act" to="/manage/downloads" data-ds-page="dash-downloads">
                           Update
                         </Link>
                         {" "}
@@ -792,7 +792,7 @@ export default function DsDashHome() {
                           {" "}
                         </div>
                         {" "}
-                        <Link className="act" to="/profile" data-ds-page="dash-team">
+                        <Link className="act" to="/manage/team" data-ds-page="dash-team">
                           Assign
                         </Link>
                         {" "}
@@ -824,7 +824,7 @@ export default function DsDashHome() {
                           {" "}
                         </div>
                         {" "}
-                        <Link className="act" to="/profile" data-ds-page="dash-billing">
+                        <Link className="act" to="/manage/billing" data-ds-page="dash-billing">
                           Review
                         </Link>
                         {" "}
@@ -856,7 +856,7 @@ export default function DsDashHome() {
                           {" "}
                         </div>
                         {" "}
-                        <Link className="act" to="/learn" data-ds-page="dash-learning">
+                        <Link className="act" to="/learning" data-ds-page="dash-learning">
                           Open
                         </Link>
                         {" "}
@@ -888,7 +888,7 @@ export default function DsDashHome() {
                     The desktop app that installs and updates everything the practice owns. Sign in once and it keeps all five seats current.
                   </p>
                   {" "}
-                  <Link className="ds-btn btn-p ds-btn-sm" to="/dashboard" data-ds-page="dash-downloads">
+                  <Link className="ds-btn btn-p ds-btn-sm" to="/manage/downloads" data-ds-page="dash-downloads">
                     Download for Windows{" "}
                     <svg viewBox="0 0 24 24">
                       <use href="#hi-downloads" />
@@ -999,7 +999,7 @@ export default function DsDashHome() {
                       Your learning
                     </h2>
                     {" "}
-                    <Link className="more" to="/learn" data-ds-page="dash-learning">
+                    <Link className="more" to="/learning" data-ds-page="dash-learning">
                       All courses
                     </Link>
                     {" "}

@@ -14,6 +14,19 @@ import { MAP } from "../lib/dsRoutes.js";
 import { DS_PAGES } from "./pages/manifest.js";
 
 const DsShell = React.lazy(() => import("./DsShell.jsx"));
+const DsAppShell = React.lazy(() => import("./DsAppShell.jsx"));
+const DsLearnStyles = React.lazy(() => import("./DsLearnStyles.jsx"));
+const DsAuthStyles = React.lazy(() => import("./DsAuthStyles.jsx"));
+const DsDocStyles = React.lazy(() => import("./DsDocStyles.jsx"));
+
+// Which of his six stylesheets a page needs, read straight off the <link>
+// tags in his source. Only site.css is global; the other five are loaded per
+// page, and porting site.css alone left every app screen, both auth screens
+// and the document renderer with no styling of their own whatsoever.
+const APP_SCREEN = /^(dash|work)-/;
+const NEEDS_LEARN = new Set(["dash-learning", "dash-course", "dash-certificates", "work-home"]);
+const NEEDS_AUTH = new Set(["login", "signup", "verify"]);
+const NEEDS_DOC = new Set(["doc-preview", "quote"]);
 
 // Real app path -> staged slug, so the preview can navigate to itself.
 //
@@ -87,6 +100,14 @@ export default function DsPreview({ page }) {
     return hash ? `${staged}#${hash}` : staged;
   }, []);
 
+  // His app screens are not marketing pages: they carry the rail and the app
+  // bar instead of the nav and the footer. Rendering them inside DsShell put
+  // "Book a demo" above a signed-in dashboard — which is what his own build
+  // does, and is on the snag list for him rather than reproduced here.
+  const isApp = APP_SCREEN.test(page.slug);
+  const Shell = isApp ? DsAppShell : DsShell;
+  const shellProps = isApp ? { title: page.title } : { mapHref };
+
   return (
     <div onClickCapture={onClickCapture}>
       {/* App.jsx renders this for the real routes, but the preview routes are
@@ -95,9 +116,12 @@ export default function DsPreview({ page }) {
           one already scrolled to that offset. */}
       <ScrollRestoration />
       <React.Suspense fallback={null}>
-        <DsShell mapHref={mapHref}>
+        {NEEDS_LEARN.has(page.slug) && <DsLearnStyles />}
+        {NEEDS_AUTH.has(page.slug) && <DsAuthStyles />}
+        {NEEDS_DOC.has(page.slug) && <DsDocStyles />}
+        <Shell {...shellProps}>
           <Page />
-        </DsShell>
+        </Shell>
       </React.Suspense>
     </div>
   );

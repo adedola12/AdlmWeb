@@ -416,6 +416,37 @@ function editPage(src, html) {
 
 // Pages whose generated component takes live data. The token expressions above
 // reference `d`, so the component signature has to provide it.
+// ── the app rail ────────────────────────────────────────────────────────────
+// His rail is dressed with one sample tenant — "Adeyemi & Partners", 2
+// projects, 13 rates, 3 of 7 products. Every one of those is a real number we
+// already hold, so each is swapped for a token and filled by DsAppShell from
+// the signed-in account. Nothing about the markup or the classes changes; a
+// find that stops matching is a build error, so his next update cannot quietly
+// reinstate the sample figures.
+const RAIL_EDITS = [
+  { find: '<span class="dsh-avi">AP</span>', replace: '<span class="dsh-avi">@@d.initials@@</span>' },
+  { find: "<b>Adeyemi &amp; Partners</b>", replace: "<b>@@d.orgName@@</b>" },
+  { find: "<span>Quantity Surveyors · Lagos</span>", replace: "<span>@@d.orgSub@@</span>" },
+  { find: 'Projects <span class="tail">2</span>', replace: 'Projects <span class="tail">@@d.projects@@</span>' },
+  { find: 'Rate library <span class="tail">13</span>', replace: 'Rate library <span class="tail">@@d.rates@@</span>' },
+  { find: 'Certificates <span class="tail">1</span>', replace: 'Certificates <span class="tail">@@d.certificates@@</span>' },
+  { find: 'seats <span class="tail">3 of 7</span>', replace: 'seats <span class="tail">@@d.seats@@</span>' },
+  { find: 'Team <span class="tail">3/5</span>', replace: 'Team <span class="tail">@@d.team@@</span>' },
+];
+
+function editRail(html) {
+  for (const e of RAIL_EDITS) {
+    if (!html.includes(e.find)) {
+      throw new Error(
+        `[port-ds-html] rail edit did not match: "${e.find.slice(0, 60)}…". ` +
+          "His rail changed upstream — re-check the markup before removing this.",
+      );
+    }
+    html = html.split(e.find).join(e.replace);
+  }
+  return html;
+}
+
 const DATA_PAGES = new Set([
   "src/learn.html",
   "src/pricing.html",
@@ -474,6 +505,8 @@ function main() {
   fs.mkdirSync(OUT_PAGES, { recursive: true });
 
   const index = fs.readFileSync(path.join(SITE, "index.html"), "utf8");
+  // The rail lives in the app screens, not in index.html.
+  const dashHome = fs.readFileSync(path.join(SITE, "src/dash-home.html"), "utf8");
 
   // ── shared chrome ──────────────────────────────────────────────────────
   const chrome = [
@@ -481,6 +514,21 @@ function main() {
     { name: "DsNav", html: editNav(slice(index, '<nav class="nav">', "</nav>", "nav")) },
     { name: "DsFooter", html: slice(index, '<footer class="foot">', "</footer>", "footer") },
     { name: "DsPromo", html: slice(index, '<section class="promo"', "<!--/promo-->", "promo band") },
+    // The signed-in app's rail. His build injects the identical block into
+    // every dash-* and work-* page, so it is chrome in exactly the same sense
+    // as the nav — sliced once here rather than duplicated 18 times.
+    // The app's own icons — 18 symbols the rail and top bar use, none of which
+    // appear in the marketing sprite. Two <svg> blocks in his source, sliced
+    // together so a symbol cannot be lost by splitting them.
+    {
+      name: "DsAppSprite",
+      html: slice(dashHome, "<!--icons-->", "<!--/icons-->", "app icon sprite"),
+    },
+    {
+      name: "DsRail",
+      html: editRail(slice(dashHome, "<!--rail-->", "<!--/rail-->", "app rail")),
+      takesData: true,
+    },
   ];
 
   const defects = [];
@@ -491,12 +539,12 @@ function main() {
     for (const a of r.backendlessForms) formsWithoutBackend.push(`${where} (action="${a}")`);
   };
 
-  for (const { name, html } of chrome) {
+  for (const { name, html, takesData } of chrome) {
     const r = htmlToJsx(html, { indent: 6 });
     note(`index.html (${name})`, r);
     fs.writeFileSync(
       path.join(OUT_CHROME, `${name}.jsx`),
-      component({ name, jsx: r.jsx, usesLink: r.usesLink, from: "index.html", wrap: false }),
+      component({ name, jsx: r.jsx, usesLink: r.usesLink, from: "index.html", wrap: false, takesData }),
       "utf8",
     );
     console.log(`[port-ds-html] chrome ${name}.jsx`);
@@ -517,6 +565,17 @@ function main() {
     } else {
       body = raw.slice(raw.indexOf("meta-->") + "meta-->".length);
     }
+
+    // His app bar reads its heading from document.title, split at the pipe.
+    // A SPA has one document title, so the heading is carried on the manifest
+    // instead — taken from his own <title> rather than invented from the slug.
+    // His src/*.html are body fragments; build.js supplies the <head>, so the
+    // title lives on the built page at the repo root, not on the source.
+    const built = path.join(SITE, `${page.src.replace(/^src\//, "")}`);
+    const titleAt = fs.existsSync(built)
+      ? fs.readFileSync(built, "utf8").match(/<title>([^<]*)<\/title>/i)
+      : null;
+    page.title = titleAt ? titleAt[1].split("|")[0].trim() : "";
 
     body = editPage(page.src, body);
 
@@ -576,6 +635,7 @@ ${[...PAGES.filter((p) => !p.internal).map((p) => ({ ...p, from: `./${p.name}.js
   .map(
     (p) =>
       `  { slug: ${JSON.stringify(p.slug)}, name: ${JSON.stringify(p.name)}, ` +
+      `title: ${JSON.stringify(p.title || "")}, ` +
       `promo: ${p.promo === true}, ` +
       `Component: React.lazy(() => import("${p.from}")) },`,
   )
