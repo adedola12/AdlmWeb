@@ -12,21 +12,30 @@ import { useAuth } from "../store.jsx";
 import { trackEvent } from "../ga";
 import { finishSocialAuth } from "../lib/socialAuth.js";
 
+// Codes already handed to the server, kept OUTSIDE the component.
+//
+// An authorization code is single use. React's StrictMode remounts a component
+// in development, and a remount creates a fresh ref — so a `useRef` guard does
+// not survive it, and the second run redeems a code the first one already
+// used. The provider answers "the code has expired", which is true and reads
+// like a real failure sitting underneath the real one.
+//
+// Module scope survives the remount. Not a development-only nicety either: a
+// double-submit or a fast refresh would do the same thing.
+const seen = new Set();
+
 export default function AuthCallback() {
   const [params] = useSearchParams();
   const { setAuth, accessToken } = useAuth();
   const nav = useNavigate();
   const [err, setErr] = React.useState("");
 
-  // A ref, not state: React runs effects twice in development, and without
-  // this the authorisation code is exchanged twice — the second attempt fails,
-  // because a code is single-use, and the error replaces a sign-in that
-  // actually worked.
-  const ran = React.useRef(false);
-
   React.useEffect(() => {
-    if (ran.current) return;
-    ran.current = true;
+    // Keyed on the code itself, so two different sign-ins in one session are
+    // both still allowed through.
+    const thisCode = params.get("code");
+    if (!thisCode || seen.has(thisCode)) return;
+    seen.add(thisCode);
 
     (async () => {
       try {
