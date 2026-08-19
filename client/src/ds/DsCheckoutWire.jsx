@@ -49,6 +49,40 @@ export default function DsCheckoutWire() {
     setMeta(readCartMeta());
   }, []);
 
+  // Spot a not-yet-sellable line on arrival, not on the way back from a failed
+  // order.
+  //
+  // Two reasons. The buyer should be told before they reach for their card,
+  // and — more importantly — a signed-out visitor never gets that far: Pay
+  // sends them to sign in first, so a notice that only appeared after the
+  // server rejected the order was unreachable for exactly the person a
+  // waitlist exists to capture. The catalogue already publishes isComingSoon,
+  // so it can be answered here. The server's `unavailable` reply stays as the
+  // backstop for anything this misses.
+  React.useEffect(() => {
+    const keys = readCartItems().map((it) => String(it.productKey || "").trim());
+    if (!keys.length) return undefined;
+    let alive = true;
+    fetch(`${API_BASE}/products`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((raw) => {
+        if (!alive || !raw) return;
+        const all = Array.isArray(raw) ? raw : raw.items || raw.products || [];
+        const soon = all
+          .filter((p) => keys.includes(p.key) && (p.isComingSoon || !p.isPublished))
+          .map((p) => ({
+            key: p.key,
+            name: p.name || p.key,
+            reason: p.isComingSoon ? "coming_soon" : "unpublished",
+          }));
+        if (soon.length) setPending(soon);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // The quotation already decided these. Arriving here having priced six
   // products in dollars and then being charged in naira, or having chosen an
   // Abuja training class that silently vanished, is exactly the kind of drift
@@ -74,6 +108,10 @@ export default function DsCheckoutWire() {
   // a real product, still being built, that the catalogue marks isComingSoon.
   const [pending, setPending] = React.useState([]);
   const [joined, setJoined] = React.useState(false);
+  // Filled in only when nobody is signed in. Someone pricing CIVIQ before they
+  // have an account is exactly the person a waitlist is for, so the button
+  // cannot depend on being logged in.
+  const [guest, setGuest] = React.useState({ name: "", email: "" });
   const fileRef = React.useRef(null);
 
   const total = order?.totalAmount ?? null;
@@ -220,7 +258,15 @@ export default function DsCheckoutWire() {
   // Join the waitlist for a product that is not finished. Uses the same
   // endpoint and the same topic string as his CIVIQ form, so these land in one
   // list in the admin rather than a second bucket nobody works.
+  // Who is asking: the signed-in account if there is one, otherwise whatever
+  // they typed. The server requires both a name and an email.
+  const knownEmail = user?.email || meta?.org?.email || "";
+  const wlEmail = (knownEmail || guest.email).trim();
+  const wlName = (user?.name || guest.name || billing.company || "").trim();
+  const wlReady = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(wlEmail) && wlName.length > 0;
+
   const joinWaitlist = async () => {
+    if (!wlReady) return;
     setBusy(true);
     try {
       await fetch(`${API_BASE}/waitlist`, {
@@ -228,8 +274,8 @@ export default function DsCheckoutWire() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: "CIVIQ waitlist",
-          name: user?.name || billing.company || user?.email || "",
-          email: user?.email || meta?.org?.email || "",
+          name: wlName,
+          email: wlEmail,
           org: billing.company || meta?.org?.name || "",
           civil3d: pending.map((u) => u.name).join(", "),
           message: "Asked for it at checkout.",
@@ -433,14 +479,40 @@ export default function DsCheckoutWire() {
           {joined ? (
             <p className="small">You are on the list. We will be in touch.</p>
           ) : (
-            <button
-              type="button"
-              className="ds-btn btn-o ds-btn-sm"
-              disabled={busy || !(user?.email || meta?.org?.email)}
-              onClick={joinWaitlist}
-            >
-              Join the waitlist
-            </button>
+            <div className="chk-wl">
+              {!knownEmail && (
+                <>
+                  <input
+                    type="text"
+                    autoComplete="name"
+                    placeholder="Your name"
+                    aria-label="Your name"
+                    value={guest.name}
+                    onChange={(e) => setGuest({ ...guest, name: e.target.value })}
+                  />
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    placeholder="you@firm.com"
+                    aria-label="Your email"
+                    value={guest.email}
+                    onChange={(e) => setGuest({ ...guest, email: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && wlReady) joinWaitlist();
+                    }}
+                  />
+                </>
+              )}
+              <button
+                type="button"
+                className="ds-btn btn-o ds-btn-sm"
+                disabled={busy || !wlReady}
+                onClick={joinWaitlist}
+              >
+                Join the waitlist
+              </button>
+            </div>
           )}
         </div>
       )}

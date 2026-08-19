@@ -144,3 +144,33 @@
 .ds .chk-soon p {
   margin-bottom: 10px;
 }
+
+/* The waitlist row inside .chk-soon. Two fields and a button when nobody is
+ * signed in; the button alone when we already know who is asking. */
+.ds .chk-wl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ds .chk-wl input {
+  flex: 1 1 170px;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.ds .chk-wl input:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.ds .chk-wl button {
+  flex: none;
+}
