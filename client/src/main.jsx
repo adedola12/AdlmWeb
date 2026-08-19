@@ -52,6 +52,7 @@ import AdminRoles from "./pages/AdminRoles.jsx";
 import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RequestTechnicalHelp from "./pages/RequestTechnicalHelp.jsx";
+import AdminFollowUps from "./pages/AdminFollowUps.jsx";
 import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
 import AdminAuditLog from "./pages/AdminAuditLog.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
@@ -634,6 +635,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="support">
             <AdminSupportTickets />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Renewal follow-up calls — staff-grantable ("followups" area)
+      {
+        path: "admin/follow-ups",
+        element: (
+          <AdminRoute permission="followups">
+            <AdminFollowUps />
           </AdminRoute>
         ),
       },

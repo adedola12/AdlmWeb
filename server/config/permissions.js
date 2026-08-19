@@ -18,6 +18,11 @@ export const ADMIN_AREAS = [
   { key: "proposals", label: "Proposals", group: "Finance", staffGrantable: true },
   { key: "users", label: "Users", group: "People", staffGrantable: true },
   { key: "support", label: "Support Tickets", group: "Support", staffGrantable: true },
+  // The renewal call desk: expired subscriptions and unapproved purchases, with
+  // a call log. Staff-grantable and deliberately separate from "users" — the
+  // person making the calls needs a phone number and a notepad, not the user
+  // directory, and nothing on that screen can change an entitlement.
+  { key: "followups", label: "Follow-Up Calls", group: "People", staffGrantable: true },
   // The main Admin Hub section pages (Pending, Active subscriptions,
   // Organizations, Storage, Installations, Settings …) and their API. Grant
   // deliberately — it includes purchase approval and entitlement management.

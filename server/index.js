@@ -389,8 +389,10 @@ app.use("/admin/roles", adminRoles);
 // ("audit") gates apply instead of the catch-all's admin-only middleware.
 import adminSupport from "./routes/admin.support.js";
 import adminAudit from "./routes/admin.audit.js";
+import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/audit-log", adminAudit);
+app.use("/admin/followups", adminFollowUps);
 
 // IMPORTANT: keep this catch-all "/admin" mount AFTER all the more-specific
 // "/admin/<feature>" mounts above. adminRoutes runs requireAuth+requireAdmin
