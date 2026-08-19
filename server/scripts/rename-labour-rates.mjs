@@ -33,16 +33,18 @@ const APPLY = args.includes("--apply");
 const restoreAt = args.indexOf("--restore");
 const RESTORE_FILE = restoreAt >= 0 ? args[restoreAt + 1] : null;
 
-// Spelling only. "whelled" is not a word, and a pneumatic roller runs on tyres.
-// Deliberately NOT touching "Static steel wheeled roller - (2.7 to 6 tonnes)":
-// that one is spelled correctly and its stray dash is a formatting question, not
-// a spelling one, so it is left for a separate decision.
+// Deliberately NOT touching the adjectival capacities — "Crane-80 ton",
+// "Tipping lorry-10 ton", "Barge (100 ton capacity)". "An 80 ton crane" is
+// idiomatic and those nine names already agree with each other; it is the
+// parenthetical RANGES that have to match, and five of the seven say "tonnes".
+// "Static steel wheeled roller - (2.7 to 6 tonnes)" keeps its stray dash too:
+// that is formatting, not spelling.
 const RENAMES = {
-  "Vibratory whelled roller (8 to 10 tons)": "Vibratory wheeled roller (8 to 10 tons)",
-  "Vibratory whelled roller (10 to 20 tons)": "Vibratory wheeled roller (10 to 20 tons)",
-  "Pneumatic tired roller (2.7 to 10 tonnes)": "Pneumatic tyred roller (2.7 to 10 tonnes)",
-  "Pneumatic tired roller (10 to 20 tonnes)": "Pneumatic tyred roller (10 to 20 tonnes)",
-  "Pneumatic tired roller (20 to 31.8 tonnes)": "Pneumatic tyred roller (20 to 31.8 tonnes)",
+  // Every other parenthetical range in the catalogue reads "tonnes"; these two
+  // read "tons". Earlier passes of this script (whelled -> wheeled, tired ->
+  // tyred) are in git history and in their own backup files.
+  "Vibratory wheeled roller (8 to 10 tons)": "Vibratory wheeled roller (8 to 10 tonnes)",
+  "Vibratory wheeled roller (10 to 20 tons)": "Vibratory wheeled roller (10 to 20 tonnes)",
 };
 
 const uri = process.env.RATEGEN_MONGO_URI || process.env.MONGO_URI || "";
