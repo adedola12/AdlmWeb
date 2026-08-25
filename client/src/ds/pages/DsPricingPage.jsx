@@ -59,8 +59,8 @@ export default function DsPricingPage({ d }) {
               See the prices
             </a>
             {" "}
-            <Link to="/contact" data-ds-page="contact" className="ds-btn btn-o">
-              Build a quote
+            <Link to="/quote" data-ds-page="quote" className="ds-btn btn-o">
+              Build a quotation
             </Link>
             {" "}
           </div>
@@ -1312,8 +1312,8 @@ export default function DsPricingPage({ d }) {
         {" "}
         <div className="hero-cta">
           {" "}
-          <Link to="/contact" data-ds-page="contact" className="ds-btn btn-p">
-            Build a quote
+          <Link to="/quote" data-ds-page="quote" className="ds-btn btn-p">
+            Build a quotation
           </Link>
           {" "}
           <Link to="/contact" data-ds-page="contact" className="ds-btn btn-o">

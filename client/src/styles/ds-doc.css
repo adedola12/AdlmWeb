@@ -197,10 +197,13 @@
 
 
 /* key/value pairs — the bill-to block, dates, references */
-.ds .doc-kv{display:flex;gap:6pt;margin:0 0 10pt var(--doc-gutter);font-size:10pt}
+.ds .doc-kv{display:flex;gap:9pt;margin:0 0 14pt var(--doc-gutter);font-size:10pt}
 .ds .doc-kv .doc-k{font-weight:600;color:#3E3E3E;white-space:nowrap}
-.ds .doc-kv .doc-v{font-weight:500;color:#3E3E3E;line-height:1.394;letter-spacing:-.2pt}
+.ds .doc-kv .doc-v{font-weight:500;color:#3E3E3E;line-height:1.55;letter-spacing:-.2pt}
 .ds .doc-kv .doc-v div{display:block}
+
+/* the label sits on the first line of its value, not above the whole block */
+.ds .doc-kv .doc-k{padding-top:.2pt}
 
 
 /* ---------------------------------------------------------------- the table */
@@ -285,7 +288,7 @@
 
 /* ---------------------------------------------------------------- invoice head */
 .ds .doc-invhead{display:flex;align-items:flex-start;justify-content:space-between;
-  margin-bottom:17pt}
+  margin-bottom:26pt}
 .ds .doc-invhead img.doc-logo{height:24pt;width:auto;display:block}
 .ds .doc-invhead .doc-title{text-align:right}
 .ds .doc-invhead .doc-title b{display:block;font-size:32pt;font-weight:700;line-height:1;

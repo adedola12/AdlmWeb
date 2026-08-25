@@ -83,7 +83,7 @@ export default function App() {
           <Outlet />
         </ErrorBoundary>
       </main>
-
+        
       {!appShellRoute && <Footer />}
       <AiAgent />
 

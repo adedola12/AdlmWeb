@@ -735,8 +735,8 @@ export default function DsRateGenPage({ d }) {
                 Get RateGen
               </Link>
               {" "}
-              <Link to="/contact" data-ds-page="contact" className="ds-btn btn-o">
-                Build a quote
+              <Link to="/quote" data-ds-page="quote" className="ds-btn btn-o">
+                Build a quotation
               </Link>
               {" "}
             </div>

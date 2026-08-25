@@ -77,7 +77,7 @@ export default function DsCart() {
               </h3>
               {" "}
               <p className="ds-sub">
-                Prices are per PC. Install fees are charged once.
+                Licences are per PC and install fees are charged once. Training seats are a year at a time, and on-site training is quoted after we speak.
               </p>
               {" "}
               <div className="toggle2" id="bill-toggle" role="group" aria-label="Billing period">
@@ -92,134 +92,11 @@ export default function DsCart() {
                 {" "}
               </div>
               {" "}
-              <div className="line" data-sku="quiv" data-price="50000" data-install="25000">
-                {" "}
-                <img src="/ds/ic-quiv.png" alt="" />
-                {" "}
-                <div>
-                  {" "}
-                  <b>
-                    QUIV
-                  </b>
-                  <span>
-                    3D takeoff · Autodesk Revit
-                  </span>
-                  {" "}
-                  <div className="qty">
-                    {" "}
-                    <button type="button" data-step="-1" aria-label="Fewer QUIV seats">
-                      −
-                    </button>
-                    {" "}
-                    <span data-qty="">
-                      2
-                    </span>
-                    {" "}
-                    <button type="button" data-step="1" aria-label="More QUIV seats">
-                      +
-                    </button>
-                    {" "}
-                  </div>
-                  {" "}
-                </div>
-                {" "}
-                <div className="amt2">
-                  <span data-lt="">
-                    ₦100,000
-                  </span>
-                  <small data-lu="">
-                    2 × ₦50,000 / mo
-                  </small>
-                </div>
-                {" "}
-              </div>
-              {" "}
-              <div className="line" data-sku="rategen" data-price="8000" data-install="0">
-                {" "}
-                <img src="/ds/ic-rategen.png" alt="" />
-                {" "}
-                <div>
-                  {" "}
-                  <b>
-                    RateGen
-                  </b>
-                  <span>
-                    Rate build-ups · desktop
-                  </span>
-                  {" "}
-                  <div className="qty">
-                    {" "}
-                    <button type="button" data-step="-1" aria-label="Fewer RateGen seats">
-                      −
-                    </button>
-                    {" "}
-                    <span data-qty="">
-                      2
-                    </span>
-                    {" "}
-                    <button type="button" data-step="1" aria-label="More RateGen seats">
-                      +
-                    </button>
-                    {" "}
-                  </div>
-                  {" "}
-                </div>
-                {" "}
-                <div className="amt2">
-                  <span data-lt="">
-                    ₦16,000
-                  </span>
-                  <small data-lu="">
-                    2 × ₦8,000 / mo
-                  </small>
-                </div>
-                {" "}
-              </div>
-              {" "}
-              <div className="line" data-sku="heron" data-price="12000" data-install="15000">
-                {" "}
-                <img src="/ds/ic-heron.png" alt="" />
-                {" "}
-                <div>
-                  {" "}
-                  <b>
-                    HERON
-                  </b>
-                  <span>
-                    2D takeoff · PlanSwift
-                  </span>
-                  {" "}
-                  <div className="qty">
-                    {" "}
-                    <button type="button" data-step="-1" aria-label="Fewer HERON seats">
-                      −
-                    </button>
-                    {" "}
-                    <span data-qty="">
-                      1
-                    </span>
-                    {" "}
-                    <button type="button" data-step="1" aria-label="More HERON seats">
-                      +
-                    </button>
-                    {" "}
-                  </div>
-                  {" "}
-                </div>
-                {" "}
-                <div className="amt2">
-                  <span data-lt="">
-                    ₦12,000
-                  </span>
-                  <small data-lu="">
-                    1 × ₦12,000 / mo
-                  </small>
-                </div>
-                {" "}
+              <div id="cart-lines">
               </div>
               {" "}
               <p className="small" style={{ marginTop: "20px" }}>
-                Need something not listed, or more than ten seats?{" "}
+                Need more than ten seats, or a document to take to whoever signs?{" "}
                 <Link to="/quote" data-ds-page="quote" style={{ color: "var(--action)" }}>
                   Build a quotation instead
                 </Link>

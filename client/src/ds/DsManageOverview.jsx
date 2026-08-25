@@ -118,8 +118,10 @@ export default function DsManageOverview() {
       ? sameDay.reduce((sum, e) => {
           const p = catalogue[e.productKey];
           if (!p) return sum;
-          const months = p.billingInterval === "yearly" ? 12 : 1;
-          return sum + termTotalNGN(p, months) * (Number(e.seats) || 1);
+          // One billing period, not twelve. termTotal counts PERIODS, and for
+          // a yearly-billed product a period is a year — passing 12 returned
+          // twelve years of it. See the note in DsBilling.
+          return sum + termTotalNGN(p, 1) * (Number(e.seats) || 1);
         }, 0)
       : 0;
 

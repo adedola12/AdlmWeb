@@ -443,10 +443,27 @@ function paginate(host, ctx) {
   const first = sheets[0];
   const box = first.querySelector(".doc-body");
   if (!box) return;
-  const limit = box.clientHeight;
+  let limit = box.clientHeight;
   if (!limit) return;
 
   const foot = box.querySelector(".doc-foot-row");
+
+  // Reserve the payment/signature row's height before measuring anything.
+  //
+  // It is pinned to the foot of the last sheet with position:absolute, so it
+  // was lifted out of the flow and then not subtracted from the space the flow
+  // was allowed to fill. On any document whose last page ran long, the copy
+  // filled the box to the floor and the payment block printed straight over
+  // the top of it — and because the overflow never became a second page, the
+  // sheet still read "Page 1 of 1".
+  const footH = foot ? foot.offsetHeight + 14 : 0;
+  if (footH && footH < limit) limit -= footH;
+
+  // Heights are whole pixels and a page holds a dozen blocks, so the rounding
+  // accumulates: a page measuring as exactly full rendered three or four
+  // pixels past its floor and clipped the last line.
+  limit -= 5;
+
   if (foot) foot.parentNode.removeChild(foot);
   const footHTML = ctx.footRow || (foot ? foot.outerHTML : "");
 
@@ -474,6 +491,10 @@ function paginate(host, ctx) {
     pages.push([el]);
     used = h + margin;
   });
+
+  // A trailing page with nothing on it is a sheet of letterhead somebody has
+  // to throw away. It happens when the last block lands exactly on a boundary.
+  while (pages.length > 1 && !pages[pages.length - 1].length) pages.pop();
 
   const wrap = first.parentNode;
   const sheetCls = first.className;

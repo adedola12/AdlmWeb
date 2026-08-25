@@ -143,6 +143,10 @@ export default function DsQuotePage({ d }) {
               Print or save as PDF
             </button>
             {" "}
+            <button type="button" className="ds-btn btn-o ds-btn-sm" id="qt-keep">
+              Keep this quotation
+            </button>
+            {" "}
             <button type="button" className="ds-btn btn-o ds-btn-sm qt-close">
               Close
             </button>

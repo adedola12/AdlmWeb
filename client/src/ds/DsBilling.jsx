@@ -136,14 +136,22 @@ export default function DsBilling() {
 
     const lines = sameDay.map((e) => {
       const p = catalogue[e.productKey];
-      const months = p?.billingInterval === "yearly" ? 12 : 1;
+      const yearly = p?.billingInterval === "yearly";
       const seats = Number(e.seats) || 1;
+      // ONE billing period, whatever that period is.
+      //
+      // termTotal's second argument is periods, and for a yearly-billed
+      // product a period is a year — so passing 12 asks for twelve YEARS and
+      // returns twelve times the annual price. Passing 1 is right for both
+      // kinds: a yearly product bills its yearly figure, a monthly one bills
+      // its monthly figure. Richard hit the same shape of fault on his side,
+      // quoting RateGen at 80,000 against a published 70,000.
       return {
         key: e.productKey,
         name: p?.name || e.productKey,
         seats,
-        months,
-        amount: termTotalNGN(p, months) * seats,
+        yearly,
+        amount: termTotalNGN(p, 1) * seats,
       };
     });
 
@@ -235,7 +243,7 @@ export default function DsBilling() {
                       <div key={l.key}>
                         <span>
                           {l.name} · {l.seats} seat{l.seats === 1 ? "" : "s"}
-                          {l.months === 12 ? " · yearly" : ""}
+                          {l.yearly ? " · yearly" : " · monthly"}
                         </span>
                         <b>{money(l.amount)}</b>
                       </div>

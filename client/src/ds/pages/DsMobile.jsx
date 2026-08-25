@@ -66,6 +66,25 @@ export default function DsMobile() {
             {" "}
           </div>
           {" "}
+          <p className="hero-note">
+            <span className="pulse">
+            </span>
+            Same account ·{" "}
+            <b>
+              no second licence
+            </b>
+          </p>
+          {" "}
+        </div>
+        {" "}
+        <div className="stage stage-photo">
+          {" "}
+          <div className="stage-in">
+            {" "}
+            <img src="/ds/hd-onsite.jpg" width="2000" height="1334" alt="A quantity surveyor on site, checking rates on a phone" />
+            {" "}
+          </div>
+          {" "}
         </div>
         {" "}
       </header>
@@ -504,9 +523,10 @@ export default function DsMobile() {
             {" "}
           </div>
           {" "}
-          <div className="bento">
+          <div className="mb-grid">
             {" "}
-            <article className="bento-c tilt rise">
+            <article className="bento-c tilt rise mb-lead">
+              {" "}
               <div className="ico">
                 <svg viewBox="0 0 24 24">
                   <use href="#i-calc" />
@@ -514,16 +534,52 @@ export default function DsMobile() {
               </div>
               {" "}
               <div className="bento-body">
+                {" "}
                 <h4>
-                  Edit rates
+                  Edit a rate where you are standing
                 </h4>
+                {" "}
                 <p>
-                  Change a material price or a labour output and the rate rebuilds.
+                  Cement moved this morning. Change the price or the labour output and the rate rebuilds against your own library, not a copy of it, the same one the desktop priced the bill from.
                 </p>
+                {" "}
+                <div className="mb-num">
+                  <b>
+                    ₦14,150
+                  </b>
+                  <span>
+                    Concrete grade 25 · per m³ · rebuilt just now
+                  </span>
+                </div>
+                {" "}
               </div>
+              {" "}
+            </article>
+            {" "}
+            <article className="bento-c tilt rise mb-shot">
+              {" "}
+              <div className="bento-img">
+                {" "}
+                <img src="/ds/hd-onsite.jpg" alt="Checking a rate on site" loading="lazy" />
+                {" "}
+              </div>
+              {" "}
+              <div className="bento-body">
+                {" "}
+                <h4>
+                  Nowhere near a workstation
+                </h4>
+                {" "}
+                <p>
+                  Only measuring needs the model. Everything after it fits in a pocket.
+                </p>
+                {" "}
+              </div>
+              {" "}
             </article>
             {" "}
             <article className="bento-c tilt rise">
+              {" "}
               <div className="ico ico-a">
                 <svg viewBox="0 0 24 24">
                   <use href="#i-chart" />
@@ -534,13 +590,16 @@ export default function DsMobile() {
                 <h4>
                   Check budgets
                 </h4>
+                {" "}
                 <p>
-                  See where a project sits against its priced budget.
+                  Where a project sits against what it was priced at, before you answer the client.
                 </p>
               </div>
+              {" "}
             </article>
             {" "}
             <article className="bento-c tilt rise">
+              {" "}
               <div className="ico">
                 <svg viewBox="0 0 24 24">
                   <use href="#i-doc" />
@@ -551,13 +610,16 @@ export default function DsMobile() {
                 <h4>
                   Review quantities
                 </h4>
+                {" "}
                 <p>
-                  Read what was extracted on the desktop, line by line.
+                  Read what was extracted on the desktop, line by line, and flag what looks wrong.
                 </p>
               </div>
+              {" "}
             </article>
             {" "}
-            <article className="bento-c tilt rise">
+            <article className="bento-c tilt rise mb-wide">
+              {" "}
               <div className="ico">
                 <svg viewBox="0 0 24 24">
                   <use href="#i-cloud" />
@@ -565,13 +627,17 @@ export default function DsMobile() {
               </div>
               {" "}
               <div className="bento-body">
+                {" "}
                 <h4>
-                  Works offline
+                  No signal is a normal condition on a site, not an error
                 </h4>
+                {" "}
                 <p>
-                  Records on site with no signal and syncs when you reconnect.
+                  Records keep working with nothing to connect to, and sync when you come back into range. Nothing is lost in the basement of a building.
                 </p>
+                {" "}
               </div>
+              {" "}
             </article>
             {" "}
           </div>
