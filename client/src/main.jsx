@@ -89,6 +89,8 @@ const ManageTeam = React.lazy(() => import("./pages/ManageTeam.jsx"));
 const ManageBilling = React.lazy(() => import("./pages/ManageBilling.jsx"));
 const ManageDownloads = React.lazy(() => import("./pages/ManageDownloads.jsx"));
 const ManageSettings = React.lazy(() => import("./pages/ManageSettings.jsx"));
+const WorkHome = React.lazy(() => import("./pages/WorkHome.jsx"));
+const WorkProjects = React.lazy(() => import("./pages/WorkProjects.jsx"));
 import UserInvoice from "./pages/UserInvoice.jsx";
 
 // ✅ QUIV for ArchiCAD
@@ -250,6 +252,10 @@ const router = createBrowserRouter([
         { path: "manage/billing", el: <ManageBilling /> },
         { path: "manage/downloads", el: <ManageDownloads /> },
         { path: "manage/settings", el: <ManageSettings /> },
+        // The Work group. Organised by project rather than by product, which
+        // is the whole architectural point of the surface.
+        { path: "work", el: <WorkHome /> },
+        { path: "work/projects", el: <WorkProjects /> },
       ].map(({ path, el }) => ({
         path,
         element: (
