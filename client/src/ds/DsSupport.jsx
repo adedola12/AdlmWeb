@@ -17,6 +17,7 @@
 // mean support asking for it in the first reply every time.
 
 import React from "react";
+import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
 import { useAuth } from "../store.jsx";
