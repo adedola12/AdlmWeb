@@ -153,7 +153,17 @@ export default function AiAgent() {
       navigate(a.to);
     } else if (a.type === "whatsapp") {
       window.open(
-        waLink(a.number, `Hi ADLM, ${user?.name ? `${user.name} here. ` : ""}I need help.`),
+        // firstName/lastName, not `name` — buildAuthPayload has never sent a
+        // joined one, so this always fell through to the anonymous wording
+        // even for somebody signed in.
+        waLink(
+          a.number,
+          `Hi ADLM, ${
+            [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim()
+              ? `${[user.firstName, user.lastName].filter(Boolean).join(" ").trim()} here. `
+              : ""
+          }I need help.`,
+        ),
         "_blank",
         "noopener,noreferrer",
       );

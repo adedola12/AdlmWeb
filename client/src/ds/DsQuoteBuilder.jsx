@@ -32,6 +32,38 @@ const DsQuoteDoc = React.lazy(() => import("./DsQuoteDoc.jsx"));
 // VAT, as his document renderer applies it.
 const VAT = 0.075;
 
+// Quotations kept on this machine.
+//
+// Ported from the SAVE_KEY half of his quote.js. His copy explains the browser
+// storage by saying there is no account yet; on our site there IS an account,
+// so the reason is different and the wording says the true one: we have no
+// endpoint that stores a draft quotation. /quote/send emails one and the cart
+// carries a selection, but nothing persists the working document, so a draft
+// belongs to the browser that made it. If a store is ever added, this is the
+// only part of the file that changes.
+const DRAFT_KEY = "adlm-quotes";
+const DRAFT_MAX = 12;
+
+function readDrafts() {
+  if (typeof window === "undefined") return [];
+  try {
+    const v = JSON.parse(window.localStorage.getItem(DRAFT_KEY));
+    return Array.isArray(v) ? v : [];
+  } catch {
+    // Corrupt or unavailable storage (private mode, quota, a half-written
+    // value) is not worth an error state on a pricing page.
+    return [];
+  }
+}
+
+function writeDrafts(all) {
+  try {
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(all.slice(0, DRAFT_MAX)));
+  } catch {
+    /* nothing to do — the quotation itself still works */
+  }
+}
+
 // His catalogue order, his editorial sub-lines and his icons — none of which
 // live in the product record. `key` is what the API is keyed on.
 const PRODUCTS = [
@@ -315,6 +347,54 @@ export default function DsQuoteBuilder() {
   }, [qty, bill, priceOf, inCur, sites, siteId, bimInstall, cur, vatRate]);
 
   const picked = calc.rows.length > 0;
+
+  // Kept quotations. His feature, his shape: the selection, the firm, the
+  // currency and enough of the total to show a row without recomputing it.
+  const [drafts, setDrafts] = React.useState(() => readDrafts());
+
+  const keepDraft = React.useCallback(() => {
+    if (!picked) return;
+    const stamp = new Date();
+    const rec = {
+      // His number, which is the date plus the last four of the total — enough
+      // to tell two quotations made the same day apart.
+      number: `ADLM-${stamp.toISOString().slice(0, 10).replace(/-/g, "")}-${String(
+        Math.round(calc.total),
+      ).slice(-4)}`,
+      made: stamp.toISOString(),
+      bill,
+      cur,
+      qty: { ...qty },
+      siteId,
+      bimInstall,
+      firm: { ...firm },
+      total: calc.total,
+      count: calc.rows.length,
+    };
+    setDrafts((prev) => {
+      const all = [rec, ...prev.filter((r) => r.number !== rec.number)];
+      writeDrafts(all);
+      return all.slice(0, DRAFT_MAX);
+    });
+  }, [picked, calc, bill, cur, qty, siteId, bimInstall, firm]);
+
+  const dropDraft = React.useCallback((number) => {
+    setDrafts((prev) => {
+      const all = prev.filter((r) => r.number !== number);
+      writeDrafts(all);
+      return all;
+    });
+  }, []);
+
+  const openDraft = React.useCallback((rec) => {
+    setQty({ ...rec.qty });
+    setBill(rec.bill);
+    setCur(rec.cur || "NGN");
+    setSiteId(rec.siteId ?? "");
+    setBimInstall(!!rec.bimInstall);
+    setFirm({ org: "", person: "", email: "", phone: "", addr: "", ...(rec.firm || {}) });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   // "Buy these now" has to carry the selection across.
   //
@@ -799,6 +879,14 @@ export default function DsQuoteBuilder() {
             >
               Buy these now
             </button>
+            <button
+              type="button"
+              className="ds-btn btn-o btn-full"
+              style={{ marginTop: "10px" }}
+              onClick={keepDraft}
+            >
+              Keep this quotation
+            </button>
             <div className="trust">
               <span>
                 <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>Valid for 30 days
@@ -810,6 +898,58 @@ export default function DsQuoteBuilder() {
                 <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>Print or save as PDF
               </span>
             </div>
+          </div>
+        )}
+
+        {drafts.length > 0 && (
+          <div id="qt-saved" className="qt-saved">
+            <h3>Kept on this machine</h3>
+            <p className="sub">
+              Quotations you saved here. They live in this browser only: nothing that stores a
+              draft against your account exists yet, so clearing your browser data removes them.
+              Buying, or emailing yourself the document, is what makes one permanent.
+            </p>
+            {drafts.map((r) => (
+              <div className="qt-saved-row" key={r.number}>
+                <div>
+                  <b>{r.number}</b>
+                  <span>
+                    {new Date(r.made).toLocaleDateString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                    {" · "}
+                    {r.count} line{r.count === 1 ? "" : "s"}
+                    {r.firm?.org ? ` · ${r.firm.org}` : ""}
+                  </span>
+                </div>
+                <div className="qt-saved-amt">
+                  {new Intl.NumberFormat(r.cur === "USD" ? "en-US" : "en-NG", {
+                    style: "currency",
+                    currency: r.cur || "NGN",
+                    maximumFractionDigits: r.cur === "USD" ? 2 : 0,
+                  }).format(Number(r.total) || 0)}
+                </div>
+                <div className="qt-saved-act">
+                  <button
+                    type="button"
+                    className="ds-btn btn-o btn-sm"
+                    onClick={() => openDraft(r)}
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    className="qt-x"
+                    aria-label={`Remove ${r.number}`}
+                    onClick={() => dropDraft(r.number)}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
