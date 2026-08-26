@@ -146,6 +146,43 @@ export default function DsSettings() {
     }
   };
 
+  // Sign a machine out. The same endpoint Team & seats uses -- this panel used
+  // to tell people to raise a ticket for it, which stopped being true the day
+  // /me/devices/revoke landed.
+  const release = React.useCallback(
+    async (d) => {
+      const label = d.name || d.fingerprint.slice(0, 12);
+      if (
+        !window.confirm(
+          `Sign ${label} out?
+
+` +
+            "Its activation is freed immediately and the seat can be installed " +
+            "on another machine. Nothing on the machine is deleted.",
+        )
+      ) {
+        return;
+      }
+      setSaving(`dev:${d.fingerprint}`);
+      setProblem("");
+      try {
+        await apiAuthed("/me/devices/revoke", {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fingerprint: d.fingerprint }),
+        });
+        const fresh = await apiAuthed("/me/devices", { token: accessToken });
+        setDevices(fresh.devices || []);
+      } catch (e) {
+        setProblem(e.message || "That machine could not be signed out.");
+      } finally {
+        setSaving("");
+      }
+    },
+    [accessToken],
+  );
+
   if (failed) {
     return (
       <div className="dsh-in">
@@ -204,24 +241,11 @@ export default function DsSettings() {
                     <input id="st-tel" type="tel" value={form.whatsapp} onChange={set("whatsapp")} />
                   </div>
                 </div>
-                <div className="two">
-                  <div className="field">
-                    <label htmlFor="st-user">
-                      Display name <span className="opt">optional</span>
-                    </label>
-                    <input id="st-user" type="text" value={form.username} onChange={set("username")} />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="st-state">State</label>
-                    <select id="st-state" value={form.state} onChange={set("state")}>
-                      <option value="">Not set</option>
-                      {(profile.states || []).map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="field">
+                  <label htmlFor="st-user">
+                    Display name <span className="opt">optional</span>
+                  </label>
+                  <input id="st-user" type="text" value={form.username} onChange={set("username")} />
                 </div>
                 <div>
                   <button className="btn btn-p btn-sm" type="submit" disabled={saving === "profile"}>
@@ -238,6 +262,62 @@ export default function DsSettings() {
                     </span>
                   )}
                 </div>
+              </form>
+            </div>
+          </section>
+
+          {/* His "Rates and currency".
+              His asks for a CITY and derives the zone from it, on the grounds
+              that nobody thinks of themselves as working in "South West" --
+              they work in Ibadan. Ours asks for the state, which is the same
+              idea and is what the profile already stores: GET /me/profile
+              returns the state the person picked and the zone derived from it,
+              and the desktop products read the same field.
+
+              So this is one real control and an explanation of what it does,
+              rather than a preference that goes nowhere. */}
+          <section className="dsh-panel">
+            <div className="dsh-ph">
+              <h2>Rates and currency</h2>
+              <span className="when">Decides every price you see</span>
+            </div>
+            <div className="dsh-body">
+              <form className="dsh-form" onSubmit={saveProfile} style={{ maxWidth: "none" }}>
+                <div className="two">
+                  <div className="field">
+                    <label htmlFor="st-state">Where you work</label>
+                    <select id="st-state" value={form.state} onChange={set("state")}>
+                      <option value="">Not set</option>
+                      {(profile.states || []).map((st) => (
+                        <option key={st} value={st}>
+                          {st}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="hint">Only used to work out your geopolitical zone.</p>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="st-zone">Geopolitical zone</label>
+                    <input
+                      id="st-zone"
+                      type="text"
+                      value={profile.zone || "Not set"}
+                      readOnly
+                      disabled
+                    />
+                    <p className="hint">Derived from the state. Saved when you save below.</p>
+                  </div>
+                </div>
+                <div>
+                  <button className="btn btn-p btn-sm" type="submit" disabled={saving === "profile"}>
+                    {saving === "profile" ? "Saving…" : "Save location"}
+                  </button>
+                </div>
+                <p className="hint">
+                  Materials and labour are priced by zone, so this is what decides the figures in
+                  your rate library and in every project priced against it afterwards. Projects
+                  already priced keep the rates they were priced with.
+                </p>
               </form>
             </div>
           </section>
@@ -342,6 +422,14 @@ export default function DsSettings() {
                         {d.products.map((k) => NAMES[k] || k).join(", ")} · {ago(d.lastSeenAt)}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      className="btn btn-o btn-sm"
+                      onClick={() => release(d)}
+                      disabled={saving === `dev:${d.fingerprint}`}
+                    >
+                      {saving === `dev:${d.fingerprint}` ? "Signing out…" : "Sign out"}
+                    </button>
                   </div>
                 ))
               ) : (
@@ -358,8 +446,9 @@ export default function DsSettings() {
                   lineHeight: 1.6,
                 }}
               >
-                To free a machine&apos;s activation, when a laptop is replaced or leaves the
-                practice, ask support to release it. Releasing one from here is not built yet.
+                Signing a machine out here frees its activation immediately, which is what you
+                want when a laptop is replaced or leaves the practice. The seat can be installed
+                on another machine straight away, and nothing on this one is deleted.
               </p>
             </div>
           </section>
