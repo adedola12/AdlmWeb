@@ -125,7 +125,17 @@
 }
 @media print{
 
-  /* the composer is chrome; only the sheets print */
+  /* The composer is chrome; only the sheets print.
+
+     This list has to include the shell, and it did not when the shell was put
+     around the composer — every wrapper is 100dvh with overflow:hidden on
+     screen, so a print clipped to the viewport and came out blank. A regression
+     worth remembering: **anything that owns the viewport has to be unwound for
+     print**, not just the thing inside it. */
+:root.adm-root, :root.adm-root body{height:auto;overflow:visible}
+.ds .adm-shell{display:block;height:auto;overflow:visible}
+.ds .adm-body{display:block;height:auto;overflow:visible}
+.ds .adm-rail, .ds .adm-top, .ds .adm-veil, .ds .adm-drawer-wrap, .ds .adm-toast{display:none !important}
 .ds .adm{display:block;height:auto;overflow:visible}
 .ds .adm-side, .ds .adm-bar, .ds .adm-src, .ds .adm-out-bar{display:none !important}
 
@@ -134,4 +144,1120 @@
 .ds .adm-main, .ds .adm-split, .ds .adm-out, .ds .adm-out .doc-stage{display:block;overflow:visible;
     height:auto;min-height:0}
 .ds .adm-out [contenteditable]{background:none !important;box-shadow:none !important}
+
+
+  /* the stage paints a grey desk on screen; on paper it is the paper */
+.ds .adm-shell .adm-out .doc-stage{background:#fff;padding:0;overflow:visible;
+    align-items:stretch}
+.ds .adm-shell .adm-out .doc-stage .doc-sheet{margin:0}
+}
+
+
+
+/* ==========================================================================
+   THE ADMIN SHELL — rebuilt 25 August 2026
+
+   Richard, on the first cut: "it's not looking like us yet… four different
+   sections in just one view… the scroll bars are even making it worse."
+
+   He was right, and the fix was not to invent an admin look. The studio already
+   has an application shell — dash.css, the signed-in hub — and an administrator
+   is an ADLM person using ADLM software. So this borrows that shell's grammar
+   exactly: a 264px rail that collapses to icons, a 64px app bar, one scrolling
+   column, and the same tokens, radii and easing.
+
+   It does not borrow dash.css's classes. Those are the customer's and another
+   session edits that file; everything here is .adm-* and reaches nothing else.
+   ========================================================================== */
+@media screen{
+:root{ --adm-rail:264px; --adm-bar:64px; }
+
+
+  /* The shell owns the viewport. Nothing outside it scrolls, which is what
+     stops the page ending in a band of empty background. */
+:root.adm-root, :root.adm-root body{height:100%;overflow:hidden}
+
+
+  /* ------------------------------------------------------------ scrollbars
+     On brand and quiet. The default Windows bar is a grey slab that turned one
+     screen into four visible panes; this is a thumb the colour of a hairline,
+     with no track and no buttons, that only darkens when you are over it. */
+.ds .adm-scroll{scrollbar-width:thin;scrollbar-color:transparent transparent}
+.ds .adm-scroll:hover{scrollbar-color:var(--line-2) transparent}
+.ds .adm-scroll::-webkit-scrollbar{width:11px;height:11px}
+.ds .adm-scroll::-webkit-scrollbar-track{background:transparent}
+
+  /* invisible until the pointer is in the pane it belongs to — the default bar
+     was doing more to divide this screen than any border was */
+.ds .adm-scroll::-webkit-scrollbar-thumb{background:transparent;border-radius:99px;
+    border:4px solid transparent;background-clip:content-box;transition:background 160ms}
+.ds .adm-scroll:hover::-webkit-scrollbar-thumb{background:var(--line-2);background-clip:content-box}
+.ds .adm-scroll::-webkit-scrollbar-thumb:hover{background:var(--ink-3);background-clip:content-box}
+.ds .adm-scroll::-webkit-scrollbar-corner{background:transparent}
+
+
+  /* ----------------------------------------------------------------- frame */
+.ds .adm-shell{height:100dvh;display:grid;
+    grid-template-columns:var(--adm-rail) minmax(0,1fr);
+    overflow:hidden;background:var(--bg-alt);font-family:var(--font);color:var(--ink-2)}
+.ds .adm-body{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+    background:var(--bg)}
+
+
+  /* ---------------------------------------------------------------- app bar */
+.ds .adm-top{position:relative;z-index:70;flex:none;height:var(--adm-bar);display:flex;
+    align-items:center;gap:12px;
+    padding:0 28px;border-bottom:1px solid var(--line);
+    background:color-mix(in srgb,var(--bg) 88%,transparent);
+    backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%)}
+.ds .adm-top .ttl{font-size:15px;font-weight:500;letter-spacing:-.012em;color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds .adm-top .crumb{font-size:11px;color:var(--ink-3);display:block;margin-bottom:1px;
+    letter-spacing:.1em;text-transform:uppercase;font-weight:500}
+.ds .adm-top .sp{margin-left:auto}
+.ds .adm-ico{flex:none;width:36px;height:36px;border-radius:11px;cursor:pointer;display:grid;
+    place-items:center;color:var(--ink-2);border:1px solid var(--line);background:var(--bg-alt);
+    transition:border-color 220ms var(--e-out),color 220ms var(--e-out)}
+.ds .adm-ico:hover{border-color:var(--action);color:var(--ink)}
+.ds .adm-ico:focus-visible{outline:2px solid var(--action);outline-offset:2px}
+.ds .adm-ico svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round}
+.ds .adm-ico .n{position:absolute;margin:-22px 0 0 20px;min-width:16px;height:16px;
+    border-radius:99px;background:var(--accent);color:#fff;font-size:10px;font-weight:600;
+    line-height:16px;padding:0 4px;font-variant-numeric:tabular-nums;text-align:center}
+
+
+  /* the site's own theme button, reused verbatim — site.js wires #tt on every
+     page, so admin gets the same control the marketing site has and stops
+     obeying the operating system */
+.ds .adm-top .tt{flex:none}
+.ds .adm-find{position:relative;flex:0 1 360px;min-width:0}
+.ds .adm-find input{width:100%;height:36px;border-radius:11px;border:1px solid var(--line);
+    background:var(--bg-alt);color:var(--ink);font:inherit;font-size:13px;font-weight:300;
+    padding:0 12px 0 34px;transition:border-color 220ms var(--e-out)}
+.ds .adm-find input::placeholder{color:var(--ink-3)}
+.ds .adm-find input:focus{outline:none;border-color:var(--action)}
+.ds .adm-find svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;
+    height:15px;fill:none;stroke:var(--ink-3);stroke-width:1.9;stroke-linecap:round;
+    pointer-events:none}
+.ds .adm-find kbd{position:absolute;right:9px;top:50%;transform:translateY(-50%);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:var(--ink-3);
+    border:1px solid var(--line);border-radius:4px;padding:1px 5px;pointer-events:none}
+.ds .adm-me{display:flex;align-items:center;gap:9px;padding:5px 12px 5px 5px;border-radius:99px;
+    border:1px solid var(--line);background:var(--bg-alt);cursor:pointer;font-family:inherit}
+.ds .adm-me:hover{border-color:var(--line-2)}
+.ds .adm-me .avi{width:26px;height:26px;flex:none;border-radius:99px;display:grid;
+    place-items:center;font-size:11px;font-weight:600;color:#fff;
+    background:linear-gradient(150deg,var(--navy-850),var(--navy-950))}
+.ds .adm-me b{font-size:12.5px;font-weight:500;color:var(--ink)}
+.ds .adm-me em{font-style:normal;font-size:11px;color:var(--ink-3)}
+
+
+  /* ------------------------------------------------------------------ rail */
+.ds .adm-rail{position:relative;z-index:60;height:100%;min-height:0;display:flex;
+    flex-direction:column;padding:0 14px 22px;overflow-y:auto;overscroll-behavior:contain;
+    background:var(--bg-alt);border-right:1px solid var(--line)}
+.ds .adm-brand{position:sticky;top:0;z-index:2;flex:none;display:flex;align-items:center;gap:10px;
+    height:var(--adm-bar);margin:0 -14px 14px;padding:0 20px;
+    background:var(--bg-alt);border-bottom:1px solid var(--line);text-decoration:none}
+.ds .adm-brand img{height:24px;width:auto}
+.ds .adm-brand .logo-d{display:none}
+.ds [data-theme="dark"] .adm-brand .logo-l{display:none}
+.ds [data-theme="dark"] .adm-brand .logo-d{display:block}
+:root:not([data-theme="light"]) .adm-brand .logo-l{display:none}
+:root:not([data-theme="light"]) .adm-brand .logo-d{display:block}
+
+  /* The word that says which surface you are on. The customer's rail carries a
+     firm name here; ours carries the fact that this is not the customer's. */
+.ds .adm-brand .tag{font-size:9.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--action-ink);background:var(--action);padding:2px 6px;border-radius:5px}
+.ds .adm-grp{font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);
+    font-weight:500;padding:0 12px;margin:18px 0 6px}
+.ds .adm-nav{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.ds .adm-nav a, .ds .adm-nav .off{position:relative;display:flex;align-items:center;gap:11px;
+    padding:8px 12px;border-radius:11px;font-size:13.5px;font-weight:400;color:var(--ink-2);
+    text-decoration:none;transition:background 200ms var(--e-out),color 200ms var(--e-out)}
+.ds .adm-nav svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;opacity:.72}
+.ds .adm-nav a:hover{background:var(--pal-light-wash);color:var(--ink)}
+.ds .adm-nav a:focus-visible{outline:2px solid var(--action);outline-offset:-2px}
+.ds .adm-nav a.on{background:var(--pal-light-wash);color:var(--pal-light-key);font-weight:500}
+.ds .adm-nav a.on svg{opacity:1}
+.ds .adm-nav a.on::before{content:"";position:absolute;left:-14px;top:7px;bottom:7px;width:3px;
+    border-radius:0 3px 3px 0;background:var(--action)}
+
+
+  /* a count that has to be cleared, not a decoration */
+.ds .adm-nav .tail{margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums;
+    color:var(--action-ink);background:var(--action);min-width:18px;text-align:center;
+    padding:1px 5px;border-radius:99px}
+
+
+  /* not built yet, and saying so is the point — the shape of the whole surface
+     is what a rail is for. Dim, never clickable. */
+.ds .adm-nav .off{color:var(--ink-3);opacity:.42;cursor:default}
+.ds .adm-nav .off svg{opacity:.5}
+.ds .adm-rule{height:1px;background:var(--line);margin:16px 12px}
+
+
+  /* collapse. Same key as the customer rail uses, deliberately: an ADLM person
+     who narrows one rail means it. */
+.ds .adm-tog{position:absolute;top:20px;right:10px;width:26px;height:26px;border-radius:8px;
+    display:grid;place-items:center;cursor:pointer;border:1px solid transparent;
+    background:none;color:var(--ink-3)}
+.ds .adm-tog:hover{background:var(--bg-inset);color:var(--ink)}
+.ds .adm-tog svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round}
+.ds .adm-who{margin:auto 0 0;padding:14px 12px 0;border-top:1px solid var(--line)}
+.ds .adm-who b{display:block;font-size:12.5px;font-weight:500;color:var(--ink)}
+.ds .adm-who span{display:block;margin-top:1px;font-size:11px;color:var(--ink-3)}
+
+
+  /* -------------------------------------------------------- rail collapsed */
+.ds .adm-tight{ --adm-rail:76px }
+.ds .adm-tight .adm-rail{padding-left:12px;padding-right:12px}
+.ds .adm-tight .adm-brand{justify-content:center;padding:0}
+.ds .adm-tight .adm-brand img{height:22px;width:22px;object-fit:cover;object-position:left center}
+.ds .adm-tight .adm-brand .tag{display:none}
+.ds .adm-tight .adm-grp{height:1px;margin:14px 8px;padding:0;overflow:hidden;
+    background:var(--line);color:transparent}
+.ds .adm-tight .adm-nav a, .ds .adm-tight .adm-nav .off{justify-content:center;padding:9px 0}
+.ds .adm-tight .adm-nav .lb{display:none}
+.ds .adm-tight .adm-nav .tail{position:absolute;top:3px;right:8px;margin:0;font-size:9.5px;
+    min-width:15px;padding:0 4px}
+.ds .adm-tight .adm-nav a.on::before{left:-12px}
+.ds .adm-tight .adm-who{text-align:center;padding:14px 0 0}
+.ds .adm-tight .adm-who span{display:none}
+.ds .adm-tight .adm-tog{position:static;margin:0 auto 12px}
+.ds .adm-tight .adm-tog svg{transform:scaleX(-1)}
+
+
+  /* a label on hover, so a collapsed rail is still navigable */
+.ds .adm-tight .adm-nav a[data-tip]:hover::after, .ds .adm-tight .adm-nav .off[data-tip]:hover::after{
+    content:attr(data-tip);position:absolute;left:calc(100% + 10px);top:50%;
+    transform:translateY(-50%);z-index:80;white-space:nowrap;
+    background:var(--ink);color:var(--bg);font-size:12px;padding:5px 10px;border-radius:7px;
+    box-shadow:0 6px 20px rgba(4,12,22,.28)}
+
+
+  /* --------------------------------------------------------------- content */
+.ds .adm-page{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    padding:26px 28px 64px}
+.ds .adm-page-in{max-width:none}
+.ds .adm-h{margin:0 0 4px;font-size:22px;font-weight:600;letter-spacing:-.025em;color:var(--ink)}
+.ds .adm-lede{margin:0 0 24px;font-size:13.5px;font-weight:300;line-height:1.6;
+    color:var(--ink-3);max-width:78ch}
+
+
+  /* ---------------------------------------------------------------- narrow */
+@media (max-width:900px){
+.ds .adm-shell{grid-template-columns:1fr}
+.ds .adm-rail{position:fixed;inset:0 auto 0 0;width:264px;transform:translateX(-100%);
+      transition:transform 260ms var(--e-out);box-shadow:0 0 60px rgba(4,12,22,.28)}
+.ds .adm-open .adm-rail{transform:none}
+.ds .adm-tog{display:none}
+.ds .adm-top{padding:0 16px}
+.ds .adm-find{flex:1 1 auto}
+.ds .adm-find kbd, .ds .adm-me em{display:none}
+.ds .adm-page{padding:20px 16px 56px}
+}
+@media (min-width:901px){
+.ds .adm-burger{display:none}
+}
+.ds .adm-veil{position:fixed;inset:0;z-index:50;background:rgba(4,12,22,.45);
+    opacity:0;pointer-events:none;transition:opacity 220ms var(--e-out)}
+.ds .adm-open .adm-veil{opacity:1;pointer-events:auto}
+@media (min-width:901px){
+.ds .adm-veil{display:none}
+}
+}
+
+
+/* ==========================================================================
+   DASHBOARD COMPONENTS — Today, and anything else that reports
+
+   Chart colour is validated, not eyeballed: the blue/orange pair passes the
+   lightness band, chroma floor, CVD separation and contrast checks in both
+   modes. Light #0765B0 / #C4551A, dark #1289E6 / #D9762F — the dark steps are
+   different colours, not the light ones dimmed, because an automatic flip
+   fails the dark band.
+
+   Every bar is directly labelled, so identity never rests on colour alone.
+   ========================================================================== */
+@media screen{
+:root{
+    --adm-plot:#0765B0;
+    --adm-plot-2:#C4551A;
+    --adm-plot-bed:#E9F0F7;
+  }
+.ds [data-theme="dark"]{
+    --adm-plot:#1289E6;
+    --adm-plot-2:#D9762F;
+    --adm-plot-bed:rgba(255,255,255,.07);
+  }
+:root:not([data-theme="light"]){
+      --adm-plot:#1289E6;
+      --adm-plot-2:#D9762F;
+      --adm-plot-bed:rgba(255,255,255,.07);
+    }
+
+
+  /* ------------------------------------------------------------- banner */
+.ds .adm-banner{display:flex;align-items:center;gap:16px;padding:14px 18px;margin:0 0 20px;
+    border-radius:16px;border:1px solid var(--pal-light-line,var(--line));
+    background-image:var(--pal-light-fill,none);background-color:var(--bg-inset)}
+.ds .adm-banner .ic{flex:none;width:36px;height:36px;border-radius:11px;display:grid;
+    place-items:center;background:var(--action);color:var(--action-ink)}
+.ds .adm-banner .ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round}
+.ds .adm-banner b{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .adm-banner p{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-2);max-width:88ch}
+
+
+  /* ---------------------------------------------------------------- KPIs */
+.ds .adm-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:0 0 20px}
+@media (max-width:1180px){
+.ds .adm-kpis{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:560px){
+.ds .adm-kpis{grid-template-columns:1fr}
+}
+.ds .adm-kpi{position:relative;border-radius:16px;border:1px solid var(--line);padding:16px 18px;
+    background-image:var(--card-fill);background-color:var(--bg)}
+.ds .adm-kpi .k{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3)}
+.ds .adm-kpi .k svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
+    stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ds .adm-kpi b{display:block;margin-top:8px;font-size:27px;font-weight:500;letter-spacing:-.035em;
+    color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.05}
+.ds .adm-kpi .u{font-size:13px;font-weight:300;color:var(--ink-3);letter-spacing:0;margin-left:4px}
+.ds .adm-kpi .ds-sub{display:block;margin-top:6px;font-size:11.5px;line-height:1.45;color:var(--ink-3)}
+.ds .adm-kpi.warn{border-color:var(--pal-orange-line,var(--line));
+    background-image:var(--pal-orange-fill,none);background-color:var(--bg)}
+.ds .adm-kpi.warn .k, .ds .adm-kpi.warn .ds-sub{color:var(--pal-orange-key,var(--ink-2))}
+
+
+  /* -------------------------------------------------------------- panels */
+.ds .adm-cols{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;align-items:start}
+@media (max-width:1080px){
+.ds .adm-cols{grid-template-columns:1fr}
+}
+.ds .adm-panel{border-radius:18px;border:1px solid var(--line);background:var(--bg);
+    margin:0 0 16px;overflow:hidden}
+.ds .adm-panel-h{display:flex;align-items:baseline;justify-content:space-between;gap:14px;
+    padding:15px 18px 0}
+.ds .adm-panel-h h2{margin:0;font-size:14px;font-weight:500;letter-spacing:-.01em;color:var(--ink)}
+.ds .adm-panel-h .note{font-size:11.5px;color:var(--ink-3)}
+.ds .adm-panel-b{padding:14px 18px 18px}
+
+
+  /* ------------------------------------------------------- bar chart
+     A horizontal bar per row, because the categories are words of unequal
+     length and a vertical axis would set them at an angle. Recessive bed,
+     4px rounded data-end, and the value direct-labelled on every row — no
+     axis, no gridlines, nothing to read twice. */
+.ds .adm-bars{display:grid;gap:11px}
+.ds .adm-bar-r{display:grid;grid-template-columns:minmax(96px,auto) minmax(0,1fr) auto;
+    gap:12px;align-items:center}
+.ds .adm-bar-l{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis}
+.ds .adm-bar-t{position:relative;height:10px;border-radius:99px;background:var(--adm-plot-bed)}
+.ds .adm-bar-f{position:absolute;inset:0 auto 0 0;border-radius:99px;background:var(--adm-plot);
+    min-width:4px}
+.ds .adm-bar-r.hot .adm-bar-f{background:var(--adm-plot-2)}
+.ds .adm-bar-v{font-size:12.5px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums;
+    min-width:2.5ch;text-align:right}
+.ds .adm-bar-r.zero .adm-bar-v{color:var(--ink-3);font-weight:300}
+.ds .adm-bar-r.none .adm-bar-t{opacity:.4}
+.ds .adm-bar-r.none .adm-bar-v{color:var(--ink-3);font-weight:300}
+.ds .adm-legend{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0 0;padding-top:12px;
+    border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)}
+.ds .adm-legend span{display:flex;align-items:center;gap:6px}
+.ds .adm-legend i{width:9px;height:9px;border-radius:3px;background:var(--adm-plot)}
+.ds .adm-legend i.hot{background:var(--adm-plot-2)}
+
+
+  /* ------------------------------------------------------ the hero number */
+.ds .adm-hero{padding:4px 0 2px}
+.ds .adm-hero b{display:block;font-size:32px;font-weight:500;letter-spacing:-.04em;color:var(--ink);
+    font-variant-numeric:tabular-nums;line-height:1.05}
+.ds .adm-hero span{display:block;margin-top:5px;font-size:12px;line-height:1.5;color:var(--ink-3)}
+
+
+  /* --------------------------------------------------------- a queue list */
+.ds .adm-jobs{list-style:none;margin:0;padding:0}
+.ds .adm-jobs li+li{border-top:1px solid var(--line)}
+.ds .adm-job{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:12px;align-items:center;
+    padding:11px 0;text-decoration:none;color:inherit}
+.ds a.adm-job:hover .adm-job-t b{color:var(--action)}
+.ds a.adm-job:focus-visible{outline:2px solid var(--action);outline-offset:2px;border-radius:8px}
+.ds .adm-job-n{font-size:17px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em;text-align:right}
+.ds .adm-job-n.zero{color:var(--ink-3);opacity:.5;font-weight:300}
+.ds .adm-job-t b{display:block;font-size:13px;font-weight:400;color:var(--ink)}
+.ds .adm-job-t span{display:block;margin-top:1px;font-size:11.5px;line-height:1.45;color:var(--ink-3)}
+.ds .adm-chip{flex:none;font-size:10.5px;font-weight:500;padding:3px 9px;border-radius:99px;
+    white-space:nowrap;border:1px solid var(--line-2);color:var(--ink-3)}
+.ds .adm-chip.due{border-color:var(--adm-plot-2);color:var(--adm-plot-2);
+    background:color-mix(in srgb,var(--adm-plot-2) 9%,transparent)}
+.ds .adm-chip.calm{opacity:.55}
+.ds .adm-chip.go{border-color:var(--action);color:var(--action);background:var(--bg-inset)}
+}
+
+
+/* ------------------------------------------------------------ a work queue
+   Built 25 August 2026 for Purchases, and meant to be the pattern every other
+   queue reuses — Installations, Enrolments, Submissions, Ada review.
+
+   A queue row is not a table row. It carries five things at once: who, what
+   they bought, what it came to, what evidence there is, and what you can do
+   about it. A table would make all five the same weight; this makes the
+   name and the money loud and the rest quiet.                               */
+@media screen{
+
+
+  /* ------------------------------------------------------------------ tabs */
+.ds .adm-tabs{display:flex;gap:2px;margin:0 0 16px;border-bottom:1px solid var(--line)}
+.ds .adm-tab{display:flex;align-items:center;gap:7px;padding:9px 14px;cursor:pointer;
+    font-family:inherit;font-size:13px;font-weight:300;color:var(--ink-3);
+    background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px}
+.ds .adm-tab:hover{color:var(--ink-2)}
+.ds .adm-tab:focus-visible{outline:2px solid var(--action);outline-offset:-2px}
+.ds .adm-tab.on{color:var(--ink);font-weight:500;border-bottom-color:var(--action)}
+.ds .adm-tab-n{font-style:normal;font-size:11px;font-variant-numeric:tabular-nums;
+    padding:1px 6px;border-radius:99px;background:var(--bg-inset);color:var(--ink-3)}
+.ds .adm-tab.on .adm-tab-n{background:var(--action);color:var(--action-ink)}
+
+
+  /* ------------------------------------------------------------------ bulk */
+
+  /* Sticks to the top of the scroll, because a selection made at row twenty is
+     acted on at row twenty, not after scrolling back up. */
+.ds .adm-bulk{position:sticky;top:0;z-index:3;display:flex;align-items:center;
+    justify-content:space-between;gap:16px;flex-wrap:wrap;
+    margin:0 0 12px;padding:10px 14px;border-radius:11px;
+    background:var(--bg-inset);border:1px solid var(--action)}
+.ds .adm-bulk > span{font-size:13px;font-weight:500;color:var(--ink)}
+.ds .adm-bulk-acts{display:flex;gap:8px;flex-wrap:wrap}
+
+
+  /* --------------------------------------------------------------- buttons
+     Admin used to draw its own. It does not any more — every button here is
+     .btn from site.css with the studio's own variants, so a button in the panel
+     and a button on the marketing site are the same object. Two button systems
+     in one product is the drift the shared rail and icon sprite exist to stop.
+
+     Only two things are added, and both are colour rather than shape:
+       .adm-danger  an outline button for something that takes away
+       .adm-quiet   an outline button that should not compete with its neighbour
+
+     Plus a smaller size for a table row, where a full .btn-sm is too tall to
+     sit in a line of text. */
+.ds .adm-danger{border-color:color-mix(in srgb,#C4551A 55%,transparent);color:#C4551A}
+.ds .adm-danger:hover{border-color:#C4551A;color:#C4551A;
+    background:color-mix(in srgb,#C4551A 9%,transparent)}
+.ds [data-theme="dark"] .adm-danger, :root:not([data-theme="light"]) .adm-danger{color:#F08A4B;
+    border-color:color-mix(in srgb,#F08A4B 45%,transparent)}
+.ds [data-theme="dark"] .adm-danger:hover, :root:not([data-theme="light"]) .adm-danger:hover{color:#F08A4B;border-color:#F08A4B}
+.ds .adm-quiet{border-color:transparent;background:none;color:var(--ink-3)}
+.ds .adm-quiet:hover{color:var(--ink);background:var(--bg-inset);border-color:transparent}
+
+
+  /* A row of a table is not a call to action. The lift and the shine that make
+     sense on a landing page are noise fifteen times down a register. */
+.ds .adm-rowacts .ds-btn, .ds .adm-table .ds-btn{padding:5px 11px;font-size:11.5px;border-radius:8px}
+.ds .adm-rowacts .ds-btn:hover, .ds .adm-table .ds-btn:hover{transform:none}
+.ds .adm-rowacts .ds-btn::before, .ds .adm-table .ds-btn::before{display:none}
+.ds .adm-lib-a .ds-btn, .ds .adm-drawer-f .ds-btn, .ds #adm-page-acts .ds-btn{white-space:nowrap}
+.ds .ds-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
+.ds .ds-btn:disabled:hover{transform:none;filter:none}
+.ds .ds-btn:disabled::before{display:none}
+
+
+  /* ------------------------------------------------------------------ card */
+.ds .adm-card{display:grid;gap:16px;align-items:center;
+    grid-template-columns:auto minmax(150px,1.1fr) minmax(170px,1.5fr) auto auto auto;
+    padding:14px 16px;margin:0 0 8px;background:var(--bg);
+    border:1px solid var(--line);border-radius:12px}
+.ds .adm-card.picked{border-color:var(--action);background:var(--bg-inset)}
+.ds .adm-card.done{opacity:.62}
+.ds .adm-pick{display:flex;align-items:center}
+.ds .adm-pick input{width:16px;height:16px;accent-color:var(--action);cursor:pointer}
+.ds .adm-pick input:disabled{cursor:not-allowed;opacity:.4}
+
+
+  /* renamed off .adm-who — that class belongs to the rail footer, and its
+     border-top was drawing a line above every customer name in the queue */
+.ds .adm-cust{min-width:0}
+.ds .adm-cust b{display:block;font-size:13.5px;font-weight:500;color:var(--ink);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .adm-org{display:block;font-size:12px;color:var(--ink-2);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .adm-mail{display:block;margin-top:1px;font-size:11px;color:var(--ink-3);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .adm-buy{min-width:0}
+.ds .adm-buy b{display:block;font-size:13px;font-weight:400;color:var(--ink);line-height:1.4}
+.ds .adm-meta{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:3px;
+    font-size:11px;color:var(--ink-3)}
+.ds .adm-meta span+span::before{content:"·";margin-right:10px}
+
+
+  /* the money reads before the words do — it is what the decision is about */
+.ds .adm-sum{text-align:right;white-space:nowrap}
+.ds .adm-sum b{display:block;font-size:15px;font-weight:500;color:var(--ink);
+    font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.ds .adm-sum span{display:block;margin-top:1px;font-size:10.5px;color:var(--ink-3);
+    font-variant-numeric:tabular-nums}
+.ds .adm-side-col{text-align:right;white-space:nowrap}
+.ds .adm-proof{display:block;font-size:11.5px;color:var(--action);text-decoration:none;
+    max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.ds .adm-proof:hover{text-decoration:underline}
+.ds .adm-proof.none{color:#C4551A;text-decoration:none}
+.ds .adm-age{display:block;margin-top:2px;font-size:11px;color:var(--ink-3)}
+.ds .adm-age.old{color:#C4551A;font-weight:500}
+.ds .adm-act{display:flex;gap:7px;align-items:center;justify-content:flex-end}
+.ds .adm-stamp{font-size:11.5px;font-weight:500;padding:4px 10px;border-radius:99px;
+    white-space:nowrap;border:1px solid currentColor}
+.ds .adm-stamp.approved{color:#1E7A4C}
+.ds .adm-stamp.rejected{color:#C4551A}
+
+
+  /* ------------------------------------------------------------- empty state */
+.ds .adm-none{padding:44px 24px;text-align:center;background:var(--bg);
+    border:1px dashed var(--line-2);border-radius:12px}
+.ds .adm-none b{display:block;font-size:15px;font-weight:500;color:var(--ink)}
+.ds .adm-none span{display:block;margin:5px auto 0;max-width:46ch;font-size:13px;
+    line-height:1.55;color:var(--ink-3)}
+.ds .adm-foot-note{margin:22px 0 0;font-size:12px;line-height:1.6;color:var(--ink-3);
+    max-width:64ch}
+
+
+  /* ----------------------------------------------------------------- toast */
+.ds .adm-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:40;
+    max-width:min(560px,calc(100vw - 32px));padding:11px 18px;border-radius:10px;
+    font-family:var(--font);font-size:13px;line-height:1.5;
+    background:var(--ink);color:var(--bg);box-shadow:0 8px 30px rgba(4,12,22,.30)}
+.ds .adm-toast[hidden]{display:none}
+
+
+  /* ---------------------------------------------------------------- narrow */
+@media (max-width:1080px){
+.ds .adm-card{grid-template-columns:auto minmax(0,1fr) auto;
+      grid-template-areas:"pick cust sum" "pick buy buy" "pick side act";
+      gap:8px 14px;align-items:start}
+.ds .adm-pick{grid-area:pick;padding-top:2px}
+.ds .adm-cust{grid-area:cust}
+.ds .adm-buy{grid-area:buy}
+.ds .adm-sum{grid-area:sum}
+.ds .adm-side-col{grid-area:side;text-align:left;align-self:center}
+.ds .adm-act{grid-area:act;margin-top:4px}
+}
+@media (max-width:560px){
+.ds .adm-card{grid-template-columns:auto minmax(0,1fr);
+      grid-template-areas:"pick cust" "pick buy" "pick sum" "pick side" "pick act"}
+.ds .adm-sum{text-align:left}
+.ds .adm-act{justify-content:flex-start}
+}
+}
+
+
+/* ==========================================================================
+   THE COMPOSER, INSIDE THE SHELL — 25 August 2026
+
+   Richard: "the composer is not properly infused… 4 different sections in just
+   one view." He counted rail, settings panel, source and preview — four
+   vertical strips, each with its own scrollbar and its own header.
+
+   Three of those four headers were saying the same thing. The fix:
+
+     1. The composer's own brand bar goes. The app bar above it already says
+        ADLM admin / Document composer; saying it twice is what made the screen
+        read as two applications stacked.
+     2. The settings panel moves to the right, as an inspector. This is the move
+        ADMIN.md section 9 asked for. Navigation belongs on the left and the
+        properties of the thing you are editing belong beside the thing — the
+        same rule every drawing package has followed for thirty years.
+     3. The action bar becomes a slim toolbar rather than a page header, so the
+        eye reads one document surface with a strip of tools, not two panes.
+
+   The strips are still there — a composer is genuinely a three-part tool — but
+   they now read in the right order: what you paste, what it becomes, and how it
+   is set.
+   ========================================================================== */
+@media screen{
+
+  /* the composer sits in the shell's body column, under the app bar */
+.ds .adm-shell .adm{height:100%;min-height:0;display:grid;
+    grid-template-columns:minmax(0,1fr) 296px;overflow:hidden;background:var(--bg-alt)}
+
+
+  /* said once, by the app bar */
+.ds .adm-shell .adm-brandbar{display:none}
+
+
+  /* --------------------------------------------------------- the inspector */
+.ds .adm-shell .adm-side{order:2;border-right:0;border-left:1px solid var(--line);
+    background:var(--bg-alt);padding-top:16px}
+.ds .adm-shell .adm-main{order:1;background:var(--bg)}
+
+
+  /* the inspector gets the quiet scrollbar too */
+.ds .adm-shell .adm-side{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.ds .adm-shell .adm-side::-webkit-scrollbar{width:10px}
+.ds .adm-shell .adm-side::-webkit-scrollbar-track{background:transparent}
+.ds .adm-shell .adm-side::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:99px;
+    border:3px solid transparent;background-clip:content-box}
+.ds .adm-shell .adm-side::-webkit-scrollbar-thumb:hover{background:var(--ink-3);
+    background-clip:content-box}
+
+
+  /* ------------------------------------------------------------- a toolbar */
+.ds .adm-shell .adm-bar{padding:9px 20px;background:var(--bg);
+    border-bottom:1px solid var(--line);gap:12px}
+
+  /* the title is the app bar's job now; what stays is the live count, which is
+     about the document rather than the screen */
+.ds .adm-shell .adm-bar > div:first-child b{display:none}
+.ds .adm-shell .adm-bar > div:first-child span{font-size:11.5px;color:var(--ink-3)}
+
+
+  /* ------------------------------------------------------------- the panes */
+.ds .adm-shell .adm-split{grid-template-columns:minmax(300px,36%) 1fr}
+.ds .adm-shell .adm-src{background:var(--bg);border-right:1px solid var(--line)}
+
+
+  /* source folded away — the document gets the whole pane */
+.ds .adm-shell.adm-nosrc .adm-split{grid-template-columns:1fr}
+.ds .adm-shell.adm-nosrc .adm-src{display:none}
+
+
+  /* Quiet scrollbars on both panes. The default Windows bars were doing more to
+     divide this screen than any border was. */
+.ds .adm-shell .adm-src, .ds .adm-shell .adm-out .doc-stage{
+    scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.ds .adm-shell .adm-src::-webkit-scrollbar, .ds .adm-shell .adm-out .doc-stage::-webkit-scrollbar{width:10px;height:10px}
+.ds .adm-shell .adm-src::-webkit-scrollbar-track, .ds .adm-shell .adm-out .doc-stage::-webkit-scrollbar-track{background:transparent}
+.ds .adm-shell .adm-src::-webkit-scrollbar-thumb, .ds .adm-shell .adm-out .doc-stage::-webkit-scrollbar-thumb{
+    background:var(--line-2);border-radius:99px;border:3px solid transparent;
+    background-clip:content-box}
+.ds .adm-shell .adm-out .doc-stage::-webkit-scrollbar-thumb{background:rgba(255,255,255,.28);
+    background-clip:content-box}
+
+
+  /* The sheet is a fixed 210mm and already overflowed this pane before the rail
+     existed. It pans rather than being silently cut — and collapsing the rail
+     is what actually gives it room. */
+
+  /* doc.css centres the sheet with align-items:center. The moment the sheet is
+     wider than the pane that becomes a trap — a centred flex child overflows
+     equally in both directions and the start of it can never be scrolled back
+     to, which is why the letterhead was cut off on the left. Aligning to the
+     start and centring with auto margins keeps it centred when it fits and
+     scrollable when it does not. doc.css belongs to the other session, so this
+     is an override inside the admin shell rather than an edit to theirs. */
+.ds .adm-shell .adm-out .doc-stage{overflow:auto;align-items:flex-start}
+.ds .adm-shell .adm-out .doc-stage .doc-sheet{margin-inline:auto}
+
+
+  /* ---------------------------------------------------------------- narrow */
+@media (max-width:1180px){
+.ds .adm-shell .adm{grid-template-columns:minmax(0,1fr) 264px}
+.ds .adm-shell .adm-split{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+}
+@media (max-width:900px){
+.ds .adm-shell .adm{grid-template-columns:1fr;overflow-y:auto}
+.ds .adm-shell .adm-side{order:1;border-left:0;border-bottom:1px solid var(--line)}
+.ds .adm-shell .adm-main{order:2}
+}
+}
+
+
+/* ==========================================================================
+   THE SIGN-IN — the one admin screen with no rail.
+
+   A person signing in has nowhere to navigate to yet, and a navigation full of
+   things they cannot reach is a worse first impression than none at all. So
+   this page carries the mark, the one sentence that says whose door this is,
+   and nothing else.
+   ========================================================================== */
+@media screen{
+.ds .adm-gate{position:relative;display:grid;place-items:center;min-height:100dvh;padding:24px;
+    background:var(--bg-alt);font-family:var(--font);overflow:hidden}
+
+
+  /* one quiet gesture, in the blue the mark is drawn with */
+.ds .adm-gate-art{position:absolute;inset:auto auto -32vh -18vw;width:78vw;height:78vh;
+    border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle at 50% 50%,
+      color-mix(in srgb,var(--action) 15%,transparent), transparent 62%)}
+.ds .adm-gate-card{position:relative;width:100%;max-width:392px;background:var(--bg);
+    border:1px solid var(--line);border-radius:18px;padding:30px 30px 24px;
+    box-shadow:0 18px 60px rgba(4,12,22,.10)}
+.ds .adm-gate-mark{display:flex;align-items:center;gap:9px;margin:0 0 24px;text-decoration:none}
+.ds .adm-gate-mark img{height:24px;width:auto}
+.ds .adm-gate-mark .logo-d{display:none}
+.ds [data-theme="dark"] .adm-gate-mark .logo-l{display:none}
+.ds [data-theme="dark"] .adm-gate-mark .logo-d{display:block}
+:root:not([data-theme="light"]) .adm-gate-mark .logo-l{display:none}
+:root:not([data-theme="light"]) .adm-gate-mark .logo-d{display:block}
+.ds .adm-gate-mark .tag{font-size:9.5px;font-weight:600;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--action-ink);background:var(--action);
+    padding:2px 6px;border-radius:5px}
+.ds .adm-gate h1{margin:0 0 5px;font-size:20px;font-weight:600;letter-spacing:-.025em;
+    color:var(--ink)}
+.ds .adm-gate-sub{margin:0 0 22px;font-size:13px;font-weight:300;line-height:1.55;
+    color:var(--ink-3)}
+.ds .adm-gate label{display:grid;gap:6px;margin:0 0 14px;font-size:11.5px;color:var(--ink-3)}
+.ds .adm-gate input{width:100%;font-family:inherit;font-size:14px;color:var(--ink);
+    background:var(--bg-alt);border:1px solid var(--line);border-radius:10px;padding:11px 12px;
+    transition:border-color 200ms var(--e-out)}
+.ds .adm-gate input:focus{outline:0;border-color:var(--action)}
+.ds .adm-gate-pw{position:relative;display:block}
+.ds .adm-gate-pw input{padding-right:66px}
+.ds .adm-gate-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    font-family:inherit;font-size:11.5px;color:var(--ink-3);cursor:pointer;
+    background:none;border:0;padding:6px 9px;border-radius:7px}
+.ds .adm-gate-eye:hover{color:var(--ink);background:var(--bg-inset)}
+
+
+  /* An error says what is wrong and what to do about it, where the eye already
+     is — never a browser bubble that vanishes on the next keystroke. */
+.ds .adm-gate-err{margin:0 0 14px;padding:9px 12px;border-radius:9px;font-size:12.5px;
+    line-height:1.5;color:#C4551A;background:color-mix(in srgb,#C4551A 8%,transparent);
+    border:1px solid color-mix(in srgb,#C4551A 34%,transparent)}
+.ds .adm-gate-err[hidden]{display:none}
+.ds .adm-gate .ds-btn{width:100%;margin-top:2px}
+.ds .adm-gate .ds-btn:disabled{opacity:.6;cursor:default}
+.ds .adm-gate-foot{margin:20px 0 0;padding-top:16px;border-top:1px solid var(--line);
+    font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+}
+
+
+/* ------------------------------------------------- installations, and sections
+   A queue can hold two populations that need different actions. Where it does,
+   they get their own heading rather than being sorted together and hoped for. */
+@media screen{
+.ds .adm-sec{margin:22px 0 10px}
+.ds .adm-sec:first-child{margin-top:4px}
+.ds .adm-sec h2{margin:0;font-size:12px;font-weight:500;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink-3)}
+.ds .adm-sec p{margin:4px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-3);max-width:78ch}
+.ds .adm-card.ins{grid-template-columns:auto minmax(170px,1.1fr) minmax(190px,1.4fr) auto auto}
+
+
+  /* An orphan is dimmer and hatched, so it reads as a record rather than a job.
+     It is not disabled — you can still act on it — but it is plainly not the
+     same kind of row as the one above it. */
+.ds .adm-card.orphan{border-style:dashed;background:var(--bg-alt)}
+
+  /* nothing the bulk bar offers can be done to an orphan, so it gets no box to
+     tick rather than a box that refuses */
+.ds .adm-card.orphan .adm-pick{visibility:hidden}
+.ds .adm-card.orphan .adm-cust b{color:var(--ink-2);font-weight:400}
+.ds .adm-buy b.muted{color:var(--ink-3);font-weight:300}
+.ds .adm-hintline{display:block;margin-top:4px;font-size:11px;line-height:1.45;color:var(--ink-3)}
+@media (max-width:1080px){
+.ds .adm-card.ins{grid-template-columns:auto minmax(0,1fr) auto;
+      grid-template-areas:"pick cust sum" "pick buy buy" "pick side act"}
+}
+}
+
+
+/* ---------------------------------------------------------------- enrolments
+   A queue where approving spends a finite thing, so the row has to carry the
+   reason it cannot be approved rather than just refusing. */
+@media screen{
+.ds .adm-toolrow{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;
+    flex-wrap:wrap;margin:0 0 16px}
+.ds .adm-toolrow .adm-tabs{margin:0;flex:1 1 auto}
+
+
+  /* the organisation lens — a control, not a screen */
+.ds .adm-switch{display:flex;align-items:center;gap:8px;cursor:pointer;padding:0 0 9px;
+    font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.ds .adm-switch input{width:15px;height:15px;accent-color:var(--action);cursor:pointer}
+.ds .adm-card.enr{grid-template-columns:auto minmax(170px,1.1fr) minmax(180px,1.3fr) auto auto auto}
+.ds .adm-payer{margin-left:7px;font-size:10px;font-weight:500;letter-spacing:.04em;
+    text-transform:uppercase;padding:1px 6px;border-radius:99px;
+    border:1px solid var(--line-2);color:var(--ink-3)}
+.ds .adm-payer.firm{border-color:var(--action);color:var(--action);background:var(--bg-inset)}
+
+
+  /* Said on the row as well as on the button, because a disabled button with a
+     title attribute is invisible to anyone who does not hover it. */
+.ds .adm-blocked{grid-column:2/-1;margin:8px 0 0;padding:7px 11px;border-radius:8px;
+    font-size:11.5px;line-height:1.45;color:#C4551A;
+    background:color-mix(in srgb,#C4551A 7%,transparent);
+    border:1px solid color-mix(in srgb,#C4551A 28%,transparent)}
+@media (max-width:1080px){
+.ds .adm-card.enr{grid-template-columns:auto minmax(0,1fr) auto;
+      grid-template-areas:"pick cust sum" "pick buy buy" "pick side act"}
+.ds .adm-blocked{grid-column:1/-1}
+}
+}
+
+
+/* -------------------------------------------------- submissions and Ada gaps */
+@media screen{
+.ds .adm-card.ds-sub{grid-template-columns:minmax(160px,1fr) minmax(200px,1.5fr) auto auto}
+
+
+  /* A mark is typed, not chosen. It sits with the buttons because it is part of
+     the same decision — a pass without one cannot be explained to a student. */
+.ds .adm-mark{width:66px;font-family:inherit;font-size:12.5px;color:var(--ink);
+    background:var(--bg-alt);border:1px solid var(--line);border-radius:8px;padding:6px 9px;
+    text-align:center}
+.ds .adm-mark:focus{outline:0;border-color:var(--action)}
+
+
+  /* ------------------------------------------------------------------ gaps */
+.ds .adm-card.gap{grid-template-columns:132px minmax(240px,2fr) minmax(180px,1fr) auto}
+.ds .adm-gap-n b{display:block;font-size:24px;font-weight:500;letter-spacing:-.03em;
+    color:var(--ink);font-variant-numeric:tabular-nums;line-height:1}
+.ds .adm-gap-n > span{display:block;margin:1px 0 7px;font-size:11px;color:var(--ink-3)}
+.ds .adm-gap-n .adm-bar-t{display:block;max-width:104px}
+.ds .adm-gap-q b{display:block;font-size:14px;font-weight:400;color:var(--ink);line-height:1.45}
+.ds .adm-gap-w{font-size:12px;color:var(--ink-2);line-height:1.5}
+.ds .adm-gap-lb{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+    margin-bottom:2px}
+@media (max-width:1080px){
+.ds .adm-card.ds-sub, .ds .adm-card.gap{grid-template-columns:minmax(0,1fr) auto}
+.ds .adm-card.gap .adm-gap-n{grid-column:1/-1}
+.ds .adm-card.gap .adm-gap-n .adm-bar-t{max-width:none}
+}
+}
+
+
+/* ====================================================== registers and records
+   A register is a table you scan; a record is one object with a history. They
+   share this section because a row in one leads to the other. */
+@media screen{
+
+  /* ---------------------------------------------------------------- table */
+.ds .adm-tw{overflow-x:auto;border:1px solid var(--line);border-radius:14px;
+    background:var(--bg);margin:0 0 18px}
+.ds .adm-table{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px}
+.ds .adm-table th{text-align:left;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:9.5px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-3);padding:12px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ds .adm-table td{padding:12px 16px;border-bottom:1px solid var(--line-2);vertical-align:middle;
+    color:var(--ink-2)}
+.ds .adm-table tr:last-child td{border-bottom:0}
+.ds .adm-table th.num, .ds .adm-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.ds .adm-table tr.go{cursor:pointer}
+.ds .adm-table tr.go:hover td{background:var(--bg-alt)}
+.ds .adm-table tr.go:focus-visible{outline:2px solid var(--action);outline-offset:-2px}
+.ds .adm-table td .adm-none{padding:34px 16px;border:0;background:none}
+.ds .adm-two b{display:block;font-size:13.5px;font-weight:500;color:var(--ink);line-height:1.35}
+.ds .adm-two span{display:block;font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.ds .adm-chip.ok{border-color:var(--good,#1E7A4C);color:var(--good,#1E7A4C);
+    background:color-mix(in srgb,#1E7A4C 9%,transparent)}
+.ds .adm-chip.bad{border-color:#C4551A;color:#C4551A;
+    background:color-mix(in srgb,#C4551A 9%,transparent)}
+.ds [data-theme="dark"] .adm-chip.ok{border-color:#4FBF89;color:#4FBF89}
+
+
+  /* --------------------------------------------------------------- record */
+.ds .adm-rec-h{display:flex;flex-wrap:wrap;align-items:flex-start;gap:18px;
+    padding:0 0 18px;margin:0 0 18px;border-bottom:1px solid var(--line)}
+.ds .adm-rec-id{flex:none;width:54px;height:54px;border-radius:16px;display:grid;place-items:center;
+    font-size:17px;font-weight:600;color:#fff;letter-spacing:.02em;
+    background:linear-gradient(150deg,var(--navy-850,#091E39),var(--navy-950,#04101F))}
+.ds .adm-rec-t{min-width:0;flex:1 1 320px}
+.ds .adm-rec-t h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.025em;color:var(--ink)}
+.ds .adm-rec-t .ds-sub{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:5px;font-size:12.5px;
+    color:var(--ink-3);align-items:center}
+.ds .adm-rec-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ds .adm-back{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3);
+    text-decoration:none;margin:0 0 14px}
+.ds .adm-back:hover{color:var(--action)}
+.ds .adm-back svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round;transform:scaleX(-1)}
+.ds .adm-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    margin:0 0 20px}
+.ds .adm-fact{background:var(--bg);padding:12px 15px}
+.ds .adm-fact b{display:block;font-size:16px;font-weight:500;color:var(--ink);
+    font-variant-numeric:tabular-nums;letter-spacing:-.015em}
+.ds .adm-fact span{display:block;margin-top:2px;font-size:11px;color:var(--ink-3)}
+.ds .adm-cols2{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start}
+@media (max-width:1080px){
+.ds .adm-cols2{grid-template-columns:1fr}
+}
+
+
+  /* ------------------------------------------------------------- timeline
+     One ordered history assembled from every other record. Nothing writes to
+     it; it is derived, so it cannot fall out of step with what happened. */
+.ds .adm-time{list-style:none;margin:0;padding:0 0 0 22px;position:relative}
+.ds .adm-time::before{content:"";position:absolute;left:4px;top:6px;bottom:6px;width:1px;
+    background:var(--line)}
+.ds .adm-time li{position:relative;padding:0 0 16px}
+.ds .adm-time li::before{content:"";position:absolute;left:-22px;top:5px;width:9px;height:9px;
+    border-radius:99px;background:var(--bg);border:2px solid var(--line-2)}
+.ds .adm-time li.money::before{border-color:var(--action)}
+.ds .adm-time li.warn::before{border-color:#C4551A}
+.ds .adm-time li.learn::before{border-color:var(--good,#1E7A4C)}
+.ds .adm-time b{display:block;font-size:13px;font-weight:400;color:var(--ink);line-height:1.4}
+.ds .adm-time .when{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;
+    color:var(--ink-3);display:block;margin-bottom:1px}
+.ds .adm-time .det{display:block;font-size:11.5px;color:var(--ink-3);line-height:1.45;margin-top:1px}
+
+
+  /* --------------------------------------------------------------- merge */
+.ds .adm-merge{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 18px;
+    padding:12px 16px;border-radius:12px;border:1px solid color-mix(in srgb,#C4551A 34%,transparent);
+    background:color-mix(in srgb,#C4551A 7%,transparent);font-size:12.5px;color:var(--ink-2)}
+.ds .adm-merge b{font-weight:500;color:var(--ink)}
+}
+
+
+/* a search field that is the point of the page, rather than app-bar furniture */
+@media screen{
+.ds .adm-find-wide{display:block;position:relative;max-width:460px;margin:0 0 18px}
+.ds .adm-find-wide input{width:100%;height:40px;border-radius:11px;border:1px solid var(--line);
+    background:var(--bg);color:var(--ink);font:inherit;font-size:14px;font-weight:300;
+    padding:0 12px 0 38px}
+.ds .adm-find-wide input:focus{outline:none;border-color:var(--action)}
+.ds .adm-find-wide svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);
+    width:16px;height:16px;fill:none;stroke:var(--ink-3);stroke-width:1.9;stroke-linecap:round;
+    pointer-events:none}
+.ds .adm-dim{color:var(--ink-3);opacity:.65}
+}
+
+
+/* ------------------------------------------------------- a louder active row
+   Richard: "I should be able to tell what tab I am on."
+
+   The first version marked it with a tinted background and a hairline. On a
+   rail of twenty-four rows that is not enough — the eye has to hunt for it. The
+   active row is now a filled chip in the action colour, which is the one thing
+   on the rail that looks pressed. A record page marks the register it belongs
+   to, more quietly, because you are inside it rather than on it. */
+@media screen{
+.ds .adm-nav a.on{background:var(--action);color:var(--action-ink);font-weight:500;
+    box-shadow:none}
+.ds .adm-nav a.on svg{opacity:1;color:var(--action-ink)}
+.ds .adm-nav a.on::before{display:none}
+.ds .adm-nav a.on:hover{background:var(--action);color:var(--action-ink);filter:brightness(1.06)}
+
+  /* the count on the active row has to invert too, or it disappears into the fill */
+.ds .adm-nav a.on .tail{background:var(--action-ink);color:var(--action)}
+
+
+  /* inside a record that belongs to this register */
+.ds .adm-nav a.on.within{background:var(--bg-inset);color:var(--pal-light-key,var(--action));
+    box-shadow:inset 2px 0 0 var(--action)}
+.ds .adm-nav a.on.within svg{color:inherit}
+.ds .adm-nav a.on.within .tail{background:var(--action);color:var(--action-ink)}
+
+
+  /* the group a live row sits in, so the eye lands in the right block first */
+.ds .adm-grp.here{color:var(--action)}
+.ds .adm-tight .adm-nav a.on{border-radius:11px}
+}
+
+
+/* --------------------------------------------- the rate library, and system */
+@media screen{
+
+  /* Draft vs published, said at the top of the screen rather than in a toast
+     you might have missed. It turns amber the moment anything is unsaved. */
+.ds .adm-lib{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;
+    padding:14px 18px;margin:0 0 16px;border-radius:14px;border:1px solid var(--line);
+    background:var(--bg)}
+.ds .adm-lib.dirty{border-color:#C4551A;background:color-mix(in srgb,#C4551A 6%,transparent)}
+.ds .adm-lib-t b{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .adm-lib-t span{display:block;margin-top:2px;font-size:12px;line-height:1.5;color:var(--ink-3);
+    max-width:70ch}
+.ds .adm-lib-a{display:flex;gap:8px;flex-wrap:wrap}
+.ds .adm-rate{display:inline-flex;flex-direction:column;align-items:flex-end;gap:3px}
+.ds .adm-rate-in{width:104px;text-align:right}
+.ds .adm-rate .was{font-size:10.5px;color:#C4551A;font-variant-numeric:tabular-nums}
+.ds .adm-table tr.changed td{background:color-mix(in srgb,#C4551A 5%,transparent)}
+.ds .adm-table tr.changed .adm-rate-in{border-color:#C4551A}
+.ds .adm-warn{color:#C4551A;font-size:12px;line-height:1.45}
+
+
+  /* ---------------------------------------------------------- danger zone */
+.ds .adm-panel.danger{border-color:color-mix(in srgb,#C4551A 42%,transparent)}
+.ds .adm-panel.danger .adm-panel-h h2{color:#C4551A}
+.ds .adm-dz-t{margin:0 0 14px;font-size:13px;line-height:1.55;color:var(--ink-2);max-width:72ch}
+.ds .adm-dz-n{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 16px;
+    padding:12px 16px;border-radius:12px;background:color-mix(in srgb,#C4551A 7%,transparent);
+    border:1px solid color-mix(in srgb,#C4551A 30%,transparent)}
+.ds .adm-dz-n b{font-size:24px;font-weight:600;color:#C4551A;letter-spacing:-.03em;
+    font-variant-numeric:tabular-nums}
+.ds .adm-dz-n span{font-size:12.5px;line-height:1.5;color:var(--ink-2);max-width:58ch}
+.ds .adm-dz-l{display:grid;gap:6px;margin:0 0 14px;max-width:340px;font-size:11.5px;
+    color:var(--ink-3)}
+.ds .adm-dz-l input{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
+    letter-spacing:.04em;color:var(--ink);background:var(--bg-alt);border:1px solid var(--line);
+    border-radius:9px;padding:10px 12px}
+.ds .adm-dz-l input:focus{outline:0;border-color:#C4551A}
+}
+
+
+/* ================================================================ the drawer
+   Where anything gets added or changed. A drawer rather than a modal, because
+   you are usually adding a row to a list you want to keep seeing. */
+@media screen{
+.ds .adm-drawer-wrap{position:fixed;inset:0;z-index:120;display:flex;justify-content:flex-end}
+.ds .adm-drawer-veil{position:absolute;inset:0;background:rgba(4,12,22,.42);
+    animation:admFade 180ms var(--e-out)}
+.ds .adm-drawer{position:relative;width:min(480px,100%);height:100%;display:flex;
+    flex-direction:column;background:var(--bg);border-left:1px solid var(--line);
+    box-shadow:-24px 0 60px rgba(4,12,22,.22);animation:admSlide 240ms var(--e-out)}
+@keyframes admFade{from{opacity:0}to{opacity:1}}
+@keyframes admSlide{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){
+.ds .adm-drawer, .ds .adm-drawer-veil{animation:none}
+}
+.ds .adm-drawer-h{flex:none;display:flex;align-items:flex-start;gap:14px;padding:20px 22px 16px;
+    border-bottom:1px solid var(--line)}
+.ds .adm-drawer-h h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.02em;color:var(--ink)}
+.ds .adm-drawer-h p{margin:5px 0 0;font-size:12.5px;line-height:1.55;color:var(--ink-3);max-width:46ch}
+.ds .adm-drawer-x{margin-left:auto;flex:none;width:30px;height:30px;border-radius:9px;cursor:pointer;
+    border:1px solid var(--line);background:var(--bg-alt);color:var(--ink-3);font-size:18px;
+    line-height:1}
+.ds .adm-drawer-x:hover{color:var(--ink);border-color:var(--line-2)}
+.ds .adm-drawer-b{flex:1;min-height:0;overflow-y:auto;padding:20px 22px}
+.ds .adm-drawer-note{margin:18px 0 0;padding:11px 14px;border-radius:9px;font-size:12px;
+    line-height:1.55;color:var(--ink-2);background:var(--bg-inset);
+    border-left:2px solid var(--action)}
+.ds .adm-drawer-f{flex:none;display:flex;justify-content:flex-end;gap:9px;padding:14px 22px;
+    border-top:1px solid var(--line);background:var(--bg-alt)}
+
+
+  /* ---------------------------------------------------------------- fields */
+.ds .adm-fs{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ds .adm-f{display:grid;gap:6px;align-content:start}
+.ds .adm-f.wide{grid-column:1/-1}
+.ds .adm-f-l{font-size:11.5px;color:var(--ink-3)}
+.ds .adm-f input, .ds .adm-f textarea, .ds .adm-f select{width:100%;font-family:inherit;font-size:13.5px;
+    color:var(--ink);background:var(--bg-alt);border:1px solid var(--line);border-radius:9px;
+    padding:9px 11px}
+.ds .adm-f textarea{resize:vertical;line-height:1.55}
+.ds .adm-f input:focus, .ds .adm-f textarea:focus, .ds .adm-f select:focus{outline:0;border-color:var(--action)}
+.ds .adm-f-h{font-size:11px;line-height:1.5;color:var(--ink-3)}
+.ds .adm-f-e{font-size:11.5px;line-height:1.45;color:#C4551A}
+.ds .adm-f.bad input, .ds .adm-f.bad textarea, .ds .adm-f.bad select{border-color:#C4551A}
+.ds .adm-f.check{grid-column:1/-1;grid-template-columns:auto 1fr;align-items:center;gap:10px}
+.ds .adm-f.check .adm-f-l{order:2;font-size:13px;color:var(--ink-2)}
+.ds .adm-f.check input{order:1;width:16px;height:16px;accent-color:var(--action);padding:0}
+.ds .adm-f.check .adm-f-h{order:3;grid-column:1/-1}
+.ds .adm-f-pre{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:9px;
+    background:var(--bg-alt);overflow:hidden}
+.ds .adm-f-pre .pre{display:grid;place-items:center;padding:0 11px;font-size:13px;color:var(--ink-3);
+    background:var(--bg-inset);border-right:1px solid var(--line)}
+.ds .adm-f-pre input{border:0;border-radius:0;background:none}
+.ds .adm-f-pre:focus-within{border-color:var(--action)}
+@media (max-width:520px){
+.ds .adm-fs{grid-template-columns:1fr}
+}
+
+
+  /* ------------------------------------------------- the page action bar */
+.ds .adm-pagehead{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;
+    flex-wrap:wrap}
+.ds .adm-pagehead > div:first-child{min-width:0;flex:1 1 420px}
+.ds #adm-page-acts{display:flex;gap:8px;flex-wrap:wrap;padding-top:4px}
+
+
+  /* row-level verbs */
+.ds .adm-rowacts{display:flex;gap:6px;justify-content:flex-end;white-space:nowrap}
+}
+
+
+/* ------------------------------------------------------------- the search
+   Results drop out of the app-bar field. Kind on the left so the list can be
+   scanned by shape before it is read. */
+@media screen{
+.ds .adm-hits{position:absolute;top:calc(100% + 8px);left:auto;right:0;z-index:90;
+    width:min(468px,calc(100vw - 32px));
+    max-height:min(52vh,420px);overflow-y:auto;overscroll-behavior:contain;
+    padding:6px;border-radius:14px;
+    background:var(--bg);border:1px solid var(--line);
+    box-shadow:0 24px 60px rgba(4,12,22,.26)}
+
+  /* the quiet scrollbar, like every other pane in the panel — the default one
+     was the loudest thing on the screen */
+.ds .adm-hits{scrollbar-width:thin;scrollbar-color:transparent transparent}
+.ds .adm-hits:hover{scrollbar-color:var(--line-2) transparent}
+.ds .adm-hits::-webkit-scrollbar{width:11px}
+.ds .adm-hits::-webkit-scrollbar-track{background:transparent}
+.ds .adm-hits::-webkit-scrollbar-thumb{background:transparent;border-radius:99px;
+    border:4px solid transparent;background-clip:content-box;transition:background 160ms}
+.ds .adm-hits:hover::-webkit-scrollbar-thumb{background:var(--line-2);background-clip:content-box}
+.ds .adm-hit{display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;align-items:baseline;
+    padding:9px 11px;border-radius:9px;text-decoration:none;color:inherit}
+.ds .adm-hit:hover, .ds .adm-hit.on{background:var(--bg-inset)}
+.ds .adm-hit .k{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.ds .adm-hit .t b{display:block;font-size:13.5px;font-weight:500;color:var(--ink);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .adm-hit .t span{display:block;font-size:11.5px;color:var(--ink-3);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .adm-hits-f{position:sticky;bottom:-6px;margin:4px -6px -6px;padding:9px 17px;
+    border-top:1px solid var(--line);background:var(--bg-alt);
+    border-radius:0 0 14px 14px;font-size:11px;color:var(--ink-3)}
+}
+
+
+/* the read-only peek drawer */
+@media screen{
+.ds .adm-drawer.peek .adm-drawer-b{padding-top:18px}
+.ds .adm-peek-h{margin:20px 0 8px;font-size:11px;font-weight:500;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-3)}
+.ds .adm-peek-h:first-child{margin-top:0}
+
+  /* four facts in a 480px drawer: two by two, rather than three and a hole */
+.ds .adm-drawer.peek .adm-facts{margin-bottom:0;grid-template-columns:1fr 1fr}
+.ds .adm-drawer.peek .adm-tw{margin-bottom:0}
+.ds .adm-drawer.peek .adm-table{min-width:0;font-size:12.5px}
+.ds .adm-drawer.peek .adm-table th{padding:9px 12px}
+.ds .adm-drawer.peek .adm-table td{padding:9px 12px}
+.ds .adm-drawer.peek .adm-time{margin-top:4px}
+.ds .adm-drawer-f a.ds-btn{text-decoration:none}
+}
+
+
+/* ------------------------------------------------------------- AI usage
+   A credit pool, a burn rate, and thirty days of daily spend. */
+@media screen{
+.ds .adm-burn-bar{position:relative;height:12px;border-radius:99px;overflow:hidden;
+    background:var(--adm-plot-bed);margin:0 0 10px}
+.ds .adm-burn-bar .spent{position:absolute;inset:0 auto 0 0;background:var(--adm-plot);
+    border-radius:99px}
+
+  /* what today's rate will have consumed by the expiry date — the gap between
+     this and the full bar is money that expires unused */
+.ds .adm-burn-bar .proj{position:absolute;inset:0 auto 0 0;border-radius:99px;
+    background:repeating-linear-gradient(135deg,
+      color-mix(in srgb,var(--adm-plot) 34%,transparent) 0 6px,
+      transparent 6px 12px)}
+.ds .adm-burn-k{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0 0 16px;font-size:11.5px;
+    color:var(--ink-3)}
+.ds .adm-burn-k span{display:flex;align-items:center;gap:7px}
+.ds .adm-burn-k span::before{content:"";width:9px;height:9px;border-radius:3px;flex:none}
+.ds .adm-burn-k .ds-a::before{background:var(--adm-plot)}
+.ds .adm-burn-k .b::before{background:repeating-linear-gradient(135deg,
+    color-mix(in srgb,var(--adm-plot) 45%,transparent) 0 3px,transparent 3px 6px);
+    border:1px solid var(--line-2)}
+.ds .adm-burn-k .c::before{background:var(--adm-plot-bed);border:1px solid var(--line-2)}
+.ds .adm-fact.warn b{color:#C4551A}
+
+
+  /* thirty columns, one per day */
+.ds .adm-cols-chart{display:flex;align-items:flex-end;gap:3px;height:130px;
+    padding:0 0 2px;border-bottom:1px solid var(--line)}
+.ds .adm-col{flex:1;display:flex;align-items:flex-end;height:100%;min-width:0}
+.ds .adm-col i{display:block;width:100%;border-radius:3px 3px 0 0;background:var(--adm-plot);
+    opacity:.85}
+.ds .adm-col:hover i{opacity:1}
+.ds .adm-col.peak i{background:var(--adm-plot-2);opacity:1}
+.ds .adm-col-ax{display:flex;justify-content:space-between;gap:12px;margin-top:8px;
+    font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ds .adm-col-ax .mid{color:var(--adm-plot-2)}
+.ds .adm-table .adm-bar-t{min-width:70px}
 }

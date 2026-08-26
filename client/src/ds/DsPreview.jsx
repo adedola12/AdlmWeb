@@ -12,6 +12,7 @@ import React from "react";
 import { ScrollRestoration, useNavigate } from "react-router-dom";
 import { MAP } from "../lib/dsRoutes.js";
 import { DS_PAGES } from "./pages/manifest.js";
+import AiAgent from "../components/AiAgent.jsx";
 
 const DsShell = React.lazy(() => import("./DsShell.jsx"));
 const DsAppShell = React.lazy(() => import("./DsAppShell.jsx"));
@@ -122,6 +123,17 @@ export default function DsPreview({ page }) {
         <Shell {...shellProps}>
           <Page />
         </Shell>
+        {/* Ada, for the same reason ScrollRestoration is here: App.jsx mounts
+            her for the real routes, and the preview routes sit outside <App />
+            so they never inherited her. Richard put a floating Ada on every
+            page of his build and she was missing from all 53 ported ones —
+            visible as an "Ask Ada" button on the live site and nothing at all
+            on /preview/*.
+
+            Ours, not his. His answers from keywords over published copy; this
+            one is Claude-backed through /agent/chat, grounded in the
+            catalogue, and already works signed out. */}
+        <AiAgent />
       </React.Suspense>
     </div>
   );

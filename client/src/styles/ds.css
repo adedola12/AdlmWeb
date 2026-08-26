@@ -2947,7 +2947,12 @@
   /* doc.css hides the page with visibility, which keeps its boxes and printed four
      blank sheets before the quotation. On a marketing page the rest of the document
      has to actually leave the flow. The sprite stays — the frame references it. */
-:root.doc-app body > *:not(.qt-doc):not(svg){display:none !important}
+
+  /* Every surface that prints a document is a body child here, not just the
+     quotation: /doc-preview mounts .docp and the admin composer mounts
+     .adm-shell. Hiding everything but .qt-doc blanked both of them — one empty
+     sheet, because the printable root itself was display:none. */
+:root.doc-app body > *:not(.qt-doc):not(.docp):not(.adm-shell):not(svg){display:none !important}
 .ds .qt-doc{position:static;display:block;height:auto;overflow:visible;
     background:none;backdrop-filter:none}
 .ds .qt-doc-scroll{overflow:visible;height:auto;flex:none}
