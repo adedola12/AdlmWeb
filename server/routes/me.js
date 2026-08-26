@@ -1819,6 +1819,68 @@ router.get(
 );
 
 /**
+ * POST /me/devices/revoke
+ *
+ * Free one of your own machines' activations.
+ *
+ * This already existed as POST /admin/users/device/revoke, which meant the
+ * only way to move a licence from a dead laptop to a new one was to ask us to
+ * do it. The seat belongs to the account and the machine belongs to the person
+ * holding it, so there is no reason that has to be a support ticket.
+ *
+ * Deliberately narrower than the admin route: it takes no email and reads the
+ * caller's own record, so the worst it can do is release a seat the caller
+ * already paid for. It marks `revokedAt` rather than deleting the row, the way
+ * the admin route does, because the audit trail is what answers "who released
+ * this and when" later.
+ *
+ * Bumping refreshVersion is what makes it take effect: the desktop clients
+ * re-check on their next call and the revoked machine stops being licensed.
+ */
+router.post(
+  "/devices/revoke",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const fingerprint = String(req.body?.fingerprint || "").trim();
+    const productKey = String(req.body?.productKey || "").trim();
+    if (!fingerprint) {
+      return res.status(400).json({ ok: false, error: "fingerprint is required" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ ok: false, error: "User missing" });
+
+    await ensureUserEntitlementsMigrated(user);
+    applyExpiryToUser(user);
+
+    // No productKey means "this machine, everywhere" — which is what somebody
+    // replacing a laptop actually wants, rather than revoking it once per
+    // product they happen to own.
+    const targets = (user.entitlements || []).filter(
+      (e) => !productKey || e.productKey === productKey,
+    );
+
+    const freed = [];
+    for (const ent of targets) {
+      for (const d of activeDevices(ent)) {
+        if (String(d.fingerprint || "") !== fingerprint) continue;
+        d.revokedAt = new Date();
+        freed.push(ent.productKey);
+      }
+    }
+
+    if (!freed.length) {
+      return res.status(404).json({ ok: false, error: "That machine is not active on this account" });
+    }
+
+    user.refreshVersion = (user.refreshVersion || 0) + 1;
+    await user.save();
+
+    return res.json({ ok: true, freed });
+  }),
+);
+
+/**
  * GET /me/rail
  *
  * The counts the signed-in rail shows beside each item — projects, rate

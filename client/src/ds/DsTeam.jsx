@@ -36,6 +36,15 @@ const NAMES = {
   civil3d: "CIVIQ",
 };
 
+const ICONS = {
+  revit: "/ds/ic-quiv.png",
+  planswift: "/ds/ic-heron.png",
+  rategen: "/ds/ic-rategen.png",
+  mep: "/ds/ic-mep.png",
+  "qs-takeoff": "/ds/ic-timepro.png",
+  civil3d: "/ds/ic-civiq.png",
+};
+
 function ago(d) {
   if (!d) return "never";
   const days = Math.floor((Date.now() - new Date(d).getTime()) / 864e5);
@@ -61,6 +70,8 @@ export default function DsTeam() {
   const [devices, setDevices] = React.useState(null);
   const [catalogue, setCatalogue] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
+  const [busy, setBusy] = React.useState("");
+  const [problem, setProblem] = React.useState("");
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
@@ -102,9 +113,15 @@ export default function DsTeam() {
       const used = Number(e.seatsUsed) || 0;
       return {
         key: e.productKey,
-        name: catalogue[e.productKey]?.name || NAMES[e.productKey] || e.productKey,
+        // His chips are 11.5px with a 16px icon, so they want the short name.
+        // Feeding them the catalogue's marketing name ("HERON: PlanSwift / 2D
+        // Drawings QS Software") turned each chip into a wrapped paragraph in
+        // an oval.
+        name: NAMES[e.productKey] || catalogue[e.productKey]?.name || e.productKey,
+        icon: ICONS[e.productKey] || "",
         owned,
         used,
+        expired: !!e.isExpired || e.status !== "active",
         pct: owned ? Math.min(100, Math.round((used / owned) * 100)) : 0,
       };
     });
@@ -120,6 +137,45 @@ export default function DsTeam() {
     user?.email ||
     "You";
 
+  // Free a machine's activation. The seat comes back immediately and the
+  // desktop clients notice on their next check-in.
+  const release = React.useCallback(
+    async (d) => {
+      const label = d.name || d.fingerprint.slice(0, 12);
+      const ok = window.confirm(
+        `Free the seat held by ${label}?\n\n` +
+          "It stops being licensed at its next check-in, and the seat can be " +
+          "installed on another machine straight away. Nothing is deleted.",
+      );
+      if (!ok) return;
+
+      setBusy(d.fingerprint);
+      setProblem("");
+      try {
+        await apiAuthed("/me/devices/revoke", {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fingerprint: d.fingerprint }),
+        });
+        // Re-read rather than patch state: seatsUsed lives on the summary and
+        // the meters are computed from it, so guessing here would leave the
+        // meters and the machine list disagreeing.
+        const [s, dev] = await Promise.all([
+          apiAuthed("/me/summary", { token: accessToken }),
+          apiAuthed("/me/devices", { token: accessToken }),
+        ]);
+        setSummary(s);
+        setDevices(dev.devices || []);
+      } catch (e) {
+        setProblem(e.message || "That seat could not be freed.");
+      } finally {
+        setBusy("");
+      }
+    },
+    [accessToken],
+  );
+
   if (failed) {
     return (
       <div className="dsh-in">
@@ -134,6 +190,8 @@ export default function DsTeam() {
       </div>
     );
   }
+
+  const held = view.meters.filter((m) => m.used > 0);
 
   return (
     <div className="dsh-in">
@@ -152,6 +210,12 @@ export default function DsTeam() {
           </Link>
         </div>
       </div>
+
+      {problem && (
+        <p className="sub" style={{ color: "var(--bad, #b42318)" }}>
+          {problem}
+        </p>
+      )}
 
       <div className="dsh-two">
         <div>
@@ -183,23 +247,18 @@ export default function DsTeam() {
                         </span>
                       </div>
                     </td>
-                    <td>
-                      {user?.role === "admin" ? "Administrator" : "Account owner"}
-                    </td>
+                    <td>{user?.role === "admin" ? "Administrator" : "Account owner"}</td>
                     <td>
                       <div className="dsh-chips">
-                        {view.meters.filter((m) => m.used > 0).length ? (
-                          view.meters
-                            .filter((m) => m.used > 0)
-                            .map((m) => (
-                              <span key={m.key} className="dsh-chip on">
-                                {m.name}
-                              </span>
-                            ))
+                        {held.length ? (
+                          held.map((m) => (
+                            <span className="dsh-chip" key={m.key}>
+                              {m.icon && <img src={m.icon} alt="" />}
+                              {m.name}
+                            </span>
+                          ))
                         ) : (
-                          <span style={{ fontSize: "12.5px", color: "var(--ink-3)" }}>
-                            None activated yet
-                          </span>
+                          <span className="dsh-chip none">None activated yet</span>
                         )}
                       </div>
                     </td>
@@ -223,9 +282,65 @@ export default function DsTeam() {
                 bought against that account. If you need several people under one bill, tell us
                 what you need and we will set it up by hand in the meantime.
               </p>
-              <Link className="btn btn-o btn-sm" to="/support/request" style={{ marginTop: 16 }}>
+              <Link className="btn btn-o btn-sm" to="/manage/support" style={{ marginTop: 16 }}>
                 Talk to us about a practice account
               </Link>
+            </div>
+          </section>
+
+          <section className="dsh-panel">
+            <div className="dsh-ph">
+              <h2>Machines</h2>
+              <span className="when">
+                {devices.length} activated
+              </span>
+            </div>
+            <div className="dsh-body">
+              {devices.length ? (
+                devices.map((d) => (
+                  <div className="dsh-dl" key={d.fingerprint}>
+                    <span className="ic">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#hi-computer" />
+                      </svg>
+                    </span>
+                    <div className="nm">
+                      <b>{d.name || d.fingerprint.slice(0, 12)}</b>
+                      <span>
+                        {d.products
+                          .map((k) => NAMES[k] || catalogue[k]?.name || k)
+                          .join(", ")}{" "}
+                        · {ago(d.lastSeenAt)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-o btn-sm"
+                      onClick={() => release(d)}
+                      disabled={busy === d.fingerprint}
+                    >
+                      {busy === d.fingerprint ? "Freeing…" : "Free the seat"}
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
+                  No machine has activated a licence yet. The first install registers one.
+                </p>
+              )}
+              <p
+                style={{
+                  margin: "16px 0 0",
+                  fontSize: "12.5px",
+                  fontWeight: 300,
+                  color: "var(--ink-3)",
+                  lineHeight: 1.6,
+                }}
+              >
+                Freeing a seat here releases it immediately, which is what you want when a
+                laptop is replaced. Activation is tied to the device, not the network:
+                switching between Wi-Fi, ethernet or a VPN does not use one up.
+              </p>
             </div>
           </section>
         </div>
@@ -244,7 +359,10 @@ export default function DsTeam() {
                   {view.meters.map((m) => (
                     <div className="row" key={m.key}>
                       <div className="lab">
-                        <span>{m.name}</span>
+                        <span>
+                          {m.name}
+                          {m.expired ? " · expired" : ""}
+                        </span>
                         <b>
                           {m.used} of {m.owned}
                         </b>
@@ -263,61 +381,41 @@ export default function DsTeam() {
                   No licensed products yet.
                 </p>
               )}
-              {view.idle > 0 && (
-                <p
-                  style={{
-                    margin: "18px 0 0",
-                    fontSize: "12.5px",
-                    fontWeight: 300,
-                    color: "var(--ink-3)",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {view.idle} seat{view.idle === 1 ? " is" : "s are"} paid for and not installed
-                  anywhere. Installing on a machine costs nothing extra.
-                </p>
-              )}
-            </div>
-          </section>
-
-          <section className="dsh-panel">
-            <div className="dsh-ph">
-              <h2>Machines</h2>
-            </div>
-            <div className="dsh-body">
-              {devices.length ? (
-                <div className="dsh-kv">
-                  {devices.map((d) => (
-                    <div key={d.fingerprint}>
-                      <span>{d.name || d.fingerprint.slice(0, 12)}</span>
-                      <b>
-                        {d.products.map((k) => catalogue[k]?.name || NAMES[k] || k).join(", ")} ·{" "}
-                        {ago(d.lastSeenAt)}
-                      </b>
-                    </div>
-                  ))}
-                  <div>
-                    <span>Free activations</span>
-                    <b>{Math.max(0, view.idle)}</b>
-                  </div>
-                </div>
-              ) : (
-                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
-                  No machine has activated a licence yet. The first install registers one.
-                </p>
-              )}
               <p
                 style={{
-                  margin: "16px 0 0",
+                  margin: "18px 0 0",
                   fontSize: "12.5px",
                   fontWeight: 300,
                   color: "var(--ink-3)",
                   lineHeight: 1.6,
                 }}
               >
-                Activation is tied to the device, not the network: switching between Wi-Fi,
-                ethernet or a VPN does not use up an activation.
+                {view.idle > 0
+                  ? `${view.idle} seat${view.idle === 1 ? " is" : "s are"} paid for and not installed anywhere. Installing on a machine costs nothing extra.`
+                  : "Every seat is installed. Buying another is the only way to add a machine without freeing one first."}
               </p>
+            </div>
+          </section>
+
+          <section className="dsh-panel">
+            <div className="dsh-ph">
+              <h2>Free activations</h2>
+            </div>
+            <div className="dsh-body">
+              <div className="dsh-kv">
+                <div>
+                  <span>Seats owned</span>
+                  <b>{view.owned}</b>
+                </div>
+                <div>
+                  <span>In use</span>
+                  <b>{view.used}</b>
+                </div>
+                <div>
+                  <span>Free right now</span>
+                  <b>{Math.max(0, view.idle)}</b>
+                </div>
+              </div>
             </div>
           </section>
         </div>
