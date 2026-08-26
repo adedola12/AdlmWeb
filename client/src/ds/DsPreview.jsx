@@ -25,6 +25,12 @@ const DsDocStyles = React.lazy(() => import("./DsDocStyles.jsx"));
 // page, and porting site.css alone left every app screen, both auth screens
 // and the document renderer with no styling of their own whatsoever.
 const APP_SCREEN = /^(dash|work)-/;
+
+// His admin screens bring their own chrome — .adm-shell wraps an .adm-rail
+// that is part of the page, not stamped around it. So they get no shell of
+// ours at all: DsShell would put the marketing nav above an admin panel, and
+// DsAppShell would put the Manage rail beside his admin rail.
+const BARE_SCREEN = /^admin-/;
 const NEEDS_LEARN = new Set(["dash-learning", "dash-course", "dash-certificates", "work-home"]);
 const NEEDS_AUTH = new Set(["login", "signup", "verify"]);
 const NEEDS_DOC = new Set(["doc-preview", "quote"]);
@@ -106,8 +112,13 @@ export default function DsPreview({ page }) {
   // "Book a demo" above a signed-in dashboard — which is what his own build
   // does, and is on the snag list for him rather than reproduced here.
   const isApp = APP_SCREEN.test(page.slug);
-  const Shell = isApp ? DsAppShell : DsShell;
-  const shellProps = isApp ? { title: page.title, page: page.slug } : { mapHref };
+  const isBare = BARE_SCREEN.test(page.slug);
+  const Shell = isBare ? React.Fragment : isApp ? DsAppShell : DsShell;
+  const shellProps = isBare
+    ? {}
+    : isApp
+      ? { title: page.title, page: page.slug }
+      : { mapHref };
 
   return (
     <div onClickCapture={onClickCapture}>

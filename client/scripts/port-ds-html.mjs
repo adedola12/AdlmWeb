@@ -114,6 +114,43 @@ const PAGES = [
   // ── the rest ────────────────────────────────────────────────────────────
   { src: "src/ada.html", name: "DsAda", slug: "ada" },
   { src: "src/doc-preview.html", name: "DsDocPreview", slug: "doc-preview" },
+
+  // ── his admin panel, 24-26 August ──────────────────────────────────────
+  // Staged for review only. Each screen carries its own .adm-shell and its
+  // behaviour lives in six admin-*.js files that are NOT ported, so these
+  // render his design against his sample data and do nothing. Our live
+  // admin at /admin/* is untouched and remains the working one.
+  { src: "src/admin-account.html", name: "DsAdminAccount", slug: "admin-account" },
+  { src: "src/admin-ada.html", name: "DsAdminAda", slug: "admin-ada" },
+  { src: "src/admin-ai.html", name: "DsAdminAi", slug: "admin-ai" },
+  { src: "src/admin-certificates.html", name: "DsAdminCertificates", slug: "admin-certificates" },
+  { src: "src/admin-coupons.html", name: "DsAdminCoupons", slug: "admin-coupons" },
+  { src: "src/admin-courses.html", name: "DsAdminCourses", slug: "admin-courses" },
+  { src: "src/admin-documents.html", name: "DsAdminDocuments", slug: "admin-documents" },
+  { src: "src/admin-emails.html", name: "DsAdminEmails", slug: "admin-emails" },
+  { src: "src/admin-enrolments.html", name: "DsAdminEnrolments", slug: "admin-enrolments" },
+  { src: "src/admin-entitlements.html", name: "DsAdminEntitlements", slug: "admin-entitlements" },
+  { src: "src/admin-events.html", name: "DsAdminEvents", slug: "admin-events" },
+  { src: "src/admin-home.html", name: "DsAdminHome", slug: "admin-home" },
+  { src: "src/admin-installations.html", name: "DsAdminInstallations", slug: "admin-installations" },
+  { src: "src/admin-invoices.html", name: "DsAdminInvoices", slug: "admin-invoices" },
+  { src: "src/admin-issued.html", name: "DsAdminIssued", slug: "admin-issued" },
+  { src: "src/admin-login.html", name: "DsAdminLogin", slug: "admin-login" },
+  { src: "src/admin-marketing.html", name: "DsAdminMarketing", slug: "admin-marketing" },
+  { src: "src/admin-organisations.html", name: "DsAdminOrganisations", slug: "admin-organisations" },
+  { src: "src/admin-people.html", name: "DsAdminPeople", slug: "admin-people" },
+  { src: "src/admin-pricing.html", name: "DsAdminPricing", slug: "admin-pricing" },
+  { src: "src/admin-products.html", name: "DsAdminProducts", slug: "admin-products" },
+  { src: "src/admin-purchases.html", name: "DsAdminPurchases", slug: "admin-purchases" },
+  { src: "src/admin-quotations.html", name: "DsAdminQuotations", slug: "admin-quotations" },
+  { src: "src/admin-rates.html", name: "DsAdminRates", slug: "admin-rates" },
+  { src: "src/admin-submissions.html", name: "DsAdminSubmissions", slug: "admin-submissions" },
+  { src: "src/admin-subscriptions.html", name: "DsAdminSubscriptions", slug: "admin-subscriptions" },
+  { src: "src/admin-support.html", name: "DsAdminSupport", slug: "admin-support" },
+  { src: "src/admin-system.html", name: "DsAdminSystem", slug: "admin-system" },
+  { src: "src/admin-templates.html", name: "DsAdminTemplates", slug: "admin-templates" },
+  { src: "src/admin-whats-new.html", name: "DsAdminWhatsNew", slug: "admin-whats-new" },
+
 ];
 
 // Hand-authored pages that live alongside the ported ones. They are written
