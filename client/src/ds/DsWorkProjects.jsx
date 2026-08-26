@@ -62,18 +62,17 @@ const SORTS = [
   { id: "name", label: "Name" },
 ];
 
-// Where a project opens today.
+// Where a project opens.
 //
-// His design has one project screen at /work/project/:id that serves every
-// product. That screen is not built yet, and until it is, a project opens
-// where it already opens: the per-product area the dashboard sends people to.
-// Linking at the unbuilt route would be six dead links on the busiest screen
-// of the surface.
+// His one project screen now exists, so a project opens at its own bill rather
+// than at the per-product area. Two keys still do not have one: rategen holds
+// no bill, and archicad's projects live on their own route with their own
+// screens, so both keep going where they already went.
 const projectHref = (p) => {
   const k = String(p.productKey || "").toLowerCase();
   if (k === "archicad") return "/archicad";
   if (k === "rategen") return "/rategen";
-  return k ? `/projects/${k}` : "/dashboard";
+  return k && p.id ? `/work/project/${k}/${p.id}` : "/dashboard";
 };
 
 export default function DsWorkProjects() {
