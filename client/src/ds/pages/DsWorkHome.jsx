@@ -355,7 +355,7 @@ export default function DsWorkHome() {
           <ul className="dsh-nav">
             {" "}
             <li>
-              <Link to="/learning" data-ds-page="dash-learning">
+              <Link to="/learn" data-ds-page="dash-learning">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-learning" />
                 </svg>
@@ -364,7 +364,7 @@ export default function DsWorkHome() {
             </li>
             {" "}
             <li>
-              <Link to="/learning/certificates" data-ds-page="dash-certificates">
+              <Link to="/dashboard" data-ds-page="dash-certificates">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-cert" />
                 </svg>
@@ -459,7 +459,7 @@ export default function DsWorkHome() {
             </li>
             {" "}
             <li>
-              <Link to="/support" data-ds-page="dash-support">
+              <Link to="/manage/support" data-ds-page="dash-support">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-support" />
                 </svg>

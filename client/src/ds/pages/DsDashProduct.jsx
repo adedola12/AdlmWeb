@@ -355,7 +355,7 @@ export default function DsDashProduct() {
           <ul className="dsh-nav">
             {" "}
             <li>
-              <Link to="/learning" data-ds-page="dash-learning">
+              <Link to="/learn" data-ds-page="dash-learning">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-learning" />
                 </svg>
@@ -364,7 +364,7 @@ export default function DsDashProduct() {
             </li>
             {" "}
             <li>
-              <Link to="/learning/certificates" data-ds-page="dash-certificates">
+              <Link to="/dashboard" data-ds-page="dash-certificates">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-cert" />
                 </svg>
@@ -459,7 +459,7 @@ export default function DsDashProduct() {
             </li>
             {" "}
             <li>
-              <Link to="/support" data-ds-page="dash-support">
+              <Link to="/manage/support" data-ds-page="dash-support">
                 <svg viewBox="0 0 24 24">
                   <use href="#hi-support" />
                 </svg>
@@ -890,7 +890,7 @@ export default function DsDashProduct() {
                     Support answers from a real address, usually the same working day. Include the version and the machine name and it will be quicker.
                   </p>
                   {" "}
-                  <Link className="ds-btn btn-p ds-btn-sm" to="/support" data-ds-page="dash-support">
+                  <Link className="ds-btn btn-p ds-btn-sm" to="/manage/support" data-ds-page="dash-support">
                     Open a ticket
                   </Link>
                   {" "}
