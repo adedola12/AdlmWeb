@@ -44,6 +44,12 @@ export default defineConfig([
       // the error boundary replaces the whole page. That is how the dashboard
       // went down in 4e7acca — <Seo> used, never imported.
       'react/jsx-no-undef': 'error',
+      // The companion to the rule above, and it has to be on with it. Without
+      // it no-unused-vars cannot see that a binding is used as a JSX element,
+      // so `const Screen = props.screen` used only as <Screen /> is reported
+      // as unused — a false error, and false errors are how a linter stops
+      // being read.
+      'react/jsx-uses-vars': 'error',
     },
   },
   {
