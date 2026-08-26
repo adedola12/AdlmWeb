@@ -52,6 +52,9 @@ import AdminChangelogs from "./pages/AdminChangelogs.jsx";
 import TrainingDetail from "./pages/TrainingDetail.jsx";
 import AdminCoupons from "./pages/AdminCoupons.jsx";
 import AdminInvoices from "./pages/AdminInvoices.jsx";
+// Lazy: it pulls in the document engine and two stylesheets that no other
+// admin screen needs.
+const AdminDocuments = React.lazy(() => import("./pages/AdminDocuments.jsx"));
 import AdminProposals from "./pages/AdminProposals.jsx";
 import AdminRoles from "./pages/AdminRoles.jsx";
 import PublicProposal from "./pages/PublicProposal.jsx";
@@ -572,6 +575,18 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="invoices">
             <AdminInvoices />
+          </AdminRoute>
+        ),
+      },
+      {
+        // The ADLM half of the document engine: written documents on the
+        // letterhead. The product half is generated out of a project.
+        path: "admin/documents",
+        element: (
+          <AdminRoute permission="invoices">
+            <React.Suspense fallback={null}>
+              <AdminDocuments />
+            </React.Suspense>
           </AdminRoute>
         ),
       },

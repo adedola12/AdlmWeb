@@ -41,6 +41,9 @@ const SHEETS = [
   { in: "learn.css", out: "ds-learn.css" },
   { in: "auth.css", out: "ds-auth.css" },
   { in: "doc.css", out: "ds-doc.css" },
+  // The document composer's chrome, added 23 August. Only the composer loads
+  // it, so it stays a separate sheet rather than joining ds.css.
+  { in: "admin.css", out: "ds-admin.css" },
 ];
 
 const CSS_DIR = path.resolve(CLIENT, "../../ADLMWebNewUI/site/assets/css");

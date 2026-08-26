@@ -1,0 +1,137 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/admin.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* The ADLM admin shell — currently one screen, the document composer.
+
+   Scoped entirely to .adm-*. It borrows doc.css for the sheet and the print
+   rules and site.css for buttons and colour tokens, and defines nothing that
+   could reach a marketing page.                                              */
+@media screen{
+.ds .adm{display:grid;grid-template-columns:296px 1fr;height:100dvh;overflow:hidden;
+    background:var(--bg-alt,#F4F6F9);font-family:var(--font,Lexend,system-ui,sans-serif)}
+
+
+  /* ------------------------------------------------------------------ side */
+.ds .adm-side{border-right:1px solid var(--line,#E0E2E7);background:var(--bg,#fff);
+    padding:0 16px 28px;overflow-y:auto}
+.ds .adm-brandbar{position:sticky;top:0;z-index:2;background:var(--bg,#fff);
+    padding:20px 6px 15px;margin:0 -16px 4px;padding-left:22px;padding-right:22px;
+    border-bottom:1px solid var(--line,#E0E2E7)}
+.ds .adm-brandbar b{display:block;font-size:15px;font-weight:500;color:var(--ink,#091E39)}
+.ds .adm-brandbar span{display:block;margin-top:2px;font-size:12px;font-weight:300;
+    color:var(--ink-3,#6C819A)}
+.ds .adm-grp{font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;font-weight:500;
+    color:var(--ink-3,#6C819A);padding:0 6px;margin:22px 0 10px}
+.ds .adm-hint{margin:10px 6px 0;font-size:11.5px;line-height:1.5;color:var(--ink-3,#6C819A)}
+.ds .adm-seg{display:flex;gap:4px;padding:4px;border-radius:11px;
+    background:var(--bg-inset,#F1F4F8)}
+.ds .adm-seg button{flex:1;border:0;background:none;cursor:pointer;font-family:inherit;
+    font-size:13px;color:var(--ink-2,#3D5169);padding:8px 10px;border-radius:8px}
+.ds .adm-seg button.on{background:var(--bg,#fff);color:var(--ink,#091E39);font-weight:500;
+    box-shadow:0 1px 3px rgba(9,30,57,.10)}
+.ds .adm-tpls{display:grid;gap:5px}
+.ds .adm-tpl{display:block;width:100%;text-align:left;border:1px solid transparent;
+    background:none;cursor:pointer;font-family:inherit;padding:10px 12px;border-radius:11px}
+.ds .adm-tpl b{display:block;font-size:13.5px;font-weight:400;color:var(--ink-2,#3D5169)}
+.ds .adm-tpl span{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3,#6C819A)}
+.ds .adm-tpl:hover{background:var(--bg-inset,#F1F4F8)}
+.ds .adm-tpl.on{background:var(--bg-inset,#F1F4F8);border-color:var(--line-2,#D6DBE3)}
+.ds .adm-tpl.on b{color:var(--ink,#091E39);font-weight:500}
+.ds .adm-fields{display:grid;gap:12px}
+.ds .adm-fields label{display:grid;gap:5px;font-size:11.5px;color:var(--ink-3,#6C819A);
+    padding:0 2px}
+.ds .adm-fields input, .ds .adm-fields textarea{font-family:inherit;font-size:13px;
+    color:var(--ink,#091E39);background:var(--bg,#fff);border:1px solid var(--line-2,#D6DBE3);
+    border-radius:9px;padding:9px 11px;resize:vertical}
+.ds .adm-fields input:focus, .ds .adm-fields textarea:focus{outline:0;border-color:var(--action,#239CFF)}
+.ds .adm-kept-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;
+    padding:9px 2px;border-bottom:1px solid var(--line,#E0E2E7)}
+.ds .adm-kept-row:last-child{border-bottom:0}
+.ds .adm-kept h4{margin:0 0 6px;font-size:12px;font-weight:500;color:var(--ink-2,#3D5169)}
+.ds .adm-kept-row b{display:block;font-size:12.5px;font-weight:400;color:var(--ink,#091E39);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds .adm-kept-row span{font-size:11px;color:var(--ink-3,#6C819A)}
+
+
+  /* ------------------------------------------------------------------ main */
+.ds .adm-main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.ds .adm-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex:none;
+    padding:13px 22px;background:var(--bg,#fff);border-bottom:1px solid var(--line,#E0E2E7)}
+.ds .adm-bar b{display:block;font-size:14.5px;font-weight:500;color:var(--ink,#091E39)}
+.ds .adm-bar span{display:block;font-size:11.5px;color:var(--ink-3,#6C819A)}
+.ds .adm-acts{display:flex;gap:8px;flex-wrap:wrap}
+.ds .adm-split{flex:1;display:grid;grid-template-columns:minmax(360px,42%) 1fr;min-height:0}
+
+
+  /* ------------------------------------------------------------------- source */
+.ds .adm-src{display:flex;flex-direction:column;min-height:0;overflow-y:auto;
+    padding:20px 22px 22px;background:var(--bg,#fff);
+    border-right:1px solid var(--line,#E0E2E7);transition:background 160ms}
+.ds .adm-src.over{background:color-mix(in srgb,var(--action,#239CFF) 7%,#fff)}
+.ds .adm-src h3{margin:0 0 5px;font-size:16px;font-weight:500;color:var(--ink,#091E39)}
+.ds .adm-sub{margin:0 0 16px;font-size:12.5px;line-height:1.5;color:var(--ink-3,#6C819A)}
+.ds .adm-file{display:flex;align-items:center;gap:11px;padding:14px;border-radius:12px;
+    border:1px dashed var(--line-2,#D6DBE3);background:var(--bg-inset,#F1F4F8)}
+.ds .adm-file span{font-size:12.5px;color:var(--ink-3,#6C819A)}
+.ds .adm-src.over .adm-file{border-color:var(--action,#239CFF)}
+.ds .adm-note{margin:11px 0 0;font-size:12px;line-height:1.5;color:var(--ink-3,#6C819A)}
+.ds .adm-note.adm-bad{color:#C2410C}
+.ds #adm-text{flex:1;min-height:280px;margin-top:16px;font-family:ui-monospace,Menlo,Consolas,monospace;
+    font-size:12.5px;line-height:1.65;color:var(--ink,#091E39);background:var(--bg,#fff);
+    border:1px solid var(--line-2,#D6DBE3);border-radius:12px;padding:14px 16px;resize:none;
+    tab-size:8}
+.ds #adm-text:focus{outline:0;border-color:var(--action,#239CFF)}
+.ds .adm-src-foot{display:flex;align-items:center;gap:12px;margin-top:13px;flex:none}
+.ds .adm-kbd{font-size:11.5px;color:var(--ink-3,#6C819A)}
+.ds kbd{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;
+    border:1px solid var(--line-2,#D6DBE3);border-bottom-width:2px;border-radius:5px;
+    padding:1px 5px;color:var(--ink-2,#3D5169);background:var(--bg,#fff)}
+.ds .adm-rules{margin-top:16px;flex:none;font-size:12px;color:var(--ink-3,#6C819A)}
+.ds .adm-rules summary{cursor:pointer;color:var(--ink-2,#3D5169);padding:4px 0}
+.ds .adm-rules ul{margin:8px 0 0;padding-left:18px;display:grid;gap:6px;line-height:1.5}
+.ds .adm-rules b{color:var(--ink,#091E39);font-weight:500}
+
+
+  /* ------------------------------------------------------------------- output */
+.ds .adm-out{display:flex;flex-direction:column;min-width:0;min-height:0}
+.ds .adm-out-bar{flex:none;padding:9px 20px;font-size:11.5px;color:var(--ink-3,#6C819A);
+    background:var(--bg,#fff);border-bottom:1px solid var(--line,#E0E2E7)}
+.ds .adm-out .doc-stage{flex:1;overflow-y:auto}
+
+
+  /* editing in place: a hairline that only appears when it is useful, because a
+     document covered in boxes stops looking like a document */
+.ds .adm-out [contenteditable]{outline:0;border-radius:3px;
+    transition:background 140ms,box-shadow 140ms}
+.ds .adm-out [contenteditable]:hover{background:rgba(35,156,255,.07)}
+.ds .adm-out [contenteditable]:focus{background:rgba(35,156,255,.10);
+    box-shadow:0 0 0 2px rgba(35,156,255,.34)}
+@media (max-width:1100px){
+.ds .adm{grid-template-columns:1fr;height:auto;overflow:visible}
+.ds .adm-side{border-right:0;border-bottom:1px solid var(--line,#E0E2E7)}
+.ds .adm-split{grid-template-columns:1fr}
+.ds .adm-src{border-right:0;border-bottom:1px solid var(--line,#E0E2E7);overflow:visible}
+.ds .adm-out .doc-stage{overflow:visible}
+:root.adm-app, :root.adm-app body{height:auto;overflow:visible}
+}
+}
+@media print{
+
+  /* the composer is chrome; only the sheets print */
+.ds .adm{display:block;height:auto;overflow:visible}
+.ds .adm-side, .ds .adm-bar, .ds .adm-src, .ds .adm-out-bar{display:none !important}
+
+  /* each of these has overflow:hidden or a fixed height on screen, and a stack of
+     sheets is 297mm per page — anything still clipping would lose page two */
+.ds .adm-main, .ds .adm-split, .ds .adm-out, .ds .adm-out .doc-stage{display:block;overflow:visible;
+    height:auto;min-height:0}
+.ds .adm-out [contenteditable]{background:none !important;box-shadow:none !important}
+}

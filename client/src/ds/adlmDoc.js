@@ -276,9 +276,17 @@ const BLOCKS = {
   para: (b) => `<p class="doc-p">${esc(b.text)}</p>`,
   bullets: (b) =>
     `<ul class="doc-ul">${(b.items || []).map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`,
-  keyvalue: (b) =>
-    `<div class="doc-kv"><span class="doc-k">${esc(b.label)}</span>` +
-    `<span class="doc-v">${(b.lines || []).map((l) => `<div>${esc(l)}</div>`).join("")}</span></div>`,
+  // `lines` is an array of address lines. A caller passing a plain string is
+  // an easy mistake to make and used to throw from inside .map, which takes
+  // down the whole document rather than one block — so a string is treated as
+  // the single line it obviously is.
+  keyvalue: (b) => {
+    const lines = Array.isArray(b.lines) ? b.lines : b.lines ? [b.lines] : [];
+    return (
+      `<div class="doc-kv"><span class="doc-k">${esc(b.label)}</span>` +
+      `<span class="doc-v">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</span></div>`
+    );
+  },
   hr: () => '<div class="doc-hr"></div>',
   spacer: (b) => `<div class="doc-spacer" style="height:${b.size || 12}pt"></div>`,
   table,
