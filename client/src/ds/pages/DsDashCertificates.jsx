@@ -311,7 +311,7 @@ export default function DsDashCertificates() {
             </li>
             {" "}
             <li>
-              <Link to="/rategen" data-ds-page="work-library">
+              <Link to="/work/library" data-ds-page="work-library">
                 <svg viewBox="0 0 24 24">
                   <use href="#wi-library" />
                 </svg>

@@ -99,7 +99,9 @@ export const MAP = {
   // Rate library and Programme are RateGen and Time Pro under his names — the
   // screens exist, so these keep pointing at the real ones rather than growing
   // a second copy.
-  "work-library": "/rategen",
+  // His library, which is the only way into a rate's build-up. /rategen
+  // is still the place it is edited, and this screen links there.
+  "work-library": "/work/library",
   "work-rate": "/rategen",
   "work-programme": "/time-management",
   // Ada is a component inside this app, but his nav links a marketing page

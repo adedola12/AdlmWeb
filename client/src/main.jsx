@@ -92,6 +92,8 @@ const ManageSettings = React.lazy(() => import("./pages/ManageSettings.jsx"));
 const WorkHome = React.lazy(() => import("./pages/WorkHome.jsx"));
 const WorkProjects = React.lazy(() => import("./pages/WorkProjects.jsx"));
 const ManageSupport = React.lazy(() => import("./pages/ManageSupport.jsx"));
+const WorkLibrary = React.lazy(() => import("./pages/WorkLibrary.jsx"));
+const WorkRate = React.lazy(() => import("./pages/WorkRate.jsx"));
 import UserInvoice from "./pages/UserInvoice.jsx";
 
 // ✅ QUIV for ArchiCAD
@@ -258,6 +260,8 @@ const router = createBrowserRouter([
         { path: "work", el: <WorkHome /> },
         { path: "work/projects", el: <WorkProjects /> },
         { path: "manage/support", el: <ManageSupport /> },
+        { path: "work/library", el: <WorkLibrary /> },
+        { path: "work/rate/:id", el: <WorkRate /> },
       ].map(({ path, el }) => ({
         path,
         element: (
