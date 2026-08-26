@@ -2,7 +2,7 @@
 
 **A complete capability outline — every QS-facing job the platform supports today, from opening an account to closing a final account.**
 
-This is a *job-shaped* map of the platform: it walks the work a QS actually does, in order, and names the screen, the rule and the output behind each step. It is a companion to [`PROJECT_WORKSPACE_FEATURES.md`](./PROJECT_WORKSPACE_FEATURES.md), which goes deeper on the workspace internals (formulas, classifications, export anatomy). Where the two differ, this document is the current one — the workspace has grown from four tabs to six, and now carries a Budget tab, a 3D model tab, collaboration, Excel BoQ import, project merging and AI assistance.
+This is a *job-shaped* map of the platform: it walks the work a QS actually does, in order, and names the screen, the rule and the output behind each step. It is a companion to [`PROJECT_WORKSPACE_FEATURES.md`](./PROJECT_WORKSPACE_FEATURES.md), which goes deeper on the workspace internals — the six tabs, the rate and build-up formulas, the classification tables, the export anatomy. Read that one for how the workspace works; read this one for everything a QS can reach, workspace or not: account and licensing, the six ways a job gets onto the platform, collaboration, portfolio reporting, AI assistance, and the learning and training surfaces.
 
 ---
 

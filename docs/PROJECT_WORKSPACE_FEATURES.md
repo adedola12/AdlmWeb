@@ -13,7 +13,7 @@ This document is the definitive feature reference for everything that happens *a
 3. [The project workspace](#3-the-project-workspace)
 4. [Bill of Quantities (BOQ)](#4-bill-of-quantities-boq)
 5. [Rate Generation engine](#5-rate-generation-engine)
-6. [Material & Labour schedules with pricing](#6-material--labour-schedules-with-pricing)
+6. [The Budget tab — material & labour build-up, pricing & procurement](#6-the-budget-tab--material--labour-build-up-pricing--procurement)
 7. [Contract Tracker (contract lock & baseline)](#7-contract-tracker)
 8. [Variation Tracker](#8-variation-tracker)
 9. [Interim Valuation & Payment Certificates](#9-interim-valuation--payment-certificates)
@@ -21,7 +21,7 @@ This document is the definitive feature reference for everything that happens *a
 11. [Earned Value Management (EVM)](#11-earned-value-management-evm)
 12. [Progress tracking & the valuation audit trail](#12-progress-tracking--the-valuation-audit-trail)
 13. [Client sharing — the public dashboard](#13-client-sharing--the-public-dashboard)
-14. [BIM model attachments](#14-bim-model-attachments)
+14. [The 3D Model tab & BIM model attachments](#14-the-3d-model-tab--bim-model-attachments)
 15. [Appendix — formulas, classifications & export reference](#15-appendix)
 
 ---
@@ -95,18 +95,25 @@ After saving, the user lands in the **project explorer** for that plugin — a f
 
 The most recently saved project appears at the top. Cards support multi-select, per-card delete, "delete selected" and "delete all". Clicking a card opens the project.
 
-### 3.2 The four working tabs
+### 3.2 The six working tabs
 
-Opening a project reveals four tabs — the heart of the workspace:
+Opening a project reveals six tabs — the heart of the workspace. They are ordered as three stages of a job, and the in-project tab bar draws a divider between the groups:
 
-| Tab | Purpose |
-|---|---|
-| **Dashboard** | Progress and cost summary at a glance — gross value, valued (earned) amount, remaining, % complete |
-| **Bill of Quantity** | The main work surface: priced line items, rate application, categories/trades, preliminaries, PC sums, variations, contract lock |
-| **PM Dashboard** | The work programme: WBS/tasks, schedule, earned-value (EVM) metrics, risk register, issue log |
-| **Valuation** | Interim payment certificates, the daily valuation log, retention/VAT/WHT settings |
+| Stage | Tab | Purpose |
+|---|---|---|
+| **Overview** | **Dashboard** | Progress and cost summary at a glance — gross value, valued (earned) amount, remaining, % complete |
+| **Commercial** | **Bill of Quantity** | The main work surface: priced line items, rate application, categories/trades, preliminaries, PC sums, variations, contract lock |
+| **Commercial** | **Budget** | The cost plan: each bill line's material & labour build-up, pricing, per-line Overhead & Profit, and the buy schedule ([§6](#6-the-budget-tab--material--labour-build-up-pricing--procurement)) |
+| **Commercial** | **Valuation** | Valuation basis, interim payment certificates, the daily valuation log, retention/VAT/WHT settings |
+| **Delivery** | **3D Model** | The IFC/BIM viewer, with each mesh tied back to the BOQ lines that measured it ([§14](#14-the-3d-model-tab--bim-model-attachments)) |
+| **Delivery** | **PM Dashboard** | The work programme: WBS/tasks, schedule, earned-value (EVM) metrics, risk register, issue log |
 
-The header also surfaces the **Project ID** (for Open from Cloud), a **contract lock/draft badge**, and a **Share Dashboard** control that produces a public client link.
+The two directions of travel between the Commercial tabs are worth stating up front, because they are what make the workspace more than a spreadsheet:
+
+- **Budget → Bill.** A line priced on the Budget tab **drives its BOQ rate** (`Material + Labour + O&P`), so the bill, the certificates and EVM all follow what the QS actually costed.
+- **Bill → Budget.** The Bill of Quantity **determines the Budget's arrangement** — same order, same sections — so the two tabs read as one document.
+
+The 3D Model tab appears only when the project carries an uploaded model. The header surfaces the **Project ID** (for Open from Cloud), a **contract lock/draft badge**, a **Share Dashboard** control that produces a public client link, the **collaborators** panel, and a **report** button (the Project report on most tabs, the PM report on the PM tab).
 
 ---
 
@@ -132,6 +139,7 @@ The rate cell is where pricing happens, and it is deliberately powerful:
 - **Rate-library search** — type a name instead of a number and the cell searches the **Rate Generation** library, suggesting matching built-up rates. Picking one fills the rate.
 - **Automatic unit conversion** — when a suggested rate's unit differs from the item's (m² ↔ m via a slab thickness parsed from the description, tonne ↔ kg, m³ → m²), the rate is converted automatically; genuine mismatches are flagged amber.
 - **Group linking** — link similar items so a rate change on one propagates to the whole group (e.g. all "150mm blockwork" lines at once).
+- **Derived from the build-up** — a line priced on the [Budget tab](#6-the-budget-tab--material--labour-build-up-pricing--procurement) has its rate computed from its material & labour build-up (`Material + Labour + O&P`) instead of typed here. A line with no priced build-up keeps whatever rate was entered.
 - **Lock-aware** — once the contract is locked, the rate cell becomes a read-only 🔒 chip and cannot be edited (see [Contract Tracker](#7-contract-tracker)).
 
 ### 4.3 Earned-value per line
@@ -239,16 +247,106 @@ End-users browse their **effective rate library** on the web (a live, auto-refre
 
 ---
 
-## 6. Material & Labour schedules with pricing
+## 6. The Budget tab — material & labour build-up, pricing & procurement
 
-The **Materials view** turns the takeoff into a priced **material & labour schedule** — the procurement and pricing companion to the structural BOQ.
+If the BOQ answers *what the client pays*, the **Budget tab** answers *what the job costs to build* — the material & labour build-up behind every bill line, priced, marked up, and tracked through procurement. It is the schedule a QS would otherwise write by hand: "109 m³ of 1:2:4 concrete = 654 bags of cement, 71 tons of sharp sand, 142 tons of granite, plus concreting labour at ₦9,000/m³".
 
-- **One line per material/labour component.** The takeoff is grouped by material (e.g. "Cement", "Sandcrete Block 9in", "Reinforcement Y12"), each with its quantity, unit, and an editable rate.
-- **Priced from Rate Gen's component catalogue.** Rates here come from the **material + labour** master/user price lists (not composite build-up rates). For each line the platform proposes the best-matching catalogue price, honouring the required unit and preferring the user's own library over the master.
-- **One-click auto-fill & price sync.** "Auto-fill (RateGen)" prices every line against the catalogue (optionally only empty rates, never overwriting on a unit conflict); "Sync prices" keeps them current.
-- **Procurement tracking.** The same grid drives a **Purchased** status (instead of "Completed"), so the material schedule doubles as a purchase/earned tracker: qty × rate = amount, with valued/balance per line.
+It is also the tab that closes the loop on pricing: a priced build-up **derives its own bill rate**, so the BOQ, the certificates and EVM all follow what was actually costed rather than a number typed into a rate cell.
 
-The connection to Rate Gen is two-tiered: the **Materials view** prices against *component* (material + labour) rates, while the **BOQ view** prices against *composite build-up* rates — both sourced from the same Rate Gen library.
+### 6.1 The Bill determines the arrangement
+
+Every budget row is resolved back to its bill line — matched by **bill code**, then by **Revit element overlap**, then by **title** — and then laid out **in Bill order, in the Bill's own sections** (category or trade, whichever grouping the Bill is using, including any custom categories).
+
+Within a bill line, the resources are bundled so the line reads the way a QS thinks about it: **materials first, then labour**, then plant / consumable / equipment, then anything else — each tagged with its kind (Material · Labour · Plant · Consumable · Equipment). The sort is stable, so rows keep their order inside each kind.
+
+Two navigation aids matter on a large bill:
+
+- A **section rail** mirroring the Bill's, for jump-to-section movement.
+- A **resource search** that matches the **resource name only** — never the bill-line title — so searching "cement" returns cement rows, not every row under a concrete line. Results are shown flat, each with the work item and section it belongs to, above a floating **Material / Labour total** for the current search. That is the fastest way to answer "how much cement is in this job, and where is it used?"
+
+### 6.2 Pricing a line
+
+- **Price manually**, or **search the RateGen library** from any row. Pricing here draws on the **material + labour component catalogue** (master and user price lists) — not composite build-up rates.
+- **Auto-fill (RateGen)** prices every row against the catalogue (optionally only the empty ones, and never overwriting on a unit conflict); **Sync prices** keeps them current. The platform proposes the best-matching catalogue price for the required unit, preferring the user's own library over the master.
+- **Overhead & Profit is set per bill line**, on the group — not per resource row. Edits commit on blur.
+- A **global Overhead & Profit** can be stamped onto every item at once, overriding the per-item values. Leave it empty and each line keeps its own.
+
+**Editing is gated.** Pricing and procurement are editable only when the project is saveable **and the contract is not locked** — the Budget tab respects the contract lock exactly as the BOQ does (see [§7](#7-contract-tracker)). Collaborators without an active RateGen subscription receive masked rates, so no money renders here for them.
+
+### 6.3 The derived bill rate
+
+A bill line with a **priced** build-up has its rate derived from it:
+
+```
+net        = Σ (budget row qty × budget row rate)      ← material + labour (+ plant / consumable)
+amount     = net × (1 + (Overhead% + Profit%) / 100)   ← the group's O&P, not compounded
+Bill Rate  = amount / bill qty                          (or amount, when the bill qty is 0)
+```
+
+- The line's **net unit cost**, **overhead %** and **profit %** are stored alongside the derived rate, so the BOQ can show where the number came from.
+- A line with **no priced build-up is left untouched** — a manually-entered rate is never overwritten by an empty schedule.
+- Derivation is **idempotent**: only a real change is written, so save-on-change callers don't churn.
+- The group's O&P is taken as the **maximum** across its rows, which tolerates a partially-filled group.
+
+Derivation runs on every path that can change a build-up — plugin save, Excel BoQ import, schedule regeneration, and Budget-tab edits — so the bill rate can never drift from the build-up behind it.
+
+### 6.4 Generating a schedule when there isn't one
+
+Most bills arrive without a material & labour sheet — an uploaded Excel bill has no model behind it at all — so the platform carries a **server-side constants engine** (the port of QUIV's own constants engine) that generates the build-up. It decides per line among three families:
+
+| Family | Examples | Treatment |
+|---|---|---|
+| **Measured work** | concrete, blockwork, formwork, rebar, finishes, fill | **Factor decomposition** — real quantities from the Material Constants library, priced from the RateGen master price list |
+| **Services / MEP** | cables, conduit, luminaires, pipework, ductwork, sanitary, fire | A supply-and-install rate split into **equipment, installation labour and the accessories nobody measures** — the item *is* the material, so there is nothing to decompose |
+| **Supply-dominated builder's work** | doors, windows, sanitary fittings, railings, roof members | A **share split** per the reference QS schedules (0.70 material / 0.15 labour) |
+
+> **The reconciliation invariant.** Because [§6.3](#63-the-derived-bill-rate) drives each bill rate *from* the build-up, a generated schedule that costed less than the bill would silently cut the client's bill total. Every generated group therefore carries an overhead/profit that makes the derived rate **equal the rate the bill arrived with**. Only an **unpriced** line (rate 0 — nothing to preserve) is priced from cost upward, using the Markup constants.
+
+**Regenerate from current constants.** One action re-derives every generated material and labour row from the **current Material Constants library**, so a change to a house standard can be pushed through an existing project. (Available where regeneration applies; it is gated on the same entitlement as the BoQ import, because generating a schedule *is* the feature.)
+
+Two constants libraries back all of this, and both are editable on the web:
+
+- **Material Constants** (`/rategen/material-constants`) — the factors that turn a measured quantity into materials and labour ("1 m³ of 1:2:4 concrete = 6.65 bags of cement"). The same keys back QUIV's and HERON's desktop constants libraries, so a firm's standards mean the same thing on the desktop and on the web.
+- **Service Constants** (`/rategen/services-constants`) — standard lengths → bundles/Nr, connector rules, and fittings allowance per type. These feed a **one-click services pricing** action on MEP projects: the server resolves material + labour rates, applies the constants through the shared service-compute engine, writes the build-up as budget items, and derives every services bill line's rate.
+
+### 6.5 Procurement & the buy schedule
+
+The Budget tab has two views:
+
+- **Breakdown** — the priced build-up described above.
+- **Buy schedule** — *what to buy and when*.
+
+The buy schedule takes each **material** row (labour is excluded — you don't procure it) and works backwards from the programme:
+
+```
+Need by = the start date of the earliest WBS task linked to that bill line
+Buy by  = Need by − lead time          (lead time is user-set; default 14 days)
+```
+
+Rows are sorted by buy date, with the unscheduled ones (no linked task) last, and each carries a **purchased** tick. This is the one place the programme and the cost plan meet directly: link cost to the WBS (see [§10.3](#103-linking-cost-to-the-wbs-the-core-feature)) and the procurement dates fall out of the schedule automatically.
+
+Procurement is recorded per resource row as either a **purchased** flag or a **procured %**, so partial deliveries are representable.
+
+### 6.6 Valuing the job from the budget
+
+The Valuation tab offers two **valuation bases**:
+
+- **By Bill of Quantity** — each line valued by its own % complete, marked on the BOQ tab.
+- **By Budget (Material & Labour)** — each line valued from its build-up, driven by what has been procured on this tab.
+
+On the budget basis, each bill line's progress is reconciled from its components:
+
+```
+line % complete = Σ (component value × procured factor) / Σ (component value)
+   where component value  = qty × (net unit cost, else rate)
+         procured factor  = 1 if purchased, else procured% / 100
+```
+
+If the components carry no cost at all (e.g. labour with no rate), the line falls back to a **simple count of procured rows**, so it still progresses. The resulting `% complete` is written to the bill line — which means it flows straight into the earned-value columns, the valuation ledger, the interim certificates and EVM through the same pipeline as manually-marked progress.
+
+### 6.7 The two-tier connection to Rate Gen
+
+The connection to Rate Gen is two-tiered: the **Budget tab** prices against *component* (material + labour) rates, while the **BOQ view** prices against *composite build-up* rates — both sourced from the same Rate Gen library. A line can therefore be priced either way: pick a composite rate in the bill's rate cell, or build it up from components on the Budget tab and let [§6.3](#63-the-derived-bill-rate) produce the rate.
 
 ---
 
@@ -301,7 +399,7 @@ The platform issues proper **interim payment certificates** on the cumulative-le
 
 Issuing a certificate computes the **cumulative value to date** across all streams:
 
-- **Measured work** — `Σ (actual or planned qty) × (actual or planned rate) × valuationFactor`, so **partial progress flows in** (a line at 60% contributes 60%).
+- **Measured work** — `Σ (actual or planned qty) × (actual or planned rate) × valuationFactor`, so **partial progress flows in** (a line at 60% contributes 60%). Where each line's progress *comes from* is set by the project's **valuation basis** — marked directly on the BOQ, or reconciled from procurement on the Budget tab (see [§6.6](#66-valuing-the-job-from-the-budget)). The certificate arithmetic is identical either way.
 - **Variations** — completed variations only.
 - **Provisional sums** — completed only.
 - **Preliminaries** — the preliminary pool × the completed allocation.
@@ -415,9 +513,18 @@ Any project can be shared with the client through a **read-only public link** (n
 
 ---
 
-## 14. BIM model attachments
+## 14. The 3D Model tab & BIM model attachments
 
 Each project can carry up to three **IFC/BIM model** uploads — one each for **Architectural, Structural, and MEP** disciplines — stored in cloud object storage and surfaced (including on the public dashboard) so the client can see the model alongside the commercial data.
+
+The **3D Model tab** is where an uploaded model is viewed in the workspace, and it is tied to the bill rather than standing apart from it: **each mesh carries its Revit Element ID**, so
+
+- selecting a BOQ line **highlights the exact elements its quantity came from**, and
+- clicking an element **traces back to the BOQ lines that measured it**, showing that element's share of each line's quantity and cost.
+
+The per-element share is read from the stored `elementQuantities` split where present; otherwise the line total is divided evenly across its elements and flagged as approximate (≈). Money is omitted entirely for a viewer who may not see rates — a RateGen-gated collaborator receives rate 0 from the server, so cost simply does not render.
+
+The viewer (three.js + the web-ifc wasm) is lazy-loaded, so it is only downloaded when the tab is actually opened, and the tab itself only appears once a model is attached.
 
 ---
 
