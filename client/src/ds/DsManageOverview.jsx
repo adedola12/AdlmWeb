@@ -362,13 +362,18 @@ export default function DsManageOverview() {
                   Switched on for this account by ADLM. Nothing to install and nothing to
                   renew — they work inside the products you already have.
                 </p>
-                {view.grants.map((g) => (
-                  <div className="dsh-note" key={g.productKey}>
-                    <span className="dot" />
-                    <span>{g.productName || g.productKey}</span>
-                    <span className="act">{g.status === "active" ? "Active" : g.status}</span>
-                  </div>
-                ))}
+                {/* .dsh-kv, not .dsh-note — the latter is not a class in his
+                    stylesheet (only .dsh-notes, the notifications panel), so
+                    these rows had no layout at all and the name ran straight
+                    into the status: "boq-importActive". */}
+                <div className="dsh-kv">
+                  {view.grants.map((g) => (
+                    <div key={g.productKey}>
+                      <span>{g.productName || g.productKey}</span>
+                      <b>{g.status === "active" ? "Active" : g.status}</b>
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
           )}

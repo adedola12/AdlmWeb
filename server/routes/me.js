@@ -22,6 +22,10 @@ import { isGodUser } from "../util/godAccount.js";
 import bcrypt from "bcryptjs";
 import { validatePasswordStrength } from "../util/passwordPolicy.js";
 import {
+  BOQ_IMPORT_ENTITLEMENT,
+  BOQ_IMPORT_LEGACY_ENTITLEMENT,
+} from "../util/boqImportAccess.js";
+import {
   verifySocialIdentity,
   exchangeCodeForIdToken,
   PROVIDER_FIELD,
@@ -374,8 +378,16 @@ router.get(
 
     // 3) Attach isCourse + productName to entitlements (so Dashboard tabs render properly)
     // Feature grants have no Product doc — give them a readable display name.
+    //
+    // Both BoQ Import keys, from the canonical constants rather than typed.
+    // The feature shipped as "quiv-boq-import" and was renamed to "boq-import"
+    // when it grew past Quiv; this table only listed the legacy one, so an
+    // account granted the CURRENT key saw the raw string "boq-import" where a
+    // name should be. Sourcing the keys from boqImportAccess.js is what stops
+    // the two drifting apart again.
     const FEATURE_GRANT_NAMES = {
-      "quiv-boq-import": "QUIV BoQ Import (feature access)",
+      [BOQ_IMPORT_ENTITLEMENT]: "Excel BoQ Import (feature access)",
+      [BOQ_IMPORT_LEGACY_ENTITLEMENT]: "Excel BoQ Import (feature access)",
       ai: "ADLM AI Add-on (cost intelligence)",
     };
     let entitlements = entsBase.map((e) => {
