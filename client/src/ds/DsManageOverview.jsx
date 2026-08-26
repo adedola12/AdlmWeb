@@ -31,6 +31,16 @@ const longDate = (d) =>
     ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : "";
 
+// His feed shows "2d", "5d", then falls back to a date once that stops being
+// a useful way to say when.
+function ago(d) {
+  if (!d) return "";
+  const days = Math.floor((Date.now() - new Date(d).getTime()) / 864e5);
+  if (days <= 0) return "today";
+  if (days < 14) return `${days}d`;
+  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 // How long a feature grant runs for.
 //
 // A grant is an entitlement, so it carries the same expiry fields a licence
@@ -79,6 +89,7 @@ export default function DsManageOverview() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
   const [courses, setCourses] = React.useState(null);
+  const [activity, setActivity] = React.useState(null);
   const [catalogue, setCatalogue] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
 
@@ -101,6 +112,13 @@ export default function DsManageOverview() {
       .then((d) => alive && setCourses(Array.isArray(d) ? d : []))
       // One tile, not the screen.
       .catch(() => alive && setCourses([]));
+
+    // The activity trail recordActivity() has been writing at every project
+    // and PM mutation. Six is what his panel shows.
+    apiAuthed("/me/activity", { token: accessToken, params: { limit: 6 } })
+      .then((d) => alive && setActivity(d.items || []))
+      // A feed is the last panel on the screen; it does not get to blank it.
+      .catch(() => alive && setActivity([]));
 
     fetch(`${API_BASE}/products`)
       .then((r) => (r.ok ? r.json() : null))
@@ -456,6 +474,83 @@ export default function DsManageOverview() {
                 <a className="ds-btn btn-p ds-btn-sm" href={view.hub.downloadUrl}>
                   Download
                 </a>
+              </div>
+            </section>
+          )}
+
+          {/* Recent activity — his .dsh-feed, on the real trail.
+              recordActivity() already writes one of these at every project and
+              PM mutation, so this is a read of something the account has been
+              keeping all along rather than anything new. */}
+          {activity && activity.length > 0 && (
+            <section className="dsh-panel">
+              <div className="dsh-ph">
+                <h2>Recent activity</h2>
+                <Link className="more" to="/profile">
+                  All activity
+                </Link>
+              </div>
+              <div className="dsh-body">
+                <ul className="dsh-feed">
+                  {activity.slice(0, 6).map((a) => (
+                    <li key={a._id}>
+                      <span className={`tick${a.category === "billing" ? " g" : ""}`} />
+                      <div>
+                        <b>{a.action || a.category || "Activity"}</b>
+                        {a.summary ? ` ${a.summary}` : ""}
+                        {a.projectName ? ` — ${a.projectName}` : ""}
+                      </div>
+                      <span className="ago">{ago(a.createdAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
+
+          {/* Your learning — his .dsh-course, from the enrolments already
+              loaded for the Courses tile. His progress bar is a percentage and
+              so is ours; his "week 4 of 6" is modules, which is the unit we
+              actually track. */}
+          {view.courses.length > 0 && (
+            <section className="dsh-panel">
+              <div className="dsh-ph">
+                <h2>Your learning</h2>
+                <Link className="more" to="/learn">
+                  All courses
+                </Link>
+              </div>
+              <div className="dsh-body">
+                {view.courses.map((c) => {
+                  const done = Number(c.summary?.completedModules ?? 0);
+                  const all = Number(c.summary?.totalModules ?? 0);
+                  const pct = Number(c.progress) || 0;
+                  return (
+                    <div className="dsh-course" key={c.course?.sku || c.enrollment?._id}>
+                      <div className="top">
+                        <b>{c.course?.title || c.course?.sku}</b>
+                        <span className="pc">
+                          {all ? (done ? `module ${done} of ${all}` : "not started") : "enrolled"}
+                        </span>
+                      </div>
+                      <div className="dsh-bar">
+                        <i style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+                      </div>
+                      <p>
+                        {[
+                          c.summary?.requiredAssignments
+                            ? `${c.summary.approvedAssignments || 0} of ${c.summary.requiredAssignments} assignments approved`
+                            : null,
+                          c.enrollment?.accessExpiresAt
+                            ? `access until ${longDate(c.enrollment.accessExpiresAt)}`
+                            : "open access",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}
