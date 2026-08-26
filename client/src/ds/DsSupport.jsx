@@ -369,23 +369,75 @@ export default function DsSupport() {
         </div>
 
         <div>
+          {/* His "Answers first". The point of it is that the commonest
+              tickets are ones somebody could have answered themselves, so the
+              answers come before the form's reply does.
+
+              Every line is true of OUR licensing rather than his sample: the
+              first is now a real action on Team & seats, since freeing a seat
+              stopped being an admin-only job. */}
           <section className="dsh-panel">
             <div className="dsh-ph">
-              <h2>Faster than a ticket</h2>
+              <h2>Answers first</h2>
+              <Link className="more" to="/manage/team">
+                Seats
+              </Link>
+            </div>
+            <div className="dsh-body">
+              <ul className="dsh-feed">
+                <li>
+                  <span className="tick" />
+                  <div>
+                    <b>Moving a licence to a new laptop</b> — free the seat under Team &amp;
+                    seats, then install on the other machine. No ticket needed.
+                  </div>
+                </li>
+                <li>
+                  <span className="tick" />
+                  <div>
+                    <b>Activation says the machine changed</b> — a rebuilt or reimaged PC counts
+                    as a new device, so free the old one first.
+                  </div>
+                </li>
+                <li>
+                  <span className="tick" />
+                  <div>
+                    <b>The panel is missing after installing</b> — Revit or PlanSwift was open
+                    during the install. Close it and launch again.
+                  </div>
+                </li>
+                <li>
+                  <span className="tick" />
+                  <div>
+                    <b>A rate looks wrong in a project</b> — open the line and follow it to its
+                    build-up. Projects keep the rate they were priced with.
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section className="dsh-panel">
+            <div className="dsh-ph">
+              <h2>Reach a human</h2>
             </div>
             <div className="dsh-body">
               <div className="dsh-kv">
-                <div>
-                  <span>WhatsApp</span>
-                  <b>+234 810 650 3524</b>
-                </div>
                 <div>
                   <span>Email</span>
                   <b>admin@adlmstudio.net</b>
                 </div>
                 <div>
+                  <span>WhatsApp</span>
+                  <b>+234 810 650 3524</b>
+                </div>
+                <div>
                   <span>Hours</span>
-                  <b>Mon to Fri, 9am to 6pm WAT</b>
+                  <b>Mon to Fri, 9 to 6 WAT</b>
+                </div>
+                <div>
+                  <span>Where</span>
+                  <b>Lagos, Nigeria</b>
                 </div>
               </div>
               <p
@@ -405,6 +457,31 @@ export default function DsSupport() {
 
           <section className="dsh-panel">
             <div className="dsh-ph">
+              <h2>Training</h2>
+            </div>
+            <div className="dsh-body">
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  fontWeight: 300,
+                  color: "var(--ink-3)",
+                  lineHeight: 1.65,
+                }}
+              >
+                If the same question keeps coming up across the practice, it is usually a
+                training problem rather than a support one. On-site sessions run on your own
+                projects.
+              </p>
+              {/* His is a modal; ours goes to the training pages, which exist. */}
+              <Link className="btn btn-o btn-sm btn-full" to="/trainings" style={{ marginTop: 16 }}>
+                Training for firms
+              </Link>
+            </div>
+          </section>
+
+          <section className="dsh-panel">
+            <div className="dsh-ph">
               <h2>Before you write</h2>
             </div>
             <div className="dsh-body">
@@ -417,10 +494,9 @@ export default function DsSupport() {
                   lineHeight: 1.65,
                 }}
               >
-                The two things that shorten a ticket most are the exact wording of any message you
-                saw, and what you had just done when it appeared. Screenshots help. If a remote
-                session would be faster, leave your AnyDesk address and somebody will ask before
-                connecting.
+                The two things that shorten a ticket most are the exact wording of any message
+                you saw, and what you had just done when it appeared. If a remote session would
+                be faster, leave your AnyDesk address and somebody will ask before connecting.
               </p>
             </div>
           </section>
