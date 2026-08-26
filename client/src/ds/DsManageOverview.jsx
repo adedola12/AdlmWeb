@@ -51,6 +51,7 @@ const ICONS = {
 export default function DsManageOverview() {
   const { user, accessToken } = useAuth();
   const [summary, setSummary] = React.useState(null);
+  const [courses, setCourses] = React.useState(null);
   const [catalogue, setCatalogue] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
 
@@ -61,6 +62,18 @@ export default function DsManageOverview() {
     apiAuthed("/me/summary", { token: accessToken })
       .then((d) => alive && setSummary(d))
       .catch(() => alive && setFailed(true));
+
+    // Courses are enrolments, not entitlements.
+    //
+    // This tile read `entitlements.filter(e => e.isCourse)` and showed 0 for an
+    // account holding two courses. A course is a CourseEnrollment keyed on a
+    // courseSku, which is a different collection with its own expiry, its own
+    // progress and its own classroom link — GET /me/courses is what the
+    // dashboard has always read, and it returns a bare array.
+    apiAuthed("/me/courses", { token: accessToken })
+      .then((d) => alive && setCourses(Array.isArray(d) ? d : []))
+      // One tile, not the screen.
+      .catch(() => alive && setCourses([]));
 
     fetch(`${API_BASE}/products`)
       .then((r) => (r.ok ? r.json() : null))
@@ -77,10 +90,9 @@ export default function DsManageOverview() {
   }, [accessToken]);
 
   const view = React.useMemo(() => {
-    if (!summary || !catalogue) return null;
+    if (!summary || !catalogue || !courses) return null;
 
     const ents = summary.entitlements || [];
-    const courses = ents.filter((e) => e.isCourse);
 
     // A feature grant is not a licensed product.
     //
@@ -153,10 +165,14 @@ export default function DsManageOverview() {
       }
     }
     for (const c of courses) {
-      if (c.status !== "active") continue;
+      // The response nests: { course, enrollment, summary, progress, access }.
+      // `progress` is a percentage, and the module counts live on `summary` —
+      // reading progress.completedModules would have been undefined on every
+      // course and flagged all of them as unstarted.
+      if (Number(c.summary?.completedModules ?? 0) > 0) continue;
       attention.push({
         kind: "course",
-        text: `${c.productName || c.productKey} is enrolled and waiting to be started.`,
+        text: `${c.course?.title || c.course?.sku || "A course"} is enrolled and not started yet.`,
         to: "/learn",
         action: "Start",
       });
@@ -167,6 +183,9 @@ export default function DsManageOverview() {
       grants,
       active,
       courses,
+      coursesInProgress: courses.filter(
+        (c) => Number(c.summary?.completedModules ?? 0) > 0,
+      ).length,
       seatsOwned,
       seatsUsed,
       nextDate,
@@ -175,7 +194,7 @@ export default function DsManageOverview() {
       installations: summary.installations || [],
       hub: summary.installerHub || {},
     };
-  }, [summary, catalogue]);
+  }, [summary, catalogue, courses]);
 
   // buildAuthPayload sends firstName; there is no `name` field, so reading one
   // fell through to the email and greeted somebody as "dolapo836".
@@ -273,7 +292,11 @@ export default function DsManageOverview() {
           </span>
           <b>{view.courses.length}</b>
           <p className="sub">
-            {view.courses.length ? "Enrolled" : "None enrolled"}
+            {view.courses.length === 0
+              ? "None enrolled"
+              : view.coursesInProgress > 0
+                ? `${view.coursesInProgress} in progress`
+                : "Enrolled, not started"}
           </p>
         </div>
       </div>
