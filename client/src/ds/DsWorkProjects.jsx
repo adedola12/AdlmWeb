@@ -1,4 +1,4 @@
-// His projects screen — every project on the account, as cards.
+// His projects screen — sources first, then the projects inside one.
 //
 // His markup: .wk-projs / .wk-proj with its .t / h3 / .stage / .c / .s / .f
 // blocks, and .wk-src for the extraction source chip. The three figures in the
@@ -82,6 +82,7 @@ export default function DsWorkProjects() {
   const [failed, setFailed] = React.useState(false);
   const [sort, setSort] = React.useState("recent");
   const [q, setQ] = React.useState("");
+  const [openKey, setOpenKey] = React.useState("");
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
@@ -94,12 +95,55 @@ export default function DsWorkProjects() {
     };
   }, [accessToken]);
 
+  // Projects arrive as one flat list, but they do not come from one place: a
+  // QUIV extraction, a HERON takeoff and a CIVIQ corridor are different kinds
+  // of work that happen to share an account. So the first level is the source,
+  // and a source opens to show what is inside it.
+  //
+  // This is not a contradiction of "organised by project, not by product". The
+  // grouping is by where the quantities were MEASURED, which is a fact about
+  // the project rather than a product menu; what the surface refuses to do is
+  // make somebody go to a product to find their work. Everything is still
+  // here, one level down, and the counts are on the folder so the level costs
+  // nothing to read past.
+  const folders = React.useMemo(() => {
+    if (!projects) return null;
+    const by = new Map();
+    for (const p of projects) {
+      const key = p.productKey || "other";
+      if (!by.has(key)) by.set(key, []);
+      by.get(key).push(p);
+    }
+    return [...by.entries()]
+      .map(([key, list]) => ({
+        key,
+        // "other" is the bucket for a project with no productKey, and it is a
+        // key rather than a name — `PRODUCT[key] || key` would print the word
+        // "other" on the card, which tells nobody anything. A project without
+        // a source came in some other way, so say that.
+        name: key === "other" ? "Imported" : PRODUCT[key] || key,
+        icon: ICONS[key] || "",
+        count: list.length,
+        items: list.reduce((n, p) => n + (Number(p.itemCount) || 0), 0),
+        value: list.reduce((n, p) => n + (Number(p.totalCost) || 0), 0),
+        touched: list.reduce(
+          (d, p) => (new Date(p.updatedAt || 0) > new Date(d || 0) ? p.updatedAt : d),
+          null,
+        ),
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [projects]);
+
+  // What is on screen: one source's projects once a folder is open.
   const shown = React.useMemo(() => {
     if (!projects) return null;
+    const pool = openKey
+      ? projects.filter((p) => (p.productKey || "other") === openKey)
+      : projects;
     const term = q.trim().toLowerCase();
     const list = term
-      ? projects.filter((p) => String(p.name || "").toLowerCase().includes(term))
-      : [...projects];
+      ? pool.filter((p) => String(p.name || "").toLowerCase().includes(term))
+      : [...pool];
 
     if (sort === "value") {
       list.sort((a, b) => (Number(b.totalCost) || 0) - (Number(a.totalCost) || 0));
@@ -109,7 +153,7 @@ export default function DsWorkProjects() {
       list.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
     }
     return list;
-  }, [projects, sort, q]);
+  }, [projects, sort, q, openKey]);
 
   if (failed) {
     return (
@@ -118,7 +162,7 @@ export default function DsWorkProjects() {
       </div>
     );
   }
-  if (!shown) {
+  if (!shown || !folders) {
     return (
       <div className="dsh-in">
         <p className="sub">Loading your projects…</p>
@@ -127,57 +171,59 @@ export default function DsWorkProjects() {
   }
 
   const total = projects.reduce((a, p) => a + (Number(p.totalCost) || 0), 0);
+  const openFolder = openKey ? folders.find((f) => f.key === openKey) : null;
 
   return (
     <div className="dsh-in">
       <div className="wk-head">
         <div>
-          <h1>Projects</h1>
+          <h1>{openFolder ? openFolder.name : "Projects"}</h1>
           <p>
-            {projects.length
-              ? `${projects.length} project${projects.length === 1 ? "" : "s"} on this account, worth ${money(total)} at the rates they were priced with.`
-              : "Nothing here yet."}
+            {!projects.length
+              ? "Nothing here yet."
+              : openFolder
+                ? `${openFolder.count} project${openFolder.count === 1 ? "" : "s"} measured in ${openFolder.name}, worth ${money(openFolder.value)}.`
+                : `${projects.length} project${projects.length === 1 ? "" : "s"} across ${folders.length} source${folders.length === 1 ? "" : "s"}, worth ${money(total)} at the rates they were priced with.`}
           </p>
+          {openFolder && (
+            <p className="wk-ref">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenKey("");
+                  setQ("");
+                }}
+                style={{
+                  background: "none",
+                  border: 0,
+                  padding: 0,
+                  cursor: "pointer",
+                  color: "var(--action)",
+                  font: "inherit",
+                }}
+              >
+                ← All sources
+              </button>
+            </p>
+          )}
         </div>
-        {projects.length > 0 && (
+        {openFolder && openFolder.count > 1 && (
           <div className="wk-acts">
             <div className="wk-loc-sw" aria-label="Sort the projects">
-              {SORTS.map((s) => (
+              {SORTS.map((opt) => (
                 <button
-                  key={s.id}
+                  key={opt.id}
                   type="button"
-                  className={sort === s.id ? "on" : ""}
-                  onClick={() => setSort(s.id)}
+                  className={sort === opt.id ? "on" : ""}
+                  onClick={() => setSort(opt.id)}
                 >
-                  {s.label}
+                  {opt.label}
                 </button>
               ))}
             </div>
           </div>
         )}
       </div>
-
-      {projects.length > 6 && (
-        <div style={{ marginBottom: 18 }}>
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Find a project by name"
-            aria-label="Find a project by name"
-            style={{
-              width: "100%",
-              maxWidth: 360,
-              padding: "10px 14px",
-              borderRadius: 12,
-              border: "1px solid var(--line)",
-              background: "transparent",
-              color: "var(--ink)",
-              fontSize: 13.5,
-            }}
-          />
-        </div>
-      )}
 
       {!projects.length ? (
         <section className="wk-panel">
@@ -192,49 +238,138 @@ export default function DsWorkProjects() {
             </Link>
           </div>
         </section>
-      ) : !shown.length ? (
-        <p className="sub">Nothing matches “{q}”.</p>
-      ) : (
+      ) : !openFolder ? (
+        /* Level one: the sources. A button rather than a link, because opening
+           one is a change of view rather than a navigation — the browser's back
+           button should leave the screen, not close a folder. */
         <div className="wk-projs">
-          {shown.map((p) => {
-            const pct = Math.round(p.progressPercent || 0);
-            return (
-              <Link className="wk-proj" to={projectHref(p)} key={p.id}>
-                <div className="t">
-                  <h3>{p.name}</h3>
-                  <span className={pct > 0 ? "stage amber" : "stage"}>
-                    {pct > 0 ? `${pct}% valued` : "Not valued"}
-                  </span>
+          {folders.map((f) => (
+            <button
+              type="button"
+              className="wk-proj"
+              key={f.key}
+              onClick={() => setOpenKey(f.key)}
+              style={{
+                textAlign: "left",
+                cursor: "pointer",
+                font: "inherit",
+                width: "100%",
+              }}
+            >
+              <div className="t">
+                <h3>
+                  {f.icon && (
+                    <img
+                      src={f.icon}
+                      alt=""
+                      style={{
+                        width: 20,
+                        height: 20,
+                        verticalAlign: -4,
+                        marginRight: 9,
+                        objectFit: "contain",
+                      }}
+                    />
+                  )}
+                  {f.name}
+                </h3>
+                <span className="stage">
+                  {f.count} project{f.count === 1 ? "" : "s"}
+                </span>
+              </div>
+              <p className="c">
+                {f.key === "other" ? "No extraction source recorded" : `Measured in ${f.name}`}
+                {f.touched ? ` · touched ${when(f.touched)}` : ""}
+              </p>
+              <div className="f">
+                <div>
+                  <b>{num(f.items)}</b>
+                  <span>items</span>
                 </div>
-                <p className="c">
-                  {p.shared ? "Shared with you" : "Yours"}
-                  {p.version ? ` · v${p.version}` : ""} · touched {when(p.updatedAt)}
-                </p>
-                <div className="s">
-                  <span className="wk-src">
-                    {ICONS[p.productKey] && <img src={ICONS[p.productKey]} alt="" />}
-                    {PRODUCT[p.productKey] || p.productKey || "Imported"}
-                  </span>
-                  {p.publicShareEnabled && <span className="wk-src sm">Share link on</span>}
+                <div>
+                  <b>{money(f.value)}</b>
+                  <span>value</span>
                 </div>
-                <div className="f">
-                  <div>
-                    <b>{num(p.itemCount)}</b>
-                    <span>items</span>
-                  </div>
-                  <div>
-                    <b>{money(p.totalCost)}</b>
-                    <span>value</span>
-                  </div>
-                  <div>
-                    <b>{money(p.remainingAmount)}</b>
-                    <span>remaining</span>
-                  </div>
+                <div>
+                  <b>{Math.round(total ? (f.value / total) * 100 : 0)}%</b>
+                  <span>of the book</span>
                 </div>
-              </Link>
-            );
-          })}
+              </div>
+            </button>
+          ))}
         </div>
+      ) : (
+        /* Level two: what is inside the open source. */
+        <>
+          {openFolder.count > 6 && (
+            <div style={{ marginBottom: 18 }}>
+              <input
+                type="search"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={`Find a project in ${openFolder.name}`}
+                aria-label="Find a project by name"
+                style={{
+                  width: "100%",
+                  maxWidth: 360,
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--line)",
+                  background: "transparent",
+                  color: "var(--ink)",
+                  fontSize: 13.5,
+                }}
+              />
+            </div>
+          )}
+
+          {shown.length ? (
+            <div className="wk-projs">
+              {shown.map((p) => {
+                const pct = Math.round(p.progressPercent || 0);
+                return (
+                  <Link className="wk-proj" to={projectHref(p)} key={p.id}>
+                    <div className="t">
+                      <h3>{p.name}</h3>
+                      <span className={pct > 0 ? "stage amber" : "stage"}>
+                        {pct > 0 ? `${pct}% valued` : "Not valued"}
+                      </span>
+                    </div>
+                    <p className="c">
+                      {p.shared ? "Shared with you" : "Yours"}
+                      {p.version ? ` · v${p.version}` : ""} · touched {when(p.updatedAt)}
+                    </p>
+                    <div className="s">
+                      <span className="wk-src">
+                        {ICONS[p.productKey] && <img src={ICONS[p.productKey]} alt="" />}
+                        {PRODUCT[p.productKey] || p.productKey || "Imported"}
+                      </span>
+                      {p.publicShareEnabled && <span className="wk-src sm">Share link on</span>}
+                    </div>
+                    <div className="f">
+                      <div>
+                        <b>{num(p.itemCount)}</b>
+                        <span>items</span>
+                      </div>
+                      <div>
+                        <b>{money(p.totalCost)}</b>
+                        <span>value</span>
+                      </div>
+                      <div>
+                        <b>{money(p.remainingAmount)}</b>
+                        <span>remaining</span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="sub">
+              Nothing in {openFolder.name} matches “{q}”.
+            </p>
+          )}
+        </>
       )}
     </div>
   );
