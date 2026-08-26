@@ -94,6 +94,7 @@ const WorkProjects = React.lazy(() => import("./pages/WorkProjects.jsx"));
 const ManageSupport = React.lazy(() => import("./pages/ManageSupport.jsx"));
 const WorkLibrary = React.lazy(() => import("./pages/WorkLibrary.jsx"));
 const WorkRate = React.lazy(() => import("./pages/WorkRate.jsx"));
+const WorkShellRoute = React.lazy(() => import("./pages/WorkShellRoute.jsx"));
 import UserInvoice from "./pages/UserInvoice.jsx";
 
 // ✅ QUIV for ArchiCAD
@@ -144,7 +145,13 @@ const router = createBrowserRouter([
         path: "time-management",
         element: (
           <ProtectedRoute>
-            <TimeManagement />
+            <React.Suspense fallback={null}>
+              <WorkShellRoute
+                screen={TimeManagement}
+                title="Programme"
+                page="work-programme"
+              />
+            </React.Suspense>
           </ProtectedRoute>
         ),
       },
@@ -375,7 +382,13 @@ const router = createBrowserRouter([
         path: "projects/:tool",
         element: (
           <ProtectedRoute>
-            <ProjectsGeneric />
+            <React.Suspense fallback={null}>
+              <WorkShellRoute
+                screen={ProjectsGeneric}
+                title="Projects"
+                page="work-projects"
+              />
+            </React.Suspense>
           </ProtectedRoute>
         ),
       },

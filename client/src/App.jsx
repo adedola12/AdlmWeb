@@ -19,7 +19,14 @@ export default function App() {
   // Screens that render inside his app frame — rail, app bar, own scroll
   // container. They supply their own chrome and their own padding, so the
   // marketing nav, the footer and the page gutter all step aside.
-  const appShellRoute = /^\/(manage|work)(\/|$)/.test(location.pathname);
+  //
+  // /projects/* and /time-management are on this list because they are now
+  // wrapped in the same frame (see pages/WorkShellRoute.jsx), even though they
+  // are our screens rather than ported ones. Leaving them off put the
+  // marketing nav and "Book a demo" above a signed-in rail.
+  const appShellRoute = /^\/(manage|work|projects|time-management)(\/|$)/.test(
+    location.pathname,
+  );
 
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
