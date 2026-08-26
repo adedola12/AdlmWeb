@@ -323,7 +323,7 @@ export default function DsWorkProject() {
             </li>
             {" "}
             <li>
-              <Link to="/time-management" data-ds-page="work-programme">
+              <Link to="/work/programme" data-ds-page="work-programme">
                 <svg viewBox="0 0 24 24">
                   <use href="#wi-gantt" />
                 </svg>

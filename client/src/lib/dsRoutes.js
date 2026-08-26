@@ -103,7 +103,9 @@ export const MAP = {
   // is still the place it is edited, and this screen links there.
   "work-library": "/work/library",
   "work-rate": "/rategen",
-  "work-programme": "/time-management",
+  // The timeline. /time-management is still where a day is recorded,
+  // and this screen links there.
+  "work-programme": "/work/programme",
   // Ada is a component inside this app, but his nav links a marketing page
   // explaining what she does — "Part of the studio". It needs its own route.
   ada: "/ada",

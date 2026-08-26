@@ -95,6 +95,7 @@ const ManageSupport = React.lazy(() => import("./pages/ManageSupport.jsx"));
 const WorkLibrary = React.lazy(() => import("./pages/WorkLibrary.jsx"));
 const WorkRate = React.lazy(() => import("./pages/WorkRate.jsx"));
 const WorkProject = React.lazy(() => import("./pages/WorkProject.jsx"));
+const WorkProgramme = React.lazy(() => import("./pages/WorkProgramme.jsx"));
 const WorkShellRoute = React.lazy(() => import("./pages/WorkShellRoute.jsx"));
 import UserInvoice from "./pages/UserInvoice.jsx";
 
@@ -271,6 +272,7 @@ const router = createBrowserRouter([
         { path: "work/library", el: <WorkLibrary /> },
         { path: "work/rate/:id", el: <WorkRate /> },
         { path: "work/project/:productKey/:id", el: <WorkProject /> },
+        { path: "work/programme", el: <WorkProgramme /> },
       ].map(({ path, el }) => ({
         path,
         element: (
