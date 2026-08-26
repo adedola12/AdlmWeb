@@ -36,14 +36,32 @@ const icon = (name) => (
   </svg>
 );
 
+// His accordion, with his hooks.
+//
+// Every rule that makes this work is scoped to the attributes rather than to a
+// class: `.ds button[data-acc-h]` is what makes the row a flex line, and
+// `.ds [data-acc] .acc-car` is what gives the chevron its 16px. Writing the
+// markup without them left the button as a block and the chevron at an SVG's
+// default size, which is how four compact rows became four enormous ones with
+// a giant arrow under each.
+//
+// The body is his too. It collapses by animating grid-template-rows from 0fr
+// to 1fr, so it must stay in the layout — the `display:none` I had instead
+// killed the transition and fought the mechanism.
 function Accordion({ title, children }) {
   const [open, setOpen] = React.useState(false);
   return (
     <div
+      data-acc=""
       className={open ? "open" : ""}
       style={{ borderBottom: "1px solid var(--line)", padding: "13px 0" }}
     >
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <button
+        type="button"
+        data-acc-h=""
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
         <svg
           viewBox="0 0 24 24"
           style={{
@@ -64,9 +82,9 @@ function Accordion({ title, children }) {
           <use href="#hi-chevron" />
         </svg>
       </button>
-      <div className="acc-body" style={open ? undefined : { display: "none" }}>
+      <div className="acc-body">
         <div>
-          <p style={{ paddingLeft: 27, marginTop: 10 }}>{children}</p>
+          <p style={{ paddingLeft: 27 }}>{children}</p>
         </div>
       </div>
     </div>
