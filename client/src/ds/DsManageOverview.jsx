@@ -31,6 +31,33 @@ const longDate = (d) =>
     ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : "";
 
+// How long a feature grant runs for.
+//
+// A grant is an entitlement, so it carries the same expiry fields a licence
+// does — and admins do issue them with an end date. Showing only "Active" hid
+// that, which is the difference between a feature somebody can rely on next
+// month and one that stops on a date nobody was told.
+//
+// An open-ended grant says so rather than showing a blank: no expiry is the
+// common case and reads as permanent, which it is.
+function grantTerm(g) {
+  const status = String(g.status || "").toLowerCase();
+
+  if (g.isExpired || status === "expired") {
+    return g.expiresAt ? `Ended ${longDate(g.expiresAt)}` : "Ended";
+  }
+  if (status !== "active") return g.status || "Inactive";
+  if (!g.expiresAt) return "Active · no end date";
+
+  const days = Number(g.daysLeft);
+  // Inside a fortnight the date alone stops being useful — the number of days
+  // is what tells somebody whether to do something about it this week.
+  if (Number.isFinite(days) && days <= 14) {
+    return `Active · ${days} day${days === 1 ? "" : "s"} left`;
+  }
+  return `Active · until ${longDate(g.expiresAt)}`;
+}
+
 // His greeting changes with the clock, so ours does too.
 function greeting() {
   const h = new Date().getHours();
@@ -164,6 +191,18 @@ export default function DsManageOverview() {
         });
       }
     }
+    // A grant running out is as actionable as a licence running out, and less
+    // visible — nobody thinks to check a feature they were simply given.
+    for (const g of grants) {
+      if (String(g.status || "").toLowerCase() !== "active") continue;
+      if (!g.expiresAt || new Date(g.expiresAt).getTime() >= soon) continue;
+      attention.push({
+        kind: "warn",
+        text: `${g.productName || g.productKey} stops working ${longDate(g.expiresAt)}.`,
+        to: "/manage/support",
+        action: "Ask us",
+      });
+    }
     for (const c of courses) {
       // The response nests: { course, enrollment, summary, progress, access }.
       // `progress` is a percentage, and the module counts live on `summary` —
@@ -182,6 +221,9 @@ export default function DsManageOverview() {
       licences,
       grants,
       active,
+      // Whether any grant has an end date at all, so the panel's copy can stop
+      // claiming there is nothing to renew when there is.
+      grantsExpire: grants.some((g) => !!g.expiresAt),
       courses,
       coursesInProgress: courses.filter(
         (c) => Number(c.summary?.completedModules ?? 0) > 0,
@@ -359,8 +401,11 @@ export default function DsManageOverview() {
               </div>
               <div className="dsh-body">
                 <p className="sub">
-                  Switched on for this account by ADLM. Nothing to install and nothing to
-                  renew — they work inside the products you already have.
+                  Switched on for this account by ADLM. Nothing to install: they work inside
+                  the products you already have.{" "}
+                  {view.grantsExpire
+                    ? "The ones with an end date stop working on it unless they are extended."
+                    : "None of them expire."}
                 </p>
                 {/* .dsh-kv, not .dsh-note — the latter is not a class in his
                     stylesheet (only .dsh-notes, the notifications panel), so
@@ -370,7 +415,7 @@ export default function DsManageOverview() {
                   {view.grants.map((g) => (
                     <div key={g.productKey}>
                       <span>{g.productName || g.productKey}</span>
-                      <b>{g.status === "active" ? "Active" : g.status}</b>
+                      <b>{grantTerm(g)}</b>
                     </div>
                   ))}
                 </div>
