@@ -107,6 +107,7 @@ import ArchiCADElement from "./pages/ArchiCADElement.jsx";
 
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
+import LazyScreen from "./components/LazyScreen.jsx";
 
 import TrainingEnrollment from "./pages/TrainingEnrollment.jsx";
 import AdminPTrainings from "./pages/AdminPTrainings.jsx";
@@ -147,13 +148,13 @@ const router = createBrowserRouter([
         path: "time-management",
         element: (
           <ProtectedRoute>
-            <React.Suspense fallback={null}>
+            <LazyScreen>
               <WorkShellRoute
                 screen={TimeManagement}
                 title="Programme"
                 page="work-programme"
               />
-            </React.Suspense>
+            </LazyScreen>
           </ProtectedRoute>
         ),
       },
@@ -249,9 +250,9 @@ const router = createBrowserRouter([
         path: "manage",
         element: (
           <ProtectedRoute>
-            <React.Suspense fallback={null}>
+            <LazyScreen>
               <ManageOverview />
-            </React.Suspense>
+            </LazyScreen>
           </ProtectedRoute>
         ),
       },
@@ -277,7 +278,7 @@ const router = createBrowserRouter([
         path,
         element: (
           <ProtectedRoute>
-            <React.Suspense fallback={null}>{el}</React.Suspense>
+            <LazyScreen>{el}</LazyScreen>
           </ProtectedRoute>
         ),
       })),
@@ -386,13 +387,13 @@ const router = createBrowserRouter([
         path: "projects/:tool",
         element: (
           <ProtectedRoute>
-            <React.Suspense fallback={null}>
+            <LazyScreen>
               <WorkShellRoute
                 screen={ProjectsGeneric}
                 title="Projects"
                 page="work-projects"
               />
-            </React.Suspense>
+            </LazyScreen>
           </ProtectedRoute>
         ),
       },
@@ -613,9 +614,9 @@ const router = createBrowserRouter([
         path: "admin/documents",
         element: (
           <AdminRoute permission="invoices">
-            <React.Suspense fallback={null}>
+            <LazyScreen>
               <AdminDocuments />
-            </React.Suspense>
+            </LazyScreen>
           </AdminRoute>
         ),
       },
