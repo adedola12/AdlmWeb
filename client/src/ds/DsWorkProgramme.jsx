@@ -146,7 +146,7 @@ export default function DsWorkProgramme() {
           </p>
         </div>
         <div className="wk-acts">
-          <Link className="btn btn-p btn-sm" to="/time-management">
+          <Link className="ds-btn btn-p ds-btn-sm" to="/time-management">
             Record a day
           </Link>
         </div>
@@ -160,7 +160,7 @@ export default function DsWorkProgramme() {
                 ? `${view.undated} task${view.undated === 1 ? " has" : "s have"} been recorded without a start date, so there is nothing to place on a timeline yet.`
                 : "Nothing recorded yet. Log a day's work and it appears here as a bar."}
             </p>
-            <Link className="btn btn-p btn-sm" to="/time-management" style={{ marginTop: 16 }}>
+            <Link className="ds-btn btn-p ds-btn-sm" to="/time-management" style={{ marginTop: 16 }}>
               Record a day
             </Link>
           </div>

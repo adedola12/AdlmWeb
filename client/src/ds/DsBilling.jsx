@@ -330,7 +330,7 @@ export default function DsBilling() {
           </p>
         </div>
         <div className="dsh-acts">
-          <a className="btn btn-o btn-sm" href="#invoices">
+          <a className="ds-btn btn-o ds-btn-sm" href="#invoices">
             Invoices
           </a>
         </div>
@@ -441,12 +441,12 @@ export default function DsBilling() {
                   <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
                     {changed ? (
                       <>
-                        <Link className="btn btn-p btn-sm" to={buyQuery()}>
+                        <Link className="ds-btn btn-p ds-btn-sm" to={buyQuery()}>
                           Buy the change
                         </Link>
                         <button
                           type="button"
-                          className="btn btn-o btn-sm"
+                          className="ds-btn btn-o ds-btn-sm"
                           onClick={() => setSeatOverride({})}
                         >
                           Reset
@@ -454,10 +454,10 @@ export default function DsBilling() {
                       </>
                     ) : (
                       <>
-                        <Link className="btn btn-o btn-sm" to="/manage/team">
+                        <Link className="ds-btn btn-o ds-btn-sm" to="/manage/team">
                           Who holds them
                         </Link>
-                        <Link className="btn btn-o btn-sm" to="/purchase">
+                        <Link className="ds-btn btn-o ds-btn-sm" to="/purchase">
                           Add a product
                         </Link>
                       </>
@@ -562,7 +562,7 @@ export default function DsBilling() {
               </p>
               <button
                 type="button"
-                className="btn btn-p btn-sm"
+                className="ds-btn btn-p ds-btn-sm"
                 onClick={() => switchCycle(yearly ? 1 : 12)}
                 disabled={busy === "cycle"}
               >
@@ -670,7 +670,7 @@ export default function DsBilling() {
                 </div>
               </div>
               <Link
-                className="btn btn-o btn-sm btn-full"
+                className="ds-btn btn-o ds-btn-sm btn-full"
                 to="/manage/settings"
                 style={{ marginTop: 16 }}
               >
@@ -707,7 +707,7 @@ export default function DsBilling() {
                 Licences run to the end of the period you have paid for. Your rate library and
                 project data stay in the account whether or not a licence is active.
               </p>
-              <Link className="btn btn-o btn-sm btn-full" to="/manage/support" style={{ marginTop: 16 }}>
+              <Link className="ds-btn btn-o ds-btn-sm btn-full" to="/manage/support" style={{ marginTop: 16 }}>
                 Talk to us first
               </Link>
             </div>

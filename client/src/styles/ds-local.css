@@ -229,3 +229,21 @@
 .ds .ada-btn {
   color: var(--bg);
 }
+
+/* A muted standalone paragraph.
+ *
+ * `.sub` is one of the ten names port-ds-css.mjs renames on the way in, so his
+ * `.sub` became `.ds-sub` — but he only ever uses it as a DESCENDANT
+ * (`.dsh-stat .sub`, `.wk-proj .sub`), and those descendant rules survive under
+ * their parents. A standalone `<p class="sub">`, which is what every loading
+ * and empty state here uses, matched nothing at all and rendered as body copy.
+ *
+ * One rule, in his tokens, rather than seventeen inline styles.
+ */
+.ds p.sub {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  font-weight: 300;
+  color: var(--ink-3);
+  line-height: 1.65;
+}

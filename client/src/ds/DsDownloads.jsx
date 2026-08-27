@@ -181,7 +181,7 @@ export default function DsDownloads() {
         </div>
         {hub.downloadUrl && (
           <div className="dsh-acts">
-            <a className="btn btn-p btn-sm" href={hub.downloadUrl}>
+            <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl}>
               Download the Installer Hub
             </a>
           </div>
@@ -195,7 +195,7 @@ export default function DsDownloads() {
           subscription covers, and keeps each product on its current build.
         </p>
         {hub.downloadUrl ? (
-          <a className="btn btn-p btn-sm" href={hub.downloadUrl}>
+          <a className="ds-btn btn-p ds-btn-sm" href={hub.downloadUrl}>
             Download for Windows {icon("downloads")}
           </a>
         ) : (
@@ -246,11 +246,11 @@ export default function DsDownloads() {
                       </span>
                     </div>
                     {pkg?.packageUri ? (
-                      <a className="btn btn-o btn-sm" href={pkg.packageUri}>
+                      <a className="ds-btn btn-o ds-btn-sm" href={pkg.packageUri}>
                         Installer
                       </a>
                     ) : (
-                      <Link className="btn btn-o btn-sm" to="/support">
+                      <Link className="ds-btn btn-o ds-btn-sm" to="/support">
                         Get help
                       </Link>
                     )}
@@ -293,7 +293,7 @@ export default function DsDownloads() {
                           : "Add it to the subscription to download"}
                       </span>
                     </div>
-                    <Link className="btn btn-o btn-sm" to={`/product/${p.key}`}>
+                    <Link className="ds-btn btn-o ds-btn-sm" to={`/product/${p.key}`}>
                       Details
                     </Link>
                   </div>
@@ -316,7 +316,7 @@ export default function DsDownloads() {
                     <b>Installer Hub user guide</b>
                     <span>PDF · installing, updating and activation</span>
                   </div>
-                  <a className="btn btn-o btn-sm" href={hub.guideUrl} target="_blank" rel="noreferrer">
+                  <a className="ds-btn btn-o ds-btn-sm" href={hub.guideUrl} target="_blank" rel="noreferrer">
                     PDF
                   </a>
                 </div>
@@ -327,7 +327,7 @@ export default function DsDownloads() {
                   <b>What&apos;s New</b>
                   <span>Every change that has shipped, product by product</span>
                 </div>
-                <Link className="btn btn-o btn-sm" to="/whats-new">
+                <Link className="ds-btn btn-o ds-btn-sm" to="/whats-new">
                   Read
                 </Link>
               </div>
@@ -337,7 +337,7 @@ export default function DsDownloads() {
                   <b>Support</b>
                   <span>Raise a ticket, or get a remote session</span>
                 </div>
-                <Link className="btn btn-o btn-sm" to="/support">
+                <Link className="ds-btn btn-o ds-btn-sm" to="/support">
                   Open
                 </Link>
               </div>

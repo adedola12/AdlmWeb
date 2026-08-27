@@ -155,7 +155,7 @@ export default function DsWorkRate() {
           </p>
         </div>
         <div className="wk-acts">
-          <Link className="btn btn-o btn-sm" to="/rategen">
+          <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
             Edit in RateGen
           </Link>
         </div>
@@ -313,7 +313,7 @@ export default function DsWorkRate() {
                 project priced against it afterwards. Projects already priced keep the figure
                 they were priced with.
               </p>
-              <Link className="btn btn-o btn-sm" to="/rategen" style={{ marginTop: 16 }}>
+              <Link className="ds-btn btn-o ds-btn-sm" to="/rategen" style={{ marginTop: 16 }}>
                 Edit in RateGen
               </Link>
             </div>

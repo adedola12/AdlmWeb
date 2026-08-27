@@ -236,14 +236,14 @@ export default function DsSupport() {
         </div>
         <div className="dsh-acts">
           <a
-            className="btn btn-o btn-sm"
+            className="ds-btn btn-o ds-btn-sm"
             href={`https://wa.me/${SUPPORT_WHATSAPP}`}
             target="_blank"
             rel="noopener noreferrer"
           >
             WhatsApp
           </a>
-          <a className="btn btn-p btn-sm" href="#ticket">
+          <a className="ds-btn btn-p ds-btn-sm" href="#ticket">
             Open a ticket
           </a>
         </div>
@@ -258,7 +258,7 @@ export default function DsSupport() {
             <div className="dsh-body">
               <form className="dsh-form" onSubmit={submit} style={{ maxWidth: "none" }}>
                 <div className="two">
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="tk-prod">Which product</label>
                     <select
                       id="tk-prod"
@@ -274,7 +274,7 @@ export default function DsSupport() {
                       ))}
                     </select>
                   </div>
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="tk-mac">Which machine</label>
                     <select id="tk-mac" value={form.machine} onChange={set("machine")}>
                       <option value="">Not machine-specific</option>
@@ -290,7 +290,7 @@ export default function DsSupport() {
                   </div>
                 </div>
 
-                <div className="field">
+                <div className="ds-field">
                   <label htmlFor="tk-sub">Summary</label>
                   <input
                     id="tk-sub"
@@ -302,7 +302,7 @@ export default function DsSupport() {
                   />
                 </div>
 
-                <div className="field">
+                <div className="ds-field">
                   <label htmlFor="tk-msg">What happens, and what you expected</label>
                   <textarea
                     id="tk-msg"
@@ -314,7 +314,7 @@ export default function DsSupport() {
                   />
                 </div>
 
-                <div className="field">
+                <div className="ds-field">
                   <label htmlFor="tk-any">
                     AnyDesk address <span className="opt">optional</span>
                   </label>
@@ -328,7 +328,7 @@ export default function DsSupport() {
                 </div>
 
                 <div>
-                  <button className="btn btn-p btn-sm" type="submit" disabled={sending}>
+                  <button className="ds-btn btn-p ds-btn-sm" type="submit" disabled={sending}>
                     {sending ? "Sending…" : "Send to support"}
                   </button>
                   {said && (
@@ -475,7 +475,7 @@ export default function DsSupport() {
                 projects.
               </p>
               {/* His is a modal; ours goes to the training pages, which exist. */}
-              <Link className="btn btn-o btn-sm btn-full" to="/trainings" style={{ marginTop: 16 }}>
+              <Link className="ds-btn btn-o ds-btn-sm btn-full" to="/trainings" style={{ marginTop: 16 }}>
                 Training for firms
               </Link>
             </div>

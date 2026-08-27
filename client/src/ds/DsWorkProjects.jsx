@@ -232,7 +232,7 @@ export default function DsWorkProjects() {
               up. Measure in QUIV or HERON, price it in RateGen, and it lands with everything
               it is worth.
             </p>
-            <Link className="btn btn-p btn-sm" to="/manage/downloads" style={{ marginTop: 16 }}>
+            <Link className="ds-btn btn-p ds-btn-sm" to="/manage/downloads" style={{ marginTop: 16 }}>
               Install the plugins
             </Link>
           </div>

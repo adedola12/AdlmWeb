@@ -205,7 +205,7 @@ export default function DsTeam() {
           </p>
         </div>
         <div className="dsh-acts">
-          <Link className="btn btn-o btn-sm" to="/purchase">
+          <Link className="ds-btn btn-o ds-btn-sm" to="/purchase">
             Buy more seats
           </Link>
         </div>
@@ -282,7 +282,7 @@ export default function DsTeam() {
                 bought against that account. If you need several people under one bill, tell us
                 what you need and we will set it up by hand in the meantime.
               </p>
-              <Link className="btn btn-o btn-sm" to="/manage/support" style={{ marginTop: 16 }}>
+              <Link className="ds-btn btn-o ds-btn-sm" to="/manage/support" style={{ marginTop: 16 }}>
                 Talk to us about a practice account
               </Link>
             </div>
@@ -315,7 +315,7 @@ export default function DsTeam() {
                     </div>
                     <button
                       type="button"
-                      className="btn btn-o btn-sm"
+                      className="ds-btn btn-o ds-btn-sm"
                       onClick={() => release(d)}
                       disabled={busy === d.fingerprint}
                     >

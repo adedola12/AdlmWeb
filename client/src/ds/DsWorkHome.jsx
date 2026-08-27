@@ -209,10 +209,10 @@ export default function DsWorkHome() {
               with what it is worth.
             </p>
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-              <Link className="btn btn-p btn-sm" to="/manage/downloads">
+              <Link className="ds-btn btn-p ds-btn-sm" to="/manage/downloads">
                 Install the plugins
               </Link>
-              <Link className="btn btn-o btn-sm" to="/rategen">
+              <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
                 Open the rate library
               </Link>
             </div>

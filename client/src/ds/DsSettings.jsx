@@ -219,36 +219,36 @@ export default function DsSettings() {
             <div className="dsh-body">
               <form className="dsh-form" onSubmit={saveProfile} style={{ maxWidth: "none" }}>
                 <div className="two">
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="st-first">First name</label>
                     <input id="st-first" type="text" value={form.firstName} onChange={set("firstName")} />
                   </div>
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="st-last">Last name</label>
                     <input id="st-last" type="text" value={form.lastName} onChange={set("lastName")} />
                   </div>
                 </div>
                 <div className="two">
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="st-mail">Work email</label>
                     <input id="st-mail" type="email" value={profile.email || ""} disabled />
                     <p className="hint">
                       The email is the account itself. To change it, talk to support.
                     </p>
                   </div>
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="st-tel">Phone</label>
                     <input id="st-tel" type="tel" value={form.whatsapp} onChange={set("whatsapp")} />
                   </div>
                 </div>
-                <div className="field">
+                <div className="ds-field">
                   <label htmlFor="st-user">
                     Display name <span className="opt">optional</span>
                   </label>
                   <input id="st-user" type="text" value={form.username} onChange={set("username")} />
                 </div>
                 <div>
-                  <button className="btn btn-p btn-sm" type="submit" disabled={saving === "profile"}>
+                  <button className="ds-btn btn-p ds-btn-sm" type="submit" disabled={saving === "profile"}>
                     {saving === "profile" ? "Saving…" : "Save profile"}
                   </button>
                   {said && (
@@ -284,7 +284,7 @@ export default function DsSettings() {
             <div className="dsh-body">
               <form className="dsh-form" onSubmit={saveProfile} style={{ maxWidth: "none" }}>
                 <div className="two">
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="st-state">Where you work</label>
                     <select id="st-state" value={form.state} onChange={set("state")}>
                       <option value="">Not set</option>
@@ -296,7 +296,7 @@ export default function DsSettings() {
                     </select>
                     <p className="hint">Only used to work out your geopolitical zone.</p>
                   </div>
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="st-zone">Geopolitical zone</label>
                     <input
                       id="st-zone"
@@ -309,7 +309,7 @@ export default function DsSettings() {
                   </div>
                 </div>
                 <div>
-                  <button className="btn btn-p btn-sm" type="submit" disabled={saving === "profile"}>
+                  <button className="ds-btn btn-p ds-btn-sm" type="submit" disabled={saving === "profile"}>
                     {saving === "profile" ? "Saving…" : "Save location"}
                   </button>
                 </div>
@@ -330,17 +330,17 @@ export default function DsSettings() {
             <div className="dsh-body">
               <form className="dsh-form" onSubmit={saveProfile} style={{ maxWidth: "none" }}>
                 <div className="two">
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="st-firm">Practice name</label>
                     <input id="st-firm" type="text" value={form.firmName} onChange={set("firmName")} />
                   </div>
-                  <div className="field">
+                  <div className="ds-field">
                     <label htmlFor="st-addr">Address</label>
                     <input id="st-addr" type="text" value={form.location} onChange={set("location")} />
                   </div>
                 </div>
                 <div>
-                  <button className="btn btn-p btn-sm" type="submit" disabled={saving === "profile"}>
+                  <button className="ds-btn btn-p ds-btn-sm" type="submit" disabled={saving === "profile"}>
                     {saving === "profile" ? "Saving…" : "Save firm details"}
                   </button>
                 </div>
@@ -357,7 +357,7 @@ export default function DsSettings() {
             </div>
             <div className="dsh-body">
               <form className="dsh-form" onSubmit={savePassword}>
-                <div className="field">
+                <div className="ds-field">
                   <label htmlFor="st-old">Current password</label>
                   <input
                     id="st-old"
@@ -367,7 +367,7 @@ export default function DsSettings() {
                     onChange={(e) => setPw((p) => ({ ...p, currentPassword: e.target.value }))}
                   />
                 </div>
-                <div className="field">
+                <div className="ds-field">
                   <label htmlFor="st-new">New password</label>
                   <input
                     id="st-new"
@@ -382,7 +382,7 @@ export default function DsSettings() {
                   </p>
                 </div>
                 <div>
-                  <button className="btn btn-p btn-sm" type="submit" disabled={saving === "password"}>
+                  <button className="ds-btn btn-p ds-btn-sm" type="submit" disabled={saving === "password"}>
                     {saving === "password" ? "Changing…" : "Change password"}
                   </button>
                   {pwSaid && (
@@ -424,7 +424,7 @@ export default function DsSettings() {
                     </div>
                     <button
                       type="button"
-                      className="btn btn-o btn-sm"
+                      className="ds-btn btn-o ds-btn-sm"
                       onClick={() => release(d)}
                       disabled={saving === `dev:${d.fingerprint}`}
                     >
@@ -480,10 +480,10 @@ export default function DsSettings() {
                 They stay here if a subscription lapses, and can be exported at any time.
               </p>
               <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-                <Link className="btn btn-o btn-sm" to="/profile">
+                <Link className="ds-btn btn-o ds-btn-sm" to="/profile">
                   Activity log
                 </Link>
-                <Link className="btn btn-o btn-sm" to="/support/request">
+                <Link className="ds-btn btn-o ds-btn-sm" to="/support/request">
                   Ask for an export
                 </Link>
               </div>

@@ -136,7 +136,7 @@ export default function DsWorkLibrary() {
           </p>
         </div>
         <div className="wk-acts">
-          <Link className="btn btn-o btn-sm" to="/rategen">
+          <Link className="ds-btn btn-o ds-btn-sm" to="/rategen">
             Edit the library
           </Link>
         </div>
@@ -205,7 +205,7 @@ export default function DsWorkLibrary() {
               Nothing in the library yet. RateGen fills this as you build rates, and every
               product on the account prices against it.
             </p>
-            <Link className="btn btn-p btn-sm" to="/rategen" style={{ marginTop: 16 }}>
+            <Link className="ds-btn btn-p ds-btn-sm" to="/rategen" style={{ marginTop: 16 }}>
               Open RateGen
             </Link>
           </div>

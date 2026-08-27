@@ -934,7 +934,7 @@ export default function DsQuoteBuilder() {
                 <div className="qt-saved-act">
                   <button
                     type="button"
-                    className="ds-btn btn-o btn-sm"
+                    className="ds-btn btn-o ds-btn-sm"
                     onClick={() => openDraft(r)}
                   >
                     Open

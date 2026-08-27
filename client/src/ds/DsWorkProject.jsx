@@ -211,7 +211,7 @@ export default function DsWorkProject() {
           </p>
         </div>
         <div className="wk-acts">
-          <Link className="btn btn-p btn-sm" to={`/projects/${productKey}`}>
+          <Link className="ds-btn btn-p ds-btn-sm" to={`/projects/${productKey}`}>
             Open in {PRODUCT[productKey] || productKey}
           </Link>
         </div>

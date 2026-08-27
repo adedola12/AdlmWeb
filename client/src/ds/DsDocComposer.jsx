@@ -233,10 +233,10 @@ export default function DsDocComposer() {
             </p>
           </div>
           <div className="adm-acts">
-            <button type="button" className="btn btn-o btn-sm" onClick={keep}>
+            <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={keep}>
               Keep this
             </button>
-            <button type="button" className="btn btn-p btn-sm" onClick={() => window.print()}>
+            <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={() => window.print()}>
               Print or save as PDF
             </button>
           </div>
@@ -332,7 +332,7 @@ export default function DsDocComposer() {
                   {counts.table === 1 ? "" : "s"} · {counts.bullets} list
                   {counts.bullets === 1 ? "" : "s"}
                 </span>
-                <button type="button" className="btn btn-o btn-sm" onClick={() => setSource("")}>
+                <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => setSource("")}>
                   Clear
                 </button>
               </div>
@@ -377,7 +377,7 @@ export default function DsDocComposer() {
                       <div>
                         <button
                           type="button"
-                          className="btn btn-o btn-sm"
+                          className="ds-btn btn-o ds-btn-sm"
                           onClick={() => open(r)}
                         >
                           Open

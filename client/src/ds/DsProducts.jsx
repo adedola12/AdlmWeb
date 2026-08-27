@@ -153,10 +153,10 @@ export default function DsProducts() {
           </p>
         </div>
         <div className="dsh-acts">
-          <Link className="btn btn-o btn-sm" to="/products">
+          <Link className="ds-btn btn-o ds-btn-sm" to="/products">
             See pricing
           </Link>
-          <Link className="btn btn-p btn-sm" to="/support/request">
+          <Link className="ds-btn btn-p ds-btn-sm" to="/support/request">
             Talk to us about seats
           </Link>
         </div>
@@ -203,7 +203,7 @@ export default function DsProducts() {
             <div className="foot2">
               {c.cat === "sub" ? (
                 <>
-                  <Link className="btn btn-o btn-sm" to="/manage/downloads">
+                  <Link className="ds-btn btn-o ds-btn-sm" to="/manage/downloads">
                     Download
                   </Link>
                   <Link
@@ -216,15 +216,15 @@ export default function DsProducts() {
                   </Link>
                 </>
               ) : c.comingSoon ? (
-                <Link className="btn btn-o btn-sm" to={`/product/${c.key}`}>
+                <Link className="ds-btn btn-o ds-btn-sm" to={`/product/${c.key}`}>
                   Join the waitlist
                 </Link>
               ) : (
                 <>
-                  <Link className="btn btn-o btn-sm" to={`/product/${c.key}`}>
+                  <Link className="ds-btn btn-o ds-btn-sm" to={`/product/${c.key}`}>
                     What it does
                   </Link>
-                  <Link className="btn btn-p btn-sm" to={`/purchase?product=${c.key}`}>
+                  <Link className="ds-btn btn-p ds-btn-sm" to={`/purchase?product=${c.key}`}>
                     Add to subscription
                   </Link>
                 </>
