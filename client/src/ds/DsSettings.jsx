@@ -148,6 +148,23 @@ export default function DsSettings() {
     };
   }, [accessToken]);
 
+  // The zone follows whichever state is currently chosen in the form, not the
+  // one last saved — otherwise picking a new state leaves the zone showing the
+  // old one until a save and a reload.
+  const chosenState = (profile?.states || []).find((st) => st.key === form?.state) || null;
+  const zoneKey = chosenState?.zone || profile?.zone || "";
+  const zoneLabel =
+    (profile?.zones || []).find((z) => z.key === zoneKey)?.label || zoneKey || "Not set";
+  // His line under it names the other places on the same rates, which is what
+  // makes a zone mean something.
+  const zoneStates = zoneKey
+    ? (profile?.states || [])
+        .filter((st) => st.zone === zoneKey && st.key !== chosenState?.key)
+        .slice(0, 3)
+        .map((st) => st.label)
+        .join(", ")
+    : "";
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const saveProfile = async (e) => {
@@ -275,7 +292,7 @@ export default function DsSettings() {
   // /me/devices/revoke landed.
   const release = React.useCallback(
     async (d) => {
-      const label = d.name || d.fingerprint.slice(0, 12);
+      const label = d.name || String(d.fingerprint || "unknown").slice(0, 12);
       if (
         !window.confirm(
           `Sign ${label} out?
@@ -481,9 +498,13 @@ export default function DsSettings() {
                     <label htmlFor="st-state">Where you work</label>
                     <select id="st-state" value={form.state} onChange={set("state")}>
                       <option value="">Not set</option>
+                      {/* STATES is [{key, label, zone}], not a list of strings.
+                          The value is the key, because that is what the profile
+                          stores and what zoneForState() maps; the label is the
+                          only part a person should ever see. */}
                       {(profile.states || []).map((st) => (
-                        <option key={st} value={st}>
-                          {st}
+                        <option key={st.key} value={st.key}>
+                          {st.label}
                         </option>
                       ))}
                     </select>
@@ -494,11 +515,15 @@ export default function DsSettings() {
                     <input
                       id="st-zone"
                       type="text"
-                      value={profile.zone || "Not set"}
+                      value={zoneLabel}
                       readOnly
                       disabled
                     />
-                    <p className="hint">Derived from the state. Saved when you save below.</p>
+                    <p className="hint">
+                      {zoneStates
+                        ? `Derived from the state. Also covers ${zoneStates}.`
+                        : "Derived from the state, and saved with it."}
+                    </p>
                   </div>
                 </div>
                 <div className="two">
@@ -659,9 +684,9 @@ export default function DsSettings() {
                   <div className="dsh-dl" key={d.fingerprint}>
                     <span className="ic">{icon("computer")}</span>
                     <div className="nm">
-                      <b>{d.name || d.fingerprint.slice(0, 12)}</b>
+                      <b>{d.name || String(d.fingerprint || "unknown").slice(0, 12)}</b>
                       <span>
-                        {d.products.map((k) => NAMES[k] || k).join(", ")} · {ago(d.lastSeenAt)}
+                        {(d.products || []).map((k) => NAMES[k] || k).join(", ") || "no product"} · {ago(d.lastSeenAt)}
                       </span>
                     </div>
                     <button

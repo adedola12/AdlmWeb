@@ -141,7 +141,7 @@ export default function DsTeam() {
   // desktop clients notice on their next check-in.
   const release = React.useCallback(
     async (d) => {
-      const label = d.name || d.fingerprint.slice(0, 12);
+      const label = d.name || String(d.fingerprint || "unknown").slice(0, 12);
       const ok = window.confirm(
         `Free the seat held by ${label}?\n\n` +
           "It stops being licensed at its next check-in, and the seat can be " +
@@ -305,11 +305,11 @@ export default function DsTeam() {
                       </svg>
                     </span>
                     <div className="nm">
-                      <b>{d.name || d.fingerprint.slice(0, 12)}</b>
+                      <b>{d.name || String(d.fingerprint || "unknown").slice(0, 12)}</b>
                       <span>
-                        {d.products
+                        {(d.products || [])
                           .map((k) => NAMES[k] || catalogue[k]?.name || k)
-                          .join(", ")}{" "}
+                          .join(", ") || "no product"}{" "}
                         · {ago(d.lastSeenAt)}
                       </span>
                     </div>
