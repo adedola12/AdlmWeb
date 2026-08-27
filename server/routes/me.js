@@ -630,6 +630,14 @@ router.get(
       firmName: firmName || "",
       nameLockedForCertificate: !!u.certificateNameLockedAt,
       stepUpEnabled: !!u.security?.stepUpEnabled,
+      // Falls back to the schema defaults rather than to false: an account
+      // created before this field existed must not read as "send me nothing".
+      notifications: {
+        productUpdates: u.notifications?.productUpdates ?? true,
+        billing: u.notifications?.billing ?? true,
+        seatsAndMembers: u.notifications?.seatsAndMembers ?? true,
+        coursesAndEvents: u.notifications?.coursesAndEvents ?? false,
+      },
     });
   }),
 );
@@ -1815,6 +1823,50 @@ router.get(
     );
 
     return res.json({ ok: true, devices });
+  }),
+);
+
+/**
+ * POST /me/notifications
+ *
+ * What this account wants to hear about.
+ *
+ * Four switches, and each one has to mean something before it is worth
+ * offering: a preference that saves nowhere is a promise the account cannot
+ * keep, which is why the settings screen went without this panel until the
+ * field existed.
+ *
+ * Only the four known keys are read. Spreading req.body onto the document
+ * would let a caller write whatever it liked into it.
+ */
+router.post(
+  "/notifications",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ ok: false, error: "User missing" });
+
+    const body = req.body || {};
+    const keys = ["productUpdates", "billing", "seatsAndMembers", "coursesAndEvents"];
+
+    user.notifications = user.notifications || {};
+    for (const k of keys) {
+      // Absent means "leave it alone", so a screen can send one switch without
+      // resetting the other three.
+      if (typeof body[k] === "boolean") user.notifications[k] = body[k];
+    }
+
+    await user.save();
+
+    return res.json({
+      ok: true,
+      notifications: {
+        productUpdates: user.notifications.productUpdates ?? true,
+        billing: user.notifications.billing ?? true,
+        seatsAndMembers: user.notifications.seatsAndMembers ?? true,
+        coursesAndEvents: user.notifications.coursesAndEvents ?? false,
+      },
+    });
   }),
 );
 

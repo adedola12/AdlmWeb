@@ -190,6 +190,20 @@ const UserSchema = new mongoose.Schema(
       savedAt: { type: Date },
     },
 
+    // What this account wants to hear about.
+    //
+    // Defaults are the three that concern something the person is paying for
+    // or relying on; marketing is off unless asked for, which is the only
+    // defensible default for it. Absent on older accounts, so every read has
+    // to fall back to these rather than to false — an account created before
+    // this field existed should not silently stop receiving its invoices.
+    notifications: {
+      productUpdates: { type: Boolean, default: true },
+      billing: { type: Boolean, default: true },
+      seatsAndMembers: { type: Boolean, default: true },
+      coursesAndEvents: { type: Boolean, default: false },
+    },
+
     refreshVersion: { type: Number, default: 1 },
     welcomeEmailSentAt: { type: Date, default: null },
   },

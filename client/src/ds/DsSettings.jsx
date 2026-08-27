@@ -10,16 +10,21 @@
 // the component the Profile page already uses, rather than a second copy of
 // the OAuth logic that could drift from it.
 //
-// His Notifications panel is not reproduced. There are no per-user notification
-// preferences in the data model, so four toggles that save nowhere would be
-// four promises the account cannot keep. When preferences exist, that panel is
-// the place for them.
+// His Notifications panel took a field to exist first. Four toggles that save
+// nowhere are four promises the account cannot keep, so it was left out until
+// User.notifications and POST /me/notifications were added — now each switch
+// writes, and each is read back from the account rather than remembered here.
+//
+// The avatar goes through the same signed direct-to-Cloudinary path the
+// Profile page has always used, lifted into lib/uploadImage.js so there is one
+// copy rather than two.
 
 import React from "react";
 import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import ConnectedAccounts from "../components/ConnectedAccounts.jsx";
+import { uploadImage } from "../lib/uploadImage.js";
 
 const icon = (name) => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -35,6 +40,13 @@ const NAMES = {
   "qs-takeoff": "Time Pro",
   civil3d: "CIVIQ",
 };
+
+// Initials for the avatar when there is no picture yet.
+function initialsOf(text, fallback) {
+  const parts = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return fallback;
+  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
+}
 
 function ago(d) {
   if (!d) return "never";
@@ -61,6 +73,20 @@ export default function DsSettings() {
   const [said, setSaid] = React.useState("");
   const [problem, setProblem] = React.useState("");
 
+  const [avatarUrl, setAvatarUrl] = React.useState("");
+  const [avatarPct, setAvatarPct] = React.useState(0);
+  const [notif, setNotif] = React.useState(null);
+  // Currency is a display layer rather than something the account stores, so
+  // it lives in this browser and says so.
+  const [currency, setCurrency] = React.useState(() => {
+    try {
+      return window.localStorage.getItem("adlm-cur") === "USD" ? "USD" : "NGN";
+    } catch {
+      return "NGN";
+    }
+  });
+  const [sample, setSample] = React.useState(null);
+
   const [pw, setPw] = React.useState({ currentPassword: "", newPassword: "" });
   const [pwSaid, setPwSaid] = React.useState("");
   const [pwProblem, setPwProblem] = React.useState("");
@@ -73,6 +99,15 @@ export default function DsSettings() {
       .then((d) => {
         if (!alive) return;
         setProfile(d);
+        setAvatarUrl(d.avatarUrl || "");
+        setNotif(
+          d.notifications || {
+            productUpdates: true,
+            billing: true,
+            seatsAndMembers: true,
+            coursesAndEvents: false,
+          },
+        );
         setForm({
           firstName: d.firstName || "",
           lastName: d.lastName || "",
@@ -88,6 +123,25 @@ export default function DsSettings() {
     apiAuthed("/me/devices", { token: accessToken })
       .then((d) => alive && setDevices(d.devices || []))
       .catch(() => alive && setDevices([]));
+
+    // His "Blockwork, at this setting" line. The point of it is that a zone is
+    // an abstraction until you see what it does to a price, so this shows a
+    // real rate from the library, priced for wherever the account is set. The
+    // sync route is already location-scoped, so no new endpoint was needed.
+    apiAuthed("/rategen-v2/library/rates/sync", { token: accessToken, params: { limit: 60 } })
+      .then((d) => {
+        if (!alive) return;
+        const items = Array.isArray(d.items) ? d.items : [];
+        // Something recognisable if we have it; otherwise whatever the library
+        // holds, because a real rate beats an invented one.
+        const pick =
+          items.find((r) => /block/i.test(r.description || "")) ||
+          items.find((r) => /concrete/i.test(r.description || "")) ||
+          items[0] ||
+          null;
+        setSample(pick);
+      })
+      .catch(() => {});
 
     return () => {
       alive = false;
@@ -145,6 +199,76 @@ export default function DsSettings() {
       setSaving("");
     }
   };
+
+  // The avatar. Uploaded straight to Cloudinary with a signature from our own
+  // server, then the URL is saved on the profile — the file never passes
+  // through the API, so a large picture does not tie up a Lambda.
+  const pickAvatar = React.useCallback(
+    async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setSaving("avatar");
+      setProblem("");
+      setSaid("");
+      try {
+        const url = await uploadImage({
+          file,
+          token: accessToken,
+          onProgress: setAvatarPct,
+        });
+        await apiAuthed("/me/profile", {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, avatarUrl: url }),
+        });
+        setAvatarUrl(url);
+        setSaid("Picture saved.");
+        if (user) {
+          setAuth({ user: { ...user, avatarUrl: url }, accessToken, licenseToken: null });
+        }
+      } catch (err) {
+        setProblem(err.message || "That picture could not be uploaded.");
+      } finally {
+        setAvatarPct(0);
+        setSaving("");
+      }
+    },
+    [accessToken, form, user, setAuth],
+  );
+
+  // One switch at a time. The endpoint leaves absent keys alone, so sending
+  // just the one that moved cannot reset the other three.
+  const toggleNotif = React.useCallback(
+    async (key) => {
+      const next = !notif?.[key];
+      setNotif((n) => ({ ...n, [key]: next }));
+      try {
+        const d = await apiAuthed("/me/notifications", {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [key]: next }),
+        });
+        // Take the server's answer rather than trusting the optimistic flip.
+        if (d?.notifications) setNotif(d.notifications);
+      } catch (err) {
+        setNotif((n) => ({ ...n, [key]: !next }));
+        setProblem(err.message || "That preference could not be saved.");
+      }
+    },
+    [accessToken, notif],
+  );
+
+  const chooseCurrency = React.useCallback((v) => {
+    setCurrency(v);
+    try {
+      window.localStorage.setItem("adlm-cur", v);
+    } catch {
+      /* a display preference is not worth an error state */
+    }
+  }, []);
 
   // Sign a machine out. The same endpoint Team & seats uses -- this panel used
   // to tell people to raise a ticket for it, which stopped being true the day
@@ -217,6 +341,75 @@ export default function DsSettings() {
               <h2>Your profile</h2>
             </div>
             <div className="dsh-body">
+              {/* His avatar block. The picture appears on the app bar and on
+                  anything this account issues, which is why it lives here
+                  rather than being a nicety. */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  marginBottom: 20,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  className="dsh-avi"
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 18,
+                    fontSize: 22,
+                    flex: "none",
+                    overflow: "hidden",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    initialsOf(
+                      [form.firstName, form.lastName].filter(Boolean).join(" ") ||
+                        profile.email,
+                      "ME",
+                    )
+                  )}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <label className="ds-btn btn-o ds-btn-sm" style={{ cursor: "pointer" }}>
+                    {saving === "avatar"
+                      ? `Uploading ${avatarPct}%`
+                      : avatarUrl
+                        ? "Change the picture"
+                        : "Upload a picture"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={pickAvatar}
+                      disabled={saving === "avatar"}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                  <p
+                    style={{
+                      margin: "9px 0 0",
+                      fontSize: "12.5px",
+                      fontWeight: 300,
+                      color: "var(--ink-3)",
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    JPG or PNG, square works best. It appears on the app bar and on anything
+                    this account issues.
+                  </p>
+                </div>
+              </div>
+
               <form className="dsh-form" onSubmit={saveProfile} style={{ maxWidth: "none" }}>
                 <div className="two">
                   <div className="ds-field">
@@ -308,6 +501,55 @@ export default function DsSettings() {
                     <p className="hint">Derived from the state. Saved when you save below.</p>
                   </div>
                 </div>
+                <div className="two">
+                  <div className="ds-field">
+                    <label htmlFor="st-cur">Currency</label>
+                    <select
+                      id="st-cur"
+                      value={currency}
+                      onChange={(e) => chooseCurrency(e.target.value)}
+                    >
+                      <option value="NGN">NGN (₦)</option>
+                      <option value="USD">USD ($)</option>
+                    </select>
+                    <p className="hint">
+                      How prices are shown to you. Invoices are raised in the currency the
+                      purchase was made in.
+                    </p>
+                  </div>
+
+                  {/* His "Blockwork, at this setting". A zone is an abstraction
+                      until you see what it does to a price, so this is a real
+                      rate out of the library, priced for wherever the account
+                      is set. */}
+                  <div className="ds-field">
+                    <label>
+                      {sample
+                        ? `${(sample.description || "A rate").slice(0, 40)}, at this setting`
+                        : "At this setting"}
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={
+                        sample
+                          ? `${new Intl.NumberFormat(currency === "USD" ? "en-US" : "en-NG", {
+                              style: "currency",
+                              currency,
+                              maximumFractionDigits: 2,
+                            }).format(Number(sample.totalCost) || 0)} per ${sample.unit || "unit"}`
+                          : "Nothing in the library yet"
+                      }
+                    />
+                    <p className="hint">
+                      {sample
+                        ? `Priced for ${sample.zone || sample.state || profile.zone || "your zone"}. Change the state above and this moves.`
+                        : "A rate appears here once the library has one."}
+                    </p>
+                  </div>
+                </div>
+
                 <div>
                   <button className="ds-btn btn-p ds-btn-sm" type="submit" disabled={saving === "profile"}>
                     {saving === "profile" ? "Saving…" : "Save location"}
@@ -461,6 +703,53 @@ export default function DsSettings() {
               <ConnectedAccounts />
             </div>
           </section>
+
+          {/* His Notifications. Real now: each switch writes to
+              POST /me/notifications and the state comes back from the account
+              rather than being remembered in this tab. */}
+          {notif && (
+            <section className="dsh-panel">
+              <div className="dsh-ph">
+                <h2>Notifications</h2>
+              </div>
+              <div className="dsh-body">
+                {[
+                  {
+                    k: "productUpdates",
+                    t: "Product updates",
+                    d: "When a build ships for something you are licensed for.",
+                  },
+                  {
+                    k: "billing",
+                    t: "Billing",
+                    d: "Invoices, renewals and anything that changes what you pay.",
+                  },
+                  {
+                    k: "seatsAndMembers",
+                    t: "Seats and machines",
+                    d: "When a seat is used, freed, or a machine signs in.",
+                  },
+                  {
+                    k: "coursesAndEvents",
+                    t: "Courses and events",
+                    d: "New courses, training dates and free lessons. Off by default.",
+                  },
+                ].map((row) => (
+                  <label className="dsh-toggle" key={row.k}>
+                    <input
+                      type="checkbox"
+                      checked={!!notif[row.k]}
+                      onChange={() => toggleNotif(row.k)}
+                    />
+                    <span>
+                      <b>{row.t}</b>
+                      <p>{row.d}</p>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="dsh-panel">
             <div className="dsh-ph">
