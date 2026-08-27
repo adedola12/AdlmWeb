@@ -74,8 +74,11 @@ function Ticket({ t }) {
           {t.title}
           <span>
             {[
-              PRODUCT[t.productKey] || t.productKey,
-              t.appVersion,
+              // "QUIV v3.1.6 · TUNDE-WS02 · opened 28 July" — his order.
+              [PRODUCT[t.productKey] || t.productKey, t.appVersion]
+                .filter(Boolean)
+                .join(" "),
+              t.machine,
               `opened ${when(t.createdAt)}`,
             ]
               .filter(Boolean)
@@ -105,6 +108,7 @@ export default function DsSupport() {
   const [devices, setDevices] = React.useState(null);
   const [tickets, setTickets] = React.useState(null);
   const [catalogue, setCatalogue] = React.useState(null);
+  const [deployments, setDeployments] = React.useState([]);
   const [failed, setFailed] = React.useState(false);
 
   const [form, setForm] = React.useState({
@@ -137,6 +141,12 @@ export default function DsSupport() {
       .then((d) => alive && setDevices(d.devices || []))
       .catch(() => alive && setDevices([]));
 
+    // Only so a ticket can carry the version of the build this account would
+    // install. A failure costs the version, not the form.
+    apiAuthed("/me/deployments", { token: accessToken })
+      .then((d) => alive && setDeployments(d.items || []))
+      .catch(() => {});
+
     fetch(`${API_BASE}/products`)
       .then((r) => (r.ok ? r.json() : null))
       .then((raw) => {
@@ -164,6 +174,16 @@ export default function DsSupport() {
     return [...rows, NON_PRODUCT];
   }, [summary, catalogue]);
 
+  const versionFor = React.useCallback(
+    (key) => {
+      if (!key || key === NON_PRODUCT.key) return "";
+      const k = String(key).toLowerCase();
+      const pkg = deployments.find((d) => String(d.productKey || "").toLowerCase() === k);
+      return pkg?.version || "";
+    },
+    [deployments],
+  );
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async (e) => {
@@ -179,10 +199,6 @@ export default function DsSupport() {
     setSending(true);
     try {
       const isAccount = form.productKey === NON_PRODUCT.key;
-      // The machine goes into the description rather than a field of its own:
-      // the ticket model has no machine column, and losing which machine it is
-      // would undo the whole point of asking.
-      const machineLine = form.machine ? `\n\nMachine: ${form.machine}` : "";
 
       await apiAuthed("/api/support/tickets", {
         token: accessToken,
@@ -190,11 +206,20 @@ export default function DsSupport() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title.trim(),
-          description: form.description.trim() + machineLine,
+          description: form.description.trim(),
           productKey: isAccount ? "" : form.productKey,
           category: isAccount ? NON_PRODUCT.category : "technical",
           source: isAccount ? "account" : form.productKey || "web",
           anyDeskAddress: form.anyDeskAddress.trim(),
+          // Its own field now rather than appended to the prose. Support's
+          // first question on an install ticket is which machine, and the
+          // account already knows — so it belongs on the ticket where the
+          // queue and the row can both read it without parsing English.
+          machine: form.machine,
+          // The published build for that product. Not necessarily what is
+          // installed on that machine, which we do not track, so it is what we
+          // would install rather than a claim about what they have.
+          appVersion: versionFor(form.productKey),
         }),
       });
 
