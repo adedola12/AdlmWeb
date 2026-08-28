@@ -39,6 +39,37 @@ summary: Model-based quantity takeoff, priced budgets and a dockable workspace �
   ────────────────────────────────────────────────────────────────────────
 -->
 
+## 3.1.9 — 28 August 2026 — Linked models, the whole takeoff in one go & a much faster run
+
+QUIV now measures a structural model linked into your architectural one, hands you the entire takeoff in a single run split by level and by type, and stops pricing anything until you ask it to.
+
+### ✨ New
+
+- **Full Handover.** Hand QUIV the whole takeoff and watch it work. It asks permission once, then walks every ticked item on your Take off List — level by level, type by type — switching the Revit view as it goes so you can see what is being measured. A modal progress panel shows the current action, what has been saved, how many were skipped and roughly how long is left. Cancel at any moment and choose to stop where it is or roll the whole run back; a cancel never interrupts a save in progress. Modules that need you to pick elements in the model are listed for you rather than guessed at.
+- **Every level, every type, on its own line.** A run no longer produces one lumped figure per module. Each level is split into the types that level actually has — every beam size, every column size, every wall type, every door and window type — so the bill carries one line per level per type and each figure can be checked against the model. A level that holds none of a given thing contributes no line at all.
+- **Railings & Balustrades.** A module of its own, measuring by the metre per level and per type, billed supply-and-fix.
+- **Clear applied prices.** A single action removes every rate QUIV applied by itself and leaves the ones you typed untouched, so you can start pricing from a clean sheet without losing your own work.
+- **Back to top.** A floating button on the Bill and the Budget returns you to the totals from anywhere in a long priced bill, instead of a long scroll back.
+
+### 🔧 Improved
+
+- **Linked structural models are measured.** If your structural engineer's model is linked into your architectural model, QUIV now measures the beams, columns and slabs inside it. Levels are paired by name where the two models agree and **by height where they do not** — so "00 - GROUND FLOOR" in the engineer's file is recognised as your "Ground floor level", which is what makes a real two-model job work. Every linked element is measured on exactly one level, so the levels always add back up to the whole-model total.
+- **Nothing is priced until you ask.** Opening a project, saving a takeoff or loading the Budget no longer applies rates behind your back. Prices arrive when you press the button, and a takeoff nobody has priced now shows no prices — whatever produced them.
+- **A rate you typed is told apart from one QUIV applied.** The Budget records where each figure came from, so your own rates survive a refresh, a rebuild and a reload.
+- **A much faster takeoff.** A full run on a seven-storey model dropped from about seventeen minutes to around six. Most of that was QUIV waiting rather than measuring: fixed pauses that outlasted work already finished, waits that could never be satisfied, and steps planned for levels that hold nothing.
+- **A faster dashboard and Budget.** Recent projects load in under a second instead of stalling for the best part of a minute, and the Budget no longer freezes while it builds — a large bill was doing many times the work it needed to on the screen thread.
+- **Prices are fetched once.** Rates already looked up are remembered for the session instead of being requested again every time prices are applied.
+- **Import Excel BoQ has been removed.** It was a web feature behind a desktop button and never worked from here. Import your BoQ on the web app instead.
+
+### 🐛 Fixed
+
+- **Staircases measured zero.** Stair dimensions are now read from Revit's own stair API, with the run width taken from the stair type when an individual run cannot report it. Levels with stairs measured nothing at all before this.
+- **Steel members were counted twice.** A steel beam or column sits in the same Revit category as a concrete one, so both the Beam/Column modules and Steelwork measured them — once by volume with formwork, once by weight. On one job that was 183 beams and 36 columns double-counted, carrying 15.52 m³ of concrete and over 300 m² of formwork that no steel section has. Steel now belongs to Steelwork alone, and the steel sections no longer appear in the Beam and Column type lists.
+- **Module materials attached to the wrong bill line.** Materials from one trade could be mopped up onto another trade's line; each now attaches to the line it belongs to.
+- **Each measurement is filed under the type it measured.** Per-type quantities were correct but could all be saved under the label "All", so every type on a level shared one description on the bill.
+- **A rejected sign-in ends the session.** An expired session used to retry indefinitely instead of asking you to sign in again.
+- **A new takeoff starts empty.** The money cards on the Bill no longer carry figures over from the previous takeoff.
+
 ## 3.1.7 — 31 July 2026 — Rock-solid sign-in, everywhere
 
 QUIV signs in reliably on every install, however it was deployed — including machines set up outside the Installer Hub.
