@@ -41,7 +41,7 @@ summary: Model-based quantity takeoff, priced budgets and a dockable workspace �
 
 ## 3.1.9 — 28 August 2026 — Linked models, the whole takeoff in one go & a much faster run
 
-QUIV now measures a structural model linked into your architectural one, hands you the entire takeoff in a single run split by level and by type, and stops pricing anything until you ask it to.
+QUIV now measures a structural model linked into your architectural one, hands you the entire takeoff in a single run split by level and by type, and runs it in about a third of the time. Nothing is priced until you ask, and an export now shows only the rates you set — anything unpriced reads 0 rather than a figure nobody chose.
 
 ### ✨ New
 
