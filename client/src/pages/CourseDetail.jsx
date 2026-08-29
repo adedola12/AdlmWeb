@@ -243,7 +243,7 @@ export default function CourseDetail() {
   if (err) return <div className="card text-red-600">{err}</div>;
   if (!data) return <div className="card text-sm text-slate-600">Loading...</div>;
 
-  const { course, enrollment, progress, moduleSubmissions, summary, access, classroom } = data;
+  const { course, enrollment, progress, moduleSubmissions, summary, access } = data;
   // The intro is not a module: it has no assignment, no quiz and nothing to
   // mark complete, so it selects an empty module rather than falling through to
   // the first one — which would quietly play lecture one under an "intro" tab.
@@ -341,17 +341,6 @@ export default function CourseDetail() {
             <div className="mt-1 text-xs text-slate-600">{progress}% complete</div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {classroom?.joinUrl ? (
-                <a
-                  className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
-                  href={classroom.joinUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Go to Google Classroom
-                </a>
-              ) : null}
-
               {enrollment?.status === "completed" && course?.certificateTemplateUrl ? (
                 <button
                   className="px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 transition"
@@ -382,18 +371,6 @@ export default function CourseDetail() {
             </div>
           ))}
         </div>
-
-        {(classroom?.joinUrl || classroom?.notes) && (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-            <div className="font-medium text-slate-900">Classroom access</div>
-            <div className="mt-1">
-              Google Classroom opens in a new tab. Progress shown here reflects work tracked through ADLM Studio.
-            </div>
-            {classroom?.notes ? (
-              <div className="mt-2 whitespace-pre-wrap">{classroom.notes}</div>
-            ) : null}
-          </div>
-        )}
 
         {Array.isArray(course?.softwares) && course.softwares.length > 0 && (
           <div className="rounded-xl border border-slate-200 bg-white p-4">

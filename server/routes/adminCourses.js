@@ -20,17 +20,6 @@ function sanitizeCourseBody(body = {}, { partial = false } = {}) {
   assign("description", stringField("description"));
   assign("thumbnailUrl", stringField("thumbnailUrl"));
   assign("onboardingVideoUrl", stringField("onboardingVideoUrl"));
-  assign("classroomJoinUrl", stringField("classroomJoinUrl"));
-  assign(
-    "classroomProvider",
-    hasOwn(body, "classroomProvider")
-      ? String(body.classroomProvider || "google_classroom").trim() === "other"
-        ? "other"
-        : "google_classroom"
-      : undefined,
-  );
-  assign("classroomCourseId", stringField("classroomCourseId"));
-  assign("classroomNotes", stringField("classroomNotes"));
   assign("certificateTemplateUrl", stringField("certificateTemplateUrl"));
   assign(
     "isPublished",

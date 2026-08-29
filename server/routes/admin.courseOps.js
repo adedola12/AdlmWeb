@@ -1,7 +1,7 @@
 /**
- * Admin operations for running a course on the platform rather than in Google
- * Classroom: quiz authoring, and the cockpit that answers "how is this cohort
- * actually doing" without opening four different screens.
+ * Admin operations for running a course on the platform: quiz authoring, and
+ * the cockpit that answers "how is this cohort actually doing" without opening
+ * four different screens.
  */
 import express from "express";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";

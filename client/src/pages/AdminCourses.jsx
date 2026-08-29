@@ -184,10 +184,6 @@ export default function AdminCourses() {
       description: "",
       thumbnailUrl: "",
       onboardingVideoUrl: "",
-      classroomJoinUrl: "",
-      classroomProvider: "google_classroom",
-      classroomCourseId: "",
-      classroomNotes: "",
       certificateTemplateUrl: "",
       isPublished: true,
       sort: 0,
@@ -204,10 +200,6 @@ export default function AdminCourses() {
       description: course.description || "",
       thumbnailUrl: course.thumbnailUrl || "",
       onboardingVideoUrl: course.onboardingVideoUrl || "",
-      classroomJoinUrl: course.classroomJoinUrl || "",
-      classroomProvider: course.classroomProvider || "google_classroom",
-      classroomCourseId: course.classroomCourseId || "",
-      classroomNotes: course.classroomNotes || "",
       certificateTemplateUrl: course.certificateTemplateUrl || "",
       isPublished: course.isPublished !== false,
       sort: course.sort ?? 0,
@@ -482,10 +474,6 @@ export default function AdminCourses() {
             description: product.description || "",
             thumbnailUrl: product.thumbnailUrl || product.images?.[0] || "",
             onboardingVideoUrl: product.previewUrl || "",
-            classroomJoinUrl: "",
-            classroomProvider: "google_classroom",
-            classroomCourseId: "",
-            classroomNotes: "",
             certificateTemplateUrl: "",
             isPublished: false,
             sort: product.sort ?? 0,
@@ -501,7 +489,7 @@ export default function AdminCourses() {
 
           if (!ignore) {
             setDraft(courseToDraft(created));
-            setMsg("Course setup created for this product. Add your Google Classroom link and save.");
+            setMsg("Course setup created for this product. Add your modules and save.");
             load();
           }
         } catch (inner) {
@@ -734,57 +722,6 @@ export default function AdminCourses() {
               </div>
             ) : null}
           </div>
-
-          <label className="text-sm sm:col-span-2">
-            <div className="mb-1">Google Classroom join link</div>
-            <input
-              className="input"
-              placeholder="https://classroom.google.com/..."
-              value={draft.classroomJoinUrl}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, classroomJoinUrl: e.target.value }))
-              }
-            />
-          </label>
-
-          <label className="text-sm">
-            <div className="mb-1">Classroom provider</div>
-            <select
-              className="input"
-              value={draft.classroomProvider}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, classroomProvider: e.target.value }))
-              }
-            >
-              <option value="google_classroom">Google Classroom</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-
-          <label className="text-sm">
-            <div className="mb-1">Classroom course ID</div>
-            <input
-              className="input"
-              placeholder="Optional Google course id"
-              value={draft.classroomCourseId}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, classroomCourseId: e.target.value }))
-              }
-            />
-          </label>
-
-          <label className="text-sm sm:col-span-2">
-            <div className="mb-1">Learner note</div>
-            <textarea
-              className="input"
-              rows={3}
-              placeholder="Instructions for joining or using the classroom"
-              value={draft.classroomNotes}
-              onChange={(e) =>
-                setDraft((prev) => ({ ...prev, classroomNotes: e.target.value }))
-              }
-            />
-          </label>
 
           <label className="text-sm sm:col-span-2">
             <div className="mb-1">Certificate template (PDF)</div>
@@ -1195,16 +1132,6 @@ export default function AdminCourses() {
               >
                 Product
               </Link>
-              {course.classroomJoinUrl ? (
-                <a
-                  className="btn btn-sm"
-                  href={course.classroomJoinUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Classroom
-                </a>
-              ) : null}
               <button
                 className="btn btn-sm"
                 onClick={() =>
