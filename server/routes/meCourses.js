@@ -195,10 +195,6 @@ function buildCourseResponse(enrollment, context) {
     blurb: "",
     thumbnailUrl: "",
     onboardingVideoUrl: "",
-    classroomJoinUrl: "",
-    classroomProvider: "google_classroom",
-    classroomCourseId: "",
-    classroomNotes: "",
     modules: [],
   };
 
@@ -244,21 +240,12 @@ function buildCourseResponse(enrollment, context) {
       accessStartedAt: toIso(startedAt),
       accessExpiresAt: toIso(expiresAt),
       lastProgressAt: toIso(enrollment.lastProgressAt),
-      classroomLastSyncedAt: toIso(enrollment.classroomLastSyncedAt),
     },
     course,
     product,
     progress: summary.progress,
     summary,
     access: accessMeta(startedAt, expiresAt),
-    classroom: {
-      provider: course.classroomProvider || "google_classroom",
-      joinUrl: course.classroomJoinUrl || "",
-      courseId: course.classroomCourseId || "",
-      notes: course.classroomNotes || "",
-      lastSyncedAt: toIso(enrollment.classroomLastSyncedAt),
-      syncEnabled: Boolean(course.classroomCourseId),
-    },
     moduleSubmissions,
   };
 }

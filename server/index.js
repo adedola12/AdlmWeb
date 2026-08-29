@@ -37,8 +37,6 @@ import adminDeploymentsRoutes from "./routes/admin.deployments.js";
 import adminCourses from "./routes/adminCourses.js";
 import adminCourseOps from "./routes/admin.courseOps.js";
 import adminSoftwares from "./routes/admin.softwares.js";
-import adminClassrooms from "./routes/admin.classrooms.js";
-import meClassrooms from "./routes/me.classrooms.js";
 import adminCourseGrading from "./routes/adminCourseGrading.js";
 import purchaseRoutes from "./routes/purchase.js";
 import learnPublic from "./routes/Learn.js";
@@ -343,8 +341,6 @@ app.use("/admin/deployments", adminDeploymentsRoutes);
 app.use("/admin/courses", adminCourses);
 app.use("/admin/course-ops", adminCourseOps);
 app.use("/admin/softwares", adminSoftwares);
-app.use("/admin/classrooms", adminClassrooms);
-app.use("/me/classrooms", meClassrooms);
 app.use("/admin/course-grading", adminCourseGrading);
 app.use("/admin/settings", adminSettings);
 

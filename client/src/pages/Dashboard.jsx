@@ -199,11 +199,6 @@ export default function Dashboard() {
   const [loadingPEnrollments, setLoadingPEnrollments] = React.useState(false);
   const [pEnrollmentsErr, setPEnrollmentsErr] = React.useState("");
 
-  // ── Classrooms (admin-granted standalone classrooms) ──
-  const [classrooms, setClassrooms] = React.useState([]);
-  const [loadingClassrooms, setLoadingClassrooms] = React.useState(false);
-  const [classroomsErr, setClassroomsErr] = React.useState("");
-
   // ── Cloud storage usage ──
   const [storageData, setStorageData] = React.useState(null);
 
@@ -241,20 +236,6 @@ export default function Dashboard() {
     }
   }, [accessToken]);
 
-  const loadClassrooms = React.useCallback(async () => {
-    setLoadingClassrooms(true);
-    setClassroomsErr("");
-    try {
-      const data = await apiAuthed(`/me/classrooms`, { token: accessToken });
-      setClassrooms(Array.isArray(data?.items) ? data.items : []);
-    } catch (e) {
-      setClassrooms([]);
-      setClassroomsErr(e?.message || "Failed to load classrooms");
-    } finally {
-      setLoadingClassrooms(false);
-    }
-  }, [accessToken]);
-
   const loadPTrainings = React.useCallback(async () => {
     setLoadingPEnrollments(true);
     setPEnrollmentsErr("");
@@ -273,13 +254,12 @@ export default function Dashboard() {
   React.useEffect(() => {
     loadSummary();
     loadCourses();
-    loadClassrooms();
     loadPTrainings();
     // Fetch cloud storage usage
     apiAuthed("/me/storage", { token: accessToken })
       .then((d) => setStorageData(d || null))
       .catch(() => null);
-  }, [loadSummary, loadCourses, loadClassrooms, loadPTrainings, accessToken]);
+  }, [loadSummary, loadCourses, loadPTrainings, accessToken]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -671,10 +651,6 @@ export default function Dashboard() {
                   loadingCourses={loadingCourses}
                   coursesError={coursesErr}
                   onRefreshCourses={loadCourses}
-                  classrooms={classrooms}
-                  loadingClassrooms={loadingClassrooms}
-                  classroomsError={classroomsErr}
-                  onRefreshClassrooms={loadClassrooms}
                   pEnrollments={approvedPTrainings}
                   loadingPTrainings={loadingPEnrollments}
                   pTrainingsError={pEnrollmentsErr}
@@ -971,16 +947,11 @@ function LearningTab({
   loadingCourses,
   coursesError,
   onRefreshCourses,
-  classrooms = [],
-  loadingClassrooms,
-  classroomsError,
-  onRefreshClassrooms,
   pEnrollments = [],
   loadingPTrainings,
   pTrainingsError,
 }) {
   const hasOnline = Array.isArray(courses) && courses.length > 0;
-  const hasClassrooms = Array.isArray(classrooms) && classrooms.length > 0;
   const hasPhysical = Array.isArray(pEnrollments) && pEnrollments.length > 0;
   const [onboardingModal, setOnboardingModal] = React.useState(null);
   const [certModal, setCertModal] = React.useState(null);
@@ -1006,15 +977,14 @@ function LearningTab({
 
         {loadingCourses && !courses ? (
           <div className="mt-2 text-sm text-slate-600">Loading online courses...</div>
-        ) : !hasOnline && !hasClassrooms ? (
+        ) : !hasOnline ? (
           <div className="mt-2 text-sm text-slate-600">No enrolled courses yet.</div>
-        ) : !hasOnline ? null : (
+        ) : (
           <div className="mt-3 space-y-3">
             {courses.map((entry) => {
               const course = entry.course || {};
               const summary = entry.summary || {};
               const access = entry.access || {};
-              const classroom = entry.classroom || {};
               const accessPill = access.isExpired
                 ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
                 : typeof access.daysLeft === "number" && access.daysLeft <= 7
@@ -1052,11 +1022,6 @@ function LearningTab({
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${accessPill}`}>
                           {access.label || "Open access"}
                         </span>
-                        {classroom.joinUrl ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-50 text-adlm-blue-700 ring-1 ring-blue-100">
-                            Google Classroom linked
-                          </span>
-                        ) : null}
                       </div>
 
                       {course.blurb ? (
@@ -1081,12 +1046,6 @@ function LearningTab({
                         <div>Pending review: {summary.pendingAssignments || 0}</div>
                       </div>
 
-                      {classroom.notes ? (
-                        <div className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-                          {classroom.notes}
-                        </div>
-                      ) : null}
-
                       <div className="mt-3 flex flex-wrap gap-2">
                         <a
                           className="px-3 py-2 rounded-md border text-sm hover:bg-slate-50 transition"
@@ -1106,16 +1065,6 @@ function LearningTab({
                           >
                             Watch Onboarding
                           </button>
-                        ) : null}
-                        {classroom.joinUrl ? (
-                          <a
-                            className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
-                            href={classroom.joinUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Go to classroom
-                          </a>
                         ) : null}
                         {entry.enrollment?.status === "completed" && course.certificateTemplateUrl ? (
                           <button
@@ -1138,76 +1087,6 @@ function LearningTab({
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Classroom Access (admin-granted standalone classrooms) */}
-        {classroomsError ? (
-          <div className="mt-2 text-sm text-red-600">{classroomsError}</div>
-        ) : null}
-        {hasClassrooms && (
-          <div className="mt-6">
-            <div className="text-sm font-semibold text-slate-700 mb-2">
-              Classroom Access
-            </div>
-            <div className="space-y-3">
-              {classrooms.map((c) => (
-                <div
-                  key={c._id}
-                  className="group relative spotlight rounded-2xl ring-1 ring-slate-200 bg-white p-4 shadow-depth lift"
-                >
-                  <div className="flex flex-col md:flex-row md:items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-semibold text-slate-900">{c.title}</div>
-                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-50 text-adlm-blue-700 ring-1 ring-blue-100">
-                          Classroom
-                        </span>
-                      </div>
-                      {c.description ? (
-                        <div className="mt-1 text-sm text-slate-600">
-                          {c.description}
-                        </div>
-                      ) : null}
-                      {c.companyName ? (
-                        <div className="mt-1 text-xs text-slate-500">
-                          {c.companyName}
-                        </div>
-                      ) : null}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {c.effectiveJoinUrl ? (
-                          <a
-                            className="px-3 py-2 rounded-md bg-adlm-blue-700 text-white text-sm hover:bg-[#0050c8] transition"
-                            href={c.effectiveJoinUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Go to Classroom
-                          </a>
-                        ) : (
-                          <span className="text-xs text-amber-700">
-                            No classroom link configured yet — ask admin.
-                          </span>
-                        )}
-                        <button
-                          className="px-3 py-2 rounded-md bg-amber-600 text-white text-sm hover:bg-amber-700 transition"
-                          onClick={() =>
-                            setCertModal({
-                              sku: `classroom:${c._id}`,
-                              title: c.title,
-                              description: c.description || "",
-                              completionDate: c.updatedAt || c.createdAt,
-                            })
-                          }
-                        >
-                          Download Certificate
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
       </div>

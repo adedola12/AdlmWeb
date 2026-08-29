@@ -445,14 +445,6 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "admin/classrooms",
-        element: (
-          <AdminRoute permission="adminhub">
-            <Admin section="classrooms" />
-          </AdminRoute>
-        ),
-      },
-      {
         path: "admin/settings",
         element: (
           <AdminRoute permission="adminhub">

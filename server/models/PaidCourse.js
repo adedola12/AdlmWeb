@@ -74,14 +74,6 @@ const PaidCourseSchema = new mongoose.Schema(
     // cookies and the concurrency seat.
     onboardingVideoUrl: { type: String },
     onboarding: { type: TrackSchema, default: () => ({}) },
-    classroomJoinUrl: { type: String, default: "" },
-    classroomProvider: {
-      type: String,
-      enum: ["google_classroom", "other"],
-      default: "google_classroom",
-    },
-    classroomCourseId: { type: String, default: "" },
-    classroomNotes: { type: String, default: "" },
     modules: { type: [ModuleSchema], default: [] },
 
     // Reusable software library entries attached to this course (max 6).

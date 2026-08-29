@@ -130,7 +130,7 @@ async function build() {
   }
 
   lines.push("");
-  lines.push("## COURSES (self-paced / classroom, paid)");
+  lines.push("## COURSES (self-paced, paid)");
   if (!courses.length) lines.push("(none published)");
   for (const c of courses) {
     lines.push(
