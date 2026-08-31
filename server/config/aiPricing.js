@@ -46,6 +46,27 @@ export const AI_FEATURES = [
     guestAllowed: true,
   },
   {
+    key: "quiv-prompt",
+    label: "QUIV prompt (Revit)",
+    desc: "One model round-trip turning a typed instruction into takeoff actions, from the plugin's AI bar.",
+    provider: "adlm-ai-service",
+    metered: true,
+    guestAllowed: false, // the plugin only runs signed in
+  },
+  {
+    // Metered by CALLS only. A handover run makes no model round-trip at all -
+    // it builds its own action list and drives the modules - so it burns no
+    // tokens and its token and cost columns are always zero. It is here
+    // because it is an expensive privilege worth rationing, not because it is
+    // an AI cost.
+    key: "quiv-handover",
+    label: "QUIV full handover run (Revit)",
+    desc: "One automated end-to-end takeoff run. Deterministic - no model round-trip, so no tokens.",
+    provider: "none",
+    metered: true,
+    guestAllowed: false,
+  },
+  {
     key: "ai-boq-check",
     label: "BoQ market rate check",
     desc: "Per-line verdict vs the RateGen benchmarks (AWS AI service).",
