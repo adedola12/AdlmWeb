@@ -19,6 +19,8 @@
 import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { aiServiceEnabled, callAiService } from "../services/adlmAiService.js";
+import { checkAiAllowance, recordAiUsage } from "../services/aiUsage.js";
+import { AI_FEATURES } from "../config/aiPricing.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -128,6 +130,120 @@ router.post("/rate-buildup", async (req, res, next) => {
     );
     if (!r.ok) return fail(res, r);
     res.json({ ok: true, ...(r.result || {}) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ───────────────────────── QUIV desktop plugin ─────────────────────────
+ * The plugin has two metered actions and they are not the same kind of thing.
+ *
+ *   quiv-prompt    — a real model round-trip. Tokens to count, cost to bill.
+ *   quiv-handover  — a full automated takeoff. No model round-trip at all, so
+ *                    no tokens; it is rationed because a run drives every
+ *                    module over every level, not because it costs AI credit.
+ *
+ * Neither can go through callAiService the way /ai/boq-check does: the prompt
+ * is answered by the SDK the plugin already talks to, and the handover is
+ * answered by Revit. So the plugin ASKS before it starts and REPORTS when it
+ * finishes, and the server owns the decision in between.
+ *
+ * That means a tampered client could skip the ask. This is licensed desktop
+ * software talking to its own backend, so the honest gate is here, at the
+ * meter, and the record is what the admin page bills from either way.
+ */
+
+const QUIV_FEATURES = new Set(["quiv-prompt", "quiv-handover"]);
+
+function quivFeature(raw) {
+  const key = String(raw || "").trim().toLowerCase();
+  return QUIV_FEATURES.has(key) ? key : "";
+}
+
+/** Whatever the limit permits, minus what has gone, floored at zero. */
+function remainingOf(gate, feature) {
+  const limit = gate?.limits;
+  if (!limit || !limit.calls) return null; // 0 means unlimited in this schema
+  const used = gate?.used?.byFeature?.[feature]?.calls || 0;
+  return Math.max(0, limit.calls - used);
+}
+
+/**
+ * GET /ai/quiv/allowance?feature=quiv-prompt
+ * May this account do it right now, and how many are left today?
+ */
+router.get("/quiv/allowance", async (req, res, next) => {
+  try {
+    const feature = quivFeature(req.query?.feature);
+    if (!feature) {
+      return res.status(400).json({ error: "feature must be quiv-prompt or quiv-handover." });
+    }
+
+    const gate = await checkAiAllowance({ user: req.user || null, feature, ip: req.ip });
+    const def = AI_FEATURES.find((f) => f.key === feature);
+
+    res.json({
+      ok: true,
+      feature,
+      label: def?.label || feature,
+      allowed: gate.allowed !== false,
+      // Empty when allowed. When it is not, this is written to be shown to the
+      // user as it stands, so the plugin never has to invent an explanation.
+      reason: gate.allowed === false ? gate.reason || "" : "",
+      code: gate.code || "",
+      remaining: remainingOf(gate, feature),
+      limit: gate?.limits?.calls || 0,
+      window: gate?.limits?.window || "month",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /ai/quiv/usage
+ * One action happened. Body: { feature, inputTokens, outputTokens, model, ms, ok, errorCode }
+ *
+ * Reported by the plugin AFTER the work, so a prompt is billed for the tokens
+ * it really spent rather than an estimate made before it ran. A handover sends
+ * no token counts and none are invented for it.
+ */
+router.post("/quiv/usage", async (req, res, next) => {
+  try {
+    const feature = quivFeature(req.body?.feature);
+    if (!feature) {
+      return res.status(400).json({ error: "feature must be quiv-prompt or quiv-handover." });
+    }
+
+    const n = (v) => Math.max(0, Math.round(Number(v) || 0));
+
+    recordAiUsage({
+      user: req.user || null,
+      feature,
+      product: "quiv",
+      provider: feature === "quiv-prompt" ? "adlm-ai-service" : "none",
+      model: String(req.body?.model || "").slice(0, 80),
+      inputTokens: feature === "quiv-prompt" ? n(req.body?.inputTokens) : 0,
+      outputTokens: feature === "quiv-prompt" ? n(req.body?.outputTokens) : 0,
+      ms: n(req.body?.ms),
+      ok: req.body?.ok !== false,
+      errorCode: String(req.body?.errorCode || "").slice(0, 80),
+      ip: req.ip,
+      sessionId: String(req.body?.sessionId || "").slice(0, 80),
+    });
+
+    // Report the state AFTER this one, so the plugin can grey its own button
+    // without a second round trip.
+    const gate = await checkAiAllowance({ user: req.user || null, feature, ip: req.ip });
+
+    res.json({
+      ok: true,
+      feature,
+      allowed: gate.allowed !== false,
+      remaining: remainingOf(gate, feature),
+      limit: gate?.limits?.calls || 0,
+      window: gate?.limits?.window || "month",
+    });
   } catch (err) {
     next(err);
   }

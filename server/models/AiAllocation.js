@@ -22,6 +22,19 @@ const LimitSchema = new mongoose.Schema(
     calls: { type: Number, default: 0, min: 0 }, // model round-trips / requests
     tokens: { type: Number, default: 0, min: 0 },
     costUsd: { type: Number, default: 0, min: 0 },
+
+    // The period the numbers above are counted over.
+    //
+    // Everything here was monthly, and for the website features that is the
+    // right shape - they are sold and budgeted by the month. A desktop feature
+    // is different: a QS who burns a month's worth of prompts on the first
+    // morning is stuck until the 1st, which reads as the product being broken
+    // rather than as a limit. A daily window gives the same annual ceiling in
+    // portions they get back tomorrow.
+    //
+    // Defaults to "month", so every existing row and every feature that does
+    // not say otherwise behaves exactly as it did before.
+    window: { type: String, enum: ["month", "day"], default: "month" },
   },
   { _id: false },
 );
