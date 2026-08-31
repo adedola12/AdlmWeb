@@ -82,12 +82,26 @@ function ModuleRow({ m, i, onChange, onRemove, accessToken }) {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 border rounded p-2">
+    <div className="grid grid-cols-1 sm:grid-cols-6 gap-2 border rounded p-2">
       <input
         className="input"
         placeholder="Code"
         value={m.code}
         onChange={(e) => onChange(i, { ...m, code: e.target.value })}
+      />
+      {/* Which week of the programme this session belongs to. Leave at 0 and
+          the course stays a flat numbered list; set it and the player groups
+          the sidebar by week and says "Week 3" instead of "Lesson 7 of 18". */}
+      <input
+        className="input"
+        type="number"
+        min="0"
+        placeholder="Week"
+        title="Week of the programme. 0 = not organised into weeks."
+        value={m.week ?? 0}
+        onChange={(e) =>
+          onChange(i, { ...m, week: Math.max(0, Number(e.target.value) || 0) })
+        }
       />
       <input
         className="input sm:col-span-2"
@@ -188,6 +202,10 @@ export default function AdminCourses() {
       classroomProvider: "google_classroom",
       classroomCourseId: "",
       classroomNotes: "",
+      tutorName: "",
+      tutorTitle: "",
+      capstoneTitle: "",
+      capstoneDueAt: "",
       certificateTemplateUrl: "",
       isPublished: true,
       sort: 0,
@@ -208,6 +226,12 @@ export default function AdminCourses() {
       classroomProvider: course.classroomProvider || "google_classroom",
       classroomCourseId: course.classroomCourseId || "",
       classroomNotes: course.classroomNotes || "",
+      tutorName: course.tutorName || "",
+      tutorTitle: course.tutorTitle || "",
+      capstoneTitle: course.capstoneTitle || "",
+      capstoneDueAt: course.capstoneDueAt
+        ? String(course.capstoneDueAt).slice(0, 10)
+        : "",
       certificateTemplateUrl: course.certificateTemplateUrl || "",
       isPublished: course.isPublished !== false,
       sort: course.sort ?? 0,
@@ -486,7 +510,11 @@ export default function AdminCourses() {
             classroomProvider: "google_classroom",
             classroomCourseId: "",
             classroomNotes: "",
-            certificateTemplateUrl: "",
+            tutorName: "",
+      tutorTitle: "",
+      capstoneTitle: "",
+      capstoneDueAt: "",
+      certificateTemplateUrl: "",
             isPublished: false,
             sort: product.sort ?? 0,
             modules: [],
@@ -643,6 +671,40 @@ export default function AdminCourses() {
               setDraft((prev) => ({ ...prev, description: e.target.value }))
             }
           />
+
+          {/* Who teaches it, and what it ends in. Both show on the course
+              player: the tutor beside the running time, the capstone in its
+              own box above the certificate. Leave them blank and the player
+              drops those cells rather than showing an empty label. */}
+          <input
+            className="input"
+            placeholder="Tutor name"
+            value={draft.tutorName}
+            onChange={(e) => setDraft((prev) => ({ ...prev, tutorName: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="Tutor title (e.g. Senior QS)"
+            value={draft.tutorTitle}
+            onChange={(e) => setDraft((prev) => ({ ...prev, tutorTitle: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="Capstone title"
+            value={draft.capstoneTitle}
+            onChange={(e) => setDraft((prev) => ({ ...prev, capstoneTitle: e.target.value }))}
+          />
+          <label className="text-sm">
+            <div className="mb-1">Capstone due</div>
+            <input
+              className="input"
+              type="date"
+              value={draft.capstoneDueAt}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, capstoneDueAt: e.target.value }))
+              }
+            />
+          </label>
 
           <label className="text-sm">
             <div className="mb-1">Thumbnail URL</div>
@@ -1122,7 +1184,7 @@ export default function AdminCourses() {
                   ...prev,
                   modules: [
                     ...prev.modules,
-                    { code: "", title: "", requiresSubmission: false },
+                    { code: "", title: "", week: 0, requiresSubmission: false },
                   ],
                 }))
               }

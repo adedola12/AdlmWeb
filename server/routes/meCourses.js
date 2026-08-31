@@ -13,7 +13,8 @@ import {
   playbackCookieOptions,
   cdnUrl,
 } from "../utils/cloudfrontSign.js";
-import { presignArchiveUrl } from "../utils/awsS3.js";
+import { presignArchiveUrl, getObjectText } from "../utils/awsS3.js";
+import { LessonNote } from "../models/LessonNote.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -89,6 +90,25 @@ function latestSubmission(list = []) {
   })[0] || null;
 }
 
+
+/**
+ * The week a lesson belongs to.
+ *
+ * `module.week` is the field an admin sets and it always wins. Failing that,
+ * the title is read: every lecture on both live courses is already titled
+ * "Week 3 · Part 1 — ...", so the week is sitting there in plain text and
+ * making somebody retype it into a form would be busywork.
+ *
+ * Returns 0 when neither says, which is what keeps a course that has no weeks
+ * on the flat lesson numbering rather than inventing one.
+ */
+function weekOf(module) {
+  const set = Number(module?.week || 0) || 0;
+  if (set > 0) return set;
+  const m = String(module?.title || "").match(/^\s*week\s+(\d{1,2})/i);
+  return m ? Number(m[1]) : 0;
+}
+
 function buildModuleSubmissions(course, enrollment, submissionsByKey) {
   const completed = new Set(enrollment?.completedModules || []);
   return (course?.modules || []).map((module) => {
@@ -99,6 +119,7 @@ function buildModuleSubmissions(course, enrollment, submissionsByKey) {
     return {
       moduleCode: module.code,
       moduleTitle: module.title,
+      week: weekOf(module),
       requiresSubmission: !!module.requiresSubmission,
       submissions,
       latestSubmission: latest,
@@ -112,6 +133,11 @@ function buildModuleSubmissions(course, enrollment, submissionsByKey) {
       // itself stays server-side, same as the lecture's.
       hasSummary: Boolean(module.summary?.hlsKey || module.summary?.sourceKey),
       summaryDurationSec: Number(module.summary?.durationSec || 0) || 0,
+
+      // Whether a transcript is worth asking for. The key stays server-side
+      // like every other one; the tab only needs to know whether to appear.
+      hasTranscript:
+        module.transcriptStatus === "COMPLETED" && !!module.transcriptKey,
     };
   });
 }
@@ -188,6 +214,27 @@ async function loadCourseContext(userId, skus) {
   return { coursesBySku, productBySku, entitlementsByKey, submissionsByKey, softwareById };
 }
 
+
+/**
+ * The certificate's reference, e.g. ADLM-BIM-2026-0417.
+ *
+ * Not a new identifier: it is the enrolment's own _id, formatted so a person
+ * can read it down a phone line and support can find the row it came from.
+ * Deterministic, so the card, the PDF and any future verification page all
+ * quote the same string for the same enrolment.
+ */
+function certificateRef(enrollment) {
+  if (!enrollment?.certificateIssuedAt && enrollment?.status !== "completed") return "";
+  const sku = String(enrollment.courseSku || "");
+  // The leading alpha run of the sku: "bim-bld-arch" -> BIM, "rates-2d" -> RATES.
+  const tag = (sku.match(/^[a-zA-Z]+/)?.[0] || "ADLM").toUpperCase().slice(0, 5);
+  const year = new Date(
+    enrollment.certificateIssuedAt || enrollment.updatedAt || Date.now(),
+  ).getFullYear();
+  const tail = String(enrollment._id || "").slice(-4).toUpperCase();
+  return `ADLM-${tag}-${year}-${tail}`;
+}
+
 function buildCourseResponse(enrollment, context) {
   const fallbackCourse = {
     sku: enrollment.courseSku,
@@ -241,6 +288,7 @@ function buildCourseResponse(enrollment, context) {
   return {
     enrollment: {
       ...enrollment,
+      certificateRef: certificateRef(enrollment),
       accessStartedAt: toIso(startedAt),
       accessExpiresAt: toIso(expiresAt),
       lastProgressAt: toIso(enrollment.lastProgressAt),
@@ -708,4 +756,149 @@ router.post("/:sku/quiz/:moduleCode", express.json(), async (req, res) => {
   res.json({ score, passed, correctCount, totalQuestions: questions.length, results });
 });
 
+/* ------------------------------------------------------------------ notes
+ *
+ * His Notes tab, kept against the account rather than the browser. Only the
+ * account that wrote a note can read it: there is no admin view of these and
+ * there should not be one — it is somebody's own thinking about material they
+ * paid for.
+ */
+
+/** GET /me/courses/:sku/notes/:moduleCode */
+router.get("/:sku/notes/:moduleCode", async (req, res) => {
+  const { sku, moduleCode } = req.params;
+
+  // Enrolment is the gate. Without it the route would happily hand back — and
+  // store — notes against a course the account has no business being in.
+  const enrolled = await CourseEnrollment.exists({
+    userId: req.user._id,
+    courseSku: sku,
+  });
+  if (!enrolled) return res.status(403).json({ error: "Not enrolled" });
+
+  const note = await LessonNote.findOne({
+    userId: req.user._id,
+    courseSku: sku,
+    moduleCode,
+  })
+    .select("body updatedAt")
+    .lean();
+
+  res.json({ body: note?.body || "", updatedAt: note?.updatedAt || null });
+});
+
+/** PUT /me/courses/:sku/notes/:moduleCode  Body: { body } */
+router.put("/:sku/notes/:moduleCode", express.json(), async (req, res) => {
+  const { sku, moduleCode } = req.params;
+
+  const enrolled = await CourseEnrollment.exists({
+    userId: req.user._id,
+    courseSku: sku,
+  });
+  if (!enrolled) return res.status(403).json({ error: "Not enrolled" });
+
+  const body = String(req.body?.body ?? "").slice(0, 20000);
+
+  // An emptied note is deleted rather than kept as a blank row: "I cleared my
+  // notes" and "I never wrote any" are the same state to the person.
+  if (!body.trim()) {
+    await LessonNote.deleteOne({ userId: req.user._id, courseSku: sku, moduleCode });
+    return res.json({ body: "", updatedAt: null });
+  }
+
+  const note = await LessonNote.findOneAndUpdate(
+    { userId: req.user._id, courseSku: sku, moduleCode },
+    { $set: { body } },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  ).lean();
+
+  res.json({ body: note.body, updatedAt: note.updatedAt });
+});
+
+/**
+ * Transcribe's output, reduced to what the panel draws.
+ *
+ * `audio_segments` is the good path: Transcribe has already grouped the words
+ * into natural speech segments with a start time, which is exactly one cue per
+ * paragraph. Older jobs — and jobs run before that field existed — only carry
+ * `items`, one entry per word, so those are gathered into ~14-second cues
+ * instead. Both produce the same shape, so the client never learns which ran.
+ */
+function toCues(parsed) {
+  const results = parsed?.results || {};
+
+  const segments = Array.isArray(results.audio_segments) ? results.audio_segments : [];
+  if (segments.length) {
+    return segments
+      .map((seg) => ({
+        at: Math.max(0, Math.round(Number(seg.start_time) || 0)),
+        text: String(seg.transcript || "").trim(),
+      }))
+      .filter((c) => c.text);
+  }
+
+  const items = Array.isArray(results.items) ? results.items : [];
+  if (!items.length) return [];
+
+  const CUE_SEC = 14;
+  const cues = [];
+  let open = null;
+  for (const item of items) {
+    const word = item?.alternatives?.[0]?.content;
+    if (!word) continue;
+    if (item.type === "punctuation") {
+      if (open) open.text += word;
+      continue;
+    }
+    const at = Number(item.start_time) || 0;
+    if (!open || at - open.at >= CUE_SEC) {
+      open = { at: Math.round(at), text: word };
+      cues.push(open);
+    } else {
+      open.text += ` ${word}`;
+    }
+  }
+  return cues.filter((c) => c.text.trim());
+}
+
+
+/* ------------------------------------------------------------- transcript
+ *
+ * The lecture, in text, with the timings Transcribe produced. Cues rather than
+ * a wall of prose: his transcript panel makes every timestamp a control that
+ * moves the player, which is the whole reason it is worth having.
+ */
+
+/** GET /me/courses/:sku/transcript/:moduleCode */
+router.get("/:sku/transcript/:moduleCode", async (req, res) => {
+  const { sku, moduleCode } = req.params;
+
+  const enrolled = await CourseEnrollment.exists({
+    userId: req.user._id,
+    courseSku: sku,
+  });
+  if (!enrolled) return res.status(403).json({ error: "Not enrolled" });
+
+  const course = await PaidCourse.findOne({ sku }).select("modules").lean();
+  const module = (course?.modules || []).find((m) => m.code === moduleCode);
+  if (!module) return res.status(404).json({ error: "No such lesson" });
+
+  if (module.transcriptStatus !== "COMPLETED" || !module.transcriptKey) {
+    // Not an error: most lectures will sit here until the pipeline has run.
+    return res.json({ cues: [], status: module.transcriptStatus || "" });
+  }
+
+  let parsed;
+  try {
+    const body = await getObjectText(module.transcriptKey);
+    parsed = JSON.parse(body);
+  } catch (e) {
+    console.error("transcript read failed", sku, moduleCode, e?.message);
+    return res.status(502).json({ error: "The transcript could not be read." });
+  }
+
+  res.json({ cues: toCues(parsed), status: "COMPLETED" });
+});
+
 export default router;
+

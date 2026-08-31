@@ -113,7 +113,7 @@ export default function Portfolio() {
       <div className="max-w-5xl mx-auto px-4 py-10">
         {/* Back link */}
         <Link
-          to="/dashboard"
+          to="/manage"
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition-colors"
         >
           <IconArrowLeft className="w-4 h-4" />

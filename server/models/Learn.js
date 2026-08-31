@@ -14,6 +14,10 @@ const FreeVideoSchema = new mongoose.Schema(
     // being made unlisted. Auto-filled on save when YOUTUBE_API_KEY is set,
     // otherwise typed in — same shape as PaidCourse lessons use.
     durationSec: { type: Number, default: 0 },
+    // Which tool the walkthrough is about — "Revit", "PlanSwift". It reads on
+    // the row beside the running time, because "Foundation takeoff tutorial"
+    // does not by itself say which plugin you are watching.
+    productLabel: { type: String, trim: true, default: "" },
     isPublished: { type: Boolean, default: true },
     sort: { type: Number, default: 0 },
   },

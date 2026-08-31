@@ -154,14 +154,14 @@ export default function DsDownloads() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Your downloads could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Your downloads could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!view) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading your downloads…</p>
+        <p className="ds-sub">Loading your downloads…</p>
       </div>
     );
   }

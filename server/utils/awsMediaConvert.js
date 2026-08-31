@@ -6,9 +6,20 @@
  * actual fix — the player drops a rung instead of buffering. Resolution alone
  * never was the problem, and upscaling would have made it worse.
  *
- * The rungs stop at the source resolution. These are 720p screen recordings of
- * Revit and Excel, so 1080p rungs would cost bitrate to encode detail that
- * isn't in the master.
+ * The rungs stop at the source resolution — and the source is 4K.
+ *
+ * This file used to say "these are 720p screen recordings", and capped the
+ * ladder at 720p on that basis. It was wrong: every one of the thirty-four
+ * archived masters is 3840x2160, checked by reading the tkhd box of each
+ * (scripts/probe-course-masters.mjs). The ladder was therefore throwing away
+ * three quarters of the picture on every lecture, and a student on fibre with
+ * a 27-inch monitor was watching a 720p upscale of a 4K screen recording of
+ * Revit — which is the one kind of content where the difference is legible,
+ * because it is full of small text.
+ *
+ * 1440p is deliberately absent. Every rung is billed per output minute across
+ * thirty-four ~96-minute lectures, and 1440 sits close enough to 1080 that it
+ * mostly duplicates it; 2160 and 1080 together cover the gap that matters.
  */
 import {
   MediaConvertClient,
@@ -178,6 +189,11 @@ export async function submitHlsJob({ sourceKey, outPrefix, jobTag = "" }) {
             },
           },
           Outputs: [
+            // Screen capture is mostly static with sudden full redraws, so QVBR
+            // spends very little of these ceilings most of the time — the
+            // ceiling is there for the redraws, where text has to stay sharp.
+            rung({ height: 2160, maxBitrate: 14000000, nameModifier: "_2160" }),
+            rung({ height: 1080, maxBitrate: 5500000, nameModifier: "_1080" }),
             rung({ height: 720, maxBitrate: 3600000, nameModifier: "_720" }),
             rung({ height: 540, maxBitrate: 1800000, nameModifier: "_540" }),
             rung({ height: 360, maxBitrate: 900000, nameModifier: "_360" }),
@@ -190,6 +206,84 @@ export async function submitHlsJob({ sourceKey, outPrefix, jobTag = "" }) {
 
   const out = await mediaConvertClient().send(command);
   return out?.Job?.Id || "";
+}
+
+
+/**
+ * Strips a lecture down to its audio track, as MP4/AAC in the archive bucket.
+ *
+ * Why this exists: Amazon Transcribe's batch limit is 2 GB per file and AWS
+ * lists it as not adjustable. Four of the thirty-four masters are over it —
+ * the largest is 5.82 GB — because they are two-hour 720p screen recordings.
+ * Transcribe only ever reads the audio track, so handing it 5.82 GB of Revit
+ * screen capture was always waste; this makes that explicit and brings the
+ * file under the ceiling at the same time. A 96-minute lecture comes out
+ * around 70 MB.
+ *
+ * The AAC settings are deliberately the same ones the HLS rungs already use.
+ * They are known to be accepted by this account's MediaConvert queue, and an
+ * invented bitrate/coding-mode/sample-rate combination is the usual way to
+ * have a job rejected for no useful reason.
+ *
+ * Writes to the ARCHIVE bucket rather than the delivery one: Transcribe reads
+ * it, students never do, and the archive is the bucket the pipeline's IAM user
+ * can already write to.
+ *
+ * @param {string} sourceKey  master object in the archive bucket
+ * @param {string} outKey     destination WITHOUT extension, e.g. audio/sku/W1D1
+ */
+export async function submitAudioExtractJob({ sourceKey, outKey, jobTag = "" }) {
+  const archiveBucket = requiredEnv("AWS_VIDEO_ARCHIVE_BUCKET");
+  const role = requiredEnv("AWS_MEDIACONVERT_ROLE_ARN");
+
+  const command = new CreateJobCommand({
+    Role: role,
+    UserMetadata: jobTag ? { module: jobTag, purpose: "transcribe-audio" } : undefined,
+    Settings: {
+      Inputs: [
+        {
+          FileInput: `s3://${archiveBucket}/${sourceKey}`,
+          AudioSelectors: { "Audio Selector 1": { DefaultSelection: "DEFAULT" } },
+          // No VideoSelector: there is no video output to feed, and asking for
+          // one only makes the job decode frames it will then throw away.
+          TimecodeSource: "ZEROBASED",
+        },
+      ],
+      OutputGroups: [
+        {
+          Name: "Audio for transcription",
+          OutputGroupSettings: {
+            Type: "FILE_GROUP_SETTINGS",
+            // Ending the destination at the key rather than a "/" names the
+            // file after it — audio/sku/W1D1 becomes audio/sku/W1D1.mp4.
+            FileGroupSettings: { Destination: `s3://${archiveBucket}/${outKey}` },
+          },
+          Outputs: [
+            {
+              // No VideoDescription at all — that is what makes it audio-only.
+              ContainerSettings: { Container: "MP4", Mp4Settings: {} },
+              AudioDescriptions: [
+                {
+                  AudioSourceName: "Audio Selector 1",
+                  CodecSettings: {
+                    Codec: "AAC",
+                    AacSettings: {
+                      Bitrate: 96000,
+                      CodingMode: "CODING_MODE_2_0",
+                      SampleRate: 48000,
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const out = await mediaConvertClient().send(command);
+  return { jobId: out?.Job?.Id || "", audioKey: `${outKey}.mp4` };
 }
 
 export async function getJobState(jobId) {

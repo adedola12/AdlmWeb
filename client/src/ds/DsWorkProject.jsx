@@ -138,7 +138,7 @@ export default function DsWorkProject() {
         <p className="wk-back">
           <Link to="/work/projects">← Projects</Link>
         </p>
-        <p className="sub">
+        <p className="ds-sub">
           That project could not be loaded. It may belong to another account, or the licence
           that covers it may have lapsed.
         </p>
@@ -148,7 +148,7 @@ export default function DsWorkProject() {
   if (!view) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading the project…</p>
+        <p className="ds-sub">Loading the project…</p>
       </div>
     );
   }
@@ -221,14 +221,14 @@ export default function DsWorkProject() {
         <div className="dsh-stat">
           <span className="k">Bill total</span>
           <b>{money(view.total)}</b>
-          <span className="sub">
+          <span className="ds-sub">
             {num(view.priced.length)} priced line{view.priced.length === 1 ? "" : "s"}
           </span>
         </div>
         <div className="dsh-stat">
           <span className="k">Completed to date</span>
           <b>{money(view.completed)}</b>
-          <span className="sub">
+          <span className="ds-sub">
             {view.total
               ? `${Math.round((view.completed / view.total) * 100)}% of the bill`
               : "nothing measured yet"}
@@ -237,12 +237,12 @@ export default function DsWorkProject() {
         <div className="dsh-stat">
           <span className="k">Outstanding</span>
           <b>{money(view.total - view.completed)}</b>
-          <span className="sub">still to do at these rates</span>
+          <span className="ds-sub">still to do at these rates</span>
         </div>
         <div className={`dsh-stat${view.unpriced.length ? " warn" : ""}`}>
           <span className="k">Not priced</span>
           <b>{num(view.unpriced.length)}</b>
-          <span className="sub">
+          <span className="ds-sub">
             {view.unpriced.length
               ? "carrying nothing in the total"
               : "every line has a rate"}

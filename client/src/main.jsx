@@ -1,7 +1,7 @@
 // src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { AuthProvider } from "./store.jsx";
 import { StepUpProvider } from "./features/security/useStepUp.jsx";
 import { ThemeProvider, initThemeBeforeRender } from "./theme.jsx";
@@ -23,13 +23,45 @@ import Products from "./pages/Products.jsx";
 import Quote from "./pages/Quote.jsx";
 import ProductDetail from "./pages/ProductDetail.jsx";
 import Login from "./pages/Login.jsx";
+import AdminLogin from "./pages/AdminLogin.jsx";
+import AdminToday from "./pages/AdminToday.jsx";
+import AdminPurchases from "./pages/AdminPurchases.jsx";
+import AdminInstallationsQueue from "./pages/AdminInstallationsQueue.jsx";
+import AdminPeople from "./pages/AdminPeople.jsx";
+import AdminEnrolments from "./pages/AdminEnrolments.jsx";
+import AdminSubmissions from "./pages/AdminSubmissions.jsx";
+import AdminFollowUpsDesk from "./pages/AdminFollowUpsDesk.jsx";
+import AdminDsOrganisations from "./pages/AdminDsOrganisations.jsx";
+import AdminDsRoles from "./pages/AdminDsRoles.jsx";
+import AdminDsSupport from "./pages/AdminDsSupport.jsx";
+import AdminDsSubscriptions from "./pages/AdminDsSubscriptions.jsx";
+import AdminDsEntitlements from "./pages/AdminDsEntitlements.jsx";
+import AdminDsQuotations from "./pages/AdminDsQuotations.jsx";
+import AdminDsInvoices from "./pages/AdminDsInvoices.jsx";
+import AdminDsCoupons from "./pages/AdminDsCoupons.jsx";
+import AdminCatProducts from "./pages/AdminCatProducts.jsx";
+import AdminCatPricing from "./pages/AdminCatPricing.jsx";
+import AdminCatRates from "./pages/AdminCatRates.jsx";
+import AdminCatSaved from "./pages/AdminCatSaved.jsx";
+import AdminRateBuilder from "./pages/AdminRateBuilder.jsx";
+import AdminDocAi from "./pages/AdminDocAi.jsx";
+import AdminDocAudit from "./pages/AdminDocAudit.jsx";
+import AdminDocProduced from "./pages/AdminDocProduced.jsx";
+import AdminDocSystem from "./pages/AdminDocSystem.jsx";
+import AdminDsWaitlist from "./pages/AdminDsWaitlist.jsx";
+import AdminLcCourses from "./pages/AdminLcCourses.jsx";
+import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
+import AdminLcLessons from "./pages/AdminLcLessons.jsx";
+import AdminLcEvents from "./pages/AdminLcEvents.jsx";
+import AdminLcClassrooms from "./pages/AdminLcClassrooms.jsx";
+import AdminLcChangelogs from "./pages/AdminLcChangelogs.jsx";
+import AdminLcShowcase from "./pages/AdminLcShowcase.jsx";
+import AdminLcFreebies from "./pages/AdminLcFreebies.jsx";
 import Signup from "./pages/Signup.jsx";
 import Purchase from "./pages/Purchase.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
 import Profile from "./pages/Profile.jsx";
 import Learn from "./pages/Learn.jsx";
-import CourseDetail from "./pages/CourseDetail.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
 import Admin from "./pages/Admin.jsx";
 import AdminLearn from "./pages/AdminLearn.jsx";
@@ -61,7 +93,6 @@ import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RequestTechnicalHelp from "./pages/RequestTechnicalHelp.jsx";
 import AdminWaitlist from "./pages/AdminWaitlist.jsx";
-import AdminFollowUps from "./pages/AdminFollowUps.jsx";
 import AdminLatest from "./pages/AdminLatest.jsx";
 import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
 import AdminAuditLog from "./pages/AdminAuditLog.jsx";
@@ -72,7 +103,7 @@ import PmTracker from "./pages/PmTracker.jsx";
 import PortfolioDashboard from "./pages/PortfolioDashboard.jsx";
 import JoinProject from "./pages/JoinProject.jsx";
 import RateGenLibrary from "./pages/RateGenLibrary.jsx";
-import AdminRateGen from "./pages/AdminRateGen.jsx";
+import AdminRateLibrary from "./pages/AdminRateLibrary.jsx";
 import AdminAddRate from "./pages/AdminAddRate.jsx";
 import RateGenUpdates from "./pages/RateGenUpdates.jsx";
 import ServiceConstants from "./pages/ServiceConstants.jsx";
@@ -96,6 +127,10 @@ const WorkLibrary = React.lazy(() => import("./pages/WorkLibrary.jsx"));
 const WorkRate = React.lazy(() => import("./pages/WorkRate.jsx"));
 const WorkProject = React.lazy(() => import("./pages/WorkProject.jsx"));
 const WorkProgramme = React.lazy(() => import("./pages/WorkProgramme.jsx"));
+const Learning = React.lazy(() => import("./pages/Learning.jsx"));
+const Certificates = React.lazy(() => import("./pages/Certificates.jsx"));
+const LearningCourse = React.lazy(() => import("./pages/LearningCourse.jsx"));
+const LearnCourseRedirect = React.lazy(() => import("./pages/LearnCourseRedirect.jsx"));
 const WorkShellRoute = React.lazy(() => import("./pages/WorkShellRoute.jsx"));
 import UserInvoice from "./pages/UserInvoice.jsx";
 
@@ -169,10 +204,16 @@ const router = createBrowserRouter([
       { path: "proposal/:token", element: <PublicProposal /> },
 
       { path: "login", element: <Login /> },
+      // A separate door, deliberately. His reasoning, kept: an admin session
+      // is not a customer session with a flag on it, so it is not reached by
+      // adding ?admin to the customer sign-in.
+      { path: "admin/login", element: <AdminLogin /> },
       { path: "signup", element: <Signup /> },
 
       { path: "learn", element: <Learn /> },
-      { path: "learn/course/:sku", element: <CourseDetail /> },
+      // The player moved to /dash-course/:sku. This resolves rather than
+      // 404s, because the URL is in emails and in people's history.
+      { path: "learn/course/:sku", element: <LearnCourseRedirect /> },
       { path: "learn/free/:id", element: <FreeVideoDetail /> },
 
       { path: "about", element: <AboutADLM /> },
@@ -227,14 +268,14 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      {
-        path: "dashboard",
-        element: (
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        ),
-      },
+      // Retired. /manage is the account overview now — his screen, on real
+      // data — and two dashboards competing for the same job is how one of
+      // them quietly goes stale.
+      //
+      // A redirect rather than a deletion, and permanently so: this path is in
+      // receipts, in enrolment emails and in people's history, and the same
+      // reasoning already keeps /learn/course/:sku alive a few lines below.
+      { path: "dashboard", element: <Navigate to="/manage" replace /> },
       {
         path: "freebies",
         element: (
@@ -274,6 +315,9 @@ const router = createBrowserRouter([
         { path: "work/rate/:id", el: <WorkRate /> },
         { path: "work/project/:productKey/:id", el: <WorkProject /> },
         { path: "work/programme", el: <WorkProgramme /> },
+        { path: "dash-learning", el: <Learning /> },
+        { path: "dash-certificates", el: <Certificates /> },
+        { path: "dash-course/:sku", el: <LearningCourse /> },
       ].map(({ path, el }) => ({
         path,
         element: (
@@ -477,11 +521,15 @@ const router = createBrowserRouter([
       },
 
       // ✅ ADMIN ONLY
+      // /admin is Today — his dashboard, the first admin screen ported. The
+      // hub's queues keep their own routes below and the rail links to them;
+      // what this replaces is the hub's front page, which was a tab strip over
+      // the same lists rather than a view of what needs doing.
       {
         path: "admin",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin />
+            <AdminToday />
           </AdminRoute>
         ),
       },
@@ -489,10 +537,13 @@ const router = createBrowserRouter([
       // inline at the bottom of /admin. Same <Admin /> component, driven by the
       // `section` prop so all existing data-loading/effects keep working.
       {
+        // His Purchases queue. The path stays /admin/pending because that is
+        // what the old hub used and what people have bookmarked; the rail
+        // calls it Purchases, as he does.
         path: "admin/pending",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin section="pending" />
+            <AdminPurchases />
           </AdminRoute>
         ),
       },
@@ -500,7 +551,7 @@ const router = createBrowserRouter([
         path: "admin/active",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin section="active" />
+            <AdminDsEntitlements />
           </AdminRoute>
         ),
       },
@@ -508,7 +559,7 @@ const router = createBrowserRouter([
         path: "admin/organizations",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin section="organizations" />
+            <AdminDsOrganisations />
           </AdminRoute>
         ),
       },
@@ -516,7 +567,7 @@ const router = createBrowserRouter([
         path: "admin/physical-training",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin section="ptrainings" />
+            <AdminLcEvents />
           </AdminRoute>
         ),
       },
@@ -524,7 +575,7 @@ const router = createBrowserRouter([
         path: "admin/subscriptions",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin section="subscriptions" />
+            <AdminDsSubscriptions />
           </AdminRoute>
         ),
       },
@@ -540,7 +591,7 @@ const router = createBrowserRouter([
         path: "admin/installations",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin section="installations" />
+            <AdminInstallationsQueue />
           </AdminRoute>
         ),
       },
@@ -556,7 +607,7 @@ const router = createBrowserRouter([
         path: "admin/classrooms",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin section="classrooms" />
+            <AdminLcClassrooms />
           </AdminRoute>
         ),
       },
@@ -564,7 +615,7 @@ const router = createBrowserRouter([
         path: "admin/settings",
         element: (
           <AdminRoute permission="adminhub">
-            <Admin section="settings" />
+            <AdminDocSystem />
           </AdminRoute>
         ),
       },
@@ -572,7 +623,37 @@ const router = createBrowserRouter([
         path: "admin/courses",
         element: (
           <AdminRoute roles={["admin"]}>
-            <AdminCourses />
+            <AdminLcCourses />
+          </AdminRoute>
+        ),
+      },
+      {
+        // Build a rate — the only place on the website a rate is created.
+        // Editing an existing one happens in Rate Gen.
+        path: "admin/rategen/build",
+        element: (
+          <AdminRoute permission="rategen">
+            <AdminRateBuilder />
+          </AdminRoute>
+        ),
+      },
+      {
+        // Saved rates — what people built themselves in RateGen. Never had a
+        // screen; the data lives on each user own library, not in RateGenRate.
+        path: "admin/saved-rates",
+        element: (
+          <AdminRoute permission="rategen">
+            <AdminCatSaved />
+          </AdminRoute>
+        ),
+      },
+      {
+        // His Price book. A new route: pricing has never had a screen, and the
+        // effective price is not readable from the product record by eye.
+        path: "admin/pricing",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminCatPricing />
           </AdminRoute>
         ),
       },
@@ -580,7 +661,7 @@ const router = createBrowserRouter([
         path: "admin/products",
         element: (
           <AdminRoute roles={["admin"]}>
-            <AdminProducts />
+            <AdminCatProducts />
           </AdminRoute>
         ),
       },
@@ -596,12 +677,17 @@ const router = createBrowserRouter([
         path: "admin/coupons",
         element: (
           <AdminRoute roles={["admin"]}>
-            <AdminCoupons />
+            <AdminDsCoupons />
           </AdminRoute>
         ),
       },
       {
-        path: "admin/invoices",
+        // The invoice composer that already works — create, edit, send. The
+        // ported register replaced /admin/invoices as the reading surface;
+        // rebuilding a working composer to match it would be a week spent to
+        // end up where we started, so it keeps a route and the register links
+        // to it.
+        path: "admin/invoices/compose",
         element: (
           <AdminRoute permission="invoices">
             <AdminInvoices />
@@ -609,9 +695,28 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: "admin/invoices",
+        element: (
+          <AdminRoute permission="invoices">
+            <AdminDsInvoices />
+          </AdminRoute>
+        ),
+      },
+      {
         // The ADLM half of the document engine: written documents on the
         // letterhead. The product half is generated out of a project.
+        // The register. The composer it replaces keeps its own route below —
+        // it works, and a register that grew a document editor would be a
+        // second place for the same thing to be got wrong.
         path: "admin/documents",
+        element: (
+          <AdminRoute permission="invoices">
+            <AdminDocProduced />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/documents/compose",
         element: (
           <AdminRoute permission="invoices">
             <LazyScreen>
@@ -624,7 +729,7 @@ const router = createBrowserRouter([
         path: "admin/proposals",
         element: (
           <AdminRoute permission="proposals">
-            <AdminProposals />
+            <AdminDsQuotations />
           </AdminRoute>
         ),
       },
@@ -632,7 +737,7 @@ const router = createBrowserRouter([
         path: "admin/course-grading",
         element: (
           <AdminRoute roles={["admin"]}>
-            <AdminCourseGrading />
+            <AdminSubmissions />
           </AdminRoute>
         ),
       },
@@ -648,7 +753,7 @@ const router = createBrowserRouter([
         path: "admin/quizzes",
         element: (
           <AdminRoute roles={["admin"]}>
-            <AdminQuizzes />
+            <AdminLcQuizzes />
           </AdminRoute>
         ),
       },
@@ -666,15 +771,17 @@ const router = createBrowserRouter([
         path: "admin/learn",
         element: (
           <AdminRoute permission="learn">
-            <AdminLearn />
+            <AdminLcLessons />
           </AdminRoute>
         ),
       },
       {
+        // His People register. The path stays /admin/users-lite because that
+        // is what the rail and people's bookmarks already point at.
         path: "admin/users-lite",
         element: (
           <AdminRoute permission="users">
-            <AdminUsersLite />
+            <AdminPeople />
           </AdminRoute>
         ),
       },
@@ -682,7 +789,7 @@ const router = createBrowserRouter([
         path: "admin/showcase",
         element: (
           <AdminRoute permission="showcase">
-            <AdminShowcase />
+            <AdminLcShowcase />
           </AdminRoute>
         ),
       },
@@ -690,7 +797,7 @@ const router = createBrowserRouter([
         path: "admin/changelogs",
         element: (
           <AdminRoute permission="changelogs">
-            <AdminChangelogs />
+            <AdminLcChangelogs />
           </AdminRoute>
         ),
       },
@@ -698,7 +805,7 @@ const router = createBrowserRouter([
         path: "admin/rategen",
         element: (
           <AdminRoute permission="rategen">
-            <AdminRateGen />
+            <AdminRateLibrary />
           </AdminRoute>
         ),
       },
@@ -714,7 +821,7 @@ const router = createBrowserRouter([
         path: "admin/rategen-master",
         element: (
           <AdminRoute permission="rategen">
-            <AdminRateGenMaster />
+            <AdminCatRates />
           </AdminRoute>
         ),
       },
@@ -724,7 +831,7 @@ const router = createBrowserRouter([
         path: "admin/ptrainings",
         element: (
           <AdminRoute roles={["admin"]}>
-            <AdminPTrainings />
+            <AdminEnrolments />
           </AdminRoute>
         ),
       },
@@ -734,7 +841,7 @@ const router = createBrowserRouter([
         path: "admin/roles",
         element: (
           <AdminRoute roles={["admin"]}>
-            <AdminRoles />
+            <AdminDsRoles />
           </AdminRoute>
         ),
       },
@@ -744,7 +851,7 @@ const router = createBrowserRouter([
         path: "admin/ai-usage",
         element: (
           <AdminRoute permission="aiusage">
-            <AdminAiUsage />
+            <AdminDocAi />
           </AdminRoute>
         ),
       },
@@ -754,7 +861,7 @@ const router = createBrowserRouter([
         path: "admin/support-tickets",
         element: (
           <AdminRoute permission="support">
-            <AdminSupportTickets />
+            <AdminDsSupport />
           </AdminRoute>
         ),
       },
@@ -774,7 +881,7 @@ const router = createBrowserRouter([
         path: "admin/waitlist",
         element: (
           <AdminRoute permission="waitlist">
-            <AdminWaitlist />
+            <AdminDsWaitlist />
           </AdminRoute>
         ),
       },
@@ -784,7 +891,7 @@ const router = createBrowserRouter([
         path: "admin/follow-ups",
         element: (
           <AdminRoute permission="followups">
-            <AdminFollowUps />
+            <AdminFollowUpsDesk />
           </AdminRoute>
         ),
       },
@@ -794,7 +901,7 @@ const router = createBrowserRouter([
         path: "admin/audit-log",
         element: (
           <AdminRoute permission="audit">
-            <AdminAuditLog />
+            <AdminDocAudit />
           </AdminRoute>
         ),
       },
@@ -804,7 +911,7 @@ const router = createBrowserRouter([
         path: "admin/freebies",
         element: (
           <AdminRoute permission="freebies">
-            <AdminFreebies />
+            <AdminLcFreebies />
           </AdminRoute>
         ),
       },
@@ -814,7 +921,7 @@ const router = createBrowserRouter([
       {
         path: "admin/flyers",
         async lazy() {
-          const { default: AdminFlyers } = await import("./pages/AdminFlyers.jsx");
+          const { default: AdminFlyers } = await import("./pages/AdminLcFlyers.jsx");
           return {
             element: (
               <AdminRoute permission="flyers">

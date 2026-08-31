@@ -127,7 +127,7 @@ export default function DsCheckoutSummary() {
   if (!items.length) {
     return (
       <>
-        <p className="sub">Your cart is empty.</p>
+        <p className="ds-sub">Your cart is empty.</p>
         <p className="small" style={{ marginTop: "16px" }}>
           <Link to="/products" style={{ color: "var(--action)" }}>
             Choose your licences
@@ -144,7 +144,7 @@ export default function DsCheckoutSummary() {
 
   return (
     <>
-      <p className="sub">
+      <p className="ds-sub">
         {seatTotal} seat{seatTotal === 1 ? "" : "s"} across {rows.length} product
         {rows.length === 1 ? "" : "s"}
         {training ? ", with on-site training" : ""}.

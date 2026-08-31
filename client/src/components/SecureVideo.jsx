@@ -70,15 +70,22 @@ function watermarkStyle(label) {
  * Two different reactions, because they trade off differently.
  *
  *   guarded — blank the frame AND pause. For a capture attempt or a hidden
- *             tab, where showing nothing is the point.
- *   paused  — pause only, frame left visible. For losing window focus, which
- *             on this course usually means the student alt-tabbed into Revit
- *             to follow along. Blanking there would fight the lesson, and it
- *             buys nothing: a screen recorder does not need focus to capture.
+ *             tab, where showing nothing is the point and nobody is listening
+ *             anyway.
+ *   blurred — blank the frame, keep playing. For losing window focus, which on
+ *             this course usually means the student alt-tabbed into Revit to
+ *             follow along. This used to pause instead, and pausing fought the
+ *             lesson exactly as much as blanking would have: somebody who
+ *             switches to Revit to practise wants to keep hearing the tutor.
+ *             Blanking costs them nothing — they are not looking at the tab —
+ *             and it still denies a casual over-the-shoulder capture.
+ *
+ * Neither is real protection against a screen recorder, which needs no focus
+ * at all. The watermark is what identifies a leak; these only raise the effort.
  */
 function useScreenshotGuard() {
   const [guarded, setGuarded] = React.useState(false);
-  const [paused, setPaused] = React.useState(false);
+  const [blurred, setBlurred] = React.useState(false);
 
   React.useEffect(() => {
     let timer;
@@ -104,8 +111,8 @@ function useScreenshotGuard() {
       }
     };
     const onVisibility = () => setGuarded(document.hidden);
-    const onBlur = () => setPaused(true);
-    const onFocus = () => setPaused(false);
+    const onBlur = () => setBlurred(true);
+    const onFocus = () => setBlurred(false);
 
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
@@ -122,18 +129,19 @@ function useScreenshotGuard() {
     };
   }, []);
 
-  return { guarded, paused };
+  return { guarded, blurred };
 }
 
-function Overlays({ label, guarded }) {
+function Overlays({ label, guarded, blurred }) {
+  const on = guarded || blurred;
   return (
     <>
       <div className="secure-watermark" style={watermarkStyle(label)} aria-hidden="true" />
       <span className="secure-watermark__chip" aria-hidden="true">{label}</span>
-      <div className={`secure-guard ${guarded ? "is-active" : ""}`} aria-hidden={!guarded}>
+      <div className={`secure-guard ${on ? "is-active" : ""}`} aria-hidden={!on}>
         <span className="secure-guard__msg">
           <IconLock className="w-4 h-4" />
-          Protected content, paused
+          {guarded ? "Protected content, paused" : "Picture hidden — the audio is still playing"}
         </span>
       </div>
     </>
@@ -216,20 +224,34 @@ export function SecureVideo({
   className = "",
   videoClassName = "",
   sessionRef = "",
+  onElement,
   ...rest
 }) {
   const label = useWatermarkLabel(sessionRef);
-  const { guarded, paused } = useScreenshotGuard();
+  const { guarded, blurred } = useScreenshotGuard();
   const ref = React.useRef(null);
   const isHls = useHlsSource(ref, src);
+
+  // The transcript panel needs to move the player: every timestamp in it is a
+  // control, which is the whole reason a transcript is worth having rather
+  // than a wall of text. Handing the element out rather than taking a
+  // forwarded ref keeps the hardening below in one place — the caller gets the
+  // node, not the right to re-mount it.
+  React.useEffect(() => {
+    if (typeof onElement === "function") onElement(ref.current);
+    return () => {
+      if (typeof onElement === "function") onElement(null);
+    };
+  }, [onElement, src]);
 
   // Pause when guarded; harden the element imperatively (props not all standard).
   React.useEffect(() => {
     const v = ref.current;
     if (!v) return;
     try { v.disableRemotePlayback = true; } catch { /* ignore */ }
-    if (guarded || paused) { try { v.pause(); } catch { /* ignore */ } }
-  }, [guarded, paused]);
+    // Blur no longer pauses — see useScreenshotGuard for why.
+    if (guarded) { try { v.pause(); } catch { /* ignore */ } }
+  }, [guarded]);
 
   return (
     <div
@@ -258,7 +280,7 @@ export function SecureVideo({
         className={`w-full h-full ${videoClassName}`}
         {...rest}
       />
-      <Overlays label={label} guarded={guarded} />
+      <Overlays label={label} guarded={guarded} blurred={blurred} />
     </div>
   );
 }
@@ -275,7 +297,7 @@ export function SecureEmbed({
   sessionRef = "",
 }) {
   const label = useWatermarkLabel(sessionRef);
-  const { guarded } = useScreenshotGuard();
+  const { guarded, blurred } = useScreenshotGuard();
 
   return (
     <div
@@ -289,7 +311,7 @@ export function SecureEmbed({
         allowFullScreen={allowFullScreen}
         className={`w-full h-full ${iframeClassName}`}
       />
-      <Overlays label={label} guarded={guarded} />
+      <Overlays label={label} guarded={guarded} blurred={blurred} />
     </div>
   );
 }

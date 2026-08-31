@@ -63,6 +63,24 @@ const DEFAULT_MODEL =
 // caller may pass a smaller value but never a larger one.
 const DEFAULT_MAX_TOKENS = Number(process.env.AGENT_MAX_TOKENS || 700);
 
+/**
+ * The most any single call may ask for.
+ *
+ * DEFAULT_MAX_TOKENS is what a caller gets when it does not say — it exists to
+ * keep Ada's chat replies short and cheap. It was also being used as a CEILING
+ * via Math.min(asked, DEFAULT), which meant a caller asking for more was
+ * silently given 700 instead. Nothing errored; the reply just stopped
+ * mid-sentence. Every one of the thirty-two generated quizzes came back
+ * truncated because of it.
+ *
+ * So: unspecified still gets the small default, an explicit ask is honoured,
+ * and this is the real ceiling.
+ */
+const HARD_MAX_TOKENS = Number(process.env.AGENT_HARD_MAX_TOKENS || 8192);
+
+const capTokens = (asked) =>
+  Math.min(Number(asked) || DEFAULT_MAX_TOKENS, HARD_MAX_TOKENS);
+
 let _openai = null;
 function openai() {
   if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -178,7 +196,7 @@ async function anthropicCreate({ system, messages, tools, maxTokens, temperature
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
-        max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+        max_tokens: capTokens(maxTokens),
         system: anthropicSystem(system, { extendedTtl }),
         messages,
         ...(tools && tools.length ? { tools } : {}),
@@ -290,7 +308,7 @@ export function bedrockRequestBody({
 }) {
   return {
     anthropic_version: BEDROCK_ANTHROPIC_VERSION,
-    max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+    max_tokens: capTokens(maxTokens),
     // Never the extended TTL on this path — see the note above.
     system: useCache
       ? anthropicSystem(system, { extendedTtl: false })

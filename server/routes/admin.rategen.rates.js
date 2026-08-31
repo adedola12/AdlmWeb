@@ -12,7 +12,11 @@ const router = express.Router();
 router.use(requireAuth, requirePermission("rategen"));
 
 /** canonical section keys */
-const ALLOWED_SECTION_KEYS = new Set([
+// Exported so the catalogue register can build its section filter from the
+// canonical list rather than from whatever sections happen to have rates in
+// them. A section with nothing in it is a real state and must stay visible:
+// Carbon and Others was invisible on the website for exactly that reason.
+export const ALLOWED_SECTION_KEYS = new Set([
   "ground",
   "concrete",
   "blockwork",
@@ -22,9 +26,10 @@ const ALLOWED_SECTION_KEYS = new Set([
   "paint",
   "steelwork",
   "carbon",
+  "mep",
 ]);
 
-const SECTION_LABELS = {
+export const SECTION_LABELS = {
   ground: "Groundwork",
   concrete: "Concrete Works",
   blockwork: "Blockwork",
@@ -33,7 +38,8 @@ const SECTION_LABELS = {
   doors_windows: "Windows & Doors",
   paint: "Painting",
   steelwork: "Steelwork",
-  carbon: "Carbon and Others"
+  carbon: "Carbon and Others",
+  mep: "MEP"
 };
 
 const toNum = (v, fallback = 0) => {
@@ -41,7 +47,7 @@ const toNum = (v, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-function normalizeSectionKey(raw) {
+export function normalizeSectionKey(raw) {
   const s = String(raw || "")
     .trim()
     .toLowerCase();
@@ -56,6 +62,7 @@ function normalizeSectionKey(raw) {
   if (s.includes("finish")) return "finishes";
   if (s.includes("block")) return "blockwork";
   if (s.includes("carbon")) return "carbon";
+  if (s.includes("mep")) return "mep";
 
   return s;
 }
@@ -390,24 +397,31 @@ router.patch("/rates/:id", updateRate);
 router.put("/rates/:id", updateRate);
 
 /**
- * DELETE /admin/rategen-v2/rates/:id
+ * DELETE /admin/rategen-v2/rates/:id — withdrawn deliberately.
+ *
+ * A published rate is not the admin's to remove. RateGen, QUIV and HERON all
+ * price against this library, and a bill built last month names the rate that
+ * priced it: deleting one does not unprice that bill, it makes the figure on
+ * it unexplainable. There is no undo and no archive to restore from.
+ *
+ * The route is kept, answering 405 with the reason, rather than deleted
+ * outright — a 404 would read as "wrong URL" and invite somebody to look for
+ * the right one.
+ *
+ * What to do instead, depending on what was actually wanted:
+ *   - the rate is wrong          → edit it; every product re-syncs on its next
+ *                                  pull and old bills keep their own figures
+ *   - the rate should not be used → price it out of use, or raise it with the
+ *                                  library owner; there is no "retired" flag
+ *                                  yet and inventing one here would be a
+ *                                  schema change made in a hurry
  */
-router.delete("/rates/:id", async (req, res, next) => {
-  try {
-    await ensureDb();
-
-    const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({ error: "Invalid id" });
-    }
-
-    const deleted = await RateGenRate.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ error: "Rate not found" });
-
-    res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
-});
+router.delete("/rates/:id", (_req, res) =>
+  res.status(405).json({
+    error:
+      "A published rate cannot be deleted. Bills already priced with it name it, and removing it would leave those figures unexplainable. Edit the rate instead — every product picks the change up on its next sync.",
+    code: "RATE_DELETE_WITHDRAWN",
+  }),
+);
 
 export default router;

@@ -50,6 +50,7 @@ router.post(
       youtubeId: id,
       thumbnailUrl: thumbnailUrl ? String(thumbnailUrl).trim() : "",
       durationSec,
+      productLabel: String(req.body?.productLabel || "").trim(),
       isPublished: !!isPublished,
       sort: Number(sort) || 0,
     });
@@ -73,6 +74,9 @@ router.patch(
       item.thumbnailUrl = thumbnailUrl ? String(thumbnailUrl).trim() : "";
     if (isPublished !== undefined) item.isPublished = !!isPublished;
     if (sort !== undefined) item.sort = Number(sort) || 0;
+    if (req.body?.productLabel !== undefined) {
+      item.productLabel = String(req.body.productLabel || "").trim();
+    }
     if (req.body?.durationSec !== undefined) {
       item.durationSec = Number(req.body.durationSec) || 0;
     }

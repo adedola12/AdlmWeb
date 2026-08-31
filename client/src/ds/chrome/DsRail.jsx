@@ -131,7 +131,7 @@ export default function DsRail({ d }) {
         <ul className="dsh-nav">
           {" "}
           <li>
-            <Link to="/learn" data-ds-page="dash-learning">
+            <Link to="/dash-learning" data-ds-page="dash-learning">
               <svg viewBox="0 0 24 24">
                 <use href="#hi-learning" />
               </svg>
@@ -140,7 +140,7 @@ export default function DsRail({ d }) {
           </li>
           {" "}
           <li>
-            <Link to="/dashboard" data-ds-page="dash-certificates">
+            <Link to="/dash-certificates" data-ds-page="dash-certificates">
               <svg viewBox="0 0 24 24">
                 <use href="#hi-cert" />
               </svg>

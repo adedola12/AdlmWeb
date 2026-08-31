@@ -236,14 +236,14 @@ export default function DsSupport() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Support could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Support could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!products || !tickets || !devices) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading support…</p>
+        <p className="ds-sub">Loading support…</p>
       </div>
     );
   }

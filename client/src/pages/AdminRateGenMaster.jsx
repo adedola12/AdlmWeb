@@ -4,6 +4,19 @@ import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+// ── READ-ONLY ────────────────────────────────────────────────────────────
+//
+// Master prices are edited in ADLM Rate Gen and published from there, where a
+// price is seen beside the rates built from it. The server refuses PUT and
+// DELETE on /admin/rategen/grid with 405 MASTER_READ_ONLY, so the controls
+// below would fail; they are hidden rather than left to fail, because a button
+// that cannot work is worse than no button.
+//
+// The screen still reads and searches the whole master library — that part is
+// unchanged and is the reason to keep it.
+const MASTER_READ_ONLY = true;
+
+
 function norm(v) {
   return String(v ?? "").trim();
 }
@@ -275,6 +288,9 @@ export default function AdminRateGenMaster() {
   }
 
   async function saveAll() {
+    // Belt and braces: the control is hidden and the server refuses, but a
+    // keyboard shortcut or a stale render should not get a different answer.
+    if (MASTER_READ_ONLY) return;
     if (!accessToken) return;
 
     setErr("");
@@ -308,6 +324,7 @@ export default function AdminRateGenMaster() {
   }
 
   async function deleteRow(name) {
+    if (MASTER_READ_ONLY) return;
     if (!accessToken) return;
 
     const ok = window.confirm(
@@ -435,6 +452,7 @@ export default function AdminRateGenMaster() {
                   : "border-slate-200 bg-white text-slate-500",
               ].join(" ")}
               onClick={saveAll}
+              hidden={MASTER_READ_ONLY}
               disabled={saving || dirtyCount === 0}
               title={
                 dirtyCount ? `${dirtyCount} pending change(s)` : "No changes"
@@ -589,6 +607,7 @@ export default function AdminRateGenMaster() {
                       <button
                         className="text-xs text-red-600 hover:text-red-700"
                         onClick={() => deleteRow(r.name)}
+                        hidden={MASTER_READ_ONLY}
                         title="Delete from DB (all zones)"
                         type="button"
                       >
@@ -700,6 +719,7 @@ export default function AdminRateGenMaster() {
                 <button
                   className="text-xs text-red-600"
                   onClick={() => deleteRow(r.name)}
+                  hidden={MASTER_READ_ONLY}
                   type="button"
                 >
                   Delete

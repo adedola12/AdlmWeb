@@ -4,11 +4,52 @@ import { useParams, Link } from "react-router-dom";
 import { API_BASE } from "../config";
 import { SecureEmbed } from "../components/SecureVideo.jsx";
 import { IconLock } from "../components/icons.jsx";
+import { apiAuthed } from "../http.js";
+import { useAuth } from "../store.jsx";
 
 export default function FreeVideoDetail() {
   const { id } = useParams(); // Mongo _id
+  const { accessToken } = useAuth();
   const [item, setItem] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+
+  // Feed "Free lessons watched" on My learning.
+  //
+  // Only for somebody signed in — a free lesson needs no account, and a watch
+  // cannot be attributed to one that does not exist. Everyone else watches
+  // exactly as before and nothing is recorded, which is the point of the free
+  // library rather than a gap in it.
+  //
+  // What is sent is dwell on this page, not player position: the lesson is a
+  // cross-origin YouTube iframe, so there is no play or ended event to read
+  // without loading YouTube's own API, and the panel is worded for what this
+  // actually measures. The tab being hidden stops the clock, so leaving the
+  // page open in a background tab does not accumulate hours.
+  React.useEffect(() => {
+    if (!id || !accessToken) return undefined;
+
+    const send = (seconds) =>
+      apiAuthed(`/me/free-lessons/${encodeURIComponent(id)}/watch`, {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seconds }),
+      }).catch(() => {
+        // Never surface this. Nobody opened a free lesson in order to have
+        // their history recorded, and a failure here must not sit on top of
+        // the thing they came for.
+      });
+
+    // No seconds on the first call: that is the "opened it" row.
+    send(0);
+
+    const STEP = 30;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") send(STEP);
+    }, STEP * 1000);
+
+    return () => clearInterval(timer);
+  }, [id, accessToken]);
 
   React.useEffect(() => {
     (async () => {

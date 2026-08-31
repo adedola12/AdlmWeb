@@ -650,7 +650,7 @@ export default function PortfolioDashboard() {
         <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-adlm-dark-muted">
           <Link to="/portfolio"  className="hover:text-adlm-blue-700 transition">All Projects →</Link>
           <Link to="/pm-tracker" className="hover:text-adlm-blue-700 transition">PM Tracker →</Link>
-          <Link to="/dashboard"  className="hover:text-adlm-blue-700 transition">Dashboard →</Link>
+          <Link to="/manage"  className="hover:text-adlm-blue-700 transition">Dashboard →</Link>
         </div>
 
       </div>

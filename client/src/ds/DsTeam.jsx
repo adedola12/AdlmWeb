@@ -179,14 +179,14 @@ export default function DsTeam() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Your seats could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Your seats could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!view) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading your seats…</p>
+        <p className="ds-sub">Loading your seats…</p>
       </div>
     );
   }
@@ -212,7 +212,7 @@ export default function DsTeam() {
       </div>
 
       {problem && (
-        <p className="sub" style={{ color: "var(--bad, #b42318)" }}>
+        <p className="ds-sub" style={{ color: "var(--bad, #b42318)" }}>
           {problem}
         </p>
       )}

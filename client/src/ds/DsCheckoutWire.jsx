@@ -396,7 +396,7 @@ export default function DsCheckoutWire() {
       <p className="small">Added to your invoice if supplied.</p>
 
       <h3 style={{ marginTop: "28px" }}>Pay with</h3>
-      <p className="sub">Choose how you&apos;d like to settle this.</p>
+      <p className="ds-sub">Choose how you&apos;d like to settle this.</p>
 
       <div className="toggle2" role="group" aria-label="Payment method">
         {METHODS.map((m) => (

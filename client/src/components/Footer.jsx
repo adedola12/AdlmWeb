@@ -27,7 +27,7 @@ export default function Footer() {
         "/about",
         "/trainings",
         "/testimonials",
-        "/dashboard",
+        "/manage",
         "/profile",
       ]),
     []
@@ -38,7 +38,8 @@ export default function Footer() {
     () => [
       /^\/product\/[^/]+$/, // /product/:key
       /^\/trainings\/[^/]+$/, // /trainings/:id
-      /^\/learn\/course\/[^/]+$/, // /learn/course/:sku
+      /^\/dash-course\/[^/]+$/, // /dash-course/:sku
+      /^\/learn\/course\/[^/]+$/, // redirects to the above
       /^\/learn\/free\/[^/]+$/, // /learn/free/:id
       /^\/projects\/[^/]+$/, // /projects/:tool
     ],

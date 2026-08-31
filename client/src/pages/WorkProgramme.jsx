@@ -1,4 +1,4 @@
-// The /work/programme route — recorded work on a timeline.
+// The /work/programme route — the bill, sequenced.
 
 import React from "react";
 import DsAppShell from "../ds/DsAppShell.jsx";

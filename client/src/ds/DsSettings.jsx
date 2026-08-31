@@ -327,14 +327,14 @@ export default function DsSettings() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Your settings could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Your settings could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!form || !profile) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading your settings…</p>
+        <p className="ds-sub">Loading your settings…</p>
       </div>
     );
   }
@@ -569,7 +569,9 @@ export default function DsSettings() {
                     />
                     <p className="hint">
                       {sample
-                        ? `Priced for ${sample.zone || sample.state || profile.zone || "your zone"}. Change the state above and this moves.`
+                        ? // The rate carries a zone KEY like "south_west"; show the
+                          // label the person just chose above it rather than the key.
+                          `Priced for ${zoneLabel}. Change the state above and this moves.`
                         : "A rate appears here once the library has one."}
                     </p>
                   </div>

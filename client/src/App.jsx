@@ -20,11 +20,21 @@ export default function App() {
   // container. They supply their own chrome and their own padding, so the
   // marketing nav, the footer and the page gutter all step aside.
   //
+  // The dash-* routes are the signed-in half of learning — My learning, the
+  // course player and the certificates — named after his own pages so a URL
+  // here reads the same as the corresponding one in his build. The public
+  // half stays at /learn with the marketing chrome, because it is a page for
+  // people who have not signed in.
+  //
   // /projects/* and /time-management are on this list because they are now
   // wrapped in the same frame (see pages/WorkShellRoute.jsx), even though they
   // are our screens rather than ported ones. Leaving them off put the
   // marketing nav and "Book a demo" above a signed-in rail.
-  const appShellRoute = /^\/(manage|work|projects|time-management)(\/|$)/.test(
+  // Routes that carry their own chrome and must not also get the marketing
+  // nav and footer. /admin joins the list because the admin section now has
+  // his rail: two sets of navigation over one page compete for the same job,
+  // and "Book a demo" does not belong above a refund queue.
+  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-course|projects|time-management|admin)(\/|$)/.test(
     location.pathname,
   );
 

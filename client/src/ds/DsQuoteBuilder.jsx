@@ -904,7 +904,7 @@ export default function DsQuoteBuilder() {
         {drafts.length > 0 && (
           <div id="qt-saved" className="qt-saved">
             <h3>Kept on this machine</h3>
-            <p className="sub">
+            <p className="ds-sub">
               Quotations you saved here. They live in this browser only: nothing that stores a
               draft against your account exists yet, so clearing your browser data removes them.
               Buying, or emailing yourself the document, is what makes one permanent.

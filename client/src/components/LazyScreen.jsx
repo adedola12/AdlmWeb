@@ -48,7 +48,7 @@ class ScreenBoundary extends React.Component {
       <div className="dsh-in">
         {isChunk ? (
           <>
-            <p className="sub">
+            <p className="ds-sub">
               This screen could not be downloaded. That usually means the app was updated while
               this tab was open, and reloading picks up the new version.
             </p>
@@ -62,7 +62,7 @@ class ScreenBoundary extends React.Component {
           </>
         ) : (
           <>
-            <p className="sub">
+            <p className="ds-sub">
               This screen hit an error while rendering. That is a fault in the page rather than
               anything you did, and reloading will not clear it.
             </p>
@@ -102,7 +102,7 @@ export default function LazyScreen({ children }) {
       <React.Suspense
         fallback={
           <div className="dsh-in">
-            <p className="sub">Loading…</p>
+            <p className="ds-sub">Loading…</p>
           </div>
         }
       >

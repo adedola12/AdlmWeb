@@ -19,8 +19,10 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../store.jsx";
+import { isStaff } from "../utils/roles.js";
 import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
+import DsLeaveStudio from "./DsLeaveStudio.jsx";
 import DsRail from "./chrome/DsRail.jsx";
 
 // His app screens load dash.css and work.css on top of site.css. Importing
@@ -57,8 +59,19 @@ function initialsOf(text, fallback) {
  */
 export default function DsAppShell({ children, title = "", page = "" }) {
   const { user, accessToken, clear } = useAuth();
+  const staff = isStaff(user);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // The app bar's search says what this section of the app actually contains.
+  // His dash.js rewrites the Manage-shaped placeholder on the learning screens
+  // for exactly this reason — "Search products, invoices, people" is the wrong
+  // promise above a page of lessons.
+  const searchPlaceholder = /^(dash-learning|dash-course|dash-certificates)$/.test(page)
+    ? "Search lessons, transcripts and guides"
+    : /^work-/.test(page)
+      ? "Search projects, rates and programmes"
+      : "Search products, invoices, people";
 
   const [counts, setCounts] = React.useState(null);
   const [drawer, setDrawer] = React.useState(false);
@@ -174,6 +187,10 @@ export default function DsAppShell({ children, title = "", page = "" }) {
   return (
     <div className="ds">
       <div className="dsh">
+        {/* His "leaving the studio" card. Renders nothing until a link to a
+            public page is clicked; the listener is on the document, so this
+            adds no element to the shell's grid. */}
+        <DsLeaveStudio />
         <DsAppSprite />
 
         {/* The rail is his markup; the click handler is his too, following a
@@ -211,7 +228,7 @@ export default function DsAppShell({ children, title = "", page = "" }) {
               {icon("search")}
               <input
                 type="search"
-                placeholder="Search products, invoices, people"
+                placeholder={searchPlaceholder}
                 aria-label="Search this account"
               />
             </span>
@@ -231,7 +248,25 @@ export default function DsAppShell({ children, title = "", page = "" }) {
                   <b>{name || "Signed in"}</b>
                   <span>{user?.email || ""}</span>
                 </div>
-                <Link to="/manage">Dashboard</Link>
+                {/* Somebody with admin rights holds two accounts' worth of
+                    screens under one sign-in, and until now the only way from
+                    one to the other was to type the URL. The pair reads as a
+                    switch rather than as two unrelated links: the side you are
+                    on is marked, so the menu says where you are as well as
+                    where you can go. A customer sees neither — there is no
+                    second side for them to be on. */}
+                {staff && (
+                  <>
+                    <Link to="/admin" className="side">
+                      Admin
+                    </Link>
+                    <Link to="/manage" className="side on">
+                      User
+                    </Link>
+                    <span className="rule" />
+                  </>
+                )}
+                {!staff && <Link to="/manage">Overview</Link>}
                 <Link to="/manage/settings">Account settings</Link>
                 <Link to="/manage/billing">Billing &amp; invoices</Link>
                 <a href="/" onClick={signOut}>

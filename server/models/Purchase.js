@@ -177,10 +177,20 @@ const PurchaseSchema = new mongoose.Schema(
 
     installation: {
       status: {
+        // "uninstalled" is written by POST /admin/installations/:id/uninstall,
+        // and was missing from this list. Mongoose validates enums on save, so
+        // that endpoint threw a ValidationError every time it was called and
+        // answered 500 — which is why no document in the database has ever
+        // carried the value. The endpoint's intent was never in doubt; the
+        // enum simply had not been told about it.
         type: String,
-        enum: ["none", "pending", "complete"],
+        enum: ["none", "pending", "complete", "uninstalled"],
         default: "none",
       },
+      // Written by the same endpoint and silently dropped by strict mode,
+      // so an uninstall recorded neither who did it nor when.
+      uninstalledBy: { type: String, default: "" },
+      uninstalledAt: { type: Date },
       anydeskUrl: {
         type: String,
         default: "https://anydesk.com/en/downloads/windows",

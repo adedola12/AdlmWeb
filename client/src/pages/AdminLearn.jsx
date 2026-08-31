@@ -60,6 +60,9 @@ export default function AdminLearn() {
       // Left at 0 the server tries YouTube (a no-op without YOUTUBE_API_KEY),
       // so the marketing tiles can show a real runtime instead of a guess.
       durationSec: Number(fd.get("durationSec") || 0),
+      // Shows beside the runtime on My learning: "Foundation takeoff tutorial
+      // — PlanSwift · 11:27".
+      productLabel: fd.get("productLabel") || "",
     };
     await apiAuthed(`/admin/learn/free`, {
       token: accessToken,
@@ -237,6 +240,11 @@ export default function AdminLearn() {
             name="thumbnailUrl"
             className="input"
             placeholder="(Optional) Thumbnail URL"
+          />
+          <input
+            name="productLabel"
+            className="input"
+            placeholder="(Optional) Tool, e.g. Revit or PlanSwift"
           />
           <input
             name="durationSec"

@@ -1,9 +1,11 @@
 // Account activity — Orders, Invoices and Installations.
 //
-// Moved off the Dashboard so the dashboard can focus on using the product
-// (products / projects / learning). This component is self-contained: it loads
-// its own data and reuses the OrdersTab / InstallationsTab renderers exported
-// from the Dashboard page (so there's a single source of truth for that UI).
+// Moved off the old /dashboard so that screen could focus on using the product
+// (products / projects / learning). That screen has since been retired
+// altogether in favour of /manage, and the two renderers this reuses —
+// OrdersTab and InstallationsTab — moved to accountTabs.jsx beside this file
+// rather than being left inside a page nobody routes to. Still one source of
+// truth for that UI; it just no longer lives under a page.
 
 import React from "react";
 import dayjs from "dayjs";
@@ -11,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../store.jsx";
 import { apiAuthed } from "../../http.js";
 import { API_BASE } from "../../config";
-import { OrdersTab, InstallationsTab } from "../../pages/Dashboard.jsx";
+import { OrdersTab, InstallationsTab } from "./accountTabs.jsx";
 
 const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
 

@@ -7,7 +7,14 @@ import { useAuth } from "../store.jsx";
  * published quiz, so it can sit unconditionally in the course page.
  *
  * Grading happens server-side — the answer key is never sent to the browser,
- * and the explanations only come back with the result.
+ * and the explanations only come back with the result. That is why the
+ * correct/incorrect styling only exists after a submission: before one, the
+ * page genuinely does not know.
+ *
+ * Richard has no student-facing quiz anywhere in his build, so there was
+ * nothing to port. The markup is written in his idiom instead — his .lx-*
+ * naming, his tokens, and the row shape .lx-res uses — with the styling in
+ * ds-local.css, which is where a control we have and he does not belongs.
  */
 export default function ModuleQuiz({ sku, moduleCode }) {
   const { accessToken } = useAuth();
@@ -78,70 +85,60 @@ export default function ModuleQuiz({ sku, moduleCode }) {
     setAnswers({});
   }
 
+  const left = questions.length - answered;
+
   return (
-    <div className="card mt-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-semibold">{quiz.title || "Quiz"}</div>
-        <div className="text-xs text-slate-500">
+    <div>
+      <div className="lx-quiz-h">
+        <b>{quiz.title || "Quiz"}</b>
+        <span>
           Pass mark {quiz.passMark}%
           {attempts.length > 0 ? ` · best ${best}%` : ""}
-          {attemptsLeft !== null ? ` · ${attemptsLeft} attempt(s) left` : ""}
-        </div>
+          {attemptsLeft !== null
+            ? ` · ${attemptsLeft} attempt${attemptsLeft === 1 ? "" : "s"} left`
+            : ""}
+        </span>
       </div>
 
-      {quiz.intro ? (
-        <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600 dark:text-adlm-dark-dim">
-          {quiz.intro}
-        </p>
-      ) : null}
+      {quiz.intro ? <p className="lx-desc">{quiz.intro}</p> : null}
 
       {result ? (
-        <div
-          className={`mt-3 rounded-lg p-3 ${
-            result.passed
-              ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100"
-              : "bg-amber-50 text-amber-900 ring-1 ring-amber-100"
-          }`}
-        >
-          <div className="font-medium">
-            {result.passed ? "Passed" : "Not passed yet"}, {result.score}% (
-            {result.correctCount}/{result.totalQuestions})
-          </div>
+        <div className={`lx-verdict ${result.passed ? "pass" : "fail"}`}>
+          <b>{result.passed ? "Passed" : "Not passed yet"}</b>
+          <span>
+            {result.score}% · {result.correctCount} of {result.totalQuestions} right · pass mark{" "}
+            {quiz.passMark}%
+          </span>
         </div>
       ) : null}
 
-      <ol className="mt-3 space-y-4">
+      <ol className="lx-qs">
         {questions.map((question, i) => {
           const outcome = result?.results?.[i];
           return (
-            <li key={question._id || i}>
-              <div className="text-sm font-medium">
+            <li className="lx-q" key={question._id || i}>
+              <b>
                 {i + 1}. {question.prompt}
-              </div>
-              <div className="mt-2 space-y-1">
+              </b>
+              <div className="lx-opts">
                 {(question.options || []).map((option, oi) => {
                   const chosen = answers[i] === oi;
+                  // The key is only known once the server has marked it, which
+                  // is the whole point of grading server-side.
                   const isKey = outcome && oi === outcome.correctIndex;
                   const wrongPick = outcome && chosen && !outcome.correct;
+                  const locked = !!result || outOfAttempts;
+                  const state = isKey ? "key" : wrongPick ? "wrong" : chosen ? "on" : "";
                   return (
                     <label
                       key={oi}
-                      className={`flex cursor-pointer items-start gap-2 rounded border p-2 text-sm ${
-                        isKey
-                          ? "border-emerald-300 bg-emerald-50"
-                          : wrongPick
-                            ? "border-rose-300 bg-rose-50"
-                            : chosen
-                              ? "border-adlm-blue-700"
-                              : "border-slate-200"
-                      }`}
+                      className={`lx-opt${state ? ` ${state}` : ""}${locked ? " done" : ""}`}
                     >
                       <input
                         type="radio"
-                        className="mt-0.5"
                         name={`q-${moduleCode}-${i}`}
                         checked={chosen}
-                        disabled={!!result || outOfAttempts}
+                        disabled={locked}
                         onChange={() => setAnswers((a) => ({ ...a, [i]: oi }))}
                       />
                       <span>{option}</span>
@@ -149,41 +146,37 @@ export default function ModuleQuiz({ sku, moduleCode }) {
                   );
                 })}
               </div>
-              {outcome?.explanation ? (
-                <p className="mt-1 text-xs text-slate-600 dark:text-adlm-dark-dim">
-                  {outcome.explanation}
-                </p>
-              ) : null}
+              {outcome?.explanation ? <p className="lx-why">{outcome.explanation}</p> : null}
             </li>
           );
         })}
       </ol>
 
-      {err ? <div className="mt-2 text-sm text-red-600">{err}</div> : null}
-
-      <div className="mt-4 flex items-center gap-2">
+      <div className="lx-qacts">
         {result ? (
           outOfAttempts ? (
-            <span className="text-sm text-slate-500">No attempts remaining.</span>
+            <em>No attempts remaining. The marked answers stay above.</em>
           ) : (
-            <button className="btn btn-sm" onClick={retake}>
+            <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={retake}>
               Try again
             </button>
           )
         ) : (
           <button
-            className="btn btn-sm"
+            type="button"
+            className="ds-btn btn-p ds-btn-sm"
             onClick={submit}
-            disabled={busy || outOfAttempts || answered < questions.length}
+            disabled={busy || outOfAttempts || left > 0}
           >
             {busy ? "Submitting…" : "Submit answers"}
           </button>
         )}
-        {!result && answered < questions.length ? (
-          <span className="text-xs text-slate-500">
-            {questions.length - answered} question(s) left
-          </span>
+        {!result && left > 0 ? (
+          <em>
+            {left} question{left === 1 ? "" : "s"} left
+          </em>
         ) : null}
+        {err ? <em className="bad">{err}</em> : null}
       </div>
     </div>
   );

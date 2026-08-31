@@ -15,6 +15,9 @@ import { Invoice } from "../models/Invoice.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { RateGenLibrary } from "../models/RateGenLibrary.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
+import { PaidCourse } from "../models/PaidCourse.js";
+import { FreeVideoWatch } from "../models/FreeVideoWatch.js";
+import { FreeVideo } from "../models/Learn.js";
 import { ActivityLog } from "../models/ActivityLog.js";
 import { sendMail } from "../util/mailer.js";
 import { resolveUserGuideUrl } from "../util/userGuide.js";
@@ -1213,8 +1216,16 @@ router.get(
 /* ──────────── Physical Training Date Confirmation ──────────── */
 
 // Authenticated confirmation (from dashboard)
+//
+// requireAuth was missing here while the handler read req.user._id on its
+// first line, so the route threw for everyone who called it — nothing in /me
+// is authenticated router-wide, each route brings its own. Confirming a
+// proposed training date from the dashboard has therefore never worked; it
+// answered 500 rather than 401, which is why it read as a server fault rather
+// than a missing session.
 router.post(
   "/orders/:id/confirm-training-date",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const purchase = await Purchase.findOne({
       _id: req.params.id,
@@ -1442,11 +1453,102 @@ router.get(
           name: 1,
           slug: 1,
           productKey: 1,
+          origin: 1,
+          isMaterials: 1,
+          // The product this work BELONGS to.
+          //
+          // A material & labour schedule is stored as its own project with its
+          // own key — revit-materials, planswift-materials, mep-materials,
+          // civil3d-materials, and one stray revitmep-materials. They are not
+          // separate products: a schedule is derived from a bill measured in
+          // QUIV or HERON and is part of that product's work. Reporting the raw
+          // key made the Work overview count them as products of their own, so
+          // QUIV under-reported its own output and CIVIQ read "Not on this
+          // account" while holding five schedules.
+          //
+          // A BoQ import is a QUIV project. The feature is granted as
+          // quiv-boq-import and produces a full QUIV project; three of them
+          // were stored against planswift and so appeared under HERON.
+          baseProductKey: {
+            $let: {
+              vars: {
+                k: { $toLower: { $ifNull: ["$productKey", ""] } },
+              },
+              in: {
+                $switch: {
+                  branches: [
+                    { case: { $eq: ["$origin", "boq-import"] }, then: "revit" },
+                    {
+                      case: { $in: ["$$k", ["revit-materials", "revit-material"]] },
+                      then: "revit",
+                    },
+                    {
+                      case: { $in: ["$$k", ["planswift-materials", "planswift-material"]] },
+                      then: "planswift",
+                    },
+                    {
+                      case: {
+                        $in: [
+                          "$$k",
+                          ["mep-materials", "mep-material", "revitmep-materials"],
+                        ],
+                      },
+                      then: "mep",
+                    },
+                    {
+                      case: { $in: ["$$k", ["civil3d-materials", "civil3d-material"]] },
+                      then: "civil3d",
+                    },
+                    {
+                      case: { $in: ["$$k", ["archicad-materials", "archicad-material"]] },
+                      then: "archicad",
+                    },
+                  ],
+                  default: "$$k",
+                },
+              },
+            },
+          },
           publicShareEnabled: 1,
           updatedAt: 1,
           version: 1,
           shared: { $ne: ["$userId", userId] },
           itemCount: { $size: "$safeItems" },
+          // Lines that carry a trade and a quantity — i.e. work that can be
+          // put on a programme. The Programme screen shelves projects on this
+          // rather than on "is it a bill", because the three kinds of
+          // materials schedule differ: HERON's carry real trades on their
+          // labour lines, CIVIQ's tag every line "Civil", and Revit MEP's are
+          // equipment schedules with no trade at all. Counting here is the
+          // only way the shelf can tell them apart without fetching each
+          // project in full.
+          tradedItems: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $gt: [{ $strLenCP: { $ifNull: ["$$item.trade", ""] } }, 0] },
+                    { $gt: [{ $ifNull: ["$$item.qty", 0] }, 0] },
+                    // QUIV's materials schedules put the COMPONENT KIND in the
+                    // trade field — every line reads "Labour". That is not a
+                    // trade, and a programme built on it is one bar called
+                    // Labour over rows with no names, so it does not count as
+                    // sequenceable work.
+                    {
+                      $not: {
+                        $in: [
+                          { $toLower: { $ifNull: ["$$item.trade", ""] } },
+                          ["labour", "labor", "material", "materials"],
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
           markedCount: {
             $size: {
               $filter: { input: "$safeItems", as: "item", cond: markedFlag },
@@ -1959,17 +2061,44 @@ router.get(
           $or: [{ userId }, { "collaborators.userId": userId }],
         }),
       ),
+      // Materials and labour come off the same document the rate count already
+      // reads, so this is the same query rather than two more. The Work
+      // overview's RateGen card says "N rates, M materials, K gangs" — his
+      // wording — and all three live here.
+      RateGenLibrary.findOne({ userId })
+        .select("customRates materials labour")
+        .lean()
+        .then((doc) => ({
+          rates: (doc?.customRates || []).length,
+          materials: (doc?.materials || []).length,
+          gangs: (doc?.labour || []).length,
+        }))
+        .catch(() => ({ rates: 0, materials: 0, gangs: 0 })),
+      // A certificate is downloadable when the enrolment is signed off AND the
+      // course has a template to print onto — which is exactly what the
+      // Certificates screen offers a Download button for.
+      //
+      // This used to count `certificateUrl`, which only one path ever writes:
+      // the auto-issue that fires when every module is approved. Marking an
+      // enrolment complete by hand — how most of them are actually signed off —
+      // never sets it, so the badge read 0 while the screen showed certificates
+      // sitting there ready.
       zero(
-        RateGenLibrary.findOne({ userId })
-          .select("customRates")
+        CourseEnrollment.find({ userId, status: "completed" })
+          .select("courseSku")
           .lean()
-          .then((doc) => (doc?.customRates || []).length),
-      ),
-      zero(
-        CourseEnrollment.countDocuments({
-          userId,
-          certificateUrl: { $exists: true, $nin: [null, ""] },
-        }),
+          .then(async (rows) => {
+            const skus = [...new Set(rows.map((r) => r.courseSku).filter(Boolean))];
+            if (!skus.length) return 0;
+            const withTemplate = await PaidCourse.find({
+              sku: { $in: skus },
+              certificateTemplateUrl: { $exists: true, $nin: [null, ""] },
+            })
+              .select("sku")
+              .lean();
+            const ok = new Set(withTemplate.map((c) => c.sku));
+            return rows.filter((r) => ok.has(r.courseSku)).length;
+          }),
       ),
       User.findById(userId, {
         name: 1,
@@ -1995,7 +2124,9 @@ router.get(
 
     res.json({
       projects,
-      rates: rateLib,
+      rates: rateLib.rates,
+      materials: rateLib.materials,
+      gangs: rateLib.gangs,
       certificates,
       productsOwned: owned.size,
       productsTotal: catalogue,
@@ -2256,5 +2387,95 @@ router.delete(
     res.json({ ok: true, provider, message: `Disconnected your ${provider} account.` });
   }),
 );
+
+/* ------------------------------------------------------------------ free
+ * lessons watched
+ *
+ * The free library needs no sign-in, so these two routes only ever see the
+ * subset of viewers who happen to be signed in. That is the honest scope of
+ * the panel on My learning, and the panel says so.
+ */
+
+/**
+ * POST /me/free-lessons/:id/watch
+ * Body: { seconds }
+ *
+ * Records that this account had a free lesson open. `seconds` is dwell on the
+ * lesson page, not video position — see the model for why that distinction is
+ * the only one available behind a cross-origin YouTube embed.
+ */
+router.post("/free-lessons/:id/watch", requireAuth, express.json(), async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({ error: "Not a lesson id" });
+  }
+
+  const video = await FreeVideo.findById(id).select("title isPublished").lean();
+  if (!video) return res.status(404).json({ error: "No such lesson" });
+
+  // A client can send anything, so the increment is clamped rather than
+  // trusted: at most one heartbeat's worth per call. Without this a single
+  // tampered request could claim a hundred hours against a ten-minute video.
+  const asked = Number(req.body?.seconds);
+  const seconds = Number.isFinite(asked) ? Math.min(Math.max(asked, 0), 120) : 0;
+
+  // `opens` counts calls that carry no elapsed time — the one the page sends
+  // when the lesson is first opened. Heartbeats after that carry seconds and
+  // must not each count as another visit.
+  const inc = { watchedSec: seconds };
+  if (!seconds) inc.opens = 1;
+
+  await FreeVideoWatch.updateOne(
+    { userId: req.user._id, videoId: id },
+    {
+      $inc: inc,
+      $set: { title: video.title || "", lastWatchedAt: new Date() },
+      $setOnInsert: { firstWatchedAt: new Date() },
+    },
+    { upsert: true },
+  );
+
+  res.json({ ok: true });
+});
+
+/**
+ * GET /me/free-lessons?limit=5
+ * The most recently opened free lessons on this account, newest first.
+ */
+router.get("/free-lessons", requireAuth, async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit || "5", 10) || 5, 1), 20);
+
+  const rows = await FreeVideoWatch.find({ userId: req.user._id })
+    .sort({ lastWatchedAt: -1 })
+    .limit(limit)
+    .lean();
+  if (!rows.length) return res.json([]);
+
+  // The lesson is joined back in for its runtime and thumbnail, but the row's
+  // own title wins if the lesson has since been deleted.
+  const videos = await FreeVideo.find({ _id: { $in: rows.map((r) => r.videoId) } })
+    .select("title durationSec thumbnailUrl youtubeId isPublished productLabel")
+    .lean();
+  const byId = Object.fromEntries(videos.map((v) => [String(v._id), v]));
+
+  res.json(
+    rows.map((r) => {
+      const v = byId[String(r.videoId)] || null;
+      return {
+        id: String(r.videoId),
+        title: v?.title || r.title || "A free lesson",
+        productLabel: v?.productLabel || "",
+        durationSec: Number(v?.durationSec || 0) || 0,
+        thumbnailUrl: v?.thumbnailUrl || "",
+        watchedSec: Number(r.watchedSec || 0) || 0,
+        opens: Number(r.opens || 0) || 0,
+        lastWatchedAt: r.lastWatchedAt || null,
+        // A lesson can be unpublished after somebody watched it. The row stays
+        // — it happened — but the panel should not link to a dead page.
+        available: !!v?.isPublished,
+      };
+    }),
+  );
+});
 
 export default router;

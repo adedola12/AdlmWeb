@@ -111,14 +111,14 @@ export default function DsWorkLibrary() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Your rate library could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Your rate library could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!shown) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading your rate library…</p>
+        <p className="ds-sub">Loading your rate library…</p>
       </div>
     );
   }
@@ -211,7 +211,7 @@ export default function DsWorkLibrary() {
           </div>
         </section>
       ) : !shown.length ? (
-        <p className="sub">Nothing matches “{q}”.</p>
+        <p className="ds-sub">Nothing matches “{q}”.</p>
       ) : (
         <div className="wk-tbl wk-tbl-rates" role="table">
           <div className="wk-hd" role="row">

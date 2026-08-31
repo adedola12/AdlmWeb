@@ -17,6 +17,8 @@ import { generateCertificatePdf } from "../lib/generateCertificatePdf.js";
  *   courseTitle        - used for the filename
  *   courseDescription  - text placed on the certificate
  *   completionDate    - ISO date string or Date
+ *   reference         - certificate reference, stamped on the PDF
+ *   preview           - open in a tab instead of saving
  */
 export default function CertificateNameModal({
   open,
@@ -25,6 +27,11 @@ export default function CertificateNameModal({
   courseTitle,
   courseDescription,
   completionDate,
+  reference = "",
+  // His ticket offers Preview and Download. Both run the same generator; only
+  // the last step differs, so a preview can never show something other than
+  // what a download would save.
+  preview = false,
 }) {
   const { user, accessToken, setAuth } = useAuth();
   const [firstName, setFirstName] = React.useState("");
@@ -126,6 +133,8 @@ export default function CertificateNameModal({
         fullName: `${fn} ${ln}`,
         courseDescription: courseDescription || "",
         dateString: formatDate(completionDate),
+        reference: reference || "",
+        preview: !!preview,
         filename: `ADLM_Certificate_${(courseTitle || "Course").replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
       });
       onClose();

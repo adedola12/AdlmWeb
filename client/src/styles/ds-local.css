@@ -247,3 +247,624 @@
   color: var(--ink-3);
   line-height: 1.65;
 }
+
+/* A real recording in his stage.
+ *
+ * His .lx-stage is a still image with a simulated transport drawn over it — a
+ * play button, a seek bar and the words "playback simulated". Ours has an
+ * actual <video> with its own controls, a watermark overlay and a concurrency
+ * seat behind it, so the simulation comes off and the frame stays: the
+ * aspect ratio, the radius and the border are the parts worth keeping.
+ *
+ * The ::after scrim has to go with it. Over a still it is a gradient that
+ * makes his white transport legible; over a live video it dims the picture and
+ * swallows every click meant for the controls underneath. */
+.ds .lx-stage.live { background: #000; }
+.ds .lx-stage.live::after { display: none; }
+.ds .lx-stage.live video,
+.ds .lx-stage.live iframe { width: 100%; height: 100%; display: block; }
+
+/* The two states that replace the picture: a seat held on another device, and
+ * a session whose recording has not been uploaded. Both keep the stage's
+ * shape so the page does not jump when one becomes the other. */
+.ds .lx-stage.msg {
+  display: grid; place-items: center; text-align: center; padding: 24px;
+  background: var(--bg-alt);
+}
+.ds .lx-stage.msg::after { display: none; }
+.ds .lx-stage.msg b {
+  display: block; font-size: 15px; font-weight: 500; color: var(--ink);
+  letter-spacing: -.015em;
+}
+.ds .lx-stage.msg p {
+  margin: 8px auto 0; max-width: 46ch; font-size: 13px; font-weight: 300;
+  color: var(--ink-3); line-height: 1.6;
+}
+
+/* The watermark note under the stage, and the lecture/recap switch above it. */
+.ds .lx-guard {
+  display: flex; align-items: center; gap: 7px; margin: 10px 0 0;
+  font-size: 11.5px; font-weight: 300; color: var(--ink-3);
+}
+.ds .lx-guard svg { width: 13px; height: 13px; flex: none; }
+.ds .lx-tabs.track { margin: 0 0 12px; }
+
+/* His .lx-res rows are links. An upload control and a graded submission are
+ * not links, so they get the same shell without the anchor. */
+.ds .lx-res .row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--bg);
+}
+.ds .lx-res .row b { font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.ds .lx-res .row em {
+  font-style: normal; font-size: 11.5px; color: var(--ink-3);
+  margin-left: auto; flex: none;
+}
+.ds .lx-res .row.ok { border-color: color-mix(in srgb, var(--action) 40%, var(--line)); }
+
+/* The module quiz.
+ *
+ * He has no student-facing quiz anywhere in his build — the word only appears
+ * in his admin screens — so there is nothing to port. This is written in his
+ * idiom instead: his tokens, his radii, his weights, and the same row shape
+ * .lx-res uses, so an answer reads like the rest of the lesson panel rather
+ * than like a form bolted on.
+ *
+ * Grading is server-side; the key never reaches the browser. That is why the
+ * correct/incorrect states only exist as classes applied after a submission. */
+.ds .lx-quiz-h {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; margin-bottom: 6px;
+}
+.ds .lx-quiz-h b {
+  font-size: 15px; font-weight: 500; color: var(--ink); letter-spacing: -.015em;
+}
+.ds .lx-quiz-h span {
+  font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+
+/* The verdict, in the shape of his .lx-cont key line. */
+.ds .lx-verdict {
+  margin: 16px 0 0; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg-alt);
+}
+.ds .lx-verdict b {
+  display: block; font-size: 13.5px; font-weight: 500; color: var(--ink);
+}
+.ds .lx-verdict span {
+  display: block; margin-top: 4px; font-size: 12.5px; font-weight: 300;
+  color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+.ds .lx-verdict.pass {
+  border-color: color-mix(in srgb, var(--ok) 38%, var(--line));
+  background: color-mix(in srgb, var(--ok) 7%, var(--bg-alt));
+}
+.ds .lx-verdict.pass b { color: var(--ok); }
+:root.dark .ds .lx-verdict.pass b { color: var(--ok-d); }
+.ds .lx-verdict.fail {
+  border-color: color-mix(in srgb, var(--warn) 42%, var(--line));
+  background: color-mix(in srgb, var(--warn) 8%, var(--bg-alt));
+}
+
+.ds .lx-qs { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 22px; }
+.ds .lx-q > b {
+  display: block; font-size: 14px; font-weight: 500; color: var(--ink);
+  line-height: 1.5; max-width: 66ch;
+}
+.ds .lx-opts { display: grid; gap: 8px; margin-top: 11px; }
+
+/* One option. Same shell as .lx-res a, but it is a control, so it carries a
+   real radio rather than a link's affordances. */
+.ds .lx-opt {
+  display: flex; align-items: flex-start; gap: 11px; padding: 11px 14px;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--bg);
+  cursor: pointer; transition: border-color 220ms var(--e-fast),
+    background 220ms var(--e-fast);
+}
+.ds .lx-opt:hover { border-color: var(--line-2); }
+.ds .lx-opt input { margin: 2px 0 0; accent-color: var(--action); flex: none; }
+.ds .lx-opt span {
+  font-size: 13.5px; font-weight: 300; color: var(--ink-2); line-height: 1.55;
+}
+.ds .lx-opt.on { border-color: var(--action); background: var(--pal-light-wash); }
+.ds .lx-opt.on span { color: var(--ink); font-weight: 400; }
+
+/* After marking. `key` is the right answer whether or not it was picked;
+   `wrong` is only ever the answer that was picked and was not it. */
+.ds .lx-opt.key {
+  border-color: color-mix(in srgb, var(--ok) 46%, var(--line));
+  background: color-mix(in srgb, var(--ok) 8%, var(--bg));
+}
+.ds .lx-opt.key span { color: var(--ink); font-weight: 400; }
+.ds .lx-opt.wrong {
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--line));
+  background: color-mix(in srgb, var(--warn) 9%, var(--bg));
+}
+.ds .lx-opt.done { cursor: default; }
+.ds .lx-why {
+  margin: 9px 0 0; padding-left: 14px; border-left: 2px solid var(--line-2);
+  font-size: 12.5px; font-weight: 300; color: var(--ink-3); line-height: 1.6;
+  max-width: 66ch;
+}
+.ds .lx-qacts {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line);
+}
+.ds .lx-qacts em {
+  font-style: normal; font-size: 12px; font-weight: 300; color: var(--ink-3);
+}
+.ds .lx-qacts em.bad { color: var(--warn); }
+
+/* Playback speed, on the line under the stage.
+ *
+ * The native speed menu is switched off by controlsList, alongside download
+ * and remote playback, so the control has to be ours. It sits on the guard
+ * line rather than over the video: his .lx-bot transport is a simulation we
+ * replaced with a real <video>, and floating a second control over the
+ * browser's own would collide with it.
+ *
+ * A ninety-six minute lecture is the whole reason this exists. */
+.ds .lx-guard { justify-content: flex-start; }
+.ds .lx-guard > span:first-of-type { min-width: 0; }
+.ds .lx-rate {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin-left: auto; flex: none;
+}
+.ds .lx-rate label {
+  font-size: 11.5px; font-weight: 300; color: var(--ink-3);
+}
+.ds .lx-rate select {
+  padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); font-family: var(--font);
+  font-size: 12px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.ds .lx-rate select:hover { border-color: var(--line-2); }
+.ds .lx-rate select:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+
+
+/* ============================================ programme — the two additions
+
+   His "Where the time comes from" table is five columns: item, trade,
+   quantity, output, gang-days. Ours carries a sixth, the line's own money off
+   the bill, because a programme that cannot say what a week of blockwork is
+   worth is only half the answer — and the whole point of deriving it from the
+   bill is that the money is already there.
+
+   The other change is that his Output cell prints a number and ours takes
+   one. His comes from the rate that priced the line; we have no such link yet,
+   so the one figure the bill does not carry is typed in the column that was
+   already for it, rather than in a panel he never drew. */
+.ds .prg-qt .wk-qhd,
+.ds .prg-qt .wk-qr {
+  grid-template-columns: 1fr 110px 104px 116px 92px 124px;
+}
+.ds .prg-qt .wk-qr .v {
+  font-size: 13.5px; color: var(--ink); text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ds .prg-qt .wk-qhd span:nth-child(n + 3) { text-align: right; }
+
+/* The input sits in the cell at the weight of the text it replaces, so the
+   column still reads as a column and not as a form dropped into a table. */
+.ds .wk-qr .r .prg-out {
+  width: 62px; padding: 3px 6px; text-align: right;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px; font-weight: 300;
+  font-variant-numeric: tabular-nums;
+}
+.ds .wk-qr .r .prg-out:hover { border-color: var(--line-2); }
+.ds .wk-qr .r .prg-out:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+.ds .wk-qr .r i {
+  font-style: normal; font-size: 11px; color: var(--ink-3); margin-left: 5px;
+}
+
+/* Same collapse his own table does on a phone: the header goes, the line
+   stacks, and the money keeps the top-right corner where the eye expects it. */
+@media (max-width: 900px) {
+  .ds .prg-qt .wk-qr { grid-template-columns: 1fr auto; }
+  .ds .prg-qt .wk-qr .v { grid-column: 2; grid-row: 1; }
+  .ds .prg-qt .wk-qr .ds-a { grid-column: 2; grid-row: 2; font-size: 13px; }
+  .ds .prg-qt .wk-qr .r { grid-column: 1; grid-row: 4; text-align: left; }
+  .ds .prg-qt .wk-qr .s { grid-column: 2; grid-row: 3 / 5; }
+}
+
+/* His .wk-proj is an anchor. On the programme it is a button, because opening
+   a product is a change of view rather than a destination — so it needs the
+   browser's button styling taken off before it can look like his card. The
+   Projects screen does the same thing with inline styles; this is that, named. */
+.ds .wk-proj.prg-card {
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: none; -webkit-appearance: none; appearance: none;
+}
+.ds .wk-proj.prg-card .t h3 img {
+  width: 20px; height: 20px; vertical-align: -4px;
+  margin-right: 9px; object-fit: contain;
+}
+
+/* The way back up a level. A link in weight, a button in behaviour, sitting in
+   his .wk-ref slot above the heading. */
+.ds .prg-back {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font-family: var(--font); font-size: inherit; color: var(--ink-3);
+}
+.ds .prg-back:hover { color: var(--action); }
+
+/* The note under the product shelf spans it, rather than sitting in a cell of
+   the card grid as if it were another product. */
+.ds .wk-projs .prg-aside { grid-column: 1 / -1; padding: 4px 2px 0; }
+
+/* The estimator sits in his .wk-locnote slot, at the weight of the note it
+   shares a line with — it is an offer, not the panel's headline. */
+.ds .wk-ph .prg-est {
+  margin-left: 12px; padding: 3px 10px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg-alt);
+  color: var(--ink-2); font-family: var(--font); font-size: 11.5px; font-weight: 300;
+}
+.ds .wk-ph .prg-est:hover:not(:disabled) { border-color: var(--action); color: var(--ink); }
+.ds .wk-ph .prg-est:disabled { opacity: .55; cursor: default; }
+
+/* An estimated output is marked so it can be told apart from one somebody
+   typed — a dotted rule, the way an abbreviation carries its expansion, with
+   the reasoning on the title. Typing over it clears the mark and the basis. */
+.ds .wk-qr .r .prg-out.est {
+  border-bottom-style: dashed;
+  border-bottom-color: color-mix(in srgb, var(--action) 55%, transparent);
+}
+
+
+/* ======================================= the admin / user switch in the menu
+
+   His account menu is a list of destinations. For an admin it also has to say
+   which of two accounts' worth of screens they are currently looking at, so
+   the two sides render as a marked pair rather than as two more links in the
+   list. A customer never sees it — there is no second side for them. */
+.ds .dsh-menu a.side {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.ds .dsh-menu a.side::after {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: transparent; flex: none;
+}
+.ds .dsh-menu a.side.on { color: var(--ink); font-weight: 500; }
+.ds .dsh-menu a.side.on::after { background: var(--action); }
+.ds .dsh-menu .rule {
+  display: block; height: 1px; margin: 6px 0;
+  background: var(--line);
+}
+
+
+/* ==================================== the account menu in the admin header
+
+   His admin header ends at the identity chip, because his admin has nowhere
+   else to go. Ours does: the same person holds a customer account, and the
+   route between the two sides belongs under the avatar where every product
+   puts it.
+
+   Shaped after his .dsh-menu rather than invented, so the two shells' menus
+   are recognisably one system, and using the same marked-pair treatment for
+   the Admin / User switch. */
+.ds .adm-acc { position: relative; display: inline-flex; }
+.ds .adm-menu {
+  position: absolute; top: calc(100% + 10px); right: 0; min-width: 224px;
+  z-index: 95; padding: 6px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--bg);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 28%);
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity 160ms var(--e-soft), transform 160ms var(--e-soft),
+    visibility 160ms;
+}
+.ds .adm-menu.on { opacity: 1; visibility: visible; transform: none; }
+.ds .adm-menu .who {
+  padding: 10px 12px 12px; border-bottom: 1px solid var(--line); margin-bottom: 6px;
+}
+.ds .adm-menu .who b { display: block; font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.ds .adm-menu .who span { display: block; font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.ds .adm-menu a,
+.ds .adm-menu button {
+  display: block; width: 100%; text-align: left; padding: 9px 12px;
+  border: 0; background: none; border-radius: 10px; cursor: pointer;
+  font-family: var(--font); font-size: 13.5px; color: var(--ink-2);
+  text-decoration: none;
+}
+.ds .adm-menu a:hover,
+.ds .adm-menu button:hover { background: var(--pal-light-wash); color: var(--ink); }
+.ds .adm-menu button.out { color: var(--ink-3); }
+.ds .adm-menu a.side {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.ds .adm-menu a.side::after {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: transparent; flex: none;
+}
+.ds .adm-menu a.side.on { color: var(--ink); font-weight: 500; }
+.ds .adm-menu a.side.on::after { background: var(--action); }
+.ds .adm-menu .rule { display: block; height: 1px; margin: 6px 0; background: var(--line); }
+
+
+/* The register search. His .adm-find is sized for the header, where it sits
+   beside a title and an avatar; on a register it is the primary control and
+   wants the width of the table above it. */
+.ds .adm-find-wide {
+  display: flex; width: 100%; max-width: 520px; margin: 0 0 18px;
+}
+.ds .adm-find-wide input { flex: 1; }
+
+
+/* ============================================ the submission viewer, and the
+   split it sits in
+
+   Richard's submissions screen lists the attached files and leaves opening
+   them to the browser. A marker who has to download every attachment, open it,
+   decide, then come back and find their place marks in batches of one — so the
+   work opens beside the queue instead, and the row stays where it was.
+
+   None of this is in his sheet, because his screen does not do it. Built from
+   the same tokens as his panels so it belongs to them. */
+.ds .adm-split { display: grid; gap: 20px; align-items: start; }
+.ds .adm-split.on { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+
+.ds .adm-view {
+  position: sticky; top: 12px;
+  display: flex; flex-direction: column; max-height: calc(100dvh - 120px);
+  border: 1px solid var(--line); border-radius: 16px;
+  background: var(--bg-alt); overflow: hidden;
+}
+.ds .adm-view-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line);
+}
+.ds .adm-view-head b { display: block; font-size: 14px; font-weight: 500; color: var(--ink); }
+.ds .adm-view-head span { display: block; font-size: 12px; color: var(--ink-3); margin-top: 3px; }
+
+.ds .adm-view-body {
+  flex: 1; min-height: 220px; overflow: auto; padding: 16px;
+  background: var(--bg-inset);
+}
+.ds .adm-view-body img { display: block; width: 100%; height: auto; border-radius: 10px; }
+.ds .adm-view-body iframe {
+  display: block; width: 100%; height: 58vh; border: 0; border-radius: 10px; background: #fff;
+}
+.ds .adm-view-note {
+  margin: 14px 0 0; padding: 12px 14px; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--line);
+  font-size: 13px; color: var(--ink-2);
+}
+.ds .adm-view-note b { display: block; font-weight: 500; color: var(--ink); margin-bottom: 4px; }
+
+.ds .adm-view-foot { padding: 14px 16px; border-top: 1px solid var(--line); }
+.ds .adm-view-foot label {
+  display: block; font-size: 11.5px; color: var(--ink-3); margin-bottom: 10px;
+}
+.ds .adm-view-foot textarea {
+  display: block; width: 100%; margin-top: 6px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 13px; resize: vertical;
+}
+.ds .adm-view-foot textarea:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+.ds .adm-view-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* On a narrow screen the work goes under the queue rather than beside it. */
+@media (max-width: 1100px) {
+  .ds .adm-split.on { grid-template-columns: 1fr; }
+  .ds .adm-view { position: static; max-height: none; }
+  .ds .adm-view-body iframe { height: 52vh; }
+}
+
+/* The outcome picker in the follow-up register. Eight outcomes is too many for
+   a row until somebody asks for them, so the row carries one button and opens
+   the list in place rather than in a dialog that loses your position. */
+.ds .adm-log { display: inline-flex; flex-wrap: wrap; gap: 4px; max-width: 320px; }
+.ds .adm-log .adm-b { font-size: 11.5px; padding: 3px 8px; }
+
+/* The status picker on a support row. A select rather than a row of buttons:
+   five statuses across six columns would push the table wider than the page. */
+.ds .adm-sel {
+  padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12px; cursor: pointer;
+}
+.ds .adm-sel:hover { border-color: var(--line-2); }
+.ds .adm-sel:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+
+/* An action beside a register heading. His .adm-pagehead already lays out two
+   children; this is the second one. */
+.ds .adm-acts { display: flex; gap: 8px; align-items: center; flex: none; }
+
+/* Two or three small actions in the last column of a register. His
+   .adm-rowacts, which the ported sheet already styles for Commerce. */
+.ds .adm-rowacts { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ds .adm-rowacts .adm-b { font-size: 11.5px; padding: 3px 9px; }
+
+/* Editing a rate in place. Three numbers and a save — a rate's price is the
+   only thing on that register anybody changes often, and sending somebody to
+   a separate editor to change one figure loses their place in 130 rows. */
+.ds .adm-edit { display: inline-flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
+.ds .adm-edit label {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+}
+.ds .adm-edit input {
+  width: 74px; padding: 3px 6px; text-align: right;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ds .adm-edit input:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+
+
+/* =========================================================== the rate builder
+
+   Richard drew no rate builder — his admin has no such screen, because his
+   prototype had no rate library behind it. Built from his tokens so it belongs
+   to the same admin: his .adm-panel for the two halves, his .adm-tabs for the
+   library switch, his .adm-none for the empty states. */
+.ds .rb-head {
+  display: grid; grid-template-columns: 2.2fr 0.7fr 1fr 1fr; gap: 14px; margin: 0 0 20px;
+}
+.ds .rb-head label { display: block; font-size: 11.5px; color: var(--ink-3); }
+.ds .rb-head input,
+.ds .rb-head select {
+  display: block; width: 100%; margin-top: 6px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 13.5px;
+}
+.ds .rb-head input:focus,
+.ds .rb-head select:focus {
+  outline: 0; border-color: var(--action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 16%, transparent);
+}
+
+.ds .rb-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 20px; align-items: start; }
+
+/* The library list is long — 595 materials — so it scrolls inside its panel
+   rather than pushing the build-up off the page. */
+.ds .rb-lib { max-height: 46vh; overflow: auto; margin-top: 6px; }
+.ds .rb-item {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; width: 100%;
+  padding: 9px 10px; border: 0; border-bottom: 1px solid var(--line);
+  background: none; text-align: left; cursor: pointer; font-family: var(--font);
+}
+.ds .rb-item:hover { background: var(--pal-light-wash); }
+/* Placed explicitly. Left to auto-placement the price took the first cell and
+   the name was pushed into the second, which read as though every component
+   were called by its price. */
+.ds .rb-item .n { grid-column: 1; grid-row: 1; font-size: 13px; color: var(--ink); }
+.ds .rb-item .c { grid-column: 1; grid-row: 2; font-size: 11px; color: var(--ink-3); }
+.ds .rb-item .p {
+  grid-column: 2; grid-row: 1 / 3; align-self: center; justify-self: end;
+  font-size: 13px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ds .rb-item .p i { font-style: normal; font-size: 11px; color: var(--ink-3); }
+
+.ds .rb-lhd, .ds .rb-line {
+  display: grid; grid-template-columns: 22px 1fr 108px 78px 104px 108px 76px;
+  gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+
+/* ── the rate library's opened build-up ───────────────────────────────────── */
+
+/* His library row is a link to a rate's own page. Here the build-up opens under
+   the row instead, because an administrator is checking a figure rather than
+   working in it, and losing your place in a list of 130 to read four lines is a
+   poor trade. Indented under the row it belongs to, so the list still reads as
+   a list. */
+.ds .rl-open {
+  padding: 12px 16px 14px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--pal-light-wash);
+}
+.ds .rl-bu > div {
+  display: grid; grid-template-columns: 1fr 120px 110px 120px;
+  gap: 10px; align-items: baseline; padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.ds .rl-bu > div:last-child { border-bottom: 0; }
+.ds .rl-bu b { display: block; font-size: 13px; font-weight: 400; color: var(--ink); }
+.ds .rl-bu em { font-style: normal; font-size: 11px; color: var(--ink-3); }
+.ds .rl-bu > div > span:nth-child(n+2) {
+  text-align: right; font-size: 12.5px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.ds .rl-sum { margin-top: 10px; font-size: 12.5px; color: var(--ink-3); }
+.ds .rl-sum b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* The library's own filter and zone controls sit in his `wk-dd` shell, which he
+   fills with a scripted listbox. A native select inside it needs the label and
+   the control on one line, and no second border of its own. */
+.ds .wk-dd { display: inline-flex; align-items: center; gap: 8px; }
+.ds .wk-dd > span {
+  font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+.ds .wk-dd select {
+  border: 0; background: none; color: var(--ink);
+  font-family: var(--font); font-size: 13px; cursor: pointer; max-width: 190px;
+}
+
+/* ── dragging a component into the build-up ───────────────────────────────── */
+
+.ds .rb-item { cursor: grab; }
+.ds .rb-item:active { cursor: grabbing; }
+
+/* Only while something is in the air. A panel that glows at rest is decoration;
+   one that answers the moment a component lifts is an instruction. */
+.ds .rb-zone.is-live {
+  outline: 1px dashed var(--line-2); outline-offset: -6px; border-radius: 12px;
+}
+.ds .rb-empty { transition: color .12s ease; }
+
+/* Where it will land. Two pixels of accent reads at a glance without shifting
+   the rows around it — a gap that opens up makes the list jump under the
+   pointer and the target you were aiming at moves. */
+.ds .rb-mark {
+  height: 2px; margin: -1px 0; border-radius: 2px;
+  background: var(--pal-accent, currentColor); opacity: .9;
+}
+
+.ds .rb-grip {
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: grab; color: var(--ink-3); opacity: .55;
+}
+.ds .rb-grip:hover { opacity: 1; }
+.ds .rb-grip:active { cursor: grabbing; }
+.ds .rb-grip svg { fill: currentColor; }
+.ds .rb-line.is-lift { opacity: .4; }
+.ds .rb-lhd {
+  font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--line-2);
+}
+.ds .rb-lhd span:nth-child(n+2), .ds .rb-line .ro { text-align: right; }
+.ds .rb-line .n b { display: block; font-size: 13px; font-weight: 400; color: var(--ink); }
+.ds .rb-line .n em { font-style: normal; font-size: 11px; color: var(--ink-3); }
+.ds .rb-line input {
+  width: 100%; padding: 5px 8px; text-align: right;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.ds .rb-line span i { font-style: normal; font-size: 10.5px; color: var(--ink-3); margin-left: 4px; }
+.ds .rb-line .ro { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.ds .rb-sum { margin-top: 18px; border-top: 1px solid var(--line-2); padding-top: 12px; }
+.ds .rb-sum > div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 5px 0;
+}
+.ds .rb-sum span { font-size: 13px; color: var(--ink-3); display: inline-flex; align-items: center; gap: 6px; }
+.ds .rb-sum span input {
+  width: 56px; padding: 3px 6px; text-align: right;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 12px;
+}
+.ds .rb-sum b { font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ds .rb-sum .tot { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
+.ds .rb-sum .tot span { font-size: 15px; color: var(--ink); font-weight: 500; }
+.ds .rb-sum .tot b { font-size: 24px; font-weight: 500; letter-spacing: -.02em; }
+.ds .rb-sum .tot b i { font-style: normal; font-size: 12px; color: var(--ink-3); margin-left: 6px; }
+
+.ds .rb-acts { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+@media (max-width: 1180px) {
+  .ds .rb-split { grid-template-columns: 1fr; }
+  .ds .rb-head { grid-template-columns: 1fr 1fr; }
+  .ds .rb-lib { max-height: 34vh; }
+}

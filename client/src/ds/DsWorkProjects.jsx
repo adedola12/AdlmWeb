@@ -72,7 +72,7 @@ const projectHref = (p) => {
   const k = String(p.productKey || "").toLowerCase();
   if (k === "archicad") return "/archicad";
   if (k === "rategen") return "/rategen";
-  return k && p.id ? `/work/project/${k}/${p.id}` : "/dashboard";
+  return k && p.id ? `/work/project/${k}/${p.id}` : "/manage";
 };
 
 export default function DsWorkProjects() {
@@ -109,7 +109,13 @@ export default function DsWorkProjects() {
     if (!projects) return null;
     const by = new Map();
     for (const p of projects) {
-      const key = p.productKey || "other";
+      // Group by the product the work BELONGS to, not the storage bucket it
+      // sits in. A material & labour schedule is saved under its own key
+      // (revit-materials, civil3d-materials and so on) but it is the same
+      // bill broken down — folders for "planswift-materials" beside
+      // "HERON" split one product's work across two, and left CIVIQ with no
+      // folder at all while five of its schedules sat under a raw key.
+      const key = p.baseProductKey || p.productKey || "other";
       if (!by.has(key)) by.set(key, []);
       by.get(key).push(p);
     }
@@ -137,7 +143,7 @@ export default function DsWorkProjects() {
   const shown = React.useMemo(() => {
     if (!projects) return null;
     const pool = openKey
-      ? projects.filter((p) => (p.productKey || "other") === openKey)
+      ? projects.filter((p) => (p.baseProductKey || p.productKey || "other") === openKey)
       : projects;
     const term = q.trim().toLowerCase();
     const list = term
@@ -157,14 +163,14 @@ export default function DsWorkProjects() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Your projects could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Your projects could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!shown || !folders) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading your projects…</p>
+        <p className="ds-sub">Loading your projects…</p>
       </div>
     );
   }
@@ -340,8 +346,11 @@ export default function DsWorkProjects() {
                     </p>
                     <div className="s">
                       <span className="wk-src">
-                        {ICONS[p.productKey] && <img src={ICONS[p.productKey]} alt="" />}
-                        {PRODUCT[p.productKey] || p.productKey || "Imported"}
+                        {ICONS[p.baseProductKey || p.productKey] && (
+                          <img src={ICONS[p.baseProductKey || p.productKey]} alt="" />
+                        )}
+                        {PRODUCT[p.baseProductKey] || p.baseProductKey || "Imported"}
+                        {p.isMaterials ? " · materials" : ""}
                       </span>
                       {p.publicShareEnabled && <span className="wk-src sm">Share link on</span>}
                     </div>
@@ -364,7 +373,7 @@ export default function DsWorkProjects() {
               })}
             </div>
           ) : (
-            <p className="sub">
+            <p className="ds-sub">
               Nothing in {openFolder.name} matches “{q}”.
             </p>
           )}

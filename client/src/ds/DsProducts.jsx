@@ -126,14 +126,14 @@ export default function DsProducts() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Your products could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Your products could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!cards) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading your products…</p>
+        <p className="ds-sub">Loading your products…</p>
       </div>
     );
   }
@@ -235,7 +235,7 @@ export default function DsProducts() {
       </div>
 
       {!shown.length && (
-        <p className="sub" style={{ marginTop: 8 }}>
+        <p className="ds-sub" style={{ marginTop: 8 }}>
           Nothing in this view.
         </p>
       )}

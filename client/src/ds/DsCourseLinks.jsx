@@ -79,7 +79,7 @@ export default function DsCourseLinks({ children }) {
       const cta = e.target.closest?.("a[data-course-sku]");
       if (!cta) return;
       e.preventDefault();
-      navigate(`/learn/course/${encodeURIComponent(cta.dataset.courseSku)}`);
+      navigate(`/dash-course/${encodeURIComponent(cta.dataset.courseSku)}`);
     },
     [navigate],
   );

@@ -20,7 +20,7 @@ import {
   UNCATEGORIZED,
 } from "../lib/boqCategory.js";
 
-const DASHBOARD_PATH = "/dashboard";
+const DASHBOARD_PATH = "/manage";
 
 const TITLES = {
   revit: "Revit Takeoffs",

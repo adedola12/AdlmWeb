@@ -29,6 +29,16 @@ function argValue(flag) {
 const SKU = argValue("--sku") || "bim-bld-arch";
 const COHORT = argValue("--cohort") || "2025";
 
+/**
+ * Cap on how many jobs a single run may submit.
+ *
+ * Added after a 4K re-encode of the whole course was about to go out on one
+ * command. Each rung is billed per output minute across ~96-minute lectures,
+ * so proving one recording before committing the other seventeen is the
+ * difference between a cheap mistake and an expensive one.
+ */
+const LIMIT = Number(argValue("--limit") || 0) || 0;
+
 function outPrefixFor(moduleCode, track = "lecture") {
   if (track === "onboarding") return `hls/${SKU}/${COHORT}/course-intro/`;
   const suffix = track === "summary" ? "-summary" : "";
@@ -205,7 +215,9 @@ const planned = allTracksOf(course).filter(({ data }) => {
 const noSource = course.modules.filter((m) => !m.sourceKey);
 
 console.log(`course:   ${course.title} (${SKU})`);
-console.log(`to encode: ${planned.length} recordings`);
+console.log(
+  `to encode: ${planned.length} recordings` + (LIMIT ? ` (this run will submit ${LIMIT})` : ""),
+);
 for (const entry of planned) {
   console.log(`  ${labelOf(entry).padEnd(6)} ${entry.data.sourceKey}`);
   console.log(`        -> ${outPrefixFor(entry.code, entry.track)}index.m3u8`);
@@ -226,7 +238,14 @@ if (!APPLY) {
 preflight();
 
 let submitted = 0;
+let attempted = 0;
+let consecutiveFailures = 0;
 for (const entry of planned) {
+  if (LIMIT && attempted >= LIMIT) break;
+  // A run of identical failures is a setup problem, and submitting the rest
+  // only makes the log longer.
+  if (consecutiveFailures >= 3) break;
+  attempted += 1;
   const { data } = entry;
   try {
     const jobId = await submitHlsJob({
@@ -239,10 +258,16 @@ for (const entry of planned) {
     data.transcodeError = "";
     await course.save();
     submitted += 1;
+    consecutiveFailures = 0;
     console.log(`  ✓ ${labelOf(entry)} submitted (${jobId})`);
   } catch (err) {
+    consecutiveFailures += 1;
     console.error(`  ✗ ${labelOf(entry)} failed to submit: ${err.message}`);
   }
+}
+
+if (consecutiveFailures >= 3) {
+  console.error("Stopped after three failures in a row — fix the cause and re-run.");
 }
 
 console.log(

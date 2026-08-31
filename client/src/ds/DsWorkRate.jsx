@@ -102,14 +102,14 @@ export default function DsWorkRate() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">That rate could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">That rate could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!rates) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading the rate…</p>
+        <p className="ds-sub">Loading the rate…</p>
       </div>
     );
   }
@@ -119,7 +119,7 @@ export default function DsWorkRate() {
         <p className="wk-back">
           <Link to="/work/library">← Rate library</Link>
         </p>
-        <p className="sub">
+        <p className="ds-sub">
           That rate is not in this library. It may have been removed, or it belongs to another
           account.
         </p>

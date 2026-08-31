@@ -265,14 +265,14 @@ export default function DsManageOverview() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Your account could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Your account could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!view) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading your account…</p>
+        <p className="ds-sub">Loading your account…</p>
       </div>
     );
   }
@@ -309,7 +309,7 @@ export default function DsManageOverview() {
             Products active
           </span>
           <b>{view.active.length}</b>
-          <p className="sub">
+          <p className="ds-sub">
             {view.active.length
               ? view.active.map((e) => e.productName || e.productKey).join(", ")
               : "Nothing active yet"}
@@ -325,7 +325,7 @@ export default function DsManageOverview() {
             {view.seatsUsed}
             {view.seatsOwned > 0 && <span className="u">of {view.seatsOwned}</span>}
           </b>
-          <p className="sub">
+          <p className="ds-sub">
             {view.seatsOwned === 0
               ? "No seats yet"
               : view.seatsOwned - view.seatsUsed > 0
@@ -340,7 +340,7 @@ export default function DsManageOverview() {
             Next charge
           </span>
           <b>{view.nextDate && view.nextAmount ? money(view.nextAmount) : "—"}</b>
-          <p className="sub">
+          <p className="ds-sub">
             {view.nextDate ? `Renews ${longDate(view.nextDate)}` : "Nothing scheduled"}
           </p>
         </div>
@@ -348,15 +348,24 @@ export default function DsManageOverview() {
         <div className={`dsh-stat${view.courses.length ? " warn" : ""}`}>
           <span className="k">
             <svg viewBox="0 0 24 24"><use href="#hi-learning" /></svg>
-            Courses
+            Courses running
           </span>
-          <b>{view.courses.length}</b>
-          <p className="sub">
+          {/* His tile reads "1 of 2" — the count in progress against the count
+              enrolled — with the qualifier in a .u span, exactly as the seats
+              tile above does. Ours showed a bare enrolment count, which says
+              nothing about whether anybody is actually working through them. */}
+          <b>
+            {view.coursesInProgress}
+            <span className="u">of {view.courses.length}</span>
+          </b>
+          <p className="ds-sub">
             {view.courses.length === 0
               ? "None enrolled"
-              : view.coursesInProgress > 0
-                ? `${view.coursesInProgress} in progress`
-                : "Enrolled, not started"}
+              : view.courses.length - view.coursesInProgress === 0
+                ? "All under way"
+                : `${view.courses.length - view.coursesInProgress} enrolment${
+                    view.courses.length - view.coursesInProgress === 1 ? "" : "s"
+                  } not started`}
           </p>
         </div>
       </div>
@@ -372,7 +381,7 @@ export default function DsManageOverview() {
             </div>
             <div className="dsh-body">
               {view.licences.length === 0 && (
-                <p className="sub">
+                <p className="ds-sub">
                   Nothing licensed yet.{" "}
                   <Link to="/products">See what ADLM makes</Link>.
                 </p>
@@ -409,47 +418,45 @@ export default function DsManageOverview() {
                   </div>
                 );
               })}
+
+              {/* Feature grants, inside Your products rather than in a panel of
+                  their own.
+                  His overview has exactly two panels in this column and does not
+                  have this at all — he has no concept of a grant. Ours does, and
+                  DsProducts deliberately keeps them off the product grid because
+                  a switch on a product somebody already owns has no seat and
+                  nothing to install. That left this as the only place they are
+                  visible, so they move inside the products panel rather than
+                  disappearing to match a layout that never had to carry them. */}
+              {view.grants.length > 0 && (
+                <>
+                  <p className="ds-sub" style={{ marginTop: 18 }}>
+                    Switched on for this account by ADLM. Nothing to install: they work inside
+                    the products above.{" "}
+                    {view.grantsExpire
+                      ? "The ones with an end date stop working on it unless they are extended."
+                      : "None of them expire."}
+                  </p>
+                  <div className="dsh-kv">
+                    {view.grants.map((g) => (
+                      <div key={g.productKey}>
+                        <span>{g.productName || g.productKey}</span>
+                        <b>{grantTerm(g)}</b>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </section>
 
-          {view.grants.length > 0 && (
-            <section className="dsh-panel">
-              <div className="dsh-ph">
-                <h2>Feature access</h2>
-              </div>
-              <div className="dsh-body">
-                <p className="sub">
-                  Switched on for this account by ADLM. Nothing to install: they work inside
-                  the products you already have.{" "}
-                  {view.grantsExpire
-                    ? "The ones with an end date stop working on it unless they are extended."
-                    : "None of them expire."}
-                </p>
-                {/* .dsh-kv, not .dsh-note — the latter is not a class in his
-                    stylesheet (only .dsh-notes, the notifications panel), so
-                    these rows had no layout at all and the name ran straight
-                    into the status: "boq-importActive". */}
-                <div className="dsh-kv">
-                  {view.grants.map((g) => (
-                    <div key={g.productKey}>
-                      <span>{g.productName || g.productKey}</span>
-                      <b>{grantTerm(g)}</b>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
-        </div>
-
-        <div>
           <section className="dsh-panel">
             <div className="dsh-ph">
               <h2>Needs your attention</h2>
             </div>
             <div className="dsh-body">
               {view.attention.length === 0 ? (
-                <p className="sub">Nothing needs you. Everything is active and installed.</p>
+                <p className="ds-sub">Nothing needs you. Everything is active and installed.</p>
               ) : (
                 view.attention.map((a, i) => (
                   <div className="dsh-note" key={`${a.kind}-${i}`}>
@@ -464,18 +471,42 @@ export default function DsManageOverview() {
             </div>
           </section>
 
+        </div>
+
+        <div>
+          {/* His Installer Hub band. It was a plain .dsh-panel here, which
+              meant none of .dsh-hub's styling applied — no navy gradient, no
+              radial highlight, and it sat below the activity feed instead of
+              heading the column. The rail literally says "MANAGE · Installer
+              Hub", so this is the thing that label points at. */}
           {view.hub.downloadUrl && (
-            <section className="dsh-panel">
-              <div className="dsh-body">
-                <h3>Installer Hub</h3>
-                <p className="meta">
-                  Installs only what this account is licensed for.
-                </p>
-                <a className="ds-btn btn-p ds-btn-sm" href={view.hub.downloadUrl}>
-                  Download
-                </a>
-              </div>
-            </section>
+            <div className="dsh-hub">
+              <h3>ADLM Installer Hub</h3>
+              <p>
+                The desktop app that installs and updates everything this account is licensed
+                for. Sign in once and it keeps every seat current.
+              </p>
+              <a className="ds-btn btn-p ds-btn-sm" href={view.hub.downloadUrl}>
+                Download for Windows
+              </a>
+              {/* His meta reads "Windows 64-bit · 84 MB · released July 2026".
+                  GET /me/summary returns only downloadUrl, videoUrl and
+                  guideUrl for the Hub — there is no version, size or release
+                  date behind it — so this says the part we actually know,
+                  matching the wording Downloads already uses rather than
+                  inventing a build number. */}
+              <p className="meta">
+                Windows 64-bit · requires an ADLM account
+                {view.hub.videoUrl ? (
+                  <>
+                    {" · "}
+                    <a href={view.hub.videoUrl} target="_blank" rel="noreferrer">
+                      Watch the walkthrough
+                    </a>
+                  </>
+                ) : null}
+              </p>
+            </div>
           )}
 
           {/* Recent activity — his .dsh-feed, on the real trail.

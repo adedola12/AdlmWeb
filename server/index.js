@@ -65,6 +65,7 @@ import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 import agentRoutes from "./routes/agent.js";
 import aiRoutes from "./routes/ai.js";
+import programmeRoutes from "./routes/programme.js";
 import geoRoutes from "./routes/geo.js";
 
 import meTrainingsRoutes from "./routes/me-trainings.js";
@@ -298,6 +299,8 @@ app.use("/helpbot", helpbotRoutes);
 app.use("/agent", agentRoutes);
 // AI cost-intelligence for the desktop plugins (auth required, metered).
 app.use("/ai", aiRoutes);
+app.use("/programme", programmeRoutes);
+app.use("/api/programme", programmeRoutes);
 app.use("/geo", geoRoutes);
 
 // Public settings (no auth) — mobile app URL etc.
@@ -397,11 +400,31 @@ app.use("/admin/roles", adminRoles);
 // ("audit") gates apply instead of the catch-all's admin-only middleware.
 import adminSupport from "./routes/admin.support.js";
 import adminWaitlist from "./routes/admin.waitlist.js";
+import adminToday from "./routes/admin.today.js";
+import adminPurchaseQueue from "./routes/admin.purchaseQueue.js";
+import adminInstallQueue from "./routes/admin.installQueue.js";
+import adminPeople from "./routes/admin.people.js";
+import adminLearnQueues from "./routes/admin.learnQueues.js";
+import adminCommerce from "./routes/admin.commerce.js";
+import adminCatalogue from "./routes/admin.catalogue.js";
+import adminLearnContent from "./routes/admin.learnContent.js";
+import adminDocuments from "./routes/admin.documents.js";
 import adminLatest from "./routes/admin.latest.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
+app.use("/admin/today", adminToday);
+// Mounted on its own path rather than under /admin/purchases, which already
+// answers for the old hub and carries a :id route that "queue" would match.
+app.use("/admin/purchase-queue", adminPurchaseQueue);
+app.use("/admin/install-queue", adminInstallQueue);
+app.use("/admin/people", adminPeople);
+app.use("/admin/queues", adminLearnQueues);
+app.use("/admin/commerce", adminCommerce);
+app.use("/admin/catalogue", adminCatalogue);
+app.use("/admin/lc", adminLearnContent);
+app.use("/admin/docs", adminDocuments);
 app.use("/admin/latest", adminLatest);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);

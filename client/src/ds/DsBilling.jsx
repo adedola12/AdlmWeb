@@ -298,14 +298,14 @@ export default function DsBilling() {
   if (failed) {
     return (
       <div className="dsh-in">
-        <p className="sub">Your billing could not be loaded just now. Please refresh.</p>
+        <p className="ds-sub">Your billing could not be loaded just now. Please refresh.</p>
       </div>
     );
   }
   if (!view || !invoices || !profile) {
     return (
       <div className="dsh-in">
-        <p className="sub">Loading your billing…</p>
+        <p className="ds-sub">Loading your billing…</p>
       </div>
     );
   }
@@ -337,7 +337,7 @@ export default function DsBilling() {
       </div>
 
       {(said || problem) && (
-        <p className="sub" style={problem ? { color: "var(--bad, #b42318)" } : undefined}>
+        <p className="ds-sub" style={problem ? { color: "var(--bad, #b42318)" } : undefined}>
           {problem || said}
         </p>
       )}

@@ -96,7 +96,7 @@ export default function OrderDetail() {
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{err}</p>
           <button
             className="mt-4 px-3 py-2 rounded-md border text-sm"
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate("/manage")}
           >
             Back to dashboard
           </button>

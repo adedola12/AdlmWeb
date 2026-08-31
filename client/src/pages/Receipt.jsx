@@ -115,7 +115,7 @@ export default function Receipt() {
           </div>
           <button
             className="mt-4 px-3 py-2 rounded-md border text-sm hover:bg-slate-50"
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate("/manage")}
           >
             Back to Dashboard
           </button>

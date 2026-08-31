@@ -89,9 +89,11 @@ export const MAP = {
   "dash-support": "/manage/support",
   // The Learn group is not built yet; these point at where the same things
   // live today rather than at routes that do not exist.
-  "dash-learning": "/learn",
-  "dash-certificates": "/dashboard",
-  "dash-course": "/learn/course/:sku",
+  // Where somebody is up to, not the public catalogue. /learn is still the
+  // catalogue and this screen links there.
+  "dash-learning": "/dash-learning",
+  "dash-certificates": "/dash-certificates",
+  "dash-course": "/dash-course/:sku",
   "dash-emails": null, // an internal email preview harness, not a public route
   "work-home": "/work",
   "work-projects": "/work/projects",

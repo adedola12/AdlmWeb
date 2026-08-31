@@ -552,6 +552,20 @@ const DATA_PAGES = new Set([
   "src/timepro.html",
 ]);
 
+/**
+ * His admin icons: the three <svg style="display:none"> blocks that sit
+ * between the rail marker and the rail itself. slice() cannot express this —
+ * it stops at the first end marker — and taking only the first block loses
+ * every ai-* and wi-* symbol, which is exactly the sort of failure that shows
+ * up as blank squares rather than as an error.
+ */
+function adminIcons(html) {
+  const from = html.indexOf('<svg xmlns="http://www.w3.org/2000/svg" style="display:none"');
+  const to = html.indexOf('<aside class="adm-rail');
+  if (from < 0 || to < 0) throw new Error("could not extract admin icon sprite");
+  return html.slice(from, to).trim();
+}
+
 function slice(str, startMark, endMark, label) {
   const a = str.indexOf(startMark);
   const b = str.indexOf(endMark, a);
@@ -604,6 +618,13 @@ function main() {
   const index = fs.readFileSync(path.join(SITE, "index.html"), "utf8");
   // The rail lives in the app screens, not in index.html.
   const dashHome = fs.readFileSync(path.join(SITE, "src/dash-home.html"), "utf8");
+  // The admin panel carries a THIRD set of icons — his admin-*.html files open
+  // with three <svg style="display:none"> blocks that the marketing and app
+  // sprites do not contain (ai-org, ai-quote, ai-tag, ai-mail, ai-ada,
+  // wi-library, and the hi-* the rail uses). Sliced here rather than left
+  // inside each generated page, because the shell that renders the rail is
+  // ours and would otherwise have to hand-copy them and then drift.
+  const adminHome = fs.readFileSync(path.join(SITE, "src/admin-home.html"), "utf8");
 
   // ── shared chrome ──────────────────────────────────────────────────────
   const chrome = [
@@ -621,6 +642,10 @@ function main() {
       name: "DsAppSprite",
       html: slice(dashHome, "<!--icons-->", "<!--/icons-->", "app icon sprite"),
     },
+    // Three sibling <svg> blocks, so this cannot use slice(): its end marker
+    // would stop at the first </svg> and silently drop two thirds of the
+    // symbols. Taken as everything between the first block and the rail.
+    { name: "DsAdminSprite", html: adminIcons(adminHome) },
     {
       name: "DsRail",
       html: editRail(slice(dashHome, "<!--rail-->", "<!--/rail-->", "app rail")),
