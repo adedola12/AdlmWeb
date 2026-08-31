@@ -305,7 +305,7 @@ function LimitFields({ value, onChange, disabled = false }) {
   const v = value || {};
   const set = (k) => (e) => onChange({ ...v, [k]: e.target.value });
   return (
-    <div className={`grid grid-cols-3 gap-2 ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
+    <div className={`grid grid-cols-4 gap-2 ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
       <label className="text-[11px]">
         Calls
         <input type="number" min="0" className={INPUT} value={v.calls ?? 0} onChange={set("calls")} />
@@ -325,6 +325,17 @@ function LimitFields({ value, onChange, disabled = false }) {
           onChange={set("costUsd")}
         />
       </label>
+      {/* Which period the three numbers above are counted over. Shown for every
+          limit, not just the daily ones: a figure like "10" means nothing until
+          you know whether it is ten a month or ten a day, and the page used to
+          imply "month" everywhere by saying nothing at all. */}
+      <label className="text-[11px]">
+        Per
+        <select className={INPUT} value={v.window === "day" ? "day" : "month"} onChange={set("window")}>
+          <option value="month">Month</option>
+          <option value="day">Day</option>
+        </select>
+      </label>
     </div>
   );
 }
@@ -341,6 +352,13 @@ const RECOMMENDED = {
     "ai-boq-check": { enabled: true, calls: 40, tokens: 0, costUsd: 0 },
     "ai-outliers": { enabled: true, calls: 40, tokens: 0, costUsd: 0 },
     "ai-rate-buildup": { enabled: true, calls: 60, tokens: 0, costUsd: 0 },
+    // Daily rather than monthly: a QS who spends a month's worth on the first
+    // morning is stuck until the 1st, which reads as the product being broken.
+    // Ten a day is the larger annual ceiling AND it comes back tomorrow.
+    "quiv-prompt": { enabled: true, calls: 10, tokens: 0, costUsd: 0, window: "day" },
+    // No model round-trip at all, so tokens and cost stay 0 by nature - the run
+    // is rationed because it drives every module over every level.
+    "quiv-handover": { enabled: true, calls: 10, tokens: 0, costUsd: 0, window: "day" },
   },
   notes: "Recommended starting allowance",
 };

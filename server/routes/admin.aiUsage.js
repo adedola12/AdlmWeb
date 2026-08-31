@@ -98,12 +98,25 @@ function shapeTotals(r = {}) {
   };
 }
 
+// `window` is carried in BOTH directions on purpose.
+//
+// Reading it out lets the page say "10 per day" rather than implying a month.
+// Writing it back matters more: this object REPLACES the stored limit, so a
+// field it does not mention is gone, and the schema default puts it back as
+// "month". An admin who opened the AI page and pressed Save - without touching
+// the QUIV rows at all - would have quietly turned their daily allowance into a
+// monthly one, and nothing on screen would have said so.
+function limitWindow(v) {
+  return String(v || "") === "day" ? "day" : "month";
+}
+
 function limitOut(l) {
   return {
     enabled: l?.enabled !== false,
     calls: Number(l?.calls) || 0,
     tokens: Number(l?.tokens) || 0,
     costUsd: Number(l?.costUsd) || 0,
+    window: limitWindow(l?.window),
   };
 }
 
@@ -113,6 +126,7 @@ function sanitizeLimit(body) {
     calls: Math.max(0, Math.floor(Number(body?.calls) || 0)),
     tokens: Math.max(0, Math.floor(Number(body?.tokens) || 0)),
     costUsd: Math.max(0, Number(Number(body?.costUsd || 0).toFixed(2))),
+    window: limitWindow(body?.window),
   };
 }
 
