@@ -79,14 +79,24 @@ export function AdmDrawer({ title, intro, note, children, foot, onClose, peek = 
 
 /* ──────────────────────────────────────────────────────────────── fields ── */
 
-function Field({ f, value, error, onChange }) {
+/**
+ * A field's label and options may be functions of the whole form.
+ *
+ * His forms need it: the picture field is "Their logo" on a testimonial and
+ * "The artwork" on a flyer, and the list of places a thing can appear depends
+ * on what kind of thing it is. Resolving here rather than at each call site
+ * keeps the spec declarative.
+ */
+const resolve = (v, values) => (typeof v === "function" ? v(values) : v);
+
+function Field({ f, value, error, onChange, values }) {
   const id = `f-${f.k}`;
   const cls = ["adm-f", f.wide ? "wide" : "", f.type === "check" ? "check" : "",
     f.type === "file" ? "media" : "", error ? "bad" : ""].filter(Boolean).join(" ");
 
   const label = (
     <span className="adm-f-l">
-      {f.label}
+      {resolve(f.label, values)}
       {f.required ? " *" : ""}
     </span>
   );
@@ -129,7 +139,7 @@ function Field({ f, value, error, onChange }) {
   } else if (f.type === "select") {
     input = (
       <select id={id} value={value ?? ""} onChange={(e) => onChange(f.k, e.target.value)}>
-        {(f.options || []).map((o) => {
+        {(resolve(f.options, values) || []).map((o) => {
           const [v, t] = Array.isArray(o) ? o : [o, o];
           return (
             <option key={v} value={v}>
@@ -204,6 +214,7 @@ export function AdmFields({ fields, values, errors = {}, onChange }) {
             f={f}
             value={values[f.k]}
             error={errors[f.k]}
+            values={values}
             onChange={on}
           />
         ))}

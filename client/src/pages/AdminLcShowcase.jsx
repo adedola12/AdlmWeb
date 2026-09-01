@@ -1,8 +1,11 @@
-// Admin route wrapper — one of the Learning/Content registers.
+// Admin route wrapper — Marketing, at /admin/showcase.
+//
+// His one screen for testimonials, free downloads and flyers. Replaces three
+// separate registers that were three collections wearing three nav entries.
 
 import React from "react";
-import DsAdminLearnContent from "../ds/DsAdminLearnContent.jsx";
+import DsAdminMarketing from "../ds/DsAdminMarketing.jsx";
 
 export default function AdminLcShowcase() {
-  return <DsAdminLearnContent screen="showcase" />;
+  return <DsAdminMarketing />;
 }

@@ -40,7 +40,13 @@ import { Training } from "../models/Training.js";
 // Exported as ChangelogProduct — one row per product, with its releases.
 import { ChangelogProduct as Changelog } from "../models/Changelog.js";
 // Exported as IndustryLeader — the marketing screen calls them showcase.
-import { IndustryLeader as Showcase } from "../models/Showcase.js";
+import {
+  IndustryLeader as Showcase,
+  IndustryLeader,
+  TrainedCompany,
+  Testimonial,
+} from "../models/Showcase.js";
+import { SLOTS, slotById } from "../util/marketingSlots.js";
 import { Flyer } from "../models/Flyer.js";
 import { Freebie } from "../models/Freebie.js";
 
@@ -595,6 +601,212 @@ router.get("/showcase", ...[requireAuth, requirePermission("showcase")], async (
       createdAt: s.createdAt || null,
     }));
     res.json({ items, counts: tally(items) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+/* ═══════════════════════════════════════════════════════════════ marketing ══
+ *
+ * One screen for the things on the website that change often: testimonials,
+ * the free downloads, and the flyers.
+ *
+ * WHY THEY ARE ONE SCREEN AND NOT THREE
+ *
+ * They were three registers because they are three collections, which is a
+ * fact about the database rather than about the work. A person adding a
+ * testimonial and a person adding a flyer are doing the same thing — putting
+ * something on the website and saying where it goes — and his design is right
+ * that it should be one table with a Kind column.
+ *
+ * WHAT THE ROW SHAPE COSTS
+ *
+ * Five collections flattened into one row means an id has to say which
+ * collection it came from, or an edit cannot find its way home. Hence
+ * "leader:64f0…" — the source, then the id.
+ */
+
+const MARKETING = {
+  leader: { model: IndustryLeader, kind: "Testimonial", pub: "featured", title: "name" },
+  company: { model: TrainedCompany, kind: "Testimonial", pub: "featured", title: "name" },
+  person: { model: Testimonial, kind: "Testimonial", pub: "featured", title: "name" },
+  freebie: { model: Freebie, kind: "Freebie", pub: "published", title: "title" },
+  flyer: { model: Flyer, kind: "Flyer", pub: "published", title: "title" },
+};
+
+/** A document has nothing to look at; a picture does. */
+const fileKindOf = (name) =>
+  /\.(docx?|xlsx?|pdf|zip|csv|pptx?)$/i.test(String(name || "")) ? "doc" : "image";
+
+router.get("/marketing", ...hub, async (_req, res, next) => {
+  try {
+    const [leaders, companies, people, freebies, flyers] = await Promise.all([
+      IndustryLeader.find({}).lean(),
+      TrainedCompany.find({}).lean(),
+      Testimonial.find({}).lean(),
+      Freebie.find({}).lean(),
+      Flyer.find({}).lean(),
+    ]);
+
+    const row = (src, d) => {
+      const spec = MARKETING[src];
+      const file = d.logoUrl || d.avatarUrl || d.imageUrl || d.thumbnailUrl || d.downloadUrl || "";
+      return {
+        id: `${src}:${d._id}`,
+        source: src,
+        kind: spec.kind,
+        title: d[spec.title] || "Untitled",
+        // The line under the title: what they said, or what it is.
+        quote: d.text || d.description || d.location || d.company || "",
+        role: d.role || "",
+        company: d.company || "",
+        downloadUrl: d.downloadUrl || "",
+        file,
+        fileKind: file ? fileKindOf(file) : "",
+        slot: d.slot || "",
+        live: !!d[spec.pub],
+      };
+    };
+
+    const items = [
+      ...leaders.map((d) => row("leader", d)),
+      ...companies.map((d) => row("company", d)),
+      ...people.map((d) => row("person", d)),
+      ...freebies.map((d) => row("freebie", d)),
+      ...flyers.map((d) => row("flyer", d)),
+    ];
+
+    const counts = { all: items.length };
+    for (const i of items) counts[i.kind] = (counts[i.kind] || 0) + 1;
+
+    res.json({
+      items,
+      slots: SLOTS,
+      unbuilt: SLOTS.filter((x) => !x.built),
+      counts,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Which collection a row id belongs to, and its mongo id. */
+function marketingRef(id) {
+  const [src, rest] = String(id || "").split(":");
+  const spec = MARKETING[src];
+  return spec ? { spec, id: rest, src } : null;
+}
+
+/** Whichever field this collection keeps its picture in. */
+const fileFieldFor = (src) =>
+  src === "freebie" ? "imageUrl" : src === "flyer" ? "thumbnailUrl" : src === "person" ? "avatarUrl" : "logoUrl";
+
+router.post("/marketing", ...hub, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const spec = MARKETING[String(b.source || "")];
+    if (!spec) return res.status(400).json({ error: "Say what kind of thing this is." });
+
+    const title = String(b.title || "").trim();
+    if (!title) return res.status(400).json({ error: "It needs a name." });
+
+    const src = String(b.source);
+    const doc = { slot: b.slot || "" };
+    doc[spec.title] = title;
+    doc[fileFieldFor(src)] = b.file || "";
+
+    if (src === "person") {
+      doc.text = b.quote || "";
+      doc.role = b.role || "";
+      doc.company = b.company || "";
+      doc.location = b.company || "";
+    } else if (src === "freebie") {
+      doc.description = b.quote || "";
+      doc.downloadUrl = b.downloadUrl || "";
+      doc.productKey = b.productKey || "";
+    } else if (src !== "flyer") {
+      doc.location = b.quote || "";
+      doc.website = b.website || "";
+    }
+
+    // Created not showing, whatever was ticked. Nothing reaches the site
+    // before somebody has looked at the row once.
+    doc[spec.pub] = false;
+
+    const made = await spec.model.create(doc);
+    res.status(201).json({ id: `${src}:${made._id}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/marketing/:id", ...hub, async (req, res, next) => {
+  try {
+    const ref = marketingRef(req.params.id);
+    if (!ref) return res.status(404).json({ error: "No such item" });
+    const b = req.body || {};
+
+    const set = { slot: b.slot || "" };
+    if (b.title) set[ref.spec.title] = String(b.title).trim();
+    if (b.file !== undefined) set[fileFieldFor(ref.src)] = b.file;
+    if (b.quote !== undefined) {
+      set[ref.src === "person" ? "text" : ref.src === "freebie" ? "description" : "location"] = b.quote;
+    }
+    if (ref.src === "person") {
+      if (b.role !== undefined) set.role = b.role;
+      if (b.company !== undefined) set.company = b.company;
+    }
+    if (ref.src === "freebie" && b.downloadUrl !== undefined) set.downloadUrl = b.downloadUrl;
+
+    const hit = await ref.spec.model.findByIdAndUpdate(ref.id, { $set: set }, { new: true }).lean();
+    if (!hit) return res.status(404).json({ error: "No such item" });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/marketing/:id/publish", ...hub, async (req, res, next) => {
+  try {
+    const ref = marketingRef(req.params.id);
+    if (!ref) return res.status(404).json({ error: "No such item" });
+    const on = !!req.body?.published;
+
+    const row = await ref.spec.model.findById(ref.id).lean();
+    if (!row) return res.status(404).json({ error: "No such item" });
+
+    // Putting something up that has nowhere to go is the mistake the Shows-on
+    // column exists to prevent, so it is refused rather than left sitting
+    // "live" and invisible.
+    if (on) {
+      if (!row.slot) {
+        return res.status(400).json({
+          error: "Say where it shows on the website first — otherwise nothing changes for a visitor.",
+        });
+      }
+      const slot = slotById.get(row.slot);
+      if (slot && !slot.built) {
+        return res.status(400).json({
+          error: `${slot.name} does not exist on the site yet, so putting this up would change nothing. It stays stored and ready.`,
+        });
+      }
+    }
+
+    await ref.spec.model.updateOne({ _id: ref.id }, { $set: { [ref.spec.pub]: on } });
+    res.json({ ok: true, live: on });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/marketing/:id", ...hub, async (req, res, next) => {
+  try {
+    const ref = marketingRef(req.params.id);
+    if (!ref) return res.status(404).json({ error: "No such item" });
+    const gone = await ref.spec.model.findByIdAndDelete(ref.id).lean();
+    if (!gone) return res.status(404).json({ error: "No such item" });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
