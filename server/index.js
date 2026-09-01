@@ -85,6 +85,7 @@ import adminRateGenLibrary from "./routes/admin.rategen.library.js";
 import adminRateGenRates from "./routes/admin.rategen.rates.js";
 import adminRateGenCompute from "./routes/admin.rategen.compute.js";
 import adminRateGenMaster from "./routes/admin.rategen.master.js";
+import adminEmails from "./routes/admin.emails.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -372,6 +373,7 @@ app.use("/rategen-v2", servicesRouter);
 
 app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
+app.use("/admin/emails", adminEmails);
 app.use("/admin/rategen-v2/library", adminRateGenLibrary);
 
 app.use("/admin/rategen-compute", adminRateGenCompute);

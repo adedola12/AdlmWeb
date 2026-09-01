@@ -27,7 +27,8 @@ import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { AdmTable, AdmTwo, AdmDim, AdmFilters, AdmChip } from "./adminUi.jsx";
-import { toneFor } from "./adminKit.jsx";
+import { toneFor, useAdmToast, checkFields } from "./adminKit.jsx";
+import { AdmDrawer, AdmFields } from "./adminForm.jsx";
 
 const when = (d) =>
   d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
@@ -266,12 +267,122 @@ const SCREENS = {
   },
 };
 
+
+/* ── what each register can be edited with ────────────────────────────────
+ *
+ * A screen with a FORMS entry gets a "+ New", an Edit on every row, a publish
+ * toggle where the collection has something to publish, and a delete behind a
+ * confirm. A screen without one stays a register, which is right for the two
+ * whose rows are nested documents with editors of their own.
+ */
+const FORMS = {
+  lessons: {
+    noun: "lesson",
+    pub: true,
+    fields: [
+      { k: "title", label: "Title", type: "text", required: true, wide: true },
+      {
+        k: "youtubeId",
+        label: "YouTube video",
+        type: "text",
+        wide: true,
+        required: true,
+        placeholder: "https://youtu.be/… or the id",
+        hint: "Paste the link; the id is taken out of it.",
+      },
+      { k: "productLabel", label: "Which product it is about", type: "text" },
+      { k: "durationSec", label: "Runs for (seconds)", type: "number" },
+      { k: "thumbnailUrl", label: "Thumbnail", type: "file", accept: "image/*", wide: true,
+        hint: "Optional — YouTube's own still is used when this is empty." },
+      { k: "sort", label: "Order on the page", type: "number",
+        hint: "Lower comes first." },
+    ],
+  },
+  quizzes: {
+    noun: "quiz",
+    pub: true,
+    // The questions are not here on purpose — see the note on the server. What
+    // can be set is what the check is called and how it is marked.
+    fields: [
+      { k: "title", label: "Title", type: "text", required: true, wide: true },
+      { k: "intro", label: "What the student is told first", type: "textarea", rows: 2, wide: true },
+      { k: "passMark", label: "Pass mark (%)", type: "number", required: true },
+      { k: "maxAttempts", label: "Attempts allowed", type: "number",
+        hint: "Zero means unlimited." },
+    ],
+  },
+  events: {
+    noun: "training",
+    fields: [
+      { k: "title", label: "Title", type: "text", required: true, wide: true },
+      { k: "description", label: "What it covers", type: "textarea", rows: 2, wide: true },
+      { k: "mode", label: "How it runs", type: "select",
+        options: [["physical", "In a room"], ["online", "Live online"], ["hybrid", "Room + streamed"]] },
+      { k: "date", label: "Starts", type: "text", placeholder: "2026-09-14" },
+      { k: "city", label: "City", type: "text", when: (v) => v.mode !== "online" },
+      { k: "country", label: "Country", type: "text", when: (v) => v.mode !== "online" },
+      { k: "venue", label: "Venue", type: "text", wide: true, when: (v) => v.mode !== "online" },
+      { k: "attendees", label: "Places", type: "number" },
+    ],
+  },
+  classrooms: {
+    noun: "classroom",
+    pub: true,
+    fields: [
+      { k: "title", label: "Title", type: "text", required: true, wide: true },
+      { k: "description", label: "What it is for", type: "textarea", rows: 2, wide: true },
+      { k: "companyName", label: "Organisation", type: "text" },
+      { k: "classroomCode", label: "Join code", type: "text" },
+      { k: "classroomUrl", label: "Join link", type: "text", wide: true,
+        check: (v) => (v && !/^https?:\/\//.test(v) ? "That is not a link." : null) },
+    ],
+  },
+  showcase: {
+    noun: "entry",
+    pub: true,
+    fields: [
+      { k: "name", label: "Name", type: "text", required: true, wide: true },
+      { k: "code", label: "Code", type: "text" },
+      { k: "location", label: "Where they are", type: "text" },
+      { k: "logoUrl", label: "Logo", type: "file", accept: "image/*", wide: true },
+      { k: "website", label: "Website", type: "text", wide: true,
+        check: (v) => (v && !/^https?:\/\//.test(v) ? "That is not a link." : null) },
+    ],
+  },
+  flyers: {
+    noun: "flyer",
+    pub: true,
+    fields: [
+      { k: "title", label: "Title", type: "text", required: true, wide: true },
+      { k: "thumbnailUrl", label: "Artwork", type: "file", accept: "image/*", wide: true },
+    ],
+  },
+  freebies: {
+    noun: "freebie",
+    pub: true,
+    fields: [
+      { k: "title", label: "Title", type: "text", required: true, wide: true },
+      { k: "description", label: "What it is", type: "textarea", rows: 2, wide: true },
+      { k: "productKey", label: "Which product it belongs to", type: "text" },
+      { k: "imageUrl", label: "Image", type: "file", accept: "image/*", wide: true },
+      { k: "downloadUrl", label: "The file people get", type: "text", wide: true,
+        check: (v) => (v && !/^https?:\/\//.test(v) ? "That is not a link." : null) },
+    ],
+  },
+};
+
 export default function DsAdminLearnContent({ screen }) {
   const S = SCREENS[screen];
+  const F = FORMS[screen];
   const { accessToken } = useAuth();
+  const [say, toast] = useAdmToast();
   const [view, setView] = React.useState("all");
   const [d, setD] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
+  const [reload, setReload] = React.useState(0);
+  const [form, setForm] = React.useState(null); // { row|null, values, errors }
+  const [confirming, setConfirming] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
     if (!accessToken || !S) return undefined;
@@ -283,7 +394,128 @@ export default function DsAdminLearnContent({ screen }) {
     return () => {
       alive = false;
     };
-  }, [accessToken, S]);
+  }, [accessToken, S, reload]);
+
+  const again = () => setReload((n) => n + 1);
+
+  /** One place for every write, so each one reports the same way. */
+  async function write(path, { method = "POST", body, ok } = {}) {
+    setBusy(true);
+    try {
+      await apiAuthed(path, {
+        token: accessToken,
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      again();
+      if (ok) say(ok);
+      return true;
+    } catch (err) {
+      // The server's sentence, not a generic one — it is the server that knows
+      // a lesson has no video.
+      say(err?.message || "That could not be saved.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const openForm = (row) =>
+    setForm({
+      row,
+      errors: {},
+      values: row
+        ? Object.fromEntries(F.fields.map((f) => [f.k, row[f.k] ?? row.raw?.[f.k] ?? ""]))
+        : Object.fromEntries(F.fields.map((f) => [f.k, f.type === "number" ? "" : ""])),
+    });
+
+  async function save() {
+    const errs = checkFields(F.fields, form.values);
+    if (Object.keys(errs).length) {
+      setForm((f) => ({ ...f, errors: errs }));
+      return;
+    }
+    const isNew = !form.row;
+    const done = await write(
+      isNew ? `/admin/lc/${screen}` : `/admin/lc/${screen}/${form.row.id}`,
+      {
+        method: isNew ? "POST" : "PUT",
+        body: form.values,
+        // Named rather than "Saved", because after a create the row is a draft
+        // and that is the thing worth telling somebody.
+        ok: isNew
+          ? `${form.values.title || form.values.name || "It"} was added as a draft.`
+          : `${form.values.title || form.values.name || "It"} was saved.`,
+      },
+    );
+    if (done) setForm(null);
+  }
+
+  /**
+   * The actions column, appended to whatever the register declares.
+   *
+   * Delete asks first and names the row. These are the public library, the
+   * training list and the marketing shelf — deleting one is not undoable and
+   * the row is often indistinguishable from its neighbour at a glance.
+   */
+  const rowActions = {
+    h: "",
+    cell: (r) => {
+      if (confirming === r.id) {
+        return (
+          <span className="adm-log">
+            <b>Delete {r.name || r.title}?</b>
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm btn-o adm-danger"
+              disabled={busy}
+              onClick={async () => {
+                const done = await write(`/admin/lc/${screen}/${r.id}`, {
+                  method: "DELETE",
+                  ok: `${r.name || r.title} was deleted.`,
+                });
+                if (done) setConfirming(null);
+              }}
+            >
+              Delete it
+            </button>
+            <button type="button" className="adm-b" onClick={() => setConfirming(null)}>
+              Keep it
+            </button>
+          </span>
+        );
+      }
+      return (
+        <span className="adm-rowacts">
+          <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => openForm(r)}>
+            Edit
+          </button>
+          {F.pub ? (
+            <button
+              type="button"
+              className={`ds-btn ds-btn-sm ${r.state === "active" ? "btn-o adm-danger" : "btn-p"}`}
+              disabled={busy}
+              onClick={() =>
+                write(`/admin/lc/${screen}/${r.id}/publish`, {
+                  body: { published: r.state !== "active" },
+                  ok:
+                    r.state === "active"
+                      ? `${r.name || r.title} is hidden from the site.`
+                      : `${r.name || r.title} is live on the site.`,
+                })
+              }
+            >
+              {r.state === "active" ? "Unpublish" : "Publish"}
+            </button>
+          ) : null}
+          <button type="button" className="adm-b" onClick={() => setConfirming(r.id)}>
+            Delete
+          </button>
+        </span>
+      );
+    },
+  };
 
   if (!S) return <p className="adm-note">No such register.</p>;
   if (failed) {
@@ -295,18 +527,28 @@ export default function DsAdminLearnContent({ screen }) {
 
   return (
     <>
+      {toast}
+
       <div className="adm-pagehead">
         <div>
           <h1 className="adm-h">{S.title}</h1>
           <p className="adm-lede">{S.lede}</p>
         </div>
-        {S.editHref ? (
-          <div className="adm-acts">
-            <Link className="ds-btn btn-p ds-btn-sm" to={S.editHref}>
+        <div className="adm-acts">
+          {/* A register that can be added to says so here. The old "Open the …
+              editor" link stays only where editing genuinely lives elsewhere —
+              a quiz's questions, a changelog's releases. */}
+          {F ? (
+            <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={() => openForm(null)}>
+              + New {F.noun}
+            </button>
+          ) : null}
+          {S.editHref ? (
+            <Link className={`ds-btn ds-btn-sm ${F ? "btn-o" : "btn-p"}`} to={S.editHref}>
               {S.editLabel}
             </Link>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
 
       {S.filters ? (
@@ -316,13 +558,51 @@ export default function DsAdminLearnContent({ screen }) {
       {!d ? (
         <p className="adm-note">Reading the register…</p>
       ) : (
-        <AdmTable cols={S.cols()} rows={items} rowKey={(r) => r.id} empty={S.empty} />
+        <AdmTable
+          cols={F ? [...S.cols(), rowActions] : S.cols()}
+          rows={items}
+          rowKey={(r) => r.id}
+          empty={S.empty}
+        />
       )}
 
-      <p className="adm-foot-note">
-        This register reads. Adding and editing stays in the editor above — one place for a thing
-        to be changed is one place for it to be got wrong.
-      </p>
+      {F ? null : (
+        <p className="adm-foot-note">
+          This register reads. Its rows are nested documents — a quiz's questions, a release's
+          list of changes — and they are edited in the editor above, where there is room to read
+          them properly.
+        </p>
+      )}
+
+      {form ? (
+        <AdmDrawer
+          title={form.row ? `Edit ${form.row.name || form.row.title || F.noun}` : `New ${F.noun}`}
+          intro={
+            form.row
+              ? null
+              : `It is created hidden. Nothing reaches the public site before somebody has looked
+                 at the row once.`
+          }
+          onClose={() => setForm(null)}
+          foot={
+            <>
+              <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => setForm(null)}>
+                Cancel
+              </button>
+              <button type="button" className="ds-btn btn-p ds-btn-sm" disabled={busy} onClick={save}>
+                {busy ? "Saving…" : form.row ? "Save it" : `Add the ${F.noun}`}
+              </button>
+            </>
+          }
+        >
+          <AdmFields
+            fields={F.fields}
+            values={form.values}
+            errors={form.errors}
+            onChange={(values) => setForm((f) => ({ ...f, values }))}
+          />
+        </AdmDrawer>
+      ) : null}
     </>
   );
 }

@@ -89,6 +89,7 @@ export const NAV = [
     items: [
       { to: "/admin/changelogs", label: "What's New", icon: "hi-alert", area: "adminhub" },
       { to: "/admin/showcase", label: "Marketing", icon: "hi-info", area: "showcase" },
+      { to: "/admin/emails", label: "Emails", icon: "ai-mail", area: "adminhub" },
       { to: "/admin/latest", label: "Latest", icon: "hi-info", area: "showcase" },
       { to: "/admin/flyers", label: "Flyers", icon: "hi-doc", area: "flyers" },
       { to: "/admin/freebies", label: "Freebies", icon: "hi-downloads", area: "freebies" },
@@ -125,14 +126,12 @@ export const NAV = [
  *
  *   Ada review   — a queue of Ada's answers for a person to correct.
  *   Certificates — issuing exists; nothing looks over what was issued.
- *   Emails       — sent mail is not browsable.
  *   Templates    — document templates are code, not records.
  *   Issued       — no register of what has gone out.
  */
 export const MISSING = [
   "Ada review",
   "Certificates",
-  "Emails",
   "Templates",
   "Issued",
 ];

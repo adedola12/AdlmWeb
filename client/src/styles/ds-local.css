@@ -913,3 +913,15 @@
   text-underline-offset: 2px; text-decoration-thickness: 1px;
 }
 .ds .adm-link:hover { color: var(--ink); }
+
+/* The saved wording of an email, shown as text rather than rendered. An
+ * admins own HTML running inside the admin is a door nobody needs open. */
+.ds .adm-pre {
+  margin: 6px 0 0; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--pal-light-wash); color: var(--ink-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 46vh; overflow: auto;
+}

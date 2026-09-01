@@ -49,6 +49,7 @@ import AdminDocAudit from "./pages/AdminDocAudit.jsx";
 import AdminDocProduced from "./pages/AdminDocProduced.jsx";
 import AdminDocSystem from "./pages/AdminDocSystem.jsx";
 import AdminStorage from "./pages/AdminStorage.jsx";
+import AdminEmails from "./pages/AdminEmails.jsx";
 import AdminDsWaitlist from "./pages/AdminDsWaitlist.jsx";
 import AdminLcCourses from "./pages/AdminLcCourses.jsx";
 import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
@@ -576,6 +577,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="adminhub">
             <AdminDsSubscriptions />
+          </AdminRoute>
+        ),
+      },
+      {
+        // His Content group has Emails; ours had no screen for what the studio
+        // sends at all.
+        path: "admin/emails",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminEmails />
           </AdminRoute>
         ),
       },

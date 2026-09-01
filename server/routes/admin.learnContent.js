@@ -562,6 +562,177 @@ router.get("/freebies", ...[requireAuth, requirePermission("freebies")], async (
 });
 
 /** Counts by state, for the filter row. */
+
+/* ══════════════════════════════════════════════════ writing, not just reading ══
+ *
+ * Every register above could be read and none could be changed, so each one
+ * carried an "Open the ... editor" button that threw you out of the screen you
+ * were working in and into an older one. This is the other half.
+ *
+ * Declared as a table rather than written out eight times, because the eight
+ * are genuinely the same operation — the only thing that differs is which
+ * fields a row has and which flag means "the public can see it".
+ *
+ * WHAT IS DELIBERATELY NOT HERE
+ *
+ * Quiz QUESTIONS. A quiz row can be renamed, re-marked and published, but the
+ * questions themselves are a nested editor with its own screen. Thirty-three
+ * of these were drafted by a script from lecture transcripts and the point of
+ * publishing one is that a person read it first — a fast inline edit is the
+ * opposite of that.
+ *
+ * Changelog RELEASES, for the same reason: a release is a version, a date and
+ * a list of changes, and it has its own editor.
+ */
+
+const WRITABLE = {
+  lessons: {
+    model: Learn,
+    pub: "isPublished",
+    label: "lesson",
+    fields: ["title", "youtubeId", "thumbnailUrl", "durationSec", "productLabel", "sort"],
+    // A lesson with no video is not a lesson. Checked here rather than only in
+    // the browser, because the browser is not the only thing that can post.
+    check: (b) => (!String(b.youtubeId || "").trim() ? "A lesson needs a YouTube video." : null),
+  },
+  quizzes: {
+    model: Quiz,
+    pub: "isPublished",
+    label: "quiz",
+    fields: ["title", "intro", "passMark", "maxAttempts"],
+  },
+  events: {
+    model: Training,
+    pub: null,
+    label: "training",
+    fields: ["title", "description", "mode", "date", "city", "country", "venue", "attendees"],
+  },
+  classrooms: {
+    model: Classroom,
+    pub: "isActive",
+    label: "classroom",
+    fields: ["title", "description", "classroomCode", "classroomUrl", "companyName"],
+  },
+  showcase: {
+    model: Showcase,
+    pub: "featured",
+    label: "entry",
+    fields: ["name", "code", "location", "logoUrl", "website"],
+  },
+  flyers: {
+    model: Flyer,
+    pub: "published",
+    label: "flyer",
+    fields: ["title", "thumbnailUrl"],
+  },
+  freebies: {
+    model: Freebie,
+    pub: "published",
+    label: "freebie",
+    fields: ["title", "description", "productKey", "imageUrl", "downloadUrl"],
+  },
+};
+
+/** Only the declared fields, and only the ones actually supplied. */
+function pick(spec, body) {
+  const out = {};
+  for (const k of spec.fields) {
+    if (body[k] === undefined) continue;
+    const v = body[k];
+    // Numbers arrive from a form as strings. Left alone they would be stored
+    // as strings and every later sort would order 10 before 9.
+    out[k] = ["durationSec", "sort", "passMark", "maxAttempts", "attendees"].includes(k)
+      ? n0(v)
+      : v;
+  }
+  return out;
+}
+
+const spec = (req, res) => {
+  const s = WRITABLE[req.params.screen];
+  if (!s) {
+    res.status(404).json({ error: "That register cannot be edited here." });
+    return null;
+  }
+  return s;
+};
+
+router.post("/:screen", ...learn, async (req, res, next) => {
+  try {
+    const s = spec(req, res);
+    if (!s) return undefined;
+    const bad = s.check?.(req.body || {});
+    if (bad) return res.status(400).json({ error: bad });
+
+    const doc = pick(s, req.body || {});
+    // Created hidden, whatever was ticked. Nothing reaches the public site
+    // before somebody has looked at the row once.
+    if (s.pub) doc[s.pub] = false;
+    const made = await s.model.create(doc);
+    res.status(201).json({ id: String(made._id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/:screen/:id", ...learn, async (req, res, next) => {
+  try {
+    const s = spec(req, res);
+    if (!s) return undefined;
+    const bad = s.check?.(req.body || {});
+    if (bad) return res.status(400).json({ error: bad });
+
+    const hit = await s.model.findByIdAndUpdate(
+      req.params.id,
+      { $set: pick(s, req.body || {}) },
+      { new: true },
+    ).lean();
+    if (!hit) return res.status(404).json({ error: `No such ${s.label}` });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:screen/:id/publish", ...learn, async (req, res, next) => {
+  try {
+    const s = spec(req, res);
+    if (!s) return undefined;
+    if (!s.pub) {
+      return res.status(400).json({ error: `A ${s.label} has nothing to publish.` });
+    }
+    const on = !!req.body?.published;
+
+    const row = await s.model.findById(req.params.id).lean();
+    if (!row) return res.status(404).json({ error: `No such ${s.label}` });
+
+    // The one guard worth having here: a lesson with no video would appear on
+    // the public library as a card that plays nothing.
+    if (on && s.model === Learn && !row.youtubeId) {
+      return res.status(400).json({
+        error: "That lesson has no video, so publishing it would put an empty card on the site.",
+      });
+    }
+
+    await s.model.updateOne({ _id: row._id }, { $set: { [s.pub]: on } });
+    res.json({ ok: true, published: on });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/:screen/:id", ...learn, async (req, res, next) => {
+  try {
+    const s = spec(req, res);
+    if (!s) return undefined;
+    const gone = await s.model.findByIdAndDelete(req.params.id).lean();
+    if (!gone) return res.status(404).json({ error: `No such ${s.label}` });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function tally(items) {
   const counts = { all: items.length };
   for (const i of items) counts[i.state] = (counts[i.state] || 0) + 1;
