@@ -903,3 +903,13 @@
   background: var(--bg); color: var(--ink);
   font-family: var(--font); font-size: 12.5px; font-variant-numeric: tabular-nums;
 }
+
+/* A link inside a table cell. His admin-catalogue.js reaches for .adm-link
+ * (the YouTube link on a course preview) but his stylesheet never defines it,
+ * so it renders as body text and nobody can tell it is clickable. One rule,
+ * in his tokens. Worth sending back to him. */
+.ds .adm-link {
+  color: var(--action); text-decoration: underline;
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+}
+.ds .adm-link:hover { color: var(--ink); }

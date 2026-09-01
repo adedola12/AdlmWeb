@@ -31,6 +31,7 @@ import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { Quiz } from "../models/Quiz.js";
+import { Product } from "../models/Product.js";
 // The model is exported as FreeVideo; the file is Learn.js.
 import { FreeVideo as Learn } from "../models/Learn.js";
 import { Classroom } from "../models/Classroom.js";
@@ -51,50 +52,324 @@ const hub = [requireAuth, requirePermission("adminhub")];
 /** published | draft — one word, so the tone table can colour it. */
 const pubState = (on) => (on ? "active" : "draft");
 
+/** A YouTube id out of whatever form of link was pasted. */
+const youtubeIdOf = (url) => {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  // Already an id rather than a link — 11 characters, no slashes.
+  if (/^[\w-]{11}$/.test(s)) return s;
+  const m = s.match(/(?:youtu\.be\/|v=|embed\/)([\w-]{11})/);
+  return m ? m[1] : "";
+};
+
 /* ─────────────────────────────────────────────────────────────── courses ── */
 
+/**
+ * Courses — the paid courses and the free videos in one register.
+ *
+ * They are one screen because they are the same object with a price on one of
+ * them: both are a card on the public Learn page, both need a cover, and the
+ * question asked of both is "is anybody getting through it".
+ *
+ * WHERE THEY STALL
+ *
+ * The column worth having, and the one that needs real work to produce. For
+ * each course we count how many enrolments have completed each module, walk
+ * the modules in order, and name the one with the largest fall from the module
+ * before it. That is where people stop — not the module with the fewest
+ * completions, which is always the last one and says nothing.
+ */
 router.get("/courses", ...learn, async (_req, res, next) => {
   try {
-    const [courses, enrolments] = await Promise.all([
+    const [courses, freeVideos, enrolments, quizzes, products] = await Promise.all([
       PaidCourse.find({}).sort({ sort: 1, title: 1 }).lean(),
-      // Grouped in the database rather than pulled and counted here: 27 rows
-      // today, but a course that works will not stay at 27.
-      CourseEnrollment.aggregate([
-        {
-          $group: {
-            _id: "$courseSku",
-            enrolled: { $sum: 1 },
-            finished: { $sum: { $cond: [{ $ifNull: ["$certificateIssuedAt", false] }, 1, 0] } },
-            modulesDone: { $sum: { $size: { $ifNull: ["$completedModules", []] } } },
-          },
-        },
-      ]),
+      Learn.find({}).sort({ sort: 1, title: 1 }).lean(),
+      CourseEnrollment.find({}).select("courseSku completedModules certificateIssuedAt").lean(),
+      Quiz.aggregate([{ $group: { _id: "$courseSku", n: { $sum: 1 } } }]),
+      // A course is priced as a product carrying its SKU. Reading the price off
+      // the product rather than storing a second copy on the course is what
+      // stops the register quoting a figure checkout would not charge.
+      Product.find({ courseSku: { $nin: [null, ""] } }).select("courseSku price priceNGN").lean(),
     ]);
 
-    const bySku = new Map(enrolments.map((e) => [e._id, e]));
+    const quizCount = new Map(quizzes.map((q) => [q._id, q.n]));
+    const priceFor = new Map(products.map((p) => [p.courseSku, n0(p.priceNGN) || n0(p.price)]));
 
-    const items = courses.map((c) => {
-      const e = bySku.get(c.sku) || { enrolled: 0, finished: 0, modulesDone: 0 };
-      const modules = (c.modules || []).length;
+    // Enrolments grouped in memory: the completedModules array has to be walked
+    // per module anyway, which an aggregate cannot do without unwinding it into
+    // far more documents than there are enrolments.
+    const byCourse = new Map();
+    for (const e of enrolments) {
+      const g = byCourse.get(e.courseSku) || { enrolled: 0, finished: 0, done: new Map() };
+      g.enrolled += 1;
+      if (e.certificateIssuedAt) g.finished += 1;
+      for (const code of e.completedModules || []) {
+        g.done.set(code, (g.done.get(code) || 0) + 1);
+      }
+      byCourse.set(e.courseSku, g);
+    }
+
+    const stallOf = (mods, g) => {
+      if (!g || g.enrolled < 3 || mods.length < 2) return null;
+      let worst = null;
+      let prev = g.enrolled;
+      for (const m of mods) {
+        const got = g.done.get(m.code) || 0;
+        const fell = prev - got;
+        if (fell > 0 && (!worst || fell > worst.fell)) worst = { fell, m };
+        prev = got;
+      }
+      // A drop nobody would act on is not worth colouring the row for.
+      return worst && worst.fell >= Math.max(2, g.enrolled * 0.2)
+        ? `${worst.m.title || worst.m.code}`
+        : null;
+    };
+
+    const paid = courses.map((c) => {
+      const mods = c.modules || [];
+      const g = byCourse.get(c.sku);
+      const recorded = mods.filter((m) => m.videoUrl).length;
+      const secs = mods.reduce((t, m) => t + n0(m.durationSec), 0);
       return {
         id: String(c._id),
+        kind: "paid",
         sku: c.sku || "",
         name: c.title || c.sku,
         blurb: c.blurb || "",
-        modules,
-        // How many of those lectures have a transcript, which is what the
-        // player's transcript tab and the quiz drafts both depend on.
-        transcribed: (c.modules || []).filter((m) => m.transcriptStatus === "COMPLETED").length,
-        enrolled: e.enrolled,
-        finished: e.finished,
-        // Where they stall, in his words: the average share of the course
-        // people have actually got through.
-        progress: e.enrolled && modules ? Math.round((e.modulesDone / (e.enrolled * modules)) * 100) : 0,
+        cover: c.thumbnailUrl || null,
+        preview: c.onboardingVideoUrl || null,
+        modules: mods.length,
+        recorded,
+        minutes: Math.round(secs / 60),
+        quizzes: quizCount.get(c.sku) || 0,
+        transcribed: mods.filter((m) => m.transcriptStatus === "COMPLETED").length,
+        price: priceFor.get(c.sku) ?? null,
+        enrolled: g?.enrolled || 0,
+        finished: g?.finished || 0,
+        stall: stallOf(mods, g),
+        published: !!c.isPublished,
         state: pubState(c.isPublished),
       };
     });
 
-    res.json({ items, counts: tally(items) });
+    // A free video is one clip and no modules, so "recorded" is whether the
+    // clip exists at all rather than a count of lectures.
+    const free = freeVideos.map((v) => ({
+      id: String(v._id),
+      kind: "free",
+      sku: "",
+      name: v.title || "Untitled",
+      blurb: v.productLabel || "",
+      cover: v.thumbnailUrl || null,
+      preview: v.youtubeId ? `https://youtu.be/${v.youtubeId}` : null,
+      modules: 0,
+      recorded: v.youtubeId ? 1 : 0,
+      minutes: Math.round(n0(v.durationSec) / 60),
+      quizzes: 0,
+      transcribed: 0,
+      price: null,
+      // Nothing counts a view per free video, so these stay at zero rather than
+      // being filled with a number that means nothing.
+      enrolled: 0,
+      finished: 0,
+      stall: null,
+      published: !!v.isPublished,
+      state: pubState(v.isPublished),
+    }));
+
+    const items = [...paid, ...free];
+    res.json({
+      items,
+      counts: {
+        all: items.length,
+        paid: paid.length,
+        free: free.length,
+        ...tally(items),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ───────────────────────────────────────────────── courses: the editor ── */
+
+/**
+ * A course's modules, for the panel behind "Modules".
+ *
+ * Numbered here rather than in the browser: the number is the module's place
+ * in the course, and a render index would quietly become "position in the
+ * list you are currently looking at".
+ */
+router.get("/courses/:id/modules", ...learn, async (req, res, next) => {
+  try {
+    const c = await PaidCourse.findById(req.params.id).select("modules title").lean();
+    if (!c) return res.status(404).json({ error: "No such course" });
+    const items = (c.modules || []).map((m, i) => ({
+      n: i + 1,
+      code: m.code || "",
+      title: m.title || "",
+      video: m.videoUrl || null,
+      mins: Math.round(n0(m.durationSec) / 60),
+      transcribed: m.transcriptStatus === "COMPLETED",
+    }));
+    res.json({ items, course: c.title || "" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * The price is NOT stored on the course.
+ *
+ * It lives on the product carrying the course's SKU, which is what checkout
+ * and the renewal cron read. Writing it here writes it there — one figure, one
+ * home. If no product carries the SKU the course cannot be sold at all, and
+ * the caller is told rather than having the number silently dropped.
+ */
+async function setCoursePrice(sku, price) {
+  if (price == null || price === "" || !sku) return null;
+  const n = Number(price);
+  if (!Number.isFinite(n) || n < 0) return "That price is not a number.";
+  const hit = await Product.findOneAndUpdate(
+    { courseSku: sku },
+    { $set: { price: n } },
+    { new: true },
+  ).lean();
+  return hit ? null : `No product carries the SKU ${sku}, so the price was not set. Create the product first.`;
+}
+
+router.post("/courses", ...learn, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const name = String(b.name || "").trim();
+    if (!name) return res.status(400).json({ error: "A course needs a title." });
+
+    if (b.kind === "free") {
+      const v = await Learn.create({
+        title: name,
+        productLabel: String(b.blurb || "").trim(),
+        thumbnailUrl: b.cover || "",
+        youtubeId: youtubeIdOf(b.psrc),
+        // Created as a draft whatever the checkbox said. Nothing is on the
+        // Learn page before somebody has looked at it once.
+        isPublished: false,
+      });
+      return res.status(201).json({ id: String(v._id), kind: "free" });
+    }
+
+    const sku = String(b.sku || "").trim();
+    if (!sku) return res.status(400).json({ error: "A paid course needs a SKU." });
+    if (await PaidCourse.exists({ sku })) {
+      return res.status(409).json({ error: `A course with the SKU ${sku} already exists.` });
+    }
+
+    const c = await PaidCourse.create({
+      sku,
+      title: name,
+      blurb: String(b.blurb || "").trim(),
+      thumbnailUrl: b.cover || "",
+      onboardingVideoUrl: b.psrc || "",
+      isPublished: false,
+      modules: [],
+    });
+    const priceNote = await setCoursePrice(sku, b.price);
+    res.status(201).json({ id: String(c._id), kind: "paid", note: priceNote });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/courses/:id", ...learn, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const name = String(b.name || "").trim();
+    if (!name) return res.status(400).json({ error: "A course needs a title." });
+
+    if (b.kind === "free") {
+      const v = await Learn.findByIdAndUpdate(
+        req.params.id,
+        {
+          $set: {
+            title: name,
+            productLabel: String(b.blurb || "").trim(),
+            thumbnailUrl: b.cover || "",
+            youtubeId: youtubeIdOf(b.psrc),
+          },
+        },
+        { new: true },
+      ).lean();
+      if (!v) return res.status(404).json({ error: "No such video" });
+      return res.json({ ok: true });
+    }
+
+    const c = await PaidCourse.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          title: name,
+          sku: String(b.sku || "").trim(),
+          blurb: String(b.blurb || "").trim(),
+          thumbnailUrl: b.cover || "",
+          onboardingVideoUrl: b.psrc || "",
+        },
+      },
+      { new: true },
+    ).lean();
+    if (!c) return res.status(404).json({ error: "No such course" });
+
+    const priceNote = await setCoursePrice(c.sku, b.price);
+    res.json({ ok: true, note: priceNote });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Publishing, with his two guards enforced here as well as in the browser.
+ *
+ * A guard that lives only in the client is a suggestion: anything that can
+ * call the API can ignore it. These are the two states that cost real money —
+ * a half-recorded course is a refund, and a coverless one is a grey box on the
+ * Learn page.
+ */
+router.post("/courses/:id/publish", ...learn, async (req, res, next) => {
+  try {
+    const on = !!req.body?.published;
+    const free = req.body?.kind === "free";
+
+    if (free) {
+      const v = await Learn.findById(req.params.id).lean();
+      if (!v) return res.status(404).json({ error: "No such video" });
+      if (on && !v.youtubeId) {
+        return res.status(400).json({ error: "That video has no clip, so there is nothing to show." });
+      }
+      await Learn.updateOne({ _id: v._id }, { $set: { isPublished: on } });
+      return res.json({ ok: true, published: on });
+    }
+
+    const c = await PaidCourse.findById(req.params.id).lean();
+    if (!c) return res.status(404).json({ error: "No such course" });
+
+    if (on) {
+      const mods = c.modules || [];
+      const short = mods.filter((m) => !m.videoUrl).length;
+      if (mods.length && short) {
+        return res.status(400).json({
+          error:
+            `Cannot publish — ${short} module${short === 1 ? " has" : "s have"} no video. ` +
+            "Somebody would pay for a course that is not there.",
+        });
+      }
+      if (!c.thumbnailUrl) {
+        return res.status(400).json({
+          error: "Cannot publish without a cover — it would be a grey box on the Learn page.",
+        });
+      }
+    }
+
+    await PaidCourse.updateOne({ _id: c._id }, { $set: { isPublished: on } });
+    res.json({ ok: true, published: on });
   } catch (err) {
     next(err);
   }

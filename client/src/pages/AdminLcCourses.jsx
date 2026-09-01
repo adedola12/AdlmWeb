@@ -1,8 +1,11 @@
-// Admin route wrapper — one of the Learning/Content registers.
+// Admin route wrapper — Courses, at /admin/courses.
+//
+// His register: the free videos and the paid courses together, because they
+// are the same object with a price on one of them.
 
 import React from "react";
-import DsAdminLearnContent from "../ds/DsAdminLearnContent.jsx";
+import DsAdminCourses from "../ds/DsAdminCourses.jsx";
 
 export default function AdminLcCourses() {
-  return <DsAdminLearnContent screen="courses" />;
+  return <DsAdminCourses />;
 }

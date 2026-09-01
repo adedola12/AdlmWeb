@@ -69,3 +69,27 @@ export function useAdmToast(ms = 4600) {
 
   return [say, toast];
 }
+
+/**
+ * Validate a values object against the visible fields only.
+ *
+ * Only the visible ones: a hidden field cannot be filled in, so refusing to
+ * save on one is a dead end — the form says something is wrong and points at
+ * nothing.
+ */
+export function checkFields(fields, values) {
+  const errs = {};
+  for (const f of fields) {
+    if (f.when && !f.when(values)) continue;
+    const v = values[f.k];
+    if (f.required && (v == null || String(v).trim() === "")) {
+      errs[f.k] = f.reqMsg || "This is needed.";
+      continue;
+    }
+    if (f.check) {
+      const msg = f.check(v, values);
+      if (msg) errs[f.k] = msg;
+    }
+  }
+  return errs;
+}
