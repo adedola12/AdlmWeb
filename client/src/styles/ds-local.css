@@ -868,3 +868,38 @@
   .ds .rb-head { grid-template-columns: 1fr 1fr; }
   .ds .rb-lib { max-height: 34vh; }
 }
+
+/* ── storage: how full an account is ──────────────────────────────────────
+   The bar and the chip carry the same three bands, so colour never says one
+   thing in the bar and another beside it. */
+.ds .adm-fill { display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end; }
+.ds .adm-fill i {
+  display: block; height: 100%; border-radius: 999px; background: var(--ok);
+}
+.ds .adm-fill::before {
+  content: ""; order: -1; width: 72px; height: 6px; border-radius: 999px;
+  background: var(--line-2); overflow: hidden; flex: none;
+}
+.ds .adm-fill b {
+  font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2);
+  min-width: 34px; text-align: right;
+}
+/* The bar is drawn as a track with an inset fill rather than two nested
+   elements, so the row height cannot shift when a bar appears. */
+.ds .adm-fill { position: relative; }
+.ds .adm-fill i {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  height: 6px; max-width: 72px;
+}
+.ds .adm-fill.is-full i    { background: var(--bad); }
+.ds .adm-fill.is-filling i { background: var(--due); }
+.ds .adm-fill.is-fine i    { background: var(--ok); }
+
+/* Inline edit inside a table cell — a figure, and the control that changes it. */
+.ds .adm-inline { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.ds .adm-inline input {
+  width: 68px; padding: 4px 7px; text-align: right;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font); font-size: 12.5px; font-variant-numeric: tabular-nums;
+}

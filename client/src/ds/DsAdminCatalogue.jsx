@@ -196,48 +196,6 @@ const SCREENS = {
     ],
   },
 
-  rates: {
-    title: "Rate data",
-    lede:
-      "The published rate library — what a unit of work costs, and what it is built from. This is " +
-      "what RateGen prices with, and what the Programme screen would take its durations from if " +
-      "the rates carried outputs.",
-    path: "/admin/catalogue/rates",
-    empty: ["No rates", "The library is empty."],
-    newHref: "/admin/rategen/build",
-    newLabel: "Build a rate",
-    cols: () => [
-      { h: "Rate", w: "34%", cell: (r) => <AdmTwo top={r.description} under={r.section} /> },
-      { h: "Unit", cell: (r) => r.unit || <AdmDim>—</AdmDim> },
-      {
-        h: "Net",
-        num: true,
-        // A Carbon and Others entry is a recipe, not a costed rate: it has no
-        // stored total until its lines are priced. A zero here would read as
-        // a free rate.
-        cell: (r) => (r.recipe ? <AdmDim>priced live</AdmDim> : money(r.net)),
-      },
-      { h: "O/P", num: true, cell: (r) => `${r.overheadPercent}% / ${r.profitPercent}%` },
-      { h: "Total", num: true, cell: (r) => (r.recipe ? <AdmDim>—</AdmDim> : money(r.total)) },
-      {
-        h: "Built from",
-        cell: (r) => (
-          <>
-            <AdmChip tone="">{r.lines} lines</AdmChip>
-            {/* Whether the rate can drive a programme as well as a price. */}
-            {r.hasLabour ? <AdmChip tone="ok">has an output</AdmChip> : null}
-          </>
-        ),
-      },
-      {
-        h: "",
-        // View only. Editing an existing rate happens in Rate Gen — this
-        // register says where rather than offering a control that would put a
-        // second editor on the same figure.
-        cell: () => <AdmDim>edited in Rate Gen</AdmDim>,
-      },
-    ],
-  },
 };
 
 SCREENS.saved = {
@@ -277,7 +235,6 @@ export default function DsAdminCatalogue({ screen }) {
   const S = SCREENS[screen];
   const { accessToken } = useAuth();
   const [view, setView] = React.useState("all");
-  const [section, setSection] = React.useState("");
   const [d, setD] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -289,13 +246,13 @@ export default function DsAdminCatalogue({ screen }) {
     if (!accessToken || !S) return undefined;
     let alive = true;
     setD(null);
-    apiAuthed(S.path, { token: accessToken, params: screen === "rates" ? { section } : {} })
+    apiAuthed(S.path, { token: accessToken })
       .then((r) => alive && setD(r))
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
     };
-  }, [accessToken, S, screen, section, reload]);
+  }, [accessToken, S, reload]);
 
   /**
    * Every write on these registers.
@@ -388,42 +345,12 @@ export default function DsAdminCatalogue({ screen }) {
         <AdmFilters current={view} onPick={setView} options={S.filters(d?.counts || {})} />
       ) : null}
 
-      {/* Rate sections are a filter the server does, because 130 rates across
-          eight sections is a list somebody narrows before reading. */}
-      {screen === "rates" && d?.sections ? (
-        <AdmFilters
-          current={section}
-          onPick={setSection}
-          options={[
-            ["", "Every section", d.total],
-            // Keyed on the canonical section, not its label: the stored labels
-            // disagree with each other and a section with no rates still has
-            // to be selectable. Carbon and Others is the case that proved it.
-            ...d.sections.map((x) => [x.key, x.name, x.n]),
-          ]}
-        />
-      ) : null}
-
       {!d ? (
         <p className="adm-note">Reading the catalogue…</p>
       ) : (
         <AdmTable cols={S.cols(A)} rows={items} rowKey={(r) => r.id} empty={S.empty} />
       )}
 
-      {screen === "rates" && d ? (
-        <p className="adm-foot-note">
-          {d.withLabour} of {d.total} rates carry a labour line, which is the only thing in the
-          library that could tell a programme how long work takes. The other{" "}
-          {d.total - d.withLabour} price the work without saying how fast it goes, which is why the
-          Programme screen has to be told its outputs. {d.recipes} build-up recipes sit behind
-          these rates.
-          <br />
-          A rate can be edited but not deleted. Every product prices against this library and a
-          bill names the rate that priced it, so removing one would leave those figures
-          unexplainable — the server refuses it. An edit reaches RateGen, QUIV and HERON on their
-          next sync, and bills already priced keep the figures they were built with.
-        </p>
-      ) : null}
 
       {screen === "saved" && d ? (
         <p className="adm-foot-note">
