@@ -108,7 +108,6 @@ import AdminAddRate from "./pages/AdminAddRate.jsx";
 import RateGenUpdates from "./pages/RateGenUpdates.jsx";
 import ServiceConstants from "./pages/ServiceConstants.jsx";
 import MaterialConstants from "./pages/MaterialConstants.jsx";
-import AdminRateGenMaster from "./pages/AdminRateGenMaster.jsx";
 import Receipt from "./pages/Receipt.jsx";
 import OrderDetail from "./pages/OrderDetail.jsx";
 import AuthCallback from "./pages/AuthCallback.jsx";

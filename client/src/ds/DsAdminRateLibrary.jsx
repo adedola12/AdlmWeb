@@ -93,11 +93,27 @@ function Dd({ label, value, options, onChange }) {
   );
 }
 
-export default function DsAdminRateLibrary() {
+/**
+ * Two screens out of one component.
+ *
+ * `screen="rates"` is his Rate library: the rates themselves.
+ * `screen="data"`  is his Rate data: the master material and labour prices.
+ *
+ * They were one screen with three tabs, which meant the admin carried two nav
+ * entries — Rate data and Rate library — that fetched the same endpoint and
+ * showed the same rates. Splitting them here rather than writing a second
+ * screen keeps one implementation of the search, the filters, the sort and the
+ * tables; the difference between the two is genuinely only which rows are on
+ * show and what may be done to them.
+ */
+export default function DsAdminRateLibrary({ screen = "rates" }) {
+  const isData = screen === "data";
+
   const { accessToken } = useAuth();
   const [say, toast] = useAdmToast();
 
-  const [tab, setTab] = React.useState("rates"); // rates | materials | labour
+  // rates | materials | labour — but a screen only ever offers its own half.
+  const [tab, setTab] = React.useState(isData ? "materials" : "rates");
   const [zone, setZone] = React.useState("south_west");
   const [q, setQ] = React.useState("");
   const [cat, setCat] = React.useState("all");
@@ -118,7 +134,8 @@ export default function DsAdminRateLibrary() {
      own zone/state if it was built for one place. Re-fetching on a zone change
      would suggest the figures move, which they do not. */
   React.useEffect(() => {
-    if (!accessToken) return undefined;
+    // Rate data never shows a rate, so it never asks for one.
+    if (!accessToken || isData) return undefined;
     let alive = true;
     apiAuthed("/admin/catalogue/rates", { token: accessToken })
       .then((r) => alive && setRates(r))
@@ -126,7 +143,7 @@ export default function DsAdminRateLibrary() {
     return () => {
       alive = false;
     };
-  }, [accessToken]);
+  }, [accessToken, isData]);
 
   /* ── materials and labour, per zone ──────────────────────────────────────
      These DO move with the zone: the same cement is not the same money in
@@ -267,31 +284,37 @@ export default function DsAdminRateLibrary() {
 
       <div className="wk-head">
         <div>
-          <h1>Rate library</h1>
+          <h1>{isData ? "Rate data" : "Rate library"}</h1>
           <p>
-            One library for the practice. A rate here is what every user prices against in QUIV,
-            HERON and Revit MEP. Rates are read here and edited in Rate Gen — the one thing built on
-            the website is a new one.
+            {isData
+              ? "The prices a rate is built from — every material, every gang, as they stand for one zone. These are corrected in ADLM Rate Gen and published from there, so what you see here is exactly what every user in this zone prices against."
+              : "One library for the practice. A rate here is what every user prices against in QUIV, HERON and Revit MEP. Rates are read here and edited in Rate Gen — the one thing built on the website is a new one."}
           </p>
         </div>
         <div className="wk-acts">
-          <label className="wk-dd">
-            <span>Zone</span>
-            <select
-              value={zone}
-              onChange={(e) => setZone(e.target.value)}
-              aria-label="Price the library for a location"
-            >
-              {ZONES.map((z) => (
-                <option key={z.key} value={z.key}>
-                  {z.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Link className="ds-btn btn-p ds-btn-sm" to="/admin/rategen/build">
-            New rate
-          </Link>
+          {/* Only Rate data offers a zone. A published rate carries the cost it
+              was built at, so a zone picker beside the rates would suggest the
+              figures move when they do not. */}
+          {isData ? (
+            <label className="wk-dd">
+              <span>Zone</span>
+              <select
+                value={zone}
+                onChange={(e) => setZone(e.target.value)}
+                aria-label="Price the library for a location"
+              >
+                {ZONES.map((z) => (
+                  <option key={z.key} value={z.key}>
+                    {z.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <Link className="ds-btn btn-p ds-btn-sm" to="/admin/rategen/build">
+              New rate
+            </Link>
+          )}
         </div>
       </div>
 
@@ -304,28 +327,33 @@ export default function DsAdminRateLibrary() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search rates, materials, gangs — or a description"
+            placeholder={
+              isData ? "Search materials and gangs by name" : "Search rates by description or trade"
+            }
             aria-label="Search the library"
             autoComplete="off"
           />
         </label>
 
-        <div className="wk-tabs">
-          {[
-            ["rates", "Rates"],
-            ["materials", "Materials"],
-            ["labour", "Labour"],
-          ].map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              className={tab === k ? "on" : undefined}
-              onClick={() => pick(k)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* The rates screen has one kind of row, so it shows no tabs at all —
+            a tab strip with a single tab is a control that cannot be used. */}
+        {isData ? (
+          <div className="wk-tabs">
+            {[
+              ["materials", "Materials"],
+              ["labour", "Labour and plant"],
+            ].map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                className={tab === k ? "on" : undefined}
+                onClick={() => pick(k)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <Dd
           label={tab === "rates" ? "Trade" : "Category"}
@@ -483,7 +511,7 @@ export default function DsAdminRateLibrary() {
       <p className="wk-count" style={{ marginTop: 18 }}>
         {tab === "rates"
           ? "A rate is edited in Rate Gen, not here — open it there and the change reaches every user on their next update."
-          : "Master prices are published from Rate Gen. What you see here is what every user in this zone prices against."}
+          : "Master prices are published from Rate Gen. Correct one there and every user in this zone gets it on their next price update."}
       </p>
     </>
   );
