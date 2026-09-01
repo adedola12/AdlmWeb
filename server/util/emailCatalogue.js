@@ -53,10 +53,17 @@ export const EMAILS = [
   },
 
   {
+    key: "account.verify",
+    name: "Confirm your email",
+    when: "Somebody signs up, before the account can buy anything",
+    file: "util/emailContent.js",
+    editable: true,
+  },
+  {
     key: "account.welcome",
     name: "Welcome",
     when: "An account is created",
-    file: "util/welcomeEmail.js",
+    file: "util/emailContent.js",
     editable: true,
   },
   {
@@ -77,6 +84,13 @@ export const EMAILS = [
     key: "billing.renewed",
     name: "Subscription renewed",
     when: "The overnight renewal charges a card successfully",
+    file: "util/autoRenew.js",
+    editable: true,
+  },
+  {
+    key: "billing.failed",
+    name: "A payment did not go through",
+    when: "A card is declined on a renewal",
     file: "util/autoRenew.js",
     editable: true,
   },

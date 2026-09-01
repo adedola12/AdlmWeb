@@ -143,6 +143,32 @@ export function requireAdminOrMiniAdmin(req, res, next) {
 // are low-volume, so one indexed read is fine), then resolves it against the
 // in-memory role cache. Super-admins pass everything; otherwise the role must
 // hold the area. 403 on denial.
+/**
+ * Refuse an act that costs money or a licence seat until the address is real.
+ *
+ * NOT a general lock on the account. Somebody who mistyped their address has
+ * to be able to sign in to fix it, and being unable to get back into a
+ * half-made account is its own trap. So an unverified person can sign in, look
+ * around, and change their address — they cannot buy, take an installer, or be
+ * granted an entitlement.
+ *
+ * The reply carries a code the client can act on, so the site can offer "send
+ * it again" rather than showing a dead end.
+ */
+export function requireVerifiedEmail(req, res, next) {
+  // Staff are not gated. An admin account is created by hand and its address
+  // is known; locking one out of a purchase queue helps nobody.
+  if (req.user?.isAdmin || req.user?.role === "admin" || req.user?.isGod) return next();
+
+  if (req.user?.emailVerified) return next();
+
+  return res.status(403).json({
+    error:
+      "Confirm your email address first — we will not sell a licence to an address we cannot reach.",
+    code: "EMAIL_NOT_VERIFIED",
+  });
+}
+
 export function requirePermission(area) {
   return async function (req, res, next) {
     try {

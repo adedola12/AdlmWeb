@@ -1,5 +1,5 @@
 import express from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireVerifiedEmail } from "../middleware/auth.js";
 import { Purchase } from "../models/Purchase.js";
 import { Product } from "../models/Product.js";
 import { Setting } from "../models/Setting.js";
@@ -32,7 +32,7 @@ const minOrgSeatsFor = (key) =>
 // If you are on Node < 18, uncomment:
 // import fetch from "node-fetch";
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, requireVerifiedEmail, async (req, res) => {
   const { productKey, months = 1 } = req.body || {};
   if (!productKey)
     return res.status(400).json({ error: "productKey required" });
@@ -67,7 +67,7 @@ router.post("/", requireAuth, async (req, res) => {
   });
 });
 
-router.post("/cart", requireAuth, async (req, res) => {
+router.post("/cart", requireAuth, requireVerifiedEmail, async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
     const currency = String(req.body?.currency || "NGN").toUpperCase();
@@ -516,7 +516,7 @@ router.get("/verify", async (req, res) => {
 // from the server-side Purchase record — the client only supplies the id, so
 // a tampered frontend can never change what gets charged. Foreign cards pay
 // in NGN too (their bank handles FX); 3DS runs inside the Paystack popup.
-router.post("/:id/paystack/init", requireAuth, async (req, res) => {
+router.post("/:id/paystack/init", requireAuth, requireVerifiedEmail, async (req, res) => {
   try {
     if (!PAYSTACK_SECRET)
       return res.status(400).json({ error: "Paystack not configured" });

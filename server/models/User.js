@@ -206,6 +206,27 @@ const UserSchema = new mongoose.Schema(
 
     refreshVersion: { type: Number, default: 1 },
     welcomeEmailSentAt: { type: Date, default: null },
+
+    /* ── is this a real address? ──────────────────────────────────────────
+     *
+     * Nothing checked, until now. Signup created the account and handed back
+     * a working token, so anybody could register with an address they had
+     * invented and the studio would carry them forever — and every mail sent
+     * to them would bounce quietly.
+     *
+     * The code is stored HASHED. It is six digits, which is small enough that
+     * a leaked database plus a plaintext column would let somebody verify
+     * another person's address at leisure. Same reasoning as a password, on a
+     * shorter secret.
+     */
+    emailVerified: { type: Boolean, default: false, index: true },
+    emailVerifiedAt: { type: Date, default: null },
+    emailVerifyHash: { type: String, default: "" },
+    emailVerifyExpires: { type: Date, default: null },
+    // Rate limiting lives on the record rather than in memory, so restarting
+    // the server is not a way to get around it.
+    emailVerifySentAt: { type: Date, default: null },
+    emailVerifyAttempts: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

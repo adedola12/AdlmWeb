@@ -1,4 +1,5 @@
 import express from "express";
+import { verifyEmail, welcome as welcomeMail } from "../util/emailContent.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -67,6 +68,12 @@ function buildAuthPayload(user) {
     username: user.username || "",
     avatarUrl: user.avatarUrl || "",
     stepUpEnabled: !!user.security?.stepUpEnabled,
+    // Carried in the token so requireVerifiedEmail can read it without a
+    // database round trip on every purchase attempt. An account verified in
+    // another tab keeps its old token until refresh, which is the right way
+    // round: the worst case is being asked to confirm something already
+    // confirmed, not being let through something that is not.
+    emailVerified: !!user.emailVerified,
     isSuperAdmin: isSuperAdminRole(user.role),
     permissions: rolePermissionList(user.role, ALL_AREA_KEYS),
     // Design Access: sees every admin section, but every /admin response is
@@ -427,22 +434,29 @@ router.post("/signup", async (req, res) => {
       entitlements: [],
     });
 
+    // The address has not been proved yet, so the WELCOME does not go now — it
+    // goes when the code comes back. Sending "your account is ready" to an
+    // address nobody has confirmed is how a studio ends up with a list full of
+    // addresses that bounce.
     try {
-      const { subject, html } = buildWelcomeEmail({
-        firstName: user.firstName,
-        lastName: user.lastName,
-      });
-
-      await sendMail({
-        to: user.email,
-        subject,
-        html,
-      });
-
-      user.welcomeEmailSentAt = new Date();
+      const code = newVerifyCode();
+      user.emailVerifyHash = hashCode(code);
+      user.emailVerifyExpires = new Date(Date.now() + VERIFY_MINUTES * 60_000);
+      user.emailVerifySentAt = new Date();
+      user.emailVerifyAttempts = 0;
       await user.save();
+
+      const { subject, html } = verifyEmail({
+        firstName: user.firstName,
+        code,
+        minutes: VERIFY_MINUTES,
+      });
+      await sendMail({ to: user.email, subject, html, templateKey: "account.verify" });
     } catch (mailErr) {
-      console.error("[/auth/signup] welcome mail error:", mailErr);
+      // A signup that cannot send is still a signup. The account exists and
+      // the code can be asked for again, which is better than losing the
+      // registration because a mail server blinked.
+      console.error("[/auth/signup] verification mail error:", mailErr);
     }
 
     // Auto-link any invoices sent to this email address
@@ -1414,6 +1428,168 @@ router.post("/social", authLimiter, async (req, res) => {
   } catch (err) {
     console.error("[/auth/social] error:", err);
     return res.status(500).json({ error: "Sign-in failed" });
+  }
+});
+
+
+
+/* ══════════════════════════════════════════════════ confirming an address ══
+ *
+ * Until this existed, signup created an account and handed back a working
+ * token, so anybody could register with an address they had invented. Every
+ * message the studio then sent to them bounced into nothing.
+ *
+ * WHAT AN UNCONFIRMED ACCOUNT CAN STILL DO
+ *
+ * Sign in, and look around. It is not locked out — being unable to get back
+ * into a half-made account is its own kind of trap, and somebody who mistyped
+ * their address needs to sign in to fix it. What it cannot do is buy, download
+ * an installer, or be granted an entitlement, because those are the acts that
+ * cost a licence seat or money and depend on us being able to reach them.
+ */
+
+const VERIFY_MINUTES = 30;
+/** How long before another code may be asked for. */
+const VERIFY_RESEND_SECONDS = 60;
+/** Wrong guesses before the code is thrown away. */
+const VERIFY_MAX_ATTEMPTS = 6;
+
+/** Six digits, from a real random source rather than Math.random. */
+function newVerifyCode() {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+/**
+ * Hashed, not stored plain. Six digits is a small secret, and a leaked
+ * database with a plaintext column would let somebody confirm another
+ * person's address at leisure.
+ */
+function hashCode(code) {
+  return crypto.createHash("sha256").update(String(code)).digest("hex");
+}
+
+router.post("/verify-email", requireAuth, async (req, res) => {
+  try {
+    await ensureDb();
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "No such account" });
+
+    if (user.emailVerified) {
+      // Not an error. Somebody pressing the link twice has done nothing wrong.
+      return res.json({ ok: true, alreadyVerified: true });
+    }
+
+    const code = String(req.body?.code || "").trim();
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: "That code should be six digits." });
+    }
+
+    if (!user.emailVerifyHash || !user.emailVerifyExpires) {
+      return res.status(400).json({
+        error: "There is no code waiting. Ask for a new one.",
+        code: "NO_CODE",
+      });
+    }
+    if (user.emailVerifyExpires.getTime() < Date.now()) {
+      return res.status(400).json({
+        error: "That code has expired. Ask for a new one.",
+        code: "CODE_EXPIRED",
+      });
+    }
+    if ((user.emailVerifyAttempts || 0) >= VERIFY_MAX_ATTEMPTS) {
+      return res.status(429).json({
+        error: "Too many wrong codes. Ask for a new one.",
+        code: "TOO_MANY",
+      });
+    }
+
+    if (hashCode(code) !== user.emailVerifyHash) {
+      user.emailVerifyAttempts = (user.emailVerifyAttempts || 0) + 1;
+      await user.save();
+      const left = VERIFY_MAX_ATTEMPTS - user.emailVerifyAttempts;
+      return res.status(400).json({
+        error:
+          left > 0
+            ? `That code is not right. ${left} ${left === 1 ? "try" : "tries"} left.`
+            : "That code is not right, and that was the last try. Ask for a new one.",
+      });
+    }
+
+    user.emailVerified = true;
+    user.emailVerifiedAt = new Date();
+    user.emailVerifyHash = "";
+    user.emailVerifyExpires = null;
+    user.emailVerifyAttempts = 0;
+    await user.save();
+
+    // NOW the welcome goes, to an address we know exists.
+    try {
+      if (!user.welcomeEmailSentAt) {
+        const { subject, html } = welcomeMail({ firstName: user.firstName });
+        await sendMail({ to: user.email, subject, html, templateKey: "account.welcome" });
+        user.welcomeEmailSentAt = new Date();
+        await user.save();
+      }
+    } catch (mailErr) {
+      console.error("[/auth/verify-email] welcome mail error:", mailErr);
+    }
+
+    res.json({ ok: true, user: buildAuthPayload(user) });
+  } catch (err) {
+    console.error("[/auth/verify-email] error:", err);
+    res.status(500).json({ error: "Could not confirm that just now." });
+  }
+});
+
+router.post("/resend-verification", requireAuth, async (req, res) => {
+  try {
+    await ensureDb();
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "No such account" });
+    if (user.emailVerified) return res.json({ ok: true, alreadyVerified: true });
+
+    // On the record rather than in memory, so restarting the server is not a
+    // way around it.
+    const since = user.emailVerifySentAt
+      ? (Date.now() - user.emailVerifySentAt.getTime()) / 1000
+      : Infinity;
+    if (since < VERIFY_RESEND_SECONDS) {
+      return res.status(429).json({
+        error: `Wait ${Math.ceil(VERIFY_RESEND_SECONDS - since)} seconds before asking for another.`,
+      });
+    }
+
+    // An address change is allowed here, because the commonest reason a code
+    // never arrives is that the address was typed wrongly.
+    const wanted = String(req.body?.email || "").trim().toLowerCase();
+    if (wanted && wanted !== user.email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(wanted)) {
+        return res.status(400).json({ error: "That email does not look right." });
+      }
+      if (await User.exists({ email: wanted, _id: { $ne: user._id } })) {
+        return res.status(409).json({ error: "Another account already uses that address." });
+      }
+      user.email = wanted;
+    }
+
+    const code = newVerifyCode();
+    user.emailVerifyHash = hashCode(code);
+    user.emailVerifyExpires = new Date(Date.now() + VERIFY_MINUTES * 60_000);
+    user.emailVerifySentAt = new Date();
+    user.emailVerifyAttempts = 0;
+    await user.save();
+
+    const { subject, html } = verifyEmail({
+      firstName: user.firstName,
+      code,
+      minutes: VERIFY_MINUTES,
+    });
+    await sendMail({ to: user.email, subject, html, templateKey: "account.verify" });
+
+    res.json({ ok: true, email: user.email });
+  } catch (err) {
+    console.error("[/auth/resend-verification] error:", err);
+    res.status(500).json({ error: "Could not send that just now." });
   }
 });
 
