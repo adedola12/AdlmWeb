@@ -222,8 +222,11 @@ export default function DsAdminShell({ children, title }) {
             </svg>
           </button>
 
-          {groups.map((g) => (
-            <React.Fragment key={g.group || "tail"}>
+          {groups.map((g, gi) => (
+            // Keyed by position, not by heading: two groups have no heading —
+            // the Today row at the top and his rule block at the bottom — and
+            // keying both on the same fallback string made them one key.
+            <React.Fragment key={g.group || `g${gi}`}>
               {/* His last block has no heading — it opens with a rule instead,
                   because AI usage, System and Sign out are not a category of
                   thing, they are how the place is run. */}
