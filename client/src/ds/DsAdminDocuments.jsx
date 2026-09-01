@@ -88,9 +88,12 @@ const SCREENS = {
   },
 
   produced: {
-    title: "Documents",
+    // "Saved documents" in his rail, and the same words here — the composer is
+    // its own entry now, so two screens called Documents would be two things
+    // with one name.
+    title: "Saved documents",
     lede:
-      "What the studio has produced and kept. Quotations are the only document this system stores " +
+      "What the composer has made and kept. Quotations are the only document this system stores " +
       "as a record — invoices have their own register, and certificates and receipts are generated " +
       "on demand with nothing written down about it.",
     path: "/admin/docs/produced",

@@ -144,8 +144,9 @@ const PAGES = [
   { src: "src/admin-purchases.html", name: "DsAdminPurchases", slug: "admin-purchases" },
   { src: "src/admin-quotations.html", name: "DsAdminQuotations", slug: "admin-quotations" },
   { src: "src/admin-rates.html", name: "DsAdminRates", slug: "admin-rates" },
-  // Added upstream 2026-08-28. His saved-rates screen — the rates a user has
-  // kept, as against the library everybody shares.
+  // Added upstream 2026-08-28. "Saved documents" — what the composer has made
+  // and kept, each one reopening into the composer exactly as it was. Nothing
+  // to do with saved RATES, which live under Catalogue.
   { src: "src/admin-saved.html", name: "DsAdminSaved", slug: "admin-saved" },
   { src: "src/admin-submissions.html", name: "DsAdminSubmissions", slug: "admin-submissions" },
   { src: "src/admin-subscriptions.html", name: "DsAdminSubscriptions", slug: "admin-subscriptions" },

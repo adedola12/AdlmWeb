@@ -223,7 +223,11 @@ export default function DsAdminShell({ children, title }) {
           </button>
 
           {groups.map((g) => (
-            <React.Fragment key={g.group || "top"}>
+            <React.Fragment key={g.group || "tail"}>
+              {/* His last block has no heading — it opens with a rule instead,
+                  because AI usage, System and Sign out are not a category of
+                  thing, they are how the place is run. */}
+              {g.rule ? <div className="adm-rule" /> : null}
               {g.group ? <p className="adm-grp">{g.group}</p> : null}
               <ul className="adm-nav">
                 {g.items.map((it) => (
@@ -248,21 +252,23 @@ export default function DsAdminShell({ children, title }) {
                     </Link>
                   </li>
                 ))}
+                {/* In the same list as the rest of the block, as he has it. It
+                    is a button and not a link because it does something rather
+                    than going somewhere, but it must read as one of the rail's
+                    own rows. */}
+                {g.rule ? (
+                  <li>
+                    <button type="button" className="adm-out" onClick={signOut} data-tip="Sign out">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#hi-signout" />
+                      </svg>
+                      <span className="lb">Sign out</span>
+                    </button>
+                  </li>
+                ) : null}
               </ul>
             </React.Fragment>
           ))}
-
-          <div className="adm-rule" />
-          <ul className="adm-nav">
-            <li>
-              <button type="button" className="adm-out" onClick={signOut} data-tip="Sign out">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#hi-signout" />
-                </svg>
-                <span className="lb">Sign out</span>
-              </button>
-            </li>
-          </ul>
 
           <p className="adm-who">
             Signed in as {who}. Everything done here is written against your name.

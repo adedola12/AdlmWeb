@@ -97,9 +97,21 @@ export const NAV = [
   {
     group: "Documents",
     items: [
-      { to: "/admin/documents", label: "Composer", icon: "hi-doc", area: "adminhub" },
-      { to: "/admin/ai-usage", label: "AI usage", icon: "ai-ada", area: "adminhub" },
+      // His split, restored: Composer is the tool, Saved is what it kept. One
+      // entry pointing at the register with a button to the composer made the
+      // tool feel like a footnote to its own output.
+      { to: "/admin/documents/compose", label: "Composer", icon: "hi-doc", area: "adminhub" },
+      { to: "/admin/documents", label: "Saved", icon: "hi-doc", area: "adminhub" },
       { to: "/admin/audit-log", label: "Audit log", icon: "hi-shield", area: "adminhub", admin: true },
+    ],
+  },
+  {
+    // His last block sits below a rule with no heading: AI usage, System and
+    // Sign out are not documents, they are how the place is run. `rule` draws
+    // the <div class="adm-rule"> he separates it with.
+    rule: true,
+    items: [
+      { to: "/admin/ai-usage", label: "AI usage", icon: "ai-ada", area: "adminhub" },
       { to: "/admin/storage", label: "Storage", icon: "hi-downloads", area: "adminhub" },
       { to: "/admin/settings", label: "System", icon: "hi-settings", area: "adminhub" },
     ],
