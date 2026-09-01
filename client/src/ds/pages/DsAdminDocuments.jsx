@@ -609,6 +609,17 @@ export default function DsAdminDocuments() {
             </li>
             {" "}
             <li>
+              <Link to="/admin/saved" data-tip="Saved documents">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#ai-quote" />
+                </svg>
+                <span className="lb">
+                  Saved
+                </span>
+              </Link>
+            </li>
+            {" "}
+            <li>
               <Link to="/admin/issued" data-tip="Issued">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <use href="#hi-downloads" />
@@ -864,7 +875,7 @@ export default function DsAdminDocuments() {
                   </button>
                   {" "}
                   <button type="button" className="ds-btn btn-o ds-btn-sm" id="adm-keep">
-                    Keep this draft
+                    Save
                   </button>
                   {" "}
                   <button type="button" className="ds-btn btn-p ds-btn-sm" id="adm-print">
@@ -884,7 +895,7 @@ export default function DsAdminDocuments() {
                   </h3>
                   {" "}
                   <p className="adm-sub">
-                    Paste the text, or drop a file anywhere on this panel. Plain text, Markdown, CSV, TSV, JSON and HTML are read here in the browser.
+                    Paste the text, or drop a file anywhere on this panel. Word documents, plain text, Markdown, CSV, TSV, JSON and HTML are all read here in the browser. A Word file keeps its headings, lists and tables and loses its fonts and spacing, which is what you want. The house style is applied here.
                   </p>
                   {" "}
                   <div className="adm-file">
@@ -893,7 +904,7 @@ export default function DsAdminDocuments() {
                       Choose a file
                     </button>
                     {" "}
-                    <input type="file" id="adm-file" accept=".txt,.md,.markdown,.csv,.tsv,.json,.html,.htm" hidden={true} />
+                    <input type="file" id="adm-file" accept=".docx,.txt,.md,.markdown,.csv,.tsv,.json,.html,.htm" hidden={true} />
                     {" "}
                     <span>
                       or drop it here
@@ -979,6 +990,14 @@ export default function DsAdminDocuments() {
                         Everything else is a paragraph.
                       </li>
                       {" "}
+                      <li>
+                        A{" "}
+                        <b>
+                          Word file
+                        </b>
+                        {" "}is read straight into those same conventions: its heading styles become headings, its lists become bullets, its tables become tables. Text in images or text boxes does not come across.
+                      </li>
+                      {" "}
                     </ul>
                     {" "}
                   </details>
@@ -990,11 +1009,23 @@ export default function DsAdminDocuments() {
                   <div className="adm-out-bar doc-noprint">
                     {" "}
                     <span>
-                      Every block on the page is editable. Click into it, type, and press{" "}
+                      Click any block to edit it in place.{" "}
                       <kbd>
                         Enter
                       </kbd>
-                      {" "}to commit.
+                      {" "}breaks it in two,{" "}
+                      <kbd>
+                        Backspace
+                      </kbd>
+                      {" "}at the start joins it to the one above, and{" "}
+                      <kbd>
+                        Ctrl
+                      </kbd>
+                      {" "}
+                      <kbd>
+                        Z
+                      </kbd>
+                      {" "}undoes. The tools beside a block delete it, move it, or change what it is.
                     </span>
                     {" "}
                   </div>
@@ -1002,11 +1033,17 @@ export default function DsAdminDocuments() {
                   <div className="doc-stage" id="adm-sheet">
                   </div>
                   {" "}
+                  <p className="adm-said doc-noprint" id="adm-said" role="status" hidden={true}>
+                  </p>
+                  {" "}
                 </section>
                 {" "}
               </div>
               {" "}
             </main>
+            {" "}
+            <div className="adm-tools doc-noprint" id="adm-tools" role="toolbar" aria-label="What to do with this block" hidden={true}>
+            </div>
             {" "}
           </div>
           {" "}

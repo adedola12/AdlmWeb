@@ -144,6 +144,9 @@ const PAGES = [
   { src: "src/admin-purchases.html", name: "DsAdminPurchases", slug: "admin-purchases" },
   { src: "src/admin-quotations.html", name: "DsAdminQuotations", slug: "admin-quotations" },
   { src: "src/admin-rates.html", name: "DsAdminRates", slug: "admin-rates" },
+  // Added upstream 2026-08-28. His saved-rates screen — the rates a user has
+  // kept, as against the library everybody shares.
+  { src: "src/admin-saved.html", name: "DsAdminSaved", slug: "admin-saved" },
   { src: "src/admin-submissions.html", name: "DsAdminSubmissions", slug: "admin-submissions" },
   { src: "src/admin-subscriptions.html", name: "DsAdminSubscriptions", slug: "admin-subscriptions" },
   { src: "src/admin-support.html", name: "DsAdminSupport", slug: "admin-support" },
@@ -151,6 +154,12 @@ const PAGES = [
   { src: "src/admin-templates.html", name: "DsAdminTemplates", slug: "admin-templates" },
   { src: "src/admin-whats-new.html", name: "DsAdminWhatsNew", slug: "admin-whats-new" },
 
+  // Error pages, added upstream 2026-08-26. Ported for the preview so his
+  // design is reviewable, but note the app does NOT serve them: a 404 here is
+  // a React route, and a 500 is the ErrorBoundary. Wiring these two up is a
+  // separate decision, not a side effect of porting them.
+  { src: "src/404.html", name: "DsNotFound", slug: "404" },
+  { src: "src/500.html", name: "DsServerError", slug: "500" },
 ];
 
 // Hand-authored pages that live alongside the ported ones. They are written
@@ -607,6 +616,44 @@ ${jsx}
 `;
 }
 
+/**
+ * Copy any image of his the app does not already have into public/ds.
+ *
+ * WHY THIS IS A STEP AND NOT A THING SOMEBODY REMEMBERS
+ *
+ * The markup is ported automatically and the pictures it points at were copied
+ * by hand, which works right up until he adds one. He added hd-onsite.jpg on
+ * 25 August; it went unnoticed until the verifier failed, and in between, the
+ * Mobile page carried two broken images. The port already knows both
+ * directories, so it can do this itself.
+ *
+ * ADDS ONLY, NEVER DELETES OR OVERWRITES. public/ds also holds art that is
+ * ours rather than his — a sync that mirrored the source would throw it away,
+ * and one that overwrote would silently undo a deliberate replacement.
+ */
+function syncImages() {
+  const from = path.join(SITE, "assets/img");
+  const to = path.join(CLIENT, "public/ds");
+  if (!fs.existsSync(from)) return;
+  fs.mkdirSync(to, { recursive: true });
+
+  const copied = [];
+  for (const name of fs.readdirSync(from)) {
+    const src = path.join(from, name);
+    if (!fs.statSync(src).isFile()) continue;
+    const dst = path.join(to, name);
+    if (fs.existsSync(dst)) continue;
+    fs.copyFileSync(src, dst);
+    copied.push(name);
+  }
+
+  if (copied.length) {
+    console.log(
+      `[port-ds-html] copied ${copied.length} new image(s) into public/ds: ${copied.join(", ")}`,
+    );
+  }
+}
+
 function main() {
   if (!fs.existsSync(SITE)) {
     console.error(`[port-ds-html] source not found: ${SITE}`);
@@ -614,6 +661,8 @@ function main() {
   }
   fs.mkdirSync(OUT_CHROME, { recursive: true });
   fs.mkdirSync(OUT_PAGES, { recursive: true });
+
+  syncImages();
 
   const index = fs.readFileSync(path.join(SITE, "index.html"), "utf8");
   // The rail lives in the app screens, not in index.html.

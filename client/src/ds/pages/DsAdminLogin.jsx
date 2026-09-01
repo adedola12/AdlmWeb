@@ -31,7 +31,7 @@ export default function DsAdminLogin() {
           </h1>
           {" "}
           <p className="adm-gate-sub">
-            Not the account you use as a customer. Admin rights are granted by ADLM, and two people hold them.
+            Not the account you use as a customer. Admin rights are granted by ADLM, and while this build is under review one account holds them.
           </p>
           {" "}
           <label>

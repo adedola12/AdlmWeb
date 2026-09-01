@@ -609,6 +609,17 @@ export default function DsAdminRates() {
             </li>
             {" "}
             <li>
+              <Link to="/admin/saved" data-tip="Saved documents">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#ai-quote" />
+                </svg>
+                <span className="lb">
+                  Saved
+                </span>
+              </Link>
+            </li>
+            {" "}
+            <li>
               <Link to="/admin/issued" data-tip="Issued">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <use href="#hi-downloads" />

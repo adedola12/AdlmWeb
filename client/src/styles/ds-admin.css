@@ -55,6 +55,13 @@
 .ds .adm-kept-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;
     padding:9px 2px;border-bottom:1px solid var(--line,#E0E2E7)}
 .ds .adm-kept-row:last-child{border-bottom:0}
+
+  /* the document open in the composer, so the sidebar says which one you are editing */
+.ds .adm-kept-row.on{background:rgba(35,156,255,.08);border-radius:6px}
+.ds .adm-kept-row.on b{font-weight:500}
+.ds .adm-kept-all{display:inline-block;margin-top:8px;font-size:11.5px;
+    color:var(--blue,#239CFF);text-decoration:none}
+.ds .adm-kept-all:hover{text-decoration:underline}
 .ds .adm-kept h4{margin:0 0 6px;font-size:12px;font-weight:500;color:var(--ink-2,#3D5169)}
 .ds .adm-kept-row b{display:block;font-size:12.5px;font-weight:400;color:var(--ink,#091E39);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -114,6 +121,32 @@
 .ds .adm-out [contenteditable]:hover{background:rgba(35,156,255,.07)}
 .ds .adm-out [contenteditable]:focus{background:rgba(35,156,255,.10);
     box-shadow:0 0 0 2px rgba(35,156,255,.34)}
+
+
+  /* the selected block, and the tools that belong to it. An outline rather than
+     a border or padding: this element is being measured for pagination, and a
+     selection that changed its height would move the page break under it. */
+.ds .adm-out [data-b]{border-radius:3px}
+.ds .adm-out [data-b].adm-on{outline:2px solid rgba(35,156,255,.42);outline-offset:3px}
+
+
+  /* an empty paragraph is still somewhere you can put the caret, so it has to
+     be visible enough to aim at */
+.ds .adm-out .doc-p:empty{min-height:1.1em}
+.ds .adm-out .doc-p:empty::before{content:'Empty paragraph';color:#B8C2CE;
+    font-style:italic;font-size:.92em}
+.ds .adm-tools{position:fixed;z-index:60;display:flex;gap:2px;padding:3px;
+    background:var(--ink,#091E39);border-radius:9px;
+    box-shadow:0 10px 26px rgba(9,30,57,.28);font-size:11.5px;max-width:92vw;
+    flex-wrap:wrap}
+.ds .adm-tools button{appearance:none;border:0;background:transparent;color:#fff;
+    font:inherit;letter-spacing:-.1px;padding:5px 9px;border-radius:6px;cursor:pointer;
+    white-space:nowrap;opacity:.86}
+.ds .adm-tools button:hover{background:rgba(255,255,255,.14);opacity:1}
+.ds .adm-tools button[data-act^="cut"]:hover{background:#C8372D;opacity:1}
+.ds .adm-said{flex:none;margin:0;padding:8px 20px;font-size:11.5px;
+    color:var(--ink-2,#3D5169);background:rgba(35,156,255,.08);
+    border-top:1px solid var(--line,#E0E2E7)}
 @media (max-width:1100px){
 .ds .adm{grid-template-columns:1fr;height:auto;overflow:visible}
 .ds .adm-side{border-right:0;border-bottom:1px solid var(--line,#E0E2E7)}
@@ -137,13 +170,15 @@
 .ds .adm-body{display:block;height:auto;overflow:visible}
 .ds .adm-rail, .ds .adm-top, .ds .adm-veil, .ds .adm-drawer-wrap, .ds .adm-toast{display:none !important}
 .ds .adm{display:block;height:auto;overflow:visible}
-.ds .adm-side, .ds .adm-bar, .ds .adm-src, .ds .adm-out-bar{display:none !important}
+.ds .adm-side, .ds .adm-bar, .ds .adm-src, .ds .adm-out-bar, .ds .adm-tools, .ds .adm-said{display:none !important}
 
   /* each of these has overflow:hidden or a fixed height on screen, and a stack of
      sheets is 297mm per page — anything still clipping would lose page two */
 .ds .adm-main, .ds .adm-split, .ds .adm-out, .ds .adm-out .doc-stage{display:block;overflow:visible;
     height:auto;min-height:0}
 .ds .adm-out [contenteditable]{background:none !important;box-shadow:none !important}
+.ds .adm-out [data-b].adm-on{outline:0 !important}
+.ds .adm-out .doc-p:empty::before{content:none}
 
 
   /* the stage paints a grey desk on screen; on paper it is the paper */
@@ -1260,4 +1295,54 @@
     font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .ds .adm-col-ax .mid{color:var(--adm-plot-2)}
 .ds .adm-table .adm-bar-t{min-width:70px}
+}
+
+
+/* a document rendered inside the peek drawer — the sheet scaled to the panel */
+@media screen{
+.ds .adm-issued-stage{position:relative;background:var(--bg-inset);padding:12px;
+    border-radius:12px;overflow:hidden;min-height:120px}
+
+  /* the sheets are absolutely stacked once scaled, because a transform leaves
+     the original box behind and they would otherwise overlap each other */
+.ds .adm-issued-stage.scaled{display:block}
+.ds .adm-issued-stage.scaled .doc-sheet{position:absolute;left:12px;
+    box-shadow:0 8px 28px rgba(4,12,22,.18)}
+.ds .adm-issued-stage .doc-sheet{box-shadow:0 8px 28px rgba(4,12,22,.18)}
+
+
+  /* a document needs more room than a summary does */
+.ds .adm-drawer.doc{width:min(620px,100%)}
+
+
+  /* -------------------------------------------------------------- media
+     You choose a picture, you do not spell one. The drop zone in the drawer
+     and the tile in the table are the same component at two sizes, so what
+     you picked is what you then see in the row. */
+.ds .adm-f.media > .adm-drop-in{position:absolute;width:1px;height:1px;opacity:0;
+    pointer-events:none}
+.ds .adm-drop{display:flex;align-items:center;gap:14px;padding:12px;
+    border:1px dashed var(--line,#E0E2E7);border-radius:12px;
+    background:var(--bg-inset,#F4F6F9);
+    transition:border-color .14s var(--e-out,ease),background .14s var(--e-out,ease)}
+.ds .adm-drop.over{border-color:var(--action,#0765B0);
+    background:color-mix(in srgb,var(--action,#0765B0) 7%,transparent)}
+.ds .adm-drop-c{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 4px}
+.ds .adm-drop-i{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;
+    background:var(--bg,#fff);color:var(--ink-3,#6B7280);font-size:15px}
+.ds .adm-drop-m{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ds .adm-drop-m strong{font-size:13px;font-weight:500;color:var(--ink);word-break:break-all}
+.ds .adm-drop-a{display:flex;gap:8px;margin-top:8px}
+.ds .adm-thumb{position:relative;display:block;width:64px;height:40px;flex:none;
+    border-radius:7px;overflow:hidden;background:var(--bg,#fff);
+    border:1px solid var(--line,#E0E2E7)}
+.ds .adm-thumb img, .ds .adm-thumb video{width:100%;height:100%;object-fit:cover;display:block}
+.ds .adm-thumb.big{width:132px;height:82px;border-radius:9px}
+.ds .adm-thumb.empty, .ds .adm-thumb.missing{display:grid;place-items:center;padding:4px;
+    border-style:dashed}
+.ds .adm-thumb-n{font-size:10px;line-height:1.25;color:var(--ink-3,#6B7280);
+    text-align:center;word-break:break-all;overflow:hidden}
+.ds .adm-thumb-play{position:absolute;right:4px;bottom:3px;font-size:9px;color:#fff;
+    background:rgba(4,12,22,.62);border-radius:4px;padding:1px 4px;pointer-events:none}
+.ds .adm-media-cell{display:flex;align-items:center;gap:9px;min-width:0}
 }
