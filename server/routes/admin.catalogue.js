@@ -23,6 +23,8 @@
 // a price book is opened to answer.
 
 import express from "express";
+import { writeAudit, reqAuditContext } from "../util/audit.js";
+import { ChangelogProduct } from "../models/Changelog.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { Product } from "../models/Product.js";
 import { Software } from "../models/Software.js";
@@ -40,13 +42,39 @@ const router = express.Router();
 
 const n0 = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
+/**
+ * Which products hold projects, and how many each licence allows.
+ *
+ * Mirrors routes/me.js, which is where it is enforced. The allowance is NOT
+ * per product on this system — it is a personal figure and an organisation
+ * figure, set in the environment, plus whatever extra slots an account has
+ * been granted. His screen shows a number per product; ours shows the two
+ * that actually govern, because inventing a third would be a figure on a
+ * screen that nothing obeys.
+ */
+const PROJECT_PRODUCT_KEYS = new Set([
+  "revit",
+  "planswift",
+  "mep",
+  "civil3d",
+  "revitmep",
+  "archicad",
+]);
+const PERSONAL_PROJECT_LIMIT = Number(process.env.PERSONAL_PROJECT_LIMIT || 30);
+const ORG_PROJECT_LIMIT = Number(process.env.ORG_PROJECT_LIMIT || 50);
+
 /* ───────────────────────────────────────────────────────────── products ── */
 
 router.get("/products", requireAuth, requirePermission("adminhub"), async (_req, res, next) => {
   try {
-    const [products, software] = await Promise.all([
+    const [products, software, logs] = await Promise.all([
       Product.find({}).sort({ sort: 1, name: 1 }).lean(),
       Software.find({}).sort({ createdAt: -1 }).lean(),
+      // His "Latest release" is the release NOTE a customer reads on What's
+      // New, not the installer file. They are different things: a build can be
+      // uploaded without anybody being told, which is exactly the gap worth
+      // seeing on this screen.
+      ChangelogProduct.find({}).select("slug name releases").lean(),
     ]);
 
     // The newest installer per product name, which is the closest thing this
@@ -61,6 +89,21 @@ router.get("/products", requireAuth, requirePermission("adminhub"), async (_req,
         return sn && (name.includes(sn.split(" ")[0]) || sn.includes(key));
       });
       return hit ? { name: hit.name, version: hit.version || "", at: hit.updatedAt } : null;
+    };
+
+    /** The newest release note written against this product, if any. */
+    const noteFor = (p) => {
+      const key = String(p.key || "").toLowerCase();
+      const name = String(p.name || "").toLowerCase();
+      const log = logs.find((l) => {
+        const slug = String(l.slug || "").toLowerCase();
+        const ln = String(l.name || "").toLowerCase();
+        return slug === key || name.includes(ln) || ln.includes(name.split(":")[0].trim());
+      });
+      const r = log?.releases?.[0];
+      return r
+        ? { version: r.version || "", on: r.date || "", note: r.highlight || r.title || "" }
+        : null;
     };
 
     const items = products.map((p) => {
@@ -81,6 +124,14 @@ router.get("/products", requireAuth, requirePermission("adminhub"), async (_req,
         install: n0(pr.installNGN),
         storageSlot: n0(p.storageSlotPriceNGN),
         release: latestFor(p),
+        note: noteFor(p),
+        // Only some products hold projects at all — RateGen and the courses
+        // have no project bucket, so a storage figure against them would be a
+        // number that governs nothing.
+        holdsProjects: PROJECT_PRODUCT_KEYS.has(String(p.key || "").toLowerCase()),
+        projects: PROJECT_PRODUCT_KEYS.has(String(p.key || "").toLowerCase())
+          ? { personal: PERSONAL_PROJECT_LIMIT, org: ORG_PROJECT_LIMIT }
+          : null,
         state,
         sort: n0(p.sort),
       };
@@ -90,6 +141,174 @@ router.get("/products", requireAuth, requirePermission("adminhub"), async (_req,
     for (const i of items) counts[i.state] = (counts[i.state] || 0) + 1;
 
     res.json({ items, counts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+/* ─────────────────────────────────────────────────── products: the writes ── */
+
+/**
+ * A product's own record: what the website says about it and whether it is on
+ * sale. The PRICE is not here — it has its own route because changing what a
+ * thing costs is a different act from renaming it, and only one of the two is
+ * worth writing to the audit log.
+ */
+router.post("/products", requireAuth, requirePermission("adminhub"), async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const name = String(b.name || "").trim();
+    const key = String(b.key || "").trim().toLowerCase();
+    if (!name) return res.status(400).json({ error: "A product needs a name." });
+    if (!key) return res.status(400).json({ error: "A product needs a key — it is what orders and entitlements point at." });
+    if (await Product.exists({ key })) {
+      return res.status(409).json({ error: `A product already uses the key ${key}.` });
+    }
+
+    const made = await Product.create({
+      key,
+      name,
+      blurb: String(b.tag || "").trim(),
+      price: {
+        monthlyNGN: n0(b.monthly),
+        yearlyNGN: n0(b.yearly),
+        installNGN: n0(b.install),
+      },
+      // A new product starts as Coming, never Live. Adding one here puts it in
+      // the price book, the quotation builder and on the website, and none of
+      // that should happen the instant somebody presses Create.
+      isPublished: false,
+      isComingSoon: true,
+    });
+    res.status(201).json({ id: String(made._id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/products/:id", requireAuth, requirePermission("adminhub"), async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const set = {};
+    if (b.name !== undefined) set.name = String(b.name).trim();
+    if (b.tag !== undefined) set.blurb = String(b.tag).trim();
+    if (b.state !== undefined) {
+      set.isPublished = b.state === "Live";
+      set.isComingSoon = b.state === "Coming";
+    }
+    const hit = await Product.findByIdAndUpdate(req.params.id, { $set: set }, { new: true }).lean();
+    if (!hit) return res.status(404).json({ error: "No such product" });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Changing a price, with the reason written down.
+ *
+ * His form asks why and puts it in the audit log beside the old and new
+ * figures, which is the right instinct: a price change with no reason cannot
+ * be explained six months later when somebody asks why a renewal quote does
+ * not match a proposal.
+ *
+ * Existing customers are NOT re-priced. They keep the figure they renew at
+ * until their term ends, so this changes what a new customer pays — the route
+ * says so in its reply rather than leaving somebody to wonder.
+ */
+router.post("/products/:id/price", requireAuth, requirePermission("adminhub"), async (req, res, next) => {
+  try {
+    const monthly = n0(req.body?.monthly);
+    const yearly = n0(req.body?.yearly);
+    const why = String(req.body?.why || "").trim();
+
+    if (!why) {
+      return res.status(400).json({
+        error: "Say why. A price change with no reason cannot be explained later.",
+      });
+    }
+    if (monthly < 0 || yearly < 0) {
+      return res.status(400).json({ error: "A price cannot be negative." });
+    }
+
+    const p = await Product.findById(req.params.id).lean();
+    if (!p) return res.status(404).json({ error: "No such product" });
+
+    const was = { monthly: n0(p.price?.monthlyNGN), yearly: n0(p.price?.yearlyNGN) };
+    await Product.updateOne(
+      { _id: p._id },
+      { $set: { "price.monthlyNGN": monthly, "price.yearlyNGN": yearly } },
+    );
+
+    // How many seats are already on it, so the reply can say what was and was
+    // not disturbed.
+    const held = await User.aggregate([
+      { $unwind: "$entitlements" },
+      { $match: { "entitlements.productKey": String(p.key || "").toLowerCase(), "entitlements.status": "active" } },
+      { $group: { _id: null, seats: { $sum: { $ifNull: ["$entitlements.seats", 1] } } } },
+    ]);
+    const seats = held[0]?.seats || 0;
+
+    await writeAudit({
+      actorId: req.user?._id,
+      actorEmail: req.user?.email,
+      action: "product.price.change",
+      status: 200,
+      ...reqAuditContext(req),
+      meta: { product: p.name, key: p.key, was, now: { monthly, yearly }, why, seatsHeld: seats },
+    });
+
+    res.json({ ok: true, seats });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Publish a release note against a product.
+ *
+ * This is what puts an entry on the public What's New page and tells the
+ * customers on that product — so it writes to the changelog the public page
+ * reads, not to a second list that would drift out of step with it.
+ */
+router.post("/products/:id/release", requireAuth, requirePermission("adminhub"), async (req, res, next) => {
+  try {
+    const version = String(req.body?.version || "").trim();
+    const on = String(req.body?.on || "").trim();
+    const note = String(req.body?.note || "").trim();
+
+    if (!version) return res.status(400).json({ error: "A release needs a version." });
+    if (!note) {
+      return res.status(400).json({
+        error: "A release note nobody can read is worse than no release note.",
+      });
+    }
+
+    const p = await Product.findById(req.params.id).lean();
+    if (!p) return res.status(404).json({ error: "No such product" });
+
+    const key = String(p.key || "").toLowerCase();
+    let log = await ChangelogProduct.findOne({ slug: key });
+    if (!log) {
+      // Six of eight products have no changelog document at all, which is why
+      // What's New could not show them. Creating one on the first release is
+      // better than refusing, and better than a separate migration nobody runs.
+      log = await ChangelogProduct.create({
+        slug: key,
+        name: p.name || key,
+        tagline: p.blurb || "",
+        status: p.isPublished ? "live" : "coming-soon",
+        releases: [],
+      });
+    }
+
+    await ChangelogProduct.updateOne(
+      { _id: log._id },
+      { $push: { releases: { $each: [{ version, date: on, highlight: note, changes: [] }], $position: 0 } } },
+    );
+
+    res.json({ ok: true, product: p.name, version });
   } catch (err) {
     next(err);
   }
