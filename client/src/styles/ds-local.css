@@ -925,3 +925,41 @@
   white-space: pre-wrap; word-break: break-word;
   max-height: 46vh; overflow: auto;
 }
+
+/* ── Ada must not sit on top of anything you can press ────────────────────
+ *
+ * She is position:fixed at right:22px bottom:22px with z-index 880, so she
+ * floats over whatever happens to be in the bottom-right corner — which, on
+ * a form or a register, is exactly where the save and the row actions are.
+ *
+ * The fix is room rather than z-index. Raising the page above her would put
+ * the page's own content over a floating button, which looks broken from the
+ * other direction; moving her breaks his design. So every scrolling surface
+ * reserves the height of the pill plus its shadow at the bottom, and the last
+ * control on a page can always be scrolled clear of her.
+ *
+ * --ada-clear rather than a literal, so the day she changes size this is one
+ * number in one place.
+ */
+:root { --ada-clear: 92px; }
+
+.ds .adm-page-in,
+.ds .dsh-main,
+.ds .wk-main,
+.ds .lx-main { padding-bottom: var(--ada-clear); }
+
+/* A drawer scrolls inside itself and sits ABOVE her (z-index on .adm-drawer-
+   wrap), so its footer needs no gap — but its scrolling body does, or the last
+   field hides behind the footer on a short screen. */
+.ds .adm-drawer-b { padding-bottom: 18px; }
+
+/* On a phone she goes full-width across the bottom, so the reserve has to be
+   taller or she covers two rows rather than one corner. */
+@media (max-width: 720px) {
+  :root { --ada-clear: 116px; }
+}
+
+/* Somebody printing a register does not want a chat button on the paper. */
+@media print {
+  .ds .ada-w { display: none !important; }
+}

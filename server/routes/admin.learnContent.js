@@ -32,6 +32,7 @@ import { PaidCourse } from "../models/PaidCourse.js";
 import { CourseEnrollment } from "../models/CourseEnrollment.js";
 import { Quiz } from "../models/Quiz.js";
 import { Product } from "../models/Product.js";
+import { User } from "../models/User.js";
 // The model is exported as FreeVideo; the file is Learn.js.
 import { FreeVideo as Learn } from "../models/Learn.js";
 import { Classroom } from "../models/Classroom.js";
@@ -475,25 +476,104 @@ router.get("/classrooms", ...[requireAuth, requirePermission("trainings")], asyn
 
 /* ────────────────────────────────────────────────────────────── what's new ── */
 
+/**
+ * What's New — every release across every product, newest first.
+ *
+ * His screen is a flat list of releases, not a list of products, because that
+ * is how a visitor reads /whats-new: one column of announcements. A product
+ * with nothing to announce has no row there and needs none here.
+ *
+ * WHY THE PRODUCTS WITH NOTHING ARE STILL NAMED
+ *
+ * Eight products are on sale and two have a changelog document, so six were
+ * simply absent from this screen — which reads as "those products have no
+ * releases" when the truth is "nobody has ever written one". Those six are
+ * counted and named under the table. A register that hides its own gaps is
+ * how a product ships for a year without a single customer being told.
+ *
+ * REACH IS SEATS, NOT ACCOUNTS
+ *
+ * A release note is not just a web page — it is what gets told to the people
+ * paying for that product. One account can hold several seats, so seats is the
+ * number of installations that will see it.
+ */
 router.get("/changelogs", ...hub, async (_req, res, next) => {
   try {
-    const rows = await Changelog.find({}).sort({ order: 1, name: 1 }).lean();
-    const items = rows.map((c) => {
-      const releases = c.releases || [];
-      const latest = releases[0] || null;
-      return {
-        id: String(c._id),
-        name: c.name || c.slug,
-        slug: c.slug || "",
-        tagline: c.tagline || "",
-        category: c.category || "",
-        releases: releases.length,
-        latest: latest ? latest.version || latest.name || "" : "",
-        latestAt: latest ? latest.date || latest.on || null : null,
-        state: String(c.status || "").toLowerCase() === "live" ? "active" : c.status || "draft",
-      };
+    const [logs, products, reach] = await Promise.all([
+      Changelog.find({}).sort({ order: 1, name: 1 }).lean(),
+      Product.find({}).select("key name").lean(),
+      User.aggregate([
+        { $unwind: "$entitlements" },
+        { $match: { "entitlements.status": "active" } },
+        {
+          $group: {
+            _id: "$entitlements.productKey",
+            seats: { $sum: { $ifNull: ["$entitlements.seats", 1] } },
+          },
+        },
+      ]),
+    ]);
+
+    const seatsFor = new Map(reach.map((r) => [String(r._id || "").toLowerCase(), r.seats]));
+
+    /**
+     * A changelog's slug and a product's key are not the same vocabulary — the
+     * catalogue still uses the CAD host it was named after (civil3d) while the
+     * changelog uses the product (civiq). Matched on the slug first, then on
+     * the name, and left unmatched rather than guessed at.
+     */
+    const keyFor = (log) => {
+      const slug = String(log.slug || "").toLowerCase();
+      if (seatsFor.has(slug)) return slug;
+      const name = String(log.name || "").toLowerCase();
+      const hit = products.find(
+        (p) =>
+          String(p.key).toLowerCase() === slug ||
+          String(p.name).toLowerCase().includes(name) ||
+          name.includes(String(p.name).toLowerCase().split(":")[0].trim()),
+      );
+      return hit ? String(hit.key).toLowerCase() : null;
+    };
+
+    const items = [];
+    for (const log of logs) {
+      const key = keyFor(log);
+      for (const r of log.releases || []) {
+        items.push({
+          id: `${log._id}:${r.version}`,
+          product: log.name || log.slug,
+          slug: log.slug || "",
+          version: r.version || "",
+          // His label is free text ("June 2026", "2022"), so it is passed
+          // through rather than parsed into a date that would print wrong.
+          on: r.date || "",
+          note: r.highlight || r.title || "",
+          changes: (r.changes || []).reduce((t, g) => t + (g.items || []).length, 0),
+          // null, not 0: "we cannot match this to a product" and "nobody holds
+          // it" are different answers and the screen shows them differently.
+          seats: key ? seatsFor.get(key) ?? 0 : null,
+          state: String(log.status || "").toLowerCase() === "live" ? "active" : "draft",
+        });
+      }
+    }
+
+    // Newest first, and a release with no date sorts last rather than first.
+    items.sort((a, b) => String(b.on).localeCompare(String(a.on)));
+
+    const told = new Set(logs.map((l) => String(l.slug || "").toLowerCase()));
+    const silent = products
+      .filter((p) => {
+        const k = String(p.key).toLowerCase();
+        if (told.has(k)) return false;
+        return !logs.some((l) => keyFor(l) === k);
+      })
+      .map((p) => p.name);
+
+    res.json({
+      items,
+      silent,
+      counts: { all: items.length, products: logs.length, silent: silent.length },
     });
-    res.json({ items, counts: tally(items) });
   } catch (err) {
     next(err);
   }

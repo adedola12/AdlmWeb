@@ -193,23 +193,68 @@ const SCREENS = {
   changelogs: {
     title: "What's New",
     lede:
-      "One row per product, with the releases published against it. This is what the What's New " +
-      "page reads, so a release missing here is a release nobody was told about.",
+      "Every release across every product, newest first — which is exactly how a visitor reads " +
+      "the public page. A note written here appears on /whats-new and on that product's own " +
+      "page, because there is one list seen two ways.",
     path: "/admin/lc/changelogs",
     editHref: "/admin/changelogs",
     editLabel: "Open the changelog editor",
-    empty: ["No changelogs", "No product has a release history."],
+    empty: ["No releases", "Nothing has been announced for any product."],
     cols: () => [
-      { h: "Product", w: "26%", cell: (c) => <AdmTwo top={c.name} under={c.tagline} /> },
-      { h: "Category", cell: (c) => c.category || <AdmDim>—</AdmDim> },
-      { h: "Releases", num: true, cell: (c) => c.releases },
       {
-        h: "Latest",
-        cell: (c) =>
-          c.latest ? <AdmTwo top={c.latest} under={when(c.latestAt)} /> : <AdmDim>none</AdmDim>,
+        h: "Released",
+        w: "18%",
+        cell: (r) => (
+          <AdmTwo
+            top={r.on || "no date"}
+            under={`${r.product} v${r.version}`}
+          />
+        ),
       },
-      { h: "State", cell: (c) => <AdmChip tone={toneFor(c.state)}>{c.state}</AdmChip> },
+      {
+        h: "What changed",
+        w: "42%",
+        cell: (r) =>
+          r.note || (r.changes ? `${r.changes} changes listed` : <AdmDim>nothing written</AdmDim>),
+      },
+      {
+        h: "Reaches",
+        // A release note is not just a web page: it is what gets told to the
+        // people paying for that product.
+        cell: (r) =>
+          r.seats == null ? (
+            <AdmDim>no product matched</AdmDim>
+          ) : (
+            <AdmTwo
+              top={`${r.seats} ${r.seats === 1 ? "seat" : "seats"}`}
+              under={`on ${r.product}`}
+            />
+          ),
+      },
+      { h: "State", cell: (r) => <AdmChip tone={toneFor(r.state)}>{r.state}</AdmChip> },
     ],
+    // His footnote, plus the one this system needs: a product nobody has ever
+    // written a release for is invisible on a list of releases, and silence is
+    // exactly the thing worth seeing.
+    after: (d) => (
+      <div className="adm-merge">
+        <b>This is the public What&rsquo;s New page.</b>
+        <span>
+          Every row here is an entry a visitor reads at /whats-new, and it is the same note that
+          appears on the product&rsquo;s own page — one list, seen two ways.
+          {d?.silent?.length ? (
+            <>
+              {" "}
+              <b>
+                {d.silent.length} product{d.silent.length === 1 ? " has" : "s have"} never had a
+                release written:
+              </b>{" "}
+              {d.silent.join(", ")}. They are on sale and their customers have been told nothing.
+            </>
+          ) : null}
+        </span>
+      </div>
+    ),
   },
 
   showcase: {
@@ -566,7 +611,12 @@ export default function DsAdminLearnContent({ screen }) {
         />
       )}
 
-      {F ? null : (
+      {/* His `after` — the paragraph a register ends with, which is where he
+          puts the thing the table cannot say. Rendered for any screen that
+          declares one. */}
+      {d && S.after ? S.after(d) : null}
+
+      {F || S.after ? null : (
         <p className="adm-foot-note">
           This register reads. Its rows are nested documents — a quiz's questions, a release's
           list of changes — and they are edited in the editor above, where there is room to read
