@@ -229,7 +229,13 @@ router.post(
     const contentType =
       String(req.body?.contentType || "").trim() || "application/octet-stream";
 
-    const presigned = await createPresignedPutUrl({ key: objectKey, contentType });
+    // installer: true routes the object into the private installers bucket
+    // when one is configured, so the package is never publicly readable.
+    const presigned = await createPresignedPutUrl({
+      key: objectKey,
+      contentType,
+      installer: true,
+    });
 
     // createPresignedPutUrl signs only ContentType, so that is the one header
     // the client must replay verbatim — anything else breaks the signature.
@@ -276,6 +282,7 @@ router.post(
       out = await uploadBufferToR2(req.file.buffer, {
         key: objectKey,
         contentType: req.file.mimetype || "application/octet-stream",
+        installer: true,
       });
       storageProvider = "r2";
     } else {
