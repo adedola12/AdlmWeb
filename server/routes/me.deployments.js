@@ -4,8 +4,53 @@ import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Purchase } from "../models/Purchase.js";
 import { ProductDeployment } from "../models/ProductDeployment.js";
+import {
+  createPresignedGetUrl,
+  isPrivateInstallerStorageEnabled,
+  objectKeyFromPackageUri,
+} from "../utils/r2Upload.js";
 
 const router = express.Router();
+
+/**
+ * Replaces each stored packageUri with a freshly signed, time-limited GET.
+ *
+ * The stored value is a permanent public URL, so handing it back means
+ * every entitled user walks away with a link that needs no credential,
+ * never expires, and works for anyone they pass it to — which for HERON
+ * left the proprietary takeoff package one GET from the world. Signing
+ * here keeps the download inside the entitlement check that already
+ * gates this route.
+ *
+ * Three deliberate properties:
+ *  - Off unless R2_INSTALLERS_BUCKET is set, so deploying this code on
+ *    its own changes nothing and the bucket move is the real cutover.
+ *  - A URI that does not resolve to an object key (a legacy Cloudinary
+ *    raw URL, say) is passed through untouched.
+ *  - A signing failure falls back to the stored URI instead of throwing.
+ *    Degrading to today's behaviour beats breaking every install on the
+ *    platform because one signature could not be produced.
+ */
+async function withSignedPackageUris(items) {
+  if (!isPrivateInstallerStorageEnabled()) return items;
+
+  return Promise.all(
+    items.map(async (item) => {
+      const key = objectKeyFromPackageUri(item?.packageUri);
+      if (!key) return item;
+
+      try {
+        return { ...item, packageUri: await createPresignedGetUrl({ key }) };
+      } catch (err) {
+        console.error(
+          `[me/deployments] could not sign packageUri for "${item?.productKey}" (${key}):`,
+          err?.message || err,
+        );
+        return item;
+      }
+    }),
+  );
+}
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -204,7 +249,7 @@ router.get(
       return { ...withoutSecrets, envVars: undefined };
     });
 
-    return res.json({ ok: true, items });
+    return res.json({ ok: true, items: await withSignedPackageUris(items) });
   }),
 );
 
