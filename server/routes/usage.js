@@ -7,11 +7,59 @@
 // relying on sign-in events, which only fire once per token lifetime.
 import express from "express";
 import mongoose from "mongoose";
+import multer from "multer";
 import { requireAuth } from "../middleware/auth.js";
 import { UsageSession } from "../models/UsageSession.js";
 import { User } from "../models/User.js";
+import {
+  DiagnosticLog,
+  MAX_CONTENT_BYTES,
+} from "../models/DiagnosticLog.js";
 
 const router = express.Router();
+
+// Beta-programme log uploads: one text part named "file", at most
+// MAX_CONTENT_BYTES. Memory storage — the text goes straight into the document.
+// The plugin's multipart helper labels every part application/octet-stream, so
+// the filter accepts that alongside text/plain and rejects the rest.
+const uploadLog = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_CONTENT_BYTES, files: 1 },
+  fileFilter: (req, file, cb) => {
+    const mime = String(file.mimetype || "").toLowerCase();
+    if (mime === "text/plain" || mime === "application/octet-stream") {
+      return cb(null, true);
+    }
+    cb(new Error(`Only a text log is accepted (got: ${mime || "unknown"})`));
+  },
+});
+
+const handleLogUpload = (req, res, next) =>
+  uploadLog.single("file")(req, res, (err) => {
+    if (!err) return next();
+    const msg =
+      err.code === "LIMIT_FILE_SIZE"
+        ? `The log must be smaller than ${Math.round(MAX_CONTENT_BYTES / 1024)} KB.`
+        : err.message || "Upload rejected.";
+    return res.status(400).json({ error: msg });
+  });
+
+// Logs kept per user+product. Older ones are removed as new ones arrive, on top
+// of the model's time-based expiry.
+const MAX_LOGS_PER_USER_PRODUCT = 30;
+
+// Lines PerfLog writes look like "[PERF] bill.open.toIdle took 812 ms (...)" or
+// the "[PERF] ==== summary" block; pull them out for the admin list view.
+function extractPerfLines(text, max = 120) {
+  const out = [];
+  for (const line of String(text || "").split(/\r?\n/)) {
+    if (line.includes("[PERF]")) {
+      out.push(line.slice(0, 300));
+      if (out.length >= max) break;
+    }
+  }
+  return out;
+}
 
 // A heartbeat within this window of the previous one continues the session.
 // Clients ping every ~5 min, so 15 min tolerates two missed pings.
@@ -103,6 +151,107 @@ router.post("/heartbeat", requireAuth, async (req, res) => {
     console.error("[/usage/heartbeat] error:", err);
     // Heartbeats are fire-and-forget on the client; a 500 body is never read.
     return res.status(500).json({ error: "heartbeat failed" });
+  }
+});
+
+// POST /usage/beta  { productKey, optedIn }
+// Records the user's beta-programme answer on the account so the admin can see
+// who is sending logs. The plugin keeps the answer locally too; this is the
+// server's copy.
+router.post("/beta", requireAuth, async (req, res) => {
+  try {
+    const userId = userIdFrom(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const optedIn = req.body?.optedIn === true || req.body?.optedIn === "true";
+    const productKey = String(req.body?.productKey || "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 40);
+
+    const set = optedIn
+      ? {
+          "betaTester.optedIn": true,
+          "betaTester.since": new Date(),
+          ...(productKey ? { "betaTester.productKey": productKey } : {}),
+        }
+      : { "betaTester.optedIn": false, "betaTester.leftAt": new Date() };
+
+    await User.updateOne({ _id: userId }, { $set: set });
+    return res.status(204).end();
+  } catch (err) {
+    console.error("[/usage/beta] error:", err);
+    return res.status(500).json({ error: "could not record beta status" });
+  }
+});
+
+// POST /usage/logs  multipart: file=<text>, productKey, appVersion, revitTarget, reason
+// A beta tester's redacted log tail. Stores it, marks the account as a beta
+// tester (an upload is the strongest possible opt-in signal), and trims the
+// user's older logs beyond MAX_LOGS_PER_USER_PRODUCT.
+router.post("/logs", requireAuth, handleLogUpload, async (req, res) => {
+  try {
+    const userId = userIdFrom(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
+      return res.status(400).json({ error: "file part required" });
+    }
+
+    const productKey = String(req.body?.productKey || "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 40);
+    if (!productKey) {
+      return res.status(400).json({ error: "productKey required" });
+    }
+
+    const content = req.file.buffer.toString("utf8");
+    const email = String(req.user?.email || "").toLowerCase();
+
+    const doc = await DiagnosticLog.create({
+      userId,
+      email,
+      productKey,
+      appVersion: String(req.body?.appVersion || "").slice(0, 40),
+      hostTarget: String(
+        req.body?.revitTarget || req.body?.hostTarget || "",
+      ).slice(0, 20),
+      reason: String(req.body?.reason || "").slice(0, 60),
+      lineCount: content.split(/\r?\n/).length,
+      sizeBytes: req.file.buffer.length,
+      perfLines: extractPerfLines(content),
+      content,
+    });
+
+    // Best-effort bookkeeping: never fail the upload over it.
+    User.updateOne(
+      { _id: userId, "betaTester.optedIn": { $ne: true } },
+      {
+        $set: {
+          "betaTester.optedIn": true,
+          "betaTester.since": new Date(),
+          "betaTester.productKey": productKey,
+        },
+      },
+    ).catch(() => {});
+
+    DiagnosticLog.find({ userId, productKey })
+      .sort({ createdAt: -1 })
+      .skip(MAX_LOGS_PER_USER_PRODUCT)
+      .select("_id")
+      .lean()
+      .then((old) =>
+        old.length
+          ? DiagnosticLog.deleteMany({ _id: { $in: old.map((o) => o._id) } })
+          : null,
+      )
+      .catch(() => {});
+
+    return res.status(201).json({ id: String(doc._id) });
+  } catch (err) {
+    console.error("[/usage/logs] error:", err);
+    return res.status(500).json({ error: "could not store log" });
   }
 });
 

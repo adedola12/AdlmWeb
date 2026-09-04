@@ -646,6 +646,11 @@ export default function Admin({ section = null }) {
   // "email|productKey" → { lastActiveAt, minutes, sessions, appVersion } from
   // /admin/usage/summary (30-day window built from plugin heartbeats).
   const [usage, setUsage] = React.useState({});
+  // "email|productKey" → [log rows, newest first] from /admin/usage/logs:
+  // diagnostic logs sent by beta testers' plugins (no content; fetched by id).
+  const [diagLogs, setDiagLogs] = React.useState({});
+  // The log being read in the viewer modal: { row, content, loading, error }.
+  const [logView, setLogView] = React.useState(null);
   const [purchases, setPurchases] = React.useState([]);
   // Bulk approve/reject on the pending tab: id → true for the ticked rows.
   const [purchaseSel, setPurchaseSel] = React.useState({});
@@ -1363,6 +1368,21 @@ export default function Admin({ section = null }) {
         setUsage(m);
       } catch {
         setUsage({});
+      }
+
+      // Beta testers' diagnostic logs — additive for the same reason.
+      try {
+        const dl = await apiAuthed(`/admin/usage/logs?days=30`, {
+          token: accessToken,
+        });
+        const m = {};
+        (dl?.rows || []).forEach((r) => {
+          const k = usageKey(r.email, r.productKey);
+          (m[k] = m[k] || []).push(r);
+        });
+        setDiagLogs(m);
+      } catch {
+        setDiagLogs({});
       }
     } catch (e) {
       setMsg(e?.message || "Failed to load admin data");
@@ -2124,6 +2144,26 @@ export default function Admin({ section = null }) {
                                 v{uRow.appVersion}
                               </div>
                             ) : null}
+                            {(() => {
+                              const logs =
+                                (diagLogs || {})[
+                                  usageKey(r.email, r.productKey)
+                                ] || [];
+                              if (!logs.length) return null;
+                              const latest = logs[0];
+                              return (
+                                <button
+                                  type="button"
+                                  className="mt-1 text-left text-adlm-blue-700 hover:underline"
+                                  title={`Beta tester · ${logs.length} diagnostic log${logs.length === 1 ? "" : "s"} in 30 days. Latest: ${latest.reason || "scheduled"}`}
+                                  onClick={() => openDiagLog(latest, logs)}
+                                >
+                                  🧪 {logs.length} log
+                                  {logs.length === 1 ? "" : "s"} · latest{" "}
+                                  {dayjs(latest.createdAt).format("MM-DD HH:mm")}
+                                </button>
+                              );
+                            })()}
                           </div>
                         );
                       })()}
@@ -2388,8 +2428,119 @@ export default function Admin({ section = null }) {
     return <Badge label={s || "—"} tone="slate" />;
   }
 
+  // Open a beta tester's diagnostic log in the viewer. The list rows carry no
+  // content, so the text is fetched by id on demand; `siblings` lets the
+  // viewer step through the same user's other logs without a reload.
+  async function openDiagLog(row, siblings) {
+    if (!row?.id) return;
+    setLogView({ row, siblings: siblings || [row], content: "", loading: true });
+    try {
+      const full = await apiAuthed(`/admin/usage/logs/${row.id}`, {
+        token: accessToken,
+      });
+      setLogView((v) =>
+        v && v.row?.id === row.id
+          ? { ...v, content: full?.content || "", loading: false }
+          : v,
+      );
+    } catch (e) {
+      setLogView((v) =>
+        v && v.row?.id === row.id
+          ? { ...v, loading: false, error: e?.message || "Could not load log" }
+          : v,
+      );
+    }
+  }
+
+  function DiagLogViewer() {
+    if (!logView) return null;
+    const { row, siblings, content, loading, error } = logView;
+    const perf = Array.isArray(row.perfLines) ? row.perfLines : [];
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+        onClick={() => setLogView(null)}
+      >
+        <div
+          className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-4 border-b p-4">
+            <div className="min-w-0">
+              <div className="font-semibold truncate">
+                🧪 {row.email} · {row.productKey}
+              </div>
+              <div className="text-xs text-slate-500">
+                {dayjs(row.createdAt).format("YYYY-MM-DD HH:mm")} ·{" "}
+                {row.reason || "scheduled"} · v{row.appVersion || "?"}
+                {row.hostTarget ? ` · Revit ${row.hostTarget}` : ""} ·{" "}
+                {row.lineCount} lines
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {siblings && siblings.length > 1 ? (
+                <select
+                  className="text-xs border rounded px-2 py-1"
+                  value={row.id}
+                  onChange={(e) => {
+                    const next = siblings.find((s) => s.id === e.target.value);
+                    if (next) openDiagLog(next, siblings);
+                  }}
+                >
+                  {siblings.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {dayjs(s.createdAt).format("MM-DD HH:mm")} ·{" "}
+                      {s.reason || "scheduled"}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  // Clipboard access can be refused; a failed copy is not worth a dialog.
+                  navigator.clipboard?.writeText(content || "").catch(() => {});
+                }}
+                disabled={loading || !content}
+              >
+                Copy
+              </button>
+              <button className="btn btn-sm" onClick={() => setLogView(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          {perf.length ? (
+            <div className="border-b p-4 bg-slate-50">
+              <div className="text-xs font-semibold text-slate-600 mb-1">
+                Timings ([PERF] lines, newest last)
+              </div>
+              <pre className="text-[11px] leading-4 whitespace-pre overflow-auto max-h-40 font-mono">
+                {perf.slice(-40).join("\n")}
+              </pre>
+            </div>
+          ) : null}
+
+          <div className="p-4 overflow-auto grow">
+            {loading ? (
+              <div className="text-sm text-slate-500">Loading log…</div>
+            ) : error ? (
+              <div className="text-sm text-red-600">{error}</div>
+            ) : (
+              <pre className="text-[11px] leading-4 whitespace-pre font-mono">
+                {content}
+              </pre>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      <DiagLogViewer />
       <AdminPageHeader
         icon={FiShield}
         title={isHub ? "Admin Hub" : SECTION_META[section]?.label || "Admin Hub"}

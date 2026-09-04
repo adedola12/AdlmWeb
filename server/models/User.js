@@ -90,6 +90,17 @@ const UserSchema = new mongoose.Schema(
 
     avatarUrl: { type: String, default: "" },
 
+    // Beta programme: the user agreed, from inside a desktop plugin, to have
+    // its diagnostic log sent to ADLM automatically. Written by POST
+    // /usage/beta and by the first successful POST /usage/logs. Read by the
+    // admin usage view; nothing else depends on it.
+    betaTester: {
+      optedIn: { type: Boolean, default: false },
+      productKey: { type: String, default: "", trim: true, lowercase: true },
+      since: { type: Date, default: null },
+      leftAt: { type: Date, default: null },
+    },
+
     firstName: { type: String, default: "", trim: true },
     lastName: { type: String, default: "", trim: true },
 
