@@ -125,6 +125,7 @@ export default function DsDocComposer() {
   // twelve near-identical rows and no way to tell which one is current.
   const [editingId, setEditingId] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
+  const [showSource, setShowSource] = React.useState(true);
   const [note, setNote] = React.useState("");
 
   const host = React.useRef(null);
@@ -379,233 +380,277 @@ export default function DsDocComposer() {
 
   return (
     <div className="ds">
-      <div className="adm">
-        <div className="adm-bar">
-          <div>
-            <h1>Documents</h1>
-            <p className="adm-sub">
-              Paste what you have written, or drop a file, and it comes out in the house style.
-              The same renderer draws the invoices and the bills of quantities, which is why an
-              ADLM letter and an ADLM invoice look like the same firm.
-            </p>
-          </div>
-          <div className="adm-acts">
-            {/* Only offered once there is a document to start again FROM, so
-                the button cannot appear on an empty composer where it would
-                do nothing. */}
-            {editingId || source.trim() ? (
-              <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={fresh}>
-                New document
+      {/*
+        HIS SHELL IS NOT OUR SHELL
+
+        This used to render <div className="adm">, which is his STANDALONE
+        page: height:100dvh and a 296px | 1fr grid, because in his build the
+        composer is the whole window and that grid is the nav beside it. Ours
+        already has a rail and a top bar from DsAdminShell, so dropping his
+        full-page shell inside our page shell put .adm-bar into a 296px column
+        and pushed the rest off the edge — which is why the screen came up
+        almost empty.
+
+        This wrapper is ours: the composer's own three regions, sized to what
+        is left of the viewport under the admin's top bar. Everything inside
+        it is his — .adm-main, .adm-bar, .adm-split, .adm-src, .adm-out,
+        .adm-side and the groups within them are styled by his admin.css.
+      */}
+      <div className="adm-compose">
+        <div className="adm-main">
+          <div className="adm-bar">
+            <div>
+              <b>
+                {blocks.length} block{blocks.length === 1 ? "" : "s"} · {counts.words} word
+                {counts.words === 1 ? "" : "s"}
+                {counts.table ? ` · ${counts.table} table${counts.table === 1 ? "" : "s"}` : ""}
+              </b>
+              <span>
+                {editingId ? "Editing a saved document — saving updates it" : "A new document"}
+              </span>
+            </div>
+            <div className="adm-acts">
+              <button
+                type="button"
+                className="ds-btn btn-o ds-btn-sm"
+                onClick={() => setShowSource((v) => !v)}
+              >
+                {showSource ? "Hide source" : "Show source"}
               </button>
+              {editingId || source.trim() ? (
+                <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={fresh}>
+                  New
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="ds-btn btn-o ds-btn-sm"
+                onClick={() => setSource("")}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="ds-btn btn-o ds-btn-sm"
+                disabled={saving}
+                onClick={keep}
+              >
+                {saving ? "Saving…" : editingId ? "Save changes" : "Save"}
+              </button>
+              <button
+                type="button"
+                className="ds-btn btn-p ds-btn-sm"
+                onClick={() => window.print()}
+              >
+                Print or save as PDF
+              </button>
+            </div>
+          </div>
+
+          <div className={showSource ? "adm-split" : "adm-split is-solo"}>
+            {showSource ? (
+              <div className={dropping ? "adm-src over" : "adm-src"}>
+                <h3>What goes in</h3>
+                <p className="adm-sub">
+                  Paste the text, or drop a file anywhere on this panel. Plain text, Markdown,
+                  CSV, TSV, JSON and HTML are all read here in the browser — the house style is
+                  applied on the right.
+                </p>
+
+                <div
+                  className="adm-file"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDropping(true);
+                  }}
+                  onDragLeave={() => setDropping(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDropping(false);
+                    loadFile(e.dataTransfer?.files?.[0]);
+                  }}
+                >
+                  <input
+                    type="file"
+                    accept=".txt,.md,.markdown,.csv,.tsv,.json,.html,.htm"
+                    onChange={(e) => loadFile(e.target.files?.[0])}
+                  />
+                  <span>or drop it here</span>
+                </div>
+
+                {/* id, not just a class: his rule is #adm-text, and it is what
+                    gives the box its height, its monospace face and its
+                    flex:1. Without the id the textarea collapsed to two rows. */}
+                <textarea
+                  id="adm-text"
+                  value={source}
+                  spellCheck
+                  onChange={(e) => setSource(e.target.value)}
+                  aria-label="The document text"
+                />
+
+                {problem && <p className="adm-note adm-bad">{problem}</p>}
+                {note && !problem && <p className="adm-note">{note}</p>}
+
+                <div className="adm-grp">
+                  <h2>What the formatter looks for</h2>
+                  <ul className="adm-rules">
+                    <li>
+                      <b># Heading</b> makes a heading. So does A SHORT LINE IN CAPITALS.
+                    </li>
+                    <li>
+                      <b>- item</b> makes a list.
+                    </li>
+                    <li>
+                      Lines split by <b>|</b> or a tab make a table, first row the header. One row
+                      on its own stays a sentence.
+                    </li>
+                    <li>A blank line ends whatever was running.</li>
+                  </ul>
+                </div>
+              </div>
             ) : null}
-            <button
-              type="button"
-              className="ds-btn btn-o ds-btn-sm"
-              disabled={saving}
-              onClick={keep}
-            >
-              {saving ? "Saving…" : editingId ? "Save changes" : "Save it"}
-            </button>
-            <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={() => window.print()}>
-              Print or save as PDF
-            </button>
+
+            <div className="adm-out">
+              <div className="adm-out-bar">
+                <span>Preview</span>
+                <span className="adm-hint">A4 · what prints is what you see</span>
+              </div>
+              {/* .adm-out .doc-stage is his rule for the scrolling sheet. */}
+              <div className="doc-stage" ref={host} />
+            </div>
           </div>
         </div>
 
-        <div className="adm-split">
-          <div className="adm-side">
-            <div className="adm-grp">
-              <h2>Template</h2>
-              <div className="adm-tpls">
-                {TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className={template === t.id ? "adm-tpl on" : "adm-tpl"}
-                    onClick={() => setTemplate(t.id)}
-                    title={t.hint}
+        <aside className="adm-side">
+          <div className="adm-grp">
+            <h2>Template</h2>
+            <div className="adm-tpls">
+              {TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={template === t.id ? "adm-tpl on" : "adm-tpl"}
+                  onClick={() => setTemplate(t.id)}
+                >
+                  <b>{t.name}</b>
+                  <span>{t.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="adm-grp">
+            <h2>The document</h2>
+            <div className="adm-fields">
+              <label>
+                <span>Title</span>
+                <input
+                  type="text"
+                  value={title}
+                  placeholder="Proposal for quantity surveying software"
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </label>
+              <label>
+                <span>Number</span>
+                <input
+                  type="text"
+                  value={number}
+                  placeholder="Leave blank for none"
+                  onChange={(e) => setNumber(e.target.value)}
+                />
+              </label>
+              <label>
+                <span>Addressed to</span>
+                <input
+                  type="text"
+                  value={to}
+                  placeholder="Adeyemi &amp; Partners, Ikoyi, Lagos"
+                  onChange={(e) => setTo(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="adm-grp">
+            <h2>Saved documents</h2>
+            {kept.length === 0 ? (
+              <p className="adm-hint">
+                Nothing saved yet. Documents are kept on the server now, not in this browser, so
+                one written here opens on any machine you sign in from.
+              </p>
+            ) : (
+              <div className="adm-kept">
+                {kept.map((r) => (
+                  <div
+                    className={editingId === r.id ? "adm-kept-row on" : "adm-kept-row"}
+                    key={r.id}
                   >
-                    {t.name}
-                  </button>
+                    <div>
+                      <b>{r.title}</b>
+                      <span>
+                        {new Date(r.at).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                        {" · "}
+                        {r.templateName || r.template}
+                        {r.sentAt ? " · sent" : ""}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="ds-btn btn-o ds-btn-sm"
+                      onClick={() => open(r)}
+                    >
+                      {editingId === r.id ? "Editing" : "Open"}
+                    </button>
+                    <button
+                      type="button"
+                      className="adm-x"
+                      aria-label={`Remove ${r.title}`}
+                      onClick={() => drop(r.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
               </div>
-            </div>
-
-            <div className="adm-grp">
-              <h2>Heading</h2>
-              <div className="adm-fields">
-                <label>
-                  <span>Title</span>
-                  <input
-                    type="text"
-                    value={title}
-                    placeholder="Proposal for quantity surveying software"
-                    onChange={(e) => setTitle(e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Reference</span>
-                  <input
-                    type="text"
-                    value={number}
-                    placeholder="ADLM-2026-0142"
-                    onChange={(e) => setNumber(e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Addressed to</span>
-                  <input
-                    type="text"
-                    value={to}
-                    placeholder="Adeyemi &amp; Partners, Ikoyi, Lagos"
-                    onChange={(e) => setTo(e.target.value)}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="adm-grp">
-              <h2>The words</h2>
-              <div
-                className={dropping ? "adm-file on" : "adm-file"}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDropping(true);
-                }}
-                onDragLeave={() => setDropping(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDropping(false);
-                  loadFile(e.dataTransfer?.files?.[0]);
-                }}
-              >
-                <input
-                  type="file"
-                  accept=".txt,.md,.markdown,.csv,.tsv,.json,.html,.htm"
-                  onChange={(e) => loadFile(e.target.files?.[0])}
-                />
-                <span>Drop a .txt, .md, .csv or .json here, or choose one</span>
-              </div>
-
-              <textarea
-                className="adm-src"
-                value={source}
-                spellCheck
-                onChange={(e) => setSource(e.target.value)}
-                aria-label="The document text"
-              />
-
-              <div className="adm-src-foot">
-                <span>
-                  {counts.words} word{counts.words === 1 ? "" : "s"} · {counts.heading} heading
-                  {counts.heading === 1 ? "" : "s"} · {counts.table} table
-                  {counts.table === 1 ? "" : "s"} · {counts.bullets} list
-                  {counts.bullets === 1 ? "" : "s"}
-                </span>
-                <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={() => setSource("")}>
-                  Clear
-                </button>
-              </div>
-
-              {problem && <p className="adm-note">{problem}</p>}
-              {note && !problem && <p className="adm-note">{note}</p>}
-            </div>
-
-            <div className="adm-grp">
-              <h2>How it reads what you type</h2>
-              <ul className="adm-rules">
-                <li>
-                  <b># Heading</b> makes a heading. So does A SHORT LINE IN CAPITALS.
-                </li>
-                <li>
-                  <b>- item</b> makes a list.
-                </li>
-                <li>
-                  Lines split by <b>|</b> or a tab make a table, first row the header. One row on
-                  its own stays a sentence.
-                </li>
-                <li>A blank line ends whatever was running.</li>
-              </ul>
-            </div>
-
-            {kept.length > 0 && (
-              <div className="adm-grp">
-                {/* Not "on this machine" any more. They are on the server, so
-                    a document written at the office opens on a laptop and a
-                    colleague can pick it up. */}
-                <h2>Saved documents</h2>
-                <div className="adm-kept">
-                  {kept.map((r) => (
-                    <div className="adm-kept-row" key={r.id}>
-                      <div>
-                        <b>{r.title}</b>
-                        <span>
-                          {new Date(r.at).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "short",
-                          })}
-                          {" · "}
-                          {r.templateName || r.template}
-                          {r.sentAt ? " · sent" : ""}
-                        </span>
-                      </div>
-                      <div>
-                        <button
-                          type="button"
-                          className="ds-btn btn-o ds-btn-sm"
-                          onClick={() => open(r)}
-                        >
-                          {editingId === r.id ? "Editing" : "Open"}
-                        </button>
-                        <button
-                          type="button"
-                          className="ds-btn btn-o ds-btn-sm"
-                          title="A copy to work from"
-                          onClick={() => duplicate(r.id)}
-                        >
-                          Copy
-                        </button>
-                        {/* Recording that it went out is what puts it in the
-                            Issued register — including a document printed and
-                            handed over, which an email-only log would miss. */}
-                        {!r.sentAt ? (
-                          <button
-                            type="button"
-                            className="ds-btn btn-o ds-btn-sm"
-                            title="Record that it went to somebody"
-                            onClick={() => send(r.id)}
-                          >
-                            Sent
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="adm-x"
-                          aria-label={`Remove ${r.title}`}
-                          onClick={() => drop(r.id)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="adm-hint">
-                  These live in this browser only. Nothing stores a document against the
-                  account yet, so print or save the PDF for anything that matters.
-                </p>
-              </div>
             )}
-          </div>
 
-          <div className="adm-main">
-            <div className="adm-out-bar">
-              <span>Preview</span>
-              <span className="adm-hint">A4 · what prints is what you see</span>
-            </div>
-            <div className="adm-out" ref={host} />
+            {kept.length > 0 ? (
+              <div className="adm-kept-acts">
+                {/* Copy and Sent act on the document currently open, so they
+                    are here rather than repeated on every row — four buttons
+                    per row is how a list stops being readable. */}
+                {editingId ? (
+                  <>
+                    <button
+                      type="button"
+                      className="ds-btn btn-o ds-btn-sm"
+                      onClick={() => duplicate(editingId)}
+                    >
+                      Copy this
+                    </button>
+                    {!kept.find((r) => r.id === editingId)?.sentAt ? (
+                      <button
+                        type="button"
+                        className="ds-btn btn-o ds-btn-sm"
+                        onClick={() => send(editingId)}
+                      >
+                        Record as sent
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+                <a className="adm-kept-all" href="/admin/documents/saved">
+                  See all saved documents
+                </a>
+              </div>
+            ) : null}
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );
