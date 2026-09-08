@@ -409,6 +409,56 @@ router.delete("/saved/:id", ...hub, async (req, res, next) => {
   }
 });
 
+
+/**
+ * Mark a document as sent.
+ *
+ * This is what moves it into the Issued register, so it is a deliberate act
+ * with a recipient rather than a side effect of pressing print. A document
+ * that was printed and handed over in a meeting still gets recorded here,
+ * which is the case an email-only log would miss entirely.
+ */
+router.post("/saved/:id/send", ...hub, async (req, res, next) => {
+  try {
+    const to = String(req.body?.to || "").trim();
+    if (!to) return res.status(400).json({ error: "Say who it went to." });
+
+    const hit = await SavedDocument.findByIdAndUpdate(
+      req.params.id,
+      { $set: { sentAt: new Date(), sentTo: to } },
+      { new: true },
+    ).lean();
+    if (!hit) return res.status(404).json({ error: "No such document" });
+    res.json({ ok: true, sentTo: to });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** A copy to work from, which is how most documents actually get written. */
+router.post("/saved/:id/duplicate", ...hub, async (req, res, next) => {
+  try {
+    const src = await SavedDocument.findById(req.params.id).lean();
+    if (!src) return res.status(404).json({ error: "No such document" });
+
+    const made = await SavedDocument.create({
+      template: src.template,
+      title: `${src.title} (copy)`,
+      // The number is NOT copied. Two documents sharing a reference is the
+      // one mistake that makes a paper trail useless.
+      number: "",
+      to: src.to,
+      source: src.source,
+      blocks: src.blocks,
+      byId: req.user?._id,
+      byEmail: req.user?.email || "",
+    });
+    res.status(201).json({ id: String(made._id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /* ───────────────────────────────────────────────────────────────── issued ── */
 
 /**

@@ -28,13 +28,16 @@
 // spec rather than to the DOM.
 
 import React from "react";
+import { apiAuthed } from "../api.js";
+import { useAuth } from "../store.jsx";
 import { mount } from "./adlmDoc.js";
 import "../styles/ds-admin.css";
 import "../styles/ds-doc.css";
 import { parseDocument } from "./docParser.js";
 
-const KEEP_KEY = "adlm-admin-docs";
-const KEEP_MAX = 12;
+// The in-progress document, so a refresh does not lose it. NOT the library —
+// that is on the server. See the note above readDraft.
+const DRAFT_KEY = "adlm-doc-draft";
 
 // His set, in his order. `tax` templates get the totals treatment; the rest
 // are prose documents on the letterhead.
@@ -68,21 +71,35 @@ On-site training, Lagos | 1 | 350,000
 
 The prices above hold for thirty days. Nothing is charged until you accept.`;
 
-// ── kept documents ─────────────────────────────────────────────────────────
+// ── where a document lives ─────────────────────────────────────────────────
+//
+// TWO STORES, DOING TWO DIFFERENT JOBS
+//
+// Saved documents live on the server. They used to live in localStorage,
+// which meant one browser, one machine, one person: a quotation written on
+// the office desktop could not be opened from a laptop, a colleague could not
+// pick it up, and clearing site data threw work away silently.
+//
+// localStorage keeps ONE thing now — the document currently being typed, so a
+// refresh or a closed tab does not lose an hour's work before anybody has
+// pressed Save. That is a crash net, not a library, and the difference is
+// worth keeping straight: the draft is private to this browser and is cleared
+// the moment the document is saved properly.
 
-function readKept() {
-  if (typeof window === "undefined") return [];
+function readDraft() {
+  if (typeof window === "undefined") return null;
   try {
-    const v = JSON.parse(window.localStorage.getItem(KEEP_KEY));
-    return Array.isArray(v) ? v : [];
+    const v = JSON.parse(window.localStorage.getItem(DRAFT_KEY));
+    return v && typeof v === "object" ? v : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
-function writeKept(all) {
+function writeDraft(d) {
   try {
-    window.localStorage.setItem(KEEP_KEY, JSON.stringify(all.slice(0, KEEP_MAX)));
+    if (d) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    else window.localStorage.removeItem(DRAFT_KEY);
   } catch {
     /* storage unavailable — the document itself still renders and prints */
   }
@@ -93,18 +110,51 @@ const READABLE = /\.(txt|md|markdown|csv|tsv|json|html?)$/i;
 // ── the screen ─────────────────────────────────────────────────────────────
 
 export default function DsDocComposer() {
+  const { accessToken } = useAuth();
   const [template, setTemplate] = React.useState("letter");
   const [title, setTitle] = React.useState("");
   const [number, setNumber] = React.useState("");
   const [to, setTo] = React.useState("");
   const [source, setSource] = React.useState(SAMPLE);
-  const [kept, setKept] = React.useState(() => readKept());
+  const [kept, setKept] = React.useState([]);
   const [dropping, setDropping] = React.useState(false);
   const [problem, setProblem] = React.useState("");
 
+  // The saved document being edited, if any. Saving with this set updates it
+  // rather than making a second copy — otherwise a morning's editing leaves
+  // twelve near-identical rows and no way to tell which one is current.
+  const [editingId, setEditingId] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+  const [note, setNote] = React.useState("");
+
   const host = React.useRef(null);
 
+  // Restore whatever was being typed when the tab last closed. Runs once, and
+  // only when there is something to restore that is not just the sample.
+  React.useEffect(() => {
+    const d = readDraft();
+    if (!d || !d.source) return;
+    setTemplate(d.template || "letter");
+    setTitle(d.title || "");
+    setNumber(d.number || "");
+    setTo(d.to || "");
+    setSource(d.source);
+    setEditingId(d.editingId || null);
+    setNote("Picked up where you left off.");
+  }, []);
+
   const blocks = React.useMemo(() => parseDocument(source), [source]);
+
+  // The crash net. Debounced, because writing to localStorage on every
+  // keystroke of a long document is real work for no benefit.
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      if (source && source !== SAMPLE) {
+        writeDraft({ template, title, number, to, source, editingId });
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [template, title, number, to, source, editingId]);
 
   const spec = React.useMemo(
     () => ({
@@ -176,39 +226,146 @@ export default function DsDocComposer() {
     reader.readAsText(file);
   }, [title]);
 
-  const keep = React.useCallback(() => {
-    const stamp = new Date();
-    const rec = {
-      id: `${stamp.toISOString()}-${Math.round(source.length)}`,
-      made: stamp.toISOString(),
-      template,
-      title: title.trim() || "Untitled",
-      number: number.trim(),
-      to: to.trim(),
-      source,
-      blocks: blocks.length,
-    };
-    setKept((prev) => {
-      const all = [rec, ...prev];
-      writeKept(all);
-      return all.slice(0, KEEP_MAX);
-    });
-  }, [source, template, title, number, to, blocks]);
+  /** The library, from the server. */
+  const refresh = React.useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const r = await apiAuthed("/admin/docs/saved", { token: accessToken });
+      setKept(r?.items || []);
+    } catch {
+      // A library that cannot be read is not a reason to stop writing, so the
+      // composer carries on and says so quietly rather than blocking.
+      setNote("Saved documents could not be listed just now.");
+    }
+  }, [accessToken]);
 
-  const open = React.useCallback((rec) => {
-    setTemplate(rec.template || "letter");
-    setTitle(rec.title === "Untitled" ? "" : rec.title || "");
-    setNumber(rec.number || "");
-    setTo(rec.to || "");
-    setSource(rec.source || "");
-  }, []);
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
 
-  const drop = React.useCallback((id) => {
-    setKept((prev) => {
-      const all = prev.filter((r) => r.id !== id);
-      writeKept(all);
-      return all;
-    });
+  const keep = React.useCallback(async () => {
+    if (!source.trim()) {
+      setProblem("There is nothing in it yet.");
+      return;
+    }
+    setSaving(true);
+    setNote("");
+    try {
+      const r = await apiAuthed("/admin/docs/saved", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingId || undefined,
+          template,
+          title: title.trim() || "Untitled",
+          number: number.trim(),
+          to: to.trim(),
+          source,
+          blocks: blocks.length,
+        }),
+      });
+      setEditingId(r?.id || null);
+      // The crash net has done its job the moment the document is really
+      // saved, so it is cleared rather than left to shadow the saved version.
+      writeDraft(null);
+      setNote(r?.updated ? "Saved." : "Saved. It is in Saved documents now.");
+      await refresh();
+    } catch (err) {
+      setProblem(
+        err?.status === 401
+          ? "Your admin session has expired. Sign in again — your work is still here."
+          : "That could not be saved. Your work is still on screen.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [accessToken, editingId, source, template, title, number, to, blocks, refresh]);
+
+  /** Open one back into the composer, exactly as it was. */
+  const open = React.useCallback(
+    async (rec) => {
+      setNote("");
+      try {
+        // The list does not carry the source — it would be a megabyte of
+        // markup nobody is reading — so the document itself is fetched.
+        const full = await apiAuthed(`/admin/docs/saved/${rec.id}`, { token: accessToken });
+        setTemplate(full.template || "letter");
+        setTitle(full.title === "Untitled" ? "" : full.title || "");
+        setNumber(full.number || "");
+        setTo(full.to || "");
+        setSource(full.source || "");
+        setEditingId(full.id);
+        setNote(`Editing “${full.title}”. Saving updates it.`);
+      } catch {
+        setProblem("That document could not be opened.");
+      }
+    },
+    [accessToken],
+  );
+
+  const drop = React.useCallback(
+    async (id) => {
+      try {
+        await apiAuthed(`/admin/docs/saved/${id}`, { token: accessToken, method: "DELETE" });
+        if (editingId === id) setEditingId(null);
+        await refresh();
+      } catch {
+        setProblem("That could not be removed.");
+      }
+    },
+    [accessToken, editingId, refresh],
+  );
+
+  /** A copy to work from, which is how most documents actually get written. */
+  const duplicate = React.useCallback(
+    async (id) => {
+      try {
+        const r = await apiAuthed(`/admin/docs/saved/${id}/duplicate`, {
+          token: accessToken,
+          method: "POST",
+        });
+        await refresh();
+        setNote("Copied. The copy has no reference number of its own yet.");
+        return r?.id;
+      } catch {
+        setProblem("That could not be copied.");
+        return null;
+      }
+    },
+    [accessToken, refresh],
+  );
+
+  /** Record that it went to somebody — which is what puts it in Issued. */
+  const send = React.useCallback(
+    async (id) => {
+      const who = window.prompt("Who did it go to? A name, a firm or an address.");
+      if (!who || !who.trim()) return;
+      try {
+        await apiAuthed(`/admin/docs/saved/${id}/send`, {
+          token: accessToken,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: who.trim() }),
+        });
+        await refresh();
+        setNote(`Recorded as sent to ${who.trim()}. It is in Issued now.`);
+      } catch {
+        setProblem("That could not be recorded.");
+      }
+    },
+    [accessToken, refresh],
+  );
+
+  /** Start again, without carrying the last document's identity into the next. */
+  const fresh = React.useCallback(() => {
+    setEditingId(null);
+    setTitle("");
+    setNumber("");
+    setTo("");
+    setSource("");
+    setNote("");
+    writeDraft(null);
   }, []);
 
   const counts = React.useMemo(() => {
@@ -233,8 +390,21 @@ export default function DsDocComposer() {
             </p>
           </div>
           <div className="adm-acts">
-            <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={keep}>
-              Keep this
+            {/* Only offered once there is a document to start again FROM, so
+                the button cannot appear on an empty composer where it would
+                do nothing. */}
+            {editingId || source.trim() ? (
+              <button type="button" className="ds-btn btn-o ds-btn-sm" onClick={fresh}>
+                New document
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="ds-btn btn-o ds-btn-sm"
+              disabled={saving}
+              onClick={keep}
+            >
+              {saving ? "Saving…" : editingId ? "Save changes" : "Save it"}
             </button>
             <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={() => window.print()}>
               Print or save as PDF
@@ -338,6 +508,7 @@ export default function DsDocComposer() {
               </div>
 
               {problem && <p className="adm-note">{problem}</p>}
+              {note && !problem && <p className="adm-note">{note}</p>}
             </div>
 
             <div className="adm-grp">
@@ -359,19 +530,23 @@ export default function DsDocComposer() {
 
             {kept.length > 0 && (
               <div className="adm-grp">
-                <h2>Kept on this machine</h2>
+                {/* Not "on this machine" any more. They are on the server, so
+                    a document written at the office opens on a laptop and a
+                    colleague can pick it up. */}
+                <h2>Saved documents</h2>
                 <div className="adm-kept">
                   {kept.map((r) => (
                     <div className="adm-kept-row" key={r.id}>
                       <div>
                         <b>{r.title}</b>
                         <span>
-                          {new Date(r.made).toLocaleDateString("en-GB", {
+                          {new Date(r.at).toLocaleDateString("en-GB", {
                             day: "numeric",
                             month: "short",
                           })}
                           {" · "}
-                          {TEMPLATES.find((t) => t.id === r.template)?.name || r.template}
+                          {r.templateName || r.template}
+                          {r.sentAt ? " · sent" : ""}
                         </span>
                       </div>
                       <div>
@@ -380,8 +555,29 @@ export default function DsDocComposer() {
                           className="ds-btn btn-o ds-btn-sm"
                           onClick={() => open(r)}
                         >
-                          Open
+                          {editingId === r.id ? "Editing" : "Open"}
                         </button>
+                        <button
+                          type="button"
+                          className="ds-btn btn-o ds-btn-sm"
+                          title="A copy to work from"
+                          onClick={() => duplicate(r.id)}
+                        >
+                          Copy
+                        </button>
+                        {/* Recording that it went out is what puts it in the
+                            Issued register — including a document printed and
+                            handed over, which an email-only log would miss. */}
+                        {!r.sentAt ? (
+                          <button
+                            type="button"
+                            className="ds-btn btn-o ds-btn-sm"
+                            title="Record that it went to somebody"
+                            onClick={() => send(r.id)}
+                          >
+                            Sent
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="adm-x"
