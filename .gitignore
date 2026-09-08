@@ -62,8 +62,3 @@ adlm-ai-*.json
 # Timestamped backups written by the maintenance scripts in server/scripts.
 # Generated data, regenerated on demand — not source.
 server/scripts/*.backup.*.json
-
-# One-off operator runners. Written to drive a broadcast or a migration
-# once, from a real shell with real credentials, then deleted. Committing one
-# leaves a script that looks runnable long after the thing it did is history.
-server/.*.tmp.mjs
