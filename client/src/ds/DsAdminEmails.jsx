@@ -56,9 +56,16 @@ export default function DsAdminEmails() {
     try {
       const full = await apiAuthed(`/admin/emails/${row.key}`, { token: accessToken });
       setOpen({ row, mode, body: full, draft: { subject: full.subject, html: full.html } });
-    } catch {
+    } catch (err) {
       setOpen(null);
-      say("That message could not be read.");
+      // "Could not be read" for an expired session sends somebody hunting for
+      // a fault in the message. The status says which of the two it is, so the
+      // toast can name the actual problem and the fix.
+      say(
+        err?.status === 401
+          ? "Your admin session has expired. Sign in again and it will open."
+          : "That message could not be read.",
+      );
     }
   }
 

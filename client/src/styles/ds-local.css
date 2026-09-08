@@ -982,32 +982,46 @@
 }
 .ds .adm-mail-orig summary:hover { color: var(--ink); }
 
-/* ── Ada gets out of the way ─────────────────────────────────────────────────
+/* ── Ada moves aside for a drawer, rather than leaving ──────────────────────
  *
  * She floats at z-index 880; every admin drawer sits at 120. So she covered
  * the drawer's own Save button — the one thing somebody opened it to press.
  *
- * His comment on .ada-w says she sits "above everything except a modal", so
- * this is the case he intended and simply had no drawers to meet. Rather than
- * give the drawer a bigger number and start an arms race, anything that puts
- * a layer over the page sets data-overlay on <html>, and she steps aside.
+ * The first fix hid her, which solved the overlap and created a worse
+ * problem: a drawer is exactly when somebody has a question. Reading a
+ * message they are about to send to every customer is the moment to ask
+ * "is this wording right?", and an assistant that vanishes precisely then
+ * is an assistant that is missing whenever it would be most use.
+ *
+ * So she steps left instead, into the dimmed area beside the drawer. Still
+ * floating, still one click, and no longer over anything that can be pressed.
+ * Anything that puts a layer over the page sets data-overlay on <html>.
  *
  * Written as :root[data-overlay] .ada-w, NOT .ds [data-overlay] — the
- * attribute is on <html>, which is an ANCESTOR of .ds. A descendant selector
- * would never match it. This is the same trap that kept the admin rail wide
- * in both states for an afternoon.
- *
- * Faded and lifted rather than display:none so she returns without a jump,
- * and pointer-events off so she cannot be clicked while invisible.
+ * attribute is on <html>, an ANCESTOR of .ds, so a descendant selector would
+ * never match. Same trap that kept the admin rail wide in both states.
  */
 :root[data-overlay] .ada-w {
-  opacity: 0;
-  transform: translateY(10px) scale(.96);
-  pointer-events: none;
+  /* The drawer is min(480px, 100%) hard against the right edge. Clearing it
+     by its own width plus a gap puts her beside it, not under it. */
+  right: calc(480px + 34px);
+}
+
+/* Below this the drawer takes the whole screen, so there is no beside to
+   move to. She fades instead — the one case where going away is right,
+   because the alternative is sitting on top of the thing being read. */
+@media (max-width: 620px) {
+  :root[data-overlay] .ada-w {
+    right: 22px;
+    opacity: 0;
+    transform: translateY(10px) scale(.96);
+    pointer-events: none;
+  }
 }
 
 .ds .ada-w {
-  transition: opacity 180ms var(--e-out), transform 180ms var(--e-out);
+  transition: right 220ms var(--e-out), opacity 180ms var(--e-out),
+    transform 180ms var(--e-out);
   /* A page with a fixed action bar at the bottom can raise her by setting
      --ada-lift on any ancestor, instead of each one inventing its own
      offset and drifting apart. */
