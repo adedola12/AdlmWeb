@@ -89,6 +89,9 @@ export const NAV = [
     items: [
       { to: "/admin/changelogs", label: "What's New", icon: "hi-alert", area: "adminhub" },
       { to: "/admin/showcase", label: "Marketing", icon: "hi-info", area: "showcase" },
+      // The rotating band low on every public page. His newest screen, and a
+      // schedule rather than a banner editor - a slide stops on its own.
+      { to: "/admin/billboard", label: "Billboard", icon: "hi-alert", area: "adminhub" },
       { to: "/admin/emails", label: "Emails", icon: "ai-mail", area: "adminhub" },
       // The only mail the studio sends on its own initiative, so it sits
       // beside the ones it sends in reply rather than in a group of its own.

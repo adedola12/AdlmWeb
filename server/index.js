@@ -88,6 +88,7 @@ import adminRateGenMaster from "./routes/admin.rategen.master.js";
 import adminEmails from "./routes/admin.emails.js";
 import adminBroadcast from "./routes/admin.broadcast.js";
 import adminCampaigns from "./routes/admin.campaigns.js";
+import adminBillboard, { publicBillboard } from "./routes/admin.billboard.js";
 import unsubscribeRouter from "./routes/unsubscribe.js";
 
 import freebiesPublic from "./routes/freebies.js";
@@ -381,6 +382,10 @@ app.use("/admin/rategen-v2", adminRateGenMaster);
 app.use("/admin/emails", adminEmails);
 app.use("/admin/broadcast", adminBroadcast);
 app.use("/admin/campaigns", adminCampaigns);
+app.use("/admin/billboard", adminBillboard);
+// Public and unauthenticated: it is what every page of the site reads to draw
+// the band, and it returns only the slides that are live today.
+app.use("/billboard", publicBillboard);
 // Public and unauthenticated on purpose: it is opened from an email, in a
 // browser nobody is signed in to. See the note at the top of the router.
 app.use("/unsubscribe", unsubscribeRouter);
