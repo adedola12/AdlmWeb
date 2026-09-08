@@ -47,6 +47,9 @@ import AdminRateBuilder from "./pages/AdminRateBuilder.jsx";
 import AdminDocAi from "./pages/AdminDocAi.jsx";
 import AdminTimeSaved from "./pages/AdminTimeSaved.jsx";
 import AdminDocAudit from "./pages/AdminDocAudit.jsx";
+import AdminDocTemplates from "./pages/AdminDocTemplates.jsx";
+import AdminDocSaved from "./pages/AdminDocSaved.jsx";
+import AdminDocIssued from "./pages/AdminDocIssued.jsx";
 import AdminDocProduced from "./pages/AdminDocProduced.jsx";
 import AdminDocSystem from "./pages/AdminDocSystem.jsx";
 import AdminStorage from "./pages/AdminStorage.jsx";
@@ -751,6 +754,30 @@ const router = createBrowserRouter([
             <LazyScreen>
               <AdminDocuments />
             </LazyScreen>
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/documents/templates",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminDocTemplates />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/documents/saved",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminDocSaved />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/documents/issued",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminDocIssued />
           </AdminRoute>
         ),
       },

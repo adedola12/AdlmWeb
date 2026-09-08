@@ -109,6 +109,11 @@ export const NAV = [
       // entry pointing at the register with a button to the composer made the
       // tool feel like a footnote to its own output.
       { to: "/admin/documents/compose", label: "Composer", icon: "hi-doc", area: "adminhub" },
+      // His three: what the engine can produce, what the composer kept, and
+      // what has actually left the studio.
+      { to: "/admin/documents/templates", label: "Templates", icon: "hi-doc", area: "adminhub" },
+      { to: "/admin/documents/saved", label: "Saved", icon: "hi-doc", area: "adminhub" },
+      { to: "/admin/documents/issued", label: "Issued", icon: "hi-downloads", area: "adminhub" },
       { to: "/admin/documents", label: "Saved", icon: "hi-doc", area: "adminhub" },
       { to: "/admin/audit-log", label: "Audit log", icon: "hi-shield", area: "adminhub", admin: true },
     ],
@@ -143,8 +148,6 @@ export const NAV = [
 export const MISSING = [
   "Ada review",
   "Certificates",
-  "Templates",
-  "Issued",
 ];
 
 /**

@@ -23,6 +23,8 @@ import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { AiUsage } from "../models/AiUsage.js";
 import { AuditLog } from "../models/AuditLog.js";
 import { Proposal } from "../models/Proposal.js";
+import { Invoice } from "../models/Invoice.js";
+import { SavedDocument } from "../models/SavedDocument.js";
 import { Setting } from "../models/Setting.js";
 
 const router = express.Router();
@@ -225,6 +227,283 @@ router.get("/system", ...hub, async (_req, res, next) => {
     ];
 
     res.json({ items, counts: { all: items.length } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const money = (n, cur = "NGN") =>
+  new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: cur || "NGN",
+    maximumFractionDigits: 0,
+  }).format(n0(n));
+
+/* ────────────────────────────────────────────────────────────── templates ── */
+
+/**
+ * What the engine can produce, and whose paper each one prints on.
+ *
+ * The list mirrors the composer's own kinds in DsDocComposer.jsx. Ours has
+ * two his mock does not — a bill of quantities and a valuation — because this
+ * is a quantity surveying studio and those are the documents it actually
+ * writes most.
+ *
+ * `paper` matters more than it looks: a practice's exports come out of the
+ * same templates, which is why an ADLM invoice and a customer's bill of
+ * quantities look like the same firm made them.
+ */
+const TEMPLATES = [
+  { id: "letter", name: "Letter", what: "Letterhead, recipient, body, signature.", paper: "ADLM or a practice" },
+  { id: "report", name: "Report", what: "Numbered sections, tables and bullets.", paper: "ADLM or a practice" },
+  { id: "statement", name: "Statement", what: "An account with a running balance.", paper: "ADLM" },
+  { id: "invoice", name: "Invoice", what: "Line items, VAT and payment details.", paper: "ADLM" },
+  { id: "receipt", name: "Receipt", what: "An invoice that has been paid.", paper: "ADLM" },
+  {
+    id: "boq",
+    name: "Bill of quantities",
+    what: "Priced items under section headings, with a collection.",
+    paper: "ADLM or a practice",
+  },
+  {
+    id: "valuation",
+    name: "Valuation",
+    what: "Work done to date against the contract sum.",
+    paper: "ADLM or a practice",
+  },
+];
+
+router.get("/templates", ...hub, async (_req, res, next) => {
+  try {
+    // Real usage, counted from the documents that were actually made on each
+    // template — not a number typed into the list.
+    const used = await SavedDocument.aggregate([
+      { $group: { _id: "$template", n: { $sum: 1 } } },
+    ]);
+    const byId = new Map(used.map((u) => [u._id, u.n]));
+
+    // Invoices and receipts are produced by their own generators rather than
+    // the composer, so their real usage lives in those collections.
+    const [invoices, receipts, quotes] = await Promise.all([
+      Invoice.estimatedDocumentCount(),
+      Invoice.countDocuments({ receiptNumber: { $exists: true, $ne: "" } }),
+      Proposal.estimatedDocumentCount(),
+    ]);
+
+    const extra = { invoice: invoices, receipt: receipts };
+
+    const items = TEMPLATES.map((t) => ({
+      id: t.id,
+      name: t.name,
+      what: t.what,
+      paper: t.paper,
+      used: (byId.get(t.id) || 0) + (extra[t.id] || 0),
+      built: true,
+      state: "active",
+    }));
+
+    // The one his list has that ours does not, said plainly rather than left
+    // for somebody to notice: a quotation here is its own document with its
+    // own numbering and share link, not a composer template.
+    items.push({
+      id: "quotation",
+      name: "Quotation",
+      what: "A cover line, priced tiers and a validity date.",
+      paper: "ADLM",
+      used: quotes,
+      built: true,
+      external: true,
+      state: "active",
+    });
+
+    res.json({ items, counts: { all: items.length } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────── saved ── */
+
+router.get("/saved", ...hub, async (_req, res, next) => {
+  try {
+    const rows = await SavedDocument.find({}).sort({ updatedAt: -1 }).limit(300).lean();
+    const items = rows.map((d) => ({
+      id: String(d._id),
+      template: d.template || "letter",
+      templateName: TEMPLATES.find((t) => t.id === d.template)?.name || d.template,
+      title: d.title || "Untitled",
+      number: d.number || "",
+      to: d.to || "",
+      blocks: n0(d.blocks),
+      by: d.byEmail || "",
+      at: d.updatedAt,
+      sentAt: d.sentAt || null,
+      sentTo: d.sentTo || "",
+      state: d.sentAt ? "sent" : "draft",
+    }));
+    const counts = { all: items.length };
+    for (const i of items) counts[i.state] = (counts[i.state] || 0) + 1;
+    res.json({ items, counts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** The composer asks for one back, source and all, to carry on editing. */
+router.get("/saved/:id", ...hub, async (req, res, next) => {
+  try {
+    const d = await SavedDocument.findById(req.params.id).lean();
+    if (!d) return res.status(404).json({ error: "No such document" });
+    res.json({
+      id: String(d._id),
+      template: d.template,
+      title: d.title,
+      number: d.number,
+      to: d.to,
+      source: d.source || "",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/saved", ...hub, async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const source = String(b.source || "");
+    if (!source.trim()) return res.status(400).json({ error: "There is nothing in it yet." });
+
+    const doc = {
+      template: String(b.template || "letter").trim(),
+      title: String(b.title || "").trim() || "Untitled",
+      number: String(b.number || "").trim(),
+      to: String(b.to || "").trim(),
+      source,
+      blocks: n0(b.blocks),
+      byId: req.user?._id,
+      byEmail: req.user?.email || "",
+    };
+
+    // Saving an already-saved document updates it rather than making a second
+    // copy — otherwise a morning's editing leaves twelve near-identical rows
+    // and no way to tell which is current.
+    if (b.id) {
+      const hit = await SavedDocument.findByIdAndUpdate(b.id, { $set: doc }, { new: true }).lean();
+      if (hit) return res.json({ id: String(hit._id), updated: true });
+    }
+
+    const made = await SavedDocument.create(doc);
+    res.status(201).json({ id: String(made._id), updated: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/saved/:id", ...hub, async (req, res, next) => {
+  try {
+    const gone = await SavedDocument.findByIdAndDelete(req.params.id).lean();
+    if (!gone) return res.status(404).json({ error: "No such document" });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ───────────────────────────────────────────────────────────────── issued ── */
+
+/**
+ * Every document that has left the studio, newest first.
+ *
+ * It answers the question that actually gets asked — "you never sent it" —
+ * so it is searchable by who received it, and it is assembled from the
+ * records that already know: an invoice knows the day it was issued, a paid
+ * invoice knows the day its receipt was raised, a quotation knows when it was
+ * built, and a saved document knows if it was sent.
+ */
+router.get("/issued", ...hub, async (req, res, next) => {
+  try {
+    const q = String(req.query.q || "").trim().toLowerCase();
+
+    const [invoices, quotes, sent] = await Promise.all([
+      Invoice.find({}).sort({ invoiceDate: -1 }).limit(400).lean(),
+      Proposal.find({}).sort({ proposalDate: -1 }).limit(300).lean(),
+      SavedDocument.find({ sentAt: { $ne: null } }).sort({ sentAt: -1 }).limit(200).lean(),
+    ]);
+
+    const out = [];
+
+    for (const i of invoices) {
+      const to = i.clientName || i.clientEmail || "Unknown";
+      const org = i.clientOrganization || "";
+      const worth = money(i.total, i.currency);
+
+      if (i.invoiceDate) {
+        out.push({
+          id: `inv:${i._id}`,
+          on: i.invoiceDate,
+          kind: "Invoice",
+          ref: i.invoiceNumber || "",
+          to,
+          org,
+          worth,
+          email: i.clientEmail || "",
+        });
+      }
+      // A receipt is a second document off the same record, and it is the one
+      // people ask for most.
+      if (i.receiptNumber) {
+        out.push({
+          id: `rct:${i._id}`,
+          on: i.receiptSentAt || i.paidAt || i.invoiceDate,
+          kind: "Receipt",
+          ref: i.receiptNumber,
+          to,
+          org,
+          worth,
+          email: i.clientEmail || "",
+        });
+      }
+    }
+
+    for (const p of quotes) {
+      out.push({
+        id: `qte:${p._id}`,
+        on: p.proposalDate || p.createdAt,
+        kind: "Quotation",
+        ref: p.proposalNumber || "",
+        to: p.clientContact || p.clientFirm || "Unnamed client",
+        org: p.clientFirm || "",
+        worth: money(p.total, p.currency),
+        email: p.clientEmail || "",
+      });
+    }
+
+    for (const d of sent) {
+      out.push({
+        id: `doc:${d._id}`,
+        on: d.sentAt,
+        kind: TEMPLATES.find((t) => t.id === d.template)?.name || "Document",
+        ref: d.number || "",
+        to: d.sentTo || d.to || "",
+        org: "",
+        worth: "",
+        email: "",
+      });
+    }
+
+    const rows = out
+      .filter((r) => r.on)
+      .filter((r) =>
+        q
+          ? `${r.ref} ${r.to} ${r.org} ${r.email} ${r.kind}`.toLowerCase().includes(q)
+          : true,
+      )
+      .sort((a, b) => new Date(b.on) - new Date(a.on));
+
+    const counts = { all: rows.length };
+    for (const r of rows) counts[r.kind] = (counts[r.kind] || 0) + 1;
+
+    res.json({ items: rows.slice(0, 400), counts, total: rows.length });
   } catch (err) {
     next(err);
   }

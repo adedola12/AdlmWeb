@@ -110,6 +110,85 @@ const SCREENS = {
     ],
   },
 
+
+  templates: {
+    title: "Templates",
+    lede:
+      "What the engine can produce and whose paper each one prints on. These are the same " +
+      "templates a customer's exports come out of, which is why an ADLM invoice and a practice's " +
+      "bill of quantities look like the same firm made them.",
+    path: "/admin/docs/templates",
+    empty: ["No templates", "The engine can produce nothing, which should not be possible."],
+    cols: () => [
+      { h: "Template", w: "20%", cell: (t) => <AdmTwo top={t.name} under={t.what} /> },
+      { h: "Paper", cell: (t) => t.paper },
+      {
+        h: "Used",
+        num: true,
+        // Counted from the documents actually made on it, not a number typed
+        // into a list. Zero is information: nobody has needed that one yet.
+        cell: (t) => (t.used ? num(t.used) : <AdmDim>not yet</AdmDim>),
+      },
+      {
+        h: "",
+        cell: (t) =>
+          t.external ? (
+            <AdmChip tone="">its own builder</AdmChip>
+          ) : (
+            <AdmChip tone="ok">in the composer</AdmChip>
+          ),
+      },
+    ],
+  },
+
+  saved: {
+    title: "Saved documents",
+    lede:
+      "What the composer has made and kept. Each one opens back into the composer exactly as it " +
+      "was — still editable, block by block — because what is stored is the source, not a picture " +
+      "of the finished page.",
+    path: "/admin/docs/saved",
+    editHref: "/admin/documents/compose",
+    editLabel: "Open the composer",
+    empty: [
+      "Nothing saved yet",
+      "Documents written in the composer used to live in one browser. They are kept on the server now, so anything saved from here on appears in this list.",
+    ],
+    cols: () => [
+      { h: "Document", w: "30%", cell: (r) => <AdmTwo top={r.title} under={r.number || r.templateName} /> },
+      { h: "To", cell: (r) => r.to || <AdmDim>nobody yet</AdmDim> },
+      { h: "On", cell: (r) => r.templateName },
+      { h: "Blocks", num: true, cell: (r) => num(r.blocks) },
+      { h: "Kept", cell: (r) => <AdmTwo top={when(r.at)} under={r.by} /> },
+      {
+        h: "",
+        cell: (r) =>
+          r.sentAt ? (
+            <AdmChip tone="ok">sent {when(r.sentAt)}</AdmChip>
+          ) : (
+            <AdmChip tone="calm">not sent</AdmChip>
+          ),
+      },
+    ],
+  },
+
+  issued: {
+    title: "Issued",
+    lede:
+      "Every document that has left the studio, newest first. It answers the question that " +
+      "actually gets asked — \"you never sent it\" — and it is assembled from the records that " +
+      "already know, rather than a second list somebody has to remember to write.",
+    path: "/admin/docs/issued",
+    search: "Search by reference, name, firm or address",
+    empty: ["Nothing issued", "No invoice, receipt or quotation has been raised."],
+    cols: () => [
+      { h: "Document", w: "24%", cell: (r) => <AdmTwo top={r.ref || r.kind} under={r.kind} /> },
+      { h: "To", w: "26%", cell: (r) => <AdmTwo top={r.to} under={r.org || r.email} /> },
+      { h: "Sent", cell: (r) => when(r.on) },
+      { h: "For", num: true, cell: (r) => r.worth || <AdmDim>—</AdmDim> },
+    ],
+  },
+
   system: {
     title: "System",
     lede:
@@ -133,18 +212,35 @@ export default function DsAdminDocuments({ screen }) {
   const { accessToken } = useAuth();
   const [d, setD] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
+  const [q, setQ] = React.useState("");
 
   React.useEffect(() => {
     if (!accessToken || !S) return undefined;
     let alive = true;
     setD(null);
-    apiAuthed(S.path, { token: accessToken })
-      .then((r) => alive && setD(r))
-      .catch(() => alive && setFailed(true));
+    // Debounced only when there is something to debounce. Issued searches the
+    // server because it spans three collections — filtering the page in the
+    // browser would only search whatever had already been fetched, which is
+    // exactly the document somebody is looking for and cannot find.
+    const t = setTimeout(
+      () => {
+        apiAuthed(S.path, { token: accessToken, params: S.search && q ? { q } : {} })
+          .then((r) => alive && setD(r))
+          .catch(() => alive && setFailed(true));
+      },
+      S.search && q ? 220 : 0,
+    );
     return () => {
       alive = false;
+      clearTimeout(t);
     };
-  }, [accessToken, S]);
+  }, [accessToken, S, q]);
+
+  // A screen change has to drop the term with it, or Issued's search silently
+  // filters a screen that has no search box to clear it from.
+  React.useEffect(() => {
+    setQ("");
+  }, [screen]);
 
   if (!S) return <p className="adm-note">No such screen.</p>;
   if (failed) {
@@ -203,6 +299,23 @@ export default function DsAdminDocuments({ screen }) {
             <span className="sub">what it wrote back — the expensive half</span>
           </div>
         </div>
+      ) : null}
+
+      {S.search ? (
+        <label className="adm-find">
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={S.search}
+            aria-label={S.search}
+          />
+          {d?.total > (d?.items || []).length ? (
+            <span className="adm-f-h">
+              Showing {num((d.items || []).length)} of {num(d.total)} — narrow it with a search.
+            </span>
+          ) : null}
+        </label>
       ) : null}
 
       {!d ? (
