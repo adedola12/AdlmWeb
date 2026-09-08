@@ -82,6 +82,23 @@ export function parseDocument(text) {
     // A markdown table's ---|--- rule carries no data.
     if (/^\|?[\s:-]*\|[\s|:-]*$/.test(l) && l.indexOf("-") >= 0) return;
 
+    // A picture on its own line. Two spellings, because people arrive here
+    // from two habits: markdown's ![caption](url), and the plainer
+    // "!image url | caption" that reads as an instruction to somebody who has
+    // never written markdown. A proposal with a site photograph in it is a
+    // different document from one without.
+    const img =
+      l.match(/^!\[([^\]]*)\]\(([^)]+)\)$/) ||
+      (() => {
+        const mm = l.match(/^!image\s+(\S+)(?:\s*\|\s*(.*))?$/i);
+        return mm ? [mm[0], mm[2] || "", mm[1]] : null;
+      })();
+    if (img) {
+      flushAll();
+      out.push({ type: "image", src: img[2].trim(), caption: (img[1] || "").trim() });
+      return;
+    }
+
     const m = l.match(/^(#{1,3})\s+(.*)$/);
     if (m) {
       flushAll();

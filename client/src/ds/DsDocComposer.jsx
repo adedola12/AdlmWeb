@@ -34,6 +34,7 @@ import { mount } from "./adlmDoc.js";
 import "../styles/ds-admin.css";
 import "../styles/ds-doc.css";
 import { parseDocument } from "./docParser.js";
+import { sampleFor, ALL_SAMPLES } from "./docSamples.js";
 
 // The in-progress document, so a refresh does not lose it. NOT the library —
 // that is on the server. See the note above readDraft.
@@ -51,25 +52,6 @@ const TEMPLATES = [
   { id: "valuation", name: "Valuation", hint: "Work done to date" },
 ];
 
-const SAMPLE = `PROPOSAL FOR QUANTITY SURVEYING SOFTWARE
-
-Thank you for the meeting on Tuesday. This sets out what we discussed, with
-the figures against each item so the total is not a surprise.
-
-## What is included
-
-- Six named products, on the machines your team already uses
-- Rate libraries priced to the geopolitical zone the project sits in
-- Two days of on-site training in Lagos
-
-## The figures
-
-Item | Qty | Amount
-QUIV for Revit | 2 | 1,000,000
-RateGen | 1 | 70,000
-On-site training, Lagos | 1 | 350,000
-
-The prices above hold for thirty days. Nothing is charged until you accept.`;
 
 // ── where a document lives ─────────────────────────────────────────────────
 //
@@ -115,7 +97,7 @@ export default function DsDocComposer() {
   const [title, setTitle] = React.useState("");
   const [number, setNumber] = React.useState("");
   const [to, setTo] = React.useState("");
-  const [source, setSource] = React.useState(SAMPLE);
+  const [source, setSource] = React.useState(() => sampleFor("letter"));
   const [kept, setKept] = React.useState([]);
   const [dropping, setDropping] = React.useState(false);
   const [problem, setProblem] = React.useState("");
@@ -163,11 +145,37 @@ export default function DsDocComposer() {
 
   const blocks = React.useMemo(() => parseDocument(source), [source]);
 
+  /**
+   * Choose a template.
+   *
+   * Each one now carries a worked example — a bill of quantities looks like a
+   * bill of quantities, a receipt like a receipt — which is the only way the
+   * picker teaches anything. But a template is also just the paper somebody
+   * prints on, and switching it must never eat what they have written.
+   *
+   * So the example is swapped only while the box still holds an untouched
+   * example. The moment a word is changed it is that person's document and
+   * the template switch changes the paper alone.
+   */
+  const pickTemplate = React.useCallback(
+    (id) => {
+      setTemplate(id);
+      setSource((cur) => (ALL_SAMPLES.includes(cur) || !cur.trim() ? sampleFor(id) : cur));
+    },
+    [],
+  );
+
+  /** Put the example back, on purpose. */
+  const loadSample = React.useCallback(() => {
+    setSource(sampleFor(template));
+    setNote("The example is back. Editing it makes it yours.");
+  }, [template]);
+
   // The crash net. Debounced, because writing to localStorage on every
   // keystroke of a long document is real work for no benefit.
   React.useEffect(() => {
     const t = setTimeout(() => {
-      if (source && source !== SAMPLE) {
+      if (source && !ALL_SAMPLES.includes(source)) {
         writeDraft({ template, title, number, to, source, editingId });
       }
     }, 600);
@@ -522,6 +530,10 @@ export default function DsDocComposer() {
                       Lines split by <b>|</b> or a tab make a table, first row the header. One row
                       on its own stays a sentence.
                     </li>
+                  <li>
+                    <b>![caption](url)</b> places a picture. So does{" "}
+                    <b>!image url | caption</b>.
+                  </li>
                   <li>A blank line ends whatever was running.</li>
                 </ul>
               </div>
@@ -581,13 +593,21 @@ export default function DsDocComposer() {
                   key={t.id}
                   type="button"
                   className={template === t.id ? "adm-tpl on" : "adm-tpl"}
-                  onClick={() => setTemplate(t.id)}
+                  onClick={() => pickTemplate(t.id)}
                 >
                   <b>{t.name}</b>
                   <span>{t.hint}</span>
                 </button>
             ))}
           </div>
+
+          <p className="adm-hint">
+            Each template starts from a worked example — real products, real
+            rates, real units. Change a word and it becomes your document.{" "}
+            <button type="button" className="adm-linkish" onClick={loadSample}>
+              Put the example back
+            </button>
+          </p>
 
           <p className="adm-grp">The document</p>
           <div className="adm-fields">

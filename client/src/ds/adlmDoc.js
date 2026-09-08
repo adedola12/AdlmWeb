@@ -287,6 +287,25 @@ const BLOCKS = {
       `<span class="doc-v">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</span></div>`
     );
   },
+  /**
+   * A picture in the body of a document — a site photograph, a detail, a
+   * screenshot of the model the takeoff came from.
+   *
+   * Deliberately never wider than the text measure and never taller than
+   * about half a page: an image that breaks the column, or one that pushes
+   * the paragraph after it onto a second sheet, makes the document look
+   * assembled rather than written. loading="lazy" because a proposal with
+   * eight photographs should not stall the preview while it draws.
+   */
+  image: (b) => {
+    if (!b.src) return "";
+    return (
+      '<figure class="doc-figure">' +
+      `<img src="${esc(b.src)}" alt="${esc(b.caption || "")}" loading="lazy">` +
+      (b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : "") +
+      "</figure>"
+    );
+  },
   hr: () => '<div class="doc-hr"></div>',
   spacer: (b) => `<div class="doc-spacer" style="height:${b.size || 12}pt"></div>`,
   table,
