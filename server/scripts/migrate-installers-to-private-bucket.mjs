@@ -258,22 +258,103 @@ async function cmdVerify(client, cfg, bucket) {
   }
   console.log("  every object present at the same size.");
 
-  const live = await signedDeliveryIsLive(cfg);
-  console.log(
-    live
-      ? "  /me/deployments is signing URLs: R2_INSTALLERS_BUCKET is set and deployed."
-      : "  R2_INSTALLERS_BUCKET is NOT set in SSM yet — signed delivery is not live.",
-  );
+  // signedDeliveryIsLive prints the specific reason it said no — which of the
+  // switch and the deploy is missing. Restating it here would only paper over
+  // that with a guess.
+  const live = await signedDeliveryIsLive();
+  if (live) console.log("  /me/deployments should now be signing URLs.");
   return live;
 }
 
-/** True once the deployed API has been told to sign installer URLs. */
-async function signedDeliveryIsLive(cfg) {
+/**
+ * True only when the RUNNING API can actually sign installer URLs.
+ *
+ * Checking that R2_INSTALLERS_BUCKET is set in SSM is not enough, and the
+ * first run of this script proved it: the parameter was set before the
+ * signing code was deployed, so an SSM-only guard would have green-lit a
+ * delete while the live API was still handing out public URLs — an outage
+ * across every product.
+ *
+ * The API Lambda reads SSM once, at cold start. So the parameter must not
+ * only exist, it must be OLDER than the Lambda's last modification: if the
+ * function has not been redeployed since the switch was set, the running
+ * container cannot have seen it.
+ *
+ * Both facts come from AWS rather than from the operator's memory of what
+ * they did in which order.
+ */
+async function signedDeliveryIsLive() {
+  let bucketParam;
   try {
-    const v = ssm("R2_INSTALLERS_BUCKET");
-    return Boolean(v && v !== "None");
+    bucketParam = JSON.parse(
+      execFileSync(
+        "aws",
+        ["ssm", "get-parameter", "--name", `${SSM_PREFIX}/R2_INSTALLERS_BUCKET`,
+         "--query", "Parameter.{v:Value,t:LastModifiedDate}", "--output", "json",
+         "--region", AWS_REGION],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      ),
+    );
   } catch {
+    console.log("  R2_INSTALLERS_BUCKET is not set in SSM — signed delivery is not live.");
     return false;
+  }
+
+  if (!bucketParam?.v || bucketParam.v === "None") {
+    console.log("  R2_INSTALLERS_BUCKET is empty — signed delivery is not live.");
+    return false;
+  }
+
+  const setAt = new Date(bucketParam.t);
+  const fnName = process.env.API_LAMBDA_NAME || (await findApiLambda());
+  if (!fnName) {
+    console.log("  Could not identify the API Lambda; set API_LAMBDA_NAME to check it.");
+    return false;
+  }
+
+  let deployedAt;
+  try {
+    const cfgJson = execFileSync(
+      "aws",
+      ["lambda", "get-function-configuration", "--function-name", fnName,
+       "--query", "LastModified", "--output", "text", "--region", AWS_REGION],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    ).trim();
+    deployedAt = new Date(cfgJson);
+  } catch (err) {
+    console.log(`  Could not read ${fnName}: ${String(err.stderr || err.message).trim()}`);
+    return false;
+  }
+
+  console.log(`  R2_INSTALLERS_BUCKET set   ${setAt.toISOString()}`);
+  console.log(`  ${fnName} deployed  ${deployedAt.toISOString()}`);
+
+  if (deployedAt <= setAt) {
+    console.log(
+      "  The API has NOT been deployed since the switch was set, so the running\n" +
+        "  container never read it and is still serving public URLs.",
+    );
+    return false;
+  }
+
+  console.log("  API deployed after the switch was set: signing should be live.");
+  return true;
+}
+
+/** Finds the API Lambda by its stack-generated name. */
+async function findApiLambda() {
+  try {
+    const names = execFileSync(
+      "aws",
+      ["lambda", "list-functions", "--query", "Functions[].FunctionName",
+       "--output", "text", "--region", AWS_REGION],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    )
+      .trim()
+      .split(/\s+/);
+    return names.find((n) => /^AdlmApi-ApiFn/i.test(n)) || null;
+  } catch {
+    return null;
   }
 }
 
