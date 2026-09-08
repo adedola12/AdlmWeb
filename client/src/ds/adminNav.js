@@ -90,6 +90,9 @@ export const NAV = [
       { to: "/admin/changelogs", label: "What's New", icon: "hi-alert", area: "adminhub" },
       { to: "/admin/showcase", label: "Marketing", icon: "hi-info", area: "showcase" },
       { to: "/admin/emails", label: "Emails", icon: "ai-mail", area: "adminhub" },
+      // The only mail the studio sends on its own initiative, so it sits
+      // beside the ones it sends in reply rather than in a group of its own.
+      { to: "/admin/campaigns", label: "Campaigns", icon: "ai-mail", area: "adminhub" },
       // Flyers and Freebies were their own entries because they are their own
       // collections. They are kinds inside Marketing now, which is his design
       // and the more honest one: adding a flyer and adding a testimonial are

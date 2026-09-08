@@ -51,6 +51,7 @@ import AdminDocProduced from "./pages/AdminDocProduced.jsx";
 import AdminDocSystem from "./pages/AdminDocSystem.jsx";
 import AdminStorage from "./pages/AdminStorage.jsx";
 import AdminEmails from "./pages/AdminEmails.jsx";
+import AdminCampaigns from "./pages/AdminCampaigns.jsx";
 import AdminDsWaitlist from "./pages/AdminDsWaitlist.jsx";
 import AdminLcCourses from "./pages/AdminLcCourses.jsx";
 import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
@@ -588,6 +589,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="adminhub">
             <AdminEmails />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/campaigns",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminCampaigns />
           </AdminRoute>
         ),
       },

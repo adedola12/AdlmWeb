@@ -56,7 +56,11 @@ export const unsubscribeUrl = (userId) =>
  * have opted out" rather than quietly showing 260 and leaving somebody to
  * wonder where the rest went.
  */
-export async function resolveAudience(audience, productKey = "") {
+// NOT async, deliberately: it returns the QUERY so callers can chain
+// .select() or .countDocuments() onto it. Marked async, every branch would be
+// wrapped in a promise and both of those calls would fail at runtime with
+// "not a function" - which is exactly what happened.
+export function resolveAudience(audience, productKey = "") {
   const base = { disabled: { $ne: true }, email: { $exists: true, $ne: "" } };
 
   const ACTIVE = { $elemMatch: { status: "active" } };
