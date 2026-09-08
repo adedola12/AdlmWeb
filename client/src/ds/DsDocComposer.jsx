@@ -126,6 +126,23 @@ export default function DsDocComposer() {
   const [editingId, setEditingId] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
   const [showSource, setShowSource] = React.useState(true);
+
+  // His PAPER toggle, and it is real rather than decorative: adlmDoc's
+  // brandOf() strips our logo, site, socials and bank block and drops to a
+  // neutral graphite palette the moment a firm name is given, so a practice's
+  // bill of quantities carries their name and nothing of ours.
+  const [paper, setPaper] = React.useState("adlm");
+  const [firm, setFirm] = React.useState("");
+
+  // The date on the sheet. It was hardcoded to today, which is wrong for a
+  // document being written up after the fact or dated ahead of a meeting.
+  const [docDate, setDocDate] = React.useState(() =>
+    new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+  );
+
+  // "Subject or reference" — the engine already renders it as a keyvalue row
+  // beside the address, and nothing was filling it in.
+  const [subject, setSubject] = React.useState("");
   const [note, setNote] = React.useState("");
 
   const host = React.useRef(null);
@@ -162,11 +179,12 @@ export default function DsDocComposer() {
       template,
       title: title.trim(),
       number: number.trim(),
-      date: new Date().toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }),
+      date: docDate.trim(),
+      // Null means ADLM's own stationery. A name means somebody else's, and
+      // brandOf() takes our identity off rather than layering theirs over it.
+      brand: paper === "practice" ? { name: firm.trim() || "Your practice" } : null,
+      meta: subject.trim() ? subject.trim().split(/\n/).filter(Boolean) : null,
+      metaLabel: "SUBJECT:",
       // An array of address lines, not a string — the engine renders one <div>
       // per line. Commas are how people type an address on one line.
       to: to
@@ -176,7 +194,7 @@ export default function DsDocComposer() {
       toLabel: template === "invoice" || template === "receipt" ? "INVOICE TO:" : "TO:",
       blocks,
     }),
-    [template, title, number, to, blocks],
+    [template, title, number, to, blocks, docDate, paper, firm, subject],
   );
 
   // Re-render the document whenever anything it is made of changes. mount()
@@ -492,9 +510,8 @@ export default function DsDocComposer() {
                 {problem && <p className="adm-note adm-bad">{problem}</p>}
                 {note && !problem && <p className="adm-note">{note}</p>}
 
-                <div className="adm-grp">
-                  <h2>What the formatter looks for</h2>
-                  <ul className="adm-rules">
+                <p className="adm-grp">What the formatter looks for</p>
+                <ul className="adm-rules">
                     <li>
                       <b># Heading</b> makes a heading. So does A SHORT LINE IN CAPITALS.
                     </li>
@@ -505,9 +522,8 @@ export default function DsDocComposer() {
                       Lines split by <b>|</b> or a tab make a table, first row the header. One row
                       on its own stays a sentence.
                     </li>
-                    <li>A blank line ends whatever was running.</li>
-                  </ul>
-                </div>
+                  <li>A blank line ends whatever was running.</li>
+                </ul>
               </div>
             ) : null}
 
@@ -523,9 +539,43 @@ export default function DsDocComposer() {
         </div>
 
         <aside className="adm-side">
-          <div className="adm-grp">
-            <h2>Template</h2>
-            <div className="adm-tpls">
+          <p className="adm-grp">Paper</p>
+          <div className="adm-seg">
+            <button
+              type="button"
+              className={paper === "adlm" ? "on" : undefined}
+              onClick={() => setPaper("adlm")}
+            >
+              ADLM
+            </button>
+            <button
+              type="button"
+              className={paper === "practice" ? "on" : undefined}
+              onClick={() => setPaper("practice")}
+            >
+              A practice
+            </button>
+          </div>
+          <p className="adm-hint">
+            ADLM documents carry our mark and colour. A practice&rsquo;s carry theirs, with one
+            line of credit in the footer — never our letterhead on their professional work.
+          </p>
+          {paper === "practice" ? (
+            <div className="adm-fields" style={{ marginTop: 10 }}>
+              <label>
+                <span>The practice&rsquo;s name</span>
+                <input
+                  type="text"
+                  value={firm}
+                  placeholder="Adeyemi &amp; Partners"
+                  onChange={(e) => setFirm(e.target.value)}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          <p className="adm-grp">Template</p>
+          <div className="adm-tpls">
               {TEMPLATES.map((t) => (
                 <button
                   key={t.id}
@@ -536,13 +586,11 @@ export default function DsDocComposer() {
                   <b>{t.name}</b>
                   <span>{t.hint}</span>
                 </button>
-              ))}
-            </div>
+            ))}
           </div>
 
-          <div className="adm-grp">
-            <h2>The document</h2>
-            <div className="adm-fields">
+          <p className="adm-grp">The document</p>
+          <div className="adm-fields">
               <label>
                 <span>Title</span>
                 <input
@@ -561,20 +609,39 @@ export default function DsDocComposer() {
                   onChange={(e) => setNumber(e.target.value)}
                 />
               </label>
-              <label>
-                <span>Addressed to</span>
-                <input
-                  type="text"
-                  value={to}
-                  placeholder="Adeyemi &amp; Partners, Ikoyi, Lagos"
-                  onChange={(e) => setTo(e.target.value)}
-                />
-              </label>
-            </div>
+            <label>
+              <span>Date</span>
+              <input
+                type="text"
+                value={docDate}
+                placeholder="8 September 2026"
+                onChange={(e) => setDocDate(e.target.value)}
+              />
+            </label>
+            <label>
+              <span>Addressed to</span>
+              {/* A textarea, not an input: an address is three or four lines
+                  and the engine renders one div per line. */}
+              <textarea
+                rows={3}
+                value={to}
+                placeholder={"The Managing Partner,\nAdeyemi & Partners,\nIkoyi, Lagos"}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </label>
+            <label>
+              <span>Subject or reference</span>
+              <textarea
+                rows={2}
+                value={subject}
+                placeholder="BIM implementation across six workstations"
+                onChange={(e) => setSubject(e.target.value)}
+              />
+            </label>
           </div>
 
-          <div className="adm-grp">
-            <h2>Saved documents</h2>
+          <p className="adm-grp">Saved documents</p>
+          <div className="adm-saved">
             {kept.length === 0 ? (
               <p className="adm-hint">
                 Nothing saved yet. Documents are kept on the server now, not in this browser, so

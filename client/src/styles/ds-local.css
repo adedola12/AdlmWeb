@@ -1113,3 +1113,11 @@
   .ds .adm-compose .adm-side { border-left: 0; border-top: 1px solid var(--line); }
   .ds .adm-compose .adm-split { grid-template-columns: 1fr; }
 }
+
+/* The composer sidebar, sitting under his .adm-grp labels rather than inside
+   them. The saved list needs the small wrapper his markup implies. */
+.ds .adm-compose .adm-side .adm-seg { margin: 0 6px; }
+.ds .adm-compose .adm-side .adm-tpls,
+.ds .adm-compose .adm-side .adm-fields,
+.ds .adm-compose .adm-side .adm-saved { padding: 0 6px; }
+.ds .adm-compose .adm-side .adm-kept-acts { padding: 0 6px; }
