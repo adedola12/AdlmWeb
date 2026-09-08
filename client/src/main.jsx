@@ -45,6 +45,7 @@ import AdminCatRates from "./pages/AdminCatRates.jsx";
 import AdminCatSaved from "./pages/AdminCatSaved.jsx";
 import AdminRateBuilder from "./pages/AdminRateBuilder.jsx";
 import AdminDocAi from "./pages/AdminDocAi.jsx";
+import AdminTimeSaved from "./pages/AdminTimeSaved.jsx";
 import AdminDocAudit from "./pages/AdminDocAudit.jsx";
 import AdminDocProduced from "./pages/AdminDocProduced.jsx";
 import AdminDocSystem from "./pages/AdminDocSystem.jsx";
@@ -863,6 +864,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="aiusage">
             <AdminDocAi />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Takeoff Time Log: hours saved by HERON/QUIV against a stated baseline
+      {
+        path: "admin/time-saved",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminTimeSaved />
           </AdminRoute>
         ),
       },

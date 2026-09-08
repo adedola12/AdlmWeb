@@ -115,6 +115,10 @@ export const NAV = [
     rule: true,
     items: [
       { to: "/admin/ai-usage", label: "AI usage", icon: "ai-ada", area: "adminhub" },
+      // The Takeoff Time Log: hours saved per firm, user and product, with the
+      // baseline it rests on written out. Same area as the hub: it is a report,
+      // and the one write on it (a new rate-table version) is a hub decision.
+      { to: "/admin/time-saved", label: "Time saved", icon: "hi-check", area: "adminhub" },
       { to: "/admin/storage", label: "Storage", icon: "hi-downloads", area: "adminhub" },
       { to: "/admin/settings", label: "System", icon: "hi-settings", area: "adminhub" },
     ],
