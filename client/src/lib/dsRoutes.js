@@ -19,6 +19,10 @@ export const MAP = {
   about: "/about",
   learn: "/learn",
   "whats-new": "/whats-new",
+  // Added upstream 2026-09-04. His free lesson gets its own page, linked
+  // as lesson?v=<slug>; ours is /learn/free/:id. The v value is folded
+  // into the path segment below, the same way dash-product?p= is.
+  lesson: "/learn/free/:id",
 
   // His "customers" page is our testimonials page under a different name.
   customers: "/testimonials",
@@ -206,6 +210,10 @@ export function resolveHref(href) {
   if (query && path.includes(":key")) {
     const value = new URLSearchParams(query).get("p");
     if (value) path = path.replace(":key", PRODUCT_KEY[value] || value);
+  } else if (query && path.includes(":id")) {
+    // His lesson pages are lesson?v=<slug>. Ours put it in the path.
+    const value = new URLSearchParams(query).get("v");
+    if (value) path = path.replace(":id", value);
   } else if (query) {
     path = `${path}?${query}`;
   }

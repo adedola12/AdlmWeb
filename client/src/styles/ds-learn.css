@@ -276,3 +276,40 @@
 .ds .lx-head h1{font-size:21px}
 .ds .lx-tx p{grid-template-columns:48px 1fr;gap:10px}
 }
+
+
+/* ---- the free lesson on the public site ------------------------------------
+   Same player as the enrolled one, on a page with the marketing nav above it
+   and a footer under it. It is deliberately the same: a free lesson that looked
+   cheaper than a paid one would be an argument for not watching it.          */
+.ds .libsec{padding:104px 0 44px}
+.ds .libcrumbs{display:flex;align-items:center;gap:9px;margin-bottom:18px;font-size:12.5px}
+.ds .libcrumbs a{color:var(--ink-3);text-decoration:none}
+.ds .libcrumbs a:hover{color:var(--action)}
+.ds .libcrumbs span{color:var(--line-2)}
+
+
+/* the side list is a set of links here, not buttons against a course model */
+.ds .lx-side a.lx-li{text-decoration:none}
+.ds .lx-player.lib .lx-head h1{max-width:22ch}
+
+
+/* The one piece the paid player has no use for: what this lesson was cut out
+   of. It sits under the tabs rather than beside the video, because it is the
+   thing to read when the lesson has finished, not while it is running.      */
+.ds .lib-course{display:flex;align-items:center;justify-content:space-between;gap:26px;
+  margin-top:18px;padding:22px 24px;border-radius:18px;
+  border:1px solid var(--line);background-image:var(--card-fill)}
+.ds .lib-course .k{display:block;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--accent);font-weight:500}
+.ds .lib-course b{display:block;margin-top:8px;font-size:18px;font-weight:500;color:var(--ink);
+  letter-spacing:-.02em}
+.ds .lib-course .s{display:block;margin-top:3px;font-size:12.5px;color:var(--ink-3)}
+.ds .lib-course p{margin:10px 0 0;font-size:13.5px;font-weight:300;color:var(--ink-2);
+  line-height:1.6;max-width:56ch}
+.ds .lib-course-a{flex:none;display:flex;flex-direction:column;gap:8px}
+@media (max-width:980px){
+.ds .lx-player.lib{grid-template-columns:1fr}
+.ds .lib-course{flex-direction:column;align-items:flex-start;gap:16px}
+.ds .lib-course-a{flex-direction:row}
+}

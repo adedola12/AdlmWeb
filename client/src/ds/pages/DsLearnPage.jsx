@@ -489,7 +489,7 @@ export default function DsLearnPage({ d }) {
           {" "}
           <div className="lgrid" id="lesson-grid">
             {" "}
-            <article className="ltile" data-cat="Revit">
+            <Link className="ltile" data-cat="Revit" data-v="arch-takeoff" to="/learn/free/arch-takeoff" data-ds-page="lesson">
               {" "}
               <img src="/ds/ls-frame.jpg" alt="" />
               {" "}
@@ -515,9 +515,9 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
-            <article className="ltile" data-cat="PlanSwift">
+            <Link className="ltile" data-cat="PlanSwift" data-v="foundation-takeoff" to="/learn/free/foundation-takeoff" data-ds-page="lesson">
               {" "}
               <img src="/ds/ls-steel.jpg" alt="" />
               {" "}
@@ -543,9 +543,9 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
-            <article className="ltile" data-cat="Rates">
+            <Link className="ltile" data-cat="Rates" data-v="defensible-rate" to="/learn/free/defensible-rate" data-ds-page="lesson">
               {" "}
               <img src="/ds/bg-rategen.jpg" alt="" />
               {" "}
@@ -571,9 +571,9 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
-            <article className="ltile" data-cat="Revit">
+            <Link className="ltile" data-cat="Revit" data-v="structural-takeoff" to="/learn/free/structural-takeoff" data-ds-page="lesson">
               {" "}
               <img src="/ds/bg-quiv.jpg" alt="" />
               {" "}
@@ -599,9 +599,9 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
-            <article className="ltile" data-cat="PlanSwift">
+            <Link className="ltile" data-cat="PlanSwift" data-v="frame-takeoff" to="/learn/free/frame-takeoff" data-ds-page="lesson">
               {" "}
               <img src="/ds/bg-heron.jpg" alt="" />
               {" "}
@@ -627,9 +627,9 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
-            <article className="ltile" data-cat="Getting started">
+            <Link className="ltile" data-cat="Getting started" data-v="hub-install" to="/learn/free/hub-install" data-ds-page="lesson">
               {" "}
               <img src="/ds/bg-timepro.jpg" alt="" />
               {" "}
@@ -655,9 +655,9 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
-            <article className="ltile" data-cat="Revit">
+            <Link className="ltile" data-cat="Revit" data-v="boq-in-minutes" to="/learn/free/boq-in-minutes" data-ds-page="lesson">
               {" "}
               <img src="/ds/ls-city.jpg" alt="" />
               {" "}
@@ -683,9 +683,9 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
-            <article className="ltile" data-cat="PlanSwift">
+            <Link className="ltile" data-cat="PlanSwift" data-v="openings" to="/learn/free/openings" data-ds-page="lesson">
               {" "}
               <img src="/ds/ls-survey.jpg" alt="" />
               {" "}
@@ -711,9 +711,9 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
-            <article className="ltile" data-cat="PlanSwift">
+            <Link className="ltile" data-cat="PlanSwift" data-v="roof-works" to="/learn/free/roof-works" data-ds-page="lesson">
               {" "}
               <img src="/ds/ls-crane.jpg" alt="" />
               {" "}
@@ -739,7 +739,7 @@ export default function DsLearnPage({ d }) {
                 {" "}
               </div>
               {" "}
-            </article>
+            </Link>
             {" "}
           </div>
           {" "}

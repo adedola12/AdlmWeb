@@ -568,6 +568,17 @@ export default function DsAdminEmails() {
             </li>
             {" "}
             <li>
+              <Link to="/admin/billboard" data-tip="Billboard">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#hi-computer" />
+                </svg>
+                <span className="lb">
+                  Billboard
+                </span>
+              </Link>
+            </li>
+            {" "}
+            <li>
               <Link to="/admin/emails" className="on" aria-current="page" data-tip="Emails">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <use href="#ai-mail" />

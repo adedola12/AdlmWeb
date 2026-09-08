@@ -744,23 +744,7 @@
 .ds .mk-out{margin-left:0;width:100%;justify-content:center;padding-top:4px}
 }
 
-/* ------------------------------------------------------------ notice banner */
-/* Admin announcement, published via POST /admin/settings/notice and delivered
-   on /me as `notice`. Sits above the page head so it is read before the
-   dashboard proper. Distinct from the force-reinstall broadcast, which signs
-   the fleet out — this one only ever says something. */
-.ds .dsh-notice{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
-  flex-wrap:wrap;margin:0 0 22px;padding:14px 18px;border:1px solid var(--line);
-  border-left-width:3px;border-radius:10px;background:var(--card-fill)}
-.ds .dsh-notice-body{min-width:0;flex:1 1 320px}
-.ds .dsh-notice-body strong{display:block;font-size:14.5px;font-weight:500;
-  letter-spacing:-.01em;color:var(--ink);margin-bottom:3px}
-.ds .dsh-notice-body p{margin:0;font-size:14px;font-weight:300;line-height:1.5;
-  color:var(--ink-2);max-width:78ch;white-space:pre-line}
-.ds .dsh-notice-cta{flex:0 0 auto;align-self:center;font-size:13.5px;font-weight:500;
-  text-decoration:none;padding:8px 15px;border-radius:8px;
-  background:var(--action);color:#fff}
-.ds .dsh-notice-cta:hover{opacity:.9}
-.ds .dsh-notice--info{border-left-color:var(--action)}
-.ds .dsh-notice--success{border-left-color:#1a7f4b}
-.ds .dsh-notice--warn{border-left-color:#b4690e}
+
+/* The switcher in the account menu is styled in site.css, because the admin
+   header uses the same classes and does not load this file. */
+.ds .dsh-menu:has(.sw){min-width:292px}

@@ -148,6 +148,9 @@ const PAGES = [
   // and kept, each one reopening into the composer exactly as it was. Nothing
   // to do with saved RATES, which live under Catalogue.
   { src: "src/admin-saved.html", name: "DsAdminSaved", slug: "admin-saved" },
+  // Added upstream 2026-09-04. His billboard: what the studio is
+  // promoting, as a schedule rather than a single banner.
+  { src: "src/admin-billboard.html", name: "DsAdminBillboard", slug: "admin-billboard" },
   { src: "src/admin-submissions.html", name: "DsAdminSubmissions", slug: "admin-submissions" },
   { src: "src/admin-subscriptions.html", name: "DsAdminSubscriptions", slug: "admin-subscriptions" },
   { src: "src/admin-support.html", name: "DsAdminSupport", slug: "admin-support" },
@@ -159,6 +162,8 @@ const PAGES = [
   // design is reviewable, but note the app does NOT serve them: a 404 here is
   // a React route, and a 500 is the ErrorBoundary. Wiring these two up is a
   // separate decision, not a side effect of porting them.
+  // A free lesson on its own page, added upstream 2026-09-04.
+  { src: "src/lesson.html", name: "DsLessonPage", slug: "lesson" },
   { src: "src/404.html", name: "DsNotFound", slug: "404" },
   { src: "src/500.html", name: "DsServerError", slug: "500" },
 ];

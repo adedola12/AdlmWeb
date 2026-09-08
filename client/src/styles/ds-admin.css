@@ -1346,3 +1346,45 @@
     background:rgba(4,12,22,.62);border-radius:4px;padding:1px 4px;pointer-events:none}
 .ds .adm-media-cell{display:flex;align-items:center;gap:9px;min-width:0}
 }
+
+
+/* ---- billboard --------------------------------------------------------------
+   Order is a pair of arrows rather than a drag handle: the list is short, the
+   arrows work on a phone, and a drag that has to be explained is not an
+   affordance. */
+.ds .adm-ord{display:inline-flex;gap:4px}
+.ds .adm-ord-b{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink-3);cursor:pointer;font-size:13px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background-color 160ms var(--e-fast),color 160ms var(--e-fast)}
+.ds .adm-ord-b:hover{background:var(--bg-inset);color:var(--ink)}
+
+
+/* The preview is the site's own band, shrunk to drawer width. Its type scales
+   with the frame, so what is checked here is the real line-wrapping. */
+.ds .adm-bill-preview{border-radius:16px;overflow:hidden;margin-bottom:18px}
+.ds .adm-bill-preview .promo-fr{border-radius:16px}
+.ds .adm-bill-preview .promo-track{height:250px}
+.ds .adm-bill-preview .promo-copy{padding:24px 26px;gap:9px}
+.ds .adm-bill-preview .promo-copy h3{font-size:19px}
+.ds .adm-bill-preview .promo-copy p{font-size:13px}
+
+
+/* ---- the name in the top corner -------------------------------------------
+   It was a button that did nothing. It now carries the same switcher the
+   dashboard menu carries — those classes live in site.css, which every page
+   loads, so the two cannot drift apart. */
+.ds .adm-top{position:relative}
+.ds .adm-memenu{position:absolute;top:calc(100% - 6px);right:18px;min-width:292px;z-index:95;
+  border-radius:16px;border:1px solid var(--line);background:var(--bg);
+  box-shadow:0 22px 60px rgba(4,12,22,.20);padding:8px;
+  opacity:0;visibility:hidden;transform:translateY(-6px);
+  transition:opacity 200ms var(--e-out),transform 200ms var(--e-out),visibility 200ms}
+.ds .adm-memenu.on{opacity:1;visibility:visible;transform:none}
+.ds .adm-memenu .who{padding:10px 12px 12px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.ds .adm-memenu .who b{display:block;font-size:13.5px;font-weight:500;color:var(--ink)}
+.ds .adm-memenu .who span{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
+.ds .adm-memenu a{display:block;padding:9px 12px;border-radius:10px;font-size:13.5px;
+  color:var(--ink-2);text-decoration:none}
+.ds .adm-memenu a:hover{background:var(--pal-light-wash);color:var(--ink)}
+.ds .adm-memenu a.out{color:var(--ink-3)}
