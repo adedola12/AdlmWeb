@@ -97,6 +97,8 @@ import modelCheckRoutes from "./routes/model-checks.js";
 import usageRoutes from "./routes/usage.js";
 import adminUsage from "./routes/admin.usage.js";
 import adminAiUsage from "./routes/admin.aiUsage.js";
+import telemetryTakeoff from "./routes/telemetry.takeoff.js";
+import adminTakeoff from "./routes/admin.takeoff.js";
 
 import trainingLocationsPublic from "./routes/training-locations.js";
 import adminTrainingLocations from "./routes/admin.training-locations.js";
@@ -387,6 +389,12 @@ app.use("/admin/usage", adminUsage);
 
 // AI spend, per-user allocations & AWS credit burn-down
 app.use("/admin/ai-usage", adminAiUsage);
+
+// Takeoff Time Log: plugins post takeoff sessions, the admin reads time saved.
+// See docs/takeoff-time-log.md.
+app.use("/telemetry", telemetryTakeoff);
+app.use("/api/telemetry", telemetryTakeoff);
+app.use("/admin/takeoff", adminTakeoff);
 
 app.use("/freebies", freebiesPublic);
 app.use("/admin/freebies", adminFreebies);
