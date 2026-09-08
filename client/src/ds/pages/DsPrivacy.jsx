@@ -57,7 +57,7 @@ export default function DsPrivacy() {
             </h3>
             {" "}
             <p>
-              An ADLM account holds your name, email, WhatsApp number and the licences you own. When you use the products, project data: takeoffs, budgets, rate libraries: syncs to that account so it is available on any machine you sign into.
+              An ADLM account holds your name, email, WhatsApp number and the licences you own. When you use the products, project data: takeoffs, budgets, rate libraries: syncs to that account so it is available on any machine you sign into. When you run a takeoff in HERON or QUIV, the plugin also records how long it took and how many items, folders and bill lines it produced, so we can report the time the tools save. Timings and counts only: no drawing content, names, quantities or prices. You can switch this off in the plugin settings.
             </p>
             {" "}
             <h3>
