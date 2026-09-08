@@ -16,7 +16,7 @@
 // Nothing here reads the database — a template that fetches is a template that
 // can fail while somebody is waiting to be told their password was reset.
 
-import { wrapEmail, emailBrand } from "./emailLayout.js";
+import { wrapEmail, wrapMarketingEmail, emailBrand } from "./emailLayout.js";
 
 const { SITE } = emailBrand;
 
@@ -349,6 +349,58 @@ export function breakGlassCode({ firstName, code, minutes = 10 }) {
       footNote:
         "If you did not just try to sign in to a privileged ADLM support account, change your " +
         "password immediately and tell the team. This account can reach any customer machine.",
+    }),
+  };
+}
+
+
+/* ── a marketing message ─────────────────────────────────────────────────────
+ *
+ * The only kind the studio sends on its own initiative, so the only kind that
+ * carries an unsubscribe. Everything above answers something a person just
+ * did; this one arrives because somebody decided to write to them.
+ *
+ * The body is plain text typed by a person in the admin, split on blank lines
+ * into paragraphs and ESCAPED. Not HTML: letting an admin paste markup into a
+ * mail that goes to every customer means one bad tag renders as garbage in
+ * three hundred inboxes, and there is no recall.
+ */
+export function marketingMessage({
+  firstName,
+  subject,
+  preheader = "",
+  heading = "",
+  body = "",
+  ctaLabel = "",
+  ctaHref = "",
+  unsubscribeUrl = "",
+}) {
+  const esc = (t) =>
+    String(t ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  const paras = String(body)
+    .split(/\n{2,}/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => p(esc(t).replace(/\n/g, "<br>")))
+    .join("");
+
+  return {
+    subject,
+    html: wrapMarketingEmail({
+      title: subject,
+      preheader,
+      body:
+        p(`Hello ${first(firstName)},`) +
+        (heading
+          ? `<h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;font-weight:600">${esc(heading)}</h1>`
+          : "") +
+        paras,
+      cta: ctaHref ? { href: ctaHref, label: ctaLabel || "Have a look" } : null,
+      unsubscribeUrl,
     }),
   };
 }
