@@ -88,6 +88,7 @@ import adminEmails from "./routes/admin.emails.js";
 import adminBroadcast from "./routes/admin.broadcast.js";
 import adminCampaigns from "./routes/admin.campaigns.js";
 import adminBillboard, { publicBillboard } from "./routes/admin.billboard.js";
+import { sweepStaleOrders } from "./util/staleOrders.js";
 import unsubscribeRouter from "./routes/unsubscribe.js";
 
 import freebiesPublic from "./routes/freebies.js";
@@ -626,6 +627,46 @@ function startCronJobs() {
     );
 
     console.log("[expiry-notifier] cron scheduled:", EXPIRY_CRON);
+  }
+
+  /* ── orders that were never approved ──────────────────────────────────
+   *
+   * After fifty days a pending order is closed and the buyer is told, with
+   * the steps to start again. It runs an hour after the expiry notifier so
+   * the two are not sending at the same minute.
+   *
+   * Capped per run on purpose - see the note in util/staleOrders.js. When
+   * this shipped, 30 orders were already past fifty days with the oldest at
+   * 290, and thirty mails in one burst is how a warming domain gets marked.
+   */
+  const ENABLE_STALE_ORDERS =
+    String(process.env.ENABLE_STALE_ORDER_CRON || "true") !== "false";
+  const STALE_ORDER_CRON = String(process.env.STALE_ORDER_CRON || "0 10 * * *");
+
+  if (ENABLE_STALE_ORDERS) {
+    cron.schedule(
+      STALE_ORDER_CRON,
+      async () => {
+        try {
+          const out = await sweepStaleOrders();
+          console.log("[stale-orders] done:", out.closed, "closed,", out.waiting, "waiting");
+          if (out.paidButPending) {
+            // Paid and never approved is a failure on our side. It is never
+            // auto-closed, so it is said out loud instead of sitting quiet.
+            console.warn(
+              "[stale-orders]",
+              out.paidButPending,
+              "PAID orders are still unapproved and were not touched - somebody should look",
+            );
+          }
+        } catch (e) {
+          console.error("[stale-orders] failed:", e?.message || e);
+        }
+      },
+      { timezone: "Africa/Lagos" },
+    );
+
+    console.log("[stale-orders] cron scheduled:", STALE_ORDER_CRON);
   }
 
   // Auto-renewal charges run BEFORE the 9am expiry notifier so a user whose

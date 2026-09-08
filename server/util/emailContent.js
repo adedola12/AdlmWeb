@@ -405,10 +405,74 @@ export function marketingMessage({
   };
 }
 
+
+/**
+ * An order that sat unapproved for too long and has been closed.
+ *
+ * The tone matters here. Nobody did anything wrong: they placed an order,
+ * something did not complete, and fifty days passed. So it does not
+ * apologise, does not blame, and does not imply they failed to pay — we do
+ * not know that they did not. It says the order is closed, what to do to
+ * start again, and how to reach a person if they believe they paid.
+ *
+ * The steps are numbered because "just order again" is not instructions to
+ * somebody who has already had one order go quiet on them.
+ */
+export function purchaseAutoDeclined({ firstName, ref, what, total, currency, days, href, whatsNewHref }) {
+  return {
+    subject: "Your ADLM order has been closed",
+    html: wrapEmail({
+      title: "Your order has been closed",
+      preheader: "It was never approved, so it has been closed. Starting again takes a minute.",
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p(
+          `Your order${ref ? ` <b>${ref}</b>` : ""}${what ? ` for <b>${what}</b>` : ""} has been ` +
+            `open and unapproved for ${days} days, so we have closed it. Nothing was charged by ` +
+            `us, and nothing is active on your account from it.`,
+        ) +
+        (total
+          ? p(`<span style="color:#6C819A">The order was for ${money(total, currency)}.</span>`)
+          : "") +
+        p("<b>If you still want it, this is the whole process:</b>") +
+        `<ol style="margin:0 0 14px;padding-left:20px;line-height:1.7">
+           <li>Sign in at adlmstudio.net and open <b>Products</b>.</li>
+           <li>Choose the product and the number of seats, and add it to your basket.</li>
+           <li>Pay by card for an instant licence, or by transfer if you prefer — the bank
+               details are on the checkout page.</li>
+           <li>Card payments activate straight away. A transfer is approved by hand once we
+               can see it, usually the same working day.</li>
+         </ol>` +
+        p(
+          "<b>If you believe you already paid for this order</b>, do not order again — reply to " +
+            "this message with the date and the amount and we will find the payment and put the " +
+            "licence on your account.",
+        ) +
+        (whatsNewHref
+          ? p(
+              `<span style="color:#6C819A">A fair bit has changed since you ordered. ` +
+                `<a href="${whatsNewHref}" style="color:#239CFF">What's New</a> lists every ` +
+                `release, so you can see what you would be getting now.</span>`,
+            )
+          : ""),
+      cta: href ? { label: "Start again", href } : null,
+      footNote:
+        "This is an automatic notice about one order. It does not affect any other product on " +
+        "your account.",
+    }),
+  };
+}
+
 export const PREVIEW = {
   "auth.password-reset": () => passwordResetCode({ firstName: "Adaeze", code: "123456" }),
   "auth.security-code": () => securityCode({ firstName: "Adaeze", code: "123456" }),
   "auth.break-glass": () => breakGlassCode({ firstName: "Adaeze", code: "123456" }),
+  "purchase.auto-declined": () =>
+    purchaseAutoDeclined({
+      firstName: "Adaeze", ref: "ADLM-0421", what: "QUIV — 1 seat, yearly",
+      total: 500000, currency: "NGN", days: 50,
+      href: `${SITE}/products`, whatsNewHref: `${SITE}/whats-new`,
+    }),
   "account.verify": () => verifyEmail({ firstName: "Adaeze", code: "123456" }),
   "account.welcome": () => welcome({ firstName: "Adaeze" }),
   "billing.invoice": () =>

@@ -53,6 +53,14 @@ export const EMAILS = [
   },
 
   {
+    key: "purchase.auto-declined",
+    name: "Order closed after 50 days",
+    when: "A pending order has gone 50 days without approval",
+    file: "util/staleOrders.js",
+    editable: true,
+    why: "",
+  },
+  {
     key: "account.verify",
     name: "Confirm your email",
     when: "Somebody signs up, before the account can buy anything",
