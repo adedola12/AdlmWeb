@@ -86,6 +86,7 @@ import adminRateGenRates from "./routes/admin.rategen.rates.js";
 import adminRateGenCompute from "./routes/admin.rategen.compute.js";
 import adminRateGenMaster from "./routes/admin.rategen.master.js";
 import adminEmails from "./routes/admin.emails.js";
+import adminBroadcast from "./routes/admin.broadcast.js";
 import adminCampaigns from "./routes/admin.campaigns.js";
 import unsubscribeRouter from "./routes/unsubscribe.js";
 
@@ -378,6 +379,7 @@ app.use("/rategen-v2", servicesRouter);
 app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
 app.use("/admin/emails", adminEmails);
+app.use("/admin/broadcast", adminBroadcast);
 app.use("/admin/campaigns", adminCampaigns);
 // Public and unauthenticated on purpose: it is opened from an email, in a
 // browser nobody is signed in to. See the note at the top of the router.
