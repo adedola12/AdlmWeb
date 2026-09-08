@@ -41,9 +41,25 @@ export function AdmDrawer({ title, intro, note, children, foot, onClose, peek = 
     // the wheel moves the list the drawer is about to act on.
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
+    // Tell the rest of the page that something is over it.
+    //
+    // Ada floats at z-index 880 and every drawer sits at 120, so she covered
+    // the drawer's own buttons — the Save in the bottom-right corner, which is
+    // the one thing somebody opened the drawer to press. Rather than fight it
+    // with a bigger number, the page says "an overlay is open" and anything
+    // floating gets out of the way. Counted rather than set, because two
+    // overlays closing must not clear the flag while one is still up.
+    const root = document.documentElement;
+    const depth = Number(root.dataset.overlay || 0) + 1;
+    root.dataset.overlay = String(depth);
+
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
+      const left = Number(root.dataset.overlay || 1) - 1;
+      if (left > 0) root.dataset.overlay = String(left);
+      else delete root.dataset.overlay;
     };
   }, [onClose]);
 

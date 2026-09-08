@@ -284,7 +284,79 @@ export function trainingConfirmed({ firstName, courseName, dates, venue, href })
  * The sample facts are obviously sample facts — "Sample Ltd", 123456 — so
  * nobody mistakes a preview for a real customer's mail.
  */
+
+/* ── the three security codes ────────────────────────────────────────────────
+ *
+ * These lived as bare <p> tags inline in routes/auth.js, so the three most
+ * security-sensitive messages the studio sends were the only three that did
+ * not look like they came from the studio. That is exactly backwards: an
+ * unbranded mail asking for a code is what a phishing attempt looks like,
+ * and these are the ones a customer most needs to trust.
+ *
+ * They stay uneditable from the admin — see the catalogue's `why`. A reset
+ * mail is the single most useful thing for an attacker to be able to rewrite.
+ */
+
+export function passwordResetCode({ firstName, code, minutes = 10 }) {
+  return {
+    subject: "Your ADLM password reset code",
+    html: wrapEmail({
+      title: "Password reset code",
+      preheader: `Your reset code is ${code}.`,
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p("Use this code to set a new password.") +
+        codeBlock(code) +
+        p(`It lasts ${minutes} minutes.`),
+      footNote:
+        "If you did not ask for this, you can ignore it — your password has not changed. " +
+        "If it keeps arriving, tell us: somebody is trying to get into your account.",
+    }),
+  };
+}
+
+export function securityCode({ firstName, code, minutes = 10 }) {
+  return {
+    subject: "Your ADLM security code",
+    html: wrapEmail({
+      title: "Security code",
+      preheader: `Your security code is ${code}.`,
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p(
+          "Use this code to confirm something that cannot be undone — deleting projects, or " +
+            "locking a contract.",
+        ) +
+        codeBlock(code) +
+        p(`It lasts ${minutes} minutes.`),
+      footNote:
+        "If you did not ask for this, somebody may have your password. Change it now and tell us.",
+    }),
+  };
+}
+
+export function breakGlassCode({ firstName, code, minutes = 10 }) {
+  return {
+    subject: "ADLM break-glass sign-in code",
+    html: wrapEmail({
+      title: "Break-glass sign-in code",
+      preheader: "A privileged support sign-in was requested.",
+      body:
+        p(`Hello ${first(firstName)},`) +
+        p("Use this code to complete a break-glass sign-in to the ADLM support account.") +
+        codeBlock(code) +
+        p(`It lasts ${minutes} minutes.`),
+      footNote:
+        "If you did not just try to sign in to a privileged ADLM support account, change your " +
+        "password immediately and tell the team. This account can reach any customer machine.",
+    }),
+  };
+}
+
 export const PREVIEW = {
+  "auth.password-reset": () => passwordResetCode({ firstName: "Adaeze", code: "123456" }),
+  "auth.security-code": () => securityCode({ firstName: "Adaeze", code: "123456" }),
+  "auth.break-glass": () => breakGlassCode({ firstName: "Adaeze", code: "123456" }),
   "account.verify": () => verifyEmail({ firstName: "Adaeze", code: "123456" }),
   "account.welcome": () => welcome({ firstName: "Adaeze" }),
   "billing.invoice": () =>

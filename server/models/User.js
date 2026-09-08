@@ -238,6 +238,28 @@ const UserSchema = new mongoose.Schema(
     // the server is not a way to get around it.
     emailVerifySentAt: { type: Date, default: null },
     emailVerifyAttempts: { type: Number, default: 0 },
+
+    /* ── does this person want marketing mail? ────────────────────────────
+     *
+     * Default true, because an ADLM account is a business relationship and
+     * telling a customer their software gained a feature is a reasonable
+     * thing to do. What matters is that saying no is easy and is obeyed.
+     *
+     * THIS FLAG ONLY EVER GOVERNS MARKETING.
+     *
+     * Receipts, licence activations, renewal failures, password resets and
+     * support replies ignore it entirely. Somebody who opts out of the
+     * newsletter has not opted out of being told their card was declined,
+     * and a system that conflated the two would be both useless and,
+     * for the billing ones, arguably unlawful.
+     */
+    emailPrefs: {
+      marketing: { type: Boolean, default: true },
+      marketingChangedAt: { type: Date, default: null },
+      // Why it went off. "asked" is somebody clicking unsubscribe; "bounced"
+      // is us switching it off because the address stopped accepting mail.
+      marketingOffReason: { type: String, default: "" },
+    },
   },
   { timestamps: true },
 );

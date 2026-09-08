@@ -17,6 +17,7 @@ import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { EmailTemplate } from "../models/EmailTemplate.js";
 import { EmailSend } from "../models/EmailSend.js";
 import { EMAILS, byKey } from "../util/emailCatalogue.js";
+import { PREVIEW } from "../util/emailContent.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
 
 const router = express.Router();
@@ -77,6 +78,27 @@ router.get("/:key", ...hub, async (req, res, next) => {
     const e = byKey.get(req.params.key);
     if (!e) return res.status(404).json({ error: "No such message" });
     const o = await EmailTemplate.findOne({ key: e.key }).lean();
+
+    // What the message actually says, rendered with plausible values.
+    //
+    // The screen used to describe where the wording lived — "it is in
+    // routes/auth.js" — which answers a developer's question, not the one
+    // somebody opening this screen has. They want to read the mail. So the
+    // original is rendered here and returned alongside any edit, and a person
+    // can see both without leaving the drawer.
+    let original = null;
+    try {
+      const make = PREVIEW[e.key];
+      if (make) {
+        const r = make();
+        original = { subject: r.subject, html: r.html };
+      }
+    } catch (previewErr) {
+      // A template that throws on sample values is a bug worth knowing about,
+      // but it must not take the whole screen down with it.
+      console.error(`[admin.emails] preview failed for ${e.key}:`, previewErr?.message);
+    }
+
     res.json({
       key: e.key,
       name: e.name,
@@ -87,6 +109,13 @@ router.get("/:key", ...hub, async (req, res, next) => {
       edited: !!o,
       subject: o?.subject || "",
       html: o?.html || "",
+      original,
+      // What is actually going out today: the edit if there is one, the
+      // original otherwise. Saves the screen re-deriving the same rule.
+      live: {
+        subject: o?.subject || original?.subject || "",
+        html: o?.html || original?.html || "",
+      },
     });
   } catch (err) {
     next(err);

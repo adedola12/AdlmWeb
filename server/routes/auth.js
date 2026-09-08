@@ -1,5 +1,11 @@
 import express from "express";
-import { verifyEmail, welcome as welcomeMail } from "../util/emailContent.js";
+import {
+  verifyEmail,
+  welcome as welcomeMail,
+  passwordResetCode,
+  securityCode,
+  breakGlassCode,
+} from "../util/emailContent.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -526,13 +532,7 @@ async function issueGodLoginOtp(user, req) {
   const safeName = user.firstName || user.username || user.email.split("@")[0];
   await sendMail({
     to: user.email,
-    subject: "ADLM break-glass sign-in code",
-    html: `<p>Hi ${safeName},</p>
-           <p>Use this code to complete your secure (break-glass) sign-in:</p>
-           <p style="font-size:22px;font-weight:bold;letter-spacing:4px">${code}</p>
-           <p>This code expires in 10 minutes. If you did <b>not</b> just try to
-           sign in to a privileged ADLM support account, change your password
-           immediately and notify the team — this account can access any machine.</p>`,
+    ...breakGlassCode({ firstName: safeName, code }),
   });
 }
 
@@ -1020,11 +1020,7 @@ router.post("/password/forgot", async (req, res) => {
     try {
       await sendMail({
         to: user.email,
-        subject: "Your ADLM password reset code",
-        html: `<p>Hi ${safeName},</p>
-               <p>Your password reset code is:</p>
-               <p style="font-size:20px;font-weight:bold;letter-spacing:3px">${code}</p>
-               <p>This code expires in 10 minutes.</p>`,
+        ...passwordResetCode({ firstName: safeName, code }),
       });
     } catch (mailErr) {
       console.error("[/auth/password/forgot] mail error:", mailErr);
@@ -1130,11 +1126,7 @@ router.post("/step-up/request", authLimiter, requireAuth, async (req, res) => {
     try {
       await sendMail({
         to: user.email,
-        subject: "Your ADLM security code",
-        html: `<p>Hi ${safeName},</p>
-               <p>Use this code to confirm a sensitive action (deleting projects or locking a contract):</p>
-               <p style="font-size:22px;font-weight:bold;letter-spacing:4px">${code}</p>
-               <p>This code expires in 10 minutes. If you didn't request it, someone may have your password — please change it.</p>`,
+        ...securityCode({ firstName: safeName, code }),
       });
     } catch (mailErr) {
       console.error("[/auth/step-up/request] mail error:", mailErr);

@@ -225,24 +225,49 @@ export default function DsAdminEmails() {
             <>
               <p className="adm-drawer-note">
                 {body.edited
-                  ? "This is the wording somebody saved here."
-                  : `This message has not been edited, so it sends as written in ${body.file}.`}
+                  ? "This is the wording somebody saved here. It sends instead of the version in the code."
+                  : `Not edited, so it sends as written in ${body.file}. This is what a customer receives.`}
               </p>
-              {body.edited ? (
-                <>
-                  <p className="adm-f-l">Subject</p>
-                  <p>{body.subject}</p>
-                  <p className="adm-f-l">Body</p>
-                  {/* The saved HTML as text. Rendering it would run an admin's
-                      own markup inside the admin, which is a needless door. */}
-                  <pre className="adm-pre">{body.html}</pre>
-                </>
+
+              <p className="adm-f-l">Subject</p>
+              <p className="adm-mail-subject">{body.live?.subject || <AdmDim>none</AdmDim>}</p>
+
+              <p className="adm-f-l">What they read</p>
+              {/* The mail itself, in an iframe.
+                  srcDoc and sandbox with nothing enabled: the markup renders
+                  exactly as a mail client would show it, while scripts, forms
+                  and navigation stay dead. Injecting it into the admin's own
+                  document would run somebody's saved markup inside the admin
+                  session, which is a door with no reason to exist. */}
+              {body.live?.html ? (
+                <iframe
+                  title="What the message looks like"
+                  className="adm-mail-frame"
+                  sandbox=""
+                  srcDoc={body.live.html}
+                />
               ) : (
-                <p>
-                  The wording lives in <b>{body.file}</b>. Press Edit to write a version that sends
-                  instead of it — the original stays where it is and can be put back at any time.
+                <p className="adm-note">
+                  This message has no preview yet, so there is nothing to show.
                 </p>
               )}
+
+              {/* Both versions exist, so both are readable — otherwise there is
+                  no way to see what an edit changed, or what reverting returns
+                  you to. */}
+              {body.edited && body.original?.html ? (
+                <details className="adm-mail-orig">
+                  <summary>Show the original, before it was edited</summary>
+                  <p className="adm-f-l">Subject</p>
+                  <p className="adm-mail-subject">{body.original.subject}</p>
+                  <iframe
+                    title="The original message"
+                    className="adm-mail-frame"
+                    sandbox=""
+                    srcDoc={body.original.html}
+                  />
+                </details>
+              ) : null}
             </>
           ) : (
             <div className="adm-fs">

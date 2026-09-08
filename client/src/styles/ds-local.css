@@ -963,3 +963,57 @@
 @media print {
   .ds .ada-w { display: none !important; }
 }
+
+/* ── reading a message in the admin ──────────────────────────────────────── */
+
+.ds .adm-mail-subject { margin: 2px 0 16px; font-size: 14.5px; color: var(--ink); }
+
+/* The mail rendered as a customer sees it. White regardless of the admin
+   theme, because that is what an inbox does — showing it on a dark ground
+   would misrepresent what was actually sent. */
+.ds .adm-mail-frame {
+  width: 100%; height: 460px; border: 1px solid var(--line);
+  border-radius: 10px; background: #fff; display: block;
+}
+
+.ds .adm-mail-orig { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.ds .adm-mail-orig summary {
+  cursor: pointer; font-size: 13px; color: var(--ink-2); margin-bottom: 10px;
+}
+.ds .adm-mail-orig summary:hover { color: var(--ink); }
+
+/* ── Ada gets out of the way ─────────────────────────────────────────────────
+ *
+ * She floats at z-index 880; every admin drawer sits at 120. So she covered
+ * the drawer's own Save button — the one thing somebody opened it to press.
+ *
+ * His comment on .ada-w says she sits "above everything except a modal", so
+ * this is the case he intended and simply had no drawers to meet. Rather than
+ * give the drawer a bigger number and start an arms race, anything that puts
+ * a layer over the page sets data-overlay on <html>, and she steps aside.
+ *
+ * Written as :root[data-overlay] .ada-w, NOT .ds [data-overlay] — the
+ * attribute is on <html>, which is an ANCESTOR of .ds. A descendant selector
+ * would never match it. This is the same trap that kept the admin rail wide
+ * in both states for an afternoon.
+ *
+ * Faded and lifted rather than display:none so she returns without a jump,
+ * and pointer-events off so she cannot be clicked while invisible.
+ */
+:root[data-overlay] .ada-w {
+  opacity: 0;
+  transform: translateY(10px) scale(.96);
+  pointer-events: none;
+}
+
+.ds .ada-w {
+  transition: opacity 180ms var(--e-out), transform 180ms var(--e-out);
+  /* A page with a fixed action bar at the bottom can raise her by setting
+     --ada-lift on any ancestor, instead of each one inventing its own
+     offset and drifting apart. */
+  bottom: calc(22px + var(--ada-lift, 0px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds .ada-w { transition: none; }
+}
