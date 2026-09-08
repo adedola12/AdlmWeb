@@ -98,7 +98,6 @@ import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RequestTechnicalHelp from "./pages/RequestTechnicalHelp.jsx";
 import AdminWaitlist from "./pages/AdminWaitlist.jsx";
-import AdminLatest from "./pages/AdminLatest.jsx";
 import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
 import AdminAuditLog from "./pages/AdminAuditLog.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
@@ -906,15 +905,6 @@ const router = createBrowserRouter([
         ),
       },
 
-      // ✅ Latest from ADLM band — staff-grantable ("latest" area)
-      {
-        path: "admin/latest",
-        element: (
-          <AdminRoute permission="latest">
-            <AdminLatest />
-          </AdminRoute>
-        ),
-      },
 
       // ✅ Waitlist & enquiries — staff-grantable ("waitlist" area)
       {

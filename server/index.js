@@ -60,7 +60,6 @@ import adminChangelogs from "./routes/admin.changelogs.js";
 import meOrdersRoutes from "./routes/meOrders.js";
 import couponsPublic from "./routes/coupons.js";
 import waitlistPublic from "./routes/waitlist.public.js";
-import latestPublic from "./routes/latest.public.js";
 import adminCoupons from "./routes/admin.coupons.js";
 import helpbotRoutes from "./routes/helpbot.js";
 import agentRoutes from "./routes/agent.js";
@@ -301,7 +300,6 @@ app.use("/coupons", couponsPublic);
 // Public marketing-form capture (CIVIQ waitlist, solutions enquiries).
 app.use("/waitlist", waitlistPublic);
 // The "Latest from ADLM" band on the marketing pages.
-app.use("/latest", latestPublic);
 app.use("/helpbot", helpbotRoutes);
 app.use("/agent", agentRoutes);
 // AI cost-intelligence for the desktop plugins (auth required, metered).
@@ -432,7 +430,6 @@ import adminCommerce from "./routes/admin.commerce.js";
 import adminCatalogue from "./routes/admin.catalogue.js";
 import adminLearnContent from "./routes/admin.learnContent.js";
 import adminDocuments from "./routes/admin.documents.js";
-import adminLatest from "./routes/admin.latest.js";
 import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
@@ -448,7 +445,6 @@ app.use("/admin/commerce", adminCommerce);
 app.use("/admin/catalogue", adminCatalogue);
 app.use("/admin/lc", adminLearnContent);
 app.use("/admin/docs", adminDocuments);
-app.use("/admin/latest", adminLatest);
 app.use("/admin/audit-log", adminAudit);
 app.use("/admin/followups", adminFollowUps);
 

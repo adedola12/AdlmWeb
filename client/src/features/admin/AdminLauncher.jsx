@@ -32,7 +32,6 @@ const TOOLS = [
   { area: "freebies", to: "/admin/freebies", label: "Freebies", desc: "Free resources", icon: FiGift },
   { area: "flyers", to: "/admin/flyers", label: "Flyer Engine", desc: "Design flyers & thumbnails", icon: FiImage },
   { area: "support", to: "/admin/support-tickets", label: "Support Tickets", desc: "User help requests & AnyDesk", icon: FiLifeBuoy },
-  { area: "latest", to: "/admin/latest", label: "Latest from ADLM", desc: "The rotating band on the marketing pages", icon: FiBell },
   { area: "waitlist", to: "/admin/waitlist", label: "Waitlist & Enquiries", desc: "CIVIQ waitlist & solutions leads", icon: FiUsers },
   { area: "followups", to: "/admin/follow-ups", label: "Follow-Up Calls", desc: "Expired subscriptions & unpaid orders to chase", icon: IconPhone },
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },

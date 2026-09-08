@@ -100,7 +100,6 @@ export const NAV = [
       // collections. They are kinds inside Marketing now, which is his design
       // and the more honest one: adding a flyer and adding a testimonial are
       // the same act. Both routes still work for anything linking to them.
-      { to: "/admin/latest", label: "Latest", icon: "hi-info", area: "showcase" },
     ],
   },
   {
