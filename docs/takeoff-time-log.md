@@ -3,7 +3,7 @@
 Records how long each takeoff or quantity-extraction session takes when done
 with HERON or QUIV, estimates what the same work would have taken by hand, and
 reports the time saved per user, firm, product and period on the admin
-**Time saved** page (`/admin/takeoff-time`).
+**Time saved** page (`/admin/time-saved`, sidebar entry under AI usage).
 
 The numbers are meant to be quoted publicly, so the design rule throughout is:
 **every figure is traceable to a stored session and a named baseline version,
@@ -163,14 +163,38 @@ Both plugins share the same shape (`Services/TakeoffTelemetry/` in HERON,
   on by default, so this follows the existing practice. The privacy page
   should mention timing counts explicitly; a draft sentence is in the PR notes.
 
+## What each plugin counts
+
+| Count | HERON (PlanSwift) | QUIV (Revit) |
+| --- | --- | --- |
+| `sheets` | Auto Take Off: sheets captured with a usable transform. Assisted (template) takeoff: 0, the plugin cannot see which pages were measured. | 0 for now. |
+| `items` | Measured items across the exported folders, split by kind from the unit string (`TakeoffCountClassifier`). | **Stored results** (one per level and type the estimator computed). Conservative on purpose: the tools do not yet report how many element instances each result covered. Adding that count raises the estimate, never lowers it. |
+| `elementTypes` | Takeoff folders exported. | Distinct `ElementType` values among the results (Walls, Beams...). |
+| `boqLines` | Summary rows written to the workbook, or cloud bill items. | Lettered lines written to the Complete BOQ CSV. |
+
+Sessions: HERON starts an *assisted* session when a job's folders load and ends
+it on Export, Export all or Save to Cloud; an *auto* session runs from Build
+scope or Capture to Finish (Scope another cancels). QUIV starts on the first
+stored result and ends on the Complete BOQ export (Clear All cancels); the
+Model Items export is recorded as its own small session. Both cancel an open
+session on sign-out and on exit, and the record is still queued, flagged.
+
 ## Seed data for review
 
 ```
 cd server
-node scripts/seed-takeoff-sessions.mjs            # dry run
+node scripts/seed-takeoff-sessions.mjs            # dry run against the live DB's active baseline
+node scripts/seed-takeoff-sessions.mjs --offline  # dry run with no database, shipped defaults
 node scripts/seed-takeoff-sessions.mjs --write    # insert 200 sessions, 3 firms, 2 products
 node scripts/seed-takeoff-sessions.mjs --wipe --write
 ```
+
+Note that local dev and production share one Atlas cluster, so `--write` puts
+seed data into production (flagged, and excluded from totals). The offline dry
+run of the shipped defaults gives roughly 76 h active against 1,480 h estimated
+manual for 185 sessions, a ratio of about 19x. That ratio is a property of the
+assumed rates, which is exactly why they are versioned and must be replaced
+with measured values before a figure is quoted.
 
 Seeded records carry `seeded: true`, are excluded from every total by default,
 and the page shows a banner when they are included.
