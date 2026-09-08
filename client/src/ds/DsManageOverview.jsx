@@ -253,6 +253,9 @@ export default function DsManageOverview() {
       attention: attention.slice(0, 5),
       installations: summary.installations || [],
       hub: summary.installerHub || {},
+      // Null unless an admin has published one — see the notice endpoints in
+      // routes/admin.settings.js. Rendered on presence, not on a flag.
+      notice: summary.notice || null,
     };
   }, [summary, catalogue, courses]);
 
@@ -279,6 +282,31 @@ export default function DsManageOverview() {
 
   return (
     <div className="dsh-in">
+      {view.notice ? (
+        <div
+          className={`dsh-notice dsh-notice--${
+            ["info", "success", "warn"].includes(view.notice.level)
+              ? view.notice.level
+              : "info"
+          }`}
+          role="status"
+        >
+          <div className="dsh-notice-body">
+            {view.notice.title ? <strong>{view.notice.title}</strong> : null}
+            <p>{view.notice.message}</p>
+          </div>
+          {view.notice.linkUrl && view.notice.linkLabel ? (
+            <a
+              className="dsh-notice-cta"
+              href={view.notice.linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {view.notice.linkLabel}
+            </a>
+          ) : null}
+        </div>
+      ) : null}
       <div className="dsh-head">
         <div>
           <h1>

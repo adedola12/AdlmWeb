@@ -16,6 +16,26 @@ const SettingSchema = new mongoose.Schema(
     forceReinstallMessage: { type: String, default: "" },
     forceReinstallAt: { type: Date, default: null },
 
+    // ── Dashboard notice ──
+    // A plain announcement banner, deliberately separate from the
+    // force-reinstall broadcast above. That one is NOT a notification: it
+    // revokes every device binding and bumps refreshVersion on every user,
+    // signing the whole fleet out and forcing re-activation. So there was no
+    // way to tell customers "a new Installer Hub is out" without also logging
+    // them all out, and routine announcements simply went unsent. This is the
+    // missing tool.
+    //
+    // Purely informational: changes no entitlement, revokes nothing. Cleared
+    // by setting noticeActive=false.
+    noticeActive: { type: Boolean, default: false },
+    noticeTitle: { type: String, default: "", trim: true },
+    noticeMessage: { type: String, default: "" },
+    // "info" | "success" | "warn" — drives the banner's colour only.
+    noticeLevel: { type: String, default: "info", trim: true },
+    noticeLinkUrl: { type: String, default: "", trim: true },
+    noticeLinkLabel: { type: String, default: "", trim: true },
+    noticeAt: { type: Date, default: null },
+
     // ── VAT / Tax ──
     // When vatEnabled is true and the matching apply* flag is set, the server
     // adds VAT to the total of that document type. The label (e.g. "VAT 7.5%")

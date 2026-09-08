@@ -562,7 +562,10 @@ router.get(
     const [ordersCount, globalSettings] = await Promise.all([
       Purchase.countDocuments({ userId: req.user._id }),
       Setting.findOne({ key: "global" })
-        .select("installerHubUrl installerHubVideoUrl installerHubGuideUrl")
+        .select(
+          "installerHubUrl installerHubVideoUrl installerHubGuideUrl " +
+            "noticeActive noticeTitle noticeMessage noticeLevel noticeLinkUrl noticeLinkLabel noticeAt",
+        )
         .lean(),
     ]);
 
@@ -582,6 +585,19 @@ router.get(
         // Always present — falls back to the copy bundled with the site.
         guideUrl: resolveUserGuideUrl(globalSettings?.installerHubGuideUrl),
       },
+
+      // Dashboard announcement banner. Null when nothing is being announced,
+      // so the client can render on presence alone rather than on a flag.
+      notice: globalSettings?.noticeActive
+        ? {
+            title: globalSettings.noticeTitle || "",
+            message: globalSettings.noticeMessage || "",
+            level: globalSettings.noticeLevel || "info",
+            linkUrl: globalSettings.noticeLinkUrl || "",
+            linkLabel: globalSettings.noticeLinkLabel || "",
+            at: globalSettings.noticeAt || null,
+          }
+        : null,
 
       ordersCount, // used by Dashboard total orders stat
       totalOrders: ordersCount, // legacy alias (safe)
