@@ -1,8 +1,7 @@
 import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
-import { Broadcast, BroadcastRecipient } from "../models/Broadcast.js";
-import { hashRecipient } from "../models/EmailSend.js";
+import { Broadcast, BroadcastRecipient, hashRecipient } from "../models/Broadcast.js";
 import { sendMail } from "../util/mailer.js";
 
 /**

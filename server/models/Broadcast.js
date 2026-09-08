@@ -1,4 +1,23 @@
+import crypto from "node:crypto";
 import mongoose from "mongoose";
+
+/**
+ * Deliberately a copy of EmailSend's hashRecipient rather than an import of it.
+ *
+ * The two must produce identical values so a recipient can be correlated
+ * across both collections, and this is kept byte-for-byte identical for that
+ * reason. But EmailSend belongs to the mail-logging work, which lives on a
+ * different branch to this one — importing it would mean broadcast could only
+ * ship after that feature, and a route that fails to import takes the whole
+ * API down at boot rather than degrading. A four-line hash is not worth that
+ * coupling.
+ */
+export const hashRecipient = (to) =>
+  crypto
+    .createHash("sha256")
+    .update(String(Array.isArray(to) ? to[0] : to || "").trim().toLowerCase())
+    .digest("hex")
+    .slice(0, 32);
 
 /**
  * A one-to-many announcement, and the per-recipient ledger that makes it safe
