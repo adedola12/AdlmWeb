@@ -23,6 +23,7 @@
 //   node scripts/seed-takeoff-sessions.mjs --wipe     # delete previously seeded records only
 //   node scripts/seed-takeoff-sessions.mjs --wipe --write   # replace
 //   node scripts/seed-takeoff-sessions.mjs --count 400 --days 180 --seed 7
+//   node scripts/seed-takeoff-sessions.mjs --offline  # dry run with no database at all
 //
 // Deterministic for a given --seed, so a review can be repeated.
 import "dotenv/config";
@@ -31,6 +32,11 @@ import mongoose from "mongoose";
 import { connectDB } from "../db.js";
 import { TakeoffSession } from "../models/TakeoffSession.js";
 import { getActiveBaseline } from "../services/takeoffBaseline.js";
+import {
+  DEFAULT_BASELINE_NOTES,
+  DEFAULT_BASELINE_RATES,
+  DEFAULT_BASELINE_VERSION,
+} from "../config/takeoffBaselineDefaults.js";
 import { buildSessionRecord, slugFirm } from "../routes/telemetry.takeoff.js";
 
 const hasFlag = (f) => process.argv.includes(f);
@@ -167,8 +173,12 @@ async function main() {
   const count = numArg("--count", 200);
   const days = numArg("--days", 90);
   const seed = numArg("--seed", 2026);
+  // --offline: generate and summarise without a database, against the shipped
+  // defaults. For checking the generator, or a machine with no MONGO_URI.
+  const offline = hasFlag("--offline");
+  if (offline && write) throw new Error("--offline cannot be combined with --write");
 
-  await connectDB();
+  if (!offline) await connectDB();
 
   if (wipe) {
     const existing = await TakeoffSession.countDocuments({ seeded: true });
@@ -182,7 +192,9 @@ async function main() {
     }
   }
 
-  const baseline = await getActiveBaseline();
+  const baseline = offline
+    ? { version: DEFAULT_BASELINE_VERSION, rates: { ...DEFAULT_BASELINE_RATES }, notes: DEFAULT_BASELINE_NOTES, activatedAt: null }
+    : await getActiveBaseline();
   const plan = makeSessions({ count, days, seed });
 
   const records = [];
@@ -221,7 +233,7 @@ async function main() {
     const r = await TakeoffSession.insertMany(records, { ordered: false });
     console.log(`[seed] inserted ${r.length} seeded sessions`);
   }
-  await mongoose.disconnect();
+  if (!offline) await mongoose.disconnect();
 }
 
 main().catch((err) => {
