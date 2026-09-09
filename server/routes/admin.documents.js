@@ -244,10 +244,11 @@ const money = (n, cur = "NGN") =>
 /**
  * What the engine can produce, and whose paper each one prints on.
  *
- * The list mirrors the composer's own kinds in DsDocComposer.jsx. Ours has
- * two his mock does not — a bill of quantities and a valuation — because this
- * is a quantity surveying studio and those are the documents it actually
- * writes most.
+ * The list mirrors the composer's own kinds in DsDocComposer.jsx, which are
+ * his five: letter, report, statement, invoice, receipt. A bill of quantities
+ * and a valuation were listed here for a while on the reasoning that a QS
+ * studio writes those most — but they are not in his design, and inventing a
+ * template because it seems sensible is how the port stops being a port.
  *
  * `paper` matters more than it looks: a practice's exports come out of the
  * same templates, which is why an ADLM invoice and a customer's bill of
@@ -259,18 +260,6 @@ const TEMPLATES = [
   { id: "statement", name: "Statement", what: "An account with a running balance.", paper: "ADLM" },
   { id: "invoice", name: "Invoice", what: "Line items, VAT and payment details.", paper: "ADLM" },
   { id: "receipt", name: "Receipt", what: "An invoice that has been paid.", paper: "ADLM" },
-  {
-    id: "boq",
-    name: "Bill of quantities",
-    what: "Priced items under section headings, with a collection.",
-    paper: "ADLM or a practice",
-  },
-  {
-    id: "valuation",
-    name: "Valuation",
-    what: "Work done to date against the contract sum.",
-    paper: "ADLM or a practice",
-  },
 ];
 
 router.get("/templates", ...hub, async (_req, res, next) => {

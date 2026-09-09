@@ -7,6 +7,11 @@
 // That teaches nobody what the template is for, and it makes the picker feel
 // decorative — the choice appeared to change nothing but the header.
 //
+// Five templates, because that is what his design has: letter, report,
+// statement, invoice, receipt. A bill of quantities and a valuation were
+// offered here and are not in his — the picker follows him rather than
+// guessing at what else a QS studio might want to print.
+//
 // Each of these is a document the studio actually sends, with ADLM's real
 // products and real prices in it (QUIV ₦500,000 a year, RateGen ₦70,000,
 // HERON ₦120,000, Revit MEP ₦180,000, Time Pro ₦20,000), Nigerian VAT at
@@ -163,69 +168,7 @@ All ten licences are active and run to 18 August 2027. The installers are on
 the account at adlmstudio.net under Downloads; each signs in with the same
 details as the website, so there is no key to keep.`,
 
-  /* ── bill of quantities ─────────────────────────────────────────────── */
-  boq: `# Bill of quantities — substructure and frame
 
-Lekki Phase 2 Tower · Adeyemi & Partners · rates at South West zone, August 2026
-
-SECTION A — SUBSTRUCTURE
-
-Item | Description | Unit | Qty | Rate | Amount
-A1 | Excavate to reduce level, not exceeding 2m deep | m3 | 3,240 | 2,850 | 9,234,000
-A2 | Earthwork support to sides of excavation | m2 | 1,180 | 1,900 | 2,242,000
-A3 | 50mm blinding, grade 15 concrete | m2 | 940 | 4,100 | 3,854,000
-A4 | Grade 30 concrete to pile caps | m3 | 386 | 128,000 | 49,408,000
-A5 | High yield reinforcement, 16mm and above | t | 41.2 | 1,450,000 | 59,740,000
-A6 | Sawn formwork to sides of pile caps | m2 | 620 | 6,800 | 4,216,000
-Collection, Section A | | | | | 128,694,000
-
-SECTION B — FRAME
-
-Item | Description | Unit | Qty | Rate | Amount
-B1 | Grade 30 concrete to columns | m3 | 512 | 132,000 | 67,584,000
-B2 | Grade 30 concrete to suspended slabs, 225mm | m3 | 1,840 | 126,000 | 231,840,000
-B3 | High yield reinforcement to frame | t | 214.6 | 1,450,000 | 311,170,000
-B4 | Sawn formwork to soffits of slabs, propping to 3.5m | m2 | 8,180 | 7,400 | 60,532,000
-B5 | 225mm sandcrete blockwork in cement and sand (1:6) | m2 | 6,940 | 9,200 | 63,848,000
-Collection, Section B | | | | | 734,974,000
-
-NOTES
-
-Measured in accordance with the Standard Method of Measurement, and priced
-from the practice's own rate library rather than a published schedule. Rates
-include labour, plant, waste and the contractor's overhead and profit at 10%
-and 25% respectively.`,
-
-  /* ── valuation ──────────────────────────────────────────────────────── */
-  valuation: `# Valuation No. 7 — work done to date
-
-Lekki Phase 2 Tower · valuation date 31 August 2026 · contract sum ₦1,284,600,000
-
-Section | Contract sum | Previous | This period | To date | %
-Substructure | 128,694,000 | 128,694,000 | 0 | 128,694,000 | 100
-Frame | 734,974,000 | 402,180,000 | 96,420,000 | 498,600,000 | 68
-Blockwork and partitions | 118,400,000 | 21,300,000 | 18,900,000 | 40,200,000 | 34
-Roof | 74,200,000 | 0 | 0 | 0 | 0
-Finishes | 156,800,000 | 0 | 0 | 0 | 0
-External works | 71,532,000 | 0 | 0 | 0 | 0
-Gross valuation | 1,284,600,000 | 552,174,000 | 115,320,000 | 667,494,000 | 52
-
-DEDUCTIONS
-
-Detail | Amount
-Retention at 5% | 33,374,700
-Previously certified | 524,565,300
-
-Net due this certificate | 109,554,000
-
-REMARKS
-
-The frame is one floor behind programme, which the contractor attributes to
-the concrete supply during the August rains. Materials on site have not been
-included in this valuation because the delivery notes for the reinforcement
-had not been produced at the time of measure.
-
-Certified for payment within 21 days of the date of this certificate.`,
 };
 
 /**
