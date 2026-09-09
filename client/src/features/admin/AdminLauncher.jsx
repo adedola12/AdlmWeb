@@ -17,6 +17,7 @@ const TOOLS = [
   { area: "trainings", to: "/admin/trainings", label: "Trainings", desc: "Online trainings & events", icon: FiCalendar },
   { area: "ptrainings", to: "/admin/ptrainings", label: "Physical Trainings", desc: "In-person events & enrolment", icon: FiMapPin },
   { area: "learn", to: "/admin/learn", label: "Learn", desc: "Video courses & library", icon: FiPlayCircle },
+  { area: "orgvideos", to: "/admin/organizations", label: "Organisation Videos", desc: "Demos & recaps recorded for one firm", icon: FiPlayCircle },
   { area: "courses", to: "/admin/courses", label: "Courses", desc: "Paid online courses", icon: FiBookOpen },
   { area: "grading", to: "/admin/course-grading", label: "Grading", desc: "Grade course submissions", icon: FiCheckSquare },
   { area: "courses", to: "/admin/course-cockpit", label: "Course Cockpit", desc: "Watch time, assignments & who has stalled", icon: FiActivity },

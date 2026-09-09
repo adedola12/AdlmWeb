@@ -23,6 +23,10 @@ export const ADMIN_AREAS = [
   // person making the calls needs a phone number and a notepad, not the user
   // directory, and nothing on that screen can change an entitlement.
   { key: "followups", label: "Follow-Up Calls", group: "People", staffGrantable: true },
+  // Videos recorded for one organisation (a demo walked through on a call,
+  // a training recap). Filed under the firm name and shown on that firm's
+  // accounts only. Staff-grantable: it is content, not an entitlement.
+  { key: "orgvideos", label: "Organisation videos", group: "Content", staffGrantable: true },
   // The main Admin Hub section pages (Pending, Active subscriptions,
   // Organizations, Storage, Installations, Settings …) and their API. Grant
   // deliberately — it includes purchase approval and entitlement management.

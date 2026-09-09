@@ -11,6 +11,7 @@ import { parseBunny, bunnyIframeSrc } from "../lib/video";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { TiltCard } from "../components/effects.jsx";
 import StorageBar from "../components/StorageBar.jsx";
+import OrgVideosSection from "../features/account/OrgVideosSection.jsx";
 import Seo from "../components/Seo.jsx";
 import { ownedGuidesFor } from "../data/guides.js";
 import { IconAlertTriangle, IconArrowRight, IconBook, IconCart, IconCheck, IconChevronRight, IconCube, IconDownload, IconGift, IconPlayCircle, IconPlaySquare, IconRefresh, IconTrophy } from "../components/icons.jsx";
@@ -430,6 +431,9 @@ export default function Dashboard() {
             icon={<IconCart className="w-5 h-5" />}
           />
         </div>
+
+        {/* Recordings ADLM made for this account's firm. Nothing on a personal account. */}
+        <OrgVideosSection />
 
         {reinstall?.active && activeSubscriptionsCount > 0 ? (
           <div className="bg-red-50 border border-red-200 text-red-900 rounded-xl shadow-depth p-4 md:p-5">

@@ -1304,6 +1304,81 @@ router.post(
   }),
 );
 
+/**
+ * POST /admin/users/entitlement/seats { email, productKey, seats, organizationName? }
+ *
+ * Sets the seat count on ONE entitlement, exactly. /users/entitlement can
+ * only raise seats (Math.max) and only on an organisation licence; this one
+ * is the explicit "this firm now has 5 seats of QUIV" control.
+ *
+ * More than one seat makes it an organisation licence — a personal licence is
+ * one machine by definition — so going above 1 needs an organisation name,
+ * taken from the body, the entitlement, or the account, in that order. Going
+ * below the number of machines currently bound is refused: the desktop
+ * plugins read seats to decide whether a machine may sign in, and silently
+ * locking out somebody mid-job is not a thing an admin means by "3 seats".
+ * Revoke the devices first, then lower the count.
+ */
+router.post(
+  "/users/entitlement/seats",
+  asyncHandler(async (req, res) => {
+    const { email, productKey } = req.body || {};
+    const seats = Math.floor(Number(req.body?.seats));
+    if (!email || !productKey)
+      return res.status(400).json({ error: "email and productKey required" });
+    if (!Number.isFinite(seats) || seats < 1 || seats > 500)
+      return res.status(400).json({ error: "seats must be a whole number from 1 to 500" });
+
+    const u = await User.findOne({ email: String(email).trim().toLowerCase() });
+    if (!u) return res.status(404).json({ error: "User not found" });
+    const ent = (u.entitlements || []).find((e) => e.productKey === productKey);
+    if (!ent) return res.status(404).json({ error: "That account holds no such entitlement" });
+    normalizeLegacyEnt(ent);
+
+    const bound = (ent.devices || []).filter((d) => d && !d.revokedAt).length;
+    if (seats < bound) {
+      return res.status(400).json({
+        error: `${bound} machine${bound === 1 ? " is" : "s are"} bound to this licence. Revoke devices before lowering the seats below that.`,
+        code: "SEATS_BELOW_BOUND",
+        bound,
+      });
+    }
+
+    const org = String(
+      req.body?.organizationName || ent.organizationName || u.organizationName || "",
+    ).trim();
+    const before = { seats: ent.seats || 1, licenseType: ent.licenseType || "personal" };
+
+    if (seats > 1) {
+      if (!org) {
+        return res.status(400).json({
+          error: "More than one seat makes this an organisation licence — give the organisation's name.",
+          code: "ORG_NAME_REQUIRED",
+        });
+      }
+      ent.licenseType = "organization";
+      ent.organizationName = org;
+      ent.seats = seats;
+    } else {
+      // One seat: keep whichever licence type it already was. An organisation
+      // with a single seat is still an organisation.
+      ent.seats = 1;
+    }
+
+    u.markModified("entitlements");
+    await u.save();
+
+    return res.json({
+      ok: true,
+      email: u.email,
+      productKey,
+      before,
+      after: { seats: ent.seats, licenseType: ent.licenseType, organizationName: ent.organizationName || "" },
+      bound,
+    });
+  }),
+);
+
 router.post(
   "/users/entitlement/delete",
   asyncHandler(async (req, res) => {
