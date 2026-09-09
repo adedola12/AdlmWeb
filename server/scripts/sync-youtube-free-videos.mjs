@@ -25,6 +25,16 @@
 //   node server/scripts/sync-youtube-free-videos.mjs --dry     # report only
 //   node server/scripts/sync-youtube-free-videos.mjs --force   # also overwrite
 //                                    section/sort/duration/date on existing rows
+//   node server/scripts/sync-youtube-free-videos.mjs --hold    # create new rows
+//                                    UNPUBLISHED (see below)
+//   node server/scripts/sync-youtube-free-videos.mjs --publish # publish every
+//                                    catalogue video that is currently hidden
+//
+// --hold / --publish exist because the database is shared with the live site
+// while the client that can show a hundred videos may not have shipped yet:
+// the older lesson page only looked through the first twelve, so a freshly
+// filed library would have read "Video not found" for most links. Sync with
+// --hold, deploy the API and client, then run --publish.
 //
 // To refresh the catalogue after new uploads:
 //   python -m yt_dlp --flat-playlist -J https://www.youtube.com/@ADLMStudio/videos
@@ -44,6 +54,8 @@ const FILE = path.resolve(here, "../data/youtube-free-videos.json");
 
 const dry = process.argv.includes("--dry");
 const force = process.argv.includes("--force");
+const hold = process.argv.includes("--hold");
+const publish = process.argv.includes("--publish");
 
 const catalogue = JSON.parse(fs.readFileSync(FILE, "utf8"));
 const videos = catalogue.videos || [];
@@ -94,7 +106,7 @@ for (const v of videos) {
         section: v.section || "",
         recommended: !!v.recommended,
         publishedAt,
-        isPublished: true,
+        isPublished: !hold,
         sort: Number(v.sort) || 0,
       });
     }
@@ -117,6 +129,8 @@ for (const v of videos) {
   fill("publishedAt", publishedAt, (c) => !c);
   fill("sort", Number(v.sort) || 0, (c) => !(Number(c) !== 0));
   if (!!doc.recommended !== !!v.recommended) set.recommended = !!v.recommended;
+  // The only time this script touches isPublished: releasing a held library.
+  if (publish && doc.isPublished === false) set.isPublished = true;
 
   if (!Object.keys(set).length) {
     untouched += 1;
@@ -131,9 +145,17 @@ for (const v of videos) {
 const catalogueIds = new Set(videos.map((v) => v.youtubeId));
 const orphans = existing.filter((d) => !catalogueIds.has(String(d.youtubeId || "").trim()));
 
+const held = await FreeVideo.countDocuments({
+  youtubeId: { $in: [...catalogueIds] },
+  isPublished: false,
+});
+
 console.log(log.join("\n"));
 console.log(
-  `\n${dry ? "[dry run] " : ""}created ${created}, updated ${updated}, unchanged ${untouched}` +
+  `\n${dry ? "[dry run] " : ""}created ${created}${hold ? " (held, unpublished)" : ""}, updated ${updated}, unchanged ${untouched}` +
+    (held && !dry
+      ? `\n${held} catalogue video(s) are unpublished — run with --publish once the site can show them`
+      : "") +
     (orphans.length
       ? `\nnot in the catalogue (left as they are): ${orphans.map((d) => `${d.youtubeId} "${d.title}"`).join("; ")}`
       : ""),
