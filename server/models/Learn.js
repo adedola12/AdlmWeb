@@ -18,6 +18,19 @@ const FreeVideoSchema = new mongoose.Schema(
     // the row beside the running time, because "Foundation takeoff tutorial"
     // does not by itself say which plugin you are watching.
     productLabel: { type: String, trim: true, default: "" },
+    // Which shelf of the library it sits on — "quiv", "heron", "revit-basics".
+    // The shelves themselves are the table in util/freeVideoSections.js; a
+    // slug that is not on it files the video under "More lessons" rather than
+    // losing it. Blank means the same.
+    section: { type: String, trim: true, default: "", index: true },
+    // Flagged to appear in the "Recommended videos" strip on the product page
+    // that the section belongs to. The strip is short, so this is a curated
+    // handful per product, not every walkthrough.
+    recommended: { type: Boolean, default: false },
+    // When it went up on YouTube. Ordering within a shelf falls back to this
+    // once `sort` ties, so a shelf reads newest-first without anyone typing
+    // sort numbers for a hundred videos.
+    publishedAt: { type: Date },
     isPublished: { type: Boolean, default: true },
     sort: { type: Number, default: 0 },
   },

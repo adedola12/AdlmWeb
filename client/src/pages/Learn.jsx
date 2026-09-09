@@ -1,8 +1,10 @@
 import React from "react";
 import PageSeo from "../components/PageSeo.jsx";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { API_BASE } from "../config";
 import { readPreloaded } from "../lib/preload.js";
+import { fetchFreeVideoSections } from "../lib/freeVideos.js";
+import FreeVideoCard from "../components/FreeVideoCard.jsx";
 import { IconGraduation, IconPlaySquare } from "../components/icons.jsx";
 
 function makePreviewUrl(url, seconds = 60, startAt = 0) {
@@ -11,23 +13,6 @@ function makePreviewUrl(url, seconds = 60, startAt = 0) {
     /\/upload\/(?!.*\/upload\/)/,
     `/upload/so_${startAt},du_${seconds}/`,
   );
-}
-
-function extractYouTubeId(input = "") {
-  try {
-    if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
-    const url = new URL(input);
-    if (url.hostname.includes("youtu.be")) return url.pathname.replace("/", "");
-    if (url.hostname.includes("youtube.com")) {
-      const id = url.searchParams.get("v");
-      if (id) return id;
-      const m = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
-      if (m) return m[1];
-    }
-  } catch {
-    // Invalid URLs should just fall back to an empty id.
-  }
-  return "";
 }
 
 function HoverVideo({ src, poster }) {
@@ -73,56 +58,6 @@ function HoverVideo({ src, poster }) {
   );
 }
 
-function HoverYouTube({ id, title, thumb }) {
-  const [hovered, setHovered] = React.useState(false);
-  const thumbUrl =
-    thumb || (id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "");
-  const iframeSrc = id
-    ? `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&rel=0&modestbranding=1`
-    : "";
-
-  return (
-    <div
-      className="rounded-xl overflow-hidden border"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      title={title}
-    >
-      {hovered && id ? (
-        <iframe
-          className="w-full aspect-video"
-          src={iframeSrc}
-          title={title}
-          allow="autoplay; encrypted-media; picture-in-picture"
-        />
-      ) : (
-        thumbUrl && (
-          <img
-            src={thumbUrl}
-            alt={title}
-            className="w-full aspect-video object-cover"
-          />
-        )
-      )}
-    </div>
-  );
-}
-
-function FreeCard({ v }) {
-  const id = extractYouTubeId(v.youtubeId);
-  return (
-    <div className="group card p-0 lift spotlight">
-      <HoverYouTube id={id} title={v.title} thumb={v.thumbnailUrl} />
-      <Link
-        to={`/learn/free/${encodeURIComponent(v._id)}`}
-        className="block p-3 text-sm font-medium group-hover:text-adlm-blue-700"
-      >
-        {v.title}
-      </Link>
-    </div>
-  );
-}
-
 function PaidCard({ c }) {
   const preview = makePreviewUrl(c.previewUrl, 60, 0);
   const purchaseKey = c.productKey || c.sku;
@@ -148,20 +83,76 @@ function PaidCard({ c }) {
   );
 }
 
+// How many tiles a shelf shows before "Show all". Two rows on desktop.
+const SHELF_PREVIEW = 6;
+
+/**
+ * One shelf of the free library: a heading, its videos, and a "show all"
+ * toggle once the shelf is longer than two rows. The shelves come from the
+ * server already grouped and ordered (GET /learn/free/sections), so this
+ * only decides how much of each to show at once.
+ */
+function Shelf({ section, open, onToggle }) {
+  const all = section.videos || [];
+  const shown = open ? all : all.slice(0, SHELF_PREVIEW);
+  const hidden = all.length - shown.length;
+  return (
+    <section id={`free-${section.slug || "more"}`} className="scroll-mt-24">
+      <div className="flex items-end justify-between gap-3 flex-wrap mb-3">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-adlm-dark-text">
+            {section.label}
+            <span className="ml-2 text-sm font-normal text-slate-500 dark:text-adlm-dark-muted tabular-nums">
+              {all.length} {all.length === 1 ? "video" : "videos"}
+            </span>
+          </h3>
+          {section.blurb && (
+            <p className="text-sm text-slate-600 dark:text-adlm-dark-muted">{section.blurb}</p>
+          )}
+        </div>
+        {all.length > SHELF_PREVIEW && (
+          <button type="button" className="btn btn-sm" onClick={onToggle}>
+            {open ? "Show fewer" : `Show all ${all.length}`}
+          </button>
+        )}
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {shown.map((v) => (
+          <FreeVideoCard key={v._id} v={v} sectionLabel={section.label} />
+        ))}
+      </div>
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mt-3 text-sm font-semibold text-adlm-blue-700 dark:text-adlm-blue-400 hover:underline"
+        >
+          {hidden} more in {section.label}
+        </button>
+      )}
+    </section>
+  );
+}
+
 export default function Learn() {
-  const [free, setFree] = React.useState({
-    items: [],
-    total: 0,
-    page: 1,
-    pageSize: 5,
-  });
+  const location = useLocation();
+
+  // The free library, grouped by shelf: QUIV, HERON, the MEP plugin, RateGen,
+  // then the generic PlanSwift and Revit teaching, the course recordings and
+  // the rest. Empty shelves never arrive.
+  const [sections, setSections] = React.useState(null);
+  const [freeError, setFreeError] = React.useState("");
+  // "all" or one shelf slug. A single shelf opens fully; "all" shows the
+  // first two rows of each and lets you expand one at a time.
+  const [filter, setFilter] = React.useState("all");
+  const [openShelves, setOpenShelves] = React.useState(() => new Set());
+
   // Seeded by the server so the catalogue is in the HTML rather than appearing
   // a second later. Undefined on any route the server did not render, which is
   // the signal for loadCourses() below to behave exactly as it always has.
   const [courses, setCourses] = React.useState(
     () => readPreloaded("learn:courses") ?? [],
   );
-  const [loadingFree, setLoadingFree] = React.useState(false);
   const [loadingCourses, setLoadingCourses] = React.useState(false);
 
   const [coursePage, setCoursePage] = React.useState(1);
@@ -171,19 +162,6 @@ export default function Learn() {
     (coursePage - 1) * perPage,
     coursePage * perPage,
   );
-
-  async function loadFree(page = 1) {
-    setLoadingFree(true);
-    try {
-      const res = await fetch(`${API_BASE}/learn/free?page=${page}&pageSize=5`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(`Free videos: ${res.status}`);
-      setFree(await res.json());
-    } finally {
-      setLoadingFree(false);
-    }
-  }
 
   async function loadCourses() {
     setLoadingCourses(true);
@@ -199,12 +177,48 @@ export default function Learn() {
   }
 
   React.useEffect(() => {
-    loadFree(1);
+    const ac = new AbortController();
+    fetchFreeVideoSections(ac.signal)
+      .then((list) => {
+        setSections(list);
+        setFreeError("");
+      })
+      .catch((e) => {
+        if (e?.name === "AbortError") return;
+        setSections([]);
+        setFreeError("The video library could not be loaded right now.");
+      });
     loadCourses();
+    return () => ac.abort();
   }, []);
 
-  const hasPrevFree = free.page > 1;
-  const hasNextFree = free.page * free.pageSize < free.total;
+  // /learn#free-heron lands on that shelf, opened. Only once the shelves have
+  // arrived; before that there is nothing to scroll to.
+  React.useEffect(() => {
+    if (!sections || !location.hash) return;
+    const id = location.hash.slice(1);
+    const slug = id.startsWith("free-") ? id.slice(5) : "";
+    if (slug && sections.some((s) => s.slug === slug)) {
+      setFilter(slug);
+    }
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [sections, location.hash]);
+
+  const toggleShelf = (slug) =>
+    setOpenShelves((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+
+  const visible = !sections
+    ? []
+    : filter === "all"
+      ? sections
+      : sections.filter((s) => s.slug === filter);
+  const totalFree = (sections || []).reduce((n, s) => n + (s.count || 0), 0);
 
   return (
     <div className="space-y-10">
@@ -222,55 +236,71 @@ export default function Learn() {
             Learn BIM, QS &amp; Cost Management
           </h1>
           <p className="mt-2 text-sm md:text-base text-white/70 max-w-2xl">
-            Free YouTube lessons and in-depth paid courses with certificates, 
+            Free YouTube lessons and in-depth paid courses with certificates,
             learn at your own pace, anywhere.
           </p>
         </div>
       </div>
 
-      <section className="card">
+      <section id="free" className="card scroll-mt-24">
         <div className="flex items-center gap-2.5 mb-1">
           <span className="w-9 h-9 rounded-xl grid place-items-center bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400 flex-shrink-0">
             <IconPlaySquare className="w-5 h-5" />
           </span>
-          <h2 className="text-xl font-semibold">Free Courses</h2>
+          <h2 className="text-xl font-semibold">Free Lessons</h2>
+          {totalFree > 0 && (
+            <span className="ml-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 tabular-nums">
+              {totalFree}
+            </span>
+          )}
         </div>
         <p className="text-sm text-slate-600 dark:text-adlm-dark-muted mb-4 ml-0.5">
-          Hover to preview. Click a title to watch.
+          The whole ADLM Studio channel, shelved by software. Hover to preview, click a title to watch.
         </p>
 
-        {loadingFree ? (
+        {sections && sections.length > 1 && (
+          <div className="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="Filter lessons by software">
+            {[{ slug: "all", label: "All", count: totalFree }, ...sections].map((s) => {
+              const on = filter === s.slug;
+              return (
+                <button
+                  key={s.slug || "more"}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setFilter(s.slug)}
+                  className={
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition " +
+                    (on
+                      ? "bg-adlm-blue-700 text-white ring-adlm-blue-700"
+                      : "bg-white dark:bg-white/5 text-slate-700 dark:text-adlm-dark-text ring-slate-200 dark:ring-white/10 hover:ring-adlm-blue-400")
+                  }
+                >
+                  {s.label}
+                  <span className={"tabular-nums " + (on ? "text-white/70" : "text-slate-400")}>
+                    {s.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {!sections ? (
           <div className="text-sm text-slate-600">Loading...</div>
+        ) : !sections.length ? (
+          <div className="text-sm text-slate-600">{freeError || "No videos yet."}</div>
         ) : (
-          <>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {free.items.map((v) => (
-                <FreeCard key={v._id} v={v} />
-              ))}
-              {!free.items.length && (
-                <div className="text-sm text-slate-600">No videos yet.</div>
-              )}
-            </div>
-            <div className="mt-4 flex items-center justify-between">
-              <button
-                className="btn btn-sm"
-                disabled={!hasPrevFree}
-                onClick={() => loadFree(free.page - 1)}
-              >
-                Previous
-              </button>
-              <div className="text-sm text-slate-600">
-                Page {free.page} of {Math.max(Math.ceil(free.total / free.pageSize), 1)}
-              </div>
-              <button
-                className="btn btn-sm"
-                disabled={!hasNextFree}
-                onClick={() => loadFree(free.page + 1)}
-              >
-                Next
-              </button>
-            </div>
-          </>
+          <div className="space-y-10">
+            {visible.map((s) => (
+              <Shelf
+                key={s.slug || "more"}
+                section={s}
+                open={filter !== "all" || openShelves.has(s.slug)}
+                onToggle={() => toggleShelf(s.slug)}
+              />
+            ))}
+          </div>
         )}
       </section>
 

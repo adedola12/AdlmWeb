@@ -35,6 +35,7 @@ import { Product } from "../models/Product.js";
 import { User } from "../models/User.js";
 // The model is exported as FreeVideo; the file is Learn.js.
 import { FreeVideo as Learn } from "../models/Learn.js";
+import { sectionOf } from "../util/freeVideoSections.js";
 import { Classroom } from "../models/Classroom.js";
 import { Training } from "../models/Training.js";
 // Exported as ChangelogProduct — one row per product, with its releases.
@@ -419,14 +420,28 @@ router.get("/quizzes", ...learn, async (_req, res, next) => {
 
 router.get("/lessons", ...learn, async (_req, res, next) => {
   try {
-    const rows = await Learn.find({}).sort({ sort: 1, createdAt: -1 }).lean();
+    const rows = await Learn.find({}).sort({ section: 1, sort: -1, createdAt: -1 }).lean();
     const items = rows.map((l) => ({
       id: String(l._id),
       name: l.title || "Untitled",
       youtubeId: l.youtubeId || "",
+      section: sectionOf(l.section)?.label || (l.section ? l.section : ""),
+      recommended: !!l.recommended,
       sort: n0(l.sort),
       state: pubState(l.isPublished),
       createdAt: l.createdAt || null,
+      // The editable fields as stored, so the drawer opens on the real values
+      // rather than on the display strings above.
+      raw: {
+        title: l.title || "",
+        youtubeId: l.youtubeId || "",
+        thumbnailUrl: l.thumbnailUrl || "",
+        durationSec: n0(l.durationSec),
+        productLabel: l.productLabel || "",
+        section: l.section || "",
+        recommended: !!l.recommended,
+        sort: n0(l.sort),
+      },
     }));
     res.json({ items, counts: tally(items) });
   } catch (err) {
@@ -882,7 +897,7 @@ const WRITABLE = {
     model: Learn,
     pub: "isPublished",
     label: "lesson",
-    fields: ["title", "youtubeId", "thumbnailUrl", "durationSec", "productLabel", "sort"],
+    fields: ["title", "youtubeId", "thumbnailUrl", "durationSec", "productLabel", "section", "recommended", "sort"],
     // A lesson with no video is not a lesson. Checked here rather than only in
     // the browser, because the browser is not the only thing that can post.
     check: (b) => (!String(b.youtubeId || "").trim() ? "A lesson needs a YouTube video." : null),

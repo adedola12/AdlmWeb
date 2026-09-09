@@ -48,6 +48,7 @@ const TEMPLATES = [
   { id: "statement", name: "Statement", hint: "An account, with a balance" },
   { id: "invoice", name: "Invoice", hint: "Title right, totals, payment block" },
   { id: "receipt", name: "Receipt", hint: "An invoice marked paid" },
+  { id: "proposal", name: "Proposal", hint: "A cover line and a validity date" },
 ];
 
 

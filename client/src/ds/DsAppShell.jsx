@@ -269,7 +269,10 @@ export default function DsAppShell({ children, title = "", page = "" }) {
                 {!staff && <Link to="/manage">Overview</Link>}
                 <Link to="/manage/settings">Account settings</Link>
                 <Link to="/manage/billing">Billing &amp; invoices</Link>
-                <a href="/" onClick={signOut}>
+                {/* His rule mutes it: .dsh-menu a.out { color: var(--ink-3) }.
+                    Sign out is the one item nobody should hit by accident, so
+                    it reads quieter than the things you came here to do. */}
+                <a href="/" className="out" onClick={signOut}>
                   Sign out
                 </a>
               </div>

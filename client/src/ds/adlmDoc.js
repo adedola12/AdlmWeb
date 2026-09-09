@@ -130,7 +130,7 @@ const paletteStyle = (brand) =>
 // ── numbering ──────────────────────────────────────────────────────────────
 
 const PREFIX = {
-  invoice: "INV", receipt: "RCT", boq: "BOQ", valuation: "VAL",
+  invoice: "INV", receipt: "RCT", boq: "BOQ", valuation: "VAL", proposal: "PRP",
   statement: "STM", letter: "LTR", report: "RPT",
 };
 
@@ -148,6 +148,10 @@ const TEMPLATES = {
   boq: { cls: "doc-content", band: true, tax: false },
   valuation: { cls: "doc-content", band: true, tax: false },
   letter: { cls: "doc-content", band: true, tax: false },
+  // His sixth. He notes it "currently borrows the letter layout", and so
+  // does this: a proposal is a letter with a validity date on it, and
+  // giving it a layout of its own would be a difference nobody asked for.
+  proposal: { cls: "doc-content", band: true, tax: false },
   report: { cls: "doc-content", band: true, tax: false },
   statement: { cls: "doc-content", band: true, tax: false },
 };

@@ -260,6 +260,12 @@ const TEMPLATES = [
   { id: "statement", name: "Statement", what: "An account with a running balance.", paper: "ADLM" },
   { id: "invoice", name: "Invoice", what: "Line items, VAT and payment details.", paper: "ADLM" },
   { id: "receipt", name: "Receipt", what: "An invoice that has been paid.", paper: "ADLM" },
+  {
+    id: "proposal",
+    name: "Proposal",
+    what: "A cover line and a validity date, on the letter layout.",
+    paper: "ADLM or a practice",
+  },
 ];
 
 router.get("/templates", ...hub, async (_req, res, next) => {

@@ -13,6 +13,14 @@ router.use(requireAuth, requirePermission("learn"));
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
+// "2026-08-13" or an ISO string -> Date; anything unparseable -> undefined,
+// so a blank form field clears the date rather than storing an Invalid Date.
+const parseDate = (v) => {
+  if (!v) return undefined;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+};
+
 /* ---------- FREE VIDEOS ---------- */
 router.get(
   "/free",
@@ -51,6 +59,11 @@ router.post(
       thumbnailUrl: thumbnailUrl ? String(thumbnailUrl).trim() : "",
       durationSec,
       productLabel: String(req.body?.productLabel || "").trim(),
+      // Which shelf of the library, and whether the product page recommends
+      // it. See util/freeVideoSections.js for the shelves.
+      section: String(req.body?.section || "").trim(),
+      recommended: !!req.body?.recommended,
+      publishedAt: parseDate(req.body?.publishedAt),
       isPublished: !!isPublished,
       sort: Number(sort) || 0,
     });
@@ -79,6 +92,11 @@ router.patch(
     }
     if (req.body?.durationSec !== undefined) {
       item.durationSec = Number(req.body.durationSec) || 0;
+    }
+    if (req.body?.section !== undefined) item.section = String(req.body.section || "").trim();
+    if (req.body?.recommended !== undefined) item.recommended = !!req.body.recommended;
+    if (req.body?.publishedAt !== undefined) {
+      item.publishedAt = parseDate(req.body.publishedAt) || undefined;
     }
     // Still unknown and the video id changed? Try YouTube once.
     if (!item.durationSec) item.durationSec = await fetchDurationSec(item.youtubeId);

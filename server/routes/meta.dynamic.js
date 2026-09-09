@@ -2,8 +2,11 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import mongoose from "mongoose";
 import { TrainingEvent } from "../models/TrainingEvent.js";
 import { Product } from "../models/Product.js";
+import { FreeVideo } from "../models/Learn.js";
+import { sectionOf } from "../util/freeVideoSections.js";
 import { ensureDb } from "../db.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -457,6 +460,29 @@ async function resolveMeta(req) {
   if (/^\/learn\/free\/[^/]+\/?$/i.test(p)) {
     meta.title = "Free Learning | ADLM Studio";
     meta.description = "Watch free BIM and construction tutorials from ADLM Studio.";
+    // The video's own title and still, so a shared link previews as the
+    // lesson rather than as the generic library card.
+    const id = extractSlug(p, "learn\\/free");
+    if (id && mongoose.isValidObjectId(id)) {
+      const v = await FreeVideo.findOne({ _id: id, isPublished: true })
+        .select("title youtubeId section")
+        .lean();
+      if (v) {
+        meta.title = `${v.title} | ADLM Studio`;
+        const shelf = sectionOf(v.section);
+        meta.description = truncate(
+          shelf
+            ? `Free ${shelf.label} lesson from ADLM Studio: ${v.title}`
+            : `Free lesson from ADLM Studio: ${v.title}`,
+        );
+        if (v.youtubeId) {
+          meta.image = `https://img.youtube.com/vi/${v.youtubeId}/maxresdefault.jpg`;
+          meta.twitterCard = "summary_large_image";
+          meta.imageWidth = 1280;
+          meta.imageHeight = 720;
+        }
+      }
+    }
     return meta;
   }
 

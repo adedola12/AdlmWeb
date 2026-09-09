@@ -7,10 +7,10 @@
 // That teaches nobody what the template is for, and it makes the picker feel
 // decorative — the choice appeared to change nothing but the header.
 //
-// Five templates, because that is what his design has: letter, report,
-// statement, invoice, receipt. A bill of quantities and a valuation were
-// offered here and are not in his — the picker follows him rather than
-// guessing at what else a QS studio might want to print.
+// Six templates, because that is what his design has: letter, report,
+// statement, invoice, receipt and proposal. A bill of quantities and a
+// valuation were offered here and are not in his — the picker follows him
+// rather than guessing at what else a QS studio might want to print.
 //
 // Each of these is a document the studio actually sends, with ADLM's real
 // products and real prices in it (QUIV ₦500,000 a year, RateGen ₦70,000,
@@ -168,6 +168,96 @@ All ten licences are active and run to 18 August 2027. The installers are on
 the account at adlmstudio.net under Downloads; each signs in with the same
 details as the website, so there is no key to keep.`,
 
+
+  /* ── proposal ───────────────────────────────────────────────────────────
+   *
+   * Modelled on the Dutum Company Limited proposal the studio actually sent:
+   * a BIM collaborative workspace and training for a quantity surveying
+   * department, its purpose stated before its deliverables, and the whole
+   * thing justified against what Autodesk and CostX charge for the same work.
+   *
+   * That competitor table is the part worth keeping. A proposal that only
+   * lists what you will do invites the question "why so much"; one that shows
+   * Revit at $2,910 a seat a year beside our figure answers it before it is
+   * asked.
+   */
+  proposal: `# A BIM collaborative workspace for the quantity surveying department
+
+Prepared for the Head of Department, Quantity Surveying, Dutum Company
+Limited, Lagos. Valid for thirty days from the date above.
+
+1. WHY
+
+The department measures well and prices well, and does both in isolation.
+Every estimator holds their own rates, their own takeoff and their own version
+of the drawing, and the cost of that only shows at tender, when three people
+have priced the same wall three ways.
+
+A collaborative workspace fixes the sharing, not the skill.
+
+- One place every estimator prices against, so a rate corrected once is corrected for everybody
+- Real-time visibility of what has been measured and what has not
+- 4D programme and 5D cost modelling from the same model, not from a second spreadsheet
+- Practices brought in line with ISO 19650
+
+2. WHAT WE WILL DELIVER
+
+Item | Detail
+Workspace | Installed across every departmental machine, licensed for one year
+Integration | All departmental computers joined to the workspace
+BIM software | Autodesk Revit, Navisworks and PlanSwift installed and activated
+ADLM plugins | QUIV for Revit and HERON for PlanSwift, on every seat
+Rate library | Your existing schedule migrated into RateGen, not retyped
+Training | Two weekends on site, then a month of support
+
+Work continues across machines: whoever picks up a job carries on from where
+the last person stopped, because the work lives in the workspace rather than
+on a desktop.
+
+3. WHAT IT COSTS
+
+Item | Seats | Rate | Amount
+QUIV for Revit, yearly | 8 | 500,000 | 4,000,000
+HERON for PlanSwift, yearly | 4 | 120,000 | 480,000
+RateGen, shared library | 2 | 70,000 | 140,000
+Workspace setup and integration | 8 | 25,000 | 200,000
+Training, two weekends on site | 1 | 450,000 | 450,000
+Subtotal | | | 5,270,000
+VAT at 7.5% | | | 395,250
+Total | | | 5,665,250
+
+4. WHAT THE ALTERNATIVE COSTS
+
+The same capability bought from the international vendors, per user per year,
+before training and before anybody adapts it to Nigerian rates.
+
+Product | Price per user | Basis
+Autodesk Revit | $2,910 | Annual subscription
+Autodesk Navisworks Manage | $2,740 | Annual subscription
+Autodesk AEC Collection | $3,560 | Annual subscription
+CostX Standard | $6,000 | Per licence
+CostX Takeoff | $4,500 | Per licence
+CostX maintenance | $1,000 to $1,500 | Per year
+PlanSwift Professional | $2,100 | Perpetual, per user
+PlanSwift plugins | $150 to $500 | Per plugin
+
+Eight seats of the AEC Collection alone is about $28,480 a year. The figures
+above are approximate and move with the vendors — they are given so the
+comparison can be checked rather than taken on trust.
+
+5. WHY US
+
+- Priced for this market, not converted into it
+- Plugins written for how a Nigerian QS actually measures
+- Training included, not sold separately once the licences are signed
+- ISO 19650 practices, not just ISO 19650 software
+- Support in the same time zone, from the people who wrote the tools
+
+We would be glad to present this to the department and answer questions before
+anything is committed.
+
+Quasim Adedolapo
+Founder, ADLM Studio`,
 
 };
 
