@@ -13,6 +13,7 @@
 
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import DsSurfaceSwitch from "./DsSurfaceSwitch.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../api.js";
 import { useTheme } from "../theme.jsx";
@@ -172,7 +173,10 @@ export default function DsAdminShell({ children, title }) {
 
   const current = (it) => it.to === best;
 
-  const signOut = () => {
+  // An anchor now carries it in the menu, as his does, so the browser's own
+  // navigation has to be called off before ours runs.
+  const signOut = (e) => {
+    e?.preventDefault?.();
     clear();
     nav("/admin/login", { replace: true });
   };
@@ -335,11 +339,12 @@ export default function DsAdminShell({ children, title }) {
               </svg>
             </button>
 
-            {/* His chip is inert — his admin has nowhere else to go. Ours
-                does: the same person holds a customer account, and the way
-                between the two sides should be where every product puts it.
-                The pair reads as a switch, marked on the side you are on,
-                exactly as the app shell's menu does. */}
+            {/* His .adm-memenu, built in admin-shell.js: the one place on an
+                admin screen that is about the person rather than the work, so
+                it is where the way back to their own account belongs. His
+                items, his wording, pointed at the screens we actually have —
+                "Your ADLM profile" is our account settings, "System settings"
+                is /admin/settings. */}
             <span className="adm-acc" ref={accRef}>
               <button
                 type="button"
@@ -354,23 +359,19 @@ export default function DsAdminShell({ children, title }) {
                   <em>{rank}</em>
                 </span>
               </button>
-              <div className={acc ? "adm-menu on" : "adm-menu"}>
+              <div className={acc ? "adm-memenu on" : "adm-memenu"}>
                 <div className="who">
                   <b>{who}</b>
                   <span>{user?.email || ""}</span>
                 </div>
-                <Link to="/admin" className="side on">
-                  Admin
-                </Link>
-                <Link to="/manage" className="side">
-                  User
-                </Link>
-                <span className="rule" />
-                <Link to="/manage/settings">Account settings</Link>
-                <Link to="/manage/billing">Billing &amp; invoices</Link>
-                <button type="button" className="out" onClick={signOut}>
-                  Sign out
-                </button>
+                <DsSurfaceSwitch at="admin" />
+                <Link to="/manage/settings">Your ADLM profile</Link>
+                <Link to="/admin/settings">System settings</Link>
+                {/* One sign-in holds both surfaces, so signing out of one
+                    signs you out of the other. His wording says so. */}
+                <a href="/" className="out" onClick={signOut}>
+                  Sign out of both
+                </a>
               </div>
             </span>
           </header>

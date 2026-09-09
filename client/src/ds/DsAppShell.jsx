@@ -18,6 +18,7 @@
 
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import DsSurfaceSwitch from "./DsSurfaceSwitch.jsx";
 import { useAuth } from "../store.jsx";
 import { isStaff } from "../utils/roles.js";
 import { apiAuthed } from "../api.js";
@@ -248,25 +249,10 @@ export default function DsAppShell({ children, title = "", page = "" }) {
                   <b>{name || "Signed in"}</b>
                   <span>{user?.email || ""}</span>
                 </div>
-                {/* Somebody with admin rights holds two accounts' worth of
-                    screens under one sign-in, and until now the only way from
-                    one to the other was to type the URL. The pair reads as a
-                    switch rather than as two unrelated links: the side you are
-                    on is marked, so the menu says where you are as well as
-                    where you can go. A customer sees neither — there is no
-                    second side for them to be on. */}
-                {staff && (
-                  <>
-                    <Link to="/admin" className="side">
-                      Admin
-                    </Link>
-                    <Link to="/manage" className="side on">
-                      User
-                    </Link>
-                    <span className="rule" />
-                  </>
-                )}
-                {!staff && <Link to="/manage">Overview</Link>}
+                {/* His switcher, shown only to somebody who holds both
+                    surfaces — the same `both` test his dash.js makes. */}
+                {staff && <DsSurfaceSwitch at="account" />}
+                <Link to="/manage">Dashboard</Link>
                 <Link to="/manage/settings">Account settings</Link>
                 <Link to="/manage/billing">Billing &amp; invoices</Link>
                 {/* His rule mutes it: .dsh-menu a.out { color: var(--ink-3) }.
