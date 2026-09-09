@@ -100,6 +100,10 @@ export default function DsFreeLessons({ children }) {
     const unmatched = [];
 
     for (const tile of tiles) {
+      // The sectioned library and the product pages' recommended strip render
+      // real links in his tile markup. They need no matching and must not be
+      // re-pointed at the library.
+      if (tile.closest("[data-ds-library]")) continue;
       const title = tile.querySelector("h4")?.textContent || "";
       const video = findVideo(title, videos);
       if (video) {
@@ -153,6 +157,8 @@ export default function DsFreeLessons({ children }) {
     (e) => {
       const tile = e.target.closest?.(".ltile");
       if (!tile) return;
+      // A library tile is a real <Link>; let it navigate itself.
+      if (tile.closest("[data-ds-library]")) return;
       if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
       // Until the library loads, or if it never does, the tile still goes
       // somewhere useful.

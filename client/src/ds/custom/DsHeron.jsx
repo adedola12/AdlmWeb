@@ -13,6 +13,7 @@
 import React from "react";
 import DsHeronPage from "../pages/DsHeronPage.jsx";
 import DsReleaseHistory from "../DsReleaseHistory.jsx";
+import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsHeron() {
@@ -21,6 +22,8 @@ export default function DsHeron() {
     <DsHeronPage
       d={{
         releases: <DsReleaseHistory slug="heron" />,
+        // Free walkthroughs flagged for this product, above the releases.
+        videos: <DsRecommendedVideos product="planswift" name="HERON" />,
         monthly: price.monthly,
         priceLine: price.priceLine,
       }}

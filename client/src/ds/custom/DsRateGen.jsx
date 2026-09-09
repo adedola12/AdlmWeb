@@ -13,6 +13,7 @@
 import React from "react";
 import DsRateGenPage from "../pages/DsRateGenPage.jsx";
 import DsReleaseHistory from "../DsReleaseHistory.jsx";
+import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsRateGen() {
@@ -21,6 +22,8 @@ export default function DsRateGen() {
     <DsRateGenPage
       d={{
         releases: <DsReleaseHistory slug="rategen" />,
+        // Free walkthroughs flagged for this product, above the releases.
+        videos: <DsRecommendedVideos product="rategen" name="RateGen" />,
         monthly: price.monthly,
         priceLine: price.priceLine,
       }}

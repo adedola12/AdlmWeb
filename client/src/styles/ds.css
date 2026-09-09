@@ -3164,3 +3164,23 @@
 .ds .promo-item.noart{grid-template-columns:1fr}
 .ds .promo-item.noart .promo-art{display:none}
 .ds .promo-item.noart .promo-copy{padding:52px 64px;max-width:840px}
+
+/* ── Free video library (ours, not his): the rest of the YouTube channel
+   shelved by software under his nine Learn tiles, and the "Recommended
+   videos" strip on the product pages. Tiles reuse his .lgrid/.ltile;
+   only the shelf headings are new. Components: src/ds/DsFreeLibrary.jsx,
+   src/ds/DsRecommendedVideos.jsx. ── */
+.ds .ds-lib{margin-top:72px;padding-top:56px;border-top:1px solid rgba(var(--shadow-c),.10)}
+.ds .ds-lib .sec-head{margin-bottom:32px}
+.ds .lib-shelf{margin-top:44px;scroll-margin-top:96px}
+.ds .lib-shelf-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+  flex-wrap:wrap;margin-bottom:18px}
+.ds .lib-shelf-head h3{margin:0;font-size:22px;line-height:1.2;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.ds .lib-shelf-head h3 .lcount{font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;opacity:.6}
+.ds .lib-shelf-head p{margin:6px 0 0;font-size:14.5px;line-height:1.5;opacity:.72;max-width:60ch}
+.ds .lib-shelf .lmore{margin-top:18px}
+.ds .ltile.lib-tile h4{font-size:17px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ds .ltile.lib-tile .eyebrow{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.ds #videos .lgrid{margin-top:8px}
+.ds #videos .lmore{margin-top:26px}
+@media (max-width:640px){.ds .ds-lib{margin-top:48px;padding-top:36px}.ds .lib-shelf-head h3{font-size:19px}}

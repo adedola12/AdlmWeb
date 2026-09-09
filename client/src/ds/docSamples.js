@@ -214,7 +214,17 @@ Work continues across machines: whoever picks up a job carries on from where
 the last person stopped, because the work lives in the workspace rather than
 on a desktop.
 
-3. WHAT IT COSTS
+![A measured model priced straight from the drawing](/adlm/product/takeoff-coloured.jpg)
+
+3. TRAINING
+
+Two weekends on site, then a month of support while the department puts it to
+work on a live job. We have run this for practices and for the NIQS, and the
+pattern holds: people learn the tool on their own project, not on a demo.
+
+![A cohort at the end of a two-weekend programme](/adlm/events/training-cohort.jpg)
+
+4. WHAT IT COSTS
 
 Item | Seats | Rate | Amount
 QUIV for Revit, yearly | 8 | 500,000 | 4,000,000
@@ -226,7 +236,7 @@ Subtotal | | | 5,270,000
 VAT at 7.5% | | | 395,250
 Total | | | 5,665,250
 
-4. WHAT THE ALTERNATIVE COSTS
+5. WHAT THE ALTERNATIVE COSTS
 
 The same capability bought from the international vendors, per user per year,
 before training and before anybody adapts it to Nigerian rates.
@@ -245,7 +255,7 @@ Eight seats of the AEC Collection alone is about $28,480 a year. The figures
 above are approximate and move with the vendors — they are given so the
 comparison can be checked rather than taken on trust.
 
-5. WHY US
+6. WHY US
 
 - Priced for this market, not converted into it
 - Plugins written for how a Nigerian QS actually measures

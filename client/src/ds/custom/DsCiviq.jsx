@@ -19,6 +19,7 @@ import React from "react";
 import DsCiviqPage from "../pages/DsCiviqPage.jsx";
 import { API_BASE } from "../../config.js";
 import DsReleaseHistory from "../DsReleaseHistory.jsx";
+import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 
 const NGN = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -66,6 +67,8 @@ export default function DsCiviq() {
     // Renders his "Nothing shipped yet" card today, and becomes a real list
     // the day the first CIVIQ release lands in the changelog.
     releases: <DsReleaseHistory slug="civiq" />,
+        // Free walkthroughs flagged for this product, above the releases.
+        videos: <DsRecommendedVideos product="civil3d" name="CIVIQ" />,
   };
 
   return <DsCiviqPage d={d} />;

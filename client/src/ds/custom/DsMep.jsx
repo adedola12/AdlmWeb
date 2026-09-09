@@ -13,6 +13,7 @@
 import React from "react";
 import DsMepPage from "../pages/DsMepPage.jsx";
 import DsReleaseHistory from "../DsReleaseHistory.jsx";
+import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsMep() {
@@ -24,6 +25,8 @@ export default function DsMep() {
     <DsMepPage
       d={{
         releases: <DsReleaseHistory slug="mep" />,
+        // Free walkthroughs flagged for this product, above the releases.
+        videos: <DsRecommendedVideos product="mep" name="Revit MEP" />,
         monthly: price.monthly,
         priceLine: price.priceLine,
       }}

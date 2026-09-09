@@ -281,6 +281,18 @@ const releaseEdit = (slug, empty = false) => ({
   replace: "@@d.releases@@",
 });
 
+// "Recommended videos" on every product page: the free-library walkthroughs
+// flagged for that product, rendered by DsRecommendedVideos in his section
+// vocabulary and slotted just above his release history. Nothing of his is
+// replaced — the slot sits before `#updates`, and renders nothing when the
+// product has no videos. Each custom wrapper supplies `d.videos`.
+const VIDEOS_EDIT = {
+  label: "recommended videos above the release history",
+  find: '<section class="sec-half blend" id="updates">',
+  replace: '@@d.videos@@<section class="sec-half blend" id="updates">',
+  once: true,
+};
+
 
 // The pricing block every product page carries: a headline figure and a
 // sentence giving the yearly price, the saving and the install fee. All four
@@ -393,11 +405,11 @@ const PAGE_EDITS = {
       replace: "@@DsCheckoutSummarySlot@@",
     },
   ],
-  "src/quiv.html": [releaseEdit("quiv"), ...priceEdits("₦50,000", "Or ₦500,000")],
-  "src/heron.html": [releaseEdit("heron"), ...priceEdits("₦12,000", "Or ₦120,000")],
-  "src/rategen.html": [releaseEdit("rategen"), ...priceEdits("₦8,000", "Or ₦70,000")],
-  "src/mep.html": [releaseEdit("mep"), ...priceEdits("₦18,000", "Or ₦180,000")],
-  "src/timepro.html": [releaseEdit("timepro"), ...priceEdits("₦2,000", "Or ₦20,000")],
+  "src/quiv.html": [VIDEOS_EDIT, releaseEdit("quiv"), ...priceEdits("₦50,000", "Or ₦500,000")],
+  "src/heron.html": [VIDEOS_EDIT, releaseEdit("heron"), ...priceEdits("₦12,000", "Or ₦120,000")],
+  "src/rategen.html": [VIDEOS_EDIT, releaseEdit("rategen"), ...priceEdits("₦8,000", "Or ₦70,000")],
+  "src/mep.html": [VIDEOS_EDIT, releaseEdit("mep"), ...priceEdits("₦18,000", "Or ₦180,000")],
+  "src/timepro.html": [VIDEOS_EDIT, releaseEdit("timepro"), ...priceEdits("₦2,000", "Or ₦20,000")],
 
   // His "Latest across the toolkit" table stated each product's newest build
   // in the markup, and had fallen behind on three of seven rows. The whole
@@ -430,6 +442,15 @@ const PAGE_EDITS = {
   "src/learn.html": [
     courseEdit("BIM for Building Works", "bimbld"),
     courseEdit("BIM for MEP &amp; HVAC", "bimmep"),
+    {
+      // The rest of the YouTube channel, shelved by software, directly under
+      // his nine tiles and their "Show more lessons" control. His tiles and
+      // filter row are untouched; DsFreeLibrary renders the shelves in his
+      // .lgrid/.ltile vocabulary. Wrapper: src/ds/custom/DsLearn.jsx.
+      label: "the full video library under his free-lesson tiles",
+      findRe: /(<div class="lmore">[\s\S]*?<\/div>)/,
+      replace: "$1@@d.library@@",
+    },
   ],
 
   "src/pricing.html": [
@@ -476,6 +497,7 @@ const PAGE_EDITS = {
       replace:
         "Or @@d.yearly@@ a year and save @@d.saving@@. Pricing indicative until release.",
     },
+    VIDEOS_EDIT,
     releaseEdit("civiq", true),
     // NOTE: a "build roadmap" section was injected here and has been removed.
     // It reused `.fgrid`, which site.css:895 defines as 2 columns and then

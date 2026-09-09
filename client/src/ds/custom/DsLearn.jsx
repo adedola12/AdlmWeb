@@ -12,6 +12,7 @@ import DsLearnPage from "../pages/DsLearnPage.jsx";
 import { API_BASE } from "../../config.js";
 import DsFreeLessons from "../DsFreeLessons.jsx";
 import DsCourseLinks from "../DsCourseLinks.jsx";
+import DsFreeLibrary from "../DsFreeLibrary.jsx";
 
 const NGN = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -58,6 +59,9 @@ export default function DsLearn() {
         d={{
           bimbld: { yearly: money(prices.bimbld) },
           bimmep: { yearly: money(prices.BIMMEP) },
+          // The rest of the channel, shelved by software, under his nine
+          // tiles. Slot placed by port-ds-html.mjs after his "Show more".
+          library: <DsFreeLibrary />,
         }}
         />
       </DsFreeLessons>

@@ -29,9 +29,15 @@ import { useAuth } from "../store.jsx";
 import { AdmTable, AdmTwo, AdmDim, AdmFilters, AdmChip } from "./adminUi.jsx";
 import { toneFor, useAdmToast, checkFields } from "./adminKit.jsx";
 import { AdmDrawer, AdmFields } from "./adminForm.jsx";
+import { fetchFreeVideoSectionList } from "../lib/freeVideos.js";
 
 const when = (d) =>
   d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+
+// The shelves of the free video library, for the lesson form's picker. Filled
+// from GET /learn/free/section-list once the component mounts — the table is
+// the server's, so the picker can never name a shelf the site does not have.
+let SECTION_OPTIONS = [["", "Unfiled — More lessons"]];
 
 /** Every register uses the same three-state filter row. */
 const stateFilters = (c, labels = {}) =>
@@ -128,7 +134,9 @@ const SCREENS = {
     local: true,
     empty: ["No lessons", "The free library is empty."],
     cols: () => [
-      { h: "Lesson", w: "40%", cell: (l) => <AdmTwo top={l.name} under={l.youtubeId} /> },
+      { h: "Lesson", w: "36%", cell: (l) => <AdmTwo top={l.name} under={l.youtubeId} /> },
+      { h: "Shelf", cell: (l) => l.section || <AdmDim>unfiled</AdmDim> },
+      { h: "Recommended", cell: (l) => (l.recommended ? "On the product page" : <AdmDim>—</AdmDim>) },
       { h: "Order", num: true, cell: (l) => l.sort },
       { h: "Added", cell: (l) => when(l.createdAt) },
       { h: "State", cell: (l) => <AdmChip tone={toneFor(l.state)}>{l.state}</AdmChip> },
@@ -336,6 +344,19 @@ const FORMS = {
         hint: "Paste the link; the id is taken out of it.",
       },
       { k: "productLabel", label: "Which product it is about", type: "text" },
+      {
+        k: "section",
+        label: "Which shelf of the library",
+        type: "select",
+        options: () => SECTION_OPTIONS,
+        hint: "QUIV, HERON, Revit basics… Unfiled goes under \"More lessons\".",
+      },
+      {
+        k: "recommended",
+        label: "Recommend on the product page",
+        type: "check",
+        hint: "Shows in the short strip on the page for the shelf's product.",
+      },
       { k: "durationSec", label: "Runs for (seconds)", type: "number" },
       { k: "thumbnailUrl", label: "Thumbnail", type: "file", accept: "image/*", wide: true,
         hint: "Optional — YouTube's own still is used when this is empty." },
@@ -428,6 +449,22 @@ export default function DsAdminLearnContent({ screen }) {
   const [form, setForm] = React.useState(null); // { row|null, values, errors }
   const [confirming, setConfirming] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
+  // Bumped once the shelf list arrives, so an open lesson form re-resolves
+  // its section options.
+  const [, setShelvesLoaded] = React.useState(0);
+
+  React.useEffect(() => {
+    if (screen !== "lessons") return undefined;
+    let alive = true;
+    fetchFreeVideoSectionList().then((list) => {
+      if (!alive || !list.length) return;
+      SECTION_OPTIONS = [["", "Unfiled — More lessons"], ...list.map((s) => [s.slug, s.label])];
+      setShelvesLoaded((n) => n + 1);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [screen]);
 
   React.useEffect(() => {
     if (!accessToken || !S) return undefined;

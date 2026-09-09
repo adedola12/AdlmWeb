@@ -2,6 +2,7 @@
 import React from "react";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { fetchFreeVideoSectionList } from "../lib/freeVideos.js";
 
 function normalizeYouTubeId(input) {
   if (!input) return "";
@@ -23,6 +24,9 @@ function normalizeYouTubeId(input) {
 export default function AdminLearn() {
   const { accessToken } = useAuth();
   const [free, setFree] = React.useState([]);
+  // The shelves of the free library (QUIV, HERON, …), from the server's own
+  // table, so the picker here can never name a shelf the site does not have.
+  const [sections, setSections] = React.useState([]);
   const [courses, setCourses] = React.useState([]);
   const [msg, setMsg] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
@@ -47,6 +51,17 @@ export default function AdminLearn() {
     load();
   }, [load]);
 
+  React.useEffect(() => {
+    let alive = true;
+    fetchFreeVideoSectionList().then((list) => alive && setSections(list));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const sectionLabel = (slug) =>
+    sections.find((s) => s.slug === slug)?.label || (slug ? slug : "unfiled");
+
   // ---- Free videos
   async function addFree(e) {
     e.preventDefault();
@@ -56,6 +71,10 @@ export default function AdminLearn() {
       youtubeId: normalizeYouTubeId(fd.get("youtubeId")),
       thumbnailUrl: fd.get("thumbnailUrl") || undefined,
       isPublished: fd.get("isPublished") === "on",
+      // Which shelf of the library it goes on, and whether the product page
+      // for that shelf recommends it.
+      section: fd.get("section") || "",
+      recommended: fd.get("recommended") === "on",
       sort: Number(fd.get("sort") || 0),
       // Left at 0 the server tries YouTube (a no-op without YOUTUBE_API_KEY),
       // so the marketing tiles can show a real runtime instead of a guess.
@@ -246,6 +265,17 @@ export default function AdminLearn() {
             className="input"
             placeholder="(Optional) Tool, e.g. Revit or PlanSwift"
           />
+          <select name="section" className="input" defaultValue="" title="Which shelf of the free library">
+            <option value="">Shelf: unfiled (More lessons)</option>
+            {sections.map((s) => (
+              <option key={s.slug} value={s.slug}>
+                Shelf: {s.label}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-sm">
+            <input name="recommended" type="checkbox" /> Recommend on the product page
+          </label>
           <input
             name="durationSec"
             type="number"
@@ -273,14 +303,36 @@ export default function AdminLearn() {
               key={v._id}
               className="border rounded p-2 flex items-center justify-between gap-3"
             >
-              <div className="text-sm">
+              <div className="text-sm min-w-0">
                 <div className="font-medium">{v.title}</div>
                 <div className="text-slate-600">
                   yt: {v.youtubeId} · sort: {v.sort} ·{" "}
-                  {v.isPublished ? "published" : "hidden"}
+                  {v.isPublished ? "published" : "hidden"} · shelf: {sectionLabel(v.section)}
+                  {v.recommended ? " · recommended" : ""}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 justify-end">
+                <select
+                  className="input py-1 text-xs"
+                  value={v.section || ""}
+                  title="Move to another shelf"
+                  onChange={(e) => saveFree({ ...v, section: e.target.value })}
+                >
+                  <option value="">Unfiled</option>
+                  {sections.map((s) => (
+                    <option key={s.slug} value={s.slug}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title="Show in the Recommended videos strip on the product page"
+                  onClick={() => saveFree({ ...v, recommended: !v.recommended })}
+                >
+                  {v.recommended ? "Un-recommend" : "Recommend"}
+                </button>
                 <button
                   type="button"
                   className="btn btn-sm"

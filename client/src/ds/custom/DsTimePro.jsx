@@ -13,6 +13,7 @@
 import React from "react";
 import DsTimeProPage from "../pages/DsTimeProPage.jsx";
 import DsReleaseHistory from "../DsReleaseHistory.jsx";
+import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsTimePro() {
@@ -21,6 +22,8 @@ export default function DsTimePro() {
     <DsTimeProPage
       d={{
         releases: <DsReleaseHistory slug="timepro" />,
+        // Free walkthroughs flagged for this product, above the releases.
+        videos: <DsRecommendedVideos product="qs-takeoff" name="Time Pro" />,
         monthly: price.monthly,
         priceLine: price.priceLine,
       }}

@@ -13,6 +13,7 @@
 import React from "react";
 import DsQuivPage from "../pages/DsQuivPage.jsx";
 import DsReleaseHistory from "../DsReleaseHistory.jsx";
+import DsRecommendedVideos from "../DsRecommendedVideos.jsx";
 import { useProductPricing } from "../useProductPricing.js";
 
 export default function DsQuiv() {
@@ -21,6 +22,8 @@ export default function DsQuiv() {
     <DsQuivPage
       d={{
         releases: <DsReleaseHistory slug="quiv" />,
+        // Free walkthroughs flagged for this product, above the releases.
+        videos: <DsRecommendedVideos product="revit" name="QUIV" />,
         monthly: price.monthly,
         priceLine: price.priceLine,
       }}

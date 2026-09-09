@@ -753,6 +753,7 @@ export default function DsLearnPage({ d }) {
             </span>
             {" "}
           </div>
+          {d.library}
           {" "}
         </div>
         {" "}
