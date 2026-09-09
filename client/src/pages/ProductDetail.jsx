@@ -23,6 +23,7 @@ import { useAuth } from "../store.jsx";
 import Seo from "../components/Seo.jsx";
 import ComingSoonModal from "../components/ComingSoonModal.jsx";
 import StorageBar from "../components/StorageBar.jsx";
+import RecommendedVideos from "../components/RecommendedVideos.jsx";
 import { apiAuthed } from "../api.js";
 import { Reveal, Stagger, StaggerItem } from "../components/effects.jsx";
 import { Eyebrow } from "../components/brand.jsx";
@@ -772,6 +773,11 @@ export default function ProductDetail() {
             </Stagger>
           </section>
         )}
+
+        {/* ── RECOMMENDED VIDEOS ───────────────────────────────────────── */}
+        {/* From the free library: the videos flagged for this product's shelf,
+            then the shared install walkthrough. Renders nothing when empty. */}
+        <RecommendedVideos productKey={productKey} productName={p.name} />
 
         {/* ── ABOUT ────────────────────────────────────────────────────── */}
         {p.description && (

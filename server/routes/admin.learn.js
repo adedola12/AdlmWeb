@@ -2,6 +2,7 @@
 import express from "express";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { FreeVideo, PaidCourseVideo } from "../models/Learn.js";
+import { fetchDurationSec } from "../util/youtubeDuration.js";
 
 const router = express.Router();
 
@@ -11,6 +12,14 @@ router.use(requireAuth, requirePermission("learn"));
 // small helper so async errors go to your global error handler (no silent crashes)
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
+
+// "2026-08-13" or an ISO string -> Date; anything unparseable -> undefined,
+// so a blank form field clears the date rather than storing an Invalid Date.
+const parseDate = (v) => {
+  if (!v) return undefined;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+};
 
 /* ---------- FREE VIDEOS ---------- */
 router.get(
@@ -38,10 +47,23 @@ router.post(
       return res.status(400).json({ error: "title and youtubeId required" });
     }
 
+    const id = String(youtubeId).trim();
+    // Typed-in duration wins; otherwise ask YouTube, which is a no-op unless
+    // YOUTUBE_API_KEY is configured.
+    const typed = Number(req.body?.durationSec) || 0;
+    const durationSec = typed || (await fetchDurationSec(id));
+
     const doc = await FreeVideo.create({
       title: String(title).trim(),
-      youtubeId: String(youtubeId).trim(),
+      youtubeId: id,
       thumbnailUrl: thumbnailUrl ? String(thumbnailUrl).trim() : "",
+      durationSec,
+      productLabel: String(req.body?.productLabel || "").trim(),
+      // Which shelf of the library, and whether the product page recommends
+      // it. See util/freeVideoSections.js for the shelves.
+      section: String(req.body?.section || "").trim(),
+      recommended: !!req.body?.recommended,
+      publishedAt: parseDate(req.body?.publishedAt),
       isPublished: !!isPublished,
       sort: Number(sort) || 0,
     });
@@ -65,6 +87,19 @@ router.patch(
       item.thumbnailUrl = thumbnailUrl ? String(thumbnailUrl).trim() : "";
     if (isPublished !== undefined) item.isPublished = !!isPublished;
     if (sort !== undefined) item.sort = Number(sort) || 0;
+    if (req.body?.productLabel !== undefined) {
+      item.productLabel = String(req.body.productLabel || "").trim();
+    }
+    if (req.body?.durationSec !== undefined) {
+      item.durationSec = Number(req.body.durationSec) || 0;
+    }
+    if (req.body?.section !== undefined) item.section = String(req.body.section || "").trim();
+    if (req.body?.recommended !== undefined) item.recommended = !!req.body.recommended;
+    if (req.body?.publishedAt !== undefined) {
+      item.publishedAt = parseDate(req.body.publishedAt) || undefined;
+    }
+    // Still unknown and the video id changed? Try YouTube once.
+    if (!item.durationSec) item.durationSec = await fetchDurationSec(item.youtubeId);
 
     await item.save();
     res.json({ ok: true, item });
@@ -142,6 +177,11 @@ router.patch(
     if (description !== undefined) item.description = String(description || "");
     if (isPublished !== undefined) item.isPublished = !!isPublished;
     if (sort !== undefined) item.sort = Number(sort) || 0;
+    if (req.body?.durationSec !== undefined) {
+      item.durationSec = Number(req.body.durationSec) || 0;
+    }
+    // Still unknown and the video id changed? Try YouTube once.
+    if (!item.durationSec) item.durationSec = await fetchDurationSec(item.youtubeId);
 
     await item.save();
     res.json({ ok: true, item });
