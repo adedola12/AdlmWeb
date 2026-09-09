@@ -219,6 +219,12 @@ app.use(express.urlencoded({ extended: false, limit: "16mb" }));
 // Structured, parseable access logs in production; colourful logs locally.
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
+// Personal JSON is never cached and never answered with 304. Express would
+// otherwise ETag every body and hand a browser 304 on match, which is only
+// as good as that browser's cache; see middleware/noStore.js for the firm
+// whose dashboard read "Failed to fetch" for weeks on clean 304s.
+app.use(noStore);
+
 // Lightweight health/readiness probe for uptime checks & load balancers.
 // Public and dependency-free so it answers even while the DB is reconnecting.
 app.get(["/health", "/healthz"], (_req, res) => {
@@ -240,6 +246,7 @@ app.use("/.well-known", wellKnownRoutes);
 // before the routes so it observes every mutating request, but it never gates
 // (per-route auth still applies). See server/middleware/auditGod.js.
 import { auditGod } from "./middleware/auditGod.js";
+import { noStore } from "./middleware/noStore.js";
 app.use(auditGod);
 
 // Apply rate limiting to auth and device endpoints
