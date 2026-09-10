@@ -11,13 +11,19 @@
 // normalised, which is what an account's own names are matched against when
 // it asks /me/org-videos. Typing "YSA" and "ysa " must land in the same place.
 //
-// Source of the picture, in order of preference:
-//   bunny  — uploaded through the admin screen, encoded by Bunny Stream and
-//            played through its embed. `bunny.status` tracks the encode.
-//   r2     — a plain MP4 on the public R2 bucket (the fallback when Bunny is
-//            not configured), played as a <video>.
-//   link   — a pasted URL (Drive, YouTube, an MP4 somewhere). Nothing is
-//            processed; the client works out how to play it.
+// THE PICTURE RIDES THE COURSE PIPELINE
+//
+// Same shape as a course module (PaidCourse.js): the master sits in the
+// archive bucket under `sourceKey`, MediaConvert builds the HLS ladder under
+// `outPrefix` in the delivery bucket, and `hlsKey` is the manifest CloudFront
+// serves behind signed cookies. Playback goes through PlaybackSession like a
+// lecture does, so the watermark carries a session ref and one login cannot
+// stream to a whole office at once.
+//
+//   s3    — the pipeline above. `transcodeStatus` follows MediaConvert.
+//   link  — a pasted URL (Drive, YouTube, an MP4). Nothing is processed.
+//   bunny / r2 — earlier rows, before the pipeline was wired in. Still play;
+//           nothing new is filed this way.
 
 import mongoose from "mongoose";
 
@@ -29,19 +35,7 @@ export function orgKeyOf(name) {
     .replace(/\s+/g, " ");
 }
 
-// Bunny's own status numbers, kept as they are so a row can be read against
-// their dashboard. https://docs.bunny.net/reference/video_getvideo
-export const BUNNY_STATUS = {
-  0: "created",
-  1: "uploaded",
-  2: "processing",
-  3: "transcoding",
-  4: "finished",
-  5: "error",
-  6: "upload-failed",
-  7: "segmenting",
-  8: "playlists-created",
-};
+export const TRANSCODE_STATES = ["", "SUBMITTED", "PROGRESSING", "COMPLETE", "CANCELED", "ERROR"];
 
 const WatchSchema = new mongoose.Schema(
   {
@@ -62,36 +56,36 @@ const OrgVideoSchema = new mongoose.Schema(
     orgName: { type: String, required: true, trim: true },
     orgKey: { type: String, required: true, index: true },
 
-    source: { type: String, enum: ["bunny", "r2", "link", "none"], default: "none" },
-    // bunny:LIB:VIDEO, an R2 public URL, or whatever was pasted.
+    source: { type: String, enum: ["s3", "link", "bunny", "r2", "none"], default: "none" },
+    // A pasted link, or for the older rows the R2 URL / bunny:LIB:VIDEO.
     videoUrl: { type: String, default: "", trim: true },
     thumbnailUrl: { type: String, default: "", trim: true },
     durationSec: { type: Number, default: 0 },
 
+    // ── The pipeline (source "s3") ──
+    // Master in the archive bucket.
+    sourceKey: { type: String, default: "" },
+    // Where MediaConvert writes the ladder in the delivery bucket, and the
+    // manifest inside it once the job completes.
+    outPrefix: { type: String, default: "" },
+    hlsKey: { type: String, default: "" },
+    transcodeJobId: { type: String, default: "" },
+    transcodeStatus: { type: String, enum: TRANSCODE_STATES, default: "" },
+    transcodePercent: { type: Number, default: 0 },
+    transcodeError: { type: String, default: "" },
+    transcodeSubmittedAt: { type: Date, default: null },
+    transcodeCheckedAt: { type: Date, default: null },
+
+    // ── Older rows ──
     bunny: {
       libId: { type: String, default: "" },
       videoId: { type: String, default: "" },
       status: { type: Number, default: null },
-      encodeProgress: { type: Number, default: 0 },
-      // What Bunny has produced so far — "360p,720p,1080p". The admin reads
-      // this to know whether a re-encode would give the firm anything better.
-      resolutions: { type: String, default: "" },
-      lastCheckedAt: { type: Date, default: null },
-      error: { type: String, default: "" },
     },
     r2: {
       key: { type: String, default: "" },
     },
-    // Where the picture was before Bunny was asked to fetch and encode it.
-    // Kept until the encode is playable, then the old R2 object is removed
-    // and this is cleared — so a fetch that fails costs nothing.
-    previousSource: {
-      source: { type: String, default: "" },
-      videoUrl: { type: String, default: "" },
-      r2Key: { type: String, default: "" },
-    },
 
-    // Bytes of the original upload, for the admin table.
     fileName: { type: String, default: "" },
     fileSize: { type: Number, default: 0 },
 

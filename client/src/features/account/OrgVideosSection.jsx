@@ -5,21 +5,33 @@
 // sees an empty "your organisation" box.
 //
 // GET /me/org-videos works out which firm the account belongs to from the
-// organisation names on its licences. The player is the same hardened one
-// the courses use: the watermark carries the viewer's identity, which matters
-// here for the same reason — a demo recorded for one firm is not for
-// forwarding. Opening a video logs a watch so the admin can see the firm has
-// looked at it.
+// organisation names on its licences. An uploaded recording plays through a
+// playback session exactly like a lecture — signed CloudFront cookies, a
+// seat, a heartbeat — and through the same hardened player, so the watermark
+// carries the viewer's identity and the session ref. A demo recorded for one
+// firm is not for forwarding.
 
 import React from "react";
 import { useAuth } from "../../store.jsx";
 import { apiAuthed } from "../../http.js";
 import { SecureEmbed, SecureVideo } from "../../components/SecureVideo.jsx";
 import { IconPlayCircle } from "../../components/icons.jsx";
-import { playableFor, clockOf } from "../../lib/orgVideoPlayer.js";
+import { clockOf } from "../../lib/orgVideoPlayer.js";
+import { useOrgVideoPlayback } from "../../lib/useOrgVideoPlayback.js";
 
 const dateOf = (d) =>
   d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+
+function Notice({ title, children }) {
+  return (
+    <div className="w-full h-full flex items-center justify-center text-center text-white/80 text-sm p-6">
+      <div>
+        <b className="block text-white">{title}</b>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function OrgVideosSection() {
   const { accessToken } = useAuth();
@@ -40,9 +52,11 @@ export default function OrgVideosSection() {
 
   const items = d?.items || [];
   const active = items.find((v) => v.id === current) || items[0] || null;
+  const playback = useOrgVideoPlayback(active, { token: accessToken });
 
+  // Links never go through a playback session, so their watch is logged here.
   React.useEffect(() => {
-    if (!active || !accessToken || noted.current.has(active.id)) return;
+    if (!active || !accessToken || active.kind === "stream" || noted.current.has(active.id)) return;
     noted.current.add(active.id);
     apiAuthed(`/me/org-videos/${active.id}/watched`, {
       token: accessToken,
@@ -54,8 +68,44 @@ export default function OrgVideosSection() {
 
   if (!items.length) return null;
 
-  const play = active ? playableFor(active) : null;
   const org = d.organisation || active?.orgName || "your organisation";
+
+  let stage;
+  if (playback.blocked) {
+    stage = (
+      <Notice title="This account is already watching on another device">
+        Your plan allows {playback.blocked.limit || 2} streams at a time. Close the video on the other
+        device and reload — the seat frees itself about a minute and a half after playback stops.
+      </Notice>
+    );
+  } else if (active?.ready === false) {
+    stage = <Notice title="Still being prepared">This recording is being uploaded. Check back in a few minutes.</Notice>;
+  } else if (playback.kind === "embed" && playback.src) {
+    stage = (
+      <SecureEmbed
+        className="w-full h-full"
+        src={playback.src}
+        title={active.title}
+        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+      />
+    );
+  } else if (playback.src) {
+    stage = (
+      <SecureVideo
+        className="w-full h-full"
+        src={playback.src}
+        sessionRef={playback.sessionRef}
+        videoClassName="object-contain"
+        preload="metadata"
+      />
+    );
+  } else {
+    stage = (
+      <Notice title={playback.error ? "Could not start playback" : "Arranging playback…"}>
+        {playback.error || "One moment."}
+      </Notice>
+    );
+  }
 
   return (
     <section className="bg-white rounded-2xl shadow-depth p-4 md:p-5" id="org-videos">
@@ -75,36 +125,19 @@ export default function OrgVideosSection() {
       <div className={`grid gap-4 ${items.length > 1 ? "lg:grid-cols-[1fr_300px]" : ""}`}>
         <div>
           <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16 / 9" }}>
-            {play && active?.ready === false ? (
-              <div className="w-full h-full flex items-center justify-center text-center text-white/80 text-sm p-6">
-                <div>
-                  <b className="block text-white">Still being prepared</b>
-                  This recording is being encoded for streaming. Check back in a few minutes.
-                </div>
-              </div>
-            ) : play?.kind === "iframe" ? (
-              <SecureEmbed
-                className="w-full h-full"
-                src={play.src}
-                title={active.title}
-                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-              />
-            ) : play?.kind === "video" ? (
-              <SecureVideo className="w-full h-full" src={play.src} videoClassName="object-contain" preload="metadata" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-center text-white/80 text-sm p-6">
-                <div>
-                  <b className="block text-white">Recording not available yet</b>
-                  It appears here once it has been uploaded.
-                </div>
-              </div>
-            )}
+            {stage}
           </div>
           {active ? (
             <div className="mt-3">
               <h3 className="font-semibold text-slate-900">{active.title}</h3>
               <p className="text-xs text-slate-500">
-                {[active.durationSec ? clockOf(active.durationSec) : "", dateOf(active.createdAt)].filter(Boolean).join(" · ")}
+                {[
+                  active.durationSec ? clockOf(active.durationSec) : "",
+                  dateOf(active.createdAt),
+                  playback.kind === "stream" ? "adaptive stream" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
               {active.description ? <p className="text-sm text-slate-700 mt-1.5">{active.description}</p> : null}
             </div>

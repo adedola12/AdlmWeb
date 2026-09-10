@@ -2,23 +2,24 @@
 //
 // The upload-and-encode flow for an organisation video, as a hook, so the
 // full admin screen and the quick-add panel on the old Admin Hub run the same
-// code: open the upload on the server, stream the bytes from this browser,
-// tell the server they are in, then poll while Bunny encodes.
+// code: get a presigned PUT from the server, stream the master from this
+// browser into the archive bucket, tell the server it is in, then poll while
+// MediaConvert builds the adaptive ladder.
 //
 //   const up = useOrgVideoUpload({ token, storage, onRow, say });
 //   up.sendFile(rowId, file)        — the whole flow, fire and forget
 //   up.watchEncode(rowId)           — resume polling a row that is encoding
+//   up.enhance(row)                 — build (or rebuild) the ladder
 //   up.uploads[rowId]               — { phase, pct, label } or undefined
 //                                     phase: uploading | processing | failed
 //
-// `storage` is the { bunny, r2 } the list endpoint reports. Bunny is tried
-// first; if Bunny refuses to OPEN the upload (a rejected key) the file goes
-// to R2 as a plain MP4 instead. A failure mid-upload is not retried on the
-// other store — half a file in two places helps nobody.
+// `storage` is the { pipeline, cloudfront } the list endpoint reports.
 
 import React from "react";
 import { apiAuthed } from "../api.js";
-import { uploadToBunnyTus, uploadToPresignedUrl } from "./bunnyTus.js";
+import { uploadToPresignedUrl } from "./s3Upload.js";
+
+const DONE = new Set(["COMPLETE", "ERROR", "CANCELED"]);
 
 export function useOrgVideoUpload({ token, storage, onRow, say }) {
   const [uploads, setUploads] = React.useState({});
@@ -71,119 +72,91 @@ export function useOrgVideoUpload({ token, storage, onRow, say }) {
     [token],
   );
 
-  /** Poll Bunny's encode until the row is playable, then let the row be. */
+  /** Poll MediaConvert until the ladder exists, then let the row be. */
   const watchEncode = React.useCallback(
     function watch(id, attempt = 0) {
+      if (pollers.current.has(id)) return;
       const t = setTimeout(async () => {
         pollers.current.delete(id);
         try {
           const r = await apiAuthed(`/admin/org-videos/${id}/status`, { token });
           const item = r?.item;
           if (item) live.current.onRow?.(item);
-          const b = item?.bunny;
-          if (b?.ready) {
+          const p = item?.pipeline;
+          if (p?.stream) {
             clearUp(id);
-            live.current.say?.(`“${item.title}” is encoded and ready to watch.`);
+            live.current.say?.(`“${item.title}” is encoded — the adaptive stream is live.`);
             return;
           }
-          if (b?.error) {
-            setUp(id, { phase: "failed", label: b.error });
+          if (p && DONE.has(p.status)) {
+            setUp(id, { phase: "failed", label: p.error || "The encode did not complete." });
             return;
           }
           setUp(id, {
             phase: "processing",
-            label: b?.status === 0 ? "Waiting for Bunny…" : `Encoding ${b?.encodeProgress || 0}%`,
+            label: p?.percent ? `Encoding ${p.percent}%` : "Encoding queued…",
           });
         } catch {
           /* a missed poll is not a failure */
         }
-        // Up to ~40 minutes; a long recording takes a while.
-        if (attempt < 480) watch(id, attempt + 1);
+        // Up to ~2 hours; MediaConvert on a long recording takes a while.
+        if (attempt < 720) watch(id, attempt + 1);
         else clearUp(id);
-      }, attempt < 6 ? 3000 : 5000);
+      }, attempt < 4 ? 4000 : 10000);
       pollers.current.set(id, t);
     },
     [token, setUp, clearUp],
   );
 
-  /** The file, up, by whichever door the server has open. */
+  /** The master, up, then the encode. */
   const sendFile = React.useCallback(
     async (id, f) => {
       const meta = { fileName: f.name, fileSize: f.size, contentType: f.type || "video/mp4" };
-      const { storage: st } = live.current;
       setUp(id, { phase: "uploading", pct: 0 });
       const onProgress = (sent, total) =>
         setUp(id, { phase: "uploading", pct: total ? Math.floor((sent / total) * 100) : 0 });
-
-      let useBunny = !!st?.bunny;
-      let start = null;
-      if (useBunny) {
-        try {
-          start = await post(`/admin/org-videos/${id}/upload/bunny`, meta);
-        } catch (e) {
-          if (!st?.r2) {
-            setUp(id, { phase: "failed", label: e?.message || "Bunny refused the upload" });
-            live.current.say?.(e?.message || "Bunny refused the upload.");
-            return;
-          }
-          useBunny = false;
-          live.current.say?.(
-            `Bunny refused to open the upload (${(e?.message || "").replace(/^Bunny Stream: /, "").slice(0, 90)}). Storing it as a plain MP4 on R2 instead.`,
-          );
-        }
-      }
-
       try {
-        if (useBunny) {
-          if (start?.item) live.current.onRow?.(start.item);
-          await uploadToBunnyTus({ file: f, tus: start.tus, onProgress });
-          const done = await post(`/admin/org-videos/${id}/upload/done`, { provider: "bunny" });
-          if (done?.item) live.current.onRow?.(done.item);
-          setUp(id, { phase: "processing", label: "Encoding…" });
-          watchEncode(id);
-        } else if (st?.r2) {
-          const signed = await post(`/admin/org-videos/${id}/upload/r2`, meta);
-          await uploadToPresignedUrl({
-            file: f,
-            uploadUrl: signed.uploadUrl,
-            contentType: signed.contentType,
-            onProgress,
-          });
-          const done = await post(`/admin/org-videos/${id}/upload/done`, {
-            provider: "r2",
-            key: signed.key,
-            publicUrl: signed.publicUrl,
-            ...meta,
-          });
-          if (done?.item) live.current.onRow?.(done.item);
-          clearUp(id);
-          live.current.say?.("Uploaded. It plays as a plain MP4 — use “Improve quality” to have Bunny encode it for streaming.");
-        } else {
-          throw new Error("No video storage is configured on the server, so a file cannot be uploaded. Paste a link instead.");
+        if (!live.current.storage?.pipeline) {
+          throw new Error("The video pipeline is not configured on the server, so a file cannot be uploaded. Paste a link instead.");
         }
+        const signed = await post(`/admin/org-videos/${id}/upload/s3`, meta);
+        await uploadToPresignedUrl({
+          file: f,
+          uploadUrl: signed.uploadUrl,
+          contentType: signed.contentType,
+          onProgress,
+        });
+        const done = await post(`/admin/org-videos/${id}/upload/done`, { key: signed.key, ...meta });
+        if (done?.item) live.current.onRow?.(done.item);
+        const p = done?.item?.pipeline;
+        if (p?.status === "ERROR") {
+          setUp(id, { phase: "failed", label: p.error || "The encode could not be started." });
+          live.current.say?.("Uploaded, but the encode could not be started. The recording plays as one file; try “Improve quality” to encode it.");
+          return;
+        }
+        setUp(id, { phase: "processing", label: "Encoding queued…" });
+        live.current.say?.("Uploaded. It plays now as one file; the adaptive stream follows once the encode completes.");
+        watchEncode(id);
       } catch (e) {
         setUp(id, { phase: "failed", label: e?.message || "Upload failed" });
         live.current.say?.(e?.message || "The upload failed. The row is still here — try again from Edit.");
       }
     },
-    [post, setUp, clearUp, watchEncode],
+    [post, setUp, watchEncode],
   );
 
-  /** "Improve quality": re-encode on Bunny, or have Bunny fetch a plain file. */
+  /** "Improve quality": build (or rebuild) the ladder from the master. */
   const enhance = React.useCallback(
     async (row) => {
       try {
         const r = await post(`/admin/org-videos/${row.id}/enhance`);
         if (r?.item) live.current.onRow?.(r.item);
-        setUp(row.id, { phase: "processing", label: r?.action === "fetch" ? "Bunny is fetching the file…" : "Re-encoding…" });
+        setUp(row.id, { phase: "processing", label: "Encoding queued…" });
         watchEncode(row.id);
-        live.current.say?.(
-          r?.action === "fetch"
-            ? `Bunny is pulling “${row.title}” in and encoding it for streaming.`
-            : `“${row.title}” is being encoded again at the library's best settings.`,
-        );
+        live.current.say?.(`“${row.title}” is being encoded at every rendition the recording supports.`);
         return true;
       } catch (e) {
+        if (e?.data?.item) live.current.onRow?.(e.data.item);
         live.current.say?.(e?.message || "Could not start the encode.");
         return false;
       }
@@ -201,28 +174,28 @@ export function orgVideoState(v, up) {
     if (up.phase === "uploading") return { word: `Uploading ${up.pct}%`, tone: "due" };
     if (up.phase === "processing") return { word: up.label || "Encoding…", tone: "due" };
   }
-  if (v.source === "none" || !v.videoUrl) return { word: "No video yet", tone: "calm" };
-  if (v.source === "bunny") {
-    const b = v.bunny || {};
-    if (b.error || b.status === 5 || b.status === 6) return { word: "Failed", tone: "bad" };
-    if (b.ready) return { word: "Ready", tone: "ok" };
-    if (b.status === 0) return { word: "Waiting for upload", tone: "due" };
-    return { word: `Encoding ${b.encodeProgress || 0}%`, tone: "due" };
+  if (v.source === "s3") {
+    const p = v.pipeline || {};
+    if (p.stream) return { word: "Streaming", tone: "ok" };
+    if (p.status === "ERROR" || p.status === "CANCELED") return { word: "Plays · encode failed", tone: "bad" };
+    if (p.master) return { word: p.percent ? `Encoding ${p.percent}%` : "Plays · encoding", tone: "due" };
+    return { word: "Waiting for upload", tone: "due" };
   }
-  if (v.source === "r2") return { word: "Ready · plain MP4", tone: "ok" };
+  if (v.source === "none" || !v.videoUrl) return { word: "No video yet", tone: "calm" };
+  if (v.source === "bunny") return { word: "Bunny (older)", tone: "ok" };
+  if (v.source === "r2") return { word: "Plain MP4 (older)", tone: "ok" };
   return { word: "Link", tone: "ok" };
 }
 
 /** Can "Improve quality" do anything for this row? Returns the reason if not. */
 export function enhanceBlocker(v, storage) {
-  if (!storage?.bunny) return "Bunny Stream is not configured on this server.";
-  if (v.source === "bunny") {
-    const b = v.bunny || {};
-    if (b.status != null && b.status < 4 && b.status !== 0) return "Still encoding.";
-    return "";
+  if (!storage?.pipeline) return "The video pipeline is not configured on this server.";
+  if (v.source !== "s3" || !v.pipeline?.master) {
+    return v.source === "none" || !v.videoUrl
+      ? "Upload a recording first."
+      : "Only an uploaded recording can be encoded. Upload the file itself for a Drive or YouTube link.";
   }
-  const url = String(v.videoUrl || "");
-  if (/^https?:\/\/[^?#]+\.(mp4|mov|m4v|webm|mkv|avi)(\?|#|$)/i.test(url)) return "";
-  if (!url) return "No video yet.";
-  return "Only a direct video file can be encoded. Upload the file itself for a Drive or YouTube link.";
+  const st = v.pipeline.status;
+  if (st && !DONE.has(st)) return "Still encoding.";
+  return "";
 }

@@ -7,14 +7,18 @@
 // is the two-minute version: pick the firm, drop the file, done.
 //
 // Same API, same upload hook, so a file started here shows the same encode
-// progress the DS screen would show — it is the same row.
+// progress the DS screen would show — it is the same row. The file goes from
+// this browser straight into the course archive bucket; MediaConvert builds
+// the adaptive stream; CloudFront serves it to the firm.
 
 import React from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../store.jsx";
 import { apiAuthed } from "../../http.js";
+import { SecureVideo } from "../../components/SecureVideo.jsx";
 import { useOrgVideoUpload, orgVideoState, enhanceBlocker } from "../../lib/useOrgVideoUpload.js";
-import { sizeOf, clockOf, playableFor } from "../../lib/orgVideoPlayer.js";
+import { useOrgVideoPlayback } from "../../lib/useOrgVideoPlayback.js";
+import { sizeOf, clockOf } from "../../lib/orgVideoPlayer.js";
 
 const NEW_ORG = "__new__";
 
@@ -28,6 +32,47 @@ const TONE_CLS = {
 
 const when = (d) =>
   d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+
+/** The preview under the table. */
+function Preview({ video, token, onClose }) {
+  const pb = useOrgVideoPlayback(video, { token, admin: true });
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 p-3">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <b className="text-sm">{video.title}</b>
+        <button className="btn btn-sm" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {pb.kind === "embed" && pb.src ? (
+        <div className="relative w-full" style={{ aspectRatio: "16 / 9", background: "#000", borderRadius: 10, overflow: "hidden" }}>
+          <iframe
+            src={pb.src}
+            title={video.title}
+            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
+          />
+        </div>
+      ) : pb.src ? (
+        <>
+          <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16 / 9" }}>
+            <SecureVideo className="w-full h-full" src={pb.src} videoClassName="object-contain" preload="metadata" />
+          </div>
+          <div className="text-[11px] text-slate-500 mt-2">
+            {pb.kind === "stream"
+              ? "Playing the adaptive stream from CloudFront — what the firm gets."
+              : pb.kind === "master"
+                ? "Playing the uploaded master as one file. The adaptive stream replaces this once the encode completes."
+                : "Playing the pasted link."}
+          </div>
+        </>
+      ) : (
+        <div className="text-sm text-slate-600">{pb.error || "Arranging playback…"}</div>
+      )}
+    </div>
+  );
+}
 
 export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true }) {
   const { accessToken } = useAuth();
@@ -73,7 +118,8 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
   // moves without a refresh.
   React.useEffect(() => {
     for (const v of d?.items || []) {
-      if (v.source === "bunny" && v.bunny && !v.bunny.ready && !v.bunny.error && !up.uploads[v.id]) {
+      const p = v.pipeline;
+      if (p && p.master && !p.stream && p.status && !["COMPLETE", "ERROR", "CANCELED"].includes(p.status) && !up.uploads[v.id]) {
         up.watchEncode(v.id);
       }
     }
@@ -138,6 +184,7 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
     try {
       await apiAuthed(`/admin/org-videos/${v.id}`, { token: accessToken, method: "DELETE" });
       up.clearUp(v.id);
+      if (preview?.id === v.id) setPreview(null);
       setReload((n) => n + 1);
       setMsg(`“${v.title}” removed.`);
     } catch (e) {
@@ -147,7 +194,6 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
 
   const items = d?.items || [];
   const storage = d?.storage;
-  const play = preview ? playableFor(preview) : null;
 
   return (
     <div className="card mb-4">
@@ -203,9 +249,7 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
           onChange={set("description")}
         />
         <select className="input" value={form.how} onChange={set("how")}>
-          <option value="upload">
-            {storage?.bunny ? "Upload a file — Bunny encodes it for streaming" : "Upload a file"}
-          </option>
+          <option value="upload">Upload a file — encoded for adaptive streaming</option>
           <option value="link">Paste a link (Drive, YouTube, an MP4)</option>
         </select>
         {form.how === "link" ? (
@@ -232,11 +276,9 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
       </div>
       <div className="mt-2 flex items-center justify-between gap-3 flex-wrap">
         <div className="text-[11px] text-slate-500">
-          {storage?.bunny
-            ? "Files go straight from this browser to Bunny Stream. Keep the tab open until the upload finishes."
-            : storage?.r2
-              ? "Bunny is not configured here, so files are stored as plain MP4s."
-              : "No video storage configured — paste a link."}
+          {storage?.pipeline
+            ? "Files go straight from this browser into the archive and are encoded for adaptive streaming. Keep the tab open until the upload finishes."
+            : "The video pipeline is not configured on this server — paste a link."}
         </div>
         <button className="btn btn-sm" disabled={busy} onClick={add}>
           {busy ? "Saving…" : form.how === "upload" ? "Add and upload" : "Add video"}
@@ -266,7 +308,8 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
               {items.map((v) => {
                 const s = orgVideoState(v, up.uploads[v.id]);
                 const blocker = enhanceBlocker(v, storage);
-                const res = v.bunny?.resolutions || [];
+                const p = v.pipeline;
+                const canWatch = p ? p.master : !!v.videoUrl;
                 return (
                   <tr key={v.id} className="border-b align-middle">
                     <td className="py-2 pr-3">
@@ -282,15 +325,17 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
                       </span>
                     </td>
                     <td className="py-2 pr-3 text-xs text-slate-600">
-                      {v.source === "bunny"
-                        ? res.length
-                          ? res.join(" · ")
-                          : "—"
-                        : v.source === "r2"
-                          ? "as recorded"
-                          : v.source === "link"
-                            ? "external"
-                            : "—"}
+                      {p
+                        ? p.stream
+                          ? "adaptive stream"
+                          : p.master
+                            ? "as recorded"
+                            : "—"
+                        : v.source === "link"
+                          ? "external"
+                          : v.source === "none"
+                            ? "—"
+                            : "older storage"}
                     </td>
                     <td className="py-2 pr-3 text-xs text-slate-600">
                       {v.watchers ? `${v.watchers} · last ${when(v.lastWatchedAt)}` : "not yet"}
@@ -300,7 +345,7 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
                     </td>
                     <td className="py-2 pr-0">
                       <div className="flex gap-1.5 justify-end flex-wrap">
-                        {playableFor(v) ? (
+                        {canWatch ? (
                           <button className="btn btn-sm" onClick={() => setPreview(v)}>
                             Watch
                           </button>
@@ -308,7 +353,7 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
                         <button
                           className="btn btn-sm"
                           disabled={!!blocker || !!up.uploads[v.id]}
-                          title={blocker || "Have Bunny produce the best renditions the file allows"}
+                          title={blocker || "Build every rendition the recording allows"}
                           onClick={() => up.enhance(v)}
                         >
                           Improve quality
@@ -324,37 +369,13 @@ export default function OrgVideosQuickAdd({ defaultOrg = "", fullRegister = true
             </tbody>
           </table>
           <div className="text-[11px] text-slate-500 mt-2">
-            “Improve quality” asks Bunny to encode every rendition the recording supports, or to pull a plain MP4 in
-            and encode it for streaming. It cannot add detail the recording never had — record at 1080p or better.
+            “Improve quality” builds the adaptive stream from the uploaded recording — every rendition it supports, up
+            to its own resolution. It cannot add detail the recording never had — record at 1080p or better.
           </div>
         </div>
       )}
 
-      {preview ? (
-        <div className="mt-3 rounded-xl border border-slate-200 p-3">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <b className="text-sm">{preview.title}</b>
-            <button className="btn btn-sm" onClick={() => setPreview(null)}>
-              Close
-            </button>
-          </div>
-          {play?.kind === "iframe" ? (
-            <div className="relative w-full" style={{ aspectRatio: "16 / 9", background: "#000", borderRadius: 10, overflow: "hidden" }}>
-              <iframe
-                src={play.src}
-                title={preview.title}
-                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
-              />
-            </div>
-          ) : play?.kind === "video" ? (
-            <video src={play.src} controls playsInline style={{ width: "100%", borderRadius: 10, background: "#000" }} />
-          ) : (
-            <div className="text-sm text-slate-600">Nothing to play yet.</div>
-          )}
-        </div>
-      ) : null}
+      {preview ? <Preview video={preview} token={accessToken} onClose={() => setPreview(null)} /> : null}
     </div>
   );
 }
