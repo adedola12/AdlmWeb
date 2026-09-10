@@ -21,7 +21,7 @@
 
 import express from "express";
 import { User } from "../models/User.js";
-import { readUnsubscribeToken } from "../util/campaigns.js";
+import { readUnsubscribeToken, readTopicUnsubscribeToken, VIDEO_TOPIC } from "../util/campaigns.js";
 
 const router = express.Router();
 
@@ -120,6 +120,115 @@ router.post("/", express.urlencoded({ extended: false }), async (req, res) => {
       "Unsubscribed",
       `<h1>Done</h1>
        <p>${user.email} will not get marketing email from us again.</p>
+       <p class="m">Receipts, licence and support messages still arrive — those are part of
+       your account. If you change your mind, it is a switch in your account settings.</p>`,
+    ),
+  );
+});
+
+/* ═══════════════════════════════════════════════ getting off ONE list ══ */
+
+/**
+ * The video list, at /api/email/unsubscribe/:token.
+ *
+ * A SEPARATE ROUTER, and a separate switch from the one above. Somebody who is
+ * tired of the tutorial announcements has not asked to stop hearing that their
+ * card was declined, and one link that does both is a link that will
+ * eventually do the wrong one.
+ *
+ * The token is topic-scoped (see util/campaigns.js): the word "videos" is
+ * inside the signed material, so a link out of a video announcement cannot be
+ * edited into a general unsubscribe. It is not a session and it reads nothing
+ * — the worst a leaked one can do is stop that person's video mail.
+ *
+ * GET SHOWS, POST DOES — the same rule the marketing unsubscribe above
+ * follows, and for the same reason: mail clients and corporate link scanners
+ * FETCH the links in a message to check them. Outlook's scanner opening this
+ * would quietly opt people out of a list they never asked to leave, and the
+ * only evidence would be a customer wondering why the videos stopped. So the
+ * GET renders a page with a button and changes nothing.
+ */
+export const videoUnsubscribeRouter = express.Router();
+
+const notOurs = (res) =>
+  res.status(400).send(
+    page(
+      "Link not recognised",
+      `<h1>That link is not one of ours</h1>
+       <p>It may have been broken by the mail client that showed it to you.</p>
+       <p class="m">You can turn video updates off in your account settings, or reply to
+       any message from us and we will do it.</p>`,
+    ),
+  );
+
+videoUnsubscribeRouter.get("/:token", async (req, res) => {
+  const id = readTopicUnsubscribeToken(VIDEO_TOPIC, req.params.token);
+  if (!id) return notOurs(res);
+
+  // A malformed id would throw inside the cast rather than 404, and a link
+  // scanner hitting a 500 is a page of noise in the logs every time a message
+  // goes out.
+  const user = await User.findById(id).select("email emailPrefs").lean().catch(() => null);
+  if (!user) {
+    return res.status(404).send(page("Not found", `<h1>We cannot find that account</h1>`));
+  }
+
+  if (user.emailPrefs?.videoUpdates === false) {
+    return res.send(
+      page(
+        "Already off",
+        `<h1>Video updates are already off</h1>
+         <p>${user.email} is not on the list for new videos.</p>
+         <p class="m">Receipts, licence and support messages are separate and still arrive —
+         those are part of your account, not a mailing list.</p>`,
+      ),
+    );
+  }
+
+  res.send(
+    page(
+      "Stop video updates",
+      `<h1>Stop emails about new videos?</h1>
+       <p>${user.email} will stop hearing when ADLM Studio publishes a video.</p>
+       <p class="m">Everything else is unaffected: receipts, licence activations, renewal
+       notices, support replies and any other news from us keep coming.</p>
+       <form method="POST" action="/api/email/unsubscribe/${encodeURIComponent(req.params.token)}">
+         <button type="submit">Stop video updates</button>
+       </form>`,
+    ),
+  );
+});
+
+videoUnsubscribeRouter.post("/:token", express.urlencoded({ extended: false }), async (req, res) => {
+  const id = readTopicUnsubscribeToken(VIDEO_TOPIC, req.params.token);
+  if (!id) return notOurs(res);
+
+  // The date is built here rather than in a module-level constant: one frozen
+  // at import would stamp every unsubscribe for the life of the process with
+  // the time the process started.
+  const user = await User.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        "emailPrefs.videoUpdates": false,
+        "emailPrefs.videoUpdatesChangedAt": new Date(),
+      },
+    },
+    { new: true },
+  )
+    .select("email")
+    .lean()
+    .catch(() => null);
+
+  if (!user) {
+    return res.status(404).send(page("Not found", `<h1>We cannot find that account</h1>`));
+  }
+
+  res.send(
+    page(
+      "Done",
+      `<h1>Done</h1>
+       <p>${user.email} will not get emails about new videos again.</p>
        <p class="m">Receipts, licence and support messages still arrive — those are part of
        your account. If you change your mind, it is a switch in your account settings.</p>`,
     ),

@@ -57,11 +57,13 @@ function ready() {
     await loadSecretsIntoEnv();
     const { connectDB } = await import("./db.js");
     await connectDB(process.env.MONGO_URI);
-    const [{ runExpiryNotifier }, { runAutoRenewals }] = await Promise.all([
-      import("./util/expiryNotifier.js"),
-      import("./util/autoRenew.js"),
-    ]);
-    return { runExpiryNotifier, runAutoRenewals };
+    const [{ runExpiryNotifier }, { runAutoRenewals }, { runVideoPoll }] =
+      await Promise.all([
+        import("./util/expiryNotifier.js"),
+        import("./util/autoRenew.js"),
+        import("./util/videoNotifier.js"),
+      ]);
+    return { runExpiryNotifier, runAutoRenewals, runVideoPoll };
   })().catch((err) => {
     _readyPromise = null;
     throw err;
@@ -80,14 +82,25 @@ export async function handler(event, context) {
   // Throwing sends the event to the scheduler's dead-letter queue, where the
   // DLQ-depth alarm surfaces it. Silently succeeding would hide a broken rule
   // until someone noticed nobody had been renewed.
-  const KNOWN = ["expiry-notifier", "auto-renew"];
+  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll"];
   if (!KNOWN.includes(job)) {
     throw new Error(`Unknown job "${job}". Expected one of: ${KNOWN.join(", ")}.`);
   }
 
   const jobs = await ready();
-  const run =
-    job === "auto-renew" ? jobs.runAutoRenewals : jobs.runExpiryNotifier;
+  const run = {
+    "auto-renew": () => jobs.runAutoRenewals(),
+    "expiry-notifier": () => jobs.runExpiryNotifier(),
+    // Shares this ENTRY POINT with the daily jobs, but NOT their Lambda
+    // function. It runs every fifteen minutes and a big send takes minutes, so
+    // on a reserved-concurrency-1 function it would eventually still be
+    // running at 08:00 and throttle the auto-renewal into its dead-letter
+    // queue. Cards not being charged because a tutorial announcement was busy
+    // is not a trade anybody would make, so infra points a second function
+    // (VideoPollFn) at this same file — one copy of the code, two concurrency
+    // budgets.
+    "video-poll": () => jobs.runVideoPoll(),
+  }[job];
 
   const startedAt = Date.now();
   console.log(`[scheduled] ${job} starting`);

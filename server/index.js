@@ -13,6 +13,7 @@ import { connectDB } from "./db.js";
 import cron from "node-cron";
 import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
+import { runVideoPoll } from "./util/videoNotifier.js";
 import { ensureRolesSeeded } from "./util/rbac.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
@@ -89,7 +90,8 @@ import adminBroadcast from "./routes/admin.broadcast.js";
 import adminCampaigns from "./routes/admin.campaigns.js";
 import adminBillboard, { publicBillboard } from "./routes/admin.billboard.js";
 import { sweepStaleOrders } from "./util/staleOrders.js";
-import unsubscribeRouter from "./routes/unsubscribe.js";
+import unsubscribeRouter, { videoUnsubscribeRouter } from "./routes/unsubscribe.js";
+import adminVideos from "./routes/admin.videos.js";
 
 import freebiesPublic from "./routes/freebies.js";
 import adminFreebies from "./routes/admin.freebies.js";
@@ -388,6 +390,11 @@ app.use("/billboard", publicBillboard);
 // Public and unauthenticated on purpose: it is opened from an email, in a
 // browser nobody is signed in to. See the note at the top of the router.
 app.use("/unsubscribe", unsubscribeRouter);
+// Same reasoning, one list rather than all of them: opened from a video
+// announcement, in a browser nobody is signed in to. The token carries the
+// topic, so this link cannot be edited into a general unsubscribe.
+app.use("/api/email/unsubscribe", videoUnsubscribeRouter);
+app.use("/admin/videos", adminVideos);
 app.use("/admin/rategen-v2/library", adminRateGenLibrary);
 
 app.use("/admin/rategen-compute", adminRateGenCompute);
@@ -422,6 +429,8 @@ app.use("/admin/roles", adminRoles);
 // ("audit") gates apply instead of the catch-all's admin-only middleware.
 import adminSupport from "./routes/admin.support.js";
 import adminWaitlist from "./routes/admin.waitlist.js";
+import adminOrgVideos from "./routes/admin.orgVideos.js";
+import meOrgVideos from "./routes/me.orgVideos.js";
 import adminToday from "./routes/admin.today.js";
 import adminPurchaseQueue from "./routes/admin.purchaseQueue.js";
 import adminInstallQueue from "./routes/admin.installQueue.js";
@@ -435,6 +444,8 @@ import adminAudit from "./routes/admin.audit.js";
 import adminFollowUps from "./routes/admin.followups.js";
 app.use("/admin/support-tickets", adminSupport);
 app.use("/admin/waitlist", adminWaitlist);
+app.use("/admin/org-videos", adminOrgVideos);
+app.use("/me/org-videos", meOrgVideos);
 app.use("/admin/today", adminToday);
 // Mounted on its own path rather than under /admin/purchases, which already
 // answers for the old hub and carries a :id route that "queue" would match.
@@ -667,6 +678,40 @@ function startCronJobs() {
     );
 
     console.log("[stale-orders] cron scheduled:", STALE_ORDER_CRON);
+  }
+
+  /* ── new videos on the channel ─────────────────────────────────────────
+   *
+   * Every fifteen minutes rather than nightly, because the point is to reach
+   * people while the video is still the newest thing on the channel. Fifteen
+   * minutes is also what the YouTube quota comfortably affords: two API units
+   * per run is under 200 a day against a default 10,000.
+   *
+   * Off unless a key and a channel are configured — an unset poller must be
+   * silent, not a log line every quarter hour saying it cannot work.
+   */
+  const ENABLE_VIDEO_CRON =
+    String(process.env.ENABLE_VIDEO_CRON || "true") !== "false";
+  const VIDEO_CRON = String(process.env.VIDEO_CRON || "*/15 * * * *");
+
+  if (ENABLE_VIDEO_CRON) {
+    cron.schedule(
+      VIDEO_CRON,
+      async () => {
+        try {
+          const out = await runVideoPoll();
+          // Only worth a line when something happened. Ninety-five runs out of
+          // a hundred find nothing, and a log that says so every fifteen
+          // minutes is a log nobody reads.
+          if (out?.found) console.log("[video-poll] done:", out);
+        } catch (e) {
+          console.error("[video-poll] failed:", e?.message || e);
+        }
+      },
+      { timezone: "Africa/Lagos" },
+    );
+
+    console.log("[video-poll] cron scheduled:", VIDEO_CRON);
   }
 
   // Auto-renewal charges run BEFORE the 9am expiry notifier so a user whose

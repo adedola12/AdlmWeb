@@ -389,6 +389,29 @@ export class AdlmApiStack extends Stack {
      * overlap, a batch-length timeout, and its own alarms so a failed nightly
      * job is not lost inside the API's error rate.
      */
+    /* Shared by both job functions below. Lifted out of ScheduledFn when the
+     * video poller became a second function pointing at the same entry point:
+     * two copies of this drift, and the one that drifts silently is the source
+     * map setting, which is only ever noticed while reading a stack trace at
+     * the worst possible moment. */
+    const JOB_BUNDLING = {
+      externalModules: [],
+      minify: true,
+      sourceMap: true,
+      // The map without this is 30MB against 8MB of actual code, and Lambda
+      // downloads and unpacks the whole package on every cold start — so three
+      // quarters of that download was the original sources embedded in the
+      // map. Dropping them keeps file/line mappings in stack traces and costs
+      // only the inline source snippet.
+      sourcesContent: false,
+      target: "node22",
+      format: OutputFormat.ESM,
+      banner:
+        "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);" +
+        "import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';" +
+        "const __filename=__f(import.meta.url);const __dirname=__d(__filename);",
+    };
+
     // Hoisted for the same reason as apiLogs — see the note there.
     const scheduledLogs = new logs.LogGroup(this, "ScheduledFnLogs", {
       retention: cfg.logRetentionDays,
@@ -425,26 +448,56 @@ export class AdlmApiStack extends Stack {
 
       logGroup: scheduledLogs,
 
-      bundling: {
-        externalModules: [],
-        minify: true,
-        sourceMap: true,
-        // The map without this is 30MB against 8MB of actual code, and Lambda
-        // downloads and unpacks the whole package on every cold start — so
-        // three quarters of that download was the original sources embedded
-        // in the map. Dropping them keeps file/line mappings in stack traces
-        // and costs only the inline source snippet.
-        sourcesContent: false,
-        target: "node22",
-        format: OutputFormat.ESM,
-        banner:
-          "import{createRequire as __cr}from'module';const require=__cr(import.meta.url);" +
-          "import{fileURLToPath as __f}from'url';import{dirname as __d}from'path';" +
-          "const __filename=__f(import.meta.url);const __dirname=__d(__filename);",
-      },
+      bundling: JOB_BUNDLING,
     });
 
-    scheduledFn.addToRolePolicy(
+    /* ── the video poller ──────────────────────────────────────────────────
+     *
+     * The SAME entry point as ScheduledFn — scheduled.js dispatches on the job
+     * name — but deliberately a SECOND function, because the two have
+     * incompatible shapes. ScheduledFn is concurrency 1 so two runs of a job
+     * that charges cards can never overlap. This one fires every fifteen
+     * minutes and a send to the whole customer base takes minutes, so on that
+     * function it would eventually still be running at 08:00, throttle the
+     * auto-renewal invocation, and dead-letter it. Cards going uncharged
+     * because a tutorial announcement was busy is not a trade worth making.
+     *
+     * One copy of the code, two concurrency budgets, two sets of alarms.
+     */
+    const videoPollLogs = new logs.LogGroup(this, "VideoPollFnLogs", {
+      retention: cfg.logRetentionDays,
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
+    const videoPollFn = new NodejsFunction(this, "VideoPollFn", {
+      entry: path.join(SERVER_DIR, "scheduled.js"),
+      handler: "handler",
+      projectRoot: SERVER_DIR,
+      depsLockFilePath: path.join(SERVER_DIR, "package-lock.json"),
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      memorySize: cfg.memoryMb,
+
+      // Under the 10-minute Mongo job-lock TTL in util/videoNotifier.js, for
+      // the same reason ScheduledFn sits under its own: a timed-out run dies
+      // without releasing the lock, so the TTL must expire after the process
+      // is definitely gone.
+      timeout: Duration.minutes(9),
+
+      ...(cfg.useReservedConcurrency ? { reservedConcurrentExecutions: 1 } : {}),
+
+      environment: {
+        NODE_ENV: "production",
+        SSM_PREFIX: cfg.ssmPrefix,
+        MONGO_MAX_POOL: String(cfg.mongoMaxPool),
+        NODE_OPTIONS: "--enable-source-maps",
+      },
+
+      logGroup: videoPollLogs,
+      bundling: JOB_BUNDLING,
+    });
+
+    for (const fn of [scheduledFn, videoPollFn]) fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["ssm:GetParametersByPath", "ssm:GetParameter", "ssm:GetParameters"],
         resources: [
@@ -453,7 +506,7 @@ export class AdlmApiStack extends Stack {
         ],
       }),
     );
-    scheduledFn.addToRolePolicy(
+    for (const fn of [scheduledFn, videoPollFn]) fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["kms:Decrypt"],
         resources: ["*"],
@@ -532,6 +585,28 @@ export class AdlmApiStack extends Stack {
       description: "ADLM entitlement expiry notifier — 09:00 Africa/Lagos daily",
     });
 
+    /* Every fifteen minutes, and a RATE rather than a cron: this has no
+     * opinion about the time of day, only about how stale an announcement is
+     * allowed to be. Fifteen minutes is also comfortably inside quota — two
+     * API units a run is under 200 a day against a default 10,000.
+     *
+     * retryAttempts: 2 and a DLQ. Unlike auto-renew, a retry here is genuinely
+     * safe: the notifier claims a video with an atomic findOneAndUpdate before
+     * mailing anybody, so a replayed invocation finds it claimed and sends
+     * nothing. maxEventAge is one poll interval — a poll replayed twenty
+     * minutes late has already been answered by the poll that came after it.
+     */
+    new scheduler.Schedule(this, "VideoPollSchedule", {
+      description: "ADLM new-video check — every 15 minutes",
+      schedule: scheduler.ScheduleExpression.rate(Duration.minutes(15)),
+      target: new schedulerTargets.LambdaInvoke(videoPollFn, {
+        input: scheduler.ScheduleTargetInput.fromObject({ job: "video-poll" }),
+        retryAttempts: 2,
+        maxEventAge: Duration.minutes(15),
+        deadLetterQueue: scheduleDlq,
+      }),
+    });
+
     /* Keep-warm ping — see config.warmIntervalMinutes for the rationale, the
      * one-container limit and the cost. Targets the API function, not
      * ScheduledFn, because it is the API's cold start users actually feel.
@@ -579,7 +654,27 @@ export class AdlmApiStack extends Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    [scheduledErrors, dlqDepth].forEach((a) => a.addAlarmAction(notify));
+    /* Its own alarm, and a threshold of 2 rather than 1.
+     *
+     * The poller fires 96 times a day against a third-party API, so a single
+     * failed run is a transient YouTube blip and alarming on it would train
+     * everybody to ignore the alarm. Two inside an hour is the API key having
+     * actually expired, the quota being spent, or the channel id being wrong —
+     * and those are silent failures, because a poller that cannot reach
+     * YouTube looks exactly like a channel that has not published anything.
+     */
+    const videoPollErrors = new cloudwatch.Alarm(this, "VideoPollErrorsAlarm", {
+      alarmDescription:
+        "The new-video poller has failed more than once in an hour. Nobody is being told " +
+        "about new videos, and the symptom is silence — check the VideoPollFn log group " +
+        "for a quotaExceeded or keyInvalid from YouTube.",
+      metric: videoPollFn.metricErrors({ period: Duration.hours(1) }),
+      threshold: 2,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    [scheduledErrors, dlqDepth, videoPollErrors].forEach((a) => a.addAlarmAction(notify));
 
     /* ═══════════════ MPXJ converter ═══════════════
      * The Java service in tools/mpxj-converter, which turns .mpp into MS

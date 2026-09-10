@@ -361,21 +361,40 @@ export async function announceVideo(
     log,
   });
 
-  const stats = {
-    recipients: recipients.length,
-    sent: out.sent,
-    failed: out.failed,
-    skippedOptedOut: skipped.optedOut,
-    skippedUnverified: skipped.unverified,
-    dryRun,
-  };
+  // A resend touches a handful of addresses out of hundreds, so it ADDS to the
+  // record rather than replacing it. Overwriting would leave the screen saying
+  // "3 recipients, 3 sent" about a video that went to 800 people, and the
+  // consent figures beside it would be zero.
+  const before = claimed.stats || {};
+  const stats = resend
+    ? {
+        recipients: before.recipients ?? recipients.length,
+        sent: (before.sent ?? 0) + out.sent,
+        failed: out.failed,
+        skippedOptedOut: before.skippedOptedOut ?? 0,
+        skippedUnverified: before.skippedUnverified ?? 0,
+        dryRun: !!before.dryRun,
+      }
+    : {
+        recipients: recipients.length,
+        sent: out.sent,
+        failed: out.failed,
+        skippedOptedOut: skipped.optedOut,
+        skippedUnverified: skipped.unverified,
+        dryRun,
+      };
 
-  // A dry run must not leave a record saying the video was announced —
-  // otherwise the first real run finds it already claimed and nobody is ever
-  // told. So the claim is handed back.
-  if (dryRun && !resend) {
-    await Video.updateOne({ videoId }, { $set: { notifiedAt: null, notifiedBy: "" } });
-    log.log?.(`[video-mail] ${videoId}: DRY RUN, claim released`);
+  // A dry run writes NOTHING to the record. Two reasons, and the second is the
+  // one that bites: a dry run must not leave the video marked as announced, or
+  // the first real run finds it claimed and nobody is ever told — and a dry
+  // run of a RESEND must not overwrite failedRecipients with the empty list a
+  // dry run always produces, which would erase the very addresses it was about
+  // to help retry.
+  if (dryRun) {
+    if (!resend) {
+      await Video.updateOne({ videoId }, { $set: { notifiedAt: null, notifiedBy: "" } });
+      log.log?.(`[video-mail] ${videoId}: DRY RUN, claim released`);
+    }
   } else {
     await Video.updateOne(
       { videoId },
