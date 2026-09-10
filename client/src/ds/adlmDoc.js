@@ -250,7 +250,7 @@ function table(b) {
           let v = cells[i];
           if (c.money && typeof v === "number") v = money(v);
           else if (c.num && typeof v === "number") v = num(v);
-          return `<td class="${cls(c.align)}">${esc(v)}</td>`;
+          return `<td class="${cls(c.align)}">${rich(v)}</td>`;
         })
         .join("") +
       "</tr>";
@@ -273,13 +273,40 @@ function totals(b) {
   );
 }
 
+/**
+ * Emphasis inside a line.
+ *
+ * Word keeps it in run properties and the composer keeps it in asterisks, so
+ * both arrive here as **bold** and *italic*.
+ *
+ * Applied strictly AFTER escaping, so a document can never introduce markup:
+ * the only two tags that can exist in the output are the two written here.
+ * Added because a document whose labels — "Delivery:", "Duration:" — were bold
+ * in Word arrived with the bold thrown away, which is half of what made an
+ * imported document look flatter than the file it came from.
+ */
+export function rich(s) {
+  return esc(s)
+    .replace(/\*\*([^*]+?)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[\s([])\*([^*\n]+?)\*(?=[\s).,;:!?\]]|$)/g, "$1<i>$2</i>");
+}
+
 const BLOCKS = {
-  heading: (b) =>
-    `<h2 class="doc-h${b.level === 1 ? " doc-h-1" : ""}${b.align === "center" ? " doc-c" : ""}">` +
-    `${esc(b.text)}</h2>`,
-  para: (b) => `<p class="doc-p">${esc(b.text)}</p>`,
+  /* Three levels, and each one a real size. There were two, and both were
+     10pt — the same as body text — so a heading was body text in bold and a
+     title was body text in bold capitals. A document that arrives with a
+     title, six sections and eleven sub-sections had nowhere to put them.
+     The tag follows the level too, so the outline is real to a reader. */
+  heading: (b) => {
+    const lvl = Math.min(3, Math.max(1, Number(b.level) || 2));
+    return (
+      `<h${lvl} class="doc-h doc-h-${lvl}${b.align === "center" ? " doc-c" : ""}">` +
+      `${rich(b.text)}</h${lvl}>`
+    );
+  },
+  para: (b) => `<p class="doc-p">${rich(b.text)}</p>`,
   bullets: (b) =>
-    `<ul class="doc-ul">${(b.items || []).map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`,
+    `<ul class="doc-ul">${(b.items || []).map((i) => `<li>${rich(i)}</li>`).join("")}</ul>`,
   // `lines` is an array of address lines. A caller passing a plain string is
   // an easy mistake to make and used to throw from inside .map, which takes
   // down the whole document rather than one block — so a string is treated as
@@ -288,7 +315,7 @@ const BLOCKS = {
     const lines = Array.isArray(b.lines) ? b.lines : b.lines ? [b.lines] : [];
     return (
       `<div class="doc-kv"><span class="doc-k">${esc(b.label)}</span>` +
-      `<span class="doc-v">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</span></div>`
+      `<span class="doc-v">${lines.map((l) => `<div>${rich(l)}</div>`).join("")}</span></div>`
     );
   },
   /**
@@ -425,17 +452,41 @@ export function render(spec) {
   );
 }
 
-// Split one table wrapper into several, each carrying the header row.
+/**
+ * Split one table wrapper into several, each carrying the header row.
+ *
+ * A chunk is only worth emitting if it can hold the header AND at least one
+ * whole row. Without that rule, a table beginning near the foot of a page had
+ * its header and first row pushed into whatever space was left regardless of
+ * whether they fitted, and the sheet — which clips — sliced the row in half.
+ * That is what the week-by-week table was doing at every page break: a header,
+ * three lines of a five-line row, and then the next sheet starting the same
+ * row again from the top.
+ *
+ * Returns null when there is nothing to do, so the caller can tell "it fits"
+ * from "it has been divided".
+ */
 function splitTable(wrap, tbl, firstRoom, fullRoom) {
   const head = tbl.querySelector("thead");
   const rows = [...tbl.querySelectorAll("tbody > tr")];
-  if (!head || rows.length < 2) return [];
+  if (!head || !rows.length) return null;
+
   const headH = head.offsetHeight;
+  const hs = rows.map((r) => r.offsetHeight);
+  const all = hs.reduce((a, b) => a + b, 0);
+
+  // Not even the header and one row fit in what is left, so the table starts
+  // on the next sheet rather than leaving a stub behind.
+  const newPage = firstRoom < headH + hs[0] + 2;
+  if (!newPage && headH + all <= firstRoom) return null;
+
   const out = [];
-  let room = firstRoom - headH;
   let bucket = [];
+  let used = 0;
+  let room = (newPage ? fullRoom : firstRoom) - headH;
 
   const flush = () => {
+    if (!bucket.length) return;
     const w = wrap.cloneNode(false);
     const t = tbl.cloneNode(false);
     const cg = tbl.querySelector("colgroup");
@@ -445,21 +496,24 @@ function splitTable(wrap, tbl, firstRoom, fullRoom) {
     bucket.forEach((r) => tb.appendChild(r));
     t.appendChild(tb);
     w.appendChild(t);
-    out.push(w);
+    out.push({ el: w, height: headH + used });
     bucket = [];
+    used = 0;
   };
 
-  rows.forEach((r) => {
-    const h = r.offsetHeight;
-    if (h > room && bucket.length) {
+  rows.forEach((r, i) => {
+    // A row taller than a whole sheet cannot be placed anywhere; it gets a
+    // sheet to itself rather than dragging a neighbour over the edge with it.
+    if (used + hs[i] > room && bucket.length) {
       flush();
       room = fullRoom - headH;
     }
     bucket.push(r);
-    room -= h;
+    used += hs[i];
   });
-  if (bucket.length) flush();
-  return out.length > 1 ? out : [];
+  flush();
+
+  return out.length ? { chunks: out, newPage } : null;
 }
 
 // Render into a host element and paginate against the real geometry.
@@ -510,12 +564,19 @@ function paginate(host, ctx) {
       return;
     }
     const tbl = el.querySelector ? el.querySelector(".doc-table") : null;
-    if (tbl && h > limit - used) {
+    if (tbl) {
       const split = splitTable(el, tbl, limit - used, limit);
-      if (split.length) {
-        pages[pages.length - 1].push(split[0]);
-        for (let i = 1; i < split.length; i += 1) pages.push([split[i]]);
-        used = split[split.length - 1].offsetHeight;
+      if (split) {
+        if (split.newPage && pages[pages.length - 1].length) pages.push([]);
+        split.chunks.forEach((c, n) => {
+          if (n > 0) pages.push([]);
+          pages[pages.length - 1].push(c.el);
+        });
+        // The chunks are not in the document yet, so their height cannot be
+        // read off them — it is carried out of the split instead. Measuring a
+        // detached node returns 0, which told every following block the page
+        // was empty.
+        used = split.chunks[split.chunks.length - 1].height + margin;
         return;
       }
     }

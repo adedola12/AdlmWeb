@@ -19,6 +19,81 @@ function cellsOf(line) {
   return null;
 }
 
+/* ------------------------------------------------------------- table columns
+
+   These were a guess: 54% to the first column and the rest split evenly, with
+   everything but the first right-aligned. That is the shape of an invoice —
+   one wide description and a row of figures — and it is wrong for every table
+   that is prose. On the programme outline it gave "Week" more room than "What
+   participants do", and set five words of description hard against the right
+   edge.
+
+   So the table is measured instead. A column's width follows how much text is
+   actually in it, damped by a power of 0.7 so that one very long column widens
+   without swallowing the others, and clamped so no column is too narrow to
+   hold its own heading. Alignment follows the content too: figures right,
+   words left, decided by what is in the cells rather than by position.
+
+   This is the piece that has to hold for a document nobody has seen yet, so it
+   takes no view about what the table is for.                                */
+const NUMLIKE = /^[₦$£€]?\s*[-+]?[\d][\d,.\s]*%?$/;
+
+function measure(head, body) {
+  const stat = head.map((label, i) => {
+    let total = 0;
+    let filled = 0;
+    let numeric = 0;
+    body.forEach((r) => {
+      const v = String(r[i] == null ? "" : r[i]).trim();
+      total += v.length;
+      if (!v) return;
+      filled++;
+      if (NUMLIKE.test(v)) numeric++;
+    });
+    const mean = body.length ? total / body.length : 0;
+    return {
+      label,
+      // The heading counts as content: a column of one-word answers under a
+      // three-word heading still has to be wide enough for the heading.
+      score: Math.max(String(label).length * 0.85, mean, 3),
+      numeric: filled ? numeric / filled : 0,
+    };
+  });
+
+  const raw = stat.map((c) => Math.pow(c.score, 0.7));
+  const sum = raw.reduce((a, b) => a + b, 0) || 1;
+  let pct = raw.map((x) => (x / sum) * 100);
+
+  // Clamp, then give the difference back to the columns that were not clamped,
+  // so the row still adds to 100.
+  const MIN = 9;
+  const MAX = 46;
+  let fixed = 0;
+  let free = 0;
+  pct = pct.map((x) => {
+    if (x < MIN) {
+      fixed += MIN;
+      return MIN;
+    }
+    if (x > MAX) {
+      fixed += MAX;
+      return MAX;
+    }
+    free += x;
+    return x;
+  });
+  const room = 100 - fixed;
+  if (free > 0 && room > 0) {
+    pct = pct.map((x) => (x === MIN || x === MAX ? x : (x / free) * room));
+  }
+
+  return stat.map((c, i) => ({
+    label: c.label,
+    align: c.numeric >= 0.7 ? "right" : "left",
+    width: `${Math.round(pct[i] * 10) / 10}%`,
+  }));
+}
+
 function titleCase(s) {
   return String(s)
     .toLowerCase()
@@ -53,11 +128,7 @@ export function parseDocument(text) {
     const head = table[0];
     out.push({
       type: "table",
-      columns: head.map((c, i) => ({
-        label: c,
-        align: i ? "right" : "left",
-        width: i ? `${Math.floor(46 / (head.length - 1))}%` : "54%",
-      })),
+      columns: measure(head, table.slice(1)),
       rows: table.slice(1).map((r) => {
         const cells = r.slice(0, head.length);
         while (cells.length < head.length) cells.push("");
@@ -99,10 +170,13 @@ export function parseDocument(text) {
       return;
     }
 
-    const m = l.match(/^(#{1,3})\s+(.*)$/);
+    // Six hashes in, three levels out. Word documents and markdown both go
+    // deeper than the sheet has sizes for, and a #### that parsed as nothing
+    // used to land in the document as a paragraph beginning with hashes.
+    const m = l.match(/^(#{1,6})\s+(.*)$/);
     if (m) {
       flushAll();
-      out.push({ type: "heading", level: m[1].length === 1 ? 1 : 2, text: m[2].trim() });
+      out.push({ type: "heading", level: Math.min(3, m[1].length), text: m[2].trim() });
       return;
     }
 
@@ -124,7 +198,9 @@ export function parseDocument(text) {
       !cellsOf(l)
     ) {
       flushAll();
-      out.push({ type: "heading", level: 2, text: titleCase(l) });
+      // The first one is the document's own name; the rest are sections. A
+      // document that opens on a line in capitals is naming itself.
+      out.push({ type: "heading", level: out.length ? 2 : 1, text: titleCase(l) });
       return;
     }
 

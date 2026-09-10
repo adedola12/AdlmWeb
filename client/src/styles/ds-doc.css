@@ -173,14 +173,38 @@
 
 
 /* ---------------------------------------------------------------- blocks */
-.ds .doc-h{margin:0 0 14pt var(--doc-gutter);font-size:10pt;font-weight:600;line-height:16pt;
-  color:#303030;letter-spacing:-.2pt}
-.ds .doc-h.doc-h-1{font-weight:700;text-transform:uppercase;line-height:1.45;margin-bottom:18pt}
-.ds .doc-h.doc-c{text-align:center}
-.ds .doc-h + .doc-h{margin-top:-6pt}
 
-/* a heading that follows body copy needs the space above it, not just below */
-.ds .doc-p + .doc-h, .ds .doc-ul + .doc-h, .ds .doc-table-wrap + .doc-h{margin-top:16pt}
+/* ---------------------------------------------------------------- the scale
+   There were two heading levels and both were 10pt — the same size as the body
+   — so a heading was body text in bold and a title was body text in bold
+   capitals. Nothing on the page said "this is the name of the document" except
+   weight, and weight alone does not carry that far down an A4 sheet.
+
+   Three levels now, each a real step, measured against a 10pt body:
+
+     1  the document's own name, once, at the top          17pt
+     2  a section of it                                    12.5pt
+     3  a sub-section, set as a small caps eyebrow         9.5pt
+
+   The title is sentence case. It was uppercase, which is defensible on a two
+   word letterhead heading and shouts on "Beyond BIM: Modern roles of a
+   Quantity Surveyor".                                                        */
+.ds .doc-h{margin:0 0 12pt var(--doc-gutter);font-weight:600;color:var(--doc-navy);
+  letter-spacing:-.02em;text-wrap:balance}
+.ds .doc-h-1{font-size:17pt;line-height:1.16;margin-bottom:4pt;letter-spacing:-.032em}
+.ds .doc-h-2{font-size:12.5pt;line-height:1.25;margin-bottom:9pt;letter-spacing:-.024em}
+.ds .doc-h-3{font-size:9.5pt;line-height:1.35;margin-bottom:7pt;font-weight:600;
+  text-transform:uppercase;letter-spacing:.075em;color:var(--doc-blue)}
+.ds .doc-h.doc-c{text-align:center}
+
+
+/* A title is followed by its standfirst, not by a gap; a section heading needs
+   air above it, and two headings in a row are one unit. */
+.ds .doc-h-1 + .doc-p{margin-top:0}
+.ds .doc-h + .doc-h{margin-top:2pt}
+.ds .doc-p + .doc-h-2, .ds .doc-ul + .doc-h-2, .ds .doc-table-wrap + .doc-h-2{margin-top:20pt}
+.ds .doc-p + .doc-h-3, .ds .doc-ul + .doc-h-3, .ds .doc-table-wrap + .doc-h-3{margin-top:15pt}
+.ds .doc-p + .doc-h-1, .ds .doc-ul + .doc-h-1, .ds .doc-table-wrap + .doc-h-1{margin-top:22pt}
 .ds .doc-p{margin:0 0 13pt var(--doc-gutter);font-size:10pt;font-weight:300;line-height:16pt;
   color:#303030;letter-spacing:-.2pt;text-align:justify}
 .ds .doc-ul{margin:0 0 15pt var(--doc-gutter);padding-left:15pt;list-style:disc}
@@ -217,6 +241,7 @@
 .ds .doc-table thead th:last-child{border-radius:0 4.7pt 0 0}
 .ds .doc-table thead th.doc-l{text-align:left}
 .ds .doc-table thead th.doc-r{text-align:right}
+.ds .doc-table td, .ds .doc-table th{overflow-wrap:anywhere}
 .ds .doc-table tbody td{
   padding:var(--doc-table-pad);color:#303030;font-weight:400;vertical-align:top;
   line-height:1.35;text-align:center}
@@ -313,6 +338,22 @@
 .ds .doc-zoom{transform-origin:top center}
 @media print{
 @page{size:A4;margin:0}
+
+
+  /* Print the colour. Every browser drops background colours when printing
+     unless the page says otherwise — "Background graphics" is a checkbox in the
+     print dialog and it is off by default. On this document that is not a
+     cosmetic loss: the table header is white text on navy and the totals bars
+     are white text on navy, so dropping the fill does not grey them, it makes
+     them INVISIBLE. A header that vanishes on the printed copy while sitting
+     there on screen is the worst kind of difference between the two, because
+     nobody discovers it until the document has been sent.
+
+     The letterhead band, the row banding and the accent rules go the same way.
+     A document engine cannot render differently depending on a browser default. */
+:root, .ds, .ds .doc-sheet, .ds .doc-sheet *{
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact}
 :root, .ds{margin:0;padding:0;background:#fff;width:auto;height:auto;overflow:visible}
 .ds .nav, .ds .npanel, .ds .mnav, .ds .promo, .ds .foot, .ds footer, .ds .doc-noprint{display:none !important}
 .ds .ds *{visibility:hidden}
@@ -333,8 +374,24 @@
 .ds .docp-main .doc-stage{overflow:visible}
 
 
-  /* a table that is split across sheets repeats its header on each one */
-.ds .doc-table thead{display:table-header-group}
+  /* The header is an ordinary row on paper, NOT a repeating header group.
+
+     table-header-group asks the printer to lift the header out of the flow and
+     redraw it at the top of every fragment of the table. That made sense when
+     the browser was doing the page breaking. It is not doing the page breaking:
+     paginate() splits the table itself and emits a real <thead> into every
+     chunk, so each sheet already has its own header sitting in the normal flow.
+
+     Asking for the repeat on top of that is redundant at best — and at worst it
+     hands the header to Chrome's repeated-header path, where it is hoisted out
+     of the paint order for a fragment that never comes, and simply does not
+     appear on the page. Which is what Richard was seeing: a header present in
+     the DOM, correct on screen, correct through headless printing, and gone in
+     the print preview.
+
+     As a plain row group there is nothing special for the printer to do with
+     it, and it prints where it sits. */
+.ds .doc-table thead{display:table-row-group}
 .ds .doc-table tr{break-inside:avoid;page-break-inside:avoid}
 .ds .doc-noprint{display:none !important}
 }

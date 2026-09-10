@@ -1388,3 +1388,18 @@
   color:var(--ink-2);text-decoration:none}
 .ds .adm-memenu a:hover{background:var(--pal-light-wash);color:var(--ink)}
 .ds .adm-memenu a.out{color:var(--ink-3)}
+
+
+/* ---- the composer's style row ---------------------------------------------
+   What a block IS, as one group of five, set apart from the verbs beside it by
+   a hairline and a slightly darker well — so "Title / Heading / Sub-heading /
+   Text / List" reads as one choice rather than five more buttons. The one it
+   already is stays lit, because a scale with nothing marked is a row of
+   suggestions. */
+.ds .adm-tools-g{display:inline-flex;gap:1px;padding:1px;border-radius:7px;
+  background:rgba(255,255,255,.09);margin-right:5px}
+.ds .adm-tools-g + button{position:relative}
+.ds .adm-tools-g + button::before{content:"";position:absolute;left:-3px;top:5px;bottom:5px;
+  width:1px;background:rgba(255,255,255,.16)}
+.ds .adm-tools .adm-tools-g button.on{background:var(--action,#239CFF);opacity:1;font-weight:500}
+.ds .adm-tools .adm-tools-g button.on:hover{background:var(--action,#239CFF)}

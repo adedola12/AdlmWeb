@@ -34,6 +34,7 @@ import { mount } from "./adlmDoc.js";
 import "../styles/ds-admin.css";
 import "../styles/ds-doc.css";
 import { parseDocument } from "./docParser.js";
+import { readDocx } from "./docxFile.js";
 import { sampleFor, ALL_SAMPLES } from "./docSamples.js";
 
 // The in-progress document, so a refresh does not lose it. NOT the library —
@@ -87,6 +88,10 @@ function writeDraft(d) {
 }
 
 const READABLE = /\.(txt|md|markdown|csv|tsv|json|html?)$/i;
+
+// A .docx is read by docxFile.js rather than by FileReader, because it is a
+// ZIP and reading it as text gets you the bytes of a ZIP.
+const WORD = /\.docx$/i;
 
 // ── the screen ─────────────────────────────────────────────────────────────
 
@@ -218,6 +223,21 @@ export default function DsDocComposer() {
 
   const loadFile = React.useCallback((file) => {
     if (!file) return;
+
+    // Word first: a document somebody wrote in Word is the commonest thing
+    // there is to bring in here, and it carries structure that a paste of the
+    // same text throws away — headings, bullets and the shape of a table.
+    if (WORD.test(file.name)) {
+      setProblem("");
+      readDocx(file)
+        .then((text) => {
+          setSource(text);
+          if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, ""));
+        })
+        .catch((err) => setProblem(err?.message || `${file.name} could not be read.`));
+      return;
+    }
+
     if (!READABLE.test(file.name)) {
       setProblem(
         `${file.name} is not a text file. Paste the text instead, or save it as .txt, .md or .csv first.`,
@@ -477,7 +497,7 @@ export default function DsDocComposer() {
               <div className={dropping ? "adm-src over" : "adm-src"}>
                 <h3>What goes in</h3>
                 <p className="adm-sub">
-                  Paste the text, or drop a file anywhere on this panel. Plain text, Markdown,
+                  Paste the text, or drop a file anywhere on this panel. Word, plain text, Markdown,
                   CSV, TSV, JSON and HTML are all read here in the browser — the house style is
                   applied on the right.
                 </p>
@@ -497,7 +517,7 @@ export default function DsDocComposer() {
                 >
                   <input
                     type="file"
-                    accept=".txt,.md,.markdown,.csv,.tsv,.json,.html,.htm"
+                    accept=".docx,.txt,.md,.markdown,.csv,.tsv,.json,.html,.htm"
                     onChange={(e) => loadFile(e.target.files?.[0])}
                   />
                   <span>or drop it here</span>
