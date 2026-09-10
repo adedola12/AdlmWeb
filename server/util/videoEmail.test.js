@@ -106,6 +106,18 @@ test("the HTML carries the greeting, excerpt, linked thumbnail, CTA and signatur
   assert.match(html, /bgcolor="#1E6BCC"/, "the CTA is Blue");
   assert.match(html, /Watch the video/);
   assert.match(html, /Adedolapo Quasim/);
+
+  // The title appears in the sentence, and NOT also as a headline above the
+  // greeting. It was both, and it read as a bug: a banner saying the video's
+  // name with "I just published a new video: <the same name>" directly under
+  // it. Once in the visible body is the whole assertion.
+  const inBody = html.slice(html.indexOf("Hi Adedolapo"));
+  assert.equal(
+    (inBody.match(/Taking off a slab in QUIV/g) || []).length,
+    2,
+    "once in the sentence, once as the image alt — not a third time as a headline",
+  );
+  assert.ok(!/<h1/i.test(html), "no headline element at all");
   assert.match(html, /CEO, ADLM Studio/);
   assert.match(html, /If it raises a question about your own project, reply to this mail\./);
 

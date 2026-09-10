@@ -204,15 +204,16 @@ export function newVideoMessage({
             </td>
           </tr>
 
+          <!-- Deliberately no headline element carrying the title.
+               There was one, and it read as a mistake: the headline gave the
+               video's name and the very next line said "I just published a new
+               video:" followed by the same name again. It also set the wrong
+               register — a banner above the greeting is a newsletter, and this
+               is meant to read as a note from one person. The title still
+               carries: it is the subject line, it is bold in the sentence
+               below, and it is the image's alt text. -->
           <tr>
-            <td style="padding:18px 32px 0">
-              <h1 style="margin:0 0 16px;font-family:${FONT};font-size:22px;line-height:1.3;
-                         color:${NAVY};font-weight:700">${t}</h1>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:0 32px;font-family:${FONT};font-size:15px;line-height:1.65;color:${INK_2}">
+            <td style="padding:20px 32px 0;font-family:${FONT};font-size:15px;line-height:1.65;color:${INK_2}">
               <p style="margin:0 0 14px">Hi ${esc(name)},</p>
               <p style="margin:0 0 14px">I just published a new video: <strong style="color:${NAVY}">${t}</strong></p>
               ${excerpt ? `<p style="margin:0 0 14px">${esc(excerpt)}</p>` : ""}
