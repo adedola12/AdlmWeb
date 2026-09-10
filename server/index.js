@@ -242,11 +242,16 @@ app.get(["/health", "/healthz"], (_req, res) => {
 // meant to be reached anonymously from end-user machines.
 app.use("/.well-known", wellKnownRoutes);
 
+// The network check behind /network-check on the site. Public, tiny, and it
+// answers with what it received rather than what it assumes; see routes/diag.js.
+app.use("/diag", diagRoutes);
+
 // Best-effort audit trail for the break-glass God support account. Mounted
 // before the routes so it observes every mutating request, but it never gates
 // (per-route auth still applies). See server/middleware/auditGod.js.
 import { auditGod } from "./middleware/auditGod.js";
 import { noStore } from "./middleware/noStore.js";
+import diagRoutes from "./routes/diag.js";
 app.use(auditGod);
 
 // Apply rate limiting to auth and device endpoints

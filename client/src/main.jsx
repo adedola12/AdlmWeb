@@ -84,6 +84,7 @@ import TrainingEnrollment from "./pages/TrainingEnrollment.jsx";
 import AdminPTrainings from "./pages/AdminPTrainings.jsx";
 
 import Freebies from "./pages/Freebies.jsx";
+import NetworkCheck from "./pages/NetworkCheck.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
 import AdminAiUsage from "./pages/AdminAiUsage.jsx";
@@ -165,6 +166,9 @@ const router = createBrowserRouter([
 
       { path: "testimonials", element: <Testimonials /> },
       { path: "support", element: <Support /> },
+      // Public on purpose: it exists for the moment the site says "Failed to
+      // fetch" and nothing else works, which is also when sign-in cannot help.
+      { path: "network-check", element: <NetworkCheck /> },
       {
         path: "support/request",
         element: (
