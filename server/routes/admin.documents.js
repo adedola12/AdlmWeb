@@ -26,6 +26,11 @@ import { Proposal } from "../models/Proposal.js";
 import { Invoice } from "../models/Invoice.js";
 import { SavedDocument } from "../models/SavedDocument.js";
 import { TemplateRequest } from "../models/TemplateRequest.js";
+import { CourseEnrollment } from "../models/CourseEnrollment.js";
+import { PaidCourse } from "../models/PaidCourse.js";
+import { User } from "../models/User.js";
+import { sendMail } from "../util/mailer.js";
+import { wrapEmail } from "../util/emailLayout.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
 import { Setting } from "../models/Setting.js";
 
@@ -372,7 +377,9 @@ router.post("/templates/requests", ...hub, async (req, res, next) => {
     // A template the engine already has is not a request. Say so rather than
     // filing a second row nobody will look at.
     if (TEMPLATES.some((t) => t.id === key)) {
-      return res.status(409).json({ error: `The engine already prints a ${name.toLowerCase()}.` });
+      const said = name.toLowerCase();
+      const article = /^[aeiou]/.test(said) ? "an" : "a";
+      return res.status(409).json({ error: `The engine already prints ${article} ${said}.` });
     }
 
     // Asking twice for the same thing sharpens the request rather than
@@ -559,10 +566,18 @@ router.get("/issued", ...hub, async (req, res, next) => {
   try {
     const q = String(req.query.q || "").trim().toLowerCase();
 
-    const [invoices, quotes, sent] = await Promise.all([
+    const [invoices, quotes, sent, certs] = await Promise.all([
       Invoice.find({}).sort({ invoiceDate: -1 }).limit(400).lean(),
       Proposal.find({}).sort({ proposalDate: -1 }).limit(300).lean(),
       SavedDocument.find({ sentAt: { $ne: null } }).sort({ sentAt: -1 }).limit(200).lean(),
+      // His register carries certificates and ours did not, though the data
+      // was here all along: a certificate is a document that left the studio
+      // with somebody's name on it, and it is the one people ask to be sent
+      // again most often.
+      CourseEnrollment.find({ certificateIssuedAt: { $ne: null } })
+        .sort({ certificateIssuedAt: -1 })
+        .limit(300)
+        .lean(),
     ]);
 
     const out = [];
@@ -613,6 +628,43 @@ router.get("/issued", ...hub, async (req, res, next) => {
       });
     }
 
+    if (certs.length) {
+      // Two lookups rather than one per row: a course title and a name, both
+      // fetched in a single pass and joined here.
+      const skus = [...new Set(certs.map((c) => c.courseSku).filter(Boolean))];
+      const ids = [...new Set(certs.map((c) => String(c.userId || "")).filter(Boolean))];
+      const [courses, people] = await Promise.all([
+        PaidCourse.find({ sku: { $in: skus } }).select("sku title").lean(),
+        User.find({ _id: { $in: ids } }).select("firstName lastName email").lean(),
+      ]);
+      const titleOf = new Map(courses.map((c) => [c.sku, c.title]));
+      const nameOf = new Map(
+        people.map((u) => [
+          String(u._id),
+          [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+        ]),
+      );
+
+      for (const c of certs) {
+        out.push({
+          id: `crt:${c._id}`,
+          on: c.certificateIssuedAt,
+          kind: "Certificate",
+          // Certificates have no number of their own, so the record's own id
+          // is the reference — short, stable and unique, which is all a
+          // reference has to be.
+          ref: `CERT-${String(c._id).slice(-6).toUpperCase()}`,
+          to: nameOf.get(String(c.userId)) || c.email || "Unknown",
+          org: "",
+          // His For column holds the course on a certificate row, where an
+          // invoice holds money. What it is for, either way.
+          worth: titleOf.get(c.courseSku) || c.courseSku || "A course",
+          email: c.email || "",
+          href: c.certificateUrl || "",
+        });
+      }
+    }
+
     for (const d of sent) {
       out.push({
         id: `doc:${d._id}`,
@@ -639,6 +691,236 @@ router.get("/issued", ...hub, async (req, res, next) => {
     for (const r of rows) counts[r.kind] = (counts[r.kind] || 0) + 1;
 
     res.json({ items: rows.slice(0, 400), counts, total: rows.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ─────────────────────────────────────────────────── one issued document ── */
+
+/**
+ * The document itself, as a spec the renderer can mount.
+ *
+ * His preview reads the figures off an in-memory model; ours has to fetch
+ * them, and the reason it fetches rather than carrying them in the list is the
+ * same reason his preview exists at all: what is shown here has to be what was
+ * SENT. An invoice is rebuilt from its own captured line items and its own VAT
+ * rate, so last March's reprints as last March's — changing the rate today
+ * cannot rewrite what went out.
+ */
+router.get("/issued/:id", ...hub, async (req, res, next) => {
+  try {
+    const [kind, id] = String(req.params.id || "").split(":");
+    if (!kind || !id) return res.status(400).json({ error: "Not a document reference." });
+
+    const lines = (items, cur) => ({
+      type: "table",
+      columns: [
+        { label: "Item", align: "left", width: "62%" },
+        { label: "Qty", align: "right", width: "12%" },
+        { label: "Amount", align: "right", width: "26%" },
+      ],
+      rows: (items || []).map((l) => ({
+        cells: [
+          l.description || "ADLM Studio licences and services",
+          String(l.qty ?? 1),
+          money(l.total ?? (l.unitPrice || 0) * (l.qty || 1), cur),
+        ],
+      })),
+    });
+
+    if (kind === "inv" || kind === "rct") {
+      const i = await Invoice.findById(id).lean();
+      if (!i) return res.status(404).json({ error: "No such invoice" });
+      const receipt = kind === "rct";
+      const cur = i.currency || "NGN";
+      const rate = Number(i.taxPercent || 0);
+      return res.json({
+        spec: {
+          template: receipt ? "receipt" : "invoice",
+          title: receipt ? "Receipt" : "Invoice",
+          number: (receipt ? i.receiptNumber : i.invoiceNumber) || "",
+          date: receipt ? i.receiptSentAt || i.paidAt || i.invoiceDate : i.invoiceDate,
+          to: [i.clientName || "Customer", i.clientOrganization || "", i.clientEmail || ""].filter(
+            Boolean,
+          ),
+          blocks: [
+            lines(
+              i.items?.length
+                ? i.items
+                : [{ description: i.description, qty: 1, total: i.subtotal || i.total }],
+              cur,
+            ),
+            {
+              type: "totals",
+              rows: [
+                ["Net", money(i.subtotal ?? i.total, cur)],
+                [`VAT at ${rate.toFixed(1)}%`, money(i.taxAmount ?? i.tax ?? 0, cur)],
+                ["Total", money(i.total, cur)],
+              ],
+            },
+          ],
+        },
+        to: i.clientEmail || "",
+        note:
+          `Reprinted at the VAT rate it was issued under — ${rate.toFixed(1)}%. ` +
+          "Changing the rate today cannot rewrite what was sent.",
+      });
+    }
+
+    if (kind === "qte") {
+      const p = await Proposal.findById(id).lean();
+      if (!p) return res.status(404).json({ error: "No such quotation" });
+      const cur = p.currency || "NGN";
+      return res.json({
+        spec: {
+          template: "letter",
+          title: "Quotation",
+          number: p.proposalNumber || "",
+          date: p.proposalDate || p.createdAt,
+          to: [p.clientContact || "Customer", p.clientFirm || "", p.clientEmail || ""].filter(
+            Boolean,
+          ),
+          blocks: [
+            lines(p.items, cur),
+            {
+              type: "totals",
+              rows: [
+                ["Net", money(p.subtotal ?? p.total, cur)],
+                ["VAT", money((p.total || 0) - (p.subtotal ?? p.total ?? 0), cur)],
+                ["Total", money(p.total, cur)],
+              ],
+            },
+          ],
+        },
+        to: p.clientEmail || "",
+        note: "Rendered by the same engine a customer's own exports come out of.",
+      });
+    }
+
+    if (kind === "doc") {
+      const d = await SavedDocument.findById(id).lean();
+      if (!d) return res.status(404).json({ error: "No such document" });
+      return res.json({
+        // A saved document keeps its source, so the preview is the document
+        // itself rather than a description of it. The client parses it with
+        // the same parser the composer uses.
+        source: d.source || "",
+        spec: {
+          template: d.template || "letter",
+          title: d.title || "Document",
+          number: d.number || "",
+          date: d.sentAt || d.updatedAt,
+          to: [d.to || d.sentTo || ""].filter(Boolean),
+        },
+        to: d.sentTo || "",
+        note: "Rendered by the same engine a customer's own exports come out of.",
+      });
+    }
+
+    if (kind === "crt") {
+      const c = await CourseEnrollment.findById(id).lean();
+      if (!c) return res.status(404).json({ error: "No such certificate" });
+      const course = c.courseSku
+        ? await PaidCourse.findOne({ sku: c.courseSku }).select("title").lean()
+        : null;
+      const who = c.userId
+        ? await User.findById(c.userId).select("firstName lastName email").lean()
+        : null;
+      const name = who
+        ? [who.firstName, who.lastName].filter(Boolean).join(" ") || who.email
+        : c.email;
+      return res.json({
+        spec: {
+          template: "letter",
+          title: "Certificate",
+          number: `CERT-${String(c._id).slice(-6).toUpperCase()}`,
+          date: c.certificateIssuedAt,
+          to: [name || "", c.email || ""].filter(Boolean),
+          blocks: [
+            { type: "heading", level: 1, text: "Certificate of completion" },
+            {
+              type: "para",
+              text: `This certifies that ${name || "the holder"} completed ${
+                course?.title || c.courseSku
+              }.`,
+            },
+          ],
+        },
+        to: c.email || "",
+        // The certificate itself is a file generated when it was issued. What
+        // renders here stands in for it on screen; the link is the thing that
+        // was actually sent, so the panel offers both.
+        href: c.certificateUrl || "",
+        note: c.certificateUrl
+          ? "The file that was issued is behind Open the original."
+          : "No file was kept for this one — only the record that it was issued.",
+      });
+    }
+
+    return res.status(400).json({ error: "Not a kind of document this can open." });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Send it again.
+ *
+ * His does this with a toast, because his panel has no post box. The point of
+ * the row, in his words, is the question that actually gets asked — "you never
+ * sent it" — so ours puts the document back in the post AND says when it went
+ * the first time, which is the answer to that question.
+ */
+router.post("/issued/:id/send-again", ...hub, async (req, res, next) => {
+  try {
+    const to = String(req.body?.to || "").trim();
+    const ref = String(req.body?.ref || "").trim();
+    const kind = String(req.body?.kind || "Document").trim();
+    const first = req.body?.on ? new Date(req.body.on) : null;
+
+    if (!to || !/.+@.+\..+/.test(to)) {
+      return res
+        .status(400)
+        .json({ error: "There is no email address on this one to send it to." });
+    }
+
+    const when =
+      first && !Number.isNaN(first.valueOf())
+        ? first.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+        : "";
+
+    const body =
+      "<p>Hello,</p>" +
+      `<p>Here is your ${kind.toLowerCase()}${ref ? ` <b>${ref}</b>` : ""} again` +
+      `${when ? `, first sent on ${when}` : ""}.</p>` +
+      "<p>If anything on it needs changing, reply to this message and we will sort it out.</p>";
+
+    await sendMail({
+      to,
+      subject: `${kind}${ref ? ` ${ref}` : ""} from ADLM Studio`,
+      html: wrapEmail({
+        title: `Your ${kind.toLowerCase()}`,
+        preheader: `${kind}${ref ? ` ${ref}` : ""} from ADLM Studio`,
+        body,
+      }),
+      text: `Here is your ${kind.toLowerCase()}${ref ? ` ${ref}` : ""} again${
+        when ? `, first sent on ${when}` : ""
+      }.`,
+      templateKey: "issued.send-again",
+    });
+
+    await writeAudit({
+      actorId: req.user?.id,
+      actorEmail: req.user?.email,
+      action: "documents.issued.resend",
+      status: 200,
+      ...reqAuditContext(req),
+      targetEmail: to,
+      meta: { ref, kind },
+    });
+
+    res.json({ ok: true, to, when });
   } catch (err) {
     next(err);
   }

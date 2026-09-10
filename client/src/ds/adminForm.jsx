@@ -31,7 +31,18 @@ import React from "react";
  * The panel itself. Closes on Escape and on the veil, because a modal that can
  * only be dismissed by finding a small × is a modal people feel trapped in.
  */
-export function AdmDrawer({ title, intro, note, children, foot, onClose, peek = false }) {
+// `wide` is his `spec.wide`, which adds the `doc` class: a drawer holding a
+// rendered A4 sheet needs 620px, not the 480px a form needs.
+export function AdmDrawer({
+  title,
+  intro,
+  note,
+  children,
+  foot,
+  onClose,
+  peek = false,
+  wide = false,
+}) {
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") onClose?.();
@@ -67,7 +78,7 @@ export function AdmDrawer({ title, intro, note, children, foot, onClose, peek = 
     <div className="adm-drawer-wrap">
       <div className="adm-drawer-veil" onClick={onClose} />
       <section
-        className={`adm-drawer${peek ? " peek" : ""}`}
+        className={`adm-drawer${peek ? " peek" : ""}${wide ? " doc" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

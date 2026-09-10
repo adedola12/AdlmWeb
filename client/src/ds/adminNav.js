@@ -96,6 +96,8 @@ export const NAV = [
       // The only mail the studio sends on its own initiative, so it sits
       // beside the ones it sends in reply rather than in a group of its own.
       { to: "/admin/campaigns", label: "Campaigns", icon: "ai-mail", area: "adminhub" },
+      // A recording made for one firm, shown on that firm's accounts only.
+      { to: "/admin/org-videos", label: "Org videos", icon: "hi-play", area: "orgvideos" },
       // Flyers and Freebies were their own entries because they are their own
       // collections. They are kinds inside Marketing now, which is his design
       // and the more honest one: adding a flyer and adding a testimonial are
@@ -114,7 +116,12 @@ export const NAV = [
       { to: "/admin/documents/templates", label: "Templates", icon: "hi-doc", area: "adminhub" },
       { to: "/admin/documents/saved", label: "Saved", icon: "hi-doc", area: "adminhub" },
       { to: "/admin/documents/issued", label: "Issued", icon: "hi-downloads", area: "adminhub" },
-      { to: "/admin/documents", label: "Saved", icon: "hi-doc", area: "adminhub" },
+      // /admin/documents — the quotations register that predates his split —
+      // sat here as a SECOND entry also labelled "Saved", so the rail offered
+      // the same word twice for two different screens. His group is Composer,
+      // Templates, Saved, Issued. The route stays so nothing linking to it
+      // breaks; it just no longer has a place in his rail, and what it showed
+      // is on Issued and under Commerce > Quotations anyway.
       { to: "/admin/audit-log", label: "Audit log", icon: "hi-shield", area: "adminhub", admin: true },
     ],
   },

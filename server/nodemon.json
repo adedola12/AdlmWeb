@@ -1,0 +1,4 @@
+{
+  "ignore": ["scripts/*.tmp.mjs", "*.tmp.mjs", "tmp/**"],
+  "ext": "js,mjs,cjs,json"
+}

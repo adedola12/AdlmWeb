@@ -142,23 +142,6 @@ const SCREENS = {
     ],
   },
 
-  issued: {
-    title: "Issued",
-    lede:
-      "Every document that has left the studio, newest first. It answers the question that " +
-      "actually gets asked — \"you never sent it\" — and it is assembled from the records that " +
-      "already know, rather than a second list somebody has to remember to write.",
-    path: "/admin/docs/issued",
-    search: "Search by reference, name, firm or address",
-    empty: ["Nothing issued", "No invoice, receipt or quotation has been raised."],
-    cols: () => [
-      { h: "Document", w: "24%", cell: (r) => <AdmTwo top={r.ref || r.kind} under={r.kind} /> },
-      { h: "To", w: "26%", cell: (r) => <AdmTwo top={r.to} under={r.org || r.email} /> },
-      { h: "Sent", cell: (r) => when(r.on) },
-      { h: "For", num: true, cell: (r) => r.worth || <AdmDim>—</AdmDim> },
-    ],
-  },
-
   system: {
     title: "System",
     lede:
@@ -182,35 +165,18 @@ export default function DsAdminDocuments({ screen }) {
   const { accessToken } = useAuth();
   const [d, setD] = React.useState(null);
   const [failed, setFailed] = React.useState(false);
-  const [q, setQ] = React.useState("");
 
   React.useEffect(() => {
     if (!accessToken || !S) return undefined;
     let alive = true;
     setD(null);
-    // Debounced only when there is something to debounce. Issued searches the
-    // server because it spans three collections — filtering the page in the
-    // browser would only search whatever had already been fetched, which is
-    // exactly the document somebody is looking for and cannot find.
-    const t = setTimeout(
-      () => {
-        apiAuthed(S.path, { token: accessToken, params: S.search && q ? { q } : {} })
-          .then((r) => alive && setD(r))
-          .catch(() => alive && setFailed(true));
-      },
-      S.search && q ? 220 : 0,
-    );
+    apiAuthed(S.path, { token: accessToken })
+      .then((r) => alive && setD(r))
+      .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
-      clearTimeout(t);
     };
-  }, [accessToken, S, q]);
-
-  // A screen change has to drop the term with it, or Issued's search silently
-  // filters a screen that has no search box to clear it from.
-  React.useEffect(() => {
-    setQ("");
-  }, [screen]);
+  }, [accessToken, S]);
 
   if (!S) return <p className="adm-note">No such screen.</p>;
   if (failed) {
@@ -271,22 +237,6 @@ export default function DsAdminDocuments({ screen }) {
         </div>
       ) : null}
 
-      {S.search ? (
-        <label className="adm-find">
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={S.search}
-            aria-label={S.search}
-          />
-          {d?.total > (d?.items || []).length ? (
-            <span className="adm-f-h">
-              Showing {num((d.items || []).length)} of {num(d.total)} — narrow it with a search.
-            </span>
-          ) : null}
-        </label>
-      ) : null}
 
       {!d ? (
         <p className="adm-note">Reading…</p>
