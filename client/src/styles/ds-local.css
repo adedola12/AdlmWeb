@@ -1145,3 +1145,16 @@
 .ds #videos .lgrid{margin-top:8px}
 .ds #videos .lmore{margin-top:26px}
 @media (max-width:640px){.ds .ds-lib{margin-top:48px;padding-top:36px}.ds .lib-shelf-head h3{font-size:19px}}
+
+
+/* ================================== the Allowed cell on the AI usage screen
+
+   OURS. A chip over a line of detail, which looks like his .adm-two and must
+   not use it: .adm-two span is display:block, and a chip IS a span — nested in
+   there it stopped hugging its text and stretched to the width of the column.
+
+   Same shape, own class. Used by src/ds/DsAdminAiUsage.jsx. */
+.ds .adm-allow { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.ds .adm-allow > span:last-child {
+  font-size: 11.5px; color: var(--ink-3); line-height: 1.35;
+}

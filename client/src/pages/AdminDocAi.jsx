@@ -1,8 +1,10 @@
-// Admin route wrapper — one of the Documents registers.
+// Admin route wrapper — AI spend, and what each account is allowed to spend.
+// Its own component rather than a row in the SCREENS map, because it is the
+// one of these that can be acted on: allowances are set from here.
 
 import React from "react";
-import DsAdminDocuments from "../ds/DsAdminDocuments.jsx";
+import DsAdminAiUsage from "../ds/DsAdminAiUsage.jsx";
 
 export default function AdminDocAi() {
-  return <DsAdminDocuments screen="ai" />;
+  return <DsAdminAiUsage />;
 }

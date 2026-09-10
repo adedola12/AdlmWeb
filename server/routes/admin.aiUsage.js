@@ -21,6 +21,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
+import { writeAudit, reqAuditContext } from "../util/audit.js";
 import { AiUsage } from "../models/AiUsage.js";
 import { AiAllocation } from "../models/AiAllocation.js";
 import { User } from "../models/User.js";
@@ -604,6 +605,130 @@ router.put("/allocations/user/:id", async (req, res) => {
   } catch (err) {
     console.error("[/admin/ai-usage/allocations/user] error:", err);
     res.status(500).json({ error: "Failed to save allocation" });
+  }
+});
+
+/**
+ * Sell somebody more.
+ *
+ * The PUT above replaces an allocation, which is the right shape for setting
+ * a policy and the wrong shape for the thing that actually happens most
+ * often: a customer hits their ceiling, pays for more, and somebody has to
+ * raise it TODAY without first reading back what the ceiling was and
+ * retyping it. Doing that through the PUT means a race — two administrators
+ * topping the same account up in the same minute, and the second one silently
+ * undoing the first — and it means the reason gets lost, because the notes
+ * field is one line that the next edit overwrites.
+ *
+ * So a top-up ADDS, and it appends rather than replaces. It also refuses to
+ * touch a cap of 0, because 0 is unlimited: adding a thousand calls to
+ * "unlimited" would quietly impose a limit of a thousand where none existed,
+ * which is the opposite of what somebody who has just paid should get.
+ *
+ * A user with no allocation of their own gets one seeded from the platform
+ * default first, so "add 500 calls" means 500 more than everyone else rather
+ * than 500 in total.
+ */
+router.post("/allocations/user/:id/top-up", async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: "Bad user id" });
+    const user = await User.findById(id).select("email").lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const add = {
+      calls: Math.max(0, Math.floor(Number(req.body?.calls) || 0)),
+      tokens: Math.max(0, Math.floor(Number(req.body?.tokens) || 0)),
+      costUsd: Math.max(0, Number(Number(req.body?.costUsd || 0).toFixed(2))),
+    };
+    if (!add.calls && !add.tokens && !add.costUsd) {
+      return res.status(400).json({ error: "Say how much to add." });
+    }
+
+    const why = String(req.body?.why || "").trim().slice(0, 200);
+    if (!why) {
+      return res.status(400).json({ error: "Say what this was for — an invoice number will do." });
+    }
+
+    // No allocation of their own yet: start from what they already had, which
+    // is the platform default, so an addition means more than everyone else.
+    let doc = await AiAllocation.findOne({ userId: id });
+    if (!doc) {
+      const def = await getDefaultAllocation();
+      doc = new AiAllocation({
+        scope: "user",
+        userId: id,
+        email: user.email || "",
+        enabled: true,
+        total: sanitizeLimit(def?.total),
+      });
+    }
+
+    const before = {
+      calls: Number(doc.total?.calls || 0),
+      tokens: Number(doc.total?.tokens || 0),
+      costUsd: Number(doc.total?.costUsd || 0),
+    };
+
+    // 0 is unlimited. Adding to it would impose a ceiling where there was
+    // none, so an unlimited dimension is left alone and said so in the reply.
+    const untouched = [];
+    const after = { ...before };
+    for (const k of ["calls", "tokens", "costUsd"]) {
+      if (!add[k]) continue;
+      if (before[k] === 0) {
+        untouched.push(k);
+        continue;
+      }
+      after[k] = before[k] + add[k];
+    }
+
+    doc.total = { ...(doc.total ? doc.total.toObject?.() ?? doc.total : {}), ...after };
+    // Paying for more implies being allowed to use it.
+    doc.enabled = true;
+    doc.notes = [
+      doc.notes,
+      `${new Date().toISOString().slice(0, 10)} +${
+        [
+          add.calls ? `${add.calls} calls` : "",
+          add.tokens ? `${add.tokens} tokens` : "",
+          add.costUsd ? `$${add.costUsd.toFixed(2)}` : "",
+        ]
+          .filter(Boolean)
+          .join(", ")
+      } — ${why} (${req.user?.email || "admin"})`,
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .slice(-2000);
+    doc.updatedBy = actorId(req);
+    doc.updatedByEmail = req.user?.email || "";
+
+    await doc.save();
+    invalidateAllocationCache(id);
+
+    await writeAudit({
+      actorId: req.user?.id || req.user?._id,
+      actorEmail: req.user?.email,
+      action: "ai.allocation.topup",
+      status: 200,
+      ...reqAuditContext(req),
+      targetEmail: user.email || "",
+      meta: { add, before, after, why, untouched },
+    });
+
+    res.json({
+      ok: true,
+      allocation: allocationOut(doc.toObject()),
+      before,
+      after,
+      // Named so the screen can say it rather than leaving somebody to notice
+      // that the number did not move.
+      untouched,
+    });
+  } catch (err) {
+    console.error("[/admin/ai-usage/allocations/user/top-up] error:", err);
+    res.status(500).json({ error: "Failed to top up" });
   }
 });
 

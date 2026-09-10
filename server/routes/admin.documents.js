@@ -21,6 +21,7 @@
 import express from "express";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { AiUsage } from "../models/AiUsage.js";
+import { AiAllocation } from "../models/AiAllocation.js";
 import { AuditLog } from "../models/AuditLog.js";
 import { Proposal } from "../models/Proposal.js";
 import { Invoice } from "../models/Invoice.js";
@@ -88,6 +89,45 @@ router.get("/ai-usage", ...hub, async (req, res, next) => {
       ]),
     ]);
 
+    // WHO SPENT IT HAS TO BE ACTIONABLE, NOT JUST READABLE
+    //
+    // The rows are grouped by email, because that is what a usage record
+    // carries. An allowance is held against a user id, so the two have to be
+    // joined before an administrator can do anything about a row: without the
+    // id, "this person is spending too much" is a fact with no button on it.
+    //
+    // Two queries for the whole page rather than one per row, and both are
+    // skipped entirely when nobody signed-in has spent anything.
+    const emails = [
+      ...new Set(byPerson.map((p) => (p._id.email || "").toLowerCase()).filter(Boolean)),
+    ];
+    let idOf = new Map();
+    let allowOf = new Map();
+    if (emails.length) {
+      const users = await User.find({ email: { $in: emails } })
+        .select("email")
+        .lean();
+      idOf = new Map(users.map((u) => [String(u.email || "").toLowerCase(), String(u._id)]));
+
+      const allocs = await AiAllocation.find({
+        scope: "user",
+        userId: { $in: [...idOf.values()] },
+      }).lean();
+      allowOf = new Map(allocs.map((a) => [String(a.userId), a]));
+    }
+
+    // The platform allowance every account falls back to, so a row can say
+    // what applies to it rather than only what it has of its own.
+    const fallback = await AiAllocation.findOne({ scope: "default" }).lean();
+
+    const limitOut = (l) => ({
+      enabled: l?.enabled !== false,
+      calls: Number(l?.calls || 0),
+      tokens: Number(l?.tokens || 0),
+      costUsd: Number(l?.costUsd || 0),
+      window: l?.window === "day" ? "day" : "month",
+    });
+
     res.json({
       items: byFeature.map((f) => ({
         id: f._id || "unattributed",
@@ -98,14 +138,44 @@ router.get("/ai-usage", ...hub, async (req, res, next) => {
         cost: f.cost,
         state: "active",
       })),
-      people: byPerson.map((p) => ({
-        id: p._id.email || "anonymous",
-        who: p._id.name || p._id.email || "Signed out",
-        email: p._id.email || "",
-        calls: p.calls,
-        cost: p.cost,
-        features: (p.features || []).filter(Boolean),
-      })),
+      people: byPerson.map((p) => {
+        const email = (p._id.email || "").toLowerCase();
+        const userId = idOf.get(email) || null;
+        const own = userId ? allowOf.get(userId) : null;
+        return {
+          id: p._id.email || "anonymous",
+          userId,
+          who: p._id.name || p._id.email || "Signed out",
+          email: p._id.email || "",
+          calls: p.calls,
+          cost: p.cost,
+          features: (p.features || []).filter(Boolean),
+          // What governs this row right now. "guest" is the signed-out
+          // bucket, which has a shared ceiling and no account to set one on.
+          governed: !userId ? "guest" : own ? (own.enabled === false ? "blocked" : "own") : "default",
+          allowance: own
+            ? {
+                enabled: own.enabled !== false,
+                total: limitOut(own.total),
+                notes: own.notes || "",
+                updatedByEmail: own.updatedByEmail || "",
+                updatedAt: own.updatedAt,
+              }
+            : null,
+        };
+      }),
+      // The default allowance travels with the page so the drawer can show what
+      // a person falls back to without a second round trip.
+      fallback: fallback
+        ? {
+            enabled: fallback.enabled !== false,
+            total: limitOut(fallback.total),
+            guestTotal: limitOut(fallback.guestTotal),
+            notes: fallback.notes || "",
+            updatedByEmail: fallback.updatedByEmail || "",
+            updatedAt: fallback.updatedAt,
+          }
+        : null,
       totals: totals[0] || { calls: 0, cost: 0, inTokens: 0, outTokens: 0 },
       days,
     });
