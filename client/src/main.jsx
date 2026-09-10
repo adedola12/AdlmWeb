@@ -45,6 +45,7 @@ import AdminCatRates from "./pages/AdminCatRates.jsx";
 import AdminCatSaved from "./pages/AdminCatSaved.jsx";
 import AdminRateBuilder from "./pages/AdminRateBuilder.jsx";
 import AdminDocAi from "./pages/AdminDocAi.jsx";
+import AdminDsCertificates from "./pages/AdminDsCertificates.jsx";
 import AdminTimeSaved from "./pages/AdminTimeSaved.jsx";
 import AdminDocAudit from "./pages/AdminDocAudit.jsx";
 import AdminDocTemplates from "./pages/AdminDocTemplates.jsx";
@@ -650,6 +651,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="adminhub">
             <AdminLcClassrooms />
+          </AdminRoute>
+        ),
+      },
+      // Every certificate the studio has issued, and the one verb that was
+      // missing entirely: withdrawing one.
+      {
+        path: "admin/certificates",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminDsCertificates />
           </AdminRoute>
         ),
       },

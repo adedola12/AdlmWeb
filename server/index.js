@@ -103,6 +103,8 @@ import modelCheckRoutes from "./routes/model-checks.js";
 import usageRoutes from "./routes/usage.js";
 import adminUsage from "./routes/admin.usage.js";
 import adminAiUsage from "./routes/admin.aiUsage.js";
+import adminCertificates from "./routes/admin.certificates.js";
+import verifyRoutes from "./routes/verify.js";
 import telemetryTakeoff from "./routes/telemetry.takeoff.js";
 import adminTakeoff from "./routes/admin.takeoff.js";
 
@@ -381,6 +383,9 @@ app.use("/rategen-v2", servicesRouter);
 app.use("/admin/rategen-v2", adminRateGenRates);
 app.use("/admin/rategen-v2", adminRateGenMaster);
 app.use("/admin/emails", adminEmails);
+app.use("/admin/certificates", adminCertificates);
+// Public on purpose: an employer checking a certificate has no account here.
+app.use("/verify", verifyRoutes);
 app.use("/admin/broadcast", adminBroadcast);
 app.use("/admin/campaigns", adminCampaigns);
 app.use("/admin/billboard", adminBillboard);

@@ -82,6 +82,9 @@ export const NAV = [
       { to: "/admin/quizzes", label: "Quizzes", icon: "hi-check", area: "learn" },
       { to: "/admin/physical-training", label: "Events", icon: "hi-calendar", area: "trainings" },
       { to: "/admin/classrooms", label: "Classrooms", icon: "hi-team", area: "trainings" },
+      // Issuing has always happened here; nothing ever looked over what had
+      // been issued, and there was no way to withdraw one.
+      { to: "/admin/certificates", label: "Certificates", icon: "hi-check", area: "adminhub" },
     ],
   },
   {
@@ -151,15 +154,12 @@ export const NAV = [
  * cannot offer them, and the port has a worklist instead of a vague sense that
  * something is outstanding.
  *
+ * Templates, Issued and Certificates have since been built and are in the rail.
+ * What is left:
+ *
  *   Ada review   — a queue of Ada's answers for a person to correct.
- *   Certificates — issuing exists; nothing looks over what was issued.
- *   Templates    — document templates are code, not records.
- *   Issued       — no register of what has gone out.
  */
-export const MISSING = [
-  "Ada review",
-  "Certificates",
-];
+export const MISSING = ["Ada review"];
 
 /**
  * The page name for his header, taken from the rail rather than passed in per
