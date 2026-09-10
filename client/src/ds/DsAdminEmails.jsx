@@ -38,6 +38,11 @@ export default function DsAdminEmails() {
   const [reload, setReload] = React.useState(0);
   const [open, setOpen] = React.useState(null); // { row, mode: "read"|"edit", body }
   const [busy, setBusy] = React.useState(false);
+  // Whether anything can actually send. Asked for only when somebody presses
+  // the button: it opens connections to every mail host we know about, which
+  // is not something a page should do on every visit.
+  const [ways, setWays] = React.useState(null);
+  const [checking, setChecking] = React.useState(false);
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
@@ -107,6 +112,18 @@ export default function DsAdminEmails() {
     }
   }
 
+  async function check() {
+    setChecking(true);
+    setWays(null);
+    try {
+      setWays(await apiAuthed("/admin/emails/health", { token: accessToken }));
+    } catch (err) {
+      setWays({ ok: false, ways: [{ via: "the check itself", ok: false, said: err?.message || "failed" }] });
+    } finally {
+      setChecking(false);
+    }
+  }
+
   if (failed) {
     return <p className="adm-note">Emails could not be loaded just now. Please refresh.</p>;
   }
@@ -167,7 +184,42 @@ export default function DsAdminEmails() {
             become readable and changeable without a developer.
           </p>
         </div>
+        <div id="adm-page-acts">
+          <button type="button" className="ds-btn btn-o ds-btn-sm" disabled={checking} onClick={check}>
+            {checking ? "Checking…" : "Can we send?"}
+          </button>
+        </div>
       </div>
+
+      {/* A fallback is only ever reached once the primary has failed, so a
+          broken one stays invisible until it is the only thing left. This is
+          how it gets looked at on an ordinary day. Nothing is sent. */}
+      {ways ? (
+        <div className="adm-merge" style={{ display: "block" }}>
+          <b>
+            {ways.ok
+              ? "There is a way out that has been checked."
+              : ways.reachable
+                ? "Nothing could be confirmed — see below."
+                : "Nothing can send."}
+          </b>
+          <table className="adm-table" style={{ marginTop: 10 }}>
+            <tbody>
+              {(ways.ways || []).map((w) => (
+                <tr key={w.via}>
+                  <td style={{ width: "30%" }}>{w.via}</td>
+                  <td style={{ width: "14%" }}>
+                    <AdmChip tone={w.unknown ? "calm" : w.ok ? "ok" : "bad"}>
+                      {w.unknown ? "unproven" : w.ok ? "works" : "refused"}
+                    </AdmChip>
+                  </td>
+                  <td>{w.said}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {!d ? (
         <p className="adm-note">Reading the messages…</p>
