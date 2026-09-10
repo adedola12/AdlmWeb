@@ -35,6 +35,8 @@ import {
   keysFor,
   presignArchivePut,
   discardOrgVideoObjects,
+  discardLadder,
+  probeMasterHeight,
   ORG_VIDEO_PREFIX,
 } from "../utils/orgVideoStorage.js";
 import { deleteFromR2 } from "../utils/r2Upload.js";
@@ -99,7 +101,16 @@ async function refreshTranscode(doc) {
     if (state.status === "COMPLETE") {
       doc.hlsKey = `${doc.outPrefix}index.m3u8`;
       doc.transcodeError = "";
-    } else if (state.status === "ERROR" || state.status === "CANCELED") {
+      // The new ladder is live, so whatever it replaced is now only costing
+      // storage. Cleared before the save and deleted after it: if the delete
+      // fails we lose some bytes, never the row's new manifest.
+      const replaced = doc.supersededPrefix || "";
+      doc.supersededPrefix = "";
+      await doc.save();
+      if (replaced && replaced !== doc.outPrefix) await discardLadder(replaced);
+      return doc;
+    }
+    if (state.status === "ERROR" || state.status === "CANCELED") {
       doc.transcodeError = state.errorMessage || `MediaConvert reported ${state.status}.`;
     }
     await doc.save();
@@ -109,14 +120,27 @@ async function refreshTranscode(doc) {
   return doc;
 }
 
-/** Submit (or resubmit) the ladder for a row whose master is in the archive. */
+/**
+ * Submit (or resubmit) the ladder for a row whose master is in the archive.
+ *
+ * Every encode gets its own directory (see keysFor). The one it replaces is
+ * remembered rather than deleted now: the old ladder stays playable for the
+ * minutes the new one takes, so nobody watching loses the picture mid-sentence.
+ */
 async function submitEncode(doc) {
-  const { outPrefix } = keysFor(doc);
+  const attempt = (doc.encodeAttempt || 0) + 1;
+  const { outPrefix } = keysFor(doc, attempt);
+  // Measured, not assumed: a rung above the master would be upscaled and
+  // billed at the higher tier for detail that is not in the file.
+  const sourceHeight = await probeMasterHeight(doc.sourceKey);
   const jobId = await submitHlsJob({
     sourceKey: doc.sourceKey,
     outPrefix,
     jobTag: `org-video:${doc._id}`,
+    sourceHeight,
   });
+  if (doc.outPrefix && doc.outPrefix !== outPrefix) doc.supersededPrefix = doc.outPrefix;
+  doc.encodeAttempt = attempt;
   doc.outPrefix = outPrefix;
   doc.transcodeJobId = jobId;
   doc.transcodeStatus = "SUBMITTED";
@@ -160,6 +184,11 @@ function maybeNotify(doc) {
 function clearStorage(doc) {
   doc.sourceKey = "";
   doc.outPrefix = "";
+  // Every ladder this row ever had has just been deleted from the root, so a
+  // remembered older one would only send the cleanup after objects that are
+  // already gone. The attempt counter is NOT reset: prefixes must stay unique
+  // across a replaced file too, or the new encode inherits a cached manifest.
+  doc.supersededPrefix = "";
   doc.hlsKey = "";
   doc.transcodeJobId = "";
   doc.transcodeStatus = "";

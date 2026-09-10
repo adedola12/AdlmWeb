@@ -189,12 +189,32 @@ function useHlsSource(videoRef, src) {
         // bandwidth by making the toolbars illegible — the blurry-playback
         // complaint the ladder was built to fix in the first place.
 
-        // hls.js assumes a fast connection until it has measured one, which on
-        // a slow link means starting at 720p and stalling before the estimate
-        // catches up. Starting the guess low costs a few seconds at a lower
-        // rung and climbs within one segment; guessing high costs a stall on
-        // the opening minute of every lecture.
-        abrEwmaDefaultEstimate: 600_000,
+        // NO abrEwmaDefaultEstimate. There was one here, set to 600 kbps, on
+        // the reasoning that guessing low costs a few seconds at a lower rung
+        // while guessing high costs a stall. The reasoning was wrong about
+        // what the option does.
+        //
+        // 600 kbps sits BELOW the bottom rung's advertised bandwidth, so it
+        // did not merely start conservatively — it pinned the opening segment
+        // to 428x240 and, by supplying an estimate at all, replaced hls.js's
+        // own first-variant bootstrap, which otherwise seeds from the manifest.
+        // On a Revit screen recording, 240p is not a cautious start, it is no
+        // text at all, and the climb back up is gated on measured throughput
+        // that only accumulates while the picture is already unusable.
+        //
+        // The mechanism, so this is not re-added as a "safer" number: hls.js
+        // seeds its estimate from the first variant in the manifest, capped at
+        // abrEwmaDefaultEstimateMax (5 Mbps), and it does that ONLY when the
+        // option is absent from userConfig — level-controller.ts guards the
+        // whole block with `userConfig?.abrEwmaDefaultEstimate === undefined`.
+        // Supplying any value, high or low, switches the bootstrap off. So the
+        // fix is to delete the option, not to raise it.
+        //
+        // MediaConvert writes the manifest highest rung first, so the seed is
+        // the top rung and playback opens sharp, then adapts DOWN within a
+        // segment if the connection cannot hold it. That is the right way round
+        // for content whose entire value is legibility: be readable immediately
+        // and drop if you must, rather than open unusable and hope to recover.
       });
       hls.loadSource(src);
       hls.attachMedia(video);
