@@ -46,6 +46,69 @@ export function readUnsubscribeToken(token) {
 export const unsubscribeUrl = (userId) =>
   `${SITE}/unsubscribe?t=${encodeURIComponent(unsubscribeToken(userId))}`;
 
+/* ────────────────────────────────────────────────────── topic unsubscribe ── */
+
+/**
+ * The same idea, scoped to ONE kind of mail.
+ *
+ * The plain token above says "this is user X" and the route it opens turns off
+ * marketing. As soon as there is more than one list, that is too blunt: a
+ * token minted for the video list must not be usable to switch off everything
+ * else, or a leaked link from a tutorial announcement quietly costs the
+ * account its renewal notices too.
+ *
+ * So the topic is INSIDE the signed material rather than beside it. Changing
+ * `videos` to `marketing` in the URL changes what is hashed, the MAC no longer
+ * matches, and the link is refused. That is the whole mechanism — there is
+ * nothing to look up and nothing to store.
+ */
+const signTopic = (topic, id) =>
+  crypto
+    .createHmac("sha256", SECRET)
+    .update(`${topic}:${id}`)
+    .digest("hex")
+    .slice(0, 32);
+
+export function topicUnsubscribeToken(topic, userId) {
+  return `${topic}.${userId}.${signTopic(topic, userId)}`;
+}
+
+/**
+ * Returns the user id, or null if the token is not one we issued FOR THIS
+ * TOPIC. A well-formed token for a different topic is rejected, not accepted
+ * as a general-purpose unsubscribe.
+ */
+export function readTopicUnsubscribeToken(topic, token) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3) return null;
+  const [gotTopic, id, mac] = parts;
+  if (!gotTopic || !id || !mac) return null;
+  // Compared before the MAC so a mismatched topic is refused on its own terms
+  // rather than surfacing as a confusing signature failure.
+  if (gotTopic !== topic) return null;
+
+  const expect = Buffer.from(signTopic(topic, id));
+  const got = Buffer.from(mac);
+  // timingSafeEqual throws on a length mismatch, so the length is checked
+  // first — a truncated token must be refused, not crash the request.
+  if (expect.length !== got.length || !crypto.timingSafeEqual(expect, got)) return null;
+  return id;
+}
+
+export const VIDEO_TOPIC = "videos";
+
+/**
+ * Where the "stop these" line in a video announcement points.
+ *
+ * Absolute, and built from PUBLIC_SITE_URL rather than the request, because
+ * the only place this URL is ever read is an inbox — there is no request to
+ * take a host from by the time somebody clicks it.
+ */
+export const videoUnsubscribeUrl = (userId) =>
+  `${SITE}/api/email/unsubscribe/${encodeURIComponent(
+    topicUnsubscribeToken(VIDEO_TOPIC, userId),
+  )}`;
+
 /* ─────────────────────────────────────────────────────────────── audiences ── */
 
 /**

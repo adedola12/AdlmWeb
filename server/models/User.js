@@ -259,6 +259,21 @@ const UserSchema = new mongoose.Schema(
       // Why it went off. "asked" is somebody clicking unsubscribe; "bounced"
       // is us switching it off because the address stopped accepting mail.
       marketingOffReason: { type: String, default: "" },
+
+      /**
+       * "Tell me when ADLM Studio publishes a video."
+       *
+       * A SEPARATE switch from `marketing`, not a sub-case of it. Somebody who
+       * does not want offers may well still want the tutorials — those are the
+       * reason a lot of these accounts exist — and folding the two together
+       * would mean the only way to keep the videos is to keep the offers.
+       *
+       * Default true, and read with `!== false` everywhere, so an account
+       * created before this field existed is opted IN rather than silently
+       * dropped from the list.
+       */
+      videoUpdates: { type: Boolean, default: true },
+      videoUpdatesChangedAt: { type: Date, default: null },
     },
   },
   { timestamps: true },
