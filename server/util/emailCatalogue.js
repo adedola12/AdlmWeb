@@ -145,6 +145,16 @@ export const EMAILS = [
     editable: true,
   },
   {
+    key: "video.published",
+    name: "New video on the channel",
+    when: "ADLM Studio publishes a video, found by the poller or announced by hand",
+    file: "util/videoEmail.js",
+    editable: false,
+    why:
+      "The wording is built around the video's own title, description and thumbnail, " +
+      "so there is nothing fixed to rewrite. Change what it says in util/videoEmail.js.",
+  },
+  {
     key: "entitlement.boq-import",
     name: "BoQ Import activated",
     when: "An admin grants the BoQ Import entitlement",

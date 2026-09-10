@@ -656,6 +656,10 @@ router.get(
         billing: u.notifications?.billing ?? true,
         seatsAndMembers: u.notifications?.seatsAndMembers ?? true,
         coursesAndEvents: u.notifications?.coursesAndEvents ?? false,
+        // Served alongside the other four so the settings screen has one
+        // shape to read, but it does NOT live in `notifications` — see the
+        // note on the POST below for why it is read out of emailPrefs.
+        videoUpdates: u.emailPrefs?.videoUpdates !== false,
       },
     });
   }),
@@ -1974,6 +1978,22 @@ router.post(
       if (typeof body[k] === "boolean") user.notifications[k] = body[k];
     }
 
+    /**
+     * videoUpdates is served and accepted here with the others, but it is
+     * STORED in emailPrefs, not in notifications.
+     *
+     * Because emailPrefs is what the send loop reads, and what the unsubscribe
+     * link in every video announcement writes. Kept in `notifications` as
+     * well, there would be two records of one decision, and the day they
+     * disagreed the switch on this screen would say "off" while the mail kept
+     * arriving. One truth, two ways in.
+     */
+    if (typeof body.videoUpdates === "boolean") {
+      user.emailPrefs = user.emailPrefs || {};
+      user.emailPrefs.videoUpdates = body.videoUpdates;
+      user.emailPrefs.videoUpdatesChangedAt = new Date();
+    }
+
     await user.save();
 
     return res.json({
@@ -1983,6 +2003,7 @@ router.post(
         billing: user.notifications.billing ?? true,
         seatsAndMembers: user.notifications.seatsAndMembers ?? true,
         coursesAndEvents: user.notifications.coursesAndEvents ?? false,
+        videoUpdates: user.emailPrefs?.videoUpdates !== false,
       },
     });
   }),

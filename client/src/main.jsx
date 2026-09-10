@@ -55,8 +55,10 @@ import AdminDocSystem from "./pages/AdminDocSystem.jsx";
 import AdminStorage from "./pages/AdminStorage.jsx";
 import AdminEmails from "./pages/AdminEmails.jsx";
 import AdminCampaigns from "./pages/AdminCampaigns.jsx";
+import AdminVideos from "./pages/AdminVideos.jsx";
 import AdminBillboard from "./pages/AdminBillboard.jsx";
 import AdminDsWaitlist from "./pages/AdminDsWaitlist.jsx";
+import AdminDsOrgVideos from "./pages/AdminDsOrgVideos.jsx";
 import AdminLcCourses from "./pages/AdminLcCourses.jsx";
 import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
 import AdminLcLessons from "./pages/AdminLcLessons.jsx";
@@ -604,6 +606,14 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: "admin/videos",
+        element: (
+          <AdminRoute permission="adminhub">
+            <AdminVideos />
+          </AdminRoute>
+        ),
+      },
+      {
         path: "admin/billboard",
         element: (
           <AdminRoute permission="adminhub">
@@ -939,6 +949,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="waitlist">
             <AdminDsWaitlist />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Organisation videos — staff-grantable ("orgvideos" area)
+      {
+        path: "admin/org-videos",
+        element: (
+          <AdminRoute permission="orgvideos">
+            <AdminDsOrgVideos />
           </AdminRoute>
         ),
       },

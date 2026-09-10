@@ -106,6 +106,7 @@ export default function DsSettings() {
             billing: true,
             seatsAndMembers: true,
             coursesAndEvents: false,
+            videoUpdates: true,
           },
         );
         setForm({
@@ -760,6 +761,16 @@ export default function DsSettings() {
                     k: "coursesAndEvents",
                     t: "Courses and events",
                     d: "New courses, training dates and free lessons. Off by default.",
+                  },
+                  {
+                    // Stored in emailPrefs rather than notifications, because
+                    // that is what the unsubscribe link in every video
+                    // announcement writes. POST /me/notifications takes it
+                    // with the rest and files it in the right place, so this
+                    // screen does not need to know the difference.
+                    k: "videoUpdates",
+                    t: "New videos",
+                    d: "An email when ADLM Studio publishes a video on YouTube.",
                   },
                 ].map((row) => (
                   <label className="dsh-toggle" key={row.k}>

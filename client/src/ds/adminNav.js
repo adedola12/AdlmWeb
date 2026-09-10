@@ -96,6 +96,10 @@ export const NAV = [
       // The only mail the studio sends on its own initiative, so it sits
       // beside the ones it sends in reply rather than in a group of its own.
       { to: "/admin/campaigns", label: "Campaigns", icon: "ai-mail", area: "adminhub" },
+      // Sits beside Campaigns because it is the same kind of thing — mail the
+      // studio sends on its own initiative — and unlike Campaigns most of the
+      // screen is a record of what the poller already did.
+      { to: "/admin/videos", label: "Videos", icon: "hi-play", area: "adminhub" },
       // A recording made for one firm, shown on that firm's accounts only.
       { to: "/admin/org-videos", label: "Org videos", icon: "hi-play", area: "orgvideos" },
       // Flyers and Freebies were their own entries because they are their own
