@@ -1042,6 +1042,21 @@
   border-left: 1px solid var(--line);
 }
 
+/* Two screens share the class name .adm-split: his composer (source | sheet)
+   and our Submissions screen (queue | viewer, further up this file). The
+   Submissions rule sets align-items:start so its viewer sits at the top of the
+   row, and that reached the composer too. A start-aligned grid item is sized
+   by its content instead of stretched to the row, so the sheet column grew to
+   the height of every page, .adm-compose clipped it with overflow:hidden, and
+   nothing scrolled - the document just stopped at the bottom of the window.
+   Stretching puts the column back to the row's height, which lets .doc-stage
+   be the scroll container his admin.css intends (and .adm-src likewise). The
+   20px gap is Submissions' too; his panes meet at a hairline. */
+.ds .adm-compose .adm-split {
+  align-items: stretch;
+  gap: 0;
+}
+
 /* Hiding the source gives the sheet the whole width. */
 .ds .adm-split.is-solo { grid-template-columns: 1fr; }
 
