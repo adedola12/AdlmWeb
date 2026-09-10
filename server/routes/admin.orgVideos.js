@@ -38,6 +38,7 @@ import {
   ORG_VIDEO_PREFIX,
 } from "../utils/orgVideoStorage.js";
 import { deleteFromR2 } from "../utils/r2Upload.js";
+import { notifyOrgVideoReady } from "../util/orgVideoMail.js";
 
 const router = express.Router();
 router.use(requireAuth, requirePermission("orgvideos"));
@@ -137,6 +138,23 @@ async function discardStored(doc) {
   } catch (e) {
     console.warn("[admin.orgVideos] could not discard stored file:", e?.message || e);
   }
+}
+
+/**
+ * Email the firm the first time a row is both published and watchable. Runs
+ * after the response has been decided, never before it, and never twice:
+ * `notifiedAt` is stamped before the mail goes so a slow send cannot race a
+ * second call into a duplicate.
+ */
+function maybeNotify(doc) {
+  const watchable = doc.source === "s3" ? !!doc.sourceKey : doc.source !== "none" && !!doc.videoUrl;
+  if (!doc.isPublished || !watchable || doc.notifiedAt) return;
+  doc.notifiedAt = new Date();
+  doc
+    .save()
+    .then(() => notifyOrgVideoReady(doc))
+    .then((r) => console.log(`[admin.orgVideos] "${doc.title}" announced to ${r?.sent ?? 0} account(s) at ${doc.orgName}`))
+    .catch((e) => console.warn("[admin.orgVideos] notify failed:", e?.message || e));
 }
 
 function clearStorage(doc) {
@@ -267,6 +285,9 @@ router.post("/", async (req, res) => {
       isPublished: req.body?.isPublished == null ? true : !!req.body.isPublished,
       createdBy: req.user?.id || req.user?._id || undefined,
     });
+    // A pasted link is watchable immediately; an upload announces itself
+    // from upload/done once the master is in.
+    maybeNotify(doc);
     return res.status(201).json({ ok: true, item: serialize(doc) });
   } catch (err) {
     console.error("[admin.orgVideos] create failed:", err);
@@ -314,6 +335,9 @@ router.patch("/:id", async (req, res) => {
     }
 
     await doc.save();
+    // Switching Live on, or pasting a link into a row that had nothing, is
+    // the moment the firm can watch — so it is the moment they hear about it.
+    maybeNotify(doc);
     return res.json({ ok: true, item: serialize(doc) });
   } catch (err) {
     console.error("[admin.orgVideos] patch failed:", err);
@@ -408,6 +432,9 @@ router.post("/:id/upload/done", async (req, res) => {
       doc.transcodeError = e?.message || "MediaConvert refused the job.";
       await doc.save();
     }
+    // The master is in and plays on its own, so the firm hears now rather
+    // than when the ladder finishes — the picture only gets better from here.
+    maybeNotify(doc);
     return res.json({ ok: true, item: serialize(doc) });
   } catch (err) {
     console.error("[admin.orgVideos] upload done failed:", err);

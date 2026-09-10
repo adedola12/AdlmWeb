@@ -91,6 +91,9 @@ const OrgVideoSchema = new mongoose.Schema(
 
     isPublished: { type: Boolean, default: true, index: true },
     sort: { type: Number, default: 0 },
+    // When the firm was emailed that this is waiting for them. Set once, the
+    // first time the row is both published and watchable; never resent.
+    notifiedAt: { type: Date, default: null },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 

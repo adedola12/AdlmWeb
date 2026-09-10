@@ -10,6 +10,7 @@ import { Product } from "../models/Product.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
 import { autoEnrollFromPurchase } from "../util/autoEnroll.js";
 import { sendMail } from "../util/mailer.js";
+import { notifySeatsChanged } from "../util/orgVideoMail.js";
 import { runExpiryNotifier } from "../util/expiryNotifier.js";
 import { sendBoqImportGrantEmail } from "../util/boqImportGrantEmail.js";
 import {
@@ -1368,13 +1369,29 @@ router.post(
     u.markModified("entitlements");
     await u.save();
 
+    const after = { seats: ent.seats, licenseType: ent.licenseType, organizationName: ent.organizationName || "" };
+
+    // The account holder hears about it. Fire-and-forget: a mail that fails
+    // must not un-set the seats it announces.
+    if (after.seats !== before.seats) {
+      notifySeatsChanged({
+        user: u,
+        productKey,
+        before,
+        after,
+        bound,
+        changedBy: req.user?.email || "",
+      }).catch(() => {});
+    }
+
     return res.json({
       ok: true,
       email: u.email,
       productKey,
       before,
-      after: { seats: ent.seats, licenseType: ent.licenseType, organizationName: ent.organizationName || "" },
+      after,
       bound,
+      notified: after.seats !== before.seats,
     });
   }),
 );
