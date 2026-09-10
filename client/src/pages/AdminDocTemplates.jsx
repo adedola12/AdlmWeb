@@ -1,8 +1,10 @@
-// Admin route wrapper — one of the Documents screens.
+// Admin route wrapper — one of the Documents screens. Templates is the one
+// that is not a read-only register: it carries his "Ask for a template" form,
+// so it has its own component rather than a row in the SCREENS map.
 
 import React from "react";
-import DsAdminDocuments from "../ds/DsAdminDocuments.jsx";
+import DsAdminTemplates from "../ds/DsAdminTemplates.jsx";
 
 export default function AdminDocTemplates() {
-  return <DsAdminDocuments screen="templates" />;
+  return <DsAdminTemplates />;
 }

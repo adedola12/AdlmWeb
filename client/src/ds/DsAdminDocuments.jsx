@@ -111,36 +111,6 @@ const SCREENS = {
   },
 
 
-  templates: {
-    title: "Templates",
-    lede:
-      "What the engine can produce and whose paper each one prints on. These are the same " +
-      "templates a customer's exports come out of, which is why an ADLM invoice and a practice's " +
-      "bill of quantities look like the same firm made them.",
-    path: "/admin/docs/templates",
-    empty: ["No templates", "The engine can produce nothing, which should not be possible."],
-    cols: () => [
-      { h: "Template", w: "20%", cell: (t) => <AdmTwo top={t.name} under={t.what} /> },
-      { h: "Paper", cell: (t) => t.paper },
-      {
-        h: "Used",
-        num: true,
-        // Counted from the documents actually made on it, not a number typed
-        // into a list. Zero is information: nobody has needed that one yet.
-        cell: (t) => (t.used ? num(t.used) : <AdmDim>not yet</AdmDim>),
-      },
-      {
-        h: "",
-        cell: (t) =>
-          t.external ? (
-            <AdmChip tone="">its own builder</AdmChip>
-          ) : (
-            <AdmChip tone="ok">in the composer</AdmChip>
-          ),
-      },
-    ],
-  },
-
   saved: {
     title: "Saved documents",
     lede:

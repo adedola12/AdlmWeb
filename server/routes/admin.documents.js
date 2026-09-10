@@ -25,6 +25,8 @@ import { AuditLog } from "../models/AuditLog.js";
 import { Proposal } from "../models/Proposal.js";
 import { Invoice } from "../models/Invoice.js";
 import { SavedDocument } from "../models/SavedDocument.js";
+import { TemplateRequest } from "../models/TemplateRequest.js";
+import { writeAudit, reqAuditContext } from "../util/audit.js";
 import { Setting } from "../models/Setting.js";
 
 const router = express.Router();
@@ -263,8 +265,8 @@ const TEMPLATES = [
   {
     id: "proposal",
     name: "Proposal",
-    what: "A cover line and a validity date, on the letter layout.",
-    paper: "ADLM or a practice",
+    what: "A cover line and a validity date, like the quotation.",
+    paper: "ADLM",
   },
 ];
 
@@ -294,12 +296,14 @@ router.get("/templates", ...hub, async (_req, res, next) => {
       paper: t.paper,
       used: (byId.get(t.id) || 0) + (extra[t.id] || 0),
       built: true,
-      state: "active",
+      state: "built",
     }));
 
-    // The one his list has that ours does not, said plainly rather than left
-    // for somebody to notice: a quotation here is its own document with its
-    // own numbering and share link, not a composer template.
+    // The one ours has that his does not, said plainly rather than left for
+    // somebody to notice: a quotation here is its own document with its own
+    // numbering and share link, not a composer template. It is on the list
+    // because it is a real thing the engine produces — but the row has to say
+    // that it opens somewhere else, or the button lies.
     items.push({
       id: "quotation",
       name: "Quotation",
@@ -308,10 +312,96 @@ router.get("/templates", ...hub, async (_req, res, next) => {
       used: quotes,
       built: true,
       external: true,
-      state: "active",
+      state: "built",
     });
 
-    res.json({ items, counts: { all: items.length } });
+    // Templates somebody has asked for and nobody has written yet. They sit
+    // on the same list as the ones that exist, marked, because a request kept
+    // on a separate screen is a request nobody sees.
+    const asked = await TemplateRequest.find({ state: "asked" }).sort({ createdAt: 1 }).lean();
+    for (const r of asked) {
+      items.push({
+        id: r.key,
+        name: r.name,
+        what: r.what,
+        paper: r.paper,
+        used: 0,
+        built: false,
+        state: "asked for",
+        needs: r.needs,
+        by: r.byEmail || "",
+        at: r.createdAt,
+      });
+    }
+
+    res.json({
+      items,
+      counts: { all: items.length, built: items.length - asked.length, asked: asked.length },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Ask for a template.
+ *
+ * His note on the form is the design: "This records the request. Building it
+ * is developer work, and it will appear here as 'built' when the block exists
+ * in the engine." So this writes down what is wanted and who wants it, and
+ * claims nothing more than that.
+ */
+router.post("/templates/requests", ...hub, async (req, res, next) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const what = String(req.body?.what || "").trim();
+    const needs = String(req.body?.needs || "").trim();
+    const paper = String(req.body?.paper || "A4 portrait").trim();
+
+    if (!name || !what || !needs) {
+      return res.status(400).json({ error: "A name, what it is for and what it needs." });
+    }
+
+    const key = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 60);
+    if (!key) return res.status(400).json({ error: "That name has nothing to slug." });
+
+    // A template the engine already has is not a request. Say so rather than
+    // filing a second row nobody will look at.
+    if (TEMPLATES.some((t) => t.id === key)) {
+      return res.status(409).json({ error: `The engine already prints a ${name.toLowerCase()}.` });
+    }
+
+    // Asking twice for the same thing sharpens the request rather than
+    // doubling it — the second description is usually the better one.
+    const row = await TemplateRequest.findOneAndUpdate(
+      { key },
+      {
+        $set: {
+          name,
+          what,
+          needs,
+          paper,
+          state: "asked",
+          byEmail: req.user?.email || "",
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    ).lean();
+
+    await writeAudit({
+      actorId: req.user?.id,
+      actorEmail: req.user?.email,
+      action: "documents.template.request",
+      status: 201,
+      ...reqAuditContext(req),
+      meta: { template: name, needs: needs.slice(0, 400) },
+    });
+
+    res.status(201).json({ id: row.key, name: row.name });
   } catch (err) {
     next(err);
   }
