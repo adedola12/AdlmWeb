@@ -28,6 +28,8 @@ import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { Campaign } from "../models/Campaign.js";
 import { Product } from "../models/Product.js";
 import { sendMail } from "../util/mailer.js";
+import { mapWithPool } from "../util/sendPool.js";
+import { isSesSelected, sendRatePerSecond } from "../util/sesTransport.js";
 import { marketingMessage } from "../util/emailContent.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
 import {
@@ -40,8 +42,29 @@ import {
 const router = express.Router();
 const hub = [requireAuth, requirePermission("adminhub")];
 
-/** Space out sends so a provider does not read a burst as spam. */
+/**
+ * How fast a campaign goes out.
+ *
+ * CAMPAIGN_GAP_MS used to be a sleep between one send and the next, which made
+ * three hundred recipients a two-minute job and eight hundred a five-minute
+ * one. It is now the pacing for a transport that cannot tell us its limit:
+ * 400ms between sends is 2.5 a second, which is a guess, and a guess is the
+ * best available answer when the provider will not say.
+ *
+ * SES will say. So when SES is carrying the mail the gap is replaced by its
+ * real per-second ceiling and as many sends in flight as that ceiling can
+ * feed — the same campaign in under a minute, without ever exceeding what the
+ * account is allowed.
+ */
 const GAP_MS = Number(process.env.CAMPAIGN_GAP_MS || 400);
+
+async function campaignPacing() {
+  if (!isSesSelected()) return { concurrency: 1, ratePerSecond: 1000 / GAP_MS };
+  const ratePerSecond = await sendRatePerSecond();
+  const concurrency =
+    Number(process.env.CAMPAIGN_CONCURRENCY) || Math.max(1, Math.ceil(ratePerSecond));
+  return { concurrency, ratePerSecond };
+}
 
 const shape = (c) => ({
   id: String(c._id),
@@ -268,18 +291,25 @@ router.post("/:id/send", ...hub, async (req, res, next) => {
     let unverified = 0;
     let failed = 0;
 
+    // Consent is settled before a single message is queued, so the pool only
+    // ever holds people who should actually receive this. Filtering inside the
+    // worker would have the skipped recipients occupying rate-limit slots they
+    // do not need.
+    const mailable = [];
     for (const u of people) {
-      if (u.emailPrefs?.marketing === false) {
-        optedOut++;
-        continue;
-      }
+      if (u.emailPrefs?.marketing === false) optedOut++;
       // An unverified address is one nobody has proved exists. Marketing to it
       // buys nothing and costs sender reputation on a bounce.
-      if (!u.emailVerified) {
-        unverified++;
-        continue;
-      }
-      try {
+      else if (!u.emailVerified) unverified++;
+      else mailable.push(u);
+    }
+
+    const { concurrency, ratePerSecond } = await campaignPacing();
+
+    await mapWithPool(
+      mailable,
+      async (u) => {
+        const optOut = unsubscribeUrl(u._id);
         const r = marketingMessage({
           firstName: u.firstName,
           subject: c.subject,
@@ -288,21 +318,31 @@ router.post("/:id/send", ...hub, async (req, res, next) => {
           body: c.body,
           ctaLabel: c.ctaLabel,
           ctaHref: c.ctaHref,
-          unsubscribeUrl: unsubscribeUrl(u._id),
+          unsubscribeUrl: optOut,
         });
         await sendMail({
           to: u.email,
           subject: r.subject,
           html: r.html,
           templateKey: "marketing.campaign",
+          // Marketing mail without a header-level opt-out is what Gmail's bulk
+          // sender rules exist to punish. The footer link stays too — this is
+          // the same URL, reachable from the client's own chrome.
+          listUnsubscribe: optOut,
         });
-        sent++;
-      } catch (err) {
-        failed++;
-        console.error(`[campaign ${c._id}] ${u.email}:`, err?.message || err);
-      }
-      await new Promise((r) => setTimeout(r, GAP_MS));
-    }
+      },
+      {
+        concurrency,
+        ratePerSecond,
+        onResult: (u, result) => {
+          if (result.ok) sent++;
+          else {
+            failed++;
+            console.error(`[campaign ${c._id}] ${u.email}:`, result.error?.message || result.error);
+          }
+        },
+      },
+    );
 
     await Campaign.updateOne(
       { _id: c._id },

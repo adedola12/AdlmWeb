@@ -124,7 +124,16 @@ export const videoUnsubscribeUrl = (userId) =>
 // wrapped in a promise and both of those calls would fail at runtime with
 // "not a function" - which is exactly what happened.
 export function resolveAudience(audience, productKey = "") {
-  const base = { disabled: { $ne: true }, email: { $exists: true, $ne: "" } };
+  const base = {
+    disabled: { $ne: true },
+    email: { $exists: true, $ne: "" },
+    // Excluded in the QUERY, unlike opting out and being unverified, which are
+    // counted at send time so the draft can explain itself. An address that
+    // bounced permanently is not a consent figure worth reporting — nobody is
+    // there to have an opinion — and every send to it costs reputation that
+    // belongs to the people who ARE reading.
+    emailUndeliverable: { $ne: true },
+  };
 
   const ACTIVE = { $elemMatch: { status: "active" } };
 

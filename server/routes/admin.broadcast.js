@@ -3,6 +3,9 @@ import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
 import { Broadcast, BroadcastRecipient, hashRecipient } from "../models/Broadcast.js";
 import { sendMail } from "../util/mailer.js";
+import { EmailSend } from "../models/EmailSend.js";
+import { mapWithPool } from "../util/sendPool.js";
+import { isSesSelected, sendRatePerSecond } from "../util/sesTransport.js";
 
 /**
  * Admin broadcast mail.
@@ -42,13 +45,28 @@ const asyncHandler = (fn) => (req, res, next) =>
 const MAX_BATCH = 200;
 const DEFAULT_BATCH = 50;
 
-/** Messages per second. Resend and SMTP both throttle; default is deliberately timid. */
-function ratePerSecond() {
+/**
+ * Messages per second, and how many at a time.
+ *
+ * The old default was two per second with a hard cap of twenty, both invented:
+ * Resend and SMTP throttle at rates neither of them publishes, so timid was
+ * the only defensible guess. An explicit BROADCAST_RATE_PER_SEC still wins,
+ * because somebody who has set it has a reason.
+ *
+ * SES publishes its rate, so on SES the guess is replaced by the real number
+ * and the sends run in parallel up to it. A 200-recipient batch stops being a
+ * 100-second job.
+ */
+async function pacing() {
   const n = Number.parseInt(process.env.BROADCAST_RATE_PER_SEC || "", 10);
-  return Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 2;
+  if (Number.isFinite(n) && n > 0) {
+    const rate = Math.min(n, 20);
+    return { ratePerSecond: rate, concurrency: Math.max(1, Math.ceil(rate)) };
+  }
+  if (!isSesSelected()) return { ratePerSecond: 2, concurrency: 1 };
+  const ratePerSecond = await sendRatePerSecond();
+  return { ratePerSecond, concurrency: Math.max(1, Math.ceil(ratePerSecond)) };
 }
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Turns an audience string into a Mongo query.
@@ -64,6 +82,10 @@ function audienceQuery(audience) {
     email: { $ne: "" },
     emailVerified: true,
     "emailPrefs.marketing": { $ne: false },
+    // An address that bounced permanently. A broadcast ledger is materialised
+    // once and sent in batches over hours, so excluding these at enrolment is
+    // what stops a dead address being retried on every batch.
+    emailUndeliverable: { $ne: true },
   };
 
   if (audience === "all") return base;
@@ -227,41 +249,58 @@ router.post(
       .limit(limit)
       .lean();
 
-    const gap = 1000 / ratePerSecond();
+    const { ratePerSecond, concurrency } = await pacing();
     let sent = 0;
     let failed = 0;
 
-    for (const r of due) {
-      // Claim the row BEFORE mailing, marking it failed-in-flight. If the
-      // Lambda dies between the claim and the send, the row is left failed
-      // rather than pending, so a resume cannot mail this address again on a
-      // guess — someone has to ask for it via /retry-failed. Erring toward a
-      // missed message rather than a duplicate is the right way round: the
-      // first is a support question, the second is a customer wondering why
-      // they were mailed twice.
-      const claim = await BroadcastRecipient.findOneAndUpdate(
-        { _id: r._id, status: "pending" },
-        { $set: { status: "failed", error: "in flight" }, $inc: { attempts: 1 } },
-      );
-      if (!claim) continue; // another call took it
-
-      try {
-        await sendMail({ to: r.email, subject: broadcast.subject, html: broadcast.html });
-        await BroadcastRecipient.updateOne(
-          { _id: r._id },
-          { $set: { status: "sent", error: "", sentAt: new Date() } },
+    // The claim-then-send dance below is per row and unchanged by running
+    // several at once: each worker claims its own row with a conditional
+    // update, and a row another worker already took comes back null.
+    await mapWithPool(
+      due,
+      async (r) => {
+        // Claim the row BEFORE mailing, marking it failed-in-flight. If the
+        // Lambda dies between the claim and the send, the row is left failed
+        // rather than pending, so a resume cannot mail this address again on a
+        // guess — someone has to ask for it via /retry-failed. Erring toward a
+        // missed message rather than a duplicate is the right way round: the
+        // first is a support question, the second is a customer wondering why
+        // they were mailed twice.
+        const claim = await BroadcastRecipient.findOneAndUpdate(
+          { _id: r._id, status: "pending" },
+          { $set: { status: "failed", error: "in flight" }, $inc: { attempts: 1 } },
         );
-        sent += 1;
-      } catch (err) {
-        await BroadcastRecipient.updateOne(
-          { _id: r._id },
-          { $set: { status: "failed", error: String(err?.message || err).slice(0, 500) } },
-        );
-        failed += 1;
-      }
+        if (!claim) return; // another call took it
 
-      await sleep(gap);
-    }
+        try {
+          // `track` is what connects this send to the open and click events
+          // SES publishes later. Without it the send log keeps only a hash and
+          // an arriving Open matches nothing, so a broadcast could be sent and
+          // then never measured - which is most of the reason to send one.
+          // Transactional mail deliberately does not pass this; see the note
+          // at the top of models/EmailSend.js.
+          await sendMail({
+            to: r.email,
+            subject: broadcast.subject,
+            html: broadcast.html,
+            templateKey: "broadcast",
+            track: { campaign: broadcast.key },
+          });
+          await BroadcastRecipient.updateOne(
+            { _id: r._id },
+            { $set: { status: "sent", error: "", sentAt: new Date() } },
+          );
+          sent += 1;
+        } catch (err) {
+          await BroadcastRecipient.updateOne(
+            { _id: r._id },
+            { $set: { status: "failed", error: String(err?.message || err).slice(0, 500) } },
+          );
+          failed += 1;
+        }
+      },
+      { concurrency, ratePerSecond },
+    );
 
     const [pending, totalSent, totalFailed, total] = await Promise.all([
       BroadcastRecipient.countDocuments({ broadcastKey: key, status: "pending" }),
@@ -309,14 +348,51 @@ router.get(
     const broadcast = await Broadcast.findOne({ key }).lean();
     if (!broadcast) return res.status(404).json({ error: `No broadcast "${key}"` });
 
-    const [total, sent, failed, pending] = await Promise.all([
+    const [total, sent, failed, pending, engagement] = await Promise.all([
       BroadcastRecipient.countDocuments({ broadcastKey: key }),
       BroadcastRecipient.countDocuments({ broadcastKey: key, status: "sent" }),
       BroadcastRecipient.countDocuments({ broadcastKey: key, status: "failed" }),
       BroadcastRecipient.countDocuments({ broadcastKey: key, status: "pending" }),
+      // Opens and clicks come from the send log rather than the ledger: the
+      // ledger knows who was mailed, the send log is what SES events land on.
+      EmailSend.aggregate([
+        { $match: { campaign: key } },
+        {
+          $group: {
+            _id: null,
+            // Distinct PEOPLE, not events. One reader with images on can raise
+            // openCount several times over, and a campaign report that counts
+            // those as separate readers is a campaign report that lies.
+            opened: { $sum: { $cond: [{ $gt: ["$openCount", 0] }, 1, 0] } },
+            clicked: { $sum: { $cond: [{ $gt: ["$clickCount", 0] }, 1, 0] } },
+            openEvents: { $sum: "$openCount" },
+            clickEvents: { $sum: "$clickCount" },
+          },
+        },
+      ]),
     ]);
 
-    res.json({ ...broadcast, totals: { total, sent, failed, pending } });
+    const e = engagement[0] || {};
+    const opened = e.opened || 0;
+    const clicked = e.clicked || 0;
+
+    res.json({
+      ...broadcast,
+      totals: { total, sent, failed, pending },
+      engagement: {
+        opened,
+        clicked,
+        openEvents: e.openEvents || 0,
+        clickEvents: e.clickEvents || 0,
+        // Rates against what was actually delivered, not against the audience:
+        // a message that failed to send was never a chance to be read.
+        openRate: sent ? Math.round((opened / sent) * 1000) / 10 : 0,
+        clickRate: sent ? Math.round((clicked / sent) * 1000) / 10 : 0,
+        // Open tracking is a pixel. Anyone reading with images off is counted
+        // as not having opened it, so this is a floor, never a headcount.
+        note: "opens are a floor - images-off readers cannot be counted",
+      },
+    });
   }),
 );
 

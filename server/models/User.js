@@ -239,6 +239,39 @@ const UserSchema = new mongoose.Schema(
     emailVerifySentAt: { type: Date, default: null },
     emailVerifyAttempts: { type: Number, default: 0 },
 
+    /* ── does this address still accept mail? ─────────────────────────────
+     *
+     * `emailVerified` says somebody proved the address existed once.
+     * This says whether it still works, which is a different question and one
+     * only the receiving server can answer — by rejecting a message.
+     *
+     * Set from SES bounce and complaint events (util/mailFeedback.js). ONLY a
+     * PERMANENT bounce lands here: a full mailbox or a server having an
+     * afternoon is a Transient bounce and means nothing about tomorrow, so
+     * treating it as death would quietly unsubscribe people for an outage they
+     * had no part in.
+     *
+     * WHAT IT BLOCKS, AND WHAT IT DOES NOT
+     *
+     * Bulk mail only — campaigns, broadcasts, video announcements. Continuing
+     * to mail a dead address is how a sender's reputation is spent, and there
+     * is nobody at the other end to benefit.
+     *
+     * It deliberately does NOT gate receipts, resets or licence mail. If this
+     * flag is ever set wrongly, a customer who cannot receive a password reset
+     * is locked out of software they paid for, whereas a receipt sent to a
+     * genuinely dead address merely fails — the same way it does today. SES's
+     * own account-level suppression list already refuses those sends at the
+     * API, which is the right place for it: one list, applied to everything,
+     * that we do not have to keep correct ourselves.
+     */
+    emailUndeliverable: { type: Boolean, default: false, index: true },
+    emailUndeliverableAt: { type: Date, default: null },
+    /** "bounce" or "complaint" — why we stopped. */
+    emailUndeliverableReason: { type: String, default: "" },
+    /** The receiving server's own words, trimmed. What support actually needs. */
+    emailUndeliverableDetail: { type: String, default: "" },
+
     /* ── does this person want marketing mail? ────────────────────────────
      *
      * Default true, because an ADLM account is a business relationship and

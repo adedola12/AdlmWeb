@@ -1,9 +1,29 @@
 // server/util/mailer.js
+//
+// THREE TRANSPORTS, IN A DELIBERATE ORDER
+//
+// SES, then Resend, then Gmail SMTP. Set MAIL_TRANSPORT=ses to put SES at the
+// front; leave it unset and nothing changes, which is the point — the switch
+// can be deployed long before the DNS and the sandbox exit are done, and
+// flipped by a parameter when they are.
+//
+// SES and Resend are the same platform. `send.adlmstudio.net` publishes SPF
+// `include:amazonses.com` and an MX at `feedback-smtp.eu-west-1.amazonses.com`,
+// so Resend has been handing this domain's mail to SES in Ireland all along.
+// Going direct removes a reseller and an API key, not a mail platform — which
+// is also why the fallback below is worth keeping through the cutover and not
+// worth keeping forever.
+//
+// Once SES has carried production traffic for a week, RESEND_API_KEY comes out
+// of SSM and this file loses two of its three transports. The Gmail SMTP path
+// should go with it: an app password that can send as the studio is a
+// credential nobody needs once the Lambda's own role can do the job.
 import nodemailer from "nodemailer";
 import fetch from "node-fetch";
 import { EmailTemplate } from "../models/EmailTemplate.js";
 import { EmailSend, hashRecipient } from "../models/EmailSend.js";
 import { canEdit } from "./emailCatalogue.js";
+import { isSesSelected, sendViaSes } from "./sesTransport.js";
 
 // strip HTML → text
 function toText(html = "") {
@@ -188,13 +208,24 @@ async function withOverride(templateKey, subject, html) {
   }
 }
 
-async function logSend(templateKey, to, ok, via) {
+async function logSend(templateKey, to, ok, via, messageId = "", track = null) {
   try {
     await EmailSend.create({
       key: templateKey || "unattributed",
       toHash: hashRecipient(to),
       ok,
       via,
+      // Without the provider's id an Open arriving later matches nothing, so
+      // it is recorded for every send, tracked or not.
+      messageId: String(messageId || ""),
+      // Only a campaign asks for this. See the note at the top of
+      // models/EmailSend.js for why it is scoped rather than blanket.
+      ...(track
+        ? {
+            to: String(Array.isArray(to) ? to[0] : to || "").trim().toLowerCase(),
+            campaign: String(track.campaign || ""),
+          }
+        : {}),
     });
   } catch {
     /* A send that happened is not undone by a log that did not. */
@@ -207,7 +238,20 @@ async function logSend(templateKey, to, ok, via) {
  *   send against it. Omitting one still sends — the message is simply logged
  *   as unattributed and cannot be edited.
  */
-export async function sendMail({ to, subject, html, text, attachments, bcc, templateKey }) {
+export async function sendMail({
+  to,
+  subject,
+  html,
+  text,
+  attachments,
+  bcc,
+  templateKey,
+  listUnsubscribe,
+  // { campaign } - set by a campaign send to record the recipient and match
+  // later open/click events to them. Transactional callers leave it unset and
+  // keep logging nothing but a hash.
+  track = null,
+}) {
   const primaryFrom =
     process.env.EMAIL_FROM ||
     `ADLM Services <${process.env.SMTP_USER || "noreply@adlmstudio.net"}>`;
@@ -227,12 +271,60 @@ export async function sendMail({ to, subject, html, text, attachments, bcc, temp
 
   const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
+  // Gmail and Yahoo both require these of anybody sending bulk mail, and the
+  // unsubscribe routes are already built to answer a one-click POST. Only the
+  // senders with a real per-recipient opt-out pass a URL; a receipt gets none,
+  // because there is nothing to unsubscribe from.
+  const listHeaders = listUnsubscribe
+    ? {
+        "List-Unsubscribe": `<${listUnsubscribe}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      }
+    : null;
+
+  /* ───────────────────────────── 0) SES ─────────────────────────────
+   * First when asked for. A failure here falls through to the transports
+   * below rather than ending the send — during the cutover that is the whole
+   * safety net, and once RESEND_API_KEY is gone there is simply nothing left
+   * to fall through to. Set MAIL_FALLBACK=off to close the net early and find
+   * out immediately whether SES is really carrying everything.
+   */
+  if (isSesSelected()) {
+    try {
+      const id = await sendViaSes({
+        // A tracked send is a campaign, and only a campaign. It routes to the
+        // marketing configuration set so opens and clicks are measured without
+        // rewriting the links in anybody's password reset.
+        tracked: Boolean(track),
+        from: primaryFrom,
+        to: body.to,
+        bcc: body.bcc,
+        subject,
+        html,
+        text: body.text,
+        attachments,
+        listUnsubscribe,
+      });
+      console.log(`[mailer] SES OK: id=${id || "unknown"} from=${primaryFrom}`);
+      await logSend(templateKey, to, true, "ses", id, track);
+      return;
+    } catch (err) {
+      console.error("[mailer] SES failed:", err?.name || "", err?.message || err);
+      if (/^(0|false|no|off)$/i.test(String(process.env.MAIL_FALLBACK || "").trim())) {
+        await logSend(templateKey, to, false, "none");
+        throw err;
+      }
+      console.warn("[mailer] falling back to Resend/SMTP");
+    }
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
 
   // 1) Resend first
   if (apiKey) {
     for (const from of [primaryFrom, fallbackFrom]) {
       const payload = { from, ...body };
+      if (listHeaders) payload.headers = listHeaders;
       if (hasAttachments) {
         payload.attachments = attachments.map((a) => ({
           filename: a.filename,
@@ -253,7 +345,7 @@ export async function sendMail({ to, subject, html, text, attachments, bcc, temp
         console.log(
           `[mailer] Resend OK: id=${data?.id || "unknown"} from=${from}`
         );
-        await logSend(templateKey, to, true, "resend");
+        await logSend(templateKey, to, true, "resend", data?.id, track);
         return;
       }
 
@@ -275,6 +367,7 @@ export async function sendMail({ to, subject, html, text, attachments, bcc, temp
 
   // 2) SMTP fallback
   const message = { from: primaryFrom, ...body };
+  if (listHeaders) message.headers = listHeaders;
   if (hasAttachments) {
     message.attachments = attachments.map((a) => ({
       filename: a.filename,
@@ -301,7 +394,7 @@ export async function sendMail({ to, subject, html, text, attachments, bcc, temp
       console.log(`[mailer] sent via ${t.adlmLabel}: ${info?.messageId || "ok"}`);
       // Logged by which way out carried it, so the send log can answer "what
       // is actually delivering our mail" rather than only "did it go".
-      await logSend(templateKey, to, true, t.adlmLabel.split(" ")[0]);
+      await logSend(templateKey, to, true, t.adlmLabel.split(" ")[0], info?.messageId, track);
       return;
     } catch (err) {
       lastErr = err;

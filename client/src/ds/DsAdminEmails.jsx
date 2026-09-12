@@ -43,6 +43,12 @@ export default function DsAdminEmails() {
   // is not something a page should do on every visit.
   const [ways, setWays] = React.useState(null);
   const [checking, setChecking] = React.useState(false);
+  // The addresses the studio has stopped mailing, and why. Loaded with the
+  // page rather than on demand — unlike the send check above, this is two
+  // indexed reads and no outbound connections, and a number nobody looks at
+  // is a number that grows.
+  const [bounces, setBounces] = React.useState(null);
+  const [clearing, setClearing] = React.useState("");
 
   React.useEffect(() => {
     if (!accessToken) return undefined;
@@ -51,10 +57,59 @@ export default function DsAdminEmails() {
     apiAuthed("/admin/emails", { token: accessToken })
       .then((r) => alive && setD(r))
       .catch(() => alive && setFailed(true));
+    // Its own request, and its own failure. A bounce list that cannot be read
+    // must not take the Emails screen down with it — the messages are the
+    // reason people come here, and they are readable whether or not anything
+    // has bounced.
+    apiAuthed("/admin/emails/bounces", { token: accessToken })
+      .then((r) => alive && setBounces(r))
+      .catch(() => alive && setBounces({ failed: true }));
     return () => {
       alive = false;
     };
   }, [accessToken, reload]);
+
+  /**
+   * Start sending to one address again.
+   *
+   * Confirmed first, because the machine was probably right. A bounce means
+   * the receiving server said the mailbox does not exist, and overruling that
+   * on a hunch puts the studio back to mailing an address that will reject it
+   * again — which is the exact behaviour that costs delivery for everybody
+   * else. The diagnostic is in the row above the button so the decision is
+   * made while looking at what their server actually said.
+   */
+  async function clearBounce(row) {
+    if (
+      !window.confirm(
+        `Start sending to ${row.email} again?\n\n` +
+          `Their mail server refused the last message:\n${row.detail || row.reason || "no reason given"}\n\n` +
+          `Only do this if you know the address works now — usually because you have spoken to them.`,
+      )
+    ) {
+      return;
+    }
+
+    setClearing(row.email);
+    try {
+      const r = await apiAuthed("/admin/emails/bounces/clear", {
+        token: accessToken,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: row.email }),
+      });
+      setReload((n) => n + 1);
+      say(
+        r?.alreadySending
+          ? `${row.email} was already being sent to.`
+          : `${row.email} will be included in mail again.`,
+      );
+    } catch (err) {
+      say(err?.message || "That could not be changed.");
+    } finally {
+      setClearing("");
+    }
+  }
 
   async function openOne(row, mode) {
     setOpen({ row, mode, body: null });
@@ -231,6 +286,98 @@ export default function DsAdminEmails() {
             rowKey={(e) => e.key}
             empty={["No messages", "Nothing is declared as sendable."]}
           />
+
+          {/* What came back.
+              Placed under the messages rather than on a screen of its own: a
+              bounce list nobody visits is a bounce list that does nothing, and
+              the people who come here to read the mail are the same people who
+              should see which of it is failing. */}
+          {bounces && !bounces.failed ? (
+            <div style={{ marginTop: 26 }}>
+              <h2 className="adm-h" style={{ fontSize: 20 }}>
+                What came back
+              </h2>
+              <p className="adm-lede">
+                {bounces.undeliverableAccounts === 0 ? (
+                  <>
+                    Nothing is being held back. Every address on file is still accepting mail.
+                  </>
+                ) : (
+                  <>
+                    {num(bounces.undeliverableAccounts)}{" "}
+                    {bounces.undeliverableAccounts === 1 ? "address is" : "addresses are"} no longer
+                    being mailed, because the receiving server refused the last message. They are
+                    left out of campaigns, broadcasts and video announcements — receipts and licence
+                    mail still try. Every send to a dead address costs a little of the delivery
+                    everybody else gets.
+                  </>
+                )}
+              </p>
+
+              {bounces.stopped?.length ? (
+                <AdmTable
+                  cols={[
+                    {
+                      h: "Address",
+                      w: "34%",
+                      cell: (r) => <AdmTwo top={r.email} under={r.name || ""} />,
+                    },
+                    {
+                      h: "Stopped",
+                      w: "16%",
+                      cell: (r) => <AdmDim>{when(r.at)}</AdmDim>,
+                    },
+                    {
+                      h: "What their server said",
+                      cell: (r) => (
+                        <>
+                          <AdmChip tone="bad">{r.reason || "bounce"}</AdmChip>{" "}
+                          <AdmDim>{r.detail || "no reason given"}</AdmDim>
+                        </>
+                      ),
+                    },
+                    {
+                      h: "",
+                      cell: (r) => (
+                        <span className="adm-rowacts">
+                          <button
+                            type="button"
+                            className="ds-btn btn-o ds-btn-sm"
+                            disabled={clearing === r.email}
+                            onClick={() => clearBounce(r)}
+                          >
+                            {clearing === r.email ? "Changing…" : "Start sending again"}
+                          </button>
+                        </span>
+                      ),
+                    },
+                  ]}
+                  rows={bounces.stopped}
+                  rowKey={(r) => r.email}
+                  empty={["Nothing held back", "No address has been refused."]}
+                />
+              ) : null}
+
+              <div className="adm-merge">
+                <b>Only put an address back if you know it works.</b>
+                <span>
+                  A bounce is the receiving server saying the mailbox does not exist, and it is
+                  usually right — the ordinary reason to overrule it is having spoken to the
+                  customer. Nothing here changes what somebody has chosen to receive: an address
+                  put back still honours an unsubscribe made before it broke.
+                  {bounces.last90Days?.complaint ? (
+                    <>
+                      {" "}
+                      {num(bounces.last90Days.complaint)} complaint
+                      {bounces.last90Days.complaint === 1 ? " was" : "s were"} recorded in the last
+                      90 days — those are people who pressed &ldquo;spam&rdquo;, and they are opted
+                      out rather than held back, so they are not in this list.
+                    </>
+                  ) : null}
+                </span>
+              </div>
+            </div>
+          ) : null}
 
           <div className="adm-merge">
             <b>These go out today.</b>

@@ -56,6 +56,11 @@ const VideoSchema = new mongoose.Schema(
       failed: { type: Number, default: 0 },
       skippedOptedOut: { type: Number, default: 0 },
       skippedUnverified: { type: Number, default: 0 },
+      // Addresses that bounced permanently on an earlier send. Counted apart
+      // from the opt-outs on purpose: "60 people asked us to stop" and "60
+      // mailboxes no longer exist" are the same number and completely
+      // different news.
+      skippedUndeliverable: { type: Number, default: 0 },
       dryRun: { type: Boolean, default: false },
     },
 
