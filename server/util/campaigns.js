@@ -121,6 +121,35 @@ const API_BASE = () =>
   String(process.env.API_BASE_URL || "").trim().replace(/\/+$/, "") ||
   `http://localhost:${process.env.PORT || 4000}`;
 
+/**
+ * Refuse to build unsubscribe links that cannot work.
+ *
+ * The localhost fallback above is right for a laptop and catastrophic in
+ * production: unset on Lambda, every message in a mailshot would carry
+ * http://localhost:4000/... as its opt-out. That is the same failure this file
+ * just fixed — a link that resolves to nothing — only less visible, because at
+ * least the front end returned a page.
+ *
+ * Checked ONCE before a run rather than per recipient, so the answer is "this
+ * send did not start" rather than four hundred identical errors and some
+ * unknown number of messages already gone.
+ *
+ * Throws rather than warns. A bulk send with no working opt-out is the one
+ * outcome here worth stopping the world for.
+ */
+export function assertUnsubscribeLinksWork() {
+  const configured = String(process.env.API_BASE_URL || "").trim();
+  if (configured) return;
+
+  // Anywhere that is not obviously a developer's machine.
+  if (process.env.NODE_ENV === "production" || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    throw new Error(
+      "API_BASE_URL is not set, so every unsubscribe link would point at localhost. " +
+        "Refusing to send. Set it to the API host (https://api.adlmstudio.net).",
+    );
+  }
+}
+
 export const videoUnsubscribeUrl = (userId) =>
   `${API_BASE()}/api/email/unsubscribe/${encodeURIComponent(
     topicUnsubscribeToken(VIDEO_TOPIC, userId),

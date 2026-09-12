@@ -38,7 +38,7 @@ import { sendMail } from "./mailer.js";
 import { newVideoMessage } from "./videoEmail.js";
 import { mapWithPool } from "./sendPool.js";
 import { isSesSelected, sendRatePerSecond } from "./sesTransport.js";
-import { videoUnsubscribeUrl } from "./campaigns.js";
+import { videoUnsubscribeUrl, assertUnsubscribeLinksWork } from "./campaigns.js";
 import { fetchRecentUploads, isConfigured, watchUrl } from "./youtubeFeed.js";
 
 /** 50 per batch, per the brief. */
@@ -364,6 +364,11 @@ export async function announceVideo(
 ) {
   const dryRun = isDryRun();
   const resend = Array.isArray(only);
+
+  // Before the claim, so a misconfigured environment does not burn the one
+  // chance to announce this video: nothing is marked notified, and the run can
+  // simply be repeated once API_BASE_URL is set.
+  assertUnsubscribeLinksWork();
 
   // Claim it. Anything but a fresh, unnotified video gets null back and this
   // returns without sending — which is the point.

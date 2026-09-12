@@ -47,3 +47,37 @@ test("the token in the finished URL still verifies", () => {
   assert.equal(readTopicUnsubscribeToken("videos", token), ID);
   assert.equal(readTopicUnsubscribeToken("marketing", token), null);
 });
+
+test("in production, an unset API_BASE_URL refuses the send rather than mailing localhost", async () => {
+  // API_BASE_URL is NOT in SSM today (checked, 12 Sep 2026). Unset on Lambda,
+  // the localhost fallback would have put http://localhost:4000/... into every
+  // message of a 485-person mailshot — the same dead-opt-out failure this file
+  // exists to prevent, only harder to spot.
+  const { assertUnsubscribeLinksWork } = await import("./campaigns.js");
+  const before = { env: process.env.NODE_ENV, api: process.env.API_BASE_URL };
+
+  try {
+    delete process.env.API_BASE_URL;
+
+    process.env.NODE_ENV = "production";
+    assert.throws(() => assertUnsubscribeLinksWork(), /API_BASE_URL is not set/);
+
+    // Lambda does not always set NODE_ENV, so the function name counts too.
+    process.env.NODE_ENV = "";
+    process.env.AWS_LAMBDA_FUNCTION_NAME = "AdlmApi-VideoPollFn";
+    assert.throws(() => assertUnsubscribeLinksWork(), /Refusing to send/);
+    delete process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+    // A laptop is allowed the localhost link — that is what it is for.
+    process.env.NODE_ENV = "development";
+    assert.doesNotThrow(() => assertUnsubscribeLinksWork());
+
+    // And configured, it never complains wherever it runs.
+    process.env.NODE_ENV = "production";
+    process.env.API_BASE_URL = "https://api.adlmstudio.net";
+    assert.doesNotThrow(() => assertUnsubscribeLinksWork());
+  } finally {
+    process.env.NODE_ENV = before.env;
+    if (before.api) process.env.API_BASE_URL = before.api;
+  }
+});
