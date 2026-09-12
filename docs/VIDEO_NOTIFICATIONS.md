@@ -15,19 +15,23 @@ Both go through the same code path, and a video is announced **once**.
 
 ---
 
-## Why this uses Resend and not SES
+## SES, not Resend — see docs/SES_MIGRATION.md
 
-The brief asked for SES. The platform already sends every message through
-`server/util/mailer.js`, which is Resend with an SMTP fallback, template
-overrides from the admin Emails screen, and per-send logging into `EmailSend`.
-Adding SES would have meant a second provider, a second reputation to warm, a
-second set of bounce handling, and two answers to "did this customer get it".
+This originally shipped on Resend, and the reasoning is worth keeping: adding a
+second provider would have meant a second reputation to warm, a second set of
+bounce handling, and two answers to "did this customer get it".
 
-If you do move to SES later, the change is confined to `mailer.js` — nothing in
-the video feature knows what carries the message. What you would need there is
-the sending domain verified in SES (DKIM records on `adlmstudio.net`),
-`admin@adlmstudio.net` verified as a sender identity, production access granted
-so you are out of the sandbox, and `AWS_REGION` set to `eu-west-1`.
+That decision was reversed in September 2026, once it turned out Resend was
+itself delivering through SES in eu-west-1 — so going direct removes a reseller
+rather than adding a provider. **`docs/SES_MIGRATION.md` is the plan**: what the
+code does now, the DNS records that have to be published by hand, the
+production-access request, and the cutover.
+
+Nothing in the video feature knows what carries the message, so none of this
+changed the announcement logic. What did change is the pacing: batches now send
+in parallel up to the rate SES actually grants, instead of one message at a
+time. Set `MAIL_TRANSPORT=ses` to turn it on; unset, everything behaves exactly
+as it did.
 
 ---
 
@@ -199,7 +203,34 @@ aws lambda invoke --function-name <VideoPollFn> \
 | `server/routes/unsubscribe.js` | `videoUnsubscribeRouter` |
 | `client/src/ds/DsAdminVideos.jsx` | The Videos screen |
 
-Tests: `node --test server/util/videoEmail.test.js server/util/videoNotifier.test.js server/util/youtubeFeed.test.js`
+## Testing it
+
+**Unit tests** run with everything else — no database, no network:
+
+```bash
+cd server && npm test
+```
+
+**A dry run** resolves the real audience, renders the real template and runs the
+real batch loop with only the transport swapped. `DRY_RUN` is forced on inside
+the script, so this file cannot be turned into a real send:
+
+```bash
+cd server && node scripts/video-dry-run.mjs
+```
+
+**Integration tests** cover the part a unit test cannot reach — the atomic
+claim that makes a double send impossible, the stats writes, and the resend
+path. They need a database, so they skip unless asked for, and they refuse to
+run against `adlmWeb`:
+
+```bash
+cd server && AUTH_DB=adlmWeb_videotest VIDEO_IT=1 node --test util/videoNotifier.integration.test.js
+```
+
+The one that matters most is the race: two callers announce the same video
+concurrently and exactly one of them sends. Asserted sequentially, a
+check-then-write would pass; run concurrently, it does not.
 
 ---
 
