@@ -156,8 +156,29 @@ function useHlsSource(videoRef, src) {
     const video = videoRef.current;
     if (!video || !src || !isHls) return undefined;
 
-    // Safari / iOS: native, and the only path that can also do FairPlay later.
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    // WHICH PLAYER, AND WHY NOT canPlayType
+    //
+    // This used to ask `video.canPlayType("application/vnd.apple.mpegurl")`
+    // and treat a truthy answer as "this browser plays HLS natively, hand it
+    // the manifest". Chromium answers "maybe" — truthy — and then cannot
+    // demux an m3u8 at all. So every Chrome and Edge viewer got the playlist
+    // assigned as a video source, MEDIA_ELEMENT_ERROR code 4
+    // (DEMUXER_ERROR_COULD_NOT_PARSE), a black player and no hls.js. That is
+    // every lecture and every organisation video on the two browsers almost
+    // all of this audience uses.
+    //
+    // canPlayType is advisory by specification; it is not a capability check.
+    // The real question is whether Media Source Extensions exist, because
+    // that is what hls.js needs and what iOS Safari lacks. Ask that directly.
+    // ManagedMediaSource is the newer iOS spelling and counts.
+    const hasMse =
+      typeof window !== "undefined" &&
+      (typeof window.MediaSource !== "undefined" ||
+        typeof window.ManagedMediaSource !== "undefined");
+
+    if (!hasMse) {
+      // iOS Safari: HLS is native here, and it is also the only path that can
+      // carry FairPlay later. No point downloading the parser it cannot use.
       video.src = src;
       return undefined;
     }
@@ -166,7 +187,13 @@ function useHlsSource(videoRef, src) {
     let cancelled = false;
 
     import("hls.js").then(({ default: Hls }) => {
-      if (cancelled || !Hls.isSupported()) return;
+      if (cancelled) return;
+      if (!Hls.isSupported()) {
+        // MSE exists but hls.js still refuses it. Native is the last resort
+        // rather than leaving the element with nothing attached.
+        video.src = src;
+        return;
+      }
       hls = new Hls({
         xhrSetup: (xhr) => {
           xhr.withCredentials = true;
