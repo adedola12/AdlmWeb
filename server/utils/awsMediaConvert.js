@@ -293,9 +293,25 @@ export async function submitHlsJob({ sourceKey, outPrefix, jobTag = "", sourceHe
 
 export async function getJobState(jobId) {
   const out = await mediaConvertClient().send(new GetJobCommand({ Id: jobId }));
+
+  // The runtime, which nothing else knows. The row that starts an encode has
+  // no idea how long the recording is — the uploader never measured it and the
+  // player only learns it after loading the manifest — so every organisation
+  // video displayed a blank runtime. MediaConvert has been reporting it on
+  // every completed job all along; it just was not read. Milliseconds, per
+  // output, so take the longest and round.
+  let durationSec = 0;
+  for (const group of out?.Job?.OutputGroupDetails || []) {
+    for (const detail of group?.OutputDetails || []) {
+      const ms = Number(detail?.DurationInMs) || 0;
+      if (ms > durationSec) durationSec = ms;
+    }
+  }
+
   return {
     status: out?.Job?.Status || "",
     errorMessage: out?.Job?.ErrorMessage || "",
     percent: Number(out?.Job?.JobPercentComplete || 0),
+    durationSec: durationSec ? Math.round(durationSec / 1000) : 0,
   };
 }

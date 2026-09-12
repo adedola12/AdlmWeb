@@ -101,6 +101,9 @@ async function refreshTranscode(doc) {
     if (state.status === "COMPLETE") {
       doc.hlsKey = `${doc.outPrefix}index.m3u8`;
       doc.transcodeError = "";
+      // The runtime, straight from the job. Nothing else in the upload path
+      // knows it, so without this every video showed a blank duration.
+      if (state.durationSec) doc.durationSec = state.durationSec;
       // The new ladder is live, so whatever it replaced is now only costing
       // storage. Cleared before the save and deleted after it: if the delete
       // fails we lose some bytes, never the row's new manifest.
