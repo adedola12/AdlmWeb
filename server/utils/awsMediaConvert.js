@@ -185,20 +185,44 @@ function rung({ height, maxBitrate, nameModifier, quality = 8 }) {
  * The smallest rung always survives, so a tiny or unmeasurable source still
  * produces a playable ladder rather than an empty output group.
  */
+/**
+ * THE CEILING IS WHAT THE MANIFEST ADVERTISES, SO IT DECIDES WHAT PLAYS.
+ *
+ * maxBitrate is a ceiling rather than a target, and the instinct is to leave
+ * it generous. On screen recordings that instinct is a trap.
+ *
+ * The picture is static for seconds and then the whole screen redraws, so one
+ * segment in a stretch costs many times its neighbours. QVBR spends up to the
+ * ceiling on exactly those segments, and MediaConvert then advertises the
+ * worst one as the rung's BANDWIDTH. Every HLS player — hls.js included —
+ * selects on that number, not on AVERAGE-BANDWIDTH. A generous ceiling
+ * therefore does not buy headroom, it prices the rung out of being chosen.
+ *
+ * Measured on the first organisation video with a 8 Mbps ceiling on 2160:
+ *
+ *   2160p   advertised 8.88 Mbps   actually 1.26 Mbps   7.1x
+ *   1080p   advertised 4.27 Mbps   actually 0.68 Mbps   6.2x
+ *
+ * hls.js divides the advertised figure by abrBandWidthUpFactor (0.7), so it
+ * demanded 12.7 Mbps of measured throughput before it would show 4K that
+ * genuinely needs 1.26 — and parked every viewer on 720p or below, on a
+ * correct six-rung ladder. The blur was the manifest overstating its own cost.
+ *
+ * So the ceilings below sit near twice each rung's real average rather than
+ * six times it. Static content never approaches them and is untouched; only
+ * the redraw spikes are compressed harder, which is the one moment nobody is
+ * reading the screen anyway.
+ */
 const RUNGS = [
-  // maxBitrate is a ceiling, not a target: QVBR spends what the picture needs
-  // and a static screen recording needs far less than these. 2160 is capped at
-  // 8 rather than 14 Mbps because nothing in a Revit walkthrough justifies 14,
-  // and a ceiling that can never be reached is not a guardrail.
-  { height: 2160, maxBitrate: 8000000, nameModifier: "_2160", quality: 9 },
-  { height: 1080, maxBitrate: 6000000, nameModifier: "_1080", quality: 9 },
-  { height: 720, maxBitrate: 3600000, nameModifier: "_720", quality: 8 },
-  { height: 540, maxBitrate: 1800000, nameModifier: "_540", quality: 8 },
-  { height: 360, maxBitrate: 900000, nameModifier: "_360", quality: 8 },
+  { height: 2160, maxBitrate: 3000000, nameModifier: "_2160", quality: 9 },
+  { height: 1080, maxBitrate: 1800000, nameModifier: "_1080", quality: 9 },
+  { height: 720, maxBitrate: 1200000, nameModifier: "_720", quality: 8 },
+  { height: 540, maxBitrate: 800000, nameModifier: "_540", quality: 8 },
+  { height: 360, maxBitrate: 500000, nameModifier: "_360", quality: 8 },
   // The bottom rung exists to avoid a stall, not to be read. Spending more
   // quality on 428x240 buys nothing legible and raises the floor a weak
   // connection has to clear.
-  { height: 240, maxBitrate: 450000, nameModifier: "_240", quality: 7 },
+  { height: 240, maxBitrate: 300000, nameModifier: "_240", quality: 7 },
 ];
 
 export function ladderFor(sourceHeight = 0) {
