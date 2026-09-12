@@ -117,12 +117,37 @@ export function recordAiUsage(evt = {}) {
     // Keep the in-process allowance snapshot honest for the rest of its TTL.
     bumpCached(doc);
 
-    AiUsage.create(doc).catch((e) =>
+    // Returned, not awaited.
+    //
+    // Every caller inside the server ignores this, which is the point: metering
+    // must never hold up an answer to a customer. But a SCRIPT that makes a
+    // call and then disconnects from the database beats the write, and the row
+    // is lost — which is how a staff-run drafting script can spend real money
+    // and leave nothing on the AI usage screen. Handing the promise back lets
+    // those callers wait for it without changing anything for the ones that do
+    // not.
+    const wrote = AiUsage.create(doc).catch((e) =>
       console.error("[aiUsage] record failed:", e?.message || e),
     );
+    pending.add(wrote);
+    wrote.finally(() => pending.delete(wrote));
+    return wrote;
   } catch (e) {
     console.error("[aiUsage] record threw:", e?.message || e);
+    return Promise.resolve();
   }
+}
+
+/**
+ * Every metering write still in flight.
+ *
+ * A script cannot await what it did not call — createMessage() records usage
+ * internally, so the caller never sees that promise. This is how a script
+ * waits for the books to be closed before it disconnects.
+ */
+const pending = new Set();
+export function flushAiUsage() {
+  return Promise.allSettled([...pending]);
 }
 
 /** Pull a usage block out of whatever shape a provider hands back. */
