@@ -44,7 +44,11 @@ function parseDate(v) {
 
 /** Window: explicit from/to, else last `days` (default 30), capped at 2 years. */
 export function windowFrom(query) {
-  const to = parseDate(query.to) || new Date();
+  // `let`, not `const`: the swap below reassigns it. As a const this is a
+  // runtime TypeError the moment somebody passes from later than to — and,
+  // more urgently, esbuild refuses to bundle it at all, which means the Lambda
+  // could not be built while this line stood.
+  let to = parseDate(query.to) || new Date();
   let from = parseDate(query.from);
   if (!from) {
     const days = Math.min(Math.max(Number(query.days) || 30, 1), 731);

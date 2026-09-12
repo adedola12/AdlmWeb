@@ -46,6 +46,34 @@ export const AI_FEATURES = [
     guestAllowed: true,
   },
   {
+    // The single largest line on the bill, and it was not in this list at all
+    // until 2026-09-12 — so it could be seen on the dashboard and not capped,
+    // because sanitizeFeatures() drops a limit set against a key it does not
+    // know.
+    //
+    // Not a screen: scripts/generate-module-quizzes.mjs, run from a terminal by
+    // a member of staff, one call per lecture. A whole transcript goes in, so
+    // one call is thousands of input tokens where an Ada round-trip is
+    // hundreds. Its rows carry no account, which is correct rather than a gap —
+    // nobody signed in, the studio ran it.
+    key: "course-quiz-draft",
+    label: "Quiz drafting",
+    desc: "Drafts a quiz from one lecture transcript. A staff-run script rather than a screen, so its calls belong to nobody.",
+    provider: "agent",
+    metered: true,
+    guestAllowed: false,
+  },
+  {
+    // Also missing until 2026-09-12. Same consequence: visible, unnameable in a
+    // limit, and unfilterable in the call log.
+    key: "programme-outputs",
+    label: "Programme — gang outputs",
+    desc: "Estimates a gang output per trade on a bill so the programme can put durations against it. One round-trip per programme.",
+    provider: "agent",
+    metered: true,
+    guestAllowed: false, // it works on a signed-in account's own project
+  },
+  {
     key: "quiv-prompt",
     label: "QUIV prompt (Revit)",
     desc: "One model round-trip turning a typed instruction into takeoff actions, from the plugin's AI bar.",

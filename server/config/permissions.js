@@ -28,6 +28,10 @@ export const ADMIN_AREAS = [
   { key: "followups", label: "Follow-Up Calls", group: "People", staffGrantable: true },
   // The rotating "Latest from ADLM" band on the marketing pages.
   { key: "latest", label: "Latest from ADLM", group: "Content", staffGrantable: true },
+  // Videos recorded for one organisation (a demo walked through on a call,
+  // a training recap). Filed under the firm name and shown on that firm's
+  // accounts only. Staff-grantable: it is content, not an entitlement.
+  { key: "orgvideos", label: "Organisation videos", group: "Content", staffGrantable: true },
   // The main Admin Hub section pages (Pending, Active subscriptions,
   // Organizations, Storage, Installations, Settings …) and their API. Grant
   // deliberately — it includes purchase approval and entitlement management.

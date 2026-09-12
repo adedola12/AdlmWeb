@@ -7,6 +7,8 @@ import { apiAuthed } from "../http.js";
 import OrganizationBadge from "../components/common/OrganizationBadge.jsx";
 import AdminPageHeader from "../components/AdminPageHeader.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
+import OrgVideosQuickAdd from "../features/admin/OrgVideosQuickAdd.jsx";
+import SeatsEditor from "../features/admin/SeatsEditor.jsx";
 import { FiShield } from "../components/icons.jsx";
 
 const MONTH_CHOICES = [
@@ -2174,6 +2176,11 @@ export default function Admin({ section = null }) {
                         <b>{r.seatsUsed}</b> / {r.seats} used
                       </div>
 
+                      {/* Set the seat count for this account on this software.
+                          Its own component: the row re-renders on load(), and
+                          the editor re-seeds from the fresh row. */}
+                      <SeatsEditor row={r} onSaved={load} onMessage={setMsg} />
+
                       <div className="mt-2 flex gap-2">
                         <button
                           className="btn btn-sm"
@@ -3620,6 +3627,8 @@ export default function Admin({ section = null }) {
       )}
 
       {/* ------------------ organizations tab ------------------ */}
+      {tab === "organizations" && <OrgVideosQuickAdd />}
+
       {tab === "organizations" && (
         <div className="card">
           <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
@@ -3992,6 +4001,9 @@ export default function Admin({ section = null }) {
                           <div className="text-xs text-slate-700">
                             <b>{r.seatsUsed}</b> / {r.seats} used
                           </div>
+
+                          {/* Set the seat count for this account on this software. */}
+                          <SeatsEditor row={r} onSaved={load} onMessage={setMsg} />
                           <div className="mt-2 flex gap-2">
                             <button
                               className="btn btn-sm"

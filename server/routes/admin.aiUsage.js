@@ -7,6 +7,9 @@
 //                               and the AWS credit burn-down + runway
 //   GET    /users               per-user rows with their allocation and how
 //                               much of it is spent this month
+//   GET    /accounts            EVERY account that holds software or has used
+//                               AI — what they hold, what they have spent, and
+//                               what they are allowed
 //   GET    /user/:id            drill-down: per-feature totals + recent calls
 //   GET    /events              raw call log (paged) for auditing a spike
 //   GET    /allocations         the default row + every per-user override
@@ -25,6 +28,7 @@ import { writeAudit, reqAuditContext } from "../util/audit.js";
 import { AiUsage } from "../models/AiUsage.js";
 import { AiAllocation } from "../models/AiAllocation.js";
 import { User } from "../models/User.js";
+import { Product } from "../models/Product.js";
 import { Setting } from "../models/Setting.js";
 import {
   AI_FEATURES,
@@ -790,6 +794,236 @@ router.put("/credit", async (req, res) => {
   } catch (err) {
     console.error("[/admin/ai-usage/credit PUT] error:", err);
     res.status(500).json({ error: "Failed to save credit settings" });
+  }
+});
+
+/* ────────────────────────────── accounts ────────────────────────────── */
+//
+// WHY THIS IS NOT /users WITH A BIGGER LIMIT
+//
+// /users is built FROM the usage log, so it can only ever list accounts that
+// have already spent something. The question an admin actually arrives with is
+// the opposite one — "who has the software and is not touching the AI in it" —
+// and that account has no row in the log at all. A list built from usage can
+// never answer it, however long you make it.
+//
+// So this one starts from the accounts: everybody holding an entitlement, plus
+// anybody who has used AI (guests aside, who are summarised separately because
+// there is no account to hold anything). Usage is joined ONTO that, which is
+// why a row can honestly read "holds QUIV, has never made a call".
+//
+// It carries what they hold as well as what they spend, because the two
+// together are the decision: a firm on three seats that has never used the AI
+// is a training problem, and the same firm at 90% of its allowance is a
+// pricing one. Neither is visible from the spend alone.
+router.get("/accounts", async (req, res) => {
+  try {
+    const { since, days } = windowFrom({ days: req.query.days || 30 });
+    const q = String(req.query.q || "").trim().toLowerCase();
+    const limit = Math.min(Math.max(Number(req.query.limit) || 400, 1), 1000);
+
+    // Usage in the window and usage this month, both by account. The month is
+    // a separate pass because the allowance resets on the calendar month and
+    // the window does not — holding a 90-day figure against a monthly cap is a
+    // different number wearing the same clothes.
+    const [inWindow, inMonth, products, def] = await Promise.all([
+      AiUsage.aggregate([
+        { $match: { at: { $gte: since } } },
+        {
+          $group: {
+            _id: "$userId",
+            email: { $last: "$email" },
+            name: { $last: "$name" },
+            lastAt: { $max: "$at" },
+            features: { $addToSet: "$feature" },
+            ...SUM,
+          },
+        },
+      ]),
+      AiUsage.aggregate([
+        { $match: { at: { $gte: monthStart() } } },
+        { $group: { _id: "$userId", ...SUM } },
+      ]),
+      Product.find({}, { key: 1, name: 1, isCourse: 1 }).lean(),
+      getDefaultAllocation(),
+    ]);
+
+    const usedById = new Map(
+      inWindow.filter((r) => r._id).map((r) => [String(r._id), r]),
+    );
+    const monthById = new Map(inMonth.filter((r) => r._id).map((r) => [String(r._id), r]));
+    const guests = inWindow.find((r) => !r._id) || null;
+
+    const label = new Map(
+      products.map((p) => [
+        String(p.key || "").toLowerCase(),
+        String(p.name || p.key || "").trim(),
+      ]),
+    );
+
+    // "HERON: PlanSwift / 2D Drawings QS Software" is the catalogue name, and
+    // it is the right name on a pricing page. In a column of licences held it
+    // is six words of packaging around the one word that identifies it, so the
+    // part before the colon travels too and the table uses that.
+    const short = (key) => {
+      const full = label.get(key) || key;
+      return full.split(":")[0].trim() || full;
+    };
+
+    // Everybody who holds something, plus everybody who has spent something.
+    const users = await User.find({
+      $or: [
+        { "entitlements.0": { $exists: true } },
+        { _id: { $in: [...usedById.keys()].map((id) => new mongoose.Types.ObjectId(id)) } },
+      ],
+    })
+      .select("name firstName lastName email role disabled firmName location createdAt entitlements")
+      .lean();
+
+    const allocs = await AiAllocation.find({
+      scope: "user",
+      userId: { $in: users.map((u) => u._id) },
+    }).lean();
+    const allocById = new Map(allocs.map((a) => [String(a.userId), a]));
+
+    const now = Date.now();
+    const live = (e) =>
+      String(e?.status || "") === "active" &&
+      (!e?.expiresAt || new Date(e.expiresAt).getTime() > now);
+
+    const rows = users.map((u) => {
+      const id = String(u._id);
+      const w = usedById.get(id);
+      const m = monthById.get(id);
+      const own = allocById.get(id);
+      const eff = own || def;
+
+      const holds = (u.entitlements || []).map((e) => {
+        const key = String(e.productKey || "").toLowerCase();
+        return {
+          key,
+          label: label.get(key) || key,
+          short: short(key),
+          // The stored status is not the whole truth — an "active" entitlement
+          // whose date has passed is expired, and the licence check already
+          // treats it that way. Saying "active" here would have the screen
+          // disagree with the software.
+          status: live(e) ? "active" : String(e.status || "inactive") === "disabled" ? "disabled" : e.expiresAt && new Date(e.expiresAt).getTime() <= now ? "expired" : String(e.status || "inactive"),
+          expiresAt: e.expiresAt || null,
+          seats: Number(e.seats || 1),
+          licenseType: e.licenseType || "personal",
+          organisation: e.organizationName || "",
+          // Machines actually bound to the licence, and when one last checked
+          // in. A seat nobody has opened in two months is its own finding.
+          devices: (e.devices || []).filter((d) => !d.revokedAt).length,
+          lastSeenAt:
+            (e.devices || [])
+              .map((d) => d.lastSeenAt)
+              .filter(Boolean)
+              .sort()
+              .slice(-1)[0] || null,
+        };
+      });
+
+      const totals = shapeTotals(w);
+      const monthTotals = shapeTotals(m);
+      const limits = eff ? limitOut(eff.total) : null;
+
+      return {
+        userId: id,
+        name: u.name || [u.firstName, u.lastName].filter(Boolean).join(" ") || "",
+        email: u.email || "",
+        role: u.role || "user",
+        disabled: u.disabled === true,
+        firm: u.firmName || holds.find((h) => h.organisation)?.organisation || "",
+        location: u.location || "",
+        joinedAt: u.createdAt || null,
+        holds,
+        seats: holds.filter((h) => h.status === "active").reduce((n, h) => n + h.seats, 0),
+        // Three states, and the middle one is the point of the screen.
+        access: holds.some((h) => h.status === "active")
+          ? "active"
+          : holds.length
+            ? "lapsed"
+            : "none",
+        usage: {
+          ...totals,
+          lastAt: w?.lastAt || null,
+          features: (w?.features || []).filter(Boolean),
+        },
+        month: { calls: monthTotals.calls, tokens: monthTotals.tokens, costUsd: monthTotals.costUsd },
+        allocation: eff
+          ? {
+              enabled: eff.enabled !== false,
+              total: limits,
+              // The per-feature caps travel with the row so the limits form can
+              // seed itself from what is already set. Without them the form
+              // would open blank and SAVE blank, and the PUT replaces rather
+              // than merges — pressing Save would have quietly deleted every
+              // per-feature limit on the account.
+              features: mapOut(eff.features),
+              notes: eff.notes || "",
+            }
+          : null,
+        allocationScope: own ? "user" : def ? "default" : "none",
+        percentUsed:
+          limits && (limits.calls || limits.tokens || limits.costUsd)
+            ? {
+                calls: limits.calls ? round((monthTotals.calls / limits.calls) * 100, 1) : null,
+                tokens: limits.tokens ? round((monthTotals.tokens / limits.tokens) * 100, 1) : null,
+                costUsd: limits.costUsd
+                  ? round((monthTotals.costUsd / limits.costUsd) * 100, 1)
+                  : null,
+              }
+            : null,
+      };
+    });
+
+    // Spenders first, largest first; then everybody who has not spent, by name,
+    // because that half of the list is read alphabetically rather than ranked.
+    rows.sort((a, b) => {
+      if (b.usage.costUsd !== a.usage.costUsd) return b.usage.costUsd - a.usage.costUsd;
+      if (b.usage.calls !== a.usage.calls) return b.usage.calls - a.usage.calls;
+      return (a.name || a.email).localeCompare(b.name || b.email);
+    });
+
+    const counts = {
+      all: rows.length,
+      using: rows.filter((r) => r.usage.calls > 0).length,
+      idle: rows.filter((r) => r.access === "active" && !r.usage.calls).length,
+      lapsed: rows.filter((r) => r.access === "lapsed").length,
+      capped: rows.filter((r) => {
+        const p = r.percentUsed;
+        return p && [p.calls, p.tokens, p.costUsd].some((v) => v != null && v >= 80);
+      }).length,
+    };
+
+    const filtered = q
+      ? rows.filter((r) =>
+          [r.name, r.email, r.firm, ...r.holds.map((h) => h.label)]
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+        )
+      : rows;
+
+    res.json({
+      days,
+      since,
+      rows: filtered.slice(0, limit),
+      truncated: Math.max(0, filtered.length - limit),
+      counts,
+      defaultAllocation: allocationOut(def),
+      // The signed-out bucket. Ada answers visitors who have no account, so
+      // they cannot be a row in a list of accounts — but dropping them would
+      // lose the largest spender on most days.
+      guests: guests
+        ? { ...shapeTotals(guests), lastAt: guests.lastAt, features: (guests.features || []).filter(Boolean) }
+        : null,
+    });
+  } catch (err) {
+    console.error("[/admin/ai-usage/accounts] error:", err);
+    res.status(500).json({ error: "Failed to load accounts" });
   }
 });
 

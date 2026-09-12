@@ -1,7 +1,7 @@
 // server/routes/admin.documents.js
 //
-// The Documents group: what the studio produces, what it spends on AI, what
-// was done in the admin, and what the system is set to.
+// The Documents group: what the studio produces, what was done in the admin,
+// and what the system is set to.
 //
 // His group is Composer, Templates, Issued, AI usage and System. Two of those
 // we do not have and they stay absent rather than becoming empty screens:
@@ -9,19 +9,21 @@
 // what has been issued (a PDF is generated and sent, and nothing records that
 // it happened).
 //
-// AI USAGE IS THE ONE THAT PAYS FOR ITSELF
+// AI USAGE IS NOT HERE ANY MORE
 //
-// 163 calls are logged with their token counts and cost, and until now the
-// only way to read it was a chart of the last 30 days. What an administrator
-// actually needs to know is which FEATURE is spending the money — Ada, the
-// quiz drafter, the programme estimator — because that is the thing that can
-// be turned down. So it is grouped by feature and by person, and the totals
-// are summed in the database rather than over a page of rows.
+// It was, briefly: a per-feature rollup served from this file because the
+// screen it fed sat in his Documents group. That was the wrong door. The AI
+// screen is gated with `aiusage` — an admin-only area, because it exposes cost
+// data and can throttle every AI feature on the platform — and this router is
+// gated with `adminhub`, so the page was reading its numbers through a weaker
+// permission than the one guarding the page itself.
+//
+// Everything it served now comes from routes/admin.aiUsage.js, behind the
+// right gate and with the per-account and per-call detail this rollup never
+// had. Nothing links here.
 
 import express from "express";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
-import { AiUsage } from "../models/AiUsage.js";
-import { AiAllocation } from "../models/AiAllocation.js";
 import { AuditLog } from "../models/AuditLog.js";
 import { Proposal } from "../models/Proposal.js";
 import { Invoice } from "../models/Invoice.js";
@@ -39,150 +41,6 @@ const router = express.Router();
 const hub = [requireAuth, requirePermission("adminhub")];
 
 const n0 = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-const DAY = 864e5;
-
-/* ─────────────────────────────────────────────────────────────── ai usage ── */
-
-router.get("/ai-usage", ...hub, async (req, res, next) => {
-  try {
-    const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
-    const since = new Date(Date.now() - days * DAY);
-
-    const [byFeature, byPerson, totals] = await Promise.all([
-      AiUsage.aggregate([
-        { $match: { at: { $gte: since } } },
-        {
-          $group: {
-            _id: "$feature",
-            calls: { $sum: 1 },
-            inTokens: { $sum: { $ifNull: ["$inputTokens", 0] } },
-            outTokens: { $sum: { $ifNull: ["$outputTokens", 0] } },
-            cost: { $sum: { $ifNull: ["$costUsd", 0] } },
-          },
-        },
-        { $sort: { cost: -1, calls: -1 } },
-      ]),
-      AiUsage.aggregate([
-        { $match: { at: { $gte: since } } },
-        {
-          $group: {
-            _id: { email: "$email", name: "$name" },
-            calls: { $sum: 1 },
-            cost: { $sum: { $ifNull: ["$costUsd", 0] } },
-            features: { $addToSet: "$feature" },
-          },
-        },
-        { $sort: { cost: -1 } },
-        { $limit: 50 },
-      ]),
-      AiUsage.aggregate([
-        { $match: { at: { $gte: since } } },
-        {
-          $group: {
-            _id: null,
-            calls: { $sum: 1 },
-            cost: { $sum: { $ifNull: ["$costUsd", 0] } },
-            inTokens: { $sum: { $ifNull: ["$inputTokens", 0] } },
-            outTokens: { $sum: { $ifNull: ["$outputTokens", 0] } },
-          },
-        },
-      ]),
-    ]);
-
-    // WHO SPENT IT HAS TO BE ACTIONABLE, NOT JUST READABLE
-    //
-    // The rows are grouped by email, because that is what a usage record
-    // carries. An allowance is held against a user id, so the two have to be
-    // joined before an administrator can do anything about a row: without the
-    // id, "this person is spending too much" is a fact with no button on it.
-    //
-    // Two queries for the whole page rather than one per row, and both are
-    // skipped entirely when nobody signed-in has spent anything.
-    const emails = [
-      ...new Set(byPerson.map((p) => (p._id.email || "").toLowerCase()).filter(Boolean)),
-    ];
-    let idOf = new Map();
-    let allowOf = new Map();
-    if (emails.length) {
-      const users = await User.find({ email: { $in: emails } })
-        .select("email")
-        .lean();
-      idOf = new Map(users.map((u) => [String(u.email || "").toLowerCase(), String(u._id)]));
-
-      const allocs = await AiAllocation.find({
-        scope: "user",
-        userId: { $in: [...idOf.values()] },
-      }).lean();
-      allowOf = new Map(allocs.map((a) => [String(a.userId), a]));
-    }
-
-    // The platform allowance every account falls back to, so a row can say
-    // what applies to it rather than only what it has of its own.
-    const fallback = await AiAllocation.findOne({ scope: "default" }).lean();
-
-    const limitOut = (l) => ({
-      enabled: l?.enabled !== false,
-      calls: Number(l?.calls || 0),
-      tokens: Number(l?.tokens || 0),
-      costUsd: Number(l?.costUsd || 0),
-      window: l?.window === "day" ? "day" : "month",
-    });
-
-    res.json({
-      items: byFeature.map((f) => ({
-        id: f._id || "unattributed",
-        name: f._id || "Unattributed",
-        calls: f.calls,
-        inTokens: f.inTokens,
-        outTokens: f.outTokens,
-        cost: f.cost,
-        state: "active",
-      })),
-      people: byPerson.map((p) => {
-        const email = (p._id.email || "").toLowerCase();
-        const userId = idOf.get(email) || null;
-        const own = userId ? allowOf.get(userId) : null;
-        return {
-          id: p._id.email || "anonymous",
-          userId,
-          who: p._id.name || p._id.email || "Signed out",
-          email: p._id.email || "",
-          calls: p.calls,
-          cost: p.cost,
-          features: (p.features || []).filter(Boolean),
-          // What governs this row right now. "guest" is the signed-out
-          // bucket, which has a shared ceiling and no account to set one on.
-          governed: !userId ? "guest" : own ? (own.enabled === false ? "blocked" : "own") : "default",
-          allowance: own
-            ? {
-                enabled: own.enabled !== false,
-                total: limitOut(own.total),
-                notes: own.notes || "",
-                updatedByEmail: own.updatedByEmail || "",
-                updatedAt: own.updatedAt,
-              }
-            : null,
-        };
-      }),
-      // The default allowance travels with the page so the drawer can show what
-      // a person falls back to without a second round trip.
-      fallback: fallback
-        ? {
-            enabled: fallback.enabled !== false,
-            total: limitOut(fallback.total),
-            guestTotal: limitOut(fallback.guestTotal),
-            notes: fallback.notes || "",
-            updatedByEmail: fallback.updatedByEmail || "",
-            updatedAt: fallback.updatedAt,
-          }
-        : null,
-      totals: totals[0] || { calls: 0, cost: 0, inTokens: 0, outTokens: 0 },
-      days,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
 
 /* ────────────────────────────────────────────────────────────── audit log ── */
 

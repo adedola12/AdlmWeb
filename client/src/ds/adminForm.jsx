@@ -189,7 +189,10 @@ function Field({ f, value, error, onChange, values }) {
     input = (
       <input
         id={id}
-        type={f.type === "number" ? "number" : "text"}
+        // A date gets the browser's own picker rather than a text box asking
+        // for a format. Both screens that declare one already hold an ISO
+        // yyyy-mm-dd, which is what the native input reads and writes.
+        type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
         value={value ?? ""}
         placeholder={f.placeholder}
         min={f.type === "number" ? f.min ?? 0 : undefined}

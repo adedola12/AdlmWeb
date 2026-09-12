@@ -29,6 +29,7 @@ import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import CertTicket from "./LxCertTicket.jsx";
+import DsOrgVideos from "./DsOrgVideos.jsx";
 import { COUNT, accountName, ago, certificateName, clock, toRow, trim } from "./lxCourses.js";
 
 export default function DsLearning() {
@@ -118,6 +119,10 @@ export default function DsLearning() {
           </Link>
         </div>
       </div>
+
+      {/* Recordings ADLM made for this account's firm. Renders nothing on a
+          personal account, or on a firm with none. */}
+      <DsOrgVideos />
 
       {/* Pick up where you left off. */}
       {hero && (

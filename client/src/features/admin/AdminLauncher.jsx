@@ -33,6 +33,7 @@ const TOOLS = [
   { area: "flyers", to: "/admin/flyers", label: "Flyer Engine", desc: "Design flyers & thumbnails", icon: FiImage },
   { area: "support", to: "/admin/support-tickets", label: "Support Tickets", desc: "User help requests & AnyDesk", icon: FiLifeBuoy },
   { area: "waitlist", to: "/admin/waitlist", label: "Waitlist & Enquiries", desc: "CIVIQ waitlist & solutions leads", icon: FiUsers },
+  { area: "orgvideos", to: "/admin/org-videos", label: "Organisation Videos", desc: "Demos & recaps recorded for one firm", icon: FiPlayCircle },
   { area: "followups", to: "/admin/follow-ups", label: "Follow-Up Calls", desc: "Expired subscriptions & unpaid orders to chase", icon: IconPhone },
   { area: "audit", to: "/admin/audit-log", label: "Audit Log", desc: "Break-glass activity & access", icon: FiActivity },
   { area: "aiusage", to: "/admin/ai-usage", label: "AI Usage", desc: "AI spend, quotas & AWS credit", icon: FiCpu },

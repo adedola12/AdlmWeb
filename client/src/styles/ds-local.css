@@ -1175,6 +1175,18 @@
 .ds .adm-allow > span:last-child {
   font-size: 11.5px; color: var(--ink-3); line-height: 1.35;
 }
+
+
+/* ================================= the Holds cell on the AI usage screen
+
+   OURS, and deliberately not .adm-allow above: that one stacks a chip over a
+   line of detail, and a row of licences wants the opposite — they read across
+   and wrap when there are too many. An account holding five products in a
+   column made its row four times the height of every other one. */
+.ds .adm-holds { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 5px; }
+.ds .adm-holds .adm-dim { font-size: 11.5px; }
+
+
 /* =========================== the Share column on the AI usage breakdowns
 
    OURS, and a fix rather than a preference. His .adm-bar-t is a <span> with a

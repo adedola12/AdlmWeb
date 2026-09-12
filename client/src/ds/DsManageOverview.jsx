@@ -18,6 +18,7 @@ import { apiAuthed } from "../api.js";
 import { API_BASE } from "../config.js";
 import { useAuth } from "../store.jsx";
 import { termTotalNGN } from "../lib/termPricing.js";
+import { DsOrgVideosPanel } from "./DsOrgVideos.jsx";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -566,6 +567,10 @@ export default function DsManageOverview() {
               </div>
             </section>
           )}
+
+          {/* Recordings ADLM made for this account's firm. Nothing at all on
+              a personal account, so the column does not gain an empty box. */}
+          <DsOrgVideosPanel />
 
           {/* Your learning — his .dsh-course, from the enrolments already
               loaded for the Courses tile. His progress bar is a percentage and
