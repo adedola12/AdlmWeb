@@ -21,6 +21,7 @@ import { can, isDesignAccess } from "../utils/roles.js";
 import DsSprite from "./chrome/DsSprite.jsx";
 import DsAdminSprite from "./chrome/DsAdminSprite.jsx";
 import { NAV, titleFor } from "./adminNav.js";
+import NetworkIndicator from "../components/NetworkIndicator.jsx";
 import "../styles/ds-admin.css";
 
 const RAIL_KEY = "adlm-adm-rail";
@@ -319,6 +320,10 @@ export default function DsAdminShell({ children, title }) {
               />
               <kbd>&#8984;K</kbd>
             </label>
+
+            {/* Not in his build: signal bars for the round trip to ADLM Cloud,
+                the same indicator the desktop products carry in their header. */}
+            <NetworkIndicator />
 
             {/* His #tt, on our ThemeProvider rather than its own localStorage
                 key. One theme system for the whole site: admin obeys the same

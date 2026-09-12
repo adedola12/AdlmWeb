@@ -25,6 +25,7 @@ import { apiAuthed } from "../api.js";
 import DsAppSprite from "./chrome/DsAppSprite.jsx";
 import DsLeaveStudio from "./DsLeaveStudio.jsx";
 import DsRail from "./chrome/DsRail.jsx";
+import NetworkIndicator from "../components/NetworkIndicator.jsx";
 
 // His app screens load dash.css and work.css on top of site.css. Importing
 // them here rather than in main.jsx is what keeps ~91 KB of dashboard styling
@@ -233,6 +234,9 @@ export default function DsAppShell({ children, title = "", page = "" }) {
                 aria-label="Search this account"
               />
             </span>
+            {/* Not in his build: signal bars for the round trip to ADLM Cloud,
+                the same indicator the desktop products carry in their header. */}
+            <NetworkIndicator />
             <span className="dsh-acc">
               <button
                 type="button"
