@@ -100,12 +100,29 @@ export const VIDEO_TOPIC = "videos";
 /**
  * Where the "stop these" line in a video announcement points.
  *
- * Absolute, and built from PUBLIC_SITE_URL rather than the request, because
+ * BUILT FROM THE API HOST, NOT THE SITE HOST
+ *
+ * This was PUBLIC_SITE_URL and it was wrong, in the way that only shows up in
+ * production. The route is served by the API, which lives on
+ * api.adlmstudio.net; adlmstudio.net is the Vercel front end, whose config
+ * rewrites `/(.*)` to index.html. So the link returned 200 and the React shell
+ * rather than the unsubscribe page — every recipient who clicked "stop these"
+ * would have landed on the marketing site and stayed subscribed.
+ *
+ * Worth being blunt about the severity: an unsubscribe link that silently does
+ * nothing is not a broken link, it is a bulk mailing with no working opt-out,
+ * and that is the one defect in this whole feature with a legal edge to it.
+ *
+ * Absolute, and taken from configuration rather than from a request, because
  * the only place this URL is ever read is an inbox — there is no request to
- * take a host from by the time somebody clicks it.
+ * take a host from by the time somebody clicks it, possibly months later.
  */
+const API_BASE = () =>
+  String(process.env.API_BASE_URL || "").trim().replace(/\/+$/, "") ||
+  `http://localhost:${process.env.PORT || 4000}`;
+
 export const videoUnsubscribeUrl = (userId) =>
-  `${SITE}/api/email/unsubscribe/${encodeURIComponent(
+  `${API_BASE()}/api/email/unsubscribe/${encodeURIComponent(
     topicUnsubscribeToken(VIDEO_TOPIC, userId),
   )}`;
 
