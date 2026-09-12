@@ -1,4 +1,4 @@
-# package-release.ps1
+﻿# package-release.ps1
 # ============================================================================
 # Turns a Release build output folder into a zip ready for publish-build.ps1,
 # and refuses to package a build that would fail in the field.
