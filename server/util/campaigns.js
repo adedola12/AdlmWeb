@@ -14,7 +14,6 @@
 import crypto from "crypto";
 import { User } from "../models/User.js";
 
-const SITE = process.env.PUBLIC_SITE_URL || "https://adlmstudio.net";
 
 /**
  * The secret the token is signed with.
@@ -43,8 +42,25 @@ export function readUnsubscribeToken(token) {
   return id;
 }
 
+/**
+ * The marketing unsubscribe link.
+ *
+ * On the API host, for the same reason the video one is — and this one was
+ * ALREADY BROKEN in production rather than newly at risk. /unsubscribe is an
+ * API route, and adlmstudio.net is the Vercel front end, whose config rewrites
+ * `/(.*)` to index.html. Curling the live URL returns 200 and the React shell.
+ *
+ * It presumably worked when the API and the site were one Render process, and
+ * broke silently in the move to Lambda — which means every campaign sent since
+ * has carried an opt-out link that quietly did nothing. That is worse than the
+ * video bug, because those messages have already gone out.
+ *
+ * Fixing it here cannot repair links already sitting in inboxes. What it does
+ * is make the switch in account settings the honest route for anybody who has
+ * given up on the link, and stop the next campaign repeating it.
+ */
 export const unsubscribeUrl = (userId) =>
-  `${SITE}/unsubscribe?t=${encodeURIComponent(unsubscribeToken(userId))}`;
+  `${API_BASE()}/unsubscribe?t=${encodeURIComponent(unsubscribeToken(userId))}`;
 
 /* ────────────────────────────────────────────────────── topic unsubscribe ── */
 

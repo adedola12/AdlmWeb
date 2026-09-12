@@ -81,3 +81,23 @@ test("in production, an unset API_BASE_URL refuses the send rather than mailing 
     if (before.api) process.env.API_BASE_URL = before.api;
   }
 });
+
+test("the MARKETING unsubscribe is on the API host too", async () => {
+  // It was already broken in production, not newly at risk: /unsubscribe is an
+  // API route and the front end rewrites everything to index.html, so the live
+  // URL returned 200 and the React shell. Every campaign since the Lambda move
+  // shipped an opt-out link that did nothing.
+  const { unsubscribeUrl } = await import("./campaigns.js");
+  const before = process.env.API_BASE_URL;
+  try {
+    process.env.API_BASE_URL = "https://api.adlmstudio.net";
+    const url = unsubscribeUrl("68ef815ed84af5b5c7c783ad");
+    assert.match(url, /^https:\/\/api\.adlmstudio\.net\/unsubscribe\?t=/);
+    assert.ok(
+      !/^https?:\/\/(www\.)?adlmstudio\.net/.test(url),
+      `points at the front end: ${url}`,
+    );
+  } finally {
+    if (before) process.env.API_BASE_URL = before;
+  }
+});
