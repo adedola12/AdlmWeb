@@ -243,6 +243,29 @@ test("a dry run of a RESEND does not erase the addresses it exists to retry", op
   assert.ok(row.notifiedAt, "and the video is still marked announced");
 });
 
+/* ───────────────────────────────────────────────────── the poll writes nothing ── */
+
+test("a dry run of the POLL does not file anything", opts, async () => {
+  // Found by running it for real against the live channel: the poll wrote its
+  // rows before ever reaching announceVideo, which is the only thing that had
+  // been taught about DRY_RUN. So a "dry run" filed fifteen videos and marked
+  // every one notified — permanently deciding that the back catalogue would
+  // never be announced — while the wrapper printed "nothing was written".
+  const { runVideoPoll } = await import("./videoNotifier.js");
+  await Video.deleteMany({});
+
+  process.env.DRY_RUN = "true";
+  const out = await runVideoPoll({ log: quiet });
+
+  // No key in CI, and that is fine: the assertion that matters is that the
+  // collection is untouched either way.
+  assert.equal(await Video.countDocuments(), 0, "the collection is still empty");
+  if (!out.skipped) {
+    assert.equal(out.dryRun, true);
+    assert.equal(out.announced, 0);
+  }
+});
+
 /* ──────────────────────────────────────────────────────────────── edge cases ── */
 
 test("a video that is not in the collection announces nothing", opts, async () => {

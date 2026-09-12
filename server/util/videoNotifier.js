@@ -36,6 +36,8 @@ import { User } from "../models/User.js";
 import { Video } from "../models/Video.js";
 import { sendMail } from "./mailer.js";
 import { newVideoMessage } from "./videoEmail.js";
+import { mapWithPool } from "./sendPool.js";
+import { isSesSelected, sendRatePerSecond } from "./sesTransport.js";
 import { videoUnsubscribeUrl } from "./campaigns.js";
 import { fetchRecentUploads, isConfigured, watchUrl } from "./youtubeFeed.js";
 
@@ -60,6 +62,26 @@ export const isDryRun = () =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * How many messages to have in flight, and how fast to start them.
+ *
+ * Only SES gets the parallel treatment, and only because it will say what its
+ * limit is. Everything else keeps the one-at-a-time pacing this job has always
+ * used: a transport that cannot tell you its ceiling is a transport you find
+ * the ceiling of by hitting it, in front of eight hundred customers.
+ *
+ * Concurrency is capped at the batch size because there is no point admitting
+ * more workers than there is work in the batch they are draining.
+ */
+export async function sendPacing() {
+  if (!isSesSelected()) return { concurrency: 1, ratePerSecond: 0 };
+  const ratePerSecond = await sendRatePerSecond();
+  const concurrency =
+    Number(process.env.VIDEO_SEND_CONCURRENCY) ||
+    Math.min(BATCH_SIZE, Math.max(1, Math.ceil(ratePerSecond)));
+  return { concurrency, ratePerSecond };
+}
+
 /* ──────────────────────────────────────────────────────────── recipients ── */
 
 /**
@@ -79,6 +101,11 @@ export function classifyRecipient(user) {
   // An unverified address is one nobody has proved exists. Mailing it buys
   // nothing and costs sender reputation on the bounce.
   if (!user.emailVerified) return "unverified";
+  // An address that already bounced permanently. Checked BEFORE the opt-out
+  // so the counts stay meaningful: somebody whose mailbox was deleted has not
+  // opted out of anything, and filing them under "opted out" would overstate
+  // how many people asked us to stop.
+  if (user.emailUndeliverable) return "undeliverable";
   // `!== false` and not `=== true`: an account created before the field
   // existed has no value at all, and must read as opted IN rather than being
   // silently dropped off the list.
@@ -97,7 +124,7 @@ export const isVideoRecipient = (user) => classifyRecipient(user) === "send";
  */
 export function splitAudience(users = []) {
   const recipients = [];
-  const skipped = { optedOut: 0, unverified: 0, noAddress: 0 };
+  const skipped = { optedOut: 0, unverified: 0, undeliverable: 0, noAddress: 0 };
 
   for (const u of users) {
     switch (classifyRecipient(u)) {
@@ -109,6 +136,9 @@ export function splitAudience(users = []) {
         break;
       case "unverified":
         skipped.unverified += 1;
+        break;
+      case "undeliverable":
+        skipped.undeliverable += 1;
         break;
       default:
         skipped.noAddress += 1;
@@ -211,9 +241,17 @@ export async function sendWithRetry(send, message, { attempts = MAX_ATTEMPTS, pa
  *   and the pause between batches is what keeps a burst of 800 messages from
  *   reading as an attack to the provider.
  *
- * Within a batch the sends are sequential, not parallel. Fifty concurrent
- * requests to the mail API is exactly the shape that trips a rate limit, and
- * the wall-clock saving is not worth spending the run's whole error budget on.
+ * WHY THE SENDS INSIDE A BATCH ARE NOW PARALLEL
+ *   They used to be sequential, and the reason given was that fifty concurrent
+ *   requests is the shape that trips a rate limit. That was true of a reseller
+ *   whose limit we could not ask about. SES tells us its per-second ceiling
+ *   (see util/sesTransport.js), so the limit can be held directly instead of
+ *   approximated by doing one thing at a time — which is both faster and more
+ *   accurate about the thing it was protecting.
+ *
+ *   `concurrency: 1` with no rate limit is exactly the old behaviour, and it
+ *   is still the default here: a caller that has not thought about the
+ *   transport's limits gets the cautious version.
  *
  * `send` is injected so the tests can drive this without a provider, and so
  * DRY_RUN can pass a function that only logs.
@@ -225,6 +263,8 @@ export async function runBatches({
   batchSize = BATCH_SIZE,
   pauseMs = BATCH_PAUSE_MS,
   pause = sleep,
+  concurrency = 1,
+  ratePerSecond = 0,
   label = "video",
   log = console,
 }) {
@@ -242,21 +282,30 @@ export async function runBatches({
     let batchSent = 0;
     let batchFailed = 0;
 
-    for (const user of batch) {
-      const r = await sendWithRetry(send, build(user), { attempts: MAX_ATTEMPTS, pause });
-      if (r.ok) {
+    // Settled, in the order the recipients went in — so the failure log and
+    // failedRecipients read the same way they did when this was a loop, even
+    // though the sends themselves finished in whatever order they finished.
+    const results = await mapWithPool(
+      batch,
+      (user) => sendWithRetry(send, build(user), { attempts: MAX_ATTEMPTS, pause }),
+      { concurrency, ratePerSecond, sleep: pause },
+    );
+
+    results.forEach(({ value }, idx) => {
+      const user = batch[idx];
+      if (value?.ok) {
         batchSent += 1;
-      } else {
-        batchFailed += 1;
-        failedRecipients.push(user.email);
-        // The address is named because that is what makes the failure
-        // actionable; the error is named because "failed" alone cannot
-        // distinguish a typo from the provider being down.
-        log.error?.(
-          `[${label}] batch ${n}/${total} ${user.email}: ${r.error?.message || r.error}`,
-        );
+        return;
       }
-    }
+      batchFailed += 1;
+      failedRecipients.push(user.email);
+      // The address is named because that is what makes the failure
+      // actionable; the error is named because "failed" alone cannot
+      // distinguish a typo from the provider being down.
+      log.error?.(
+        `[${label}] batch ${n}/${total} ${user.email}: ${value?.error?.message || value?.error}`,
+      );
+    });
 
     sent += batchSent;
     failed += batchFailed;
@@ -277,15 +326,21 @@ const MAX_STORED_FAILURES = 500;
 function buildMessage(video) {
   const url = watchUrl(video.videoId);
   return (user) => {
+    const optOut = videoUnsubscribeUrl(user._id);
     const m = newVideoMessage({
       firstName: user.firstName,
       title: video.title,
       description: video.description,
       thumbnailUrl: video.thumbnailUrl,
       videoUrl: url,
-      unsubscribeUrl: videoUnsubscribeUrl(user._id),
+      unsubscribeUrl: optOut,
     });
     return {
+      // The same URL the footer link uses, promoted into a header so the
+      // "unsubscribe" button in Gmail's own chrome works. A list that is
+      // genuinely easy to leave gets reported as spam far less often, which
+      // is the reputation this whole migration depends on.
+      listUnsubscribe: optOut,
       to: user.email,
       subject: m.subject,
       html: m.html,
@@ -326,7 +381,7 @@ export async function announceVideo(
   }
 
   const all = await audienceQuery()
-    .select("email firstName emailVerified emailPrefs")
+    .select("email firstName emailVerified emailPrefs emailUndeliverable")
     .lean();
 
   let { recipients, skipped } = splitAudience(all);
@@ -338,7 +393,8 @@ export async function announceVideo(
 
   log.log?.(
     `[video-mail] ${videoId} "${claimed.title}": ${recipients.length} to mail, ` +
-      `${skipped.optedOut} opted out, ${skipped.unverified} unverified` +
+      `${skipped.optedOut} opted out, ${skipped.unverified} unverified, ` +
+      `${skipped.undeliverable} undeliverable` +
       (dryRun ? " — DRY RUN, nothing will be sent" : ""),
   );
 
@@ -352,11 +408,20 @@ export async function announceVideo(
       }
     : send;
 
+  const { concurrency, ratePerSecond } = await sendPacing();
+  if (concurrency > 1) {
+    log.log?.(
+      `[video-mail] ${videoId}: sending ${concurrency} at a time, up to ${ratePerSecond}/s`,
+    );
+  }
+
   const out = await runBatches({
     recipients,
     build: buildMessage(claimed),
     send: transport,
     pause,
+    concurrency,
+    ratePerSecond,
     label: "video-mail",
     log,
   });
@@ -373,6 +438,7 @@ export async function announceVideo(
         failed: out.failed,
         skippedOptedOut: before.skippedOptedOut ?? 0,
         skippedUnverified: before.skippedUnverified ?? 0,
+        skippedUndeliverable: before.skippedUndeliverable ?? 0,
         dryRun: !!before.dryRun,
       }
     : {
@@ -381,6 +447,7 @@ export async function announceVideo(
         failed: out.failed,
         skippedOptedOut: skipped.optedOut,
         skippedUnverified: skipped.unverified,
+        skippedUndeliverable: skipped.undeliverable,
         dryRun,
       };
 
@@ -494,6 +561,36 @@ export async function runVideoPoll({ log = console } = {}) {
       String(process.env.VIDEO_ANNOUNCE_ON_FIRST_RUN || "").trim(),
     );
     const seedOnly = isFirstRun && !announceFirstRun;
+
+    /**
+     * A dry run stops HERE, before the collection is touched.
+     *
+     * announceVideo has always honoured DRY_RUN, but this function writes
+     * before it ever calls it — so a dry run of the poll filed fifteen videos
+     * and marked every one of them notified, while the wrapper script printed
+     * "nothing was written". It was not a harmless discrepancy: those rows are
+     * what makes a video never be announced, so a preview quietly decided that
+     * the entire back catalogue would never be mailed.
+     *
+     * Worse in the other direction. The point of a dry run is to be able to
+     * look before committing, and a look that consumes the thing you were
+     * deciding about is not a look.
+     */
+    if (isDryRun()) {
+      log.warn?.(
+        `[video-poll] DRY RUN: ${fresh.length} new video(s) found and NOT filed` +
+          (seedOnly ? " (a real run here would seed and mail nobody)" : ""),
+      );
+      for (const v of fresh) log.log?.(`[video-poll] DRY RUN would file ${v.videoId} — ${v.title}`);
+      return {
+        ok: true,
+        dryRun: true,
+        checked: uploads.length,
+        found: fresh.length,
+        announced: 0,
+        wouldSeed: seedOnly,
+      };
+    }
 
     // Written BEFORE anything is sent. A crash between seeing and sending
     // leaves a row with notifiedAt still null, so the next run sends it. The
