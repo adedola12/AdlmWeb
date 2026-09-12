@@ -13,8 +13,8 @@
 //
 // 163 calls are logged with their token counts and cost, and until now the
 // only way to read it was a chart of the last 30 days. What an administrator
-// actually needs to know is which FEATURE is spending the money â€” Ada, the
-// quiz drafter, the programme estimator â€” because that is the thing that can
+// actually needs to know is which FEATURE is spending the money — Ada, the
+// quiz drafter, the programme estimator — because that is the thing that can
 // be turned down. So it is grouped by feature and by person, and the totals
 // are summed in the database rather than over a page of rows.
 
@@ -41,7 +41,7 @@ const hub = [requireAuth, requirePermission("adminhub")];
 const n0 = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const DAY = 864e5;
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ai usage â”€â”€ */
+/* ─────────────────────────────────────────────────────────────── ai usage ── */
 
 router.get("/ai-usage", ...hub, async (req, res, next) => {
   try {
@@ -184,7 +184,7 @@ router.get("/ai-usage", ...hub, async (req, res, next) => {
   }
 });
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ audit log â”€â”€ */
+/* ────────────────────────────────────────────────────────────── audit log ── */
 
 router.get("/audit", ...hub, async (req, res, next) => {
   try {
@@ -218,11 +218,11 @@ router.get("/audit", ...hub, async (req, res, next) => {
   }
 });
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ documents â”€â”€ */
+/* ───────────────────────────────────────────────────────────── documents ── */
 
 /**
  * What the studio has produced. Quotations are the only document type this
- * system stores as a record â€” invoices have their own register, and anything
+ * system stores as a record — invoices have their own register, and anything
  * else (certificates, receipts) is generated on demand and not kept.
  */
 router.get("/produced", ...hub, async (_req, res, next) => {
@@ -250,14 +250,14 @@ router.get("/produced", ...hub, async (_req, res, next) => {
   }
 });
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ system â”€â”€ */
+/* ──────────────────────────────────────────────────────────────── system ── */
 
 router.get("/system", ...hub, async (_req, res, next) => {
   try {
     const s = (await Setting.findOne({ key: "global" }).lean()) || {};
 
     // One row per setting, because the question an administrator has is "what
-    // is this set to and does it apply" â€” not "show me a JSON blob".
+    // is this set to and does it apply" — not "show me a JSON blob".
     const items = [
       {
         id: "fx",
@@ -273,7 +273,7 @@ router.get("/system", ...hub, async (_req, res, next) => {
         note: [
           s.vatApplyToPurchases ? "applies to purchases" : "not on purchases",
           s.vatApplyToInvoices ? "applies to invoices" : "not on invoices",
-        ].join(" Â· "),
+        ].join(" · "),
         state: s.vatEnabled ? "active" : "calm",
       },
       {
@@ -316,7 +316,7 @@ const money = (n, cur = "NGN") =>
     maximumFractionDigits: 0,
   }).format(n0(n));
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ templates â”€â”€ */
+/* ────────────────────────────────────────────────────────────── templates ── */
 
 /**
  * What the engine can produce, and whose paper each one prints on.
@@ -324,7 +324,7 @@ const money = (n, cur = "NGN") =>
  * The list mirrors the composer's own kinds in DsDocComposer.jsx, which are
  * his five: letter, report, statement, invoice, receipt. A bill of quantities
  * and a valuation were listed here for a while on the reasoning that a QS
- * studio writes those most â€” but they are not in his design, and inventing a
+ * studio writes those most — but they are not in his design, and inventing a
  * template because it seems sensible is how the port stops being a port.
  *
  * `paper` matters more than it looks: a practice's exports come out of the
@@ -348,7 +348,7 @@ const TEMPLATES = [
 router.get("/templates", ...hub, async (_req, res, next) => {
   try {
     // Real usage, counted from the documents that were actually made on each
-    // template â€” not a number typed into the list.
+    // template — not a number typed into the list.
     const used = await SavedDocument.aggregate([
       { $group: { _id: "$template", n: { $sum: 1 } } },
     ]);
@@ -377,7 +377,7 @@ router.get("/templates", ...hub, async (_req, res, next) => {
     // The one ours has that his does not, said plainly rather than left for
     // somebody to notice: a quotation here is its own document with its own
     // numbering and share link, not a composer template. It is on the list
-    // because it is a real thing the engine produces â€” but the row has to say
+    // because it is a real thing the engine produces — but the row has to say
     // that it opens somewhere else, or the button lies.
     items.push({
       id: "quotation",
@@ -453,7 +453,7 @@ router.post("/templates/requests", ...hub, async (req, res, next) => {
     }
 
     // Asking twice for the same thing sharpens the request rather than
-    // doubling it â€” the second description is usually the better one.
+    // doubling it — the second description is usually the better one.
     const row = await TemplateRequest.findOneAndUpdate(
       { key },
       {
@@ -484,7 +484,7 @@ router.post("/templates/requests", ...hub, async (req, res, next) => {
   }
 });
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ saved â”€â”€ */
+/* ────────────────────────────────────────────────────────────────── saved ── */
 
 router.get("/saved", ...hub, async (_req, res, next) => {
   try {
@@ -550,7 +550,7 @@ router.post("/saved", ...hub, async (req, res, next) => {
     };
 
     // Saving an already-saved document updates it rather than making a second
-    // copy â€” otherwise a morning's editing leaves twelve near-identical rows
+    // copy — otherwise a morning's editing leaves twelve near-identical rows
     // and no way to tell which is current.
     if (b.id) {
       const hit = await SavedDocument.findByIdAndUpdate(b.id, { $set: doc }, { new: true }).lean();
@@ -624,12 +624,12 @@ router.post("/saved/:id/duplicate", ...hub, async (req, res, next) => {
   }
 });
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ issued â”€â”€ */
+/* ───────────────────────────────────────────────────────────────── issued ── */
 
 /**
  * Every document that has left the studio, newest first.
  *
- * It answers the question that actually gets asked â€” "you never sent it" â€”
+ * It answers the question that actually gets asked — "you never sent it" —
  * so it is searchable by who received it, and it is assembled from the
  * records that already know: an invoice knows the day it was issued, a paid
  * invoice knows the day its receipt was raised, a quotation knows when it was
@@ -724,7 +724,7 @@ router.get("/issued", ...hub, async (req, res, next) => {
           on: c.certificateIssuedAt,
           kind: "Certificate",
           // Certificates have no number of their own, so the record's own id
-          // is the reference â€” short, stable and unique, which is all a
+          // is the reference — short, stable and unique, which is all a
           // reference has to be.
           ref: `CERT-${String(c._id).slice(-6).toUpperCase()}`,
           to: nameOf.get(String(c.userId)) || c.email || "Unknown",
@@ -769,7 +769,7 @@ router.get("/issued", ...hub, async (req, res, next) => {
   }
 });
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ one issued document â”€â”€ */
+/* ─────────────────────────────────────────────────── one issued document ── */
 
 /**
  * The document itself, as a spec the renderer can mount.
@@ -778,7 +778,7 @@ router.get("/issued", ...hub, async (req, res, next) => {
  * them, and the reason it fetches rather than carrying them in the list is the
  * same reason his preview exists at all: what is shown here has to be what was
  * SENT. An invoice is rebuilt from its own captured line items and its own VAT
- * rate, so last March's reprints as last March's â€” changing the rate today
+ * rate, so last March's reprints as last March's — changing the rate today
  * cannot rewrite what went out.
  */
 router.get("/issued/:id", ...hub, async (req, res, next) => {
@@ -836,7 +836,7 @@ router.get("/issued/:id", ...hub, async (req, res, next) => {
         },
         to: i.clientEmail || "",
         note:
-          `Reprinted at the VAT rate it was issued under â€” ${rate.toFixed(1)}%. ` +
+          `Reprinted at the VAT rate it was issued under — ${rate.toFixed(1)}%. ` +
           "Changing the rate today cannot rewrite what was sent.",
       });
     }
@@ -927,7 +927,7 @@ router.get("/issued/:id", ...hub, async (req, res, next) => {
         href: c.certificateUrl || "",
         note: c.certificateUrl
           ? "The file that was issued is behind Open the original."
-          : "No file was kept for this one â€” only the record that it was issued.",
+          : "No file was kept for this one — only the record that it was issued.",
       });
     }
 
@@ -941,8 +941,8 @@ router.get("/issued/:id", ...hub, async (req, res, next) => {
  * Send it again.
  *
  * His does this with a toast, because his panel has no post box. The point of
- * the row, in his words, is the question that actually gets asked â€” "you never
- * sent it" â€” so ours puts the document back in the post AND says when it went
+ * the row, in his words, is the question that actually gets asked — "you never
+ * sent it" — so ours puts the document back in the post AND says when it went
  * the first time, which is the answer to that question.
  */
 router.post("/issued/:id/send-again", ...hub, async (req, res, next) => {
