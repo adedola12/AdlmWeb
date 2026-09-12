@@ -31,10 +31,17 @@
 //   node scripts/place-quiz-checkpoints.mjs --apply          write them to the quizzes
 //   node scripts/place-quiz-checkpoints.mjs --unplace        take them all off again
 
-import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 import mongoose from "mongoose";
+
+// server/.env, wherever this was run from. "dotenv/config" reads the working
+// directory, so from the repo root it quietly found nothing and mongoose was
+// handed an undefined connection string.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(HERE, "..", ".env") });
 
 const args = process.argv.slice(2);
 const has = (f) => args.includes(f);
@@ -46,7 +53,10 @@ const REVIEW = has("--review");
 const UNPLACE = has("--unplace");
 const ONLY_SKU = val("--sku", "");
 const LIMIT = Number(val("--limit", DRY ? 1 : 0)) || 0;
-const OUT = path.resolve(val("--out", path.join(process.cwd(), "scripts", "checkpoint-draft.json")));
+// Beside the script, not beside wherever it was run from. Defaulting to
+// process.cwd() meant the same command worked from server/ and reported "no
+// draft" from the repo root, which is a confusing way to be told to cd.
+const OUT = path.resolve(val("--out", path.join(HERE, "checkpoint-draft.json")));
 
 /* ── the shape of a lecture the model reads ────────────────────────────── */
 
