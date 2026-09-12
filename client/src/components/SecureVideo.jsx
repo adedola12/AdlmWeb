@@ -216,6 +216,34 @@ function useHlsSource(videoRef, src) {
         // bandwidth by making the toolbars illegible — the blurry-playback
         // complaint the ladder was built to fix in the first place.
 
+        // CHOOSE THE RUNG ON ITS AVERAGE, NOT ITS PEAK
+        //
+        // Screen recordings are pathological for peak-based selection. The
+        // picture is static for seconds at a time and then the whole screen
+        // redraws, so one segment in a stretch costs many times its
+        // neighbours. MediaConvert advertises BANDWIDTH as that worst segment
+        // and AVERAGE-BANDWIDTH as the truth, and on this content they are
+        // nowhere near each other. Measured on the first organisation video:
+        //
+        //   2160p   peak 8.88 Mbps   average 1.26 Mbps   (7.1x)
+        //   1080p   peak 4.27 Mbps   average 0.68 Mbps   (6.2x)
+        //
+        // hls.js compares against maxBitrate — the peak — and only against
+        // averageBitrate when config.maxStarvationDelay is 0 AND the buffer
+        // already holds two segments (abr-controller, findBestLevel). With the
+        // default of 4 it therefore demanded 8.88/0.7 = 12.7 Mbps of measured
+        // throughput before it would show 4K that genuinely needs 1.26, and
+        // parked everyone on 720p or below. The ladder was right and the
+        // picture was still soft.
+        //
+        // Zero does not mean "ignore rebuffering". It means "do not budget for
+        // any", and the two-segment buffer condition is what makes that safe:
+        // the average is only trusted once there is a healthy buffer to absorb
+        // a spike, and the moment the buffer falls the selector reverts to the
+        // peak and steps down. Exactly the right way round for video-on-demand
+        // whose entire value is being readable.
+        maxStarvationDelay: 0,
+
         // NO abrEwmaDefaultEstimate. There was one here, set to 600 kbps, on
         // the reasoning that guessing low costs a few seconds at a lower rung
         // while guessing high costs a stall. The reasoning was wrong about
