@@ -83,6 +83,13 @@ on:
   # Lets you ship without an empty commit — after changing an SSM parameter,
   # for instance, which needs new containers but touches no code.
   workflow_dispatch:
+    inputs:
+      allow_deletions:
+        description: >-
+          Deploy even though it removes live resources. Tick this only when
+          taking infrastructure away is the actual intention.
+        type: boolean
+        default: false
 
 # One deploy at a time. cancel-in-progress is deliberately false: cancelling a
 # CloudFormation update midway leaves the stack in UPDATE_IN_PROGRESS and the
@@ -135,12 +142,22 @@ jobs:
         working-directory: infra
         run: npx cdk diff || true
 
+      # NOT `cdk deploy` directly. CDK makes the live stack look like THIS
+      # checkout, so a deploy from a branch that does not define a resource
+      # deletes it — which is how the SES mail infrastructure disappeared on
+      # 2026-09-12 in a run that finished green. The guard reads the template
+      # CloudFormation is holding, compares logical IDs, and fails the job
+      # rather than removing anything nobody asked to remove. See
+      # infra/scripts/guarded-deploy.mjs.
+      #
+      # --require-approval never: there are no IAM or security-group changes
+      # in a routine code deploy, and a prompt in CI just hangs until timeout.
+      # A change that DOES touch IAM will still show in the diff step above.
       - name: Deploy
         working-directory: infra
-        # --require-approval never: there are no IAM or security-group changes
-        # in a routine code deploy, and a prompt in CI just hangs until timeout.
-        # A change that DOES touch IAM will still show in the diff step above.
-        run: npx cdk deploy --require-approval never
+        env:
+          ALLOW_STACK_DELETIONS: ${{ inputs.allow_deletions && '1' || '0' }}
+        run: npm run deploy -- --require-approval never
 
       # A cold start that cannot import its own bundle returns 502 on every
       # request, and CloudFormation will have reported success regardless — the
