@@ -48,10 +48,21 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
   const [session, setSession] = React.useState(null);
   const [blocked, setBlocked] = React.useState(null);
 
+  // The token is held in a ref and the effect keys on whether one EXISTS, not
+  // on its value. AuthProvider refreshes the access token every ten minutes and
+  // writes the new one into auth state; with the token in this dependency array
+  // each refresh tore the session down and claimed a new one, which replaces the
+  // playback URL and resets the media element to 0:00. A two-hour lecture
+  // restarted roughly ten times and could not be finished. Same defect as the
+  // organisation player, same fix.
+  const tokenRef = React.useRef(token);
+  tokenRef.current = token;
+  const hasToken = !!token;
+
   React.useEffect(() => {
     // The intro belongs to the course, not to a module, so it is the one track
     // that legitimately has no module code.
-    if (!sku || !token) return undefined;
+    if (!sku || !hasToken) return undefined;
     if (!moduleCode && track !== "onboarding") return undefined;
 
     let cancelled = false;
@@ -67,7 +78,7 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
       // requires, so it would always 401. If the tab dies before this request
       // lands, the missing heartbeat frees the seat within 90s anyway.
       apiAuthed(`/me/courses/${encodeURIComponent(sku)}/playback/stop`, {
-        token,
+        token: tokenRef.current,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
@@ -80,7 +91,7 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
         const res = await apiAuthed(
           `/me/courses/${encodeURIComponent(sku)}/playback/start`,
           {
-            token,
+            token: tokenRef.current,
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -103,7 +114,7 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
           const deltaSec = Math.round((now - lastPingAt) / 1000);
           lastPingAt = now;
           apiAuthed(`/me/courses/${encodeURIComponent(sku)}/playback/ping`, {
-            token,
+            token: tokenRef.current,
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -129,7 +140,7 @@ function usePlaybackSession(sku, moduleCode, token, track = "lecture") {
       window.removeEventListener("pagehide", stop);
       stop();
     };
-  }, [sku, moduleCode, token, track]);
+  }, [sku, moduleCode, hasToken, track]);
 
   return { session, blocked };
 }

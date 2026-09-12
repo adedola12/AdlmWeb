@@ -25,8 +25,24 @@ export function useOrgVideoPlayback(video, { token, admin = false } = {}) {
   const id = video?.id || "";
   const stream = video?.source === "s3" || video?.kind === "stream";
 
+  // THE TOKEN IS HELD IN A REF, AND THE EFFECT KEYS ON WHETHER ONE EXISTS.
+  //
+  // Not on its value. AuthProvider refreshes the access token on a 10-minute
+  // interval and writes the new one into auth state, so the token a component
+  // holds CHANGES four times during a forty-minute recording. With the token in
+  // this effect's dependency array, each of those changes tore the effect down
+  // and re-ran it: the old session was stopped, a new /playback/start was
+  // claimed, and `src` was replaced — which resets the media element to 0:00.
+  // The video restarted every ten minutes and could not be finished at all.
+  //
+  // A ref gives ping and stop the current token at call time without making
+  // the token an identity the effect reacts to.
+  const tokenRef = React.useRef(token);
+  tokenRef.current = token;
+  const hasToken = !!token;
+
   React.useEffect(() => {
-    if (!id || !token) {
+    if (!id || !hasToken) {
       setState({ src: "", kind: "", sessionRef: "", blocked: null, error: "" });
       return undefined;
     }
@@ -51,7 +67,7 @@ export function useOrgVideoPlayback(video, { token, admin = false } = {}) {
 
     const json = (path, body) =>
       apiAuthed(path, {
-        token,
+        token: tokenRef.current,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body || {}),
@@ -68,7 +84,7 @@ export function useOrgVideoPlayback(video, { token, admin = false } = {}) {
     (async () => {
       try {
         if (admin) {
-          const r = await apiAuthed(`/admin/org-videos/${id}/play`, { token });
+          const r = await apiAuthed(`/admin/org-videos/${id}/play`, { token: tokenRef.current });
           if (cancelled) return;
           setState({ src: r?.playbackUrl || "", kind: r?.kind || "", sessionRef: "", blocked: null, error: r?.playbackUrl ? "" : "Nothing to play yet." });
           return;
@@ -104,15 +120,23 @@ export function useOrgVideoPlayback(video, { token, admin = false } = {}) {
       }
     })();
 
+    // Closing the tab is not an unmount: React's cleanup never runs, so
+    // without this the seat stays claimed until the heartbeat lapses. The
+    // course player has had this since it shipped and the organisation player
+    // was written without it — with two streams per account and several people
+    // at a firm, a couple of abandoned tabs is the whole allowance.
+    window.addEventListener("pagehide", stop);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("pagehide", stop);
       stop();
     };
     // `video` itself is deliberately not a dependency: the row object is
     // replaced on every list refresh, and re-claiming a seat each time would
     // restart the picture under the viewer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, stream, token, admin]);
+  }, [id, stream, hasToken, admin]);
 
   return state;
 }
