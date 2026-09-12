@@ -90,12 +90,27 @@ $dlls = Get-ChildItem -LiteralPath $BuildDir -Recurse -Include *.dll, *.exe -Fil
 $stale = @(); $hasNew = $false; $hasEnvVar = $false
 foreach ($d in $dlls) {
     $bytes = [System.IO.File]::ReadAllBytes($d.FullName)
-    # .NET string literals are UTF-16LE in the metadata heap; check both.
-    $u16 = [System.Text.Encoding]::Unicode.GetString($bytes)
-    $u8 = [System.Text.Encoding]::UTF8.GetString($bytes)
-    if ($u16 -match "adlmweb\.onrender\.com" -or $u8 -match "adlmweb\.onrender\.com") { $stale += $d.Name }
-    if ($u16 -match "api\.adlmstudio\.net" -or $u8 -match "api\.adlmstudio\.net") { $hasNew = $true }
-    if ($u16 -match "ADLM_API_BASE_URL" -or $u8 -match "ADLM_API_BASE_URL") { $hasEnvVar = $true }
+    # C# string literals live UTF-16LE in the #US heap; XAML compiled to BAML
+    # stores its strings UTF-8. So read the file as both.
+    #
+    # The UTF-16 pass has to be done twice, from byte 0 and from byte 1. Heap
+    # entries are byte-aligned, not 2-byte aligned, so a literal that happens to
+    # begin at an odd offset decodes to nonsense when you start at 0 and the
+    # match silently fails. That is not theoretical: HERON 2.9.2 passed and
+    # 2.9.3 failed on the same source, because unrelated new code shifted
+    # api.adlmstudio.net by one byte. A check that depends on alignment luck is
+    # worse than no check, because it fails closed on a good build and teaches
+    # you to reach for -Force.
+    # -match against an array returns the matching elements, so it is true when
+    # any of the three readings contains the pattern.
+    $probe = @(
+        [System.Text.Encoding]::Unicode.GetString($bytes)
+        [System.Text.Encoding]::Unicode.GetString($bytes, 1, $bytes.Length - 1)
+        [System.Text.Encoding]::UTF8.GetString($bytes)
+    )
+    if ($probe -match "adlmweb\.onrender\.com") { $stale += $d.Name }
+    if ($probe -match "api\.adlmstudio\.net") { $hasNew = $true }
+    if ($probe -match "ADLM_API_BASE_URL") { $hasEnvVar = $true }
 }
 
 Write-Host ""
