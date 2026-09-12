@@ -50,8 +50,24 @@ const POLICY_NAME = "adlm-video-cors";
 const ORIGINS = ["https://www.adlmstudio.net", "https://adlmstudio.net"];
 
 function aws(args) {
-  const out = execFileSync("aws", args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
-  return out.trim() ? JSON.parse(out) : null;
+  try {
+    const out = execFileSync("aws", args, {
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return out.trim() ? JSON.parse(out) : null;
+  } catch (e) {
+    // execFileSync throws a stack trace that buries the one line that matters.
+    // The first run of this script created the policy and then failed here,
+    // and the reason scrolled past unread — so print what AWS actually said,
+    // and nothing else.
+    const said = String(e.stderr || e.stdout || e.message || "").trim();
+    console.error(`\n  aws ${args.slice(0, 2).join(" ")} failed:\n`);
+    for (const line of said.split("\n").slice(0, 6)) console.error("    " + line);
+    console.error("");
+    process.exit(1);
+  }
 }
 
 function withTempJson(value, fn) {
@@ -156,4 +172,16 @@ withTempJson(cfg.DistributionConfig, (ref) => {
   ]);
   console.log("distribution updated. status:", res?.Distribution?.Status);
 });
-console.log("CloudFront takes a few minutes to propagate to every edge.");
+
+// Read it back rather than trusting the call. Creating the policy and failing
+// to attach it looks like success from the console output alone, and that is
+// exactly what happened on the first run.
+const after = aws(["cloudfront", "get-distribution", "--id", DISTRIBUTION_ID, "--output", "json"]);
+const attached = after?.Distribution?.DistributionConfig?.DefaultCacheBehavior?.ResponseHeadersPolicyId;
+if (attached === policyId) {
+  console.log(`verified: policy ${policyId} is on the distribution`);
+  console.log("CloudFront takes a few minutes to propagate to every edge.");
+} else {
+  console.error(`\n  NOT ATTACHED. distribution still reports: ${attached || "(none)"}`);
+  process.exit(1);
+}
