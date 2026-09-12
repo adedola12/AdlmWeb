@@ -85,9 +85,26 @@ function createPolicy() {
     Comment: "CORS for HLS playback by hls.js with signed cookies",
     CorsConfig: {
       AccessControlAllowOrigins: { Quantity: ORIGINS.length, Items: ORIGINS },
-      AccessControlAllowHeaders: { Quantity: 1, Items: ["*"] },
+      // Explicit, not "*". CloudFront refuses a wildcard in either the origin
+      // list or the header list while AccessControlAllowCredentials is true,
+      // and it is right to: the browser would refuse the response anyway.
+      // Only `Range` here actually provokes a preflight — hls.js uses it for
+      // byte-range segments, and it is not a CORS-safelisted request header.
+      // The rest are listed so a preflight never fails on a header the player
+      // happens to add.
+      AccessControlAllowHeaders: {
+        Quantity: 4,
+        Items: ["Origin", "Range", "Accept", "Content-Type"],
+      },
       AccessControlAllowMethods: { Quantity: 2, Items: ["GET", "HEAD"] },
       AccessControlAllowCredentials: true,
+      // What the player is allowed to READ off the response. Without
+      // Content-Range and Content-Length a byte-range fetch cannot be
+      // interpreted.
+      AccessControlExposeHeaders: {
+        Quantity: 4,
+        Items: ["Content-Length", "Content-Range", "ETag", "Date"],
+      },
       AccessControlMaxAgeSec: 3600,
       // Set the headers even if the origin sent its own, so this does not
       // depend on the bucket's configuration staying absent.
