@@ -225,8 +225,13 @@ path. They need a database, so they skip unless asked for, and they refuse to
 run against `adlmWeb`:
 
 ```bash
-cd server && AUTH_DB=adlmWeb_videotest VIDEO_IT=1 node --test util/videoNotifier.integration.test.js
+cd server
+node scripts/video-integration-test.mjs
 ```
+
+(The runner sets the variables itself. The bash-style `AUTH_DB=… VIDEO_IT=1 node …`
+prefix that used to be documented here is a parse error in PowerShell 5.1, which
+is what this machine runs — so the documented command simply did not work.)
 
 The one that matters most is the race: two callers announce the same video
 concurrently and exactly one of them sends. Asserted sequentially, a

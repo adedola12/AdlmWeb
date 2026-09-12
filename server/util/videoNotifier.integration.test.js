@@ -21,6 +21,11 @@
 // behaviour under a second caller is exactly the thing a unit test with a
 // mocked ODM would assert into existence rather than verify.
 
+// Loads server/.env, so MONGO_URI does not have to be exported by hand. It did
+// have to be, once — which meant the suite passed for whoever had exported it
+// and failed with "MONGO_URI is not set" for everybody else, including the
+// second time I ran it myself.
+import "dotenv/config";
 import { test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
