@@ -535,7 +535,11 @@ router.get("/:id/play", async (req, res) => {
     let kind = "";
     if (doc.hlsKey && isCloudfrontConfigured()) {
       try {
-        const { cookies, expiresAt } = signPlaybackCookies({ keyPrefix: doc.outPrefix });
+        // From the key being SERVED, not doc.outPrefix — the two diverge while
+        // a re-encode runs. See the same note in routes/me.orgVideos.js.
+        const { cookies, expiresAt } = signPlaybackCookies({
+          keyPrefix: doc.hlsKey.replace(/index\.m3u8$/, ""),
+        });
         for (const [name, value] of Object.entries(cookies)) {
           res.cookie(name, value, playbackCookieOptions(expiresAt));
         }
