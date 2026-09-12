@@ -263,6 +263,38 @@ function useHlsSource(videoRef, src) {
         // for content whose entire value is legibility: be readable immediately
         // and drop if you must, rather than open unusable and hope to recover.
       });
+      // A fatal error with no handler stops the stream for good, silently.
+      //
+      // hls.js reports plenty of non-fatal errors and recovers from them on
+      // its own; the two fatal classes it CAN recover from need to be told to.
+      // Without this a single dropped request forty minutes into a lecture
+      // ends the viewing with a frozen frame and nothing in the interface to
+      // say why — and on a Lagos connection a dropped request over forty
+      // minutes is close to certain rather than a corner case.
+      //
+      // NETWORK_ERROR: ask it to resume loading. MEDIA_ERROR: ask it to
+      // recover the decoder, and only give up if that fails twice in a row,
+      // which is hls.js's own documented escalation.
+      let mediaRecoveries = 0;
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data?.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls.startLoad();
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries < 2) {
+          mediaRecoveries += 1;
+          hls.recoverMediaError();
+          return;
+        }
+        // Genuinely unrecoverable. Tear the instance down rather than leave it
+        // retrying a stream that will not come back.
+        try { hls.destroy(); } catch { /* ignore */ }
+      });
+      // A clean fragment resets the escalation, so a blip at minute five does
+      // not spend the allowance for one at minute thirty.
+      hls.on(Hls.Events.FRAG_BUFFERED, () => { mediaRecoveries = 0; });
+
       hls.loadSource(src);
       hls.attachMedia(video);
     });
