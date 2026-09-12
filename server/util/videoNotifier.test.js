@@ -102,13 +102,47 @@ test("the split gives back the list and the reasons together", () => {
     { email: "in2@x.test", emailVerified: true, emailPrefs: { videoUpdates: true } },
     { email: "out@x.test", emailVerified: true, emailPrefs: { videoUpdates: false } },
     { email: "unv@x.test", emailVerified: false },
+    { email: "dead@x.test", emailVerified: true, emailUndeliverable: true },
     { email: "", emailVerified: true },
   ]);
 
   assert.deepEqual(recipients.map((u) => u.email), ["in1@x.test", "in2@x.test"]);
-  assert.deepEqual(skipped, { optedOut: 1, unverified: 1, noAddress: 1 });
+  assert.deepEqual(skipped, { optedOut: 1, unverified: 1, undeliverable: 1, noAddress: 1 });
   // The figures have to add up, or the admin screen lies about consent.
-  assert.equal(recipients.length + skipped.optedOut + skipped.unverified + skipped.noAddress, 5);
+  assert.equal(
+    recipients.length +
+      skipped.optedOut +
+      skipped.unverified +
+      skipped.undeliverable +
+      skipped.noAddress,
+    6,
+  );
+});
+
+test("an address that bounced permanently is not mailed, and is not called an opt-out", () => {
+  // The distinction matters on the admin screen: "60 people asked us to stop"
+  // and "60 mailboxes no longer exist" are the same number and completely
+  // different news. Counting a dead mailbox as consent withdrawn would make
+  // the studio look rejected when it has only been outlived.
+  assert.equal(
+    classifyRecipient({ email: "a@x.test", emailVerified: true, emailUndeliverable: true }),
+    "undeliverable",
+  );
+  // Still undeliverable even where the preference says yes.
+  assert.equal(
+    classifyRecipient({
+      email: "a@x.test",
+      emailVerified: true,
+      emailUndeliverable: true,
+      emailPrefs: { videoUpdates: true },
+    }),
+    "undeliverable",
+  );
+  // An account from before the field existed must read as mailable.
+  assert.equal(
+    classifyRecipient({ email: "a@x.test", emailVerified: true, emailUndeliverable: undefined }),
+    "send",
+  );
 });
 
 /* ─────────────────────────────────────────────────────────────────── retry ── */
