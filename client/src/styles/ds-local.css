@@ -1,7 +1,7 @@
 /* Hand-authored additions to the ported design system.
  *
  * Everything else under src/styles/ds*.css is generated from Richard's
- * stylesheets and must not be edited â€” a re-run of scripts/port-ds-css.mjs
+ * stylesheets and must not be edited — a re-run of scripts/port-ds-css.mjs
  * would discard the change. This file is where a control that exists in our
  * build but not in his gets its styling, written in his idiom and using his
  * tokens so it does not read as a bolt-on.
@@ -11,8 +11,8 @@
  */
 
 /* On-site training: his tile leaves this "On enquiry", because his static
- * build has no way to know the price. Ours does â€” every training location is
- * a city and a participant band with a real fee â€” so the stepper is replaced
+ * build has no way to know the price. Ours does — every training location is
+ * a city and a participant band with a real fee — so the stepper is replaced
  * by a select and an optional add-on. */
 .ds .qt-site {
   margin-top: 10px;
@@ -54,7 +54,7 @@
   flex: none;
 }
 
-/* The QR beside the signature. Ours, not his â€” his signature block is the
+/* The QR beside the signature. Ours, not his — his signature block is the
  * signature alone. Sized in points like the rest of the sheet so it prints at
  * a scannable size rather than a screen-pixel size that shrinks on paper. */
 .ds .doc-signrow {
@@ -88,7 +88,7 @@
 }
 
 /* Checkout: the receipt upload and the status line. Neither exists in his
- * build â€” his form posts nowhere and proof of a transfer went over WhatsApp. */
+ * build — his form posts nowhere and proof of a transfer went over WhatsApp. */
 .ds .chk-receipt {
   display: flex;
   align-items: center;
@@ -216,7 +216,7 @@
  *
  * --ink is #061423 in light, so white on near-black reads fine. In dark it is
  * #F2F7FC, so the same white label sits on a near-white pill and disappears.
- * Broken on his site too, not something the port introduced â€” worth sending
+ * Broken on his site too, not something the port introduced — worth sending
  * back to him.
  *
  * The fix is to let the label take the token that is always --ink's opposite.
@@ -233,7 +233,7 @@
 /* A muted standalone paragraph.
  *
  * `.sub` is one of the ten names port-ds-css.mjs renames on the way in, so his
- * `.sub` became `.ds-sub` â€” but he only ever uses it as a DESCENDANT
+ * `.sub` became `.ds-sub` — but he only ever uses it as a DESCENDANT
  * (`.dsh-stat .sub`, `.wk-proj .sub`), and those descendant rules survive under
  * their parents. A standalone `<p class="sub">`, which is what every loading
  * and empty state here uses, matched nothing at all and rendered as body copy.
@@ -250,7 +250,7 @@
 
 /* A real recording in his stage.
  *
- * His .lx-stage is a still image with a simulated transport drawn over it â€” a
+ * His .lx-stage is a still image with a simulated transport drawn over it — a
  * play button, a seek bar and the words "playback simulated". Ours has an
  * actual <video> with its own controls, a watermark overlay and a concurrency
  * seat behind it, so the simulation comes off and the frame stays: the
@@ -304,8 +304,8 @@
 
 /* The module quiz.
  *
- * He has no student-facing quiz anywhere in his build â€” the word only appears
- * in his admin screens â€” so there is nothing to port. This is written in his
+ * He has no student-facing quiz anywhere in his build — the word only appears
+ * in his admin screens — so there is nothing to port. This is written in his
  * idiom instead: his tokens, his radii, his weights, and the same row shape
  * .lx-res uses, so an answer reads like the rest of the lesson panel rather
  * than like a form bolted on.
@@ -342,8 +342,8 @@
 .ds .lx-verdict.pass b { color: var(--ok); }
 :root.dark .ds .lx-verdict.pass b { color: var(--ok-d); }
 .ds .lx-verdict.fail {
-  border-color: color-mix(in srgb, var(--warn) 42%, var(--line));
-  background: color-mix(in srgb, var(--warn) 8%, var(--bg-alt));
+  border-color: color-mix(in srgb, var(--orange-600) 42%, var(--line));
+  background: color-mix(in srgb, var(--orange-600) 8%, var(--bg-alt));
 }
 
 .ds .lx-qs { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 22px; }
@@ -377,8 +377,24 @@
 }
 .ds .lx-opt.key span { color: var(--ink); font-weight: 400; }
 .ds .lx-opt.wrong {
-  border-color: color-mix(in srgb, var(--warn) 50%, var(--line));
-  background: color-mix(in srgb, var(--warn) 9%, var(--bg));
+  border-color: color-mix(in srgb, var(--orange-600) 55%, var(--line));
+  background: color-mix(in srgb, var(--orange-600) 10%, var(--bg));
+}
+.ds .lx-opt.wrong span { color: var(--ink); font-weight: 400; }
+/* His idiom: the token holds the light value and dark gets its own rule. On a
+   dark sheet #C4531A is nearly the background, which is how a wrong answer
+   came to look unmarked even once it had a colour. */
+:root.dark .ds .lx-opt.wrong {
+  border-color: color-mix(in srgb, var(--orange-400) 58%, var(--line));
+  background: color-mix(in srgb, var(--orange-400) 14%, var(--bg));
+}
+:root.dark .ds .lx-opt.key {
+  border-color: color-mix(in srgb, var(--ok-d) 50%, var(--line));
+  background: color-mix(in srgb, var(--ok-d) 12%, var(--bg));
+}
+:root.dark .ds .lx-verdict.fail {
+  border-color: color-mix(in srgb, var(--orange-400) 46%, var(--line));
+  background: color-mix(in srgb, var(--orange-400) 12%, var(--bg-alt));
 }
 .ds .lx-opt.done { cursor: default; }
 .ds .lx-why {
@@ -393,7 +409,8 @@
 .ds .lx-qacts em {
   font-style: normal; font-size: 12px; font-weight: 300; color: var(--ink-3);
 }
-.ds .lx-qacts em.bad { color: var(--warn); }
+.ds .lx-qacts em.bad { color: var(--orange-600); }
+:root.dark .ds .lx-qacts em.bad { color: var(--orange-400); }
 
 /* Playback speed, on the line under the stage.
  *
@@ -426,12 +443,12 @@
 }
 
 
-/* ============================================ programme â€” the two additions
+/* ============================================ programme — the two additions
 
    His "Where the time comes from" table is five columns: item, trade,
    quantity, output, gang-days. Ours carries a sixth, the line's own money off
    the bill, because a programme that cannot say what a week of blockwork is
-   worth is only half the answer â€” and the whole point of deriving it from the
+   worth is only half the answer — and the whole point of deriving it from the
    bill is that the money is already there.
 
    The other change is that his Output cell prints a number and ours takes
@@ -477,7 +494,7 @@
 }
 
 /* His .wk-proj is an anchor. On the programme it is a button, because opening
-   a product is a change of view rather than a destination â€” so it needs the
+   a product is a change of view rather than a destination — so it needs the
    browser's button styling taken off before it can look like his card. The
    Projects screen does the same thing with inline styles; this is that, named. */
 .ds .wk-proj.prg-card {
@@ -502,7 +519,7 @@
 .ds .wk-projs .prg-aside { grid-column: 1 / -1; padding: 4px 2px 0; }
 
 /* The estimator sits in his .wk-locnote slot, at the weight of the note it
-   shares a line with â€” it is an offer, not the panel's headline. */
+   shares a line with — it is an offer, not the panel's headline. */
 .ds .wk-ph .prg-est {
   margin-left: 12px; padding: 3px 10px; cursor: pointer;
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg-alt);
@@ -512,7 +529,7 @@
 .ds .wk-ph .prg-est:disabled { opacity: .55; cursor: default; }
 
 /* An estimated output is marked so it can be told apart from one somebody
-   typed â€” a dotted rule, the way an abbreviation carries its expansion, with
+   typed — a dotted rule, the way an abbreviation carries its expansion, with
    the reasoning on the title. Typing over it clears the mark and the basis. */
 .ds .wk-qr .r .prg-out.est {
   border-bottom-style: dashed;
@@ -522,7 +539,7 @@
 
 /* ============================== what his account menus needed from us: nothing
 
-   Two blocks lived here â€” a marked Admin / User pair for .dsh-menu, and a
+   Two blocks lived here — a marked Admin / User pair for .dsh-menu, and a
    whole .adm-menu shaped after his .dsh-menu for the admin header. Both were
    stand-ins written before his surface.js and .adm-memenu were read properly.
    His switcher (.sw / .sw-row / .sw-now, site.css) and his admin menu
@@ -545,7 +562,7 @@
 
    Richard's submissions screen lists the attached files and leaves opening
    them to the browser. A marker who has to download every attachment, open it,
-   decide, then come back and find their place marks in batches of one â€” so the
+   decide, then come back and find their place marks in batches of one — so the
    work opens beside the queue instead, and the row stays where it was.
 
    None of this is in his sheet, because his screen does not do it. Built from
@@ -632,7 +649,7 @@
 .ds .adm-rowacts { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ds .adm-rowacts .adm-b { font-size: 11.5px; padding: 3px 9px; }
 
-/* Editing a rate in place. Three numbers and a save â€” a rate's price is the
+/* Editing a rate in place. Three numbers and a save — a rate's price is the
    only thing on that register anybody changes often, and sending somebody to
    a separate editor to change one figure loses their place in 130 rows. */
 .ds .adm-edit { display: inline-flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
@@ -655,7 +672,7 @@
 
 /* =========================================================== the rate builder
 
-   Richard drew no rate builder â€” his admin has no such screen, because his
+   Richard drew no rate builder — his admin has no such screen, because his
    prototype had no rate library behind it. Built from his tokens so it belongs
    to the same admin: his .adm-panel for the two halves, his .adm-tabs for the
    library switch, his .adm-none for the empty states. */
@@ -677,7 +694,7 @@
 
 .ds .rb-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 20px; align-items: start; }
 
-/* The library list is long â€” 595 materials â€” so it scrolls inside its panel
+/* The library list is long — 595 materials — so it scrolls inside its panel
    rather than pushing the build-up off the page. */
 .ds .rb-lib { max-height: 46vh; overflow: auto; margin-top: 6px; }
 .ds .rb-item {
@@ -703,7 +720,7 @@
   gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line);
 }
 
-/* â”€â”€ the rate library's opened build-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── the rate library's opened build-up ───────────────────────────────────── */
 
 /* His library row is a link to a rate's own page. Here the build-up opens under
    the row instead, because an administrator is checking a figure rather than
@@ -742,7 +759,7 @@
   font-family: var(--font); font-size: 13px; cursor: pointer; max-width: 190px;
 }
 
-/* â”€â”€ dragging a component into the build-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── dragging a component into the build-up ───────────────────────────────── */
 
 .ds .rb-item { cursor: grab; }
 .ds .rb-item:active { cursor: grabbing; }
@@ -755,7 +772,7 @@
 .ds .rb-empty { transition: color .12s ease; }
 
 /* Where it will land. Two pixels of accent reads at a glance without shifting
-   the rows around it â€” a gap that opens up makes the list jump under the
+   the rows around it — a gap that opens up makes the list jump under the
    pointer and the target you were aiming at moves. */
 .ds .rb-mark {
   height: 2px; margin: -1px 0; border-radius: 2px;
@@ -810,7 +827,7 @@
   .ds .rb-lib { max-height: 34vh; }
 }
 
-/* â”€â”€ storage: how full an account is â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ── storage: how full an account is ──────────────────────────────────────
    The bar and the chip carry the same three bands, so colour never says one
    thing in the bar and another beside it. */
 .ds .adm-fill { display: inline-flex; align-items: center; gap: 9px; justify-content: flex-end; }
@@ -832,11 +849,11 @@
   position: absolute; left: 0; top: 50%; transform: translateY(-50%);
   height: 6px; max-width: 72px;
 }
-.ds .adm-fill.is-full i    { background: var(--bad); }
-.ds .adm-fill.is-filling i { background: var(--due); }
+.ds .adm-fill.is-full i    { background: var(--orange-600); }
+.ds .adm-fill.is-filling i { background: var(--orange-400); }
 .ds .adm-fill.is-fine i    { background: var(--ok); }
 
-/* Inline edit inside a table cell â€” a figure, and the control that changes it. */
+/* Inline edit inside a table cell — a figure, and the control that changes it. */
 .ds .adm-inline { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
 .ds .adm-inline input {
   width: 68px; padding: 4px 7px; text-align: right;
@@ -867,10 +884,10 @@
   max-height: 46vh; overflow: auto;
 }
 
-/* â”€â”€ Ada must not sit on top of anything you can press â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ── Ada must not sit on top of anything you can press ────────────────────
  *
  * She is position:fixed at right:22px bottom:22px with z-index 880, so she
- * floats over whatever happens to be in the bottom-right corner â€” which, on
+ * floats over whatever happens to be in the bottom-right corner — which, on
  * a form or a register, is exactly where the save and the row actions are.
  *
  * The fix is room rather than z-index. Raising the page above her would put
@@ -890,7 +907,7 @@
 .ds .lx-main { padding-bottom: var(--ada-clear); }
 
 /* A drawer scrolls inside itself and sits ABOVE her (z-index on .adm-drawer-
-   wrap), so its footer needs no gap â€” but its scrolling body does, or the last
+   wrap), so its footer needs no gap — but its scrolling body does, or the last
    field hides behind the footer on a short screen. */
 .ds .adm-drawer-b { padding-bottom: 18px; }
 
@@ -905,12 +922,12 @@
   .ds .ada-w { display: none !important; }
 }
 
-/* â”€â”€ reading a message in the admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── reading a message in the admin ──────────────────────────────────────── */
 
 .ds .adm-mail-subject { margin: 2px 0 16px; font-size: 14.5px; color: var(--ink); }
 
 /* The mail rendered as a customer sees it. White regardless of the admin
-   theme, because that is what an inbox does â€” showing it on a dark ground
+   theme, because that is what an inbox does — showing it on a dark ground
    would misrepresent what was actually sent. */
 .ds .adm-mail-frame {
   width: 100%; height: 460px; border: 1px solid var(--line);
@@ -923,10 +940,10 @@
 }
 .ds .adm-mail-orig summary:hover { color: var(--ink); }
 
-/* â”€â”€ Ada moves aside for a drawer, rather than leaving â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ── Ada moves aside for a drawer, rather than leaving ──────────────────────
  *
  * She floats at z-index 880; every admin drawer sits at 120. So she covered
- * the drawer's own Save button â€” the one thing somebody opened it to press.
+ * the drawer's own Save button — the one thing somebody opened it to press.
  *
  * The first fix hid her, which solved the overlap and created a worse
  * problem: a drawer is exactly when somebody has a question. Reading a
@@ -938,7 +955,7 @@
  * floating, still one click, and no longer over anything that can be pressed.
  * Anything that puts a layer over the page sets data-overlay on <html>.
  *
- * Written as :root[data-overlay] .ada-w, NOT .ds [data-overlay] â€” the
+ * Written as :root[data-overlay] .ada-w, NOT .ds [data-overlay] — the
  * attribute is on <html>, an ANCESTOR of .ds, so a descendant selector would
  * never match. Same trap that kept the admin rail wide in both states.
  */
@@ -949,7 +966,7 @@
 }
 
 /* Below this the drawer takes the whole screen, so there is no beside to
-   move to. She fades instead â€” the one case where going away is right,
+   move to. She fades instead — the one case where going away is right,
    because the alternative is sitting on top of the thing being read. */
 @media (max-width: 620px) {
   :root[data-overlay] .ada-w {
@@ -973,7 +990,7 @@
   .ds .ada-w { transition: none; }
 }
 
-/* â”€â”€ Billboard: the thumbnail, the order arrows and the preview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Billboard: the thumbnail, the order arrows and the preview ───────────── */
 
 .ds .adm-bb-thumb {
   width: 62px; height: 40px; object-fit: cover;
@@ -1013,7 +1030,7 @@
 .ds .adm-bb-copy .when { font-size: 12.5px; color: var(--action); }
 .ds .adm-bb-copy p { margin: 0; font-size: 13px; color: var(--ink-2); }
 
-/* â”€â”€ the composer, inside our admin shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ── the composer, inside our admin shell ────────────────────────────────────
  *
  * His composer renders in .adm - a standalone page shell, height:100dvh with a
  * 296px | 1fr grid for its own nav. Ours already has a rail and a top bar, so
@@ -1078,7 +1095,7 @@
 .ds .adm-compose .adm-side .adm-saved { padding: 0 6px; }
 .ds .adm-compose .adm-side .adm-kept-acts { padding: 0 6px; }
 
-/* â”€â”€ a picture inside a document â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ── a picture inside a document ─────────────────────────────────────────────
  *
  * Sized in points like the rest of the sheet, so it prints at the size it
  * shows. Capped at half a page: an image that pushes the paragraph after it
@@ -1119,7 +1136,7 @@
 
 /* ================================================= the free video library
 
-   OURS, NOT HIS â€” AND IT LIVES HERE FOR A REASON
+   OURS, NOT HIS — AND IT LIVES HERE FOR A REASON
 
    These rules were appended to the bottom of ds.css, which is generated by
    scripts/port-ds-css.mjs from his site.css. The next port erased them, and
@@ -1129,7 +1146,7 @@
 
    What it dresses: the rest of the YouTube channel, shelved by software under
    his nine Learn tiles, and the "Recommended videos" strip on the product
-   pages. Tiles reuse his .lgrid / .ltile â€” only the shelf headings are new.
+   pages. Tiles reuse his .lgrid / .ltile — only the shelf headings are new.
    Components: src/ds/DsFreeLibrary.jsx, src/ds/DsRecommendedVideos.jsx. */
 .ds .ds-lib{margin-top:72px;padding-top:56px;border-top:1px solid rgba(var(--shadow-c),.10)}
 .ds .ds-lib .sec-head{margin-bottom:32px}
@@ -1150,7 +1167,7 @@
 /* ================================== the Allowed cell on the AI usage screen
 
    OURS. A chip over a line of detail, which looks like his .adm-two and must
-   not use it: .adm-two span is display:block, and a chip IS a span â€” nested in
+   not use it: .adm-two span is display:block, and a chip IS a span — nested in
    there it stopped hugging its text and stretched to the width of the column.
 
    Same shape, own class. Used by src/ds/DsAdminAiUsage.jsx. */
@@ -1158,7 +1175,67 @@
 .ds .adm-allow > span:last-child {
   font-size: 11.5px; color: var(--ink-3); line-height: 1.35;
 }
+/* =========================== the Share column on the AI usage breakdowns
 
+   OURS, and a fix rather than a preference. His .adm-bar-t is a <span> with a
+   height and no display, which is fine everywhere else on his site because it
+   sits in a grid and gets blockified. In a table cell it stays inline, height
+   is ignored, and the Share column renders as nothing — empty in his own build
+   too, which is how the bug survived. The column exists to carry the bar, so
+   the bar is made a block here. */
+.ds .adm-table .adm-bar-t { display: block; }
+
+
+/* ======================= per-feature limits, in the AI usage limits drawer
+
+   OURS: he has no per-feature form, because his allowance is a number on a
+   page. Built out of his own field styles (.adm-f, .adm-f-l) so the inputs are
+   the ones the rest of the admin uses, with a row per feature carrying the
+   plain-English description of what that feature actually is — the person
+   setting a cap on "ai-outliers" at 9pm should not have to know the codebase
+   to find out what they are capping. */
+.ds .adm-flim { margin-top: 26px; }
+.ds .adm-flim-say {
+  margin: 0 0 14px; font-size: 12px; line-height: 1.6; color: var(--ink-3);
+}
+.ds .adm-flim-say b { color: var(--ink-2); font-weight: 500; }
+.ds .adm-flim-r {
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+}
+.ds .adm-flim-r.off { background: color-mix(in srgb, #C4551A 6%, transparent); }
+.ds .adm-flim-sw { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.ds .adm-flim-sw input { margin: 2px 0 0; width: 15px; height: 15px; flex: none; accent-color: var(--action); }
+.ds .adm-flim-sw b {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 13px; font-weight: 500; color: var(--ink);
+}
+.ds .adm-flim-sw em {
+  display: block; margin-top: 3px; font-style: normal;
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-3);
+}
+.ds .adm-flim-f {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 12px 0 0;
+}
+.ds .adm-flim-off { margin: 10px 0 0; font-size: 11.5px; color: var(--ink-3); }
+@media (max-width: 560px) { .ds .adm-flim-f { grid-template-columns: 1fr; } }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   TOKENS THAT DO NOT EXIST FAIL SILENTLY
+
+   var(--warn), var(--bad) and var(--due) were used here and are defined
+   nowhere. A var() with no fallback makes the whole declaration invalid at
+   computed-value time, so the browser drops it without a word: the rule is in
+   the stylesheet, the class is on the element, and nothing happens.
+
+   That is how a student came to submit a quiz and see the right answers in
+   green with their own wrong answers unmarked — .lx-opt.wrong had a class and
+   no colour. The AI usage burn-down bars were invisible for the same reason.
+
+   His palette is --ok / --ok-d for green and the --orange-* scale for alarm.
+   There is no --warn. If a token is needed that he does not have, give it a
+   fallback — var(--x, #hex) — so the declaration survives being wrong.
+   ─────────────────────────────────────────────────────────────────────────── */
 
 /* ============================================== checkpoints in the lecture
 
@@ -1203,15 +1280,15 @@
 .ds .lx-cp-opt:hover:not(:disabled) { background: var(--pal-light-wash); color: var(--ink); }
 .ds .lx-cp-opt.on { border-color: var(--action); color: var(--ink); }
 .ds .lx-cp-opt.on i { background: var(--action); color: var(--action-ink); }
-.ds .lx-cp-opt.right { border-color: var(--good, #1E7A4C); color: var(--good, #1E7A4C); }
-.ds .lx-cp-opt.right i { background: var(--good, #1E7A4C); color: #fff; }
+.ds .lx-cp-opt.right { border-color: var(--ok); color: var(--ok); }
+.ds .lx-cp-opt.right i { background: var(--ok); color: #fff; }
 .ds .lx-cp-opt.wrong { border-color: #C4551A; color: #C4551A; }
 .ds .lx-cp-opt:disabled { cursor: default; }
 
 .ds .lx-cp-said { margin-top: 13px; padding: 11px 13px; border-radius: 11px; font-size: 13px; }
 .ds .lx-cp-said b { display: block; margin-bottom: 3px; font-weight: 500; }
 .ds .lx-cp-said p { margin: 0; color: var(--ink-2); line-height: 1.5; }
-.ds .lx-cp-said.ok { background: rgba(30, 122, 76, .10); color: var(--good, #1E7A4C); }
+.ds .lx-cp-said.ok { background: color-mix(in srgb, var(--ok) 10%, var(--bg)); color: var(--ok); }
 .ds .lx-cp-said.no { background: rgba(196, 85, 26, .10); color: #C4551A; }
 
 /* Stuck to the bottom of the card, not flowing off it.
@@ -1245,4 +1322,4 @@
   font-variant-numeric: tabular-nums;
 }
 .ds .lx-cp-strip button:hover { color: var(--ink); border-color: var(--action); }
-.ds .lx-cp-strip button.on { border-color: var(--good, #1E7A4C); color: var(--good, #1E7A4C); }
+.ds .lx-cp-strip button.on { border-color: var(--ok); color: var(--ok); }
