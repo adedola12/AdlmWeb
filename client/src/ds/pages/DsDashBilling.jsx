@@ -712,7 +712,6 @@ export default function DsDashBilling() {
                   <div className="tbl-wrap">
                     {" "}
                     <table className="tbl">
-                      {" "}
                       <thead>
                         <tr>
                           <th>
@@ -734,131 +733,104 @@ export default function DsDashBilling() {
                           </th>
                         </tr>
                       </thead>
-                      {" "}
                       <tbody>
-                        {" "}
                         <tr>
-                          {" "}
                           <td className="num">
                             ADLM-2026-0731
                           </td>
                           <td className="num">
                             31 July 2026
                           </td>
-                          {" "}
                           <td>
                             Aug, Sep
                           </td>
                           <td className="num">
                             ₦137,600
                           </td>
-                          {" "}
                           <td>
                             <span className="pill pill-b">
                               Due 7 Sep
                             </span>
                           </td>
-                          {" "}
                           <td>
                             <a href="#" style={{ color: "var(--action)", fontSize: "12.5px", textDecoration: "none" }}>
                               PDF
                             </a>
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                         <tr>
-                          {" "}
                           <td className="num">
                             ADLM-2026-0630
                           </td>
                           <td className="num">
                             30 June 2026
                           </td>
-                          {" "}
                           <td>
                             Jul, Aug
                           </td>
                           <td className="num">
                             ₦137,600
                           </td>
-                          {" "}
                           <td>
                             <span className="pill pill-a">
                               Paid
                             </span>
                           </td>
-                          {" "}
                           <td>
                             <a href="#" style={{ color: "var(--action)", fontSize: "12.5px", textDecoration: "none" }}>
                               PDF
                             </a>
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                         <tr>
-                          {" "}
                           <td className="num">
                             ADLM-2026-0531
                           </td>
                           <td className="num">
                             31 May 2026
                           </td>
-                          {" "}
                           <td>
                             Jun, Jul
                           </td>
                           <td className="num">
                             ₦107,500
                           </td>
-                          {" "}
                           <td>
                             <span className="pill pill-a">
                               Paid
                             </span>
                           </td>
-                          {" "}
                           <td>
                             <a href="#" style={{ color: "var(--action)", fontSize: "12.5px", textDecoration: "none" }}>
                               PDF
                             </a>
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                         <tr>
-                          {" "}
                           <td className="num">
                             ADLM-2026-0430
                           </td>
                           <td className="num">
                             30 April 2026
                           </td>
-                          {" "}
                           <td>
                             May, Jun
                           </td>
                           <td className="num">
                             ₦107,500
                           </td>
-                          {" "}
                           <td>
                             <span className="pill pill-a">
                               Paid
                             </span>
                           </td>
-                          {" "}
                           <td>
                             <a href="#" style={{ color: "var(--action)", fontSize: "12.5px", textDecoration: "none" }}>
                               PDF
                             </a>
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                       </tbody>
-                      {" "}
                     </table>
                     {" "}
                   </div>

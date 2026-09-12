@@ -252,10 +252,17 @@ export async function sendMail({
   // keep logging nothing but a hash.
   track = null,
 }) {
+  // The sender name is "ADLM Studio" and must stay that, here and in the
+  // fallback below. It is what the brand is called everywhere a customer meets
+  // it — the site, the plugins, the signature at the bottom of these messages —
+  // and it is the one line of a message somebody reads before deciding whether
+  // to open it. Two names for one firm in an inbox is how mail from a domain
+  // starts looking like mail about it. (util/mailer.sender.test.js enforces
+  // this by reading this file, so do not write the old name even in a comment.)
   const primaryFrom =
     process.env.EMAIL_FROM ||
-    `ADLM Services <${process.env.SMTP_USER || "noreply@adlmstudio.net"}>`;
-  const fallbackFrom = "ADLM Services <onboarding@resend.dev>"; // valid for testing
+    `ADLM Studio <${process.env.SMTP_USER || "noreply@adlmstudio.net"}>`;
+  const fallbackFrom = "ADLM Studio <onboarding@resend.dev>"; // valid for testing
 
   const over = await withOverride(templateKey, subject, html);
   subject = over.subject;

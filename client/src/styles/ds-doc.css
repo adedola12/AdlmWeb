@@ -117,6 +117,10 @@
 .ds .doc-head .doc-contact div{display:flex;align-items:center;gap:2pt;
   font-size:7.1pt;font-weight:500;line-height:1;color:var(--doc-navy);letter-spacing:-.43pt}
 .ds .doc-head .doc-contact svg{width:7.8pt;height:7.8pt;flex:none;fill:currentColor}
+.ds .doc-head .doc-place{align-items:flex-start}
+.ds .doc-head .doc-place svg{margin-top:.6pt}
+.ds .doc-head .doc-place span{line-height:1.35}
+.ds .doc-head .doc-reg{padding-left:9.8pt;letter-spacing:0}
 .ds .doc-head .doc-social{display:flex;gap:3.4pt;align-items:center;margin-right:1.8pt}
 
 
@@ -234,21 +238,21 @@
 .ds .doc-table-wrap{margin:0 0 18pt}
 .ds .doc-table{width:100%;border-collapse:collapse;table-layout:fixed;
   font-size:var(--doc-table-size);letter-spacing:-.06em}
-.ds .doc-table thead th{
+.ds .doc-table .doc-hrow th{
   background:var(--doc-navy);color:#fff;font-weight:600;text-align:center;
   padding:var(--doc-table-pad);line-height:1.2;letter-spacing:-.1em}
-.ds .doc-table thead th:first-child{border-radius:4.7pt 0 0 0}
-.ds .doc-table thead th:last-child{border-radius:0 4.7pt 0 0}
-.ds .doc-table thead th.doc-l{text-align:left}
-.ds .doc-table thead th.doc-r{text-align:right}
+.ds .doc-table .doc-hrow th:first-child{border-radius:4.7pt 0 0 0}
+.ds .doc-table .doc-hrow th:last-child{border-radius:0 4.7pt 0 0}
+.ds .doc-table .doc-hrow th.doc-l{text-align:left}
+.ds .doc-table .doc-hrow th.doc-r{text-align:right}
 .ds .doc-table td, .ds .doc-table th{overflow-wrap:anywhere}
 .ds .doc-table tbody td{
   padding:var(--doc-table-pad);color:#303030;font-weight:400;vertical-align:top;
   line-height:1.35;text-align:center}
 .ds .doc-table tbody td.doc-l{text-align:left}
 .ds .doc-table tbody td.doc-r{text-align:right}
-.ds .doc-table tbody tr:nth-child(even) td{background:var(--doc-band)}
-.ds .doc-table tbody tr:nth-child(odd) td{background:#fff}
+.ds .doc-table .doc-hrow ~ tr:nth-child(odd) td{background:var(--doc-band)}
+.ds .doc-table .doc-hrow ~ tr:nth-child(even) td{background:#fff}
 
 /* a trade heading inside a bill of quantities */
 .ds .doc-table tbody tr.doc-group td{
@@ -374,24 +378,8 @@
 .ds .docp-main .doc-stage{overflow:visible}
 
 
-  /* The header is an ordinary row on paper, NOT a repeating header group.
-
-     table-header-group asks the printer to lift the header out of the flow and
-     redraw it at the top of every fragment of the table. That made sense when
-     the browser was doing the page breaking. It is not doing the page breaking:
-     paginate() splits the table itself and emits a real <thead> into every
-     chunk, so each sheet already has its own header sitting in the normal flow.
-
-     Asking for the repeat on top of that is redundant at best — and at worst it
-     hands the header to Chrome's repeated-header path, where it is hoisted out
-     of the paint order for a fragment that never comes, and simply does not
-     appear on the page. Which is what Richard was seeing: a header present in
-     the DOM, correct on screen, correct through headless printing, and gone in
-     the print preview.
-
-     As a plain row group there is nothing special for the printer to do with
-     it, and it prints where it sits. */
-.ds .doc-table thead{display:table-row-group}
+  /* The header row is written into every chunk by paginate(), so there is no
+     thead here for a printer to lift out and repeat. Nothing to declare. */
 .ds .doc-table tr{break-inside:avoid;page-break-inside:avoid}
 .ds .doc-noprint{display:none !important}
 }

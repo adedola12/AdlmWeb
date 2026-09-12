@@ -81,6 +81,45 @@ export default function DsLearnPage({ d }) {
         {" "}
       </header>
       {" "}
+      <section className="sec-half" id="cohort" style={{ paddingBottom: "0" }}>
+        {" "}
+        <div className="shell">
+          {" "}
+          <div className="wcard rise">
+            {" "}
+            <div className="wcard-copy">
+              {" "}
+              <span className="eyebrow">
+                Live cohort · 6 Oct – 7 Nov 2026
+              </span>
+              {" "}
+              <h3>
+                Beyond BIM: the modern roles of a Quantity Surveyor
+              </h3>
+              {" "}
+              <p>
+                Five weeks, ten live sessions, one project carried from the 3D model all the way to a cashflow forecast: on the Burj Khalifa Revit model, with a month of ADLM software included. Presented with NIQS.
+              </p>
+              {" "}
+              <Link to="/beyondbim" data-ds-page="beyondbim" className="ds-btn btn-p ds-btn-sm">
+                See the programme{" "}
+                <svg viewBox="0 0 24 24">
+                  <use href="#i-arrow" />
+                </svg>
+              </Link>
+              {" "}
+            </div>
+            {" "}
+            <div className="wcard-art">
+              <img src="/ds/bb-hero-light.jpg" alt="" loading="lazy" />
+            </div>
+            {" "}
+          </div>
+          {" "}
+        </div>
+        {" "}
+      </section>
+      {" "}
       <section className="sec" id="courses">
         {" "}
         <div className="shell">
@@ -753,8 +792,7 @@ export default function DsLearnPage({ d }) {
             </span>
             {" "}
           </div>
-          {d.library}
-          {" "}
+          {d.library}{" "}
         </div>
         {" "}
       </section>
@@ -779,6 +817,47 @@ export default function DsLearnPage({ d }) {
             <p className="ds-lede">
               Conferences, chapter workshops, university sessions and in-office programmes since 2022. Six are featured below, and every one of the thirty is listed underneath.
             </p>
+            {" "}
+          </div>
+          {" "}
+          {/* what is open now sits above what has already happened */}
+          {" "}
+          <div className="wcard rise" style={{ marginBottom: "56px" }}>
+            {" "}
+            <div className="wcard-copy">
+              {" "}
+              <span className="eyebrow">
+                Next up · registration open
+              </span>
+              {" "}
+              <h3>
+                Beyond BIM, the modern roles of a Quantity Surveyor
+              </h3>
+              {" "}
+              <p>
+                Five weeks live online, 6 October to 7 November 2026. Ten sessions carrying one project from the 3D model all the way to a cashflow forecast, on the Burj Khalifa Revit model, with a month of ADLM software included. Presented with NIQS.
+              </p>
+              {" "}
+              <div style={{ display: "flex", gap: "9px", marginTop: "24px", flexWrap: "wrap" }}>
+                {" "}
+                <Link to="/beyondbim" data-ds-page="beyondbim" className="ds-btn btn-p ds-btn-sm">
+                  See the programme{" "}
+                  <svg viewBox="0 0 24 24">
+                    <use href="#i-arrow" />
+                  </svg>
+                </Link>
+                {" "}
+                <Link to="/beyondbim/register" data-ds-page="beyondbim-register" className="ds-btn btn-o ds-btn-sm">
+                  Register
+                </Link>
+                {" "}
+              </div>
+              {" "}
+            </div>
+            {" "}
+            <div className="wcard-art">
+              <img src="/ds/bb-hero-light.jpg" alt="" loading="lazy" />
+            </div>
             {" "}
           </div>
           {" "}

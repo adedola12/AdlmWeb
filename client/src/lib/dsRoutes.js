@@ -51,6 +51,10 @@ export const MAP = {
   // have a /quote route, so it lands there.
   quote: "/quote",
   "how-it-works": "/how-it-works",
+  // The October 2026 cohort, and the form that is its own page rather than
+  // the foot of a long read.
+  beyondbim: "/beyondbim",
+  "beyondbim-register": "/beyondbim/register",
   careers: "/careers",
   press: "/press",
   privacy: "/privacy",

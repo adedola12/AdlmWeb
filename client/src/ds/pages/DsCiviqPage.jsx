@@ -695,8 +695,7 @@ export default function DsCiviqPage({ d }) {
         </div>
         {" "}
       </section>
-      {" "}
-      {d.videos}
+      {" "}{d.videos}
       <section className="sec-half blend" id="updates">
         {" "}
         <div className="shell">
@@ -920,31 +919,24 @@ export default function DsCiviqPage({ d }) {
                 </label>
                 {" "}
                 <select id="cw-ver" name="civil3d">
-                  {" "}
                   <option value="">
                     Select a version
                   </option>
-                  {" "}
                   <option>
                     Civil 3D 2026
                   </option>
-                  {" "}
                   <option>
                     Civil 3D 2025
                   </option>
-                  {" "}
                   <option>
                     Civil 3D 2024
                   </option>
-                  {" "}
                   <option>
                     Older than 2024
                   </option>
-                  {" "}
                   <option>
                     Not using Civil 3D yet
                   </option>
-                  {" "}
                 </select>
                 {" "}
               </div>

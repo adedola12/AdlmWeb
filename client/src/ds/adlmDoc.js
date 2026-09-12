@@ -70,6 +70,17 @@ const ADLM = {
   mark: "/ds/mark.svg", // icon only. The watermark is never the lockup
   site: "www.adlmstudio.net",
   social: "ADLM Studio",
+
+  /* The registered office, and the number it is registered under.
+     A letter on a letterhead that carries neither is a letter from nobody in
+     particular — and on anything contractual the registration number is what
+     identifies which company actually signed.
+
+     `reg` is deliberately empty. ADLM's RC number has not been given, and a
+     registration number invented to fill a gap would be a false record on
+     every document the studio sends. It prints nothing until it is set. */
+  address: ["1 Alhaji Abiola Street, Olowora,", "Ikosi, Lagos, Nigeria"],
+  reg: "",
   bank: { account: "1634998770", name: "ADLM Studio", bank: "Access Bank" },
   ink: "#091E39",
   accent: "#239CFF",
@@ -174,6 +185,10 @@ const socialDots = () =>
 // A practice that has not uploaded a mark still needs a letterhead. Falling
 // back to ADLM's logo would put our brand on their paper, so the name is set
 // as a wordmark instead.
+const PIN =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>';
+
 function lockup(brand, h) {
   if (brand.logo) {
     return `<img class="doc-logo" src="${esc(brand.logo)}" alt="${esc(brand.name)}" style="height:${h}pt">`;
@@ -195,6 +210,19 @@ function frame(t, brand, page, pages) {
     (brand.lines || []).forEach((l) => {
       contact += `<div><span>${esc(l)}</span></div>`;
     });
+    // The address sits under the contact lines, its pin drawn once against the
+    // first line so a two-line address reads as one address rather than two
+    // entries.
+    let addr = brand.address;
+    if (typeof addr === "string") addr = [addr];
+    if (addr && addr.length) {
+      contact +=
+        `<div class="doc-place">${PIN}<span>` +
+        `${addr.map(esc).join("<br>")}</span></div>`;
+    }
+    if (brand.reg) {
+      contact += `<div class="doc-reg"><span>${esc(brand.reg)}</span></div>`;
+    }
     h +=
       `<div class="doc-head">${lockup(brand, 26.6)}` +
       (contact ? `<div class="doc-contact">${contact}</div>` : "") +
@@ -226,9 +254,23 @@ function table(b) {
   let h =
     '<div class="doc-table-wrap"><table class="doc-table"><colgroup>' +
     cols.map((c) => `<col${c.width ? ` style="width:${c.width}"` : ""}>`).join("") +
-    "</colgroup><thead><tr>" +
+    "</colgroup><tbody>" +
+    /* The header is an ordinary row, not a <thead>.
+     *
+     * A thead exists so a printer can lift the header out of the flow and
+     * redraw it at the top of every fragment of a table. We do not want that:
+     * paginate() splits the table itself and writes the header row into every
+     * chunk, so each sheet already carries its own in the normal flow. Leaving
+     * it a thead asks the browser to do the same job again, and Chrome's
+     * repeated-header path lost it entirely in print preview — present in the
+     * DOM, right on screen, gone on the page.
+     *
+     * The cells stay <th>, so the styling, the composer's cell indexing and
+     * the table's meaning are all unchanged.
+     */
+    '<tr class="doc-hrow">' +
     cols.map((c) => `<th class="${cls(c.align)}">${esc(c.label)}</th>`).join("") +
-    "</tr></thead><tbody>";
+    "</tr>";
 
   (b.rows || []).forEach((r) => {
     if (r && r.group) {
@@ -423,10 +465,19 @@ export function render(spec) {
   let inner = "";
   if (t.cls === "doc-invoice") inner += invoiceHead(spec, brand);
 
+  // Who it is from, when that is not simply the letterhead. Most documents do
+  // not need it — the paper says who sent them. It earns its place when the
+  // sender is a person or a department rather than the studio, or when the
+  // document will be filed by somebody who needs a reply address on the face
+  // of it rather than in the footer.
+  //
   // The address is the one block that leaves the body column and sits on the
   // logo line, with the date opposite it. A document addressed to nobody — a
   // proposal, a report — simply has no address row and opens on its title.
   let addr = "";
+  if (spec.from && spec.from.length) {
+    addr += BLOCKS.keyvalue({ label: spec.fromLabel || "FROM:", lines: spec.from });
+  }
   if (spec.to && spec.to.length) {
     addr += BLOCKS.keyvalue({ label: spec.toLabel || "INVOICE TO:", lines: spec.to });
   }
@@ -467,8 +518,8 @@ export function render(spec) {
  * from "it has been divided".
  */
 function splitTable(wrap, tbl, firstRoom, fullRoom) {
-  const head = tbl.querySelector("thead");
-  const rows = [...tbl.querySelectorAll("tbody > tr")];
+  const head = tbl.querySelector("tr.doc-hrow");
+  const rows = [...tbl.querySelectorAll("tbody > tr:not(.doc-hrow)")];
   if (!head || !rows.length) return null;
 
   const headH = head.offsetHeight;
@@ -491,8 +542,9 @@ function splitTable(wrap, tbl, firstRoom, fullRoom) {
     const t = tbl.cloneNode(false);
     const cg = tbl.querySelector("colgroup");
     if (cg) t.appendChild(cg.cloneNode(true));
-    t.appendChild(head.cloneNode(true));
     const tb = document.createElement("tbody");
+    // Into the body, because the header is one of its rows now.
+    tb.appendChild(head.cloneNode(true));
     bucket.forEach((r) => tb.appendChild(r));
     t.appendChild(tb);
     w.appendChild(t);

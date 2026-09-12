@@ -44,6 +44,8 @@ const SHEETS = [
   // The document composer's chrome, added 23 August. Only the composer loads
   // it, so it stays a separate sheet rather than joining ds.css.
   { in: "admin.css", out: "ds-admin.css" },
+  // The Beyond BIM cohort page, added 12 September. One page loads it.
+  { in: "beyondbim.css", out: "ds-beyondbim.css" },
 ];
 
 const CSS_DIR = path.resolve(CLIENT, "../../ADLMWebNewUI/site/assets/css");

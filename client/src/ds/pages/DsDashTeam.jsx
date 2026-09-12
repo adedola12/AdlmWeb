@@ -553,10 +553,8 @@ export default function DsDashTeam() {
                   <div className="tbl-wrap">
                     {" "}
                     <table className="tbl">
-                      {" "}
                       <thead>
                         <tr>
-                          {" "}
                           <th>
                             Member
                           </th>
@@ -572,12 +570,9 @@ export default function DsDashTeam() {
                           <th>
                             Last active
                           </th>
-                          {" "}
                         </tr>
                       </thead>
-                      {" "}
                       <tbody>
-                        {" "}
                         <tr data-member="">
                           <td>
                             <div className="dsh-who">
@@ -595,7 +590,6 @@ export default function DsDashTeam() {
                               </span>
                             </div>
                           </td>
-                          {" "}
                           <td>
                             Principal Partner
                             <br />
@@ -603,7 +597,6 @@ export default function DsDashTeam() {
                               Account owner
                             </span>
                           </td>
-                          {" "}
                           <td>
                             <div className="dsh-chips">
                               <button type="button" className="dsh-chip on" data-seat="quiv" aria-pressed="true">
@@ -620,13 +613,10 @@ export default function DsDashTeam() {
                               </button>
                             </div>
                           </td>
-                          {" "}
                           <td className="num">
                             Today
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                         <tr data-member="">
                           <td>
                             <div className="dsh-who">
@@ -644,11 +634,9 @@ export default function DsDashTeam() {
                               </span>
                             </div>
                           </td>
-                          {" "}
                           <td>
                             Senior QS
                           </td>
-                          {" "}
                           <td>
                             <div className="dsh-chips">
                               <button type="button" className="dsh-chip on" data-seat="quiv" aria-pressed="true">
@@ -665,13 +653,10 @@ export default function DsDashTeam() {
                               </button>
                             </div>
                           </td>
-                          {" "}
                           <td className="num">
                             Yesterday
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                         <tr data-member="">
                           <td>
                             <div className="dsh-who">
@@ -689,11 +674,9 @@ export default function DsDashTeam() {
                               </span>
                             </div>
                           </td>
-                          {" "}
                           <td>
                             QS · in training
                           </td>
-                          {" "}
                           <td>
                             <div className="dsh-chips">
                               <button type="button" className="dsh-chip" data-seat="quiv" aria-pressed="false">
@@ -710,13 +693,10 @@ export default function DsDashTeam() {
                               </button>
                             </div>
                           </td>
-                          {" "}
                           <td className="num">
                             2 days ago
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                         <tr data-member="">
                           <td>
                             <div className="dsh-who">
@@ -734,11 +714,9 @@ export default function DsDashTeam() {
                               </span>
                             </div>
                           </td>
-                          {" "}
                           <td>
                             QS
                           </td>
-                          {" "}
                           <td>
                             <div className="dsh-chips">
                               <button type="button" className="dsh-chip" data-seat="quiv" aria-pressed="false">
@@ -755,13 +733,10 @@ export default function DsDashTeam() {
                               </button>
                             </div>
                           </td>
-                          {" "}
                           <td className="num">
                             6 days ago
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                         <tr data-member="">
                           <td>
                             <div className="dsh-who">
@@ -779,11 +754,9 @@ export default function DsDashTeam() {
                               </span>
                             </div>
                           </td>
-                          {" "}
                           <td>
                             Graduate QS
                           </td>
-                          {" "}
                           <td>
                             <div className="dsh-chips">
                               <button type="button" className="dsh-chip" data-seat="quiv" aria-pressed="false">
@@ -800,15 +773,11 @@ export default function DsDashTeam() {
                               </button>
                             </div>
                           </td>
-                          {" "}
                           <td className="num">
                             Not yet signed in
                           </td>
-                          {" "}
                         </tr>
-                        {" "}
                       </tbody>
-                      {" "}
                     </table>
                     {" "}
                   </div>

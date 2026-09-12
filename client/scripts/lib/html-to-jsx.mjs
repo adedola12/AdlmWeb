@@ -146,7 +146,32 @@ function withTokens(text, escape) {
   return out + escape(text.slice(last));
 }
 
-function escapeText(text) {
+/**
+ * Elements whose children React will not let be text.
+ *
+ * A table lays out rows, not prose: React refuses a whitespace text node
+ * inside one and warns that it will cause a hydration error. Which is exactly
+ * what the explicit-space rule below produced — his markup has a newline
+ * between <table> and <thead>, that run became a {" "}, and every ported page
+ * with a table logged four warnings and rendered a table React was unhappy
+ * with.
+ *
+ * The space was never meaningful in these: HTML drops whitespace between a
+ * table and its rows too. So inside one of these the run is simply dropped.
+ */
+const NO_TEXT = new Set([
+  "table",
+  "thead",
+  "tbody",
+  "tfoot",
+  "tr",
+  "colgroup",
+  "select",
+  "optgroup",
+  "dl",
+]);
+
+function escapeText(text, parent) {
   if (!text) return "";
 
   // Em dashes come out of the copy here, at the one point every text node
@@ -162,10 +187,11 @@ function escapeText(text) {
   // still true of {" "}), so this is faithful in both directions — and it has
   // to be explicit because the token now sits alone on its own output line,
   // where JSX would otherwise trim it away.
-  if (!text.trim()) return '{" "}';
+  const bare = parent && NO_TEXT.has(parent);
+  if (!text.trim()) return bare ? "" : '{" "}';
 
-  const leading = /^\s/.test(text) ? '{" "}' : "";
-  const trailing = /\s$/.test(text) ? '{" "}' : "";
+  const leading = !bare && /^\s/.test(text) ? '{" "}' : "";
+  const trailing = !bare && /\s$/.test(text) ? '{" "}' : "";
   // Collapse internal runs the way HTML would, so the indenting pass below
   // cannot change what the reader sees.
   const core = withTokens(text.trim().replace(/\s+/g, " "), escape);
@@ -275,10 +301,12 @@ export function htmlToJsx(html, opts = {}) {
   while (i < html.length) {
     const lt = html.indexOf("<", i);
     if (lt < 0) {
-      out.push(escapeText(html.slice(i)));
+      out.push(escapeText(html.slice(i), openStack[openStack.length - 1]?.tag));
       break;
     }
-    if (lt > i) out.push(escapeText(html.slice(i, lt)));
+    if (lt > i) {
+      out.push(escapeText(html.slice(i, lt), openStack[openStack.length - 1]?.tag));
+    }
 
     // Comment
     if (html.startsWith("<!--", lt)) {

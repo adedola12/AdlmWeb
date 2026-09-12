@@ -746,8 +746,7 @@ export default function DsRateGenPage({ d }) {
         </div>
         {" "}
       </section>
-      {" "}
-      {d.videos}
+      {" "}{d.videos}
       <section className="sec-half blend" id="updates">
         {" "}
         <div className="shell">

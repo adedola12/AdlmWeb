@@ -101,6 +101,10 @@ export default function DsDocComposer() {
   const [title, setTitle] = React.useState("");
   const [number, setNumber] = React.useState("");
   const [to, setTo] = React.useState("");
+  // Who it is from, when that is not simply the letterhead. Most documents do
+  // not need it; it earns its place when the sender is a person or a
+  // department rather than the studio.
+  const [from, setFrom] = React.useState("");
   const [source, setSource] = React.useState(() => sampleFor("letter"));
   const [kept, setKept] = React.useState([]);
   const [dropping, setDropping] = React.useState(false);
@@ -142,6 +146,7 @@ export default function DsDocComposer() {
     setTitle(d.title || "");
     setNumber(d.number || "");
     setTo(d.to || "");
+    setFrom(d.from || "");
     setSource(d.source);
     setEditingId(d.editingId || null);
     setNote("Picked up where you left off.");
@@ -204,9 +209,18 @@ export default function DsDocComposer() {
         .map((s) => s.trim())
         .filter(Boolean),
       toLabel: template === "invoice" || template === "receipt" ? "INVOICE TO:" : "TO:",
+      // Left off entirely when empty, so the engine does not print a FROM:
+      // label with nothing under it.
+      from: from.trim()
+        ? from
+            .split(/\n|,/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : null,
+      fromLabel: "FROM:",
       blocks,
     }),
-    [template, title, number, to, blocks, docDate, paper, firm, subject],
+    [template, title, number, to, from, blocks, docDate, paper, firm, subject],
   );
 
   // Re-render the document whenever anything it is made of changes. mount()
@@ -340,6 +354,7 @@ export default function DsDocComposer() {
         setTitle(full.title === "Untitled" ? "" : full.title || "");
         setNumber(full.number || "");
         setTo(full.to || "");
+        setFrom(full.from || "");
         setSource(full.source || "");
         setEditingId(full.id);
         setNote(`Editing “${full.title}”. Saving updates it.`);
@@ -409,6 +424,7 @@ export default function DsDocComposer() {
     setTitle("");
     setNumber("");
     setTo("");
+    setFrom("");
     setSource("");
     setNote("");
     writeDraft(null);
@@ -655,6 +671,18 @@ export default function DsDocComposer() {
                 value={docDate}
                 placeholder="8 September 2026"
                 onChange={(e) => setDocDate(e.target.value)}
+              />
+            </label>
+            <label>
+              <span>From</span>
+              {/* Optional, and blank on almost everything: the letterhead
+                  already says who sent it. Worth filling in when the sender is
+                  a person or a department. */}
+              <textarea
+                rows={2}
+                value={from}
+                placeholder={"Quasim Adedolapo,\nFounder"}
+                onChange={(e) => setFrom(e.target.value)}
               />
             </label>
             <label>

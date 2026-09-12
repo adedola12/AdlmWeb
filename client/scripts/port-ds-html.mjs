@@ -38,6 +38,14 @@ const PAGES = [
   { src: "src/customers.html", name: "DsCustomers", slug: "customers" },
   { src: "src/contact.html", name: "DsContact", slug: "contact" },
   { src: "src/how-it-works.html", name: "DsHowItWorks", slug: "how-it-works" },
+
+  // The October 2026 cohort, added upstream 2026-09-12. Its own stylesheet
+  // (ds-beyondbim.css) and 348 lines of behaviour in assets/js/beyondbim.js —
+  // the accordion, the section rail and the theme-paired artwork — which is
+  // NOT ported here. The markup renders; the interactions need doing by hand,
+  // the same way site.js became useDsBehaviours.js.
+  { src: "src/beyondbim.html", name: "DsBeyondBim", slug: "beyondbim" },
+  { src: "src/beyondbim-register.html", name: "DsBeyondBimRegister", slug: "beyondbim-register" },
   // Added upstream 2026-08-18 ("Six products, and a quotation you can price
   // yourself"). The markup ports cleanly; its 346-line calculator in
   // assets/js/quote.js is NOT ported yet, so the page renders but does not

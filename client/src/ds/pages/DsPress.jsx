@@ -84,9 +84,7 @@ export default function DsPress() {
           <div className="ctable-wrap rise">
             {" "}
             <table className="ctable">
-              {" "}
               <tbody>
-                {" "}
                 <tr>
                   <th className="rowhead" scope="row">
                     Founded
@@ -98,7 +96,6 @@ export default function DsPress() {
                     2019
                   </td>
                 </tr>
-                {" "}
                 <tr>
                   <th className="rowhead" scope="row">
                     Headquarters
@@ -110,7 +107,6 @@ export default function DsPress() {
                     Lagos, Nigeria
                   </td>
                 </tr>
-                {" "}
                 <tr>
                   <th className="rowhead" scope="row">
                     What we make
@@ -122,7 +118,6 @@ export default function DsPress() {
                     Quantity surveying software and BIM training for the African construction market
                   </td>
                 </tr>
-                {" "}
                 <tr>
                   <th className="rowhead" scope="row">
                     Products
@@ -134,7 +129,6 @@ export default function DsPress() {
                     QUIV · HERON · RateGen · Revit MEP · Time Pro · CIVIQ (in development)
                   </td>
                 </tr>
-                {" "}
                 <tr>
                   <th className="rowhead" scope="row">
                     Training delivered
@@ -146,7 +140,6 @@ export default function DsPress() {
                     30 events · 3,100+ professionals
                   </td>
                 </tr>
-                {" "}
                 <tr>
                   <th className="rowhead" scope="row">
                     Reach
@@ -158,7 +151,6 @@ export default function DsPress() {
                     10+
                   </td>
                 </tr>
-                {" "}
                 <tr>
                   <th className="rowhead" scope="row">
                     Press contact
@@ -170,9 +162,7 @@ export default function DsPress() {
                     admin@adlmstudio.net
                   </td>
                 </tr>
-                {" "}
               </tbody>
-              {" "}
             </table>
             {" "}
           </div>

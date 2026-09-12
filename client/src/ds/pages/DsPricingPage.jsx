@@ -560,18 +560,14 @@ export default function DsPricingPage({ d }) {
           <div className="ctable-wrap rise">
             {" "}
             <table className="ctable">
-              {" "}
               <thead>
-                {" "}
                 <tr>
-                  {" "}
                   <th className="rowhead">
                     Capability
                     <small>
                       What you get, tool by tool
                     </small>
                   </th>
-                  {" "}
                   <th className="ct-c">
                     <span className="ct-prod">
                       {" "}
@@ -585,7 +581,6 @@ export default function DsPricingPage({ d }) {
                       </span>
                     </span>
                   </th>
-                  {" "}
                   <th className="ct-c">
                     <span className="ct-prod">
                       {" "}
@@ -599,7 +594,6 @@ export default function DsPricingPage({ d }) {
                       </span>
                     </span>
                   </th>
-                  {" "}
                   <th className="ct-c">
                     <span className="ct-prod">
                       {" "}
@@ -613,7 +607,6 @@ export default function DsPricingPage({ d }) {
                       </span>
                     </span>
                   </th>
-                  {" "}
                   <th className="ct-c">
                     <span className="ct-prod">
                       {" "}
@@ -627,7 +620,6 @@ export default function DsPricingPage({ d }) {
                       </span>
                     </span>
                   </th>
-                  {" "}
                   <th className="ct-c">
                     <span className="ct-prod">
                       {" "}
@@ -641,7 +633,6 @@ export default function DsPricingPage({ d }) {
                       </span>
                     </span>
                   </th>
-                  {" "}
                   <th className="ct-c">
                     <span className="ct-prod">
                       {" "}
@@ -655,58 +646,43 @@ export default function DsPricingPage({ d }) {
                       </span>
                     </span>
                   </th>
-                  {" "}
                 </tr>
-                {" "}
               </thead>
-              {" "}
               <tbody>
-                {" "}
                 <tr>
-                  {" "}
                   <th className="rowhead" scope="row">
                     Measures from
                     <small>
                       What it reads to produce quantities
                     </small>
                   </th>
-                  {" "}
                   <td className="ct-c">
                     3D model elements
                   </td>
-                  {" "}
                   <td className="ct-c">
                     2D &amp; scanned drawings
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     MEP services in 3D
                   </td>
-                  {" "}
                   <td className="ct-c">
                     Site output logs
                   </td>
-                  {" "}
                   <td className="ct-c">
                     Civil 3D corridors
                   </td>
-                  {" "}
                 </tr>
-                {" "}
                 <tr>
-                  {" "}
                   <th className="rowhead" scope="row">
                     Prices the work
                     <small>
                       Applies rates to what it measured
                     </small>
                   </th>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -714,7 +690,6 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -722,7 +697,6 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -733,7 +707,6 @@ export default function DsPricingPage({ d }) {
                       the source
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -741,28 +714,22 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                 </tr>
-                {" "}
                 <tr>
-                  {" "}
                   <th className="rowhead" scope="row">
                     Bill of quantities
                     <small>
                       Structured, QS-format output
                     </small>
                   </th>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -773,7 +740,6 @@ export default function DsPricingPage({ d }) {
                       multi-storey
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -784,12 +750,10 @@ export default function DsPricingPage({ d }) {
                       linked Excel
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -797,48 +761,38 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                 </tr>
-                {" "}
                 <tr>
-                  {" "}
                   <th className="rowhead" scope="row">
                     Programme &amp; time
                     <small>
                       Durations, sequencing, MS Project
                     </small>
                   </th>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -849,23 +803,18 @@ export default function DsPricingPage({ d }) {
                       MS Project
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                 </tr>
-                {" "}
                 <tr>
-                  {" "}
                   <th className="rowhead" scope="row">
                     Works offline
                     <small>
                       Usable without a connection
                     </small>
                   </th>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -873,7 +822,6 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -881,7 +829,6 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -889,7 +836,6 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -897,7 +843,6 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -905,33 +850,26 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                 </tr>
-                {" "}
                 <tr>
-                  {" "}
                   <th className="rowhead" scope="row">
                     Mobile companion
                     <small>
                       Cost work away from the PC
                     </small>
                   </th>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -939,12 +877,10 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-yes">
                       <svg viewBox="0 0 24 24">
@@ -952,16 +888,13 @@ export default function DsPricingPage({ d }) {
                       </svg>
                     </span>
                   </td>
-                  {" "}
                   <td className="ct-c">
                     <span className="ct-no">
                     </span>
                   </td>
-                  {" "}
                 </tr>
-                {" "}{d.compareRow}{" "}
+                {d.compareRow}
               </tbody>
-              {" "}
             </table>
             {" "}
           </div>

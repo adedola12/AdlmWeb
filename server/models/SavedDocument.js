@@ -33,6 +33,11 @@ const SavedDocumentSchema = new mongoose.Schema(
     // "The Principal Partner" rather than to an account we hold.
     to: { type: String, default: "", trim: true },
 
+    // Who it is from, when that is not simply the letterhead. Blank on almost
+    // every document, and blank on every one saved before the field existed —
+    // which the composer reads as missing rather than assuming a fresh shape.
+    from: { type: String, default: "", trim: true },
+
     source: { type: String, default: "" },
     blocks: { type: Number, default: 0 },
 

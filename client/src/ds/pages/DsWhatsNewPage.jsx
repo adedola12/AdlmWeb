@@ -83,17 +83,14 @@ export default function DsWhatsNewPage({ d }) {
           <div className="ctable-wrap rise">
             {" "}
             <table className="ctable">
-              {" "}
               <thead>
                 <tr>
-                  {" "}
                   <th className="rowhead">
                     Product
                     <small>
                       Latest shipping build
                     </small>
                   </th>
-                  {" "}
                   <th>
                     Version
                   </th>
@@ -103,10 +100,9 @@ export default function DsWhatsNewPage({ d }) {
                   <th>
                     What changed
                   </th>
-                  {" "}
                 </tr>
               </thead>
-              {" "}{d.latest}{" "}
+              {d.latest}
             </table>
             {" "}
           </div>

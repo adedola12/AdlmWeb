@@ -553,27 +553,21 @@ export default function DsDashSupport() {
                           </label>
                           {" "}
                           <select id="tk-prod" name="product">
-                            {" "}
                             <option>
                               QUIV v3.1.7
                             </option>
-                            {" "}
                             <option>
                               RateGen v2.5.0
                             </option>
-                            {" "}
                             <option>
                               HERON v2.9.0
                             </option>
-                            {" "}
                             <option>
                               Installer Hub v1.0
                             </option>
-                            {" "}
                             <option>
                               Account, seats or billing
                             </option>
-                            {" "}
                           </select>
                         </div>
                         {" "}
@@ -583,19 +577,15 @@ export default function DsDashSupport() {
                           </label>
                           {" "}
                           <select id="tk-mac" name="machine">
-                            {" "}
                             <option>
                               TUNDE-WS02
                             </option>
-                            {" "}
                             <option>
                               CHIDI-LT01
                             </option>
-                            {" "}
                             <option>
                               Not machine-specific
                             </option>
-                            {" "}
                           </select>
                         </div>
                         {" "}

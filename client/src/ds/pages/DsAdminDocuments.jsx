@@ -834,6 +834,12 @@ export default function DsAdminDocuments() {
                 </label>
                 {" "}
                 <label>
+                  Address from
+                  <textarea id="adm-from" rows="3" placeholder="Leave blank to use the letterhead">
+                  </textarea>
+                </label>
+                {" "}
+                <label>
                   Addressed to
                   <textarea id="adm-to" rows="4" placeholder="One line each">
                   </textarea>
