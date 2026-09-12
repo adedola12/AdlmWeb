@@ -672,6 +672,10 @@ router.get("/:sku/quiz/:moduleCode", async (req, res) => {
         _id: q._id,
         prompt: q.prompt,
         options: q.options,
+        // Where in the lecture it belongs, so the player knows when to ask
+        // it. Still no correctIndex and still no explanation — the anchor is
+        // not part of the answer key.
+        atSec: q.atSec ?? null,
       })),
     },
     attempts: attempts.map((a) => ({
@@ -685,6 +689,54 @@ router.get("/:sku/quiz/:moduleCode", async (req, res) => {
       ? Math.max(0, quiz.maxAttempts - attempts.length)
       : null,
     best: attempts.reduce((best, a) => Math.max(best, a.score || 0), 0),
+  });
+});
+
+/**
+ * POST /me/courses/:sku/quiz/:moduleCode/check — one question, answered where
+ * it was asked.
+ *
+ * WHY THIS DOES NOT SCORE ANYTHING
+ *
+ * A checkpoint is teaching, not examining. Its whole value is that the student
+ * finds out they were wrong while the explanation is still on the screen
+ * behind them, and a mark attached to that turns a moment of learning into a
+ * moment of being caught — which is the fastest way to make somebody stop
+ * engaging and start skipping.
+ *
+ * So this records no attempt and moves no mark. The graded quiz at the end of
+ * the module is unchanged, and the certificate mark still comes only from
+ * there.
+ *
+ * It gives away one answer at a time, which is not a leak: these quizzes have
+ * maxAttempts 0 — unlimited — so a student who wants the key can already get
+ * it by submitting twice. Nothing is being opened that was closed.
+ */
+router.post("/:sku/quiz/:moduleCode/check", express.json(), async (req, res) => {
+  const { sku, moduleCode } = req.params;
+  const questionId = String(req.body?.questionId || "");
+  const choice = Number(req.body?.choice);
+
+  const enrollment = await CourseEnrollment.findOne({
+    userId: req.user._id,
+    courseSku: sku,
+  }).lean();
+  if (!enrollment) return res.status(403).json({ error: "Not enrolled" });
+
+  const quiz = await Quiz.findOne({ courseSku: sku, moduleCode, isPublished: true }).lean();
+  if (!quiz) return res.status(404).json({ error: "No quiz for this module" });
+
+  const q = (quiz.questions || []).find((x) => String(x._id) === questionId);
+  if (!q) return res.status(404).json({ error: "No such question" });
+
+  if (!Number.isInteger(choice) || choice < 0 || choice >= (q.options || []).length) {
+    return res.status(400).json({ error: "Pick one of the options." });
+  }
+
+  res.json({
+    correct: choice === q.correctIndex,
+    correctIndex: q.correctIndex,
+    explanation: q.explanation || "",
   });
 });
 

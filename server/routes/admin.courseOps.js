@@ -80,6 +80,14 @@ function sanitizeQuiz(body = {}) {
         .filter(Boolean),
       correctIndex: Math.max(0, Number(q?.correctIndex ?? 0) || 0),
       explanation: String(q?.explanation || "").trim(),
+      // Where in the lecture it is asked. null is "not placed", which is a
+      // different thing from second zero — the whitelist here is why this
+      // needs saying: anything not named is dropped on every save, so a field
+      // added to the schema and not added here is a field that never persists.
+      atSec:
+        q?.atSec === null || q?.atSec === undefined || q?.atSec === ""
+          ? null
+          : Math.max(0, Math.floor(Number(q.atSec) || 0)),
     })),
   };
 }

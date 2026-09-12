@@ -8,6 +8,7 @@ import CertificateNameModal from "../components/CertificateNameModal.jsx";
 import { clock } from "../ds/lxCourses.js";
 import { SecureVideo, SecureEmbed } from "../components/SecureVideo.jsx";
 import ModuleQuiz from "../components/ModuleQuiz.jsx";
+import LectureCheckpoints from "../components/LectureCheckpoints.jsx";
 import {
   IconDownload,
   IconLink,
@@ -525,6 +526,22 @@ export default function CourseDetail() {
               </div>
             </div>
           )}
+
+          {/* Asked at the moment the point is made, over the player, which is
+              the only place a question actually gets answered. Renders
+              nothing at all when no question in this session has been placed
+              in the timeline, so a lecture without checkpoints is unchanged. */}
+          <LectureCheckpoints
+            sku={sku}
+            // The onboarding video is not a module and has no quiz. The recap
+            // is a different recording of the same session, so a checkpoint
+            // placed at 41:20 of the lecture points at nothing in a four
+            // minute summary — timestamps belong to the track they were taken
+            // from, and there is only one of those.
+            moduleCode={activeCode === INTRO_CODE || track !== "lecture" ? "" : activeCode}
+            videoRef={videoRef}
+            at={at}
+          />
 
           <div className="lx-guard">
             <IconLock />

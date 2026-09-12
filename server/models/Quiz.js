@@ -21,6 +21,24 @@ const QuestionSchema = new mongoose.Schema(
     correctIndex: { type: Number, default: 0 },
     // Shown after submission, right or wrong — the teaching happens here.
     explanation: { type: String, default: "" },
+
+    /**
+     * Where in the lecture this question belongs, in seconds.
+     *
+     * A quiz at the end of a two-hour session asks about something the student
+     * heard ninety minutes ago, and the honest answer to most of it is "I do
+     * not remember" rather than "I did not understand". A question asked at
+     * the moment the point was made is a different question: it catches the
+     * misunderstanding while the explanation is still on screen behind it.
+     *
+     * So a question can be anchored to a second, and the player stops there
+     * and asks it.
+     *
+     * null means not anchored, which is what every question written before
+     * this field existed is. Those are asked the old way, at the end, so
+     * nothing that already works changes until somebody places it.
+     */
+    atSec: { type: Number, default: null, min: 0 },
   },
   { _id: true },
 );
