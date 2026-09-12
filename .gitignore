@@ -62,3 +62,10 @@ adlm-ai-*.json
 # Timestamped backups written by the maintenance scripts in server/scripts.
 # Generated data, regenerated on demand — not source.
 server/scripts/*.backup.*.json
+
+# The checkpoint placement drafts. Model output about where each quiz question
+# belongs in its lecture — reviewed, applied, then regenerable from the
+# transcripts at any time. The quizzes themselves are the record; this is the
+# working paper.
+server/scripts/checkpoint-draft*.json
+server/scripts/checkpoint-redraft*.json
