@@ -1,3 +1,6 @@
+// MUST be first: registers the demo-tenancy plugin before any model is
+// compiled. See server/models/demoTenancy.js.
+import "./models/tenancy.bootstrap.js";
 import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
@@ -15,6 +18,7 @@ import { runExpiryNotifier } from "./util/expiryNotifier.js";
 import { runAutoRenewals } from "./util/autoRenew.js";
 import { runVideoPoll } from "./util/videoNotifier.js";
 import { ensureRolesSeeded } from "./util/rbac.js";
+import { assertTenancyApplied } from "./models/demoTenancy.js";
 import { resolveUserGuideUrl } from "./util/userGuide.js";
 import { authLimiter, deviceLimiter, generalLimiter } from "./middleware/rateLimiter.js";
 
@@ -30,12 +34,11 @@ import meDeploymentsRoutes from "./routes/me.deployments.js";
 import meCourses from "./routes/meCourses.js";
 import { designMode } from "./middleware/designMode.js";
 import adminRoutes from "./routes/admin.js";
+import { demoModeGuard } from "./middleware/demoMode.js";
 import adminDeploymentsRoutes from "./routes/admin.deployments.js";
 import adminCourses from "./routes/adminCourses.js";
 import adminCourseOps from "./routes/admin.courseOps.js";
 import adminSoftwares from "./routes/admin.softwares.js";
-import adminClassrooms from "./routes/admin.classrooms.js";
-import meClassrooms from "./routes/me.classrooms.js";
 import adminCourseGrading from "./routes/adminCourseGrading.js";
 import purchaseRoutes from "./routes/purchase.js";
 import learnPublic from "./routes/Learn.js";
@@ -237,6 +240,12 @@ app.use(express.urlencoded({ extended: false, limit: "16mb" }));
 // Structured, parseable access logs in production; colourful logs locally.
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
+// Personal JSON is never cached and never answered with 304. Express would
+// otherwise ETag every body and hand a browser 304 on match, which is only
+// as good as that browser's cache; see middleware/noStore.js for the firm
+// whose dashboard read "Failed to fetch" for weeks on clean 304s.
+app.use(noStore);
+
 // Lightweight health/readiness probe for uptime checks & load balancers.
 // Public and dependency-free so it answers even while the DB is reconnecting.
 app.get(["/health", "/healthz"], (_req, res) => {
@@ -254,10 +263,16 @@ app.get(["/health", "/healthz"], (_req, res) => {
 // meant to be reached anonymously from end-user machines.
 app.use("/.well-known", wellKnownRoutes);
 
+// The network check behind /network-check on the site. Public, tiny, and it
+// answers with what it received rather than what it assumes; see routes/diag.js.
+app.use("/diag", diagRoutes);
+
 // Best-effort audit trail for the break-glass God support account. Mounted
 // before the routes so it observes every mutating request, but it never gates
 // (per-route auth still applies). See server/middleware/auditGod.js.
 import { auditGod } from "./middleware/auditGod.js";
+import { noStore } from "./middleware/noStore.js";
+import diagRoutes from "./routes/diag.js";
 app.use(auditGod);
 
 // Apply rate limiting to auth and device endpoints
@@ -346,10 +361,14 @@ app.get("/settings/force-reinstall", async (_req, res) => {
 /* =========================
    ✅ ADMIN ROUTES
    ========================= */
-// Design Access gate. Must stay the FIRST thing mounted on /admin: it is what
-// turns a design role into a look-but-never-touch admin, and anything mounted
-// above it would be served unmasked. See server/middleware/designMode.js.
+// The two view-only masks. Both MUST stay ahead of every /admin router: each
+// turns its own role into a look-but-never-touch admin by rewriting the
+// response with placeholder data, and anything mounted above them would be
+// served unmasked. The per-area gates downstream only admit these roles
+// because these have already run.
+// See server/middleware/designMode.js and server/middleware/demoMode.js.
 app.use("/admin", designMode);
+app.use("/admin", demoModeGuard);
 
 app.use("/admin/learn", adminLearn);
 app.use("/admin/media", adminMediaRoutes);
@@ -364,8 +383,6 @@ app.use("/admin/deployments", adminDeploymentsRoutes);
 app.use("/admin/courses", adminCourses);
 app.use("/admin/course-ops", adminCourseOps);
 app.use("/admin/softwares", adminSoftwares);
-app.use("/admin/classrooms", adminClassrooms);
-app.use("/me/classrooms", meClassrooms);
 app.use("/admin/course-grading", adminCourseGrading);
 app.use("/admin/settings", adminSettings);
 
@@ -599,6 +616,10 @@ export function bootstrap() {
 
   _readyPromise = (async () => {
     validateEnv();
+    // Fail loudly if any model dodged the demo-tenancy plugin. An untenanted
+    // model would serve REAL rows to a demo session, silently — better to
+    // refuse to boot than to leak. Deliberately NOT caught below.
+    assertTenancyApplied();
     await connectDB(process.env.MONGO_URI);
 
     // Seed built-in roles (admin / mini_admin / user) and warm the permission

@@ -1,8 +1,7 @@
 import mongoose from "mongoose";
 
 /**
- * A quiz attached to one module of a course — the platform equivalent of the
- * "Understanding 5D BIM QUIZ" that currently only exists in Google Classroom.
+ * A quiz attached to one module of a course, e.g. "Understanding 5D BIM".
  *
  * Correct answers live here and are stripped before the quiz is sent to a
  * student; grading happens server-side so the answer key never reaches the

@@ -164,8 +164,29 @@ function useHlsSource(videoRef, src) {
     const video = videoRef.current;
     if (!video || !src || !isHls) return undefined;
 
-    // Safari / iOS: native, and the only path that can also do FairPlay later.
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    // WHICH PLAYER, AND WHY NOT canPlayType
+    //
+    // This used to ask `video.canPlayType("application/vnd.apple.mpegurl")`
+    // and treat a truthy answer as "this browser plays HLS natively, hand it
+    // the manifest". Chromium answers "maybe" — truthy — and then cannot
+    // demux an m3u8 at all. So every Chrome and Edge viewer got the playlist
+    // assigned as a video source, MEDIA_ELEMENT_ERROR code 4
+    // (DEMUXER_ERROR_COULD_NOT_PARSE), a black player and no hls.js. That is
+    // every lecture and every organisation video on the two browsers almost
+    // all of this audience uses.
+    //
+    // canPlayType is advisory by specification; it is not a capability check.
+    // The real question is whether Media Source Extensions exist, because
+    // that is what hls.js needs and what iOS Safari lacks. Ask that directly.
+    // ManagedMediaSource is the newer iOS spelling and counts.
+    const hasMse =
+      typeof window !== "undefined" &&
+      (typeof window.MediaSource !== "undefined" ||
+        typeof window.ManagedMediaSource !== "undefined");
+
+    if (!hasMse) {
+      // iOS Safari: HLS is native here, and it is also the only path that can
+      // carry FairPlay later. No point downloading the parser it cannot use.
       video.src = src;
       return undefined;
     }
@@ -174,7 +195,13 @@ function useHlsSource(videoRef, src) {
     let cancelled = false;
 
     import("hls.js").then(({ default: Hls }) => {
-      if (cancelled || !Hls.isSupported()) return;
+      if (cancelled) return;
+      if (!Hls.isSupported()) {
+        // MSE exists but hls.js still refuses it. Native is the last resort
+        // rather than leaving the element with nothing attached.
+        video.src = src;
+        return;
+      }
       hls = new Hls({
         xhrSetup: (xhr) => {
           xhr.withCredentials = true;
@@ -197,13 +224,85 @@ function useHlsSource(videoRef, src) {
         // bandwidth by making the toolbars illegible — the blurry-playback
         // complaint the ladder was built to fix in the first place.
 
-        // hls.js assumes a fast connection until it has measured one, which on
-        // a slow link means starting at 720p and stalling before the estimate
-        // catches up. Starting the guess low costs a few seconds at a lower
-        // rung and climbs within one segment; guessing high costs a stall on
-        // the opening minute of every lecture.
-        abrEwmaDefaultEstimate: 600_000,
+        // DO NOT SET maxStarvationDelay TO 0.
+        //
+        // It is tempting, because hls.js only compares a level against its
+        // AVERAGE-BANDWIDTH rather than its peak when that option is 0, and
+        // on screen recordings the advertised peak runs several times the
+        // average. It does not work, and it does not fail quietly: playback
+        // stops dead at 0:00 with a black frame and never starts.
+        //
+        // findBestLevel computes `maxFetchDuration = bufferStarvationDelay +
+        // maxStarvationDelay`. At startup the buffer is empty, so that whole
+        // budget is zero, and the only clause left that can admit a level is
+        // `fetchDuration <= ttfbEstimateSec` — true for nothing that has to be
+        // downloaded. No level qualifies and the player never picks one.
+        //
+        // The peak-versus-average gap is real, but it is a defect in what the
+        // manifest advertises, not something to correct in the player. It is
+        // fixed where it is caused, by capping the encoder's MaxBitrate so the
+        // worst segment stays near the average. See RUNGS in
+        // server/utils/awsMediaConvert.js.
+
+        // NO abrEwmaDefaultEstimate. There was one here, set to 600 kbps, on
+        // the reasoning that guessing low costs a few seconds at a lower rung
+        // while guessing high costs a stall. The reasoning was wrong about
+        // what the option does.
+        //
+        // 600 kbps sits BELOW the bottom rung's advertised bandwidth, so it
+        // did not merely start conservatively — it pinned the opening segment
+        // to 428x240 and, by supplying an estimate at all, replaced hls.js's
+        // own first-variant bootstrap, which otherwise seeds from the manifest.
+        // On a Revit screen recording, 240p is not a cautious start, it is no
+        // text at all, and the climb back up is gated on measured throughput
+        // that only accumulates while the picture is already unusable.
+        //
+        // The mechanism, so this is not re-added as a "safer" number: hls.js
+        // seeds its estimate from the first variant in the manifest, capped at
+        // abrEwmaDefaultEstimateMax (5 Mbps), and it does that ONLY when the
+        // option is absent from userConfig — level-controller.ts guards the
+        // whole block with `userConfig?.abrEwmaDefaultEstimate === undefined`.
+        // Supplying any value, high or low, switches the bootstrap off. So the
+        // fix is to delete the option, not to raise it.
+        //
+        // MediaConvert writes the manifest highest rung first, so the seed is
+        // the top rung and playback opens sharp, then adapts DOWN within a
+        // segment if the connection cannot hold it. That is the right way round
+        // for content whose entire value is legibility: be readable immediately
+        // and drop if you must, rather than open unusable and hope to recover.
       });
+      // A fatal error with no handler stops the stream for good, silently.
+      //
+      // hls.js reports plenty of non-fatal errors and recovers from them on
+      // its own; the two fatal classes it CAN recover from need to be told to.
+      // Without this a single dropped request forty minutes into a lecture
+      // ends the viewing with a frozen frame and nothing in the interface to
+      // say why — and on a Lagos connection a dropped request over forty
+      // minutes is close to certain rather than a corner case.
+      //
+      // NETWORK_ERROR: ask it to resume loading. MEDIA_ERROR: ask it to
+      // recover the decoder, and only give up if that fails twice in a row,
+      // which is hls.js's own documented escalation.
+      let mediaRecoveries = 0;
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data?.fatal) return;
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls.startLoad();
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries < 2) {
+          mediaRecoveries += 1;
+          hls.recoverMediaError();
+          return;
+        }
+        // Genuinely unrecoverable. Tear the instance down rather than leave it
+        // retrying a stream that will not come back.
+        try { hls.destroy(); } catch { /* ignore */ }
+      });
+      // A clean fragment resets the escalation, so a blip at minute five does
+      // not spend the allowance for one at minute thirty.
+      hls.on(Hls.Events.FRAG_BUFFERED, () => { mediaRecoveries = 0; });
+
       hls.loadSource(src);
       hls.attachMedia(video);
     });

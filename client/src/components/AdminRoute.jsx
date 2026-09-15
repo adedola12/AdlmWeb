@@ -2,7 +2,7 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../store.jsx";
-import { can, isDesignAccess, isStaff } from "../utils/roles.js";
+import { can, isDesignAccess, isDemo, isStaff } from "../utils/roles.js";
 import DsAdminShell from "../ds/DsAdminShell.jsx";
 
 // Gate a route by either a permission (preferred) or a legacy role list.
@@ -25,14 +25,17 @@ export default function AdminRoute({ roles = ["admin"], permission, children }) 
     );
   }
 
-  // Design Access opens every admin route, including the role-gated ones — a
-  // designer has to reach a screen to rebuild it. Everything behind these
-  // routes is masked server-side (server/middleware/designMode.js).
-  const allowed = isDesignAccess(user)
-    ? true
-    : permission
+  // Both view-only roles open every admin route, including the role-gated
+  // ones: you cannot rebuild or review a screen you cannot reach. Neither
+  // grants authority over anything on it — each is masked server-side by its
+  // own middleware (designMode.js and demoMode.js), which replaces the
+  // response with placeholder data and refuses every write.
+  const allowed =
+    isDesignAccess(user) ||
+    isDemo(user) ||
+    (permission
       ? can(user, permission)
-      : roles.includes(user.role) || (user.isSuperAdmin && roles.includes("admin"));
+      : roles.includes(user.role) || (user.isSuperAdmin && roles.includes("admin")));
 
   // Signed in, but as somebody with no admin rights. Sending them to the
   // dashboard is right for a customer who wandered in; for staff who signed in

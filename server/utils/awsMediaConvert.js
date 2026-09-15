@@ -8,18 +8,21 @@
  *
  * The rungs stop at the source resolution — and the source is 4K.
  *
- * This file used to say "these are 720p screen recordings", and capped the
- * ladder at 720p on that basis. It was wrong: every one of the thirty-four
- * archived masters is 3840x2160, checked by reading the tkhd box of each
- * (scripts/probe-course-masters.mjs). The ladder was therefore throwing away
- * three quarters of the picture on every lecture, and a student on fibre with
- * a 27-inch monitor was watching a 720p upscale of a 4K screen recording of
- * Revit — which is the one kind of content where the difference is legible,
- * because it is full of small text.
+ * This file used to say "these are 720p screen recordings" and capped the
+ * ladder at 720p on that basis. It was wrong, and a firm reported it back as
+ * simply blurry: their 40-minute Revit walkthrough was recorded at 3840x2160
+ * and the cap rendered it at 1280x720. Screen content is the one kind where
+ * that is not subtle. A ribbon label 11px tall at native becomes 4px at a
+ * third of the height, which is not small text, it is no text.
  *
- * 1440p is deliberately absent. Every rung is billed per output minute across
- * thirty-four ~96-minute lectures, and 1440 sits close enough to 1080 that it
- * mostly duplicates it; 2160 and 1080 together cover the gap that matters.
+ * 1440p is deliberately absent. Every rung is billed per output minute, and
+ * 1440 sits close enough to 1080 that it mostly duplicates it; 2160 and 1080
+ * together cover the gap that matters.
+ *
+ * The extra rungs cost nothing on a master that cannot use them, because a
+ * rung above the source is dropped before the job is submitted rather than
+ * upscaled into existence. See ladderFor below — MediaConvert itself will
+ * happily upscale, and bill for it, so the refusal has to be ours.
  */
 import {
   MediaConvertClient,
@@ -107,13 +110,21 @@ function watermarkOverlay(height) {
   };
 }
 
-function rung({ height, maxBitrate, nameModifier }) {
+function rung({ height, maxBitrate, nameModifier, quality = 8 }) {
   return {
     NameModifier: nameModifier,
     ContainerSettings: { Container: "M3U8", M3u8Settings: {} },
     VideoDescription: {
       Height: height,
       ScalingBehavior: "DEFAULT",
+      // Above the default 50, so the scaler's anti-alias kernel is wound back
+      // a little on every rung that is a downscale. Small glyphs are exactly
+      // what a soft downscale destroys first, and a Revit ribbon is nothing
+      // but small glyphs. A no-op on the rung that matches the source, since
+      // nothing is being scaled there. Mild on purpose: push it much past this
+      // and high-contrast edges start to ring, which reads as worse, not
+      // sharper.
+      Sharpness: 70,
       ...(watermarkOverlay(height) ? { VideoPreprocessors: watermarkOverlay(height) } : {}),
       CodecSettings: {
         Codec: "H_264",
@@ -122,8 +133,20 @@ function rung({ height, maxBitrate, nameModifier }) {
           // is rejected outright — the two are alternative rate-control models,
           // not complementary knobs.
           RateControlMode: "QVBR",
-          QvbrSettings: { QvbrQualityLevel: 8 },
+          // Per rung rather than flat. AWS's own table puts 8 at 720p; the
+          // rungs a large screen actually lands on carry the text, so they get
+          // 9. QVBR only spends what the picture needs, so raising the target
+          // on a static screen recording costs far less than the number
+          // suggests — and the ceiling below still binds.
+          QvbrSettings: { QvbrQualityLevel: quality },
           MaxBitrate: maxBitrate,
+          // Named rather than left to the default. High profile's 8x8 transform
+          // is the one codec feature that specifically helps high-contrast
+          // glyph edges, and CABAC is worth a few percent on the same content.
+          // Both are almost certainly the defaults already; naming them makes
+          // the encode deterministic instead of dependent on that staying true.
+          CodecProfile: "HIGH",
+          EntropyEncoding: "CABAC",
           SceneChangeDetect: "TRANSITION_DETECTION",
           GopSizeUnits: "AUTO",
           QualityTuningLevel: "SINGLE_PASS_HQ",
@@ -146,16 +169,86 @@ function rung({ height, maxBitrate, nameModifier }) {
 }
 
 /**
+ * THE LADDER, and why it has to know the source height.
+ *
+ * MediaConvert does NOT decline to upscale. Setting `Height` on an output is
+ * an instruction, not a ceiling: hand it a 1428x814 recording with a 2160 rung
+ * and it returns a 3790x2160 output — measured, not assumed. That output
+ * carries no more detail than the master did, and it bills at the 4K
+ * multiplier, which is the most expensive tier on the price list.
+ *
+ * So a rung above the master is dropped rather than submitted. A 4K master
+ * gets all six; a 1080p one gets four; a genuinely 720p one gets three and
+ * costs a fraction. `sourceHeight` of 0 means "not measured" and submits
+ * everything, which is the behaviour the course scripts have always had.
+ *
+ * The smallest rung always survives, so a tiny or unmeasurable source still
+ * produces a playable ladder rather than an empty output group.
+ */
+/**
+ * THE CEILING IS WHAT THE MANIFEST ADVERTISES, SO IT DECIDES WHAT PLAYS.
+ *
+ * maxBitrate is a ceiling rather than a target, and the instinct is to leave
+ * it generous. On screen recordings that instinct is a trap.
+ *
+ * The picture is static for seconds and then the whole screen redraws, so one
+ * segment in a stretch costs many times its neighbours. QVBR spends up to the
+ * ceiling on exactly those segments, and MediaConvert then advertises the
+ * worst one as the rung's BANDWIDTH. Every HLS player — hls.js included —
+ * selects on that number, not on AVERAGE-BANDWIDTH. A generous ceiling
+ * therefore does not buy headroom, it prices the rung out of being chosen.
+ *
+ * Measured on the first organisation video with a 8 Mbps ceiling on 2160:
+ *
+ *   2160p   advertised 8.88 Mbps   actually 1.26 Mbps   7.1x
+ *   1080p   advertised 4.27 Mbps   actually 0.68 Mbps   6.2x
+ *
+ * hls.js divides the advertised figure by abrBandWidthUpFactor (0.7), so it
+ * demanded 12.7 Mbps of measured throughput before it would show 4K that
+ * genuinely needs 1.26 — and parked every viewer on 720p or below, on a
+ * correct six-rung ladder. The blur was the manifest overstating its own cost.
+ *
+ * So the ceilings below sit near twice each rung's real average rather than
+ * six times it. Static content never approaches them and is untouched; only
+ * the redraw spikes are compressed harder, which is the one moment nobody is
+ * reading the screen anyway.
+ */
+const RUNGS = [
+  { height: 2160, maxBitrate: 3000000, nameModifier: "_2160", quality: 9 },
+  { height: 1080, maxBitrate: 1800000, nameModifier: "_1080", quality: 9 },
+  { height: 720, maxBitrate: 1200000, nameModifier: "_720", quality: 8 },
+  { height: 540, maxBitrate: 800000, nameModifier: "_540", quality: 8 },
+  { height: 360, maxBitrate: 500000, nameModifier: "_360", quality: 8 },
+  // The bottom rung exists to avoid a stall, not to be read. Spending more
+  // quality on 428x240 buys nothing legible and raises the floor a weak
+  // connection has to clear.
+  { height: 240, maxBitrate: 300000, nameModifier: "_240", quality: 7 },
+];
+
+export function ladderFor(sourceHeight = 0) {
+  const h = Number(sourceHeight) || 0;
+  // A few pixels of slack: a 1080p capture is sometimes 1076 or 1088 lines
+  // after a container's display matrix, and refusing its own rung over four
+  // pixels would cost the whole point of the rung.
+  const usable = h > 0 ? RUNGS.filter((r) => r.height <= h + 16) : RUNGS;
+  return (usable.length ? usable : [RUNGS[RUNGS.length - 1]]).map(rung);
+}
+
+/**
  * Submits the transcode. Returns the MediaConvert job id; the job is async, so
  * `getJobState` is how you find out it finished.
  *
  * @param {string} sourceKey  master object in the archive bucket
  * @param {string} outPrefix  e.g. hls/bim-bld-arch/2025/w1d1/
+ * @param {number} sourceHeight  the master's real pixel height, when known.
+ *   Rungs above it are dropped — see LADDER below. Omit and every rung is
+ *   submitted, which is what the course scripts have always done.
  */
-export async function submitHlsJob({ sourceKey, outPrefix, jobTag = "" }) {
+export async function submitHlsJob({ sourceKey, outPrefix, jobTag = "", sourceHeight = 0 }) {
   const archiveBucket = requiredEnv("AWS_VIDEO_ARCHIVE_BUCKET");
   const deliveryBucket = requiredEnv("AWS_VIDEO_DELIVERY_BUCKET");
   const role = requiredEnv("AWS_MEDIACONVERT_ROLE_ARN");
+  const outputs = ladderFor(sourceHeight);
 
   const command = new CreateJobCommand({
     Role: role,
@@ -188,17 +281,7 @@ export async function submitHlsJob({ sourceKey, outPrefix, jobTag = "" }) {
               ManifestDurationFormat: "INTEGER",
             },
           },
-          Outputs: [
-            // Screen capture is mostly static with sudden full redraws, so QVBR
-            // spends very little of these ceilings most of the time — the
-            // ceiling is there for the redraws, where text has to stay sharp.
-            rung({ height: 2160, maxBitrate: 14000000, nameModifier: "_2160" }),
-            rung({ height: 1080, maxBitrate: 5500000, nameModifier: "_1080" }),
-            rung({ height: 720, maxBitrate: 3600000, nameModifier: "_720" }),
-            rung({ height: 540, maxBitrate: 1800000, nameModifier: "_540" }),
-            rung({ height: 360, maxBitrate: 900000, nameModifier: "_360" }),
-            rung({ height: 240, maxBitrate: 450000, nameModifier: "_240" }),
-          ],
+          Outputs: outputs,
         },
       ],
     },
@@ -288,9 +371,25 @@ export async function submitAudioExtractJob({ sourceKey, outKey, jobTag = "" }) 
 
 export async function getJobState(jobId) {
   const out = await mediaConvertClient().send(new GetJobCommand({ Id: jobId }));
+
+  // The runtime, which nothing else knows. The row that starts an encode has
+  // no idea how long the recording is — the uploader never measured it and the
+  // player only learns it after loading the manifest — so every organisation
+  // video displayed a blank runtime. MediaConvert has been reporting it on
+  // every completed job all along; it just was not read. Milliseconds, per
+  // output, so take the longest and round.
+  let durationSec = 0;
+  for (const group of out?.Job?.OutputGroupDetails || []) {
+    for (const detail of group?.OutputDetails || []) {
+      const ms = Number(detail?.DurationInMs) || 0;
+      if (ms > durationSec) durationSec = ms;
+    }
+  }
+
   return {
     status: out?.Job?.Status || "",
     errorMessage: out?.Job?.ErrorMessage || "",
     percent: Number(out?.Job?.JobPercentComplete || 0),
+    durationSec: durationSec ? Math.round(durationSec / 1000) : 0,
   };
 }

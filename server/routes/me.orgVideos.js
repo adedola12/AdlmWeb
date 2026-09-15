@@ -185,7 +185,14 @@ router.post("/:id/playback/start", express.json(), async (req, res) => {
     if (doc.source === "s3") {
       if (doc.hlsKey && isCloudfrontConfigured()) {
         try {
-          const { cookies, expiresAt } = signPlaybackCookies({ keyPrefix: doc.outPrefix, ip: clientIp(req) });
+          // Derive the prefix from the key being SERVED, never from
+          // doc.outPrefix. The two diverge for as long as a re-encode runs:
+          // outPrefix already names the new ladder directory while hlsKey still
+          // names the old one that is playing. Signing outPrefix granted a
+          // directory nobody was asking for and denied the one they were, so
+          // every member got 403 for the length of an encode.
+          const keyPrefix = doc.hlsKey.replace(/index\.m3u8$/, "");
+          const { cookies, expiresAt } = signPlaybackCookies({ keyPrefix, ip: clientIp(req) });
           for (const [name, value] of Object.entries(cookies)) {
             res.cookie(name, value, playbackCookieOptions(expiresAt));
           }

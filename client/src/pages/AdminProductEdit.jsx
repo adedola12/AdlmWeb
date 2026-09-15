@@ -571,7 +571,7 @@ export default function AdminProductEdit() {
           <div>
             <div className="font-medium">Course delivery</div>
             <div className="mt-1 text-sm text-slate-600">
-              Add the Google Classroom link and learner instructions from the course setup page. Once saved there, the classroom button appears automatically on the dashboard and inside the enrolled course.
+              Build the modules, lessons and assignments on the course setup page. Once published there, the course opens directly on the dashboard and in the enrolled course player.
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -622,7 +622,7 @@ export default function AdminProductEdit() {
                     .filter(Boolean),
                 )
               }
-              placeholder={"One feature per line, e.g.\n100% Online (Google Classroom)\n6-week structured roadmap\nAutodesk Revit (MEP)…"}
+              placeholder={"One feature per line, e.g.\n100% Online, self-paced\n6-week structured roadmap\nAutodesk Revit (MEP)…"}
             />
             <div className="text-xs text-slate-500">
               One feature per line. Each line becomes a bullet on the product page.

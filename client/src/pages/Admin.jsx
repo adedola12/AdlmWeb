@@ -3627,7 +3627,7 @@ export default function Admin({ section = null }) {
       )}
 
       {/* ------------------ organizations tab ------------------ */}
-      {tab === "organizations" && <OrgVideosQuickAdd />}
+      {tab === "organizations" && <OrgVideosQuickAdd fullRegister={false} />}
 
       {tab === "organizations" && (
         <div className="card">

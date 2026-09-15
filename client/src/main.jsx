@@ -104,6 +104,7 @@ import PublicProposal from "./pages/PublicProposal.jsx";
 import Support from "./pages/Support.jsx";
 import RequestTechnicalHelp from "./pages/RequestTechnicalHelp.jsx";
 import AdminWaitlist from "./pages/AdminWaitlist.jsx";
+import AdminFollowUps from "./pages/AdminFollowUps.jsx";
 import AdminSupportTickets from "./pages/AdminSupportTickets.jsx";
 import AdminAuditLog from "./pages/AdminAuditLog.jsx";
 import RevitProjects from "./pages/RevitProjects.jsx";
@@ -157,6 +158,7 @@ import TrainingEnrollment from "./pages/TrainingEnrollment.jsx";
 import AdminPTrainings from "./pages/AdminPTrainings.jsx";
 
 import Freebies from "./pages/Freebies.jsx";
+import NetworkCheck from "./pages/NetworkCheck.jsx";
 import AdminFreebies from "./pages/AdminFreebies.jsx";
 import AdminUsersLite from "./pages/AdminUsersLite.jsx";
 import AdminAiUsage from "./pages/AdminAiUsage.jsx";
@@ -259,6 +261,9 @@ const router = createBrowserRouter([
 
       { path: "testimonials", element: <Testimonials /> },
       { path: "support", element: <Support /> },
+      // Public on purpose: it exists for the moment the site says "Failed to
+      // fetch" and nothing else works, which is also when sign-in cannot help.
+      { path: "network-check", element: <NetworkCheck /> },
       {
         path: "support/request",
         element: (
@@ -981,6 +986,16 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="followups">
             <AdminFollowUpsDesk />
+          </AdminRoute>
+        ),
+      },
+
+      // ✅ Renewal follow-up calls — staff-grantable ("followups" area)
+      {
+        path: "admin/follow-ups",
+        element: (
+          <AdminRoute permission="followups">
+            <AdminFollowUps />
           </AdminRoute>
         ),
       },

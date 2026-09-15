@@ -59,7 +59,6 @@ const CourseEnrollmentSchema = new mongoose.Schema(
     accessStartedAt: { type: Date, default: null },
     accessExpiresAt: { type: Date, default: null },
     lastProgressAt: { type: Date, default: null },
-    classroomLastSyncedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

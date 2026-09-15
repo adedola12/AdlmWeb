@@ -207,7 +207,7 @@ Every link below is live. The `/learn/free/...` URL is the ADLM website page (ke
 
 **BIM Course on Building Works** — ₦125,000 / $149.99. Project setup done properly (EIR → BEP → MIDP/TIDP → MPDT) in a real CDE; coordinate Arch/Struct/MEP with clash and issue tracking; auditable BoQs and 5D cost from model data; 4D sequencing; COBie handover; Power BI dashboards. Graduates leave with a portfolio: BEP pack, federated model, 4D/5D clip, BoQ, COBie and a dashboard. Taught with ADLM tools (HERON, RateGen, COBie Exporter).
 
-**BIM Course on Building Services (MEP & HVAC)** — ₦105,000 / $99.98. 100% online via Google Classroom, self-paced, over a 6-week roadmap (foundations → 3D → 4D → 5D → analytics → capstone). Revit MEP, ADLM Revit MEP plugin, Navisworks Manage, MS Project, Excel, RateGen, PlanSwift/CostX, Power BI, optional Python/AI. Weekly assessments, a "BIM Manager" capstone, certificate of completion, and the top 3 projects featured on ADLM channels.
+**BIM Course on Building Services (MEP & HVAC)** — ₦105,000 / $99.98. 100% online on the ADLM Studio platform, self-paced, over a 6-week roadmap (foundations → 3D → 4D → 5D → analytics → capstone). Revit MEP, ADLM Revit MEP plugin, Navisworks Manage, MS Project, Excel, RateGen, PlanSwift/CostX, Power BI, optional Python/AI. Weekly assessments, a "BIM Manager" capstone, certificate of completion, and the top 3 projects featured on ADLM channels.
 
 Both have preview videos on their course pages: https://www.adlmstudio.net/learn/course/bim-bld-arch and https://www.adlmstudio.net/learn/course/BIM-MEP-25
 

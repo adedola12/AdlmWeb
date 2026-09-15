@@ -70,6 +70,13 @@ const OrgVideoSchema = new mongoose.Schema(
     outPrefix: { type: String, default: "" },
     hlsKey: { type: String, default: "" },
     transcodeJobId: { type: String, default: "" },
+    // Which encode this is. Each one writes its own ladder directory, so a
+    // re-encode changes the manifest URL and cannot be masked by a stale
+    // CloudFront copy of the previous one. 0 is the pre-versioning layout.
+    encodeAttempt: { type: Number, default: 0 },
+    // The ladder this encode replaces, held until the new one is playable
+    // so a re-encode never blanks the picture for someone mid-watch.
+    supersededPrefix: { type: String, default: "" },
     transcodeStatus: { type: String, enum: TRANSCODE_STATES, default: "" },
     transcodePercent: { type: Number, default: 0 },
     transcodeError: { type: String, default: "" },

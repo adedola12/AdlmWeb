@@ -19,7 +19,12 @@ import { buildWelcomeEmail } from "../util/welcomeEmail.js";
 import { Invoice } from "../models/Invoice.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
-import { rolePermissionList, isSuperAdminRole, isDesignRole } from "../util/rbac.js";
+import {
+  rolePermissionList,
+  isSuperAdminRole,
+  isDesignRole,
+  isDemoRole,
+} from "../util/rbac.js";
 import { ALL_AREA_KEYS } from "../config/permissions.js";
 import {
   signAccess,
@@ -81,6 +86,7 @@ function buildAuthPayload(user) {
     // confirmed, not being let through something that is not.
     emailVerified: !!user.emailVerified,
     isSuperAdmin: isSuperAdminRole(user.role),
+    demoMode: isDemoRole(user.role),
     permissions: rolePermissionList(user.role, ALL_AREA_KEYS),
     // Design Access: sees every admin section, but every /admin response is
     // placeholder data. The client reads this to show the standing banner.
