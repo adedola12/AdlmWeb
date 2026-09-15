@@ -1090,13 +1090,13 @@ const router = createBrowserRouter([
   {
     path: "/fit",
     element: (
-      <React.Fragment /* TEMP-VERIFY: gate off locally, restore before commit */>
+      <DsPreviewGate>
         <React.Suspense fallback={null}>
           <DsShellLazy>
             <DsFit />
           </DsShellLazy>
         </React.Suspense>
-      </React.Fragment>
+      </DsPreviewGate>
     ),
     errorElement: <AppError />,
   },
