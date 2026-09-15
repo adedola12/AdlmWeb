@@ -10,6 +10,7 @@ import { API_BASE } from "../config";
 // bundle and only fetched when a user actually uploads a model.
 import { FaChartBar, FaCubes, FaFileExcel, FaFolder, FaInfoCircle, FaKey, FaSearch, FaSyncAlt, FaTasks, FaThLarge, FaTimes, FaUserPlus } from "../components/icons.jsx";
 import * as XLSX from "xlsx";
+import Banner from "../components/common/Banner.jsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
 import {
@@ -1072,6 +1073,11 @@ export default function ProjectsGeneric() {
   const SidebarIcon = sidebarMeta.Icon;
 
   const [rows, setRows] = React.useState([]);
+  // Starts true: the first load() fires from an effect on mount, so without
+  // this the explorer renders its empty state — "no projects" — during the
+  // very first fetch, then replaces it with the user's projects. The list
+  // has no way to distinguish "nothing yet" from "nothing loaded" otherwise.
+  const [listLoading, setListLoading] = React.useState(true);
   const [sel, setSel] = React.useState(null);
   const [err, setErr] = React.useState("");
   const [storageInfo, setStorageInfo] = React.useState(null);
@@ -2057,6 +2063,7 @@ export default function ProjectsGeneric() {
   async function load({ keepSelection = true } = {}) {
     setErr("");
     setNotice("");
+    setListLoading(true);
 
     try {
       const [list, storage] = await Promise.all([
@@ -2111,6 +2118,10 @@ export default function ProjectsGeneric() {
       setErr(e.message || "Failed to load projects");
       closeProject();
       setRows([]);
+    } finally {
+      // finally, not the try tail: a failed load must clear the skeleton
+      // too, or the grid shimmers forever behind the error banner.
+      setListLoading(false);
     }
   }
 
@@ -5105,7 +5116,7 @@ export default function ProjectsGeneric() {
     "h-4 w-4 accent-blue-600 border-0 outline-none ring-0 focus:ring-0 focus:outline-none";
 
   return (
-    <div className="min-h-screen p-4 md:p-6">
+    <div className="corporate-ground hex-field min-h-screen p-4 md:p-6">
       <div className={`mx-auto flex flex-col gap-4 ${sel ? "max-w-[1700px]" : "max-w-7xl md:flex-row"}`}>
         {/* SIDEBAR — vertical while browsing; collapses to a slim
             horizontal bar once a project is open so the data tables get
@@ -5113,7 +5124,7 @@ export default function ProjectsGeneric() {
         <aside className={sel ? "w-full" : "md:w-[260px]"}>
           {sel ? (
             <div className="space-y-3">
-              <div className="card !p-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="card p-2.5! flex flex-wrap items-center gap-x-4 gap-y-2">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue">
                     <SidebarIcon className="text-base" />
@@ -5207,19 +5218,15 @@ export default function ProjectsGeneric() {
                 </div>
               </div>
 
-              {err && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {err}
-                </div>
-              )}
-              {notice && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  {notice}
-                </div>
-              )}
+              <Banner tone="error" onDismiss={() => setErr("")}>
+                {err}
+              </Banner>
+              <Banner tone="success" onDismiss={() => setNotice("")}>
+                {notice}
+              </Banner>
             </div>
           ) : (
-          <div className="card !p-0 overflow-hidden md:sticky md:top-6">
+          <div className="card p-0! overflow-hidden md:sticky md:top-6">
             {/* Identity band — tells the user exactly which tool & mode
                 they're in, so the rest of the sidebar is purely navigation. */}
             <div className="relative overflow-hidden bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 p-4 text-white">
@@ -5362,16 +5369,12 @@ export default function ProjectsGeneric() {
                 </div>
               </div>
 
-              {err && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {err}
-                </div>
-              )}
-              {notice && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  {notice}
-                </div>
-              )}
+              <Banner tone="error" onDismiss={() => setErr("")}>
+                {err}
+              </Banner>
+              <Banner tone="success" onDismiss={() => setNotice("")}>
+                {notice}
+              </Banner>
             </div>
           </div>
           )}
@@ -5385,9 +5388,9 @@ export default function ProjectsGeneric() {
               <div className="min-w-0">
                 {sel ? (
                   <>
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
+                    <div className="flex items-center gap-1.5">
                       <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-adlm-orange" />
-                      {title}
+                      <span className="eyebrow">{title}</span>
                     </div>
                     <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
                       <span aria-hidden="true" className="h-7 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
@@ -5396,8 +5399,12 @@ export default function ProjectsGeneric() {
                   </>
                 ) : (
                   <>
-                    <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                      <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
+                    <div className="flex items-center gap-1.5">
+                      <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-adlm-orange" />
+                      <span className="eyebrow">{sidebarMeta.app}</span>
+                    </div>
+                    <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      <span aria-hidden="true" className="h-7 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
                       <span className="truncate">{title}</span>
                     </h1>
                     <div className="text-xs text-slate-500 dark:text-adlm-dark-muted mt-1">
@@ -5477,6 +5484,25 @@ export default function ProjectsGeneric() {
                 sectionSummary={sectionSummary}
                 statusPastLabel={statusPastLabel}
                 storageInfo={storageInfo}
+                loading={listLoading}
+                searchQuery={projectQuery}
+                totalCount={rows.length}
+                toolLabel={sidebarMeta.app || "your plugin"}
+                onClearSearch={() => setProjectQuery("")}
+                onAddShared={() => {
+                  setClaimErr("");
+                  setClaimUpsell(null);
+                  setClaimCode("");
+                  setClaimOpen(true);
+                }}
+                onImportBoq={
+                  canBoqImport
+                    ? () => {
+                        setBoqImportErr("");
+                        setBoqImportOpen(true);
+                      }
+                    : undefined
+                }
               />
             ) : (
               <ProjectOpenView
