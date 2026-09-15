@@ -174,30 +174,6 @@ const SCREENS = {
     ],
   },
 
-  classrooms: {
-    title: "Classrooms",
-    lede: "Private classrooms opened for a firm, and whether each is still running.",
-    path: "/admin/lc/classrooms",
-    editHref: "/admin/classrooms",
-    editLabel: "Open the classroom editor",
-    filters: (c) => stateFilters(c, { active: "Running", closed: "Closed" }),
-    local: true,
-    empty: ["No classrooms", "None has been opened."],
-    cols: () => [
-      { h: "Classroom", w: "28%", cell: (c) => <AdmTwo top={c.name} under={c.code} /> },
-      { h: "Opened for", cell: (c) => <AdmTwo top={c.who} under={c.company || c.email} /> },
-      { h: "Opened", cell: (c) => when(c.createdAt) },
-      {
-        h: "State",
-        cell: (c) => (
-          <AdmChip tone={c.state === "active" ? "ok" : "calm"}>
-            {c.state === "active" ? "running" : "closed"}
-          </AdmChip>
-        ),
-      },
-    ],
-  },
-
   changelogs: {
     title: "What's New",
     lede:
@@ -389,18 +365,6 @@ const FORMS = {
       { k: "country", label: "Country", type: "text", when: (v) => v.mode !== "online" },
       { k: "venue", label: "Venue", type: "text", wide: true, when: (v) => v.mode !== "online" },
       { k: "attendees", label: "Places", type: "number" },
-    ],
-  },
-  classrooms: {
-    noun: "classroom",
-    pub: true,
-    fields: [
-      { k: "title", label: "Title", type: "text", required: true, wide: true },
-      { k: "description", label: "What it is for", type: "textarea", rows: 2, wide: true },
-      { k: "companyName", label: "Organisation", type: "text" },
-      { k: "classroomCode", label: "Join code", type: "text" },
-      { k: "classroomUrl", label: "Join link", type: "text", wide: true,
-        check: (v) => (v && !/^https?:\/\//.test(v) ? "That is not a link." : null) },
     ],
   },
   showcase: {
