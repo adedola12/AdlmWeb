@@ -491,6 +491,11 @@
   .ds .prg-qt .wk-qr .ds-a { grid-column: 2; grid-row: 2; font-size: 13px; }
   .ds .prg-qt .wk-qr .r { grid-column: 1; grid-row: 4; text-align: left; }
   .ds .prg-qt .wk-qr .s { grid-column: 2; grid-row: 3 / 5; }
+  /* prg-qhd-fold — the rows above fold into two lines at this width, so a
+     six-column header over them labels columns that no longer exist. His
+     own sheet hides .wk-qhd when his rows fold (760px); ours fold earlier,
+     so the header has to go at the same point they do. */
+  .ds .prg-qt .wk-qhd { display: none; }
 }
 
 /* His .wk-proj is an anchor. On the programme it is a button, because opening
@@ -744,6 +749,22 @@
   text-align: right; font-size: 12.5px; color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
+
+/* rl-bu-phone — the build-up on a phone.
+   Four columns needed 350px of fixed width; a phone has about 331, so the
+   quantity and price ran off the right edge with nothing to scroll them into
+   view. His answer for the same shape in work.css is "the build-up stops being
+   a table and becomes a stack of stated facts" (.wk-bl), at his 760px break,
+   and this is that move: what it is and what it costs share the first line,
+   quantity and waste go underneath in the quieter ink. Read-only rows, so
+   nothing is lost by folding them. */
+@media (max-width: 760px) {
+  .ds .rl-bu > div { grid-template-columns: 1fr auto; gap: 4px 14px; padding: 10px 0; }
+  .ds .rl-bu > div > span:nth-child(1) { grid-column: 1; grid-row: 1; }
+  .ds .rl-bu > div > span:nth-child(4) { grid-column: 2; grid-row: 1; }
+  .ds .rl-bu > div > span:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 12px; color: var(--ink-3); }
+  .ds .rl-bu > div > span:nth-child(3) { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--ink-3); text-align: right; }
+}
 .ds .rl-sum { margin-top: 10px; font-size: 12.5px; color: var(--ink-3); }
 .ds .rl-sum b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
@@ -802,6 +823,23 @@
 }
 .ds .rb-line span i { font-style: normal; font-size: 10.5px; color: var(--ink-3); margin-left: 4px; }
 .ds .rb-line .ro { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* rb-lines-scroll — the line editor on a phone.
+   Seven columns carry about 556px of fixed width and gaps, against a phone's
+   331. Unlike the rate library's build-up these rows hold inputs, and folding
+   a quantity field under a waste field makes a form nobody can read, so the
+   rows keep their shape and scroll inside their own box. That is what his
+   admin tables do: .adm-tw scrolls, .adm-table holds a min-width.
+
+   Scoped to his 760px break on purpose. On a desktop the builder shares the
+   screen with the component library and its column can be narrower than this
+   floor, so an unconditional min-width would put a scrollbar where there has
+   never been one. The 1px padding holds the drop marker's -1px margin, which
+   would otherwise make the box scroll vertically by a pixel. */
+@media (max-width: 760px) {
+  .ds .rb-lines { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 1px 0; }
+  .ds .rb-lhd, .ds .rb-line { min-width: 680px; }
+}
 
 .ds .rb-sum { margin-top: 18px; border-top: 1px solid var(--line-2); padding-top: 12px; }
 .ds .rb-sum > div {
