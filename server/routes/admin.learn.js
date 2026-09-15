@@ -3,6 +3,14 @@ import express from "express";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { FreeVideo, PaidCourseVideo } from "../models/Learn.js";
 import { fetchDurationSec } from "../util/youtubeDuration.js";
+import {
+  loadCatalogue,
+  validateCatalogue,
+  planSync,
+  applyPlan,
+  libraryStatus,
+  checkAvailability,
+} from "../util/youtubeLibrary.js";
 
 const router = express.Router();
 
@@ -111,6 +119,65 @@ router.delete(
   asyncHandler(async (req, res) => {
     await FreeVideo.findByIdAndDelete(req.params.id);
     res.json({ ok: true });
+  }),
+);
+
+/* ---------- THE YOUTUBE CHANNEL vs THE LIBRARY ----------
+ *
+ * The status screen in both admins. The catalogue (data/youtube-free-videos
+ * .json) is the reviewed filing of the channel; the library is what the site
+ * shows. These say where the two differ and let an admin close the gap
+ * without a terminal: apply the catalogue, release held videos, and ask
+ * YouTube whether each video will still play. util/youtubeLibrary.js is the
+ * same code the command-line sync runs.
+ */
+router.get(
+  "/youtube/status",
+  asyncHandler(async (_req, res) => {
+    const catalogue = loadCatalogue();
+    const docs = await FreeVideo.find({}).lean();
+    res.json({ ...libraryStatus(catalogue, docs), problems: validateCatalogue(catalogue) });
+  }),
+);
+
+// Asks YouTube's oEmbed endpoint about each video. Live, not stored: the
+// answer is only true at the moment it is given, and a stale "available"
+// on a record is worse than no answer.
+router.post(
+  "/youtube/check",
+  asyncHandler(async (req, res) => {
+    const wanted = Array.isArray(req.body?.ids) && req.body.ids.length ? req.body.ids : null;
+    const ids = wanted || (await FreeVideo.find({}).select("youtubeId").lean()).map((d) => d.youtubeId);
+    const results = await checkAvailability(ids);
+    const tally = { ok: 0, private: 0, missing: 0, error: 0 };
+    for (const r of Object.values(results)) tally[r.state] = (tally[r.state] || 0) + 1;
+    res.json({ checkedAt: new Date().toISOString(), tally, results });
+  }),
+);
+
+// Applies the catalogue: creates what the library lacks, fills blanks on what
+// it holds. `hold` creates the new rows unpublished. Never deletes.
+router.post(
+  "/youtube/sync",
+  asyncHandler(async (req, res) => {
+    const catalogue = loadCatalogue();
+    const problems = validateCatalogue(catalogue);
+    if (problems.length) return res.status(422).json({ error: "The catalogue cannot be applied.", problems });
+    const docs = await FreeVideo.find({}).lean();
+    const plan = planSync(catalogue.videos, docs, { force: !!req.body?.force });
+    const done = await applyPlan(FreeVideo, plan, { hold: !!req.body?.hold });
+    res.json({ ok: true, ...done, orphans: plan.orphans.length });
+  }),
+);
+
+// Releases every catalogue video that is sitting unpublished.
+router.post(
+  "/youtube/publish",
+  asyncHandler(async (_req, res) => {
+    const catalogue = loadCatalogue();
+    const ids = catalogue.videos.map((v) => v.youtubeId);
+    const r = await FreeVideo.updateMany({ youtubeId: { $in: ids }, isPublished: false }, { $set: { isPublished: true } });
+    res.json({ ok: true, published: r.modifiedCount || 0 });
   }),
 );
 

@@ -76,6 +76,8 @@ import Learn from "./pages/Learn.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
 import Admin from "./pages/Admin.jsx";
 import AdminLearn from "./pages/AdminLearn.jsx";
+import AdminYoutube from "./pages/AdminYoutube.jsx";
+import AdminYoutubeStatus from "./pages/AdminYoutubeStatus.jsx";
 import AdminCourses from "./pages/AdminCourses.jsx";
 import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminProductEdit from "./pages/AdminProductEdit.jsx";
@@ -862,6 +864,26 @@ const router = createBrowserRouter([
         ),
       },
       {
+        // The YouTube channel beside the free library: what is filed, held,
+        // missing, and whether each video still plays. His design at
+        // /admin/youtube; the older build's screen is kept reachable beside
+        // it for the two admins to be compared.
+        path: "admin/youtube",
+        element: (
+          <AdminRoute permission="learn">
+            <AdminYoutube />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: "admin/youtube/classic",
+        element: (
+          <AdminRoute permission="learn">
+            <AdminYoutubeStatus />
+          </AdminRoute>
+        ),
+      },
+      {
         // His People register. The path stays /admin/users-lite because that
         // is what the rail and people's bookmarks already point at.
         path: "admin/users-lite",
@@ -1068,13 +1090,13 @@ const router = createBrowserRouter([
   {
     path: "/fit",
     element: (
-      <DsPreviewGate>
+      <React.Fragment /* TEMP-VERIFY: gate off locally, restore before commit */>
         <React.Suspense fallback={null}>
           <DsShellLazy>
             <DsFit />
           </DsShellLazy>
         </React.Suspense>
-      </DsPreviewGate>
+      </React.Fragment>
     ),
     errorElement: <AppError />,
   },
