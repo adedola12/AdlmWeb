@@ -39,6 +39,16 @@ summary: Model-based quantity takeoff, priced budgets and a dockable workspace �
   ────────────────────────────────────────────────────────────────────────
 -->
 
+## 3.1.11 — 15 September 2026 — A model linked twice is measured once
+
+If the same file is linked into your model more than once, QUIV was measuring it once for every time it was linked. It now measures it once and tells you it found the duplicate.
+
+### 🐛 Fixed
+
+- **A model linked twice was measured twice.** One linked Revit file can sit in a host model as several link instances: the link gets copy-pasted, mirrored, arrayed, or linked a second time when it looks like it has gone missing. QUIV read the whole linked file once per instance, so every beam, column and slab inside a structural link placed twice landed on the bill at exactly double, and three placements tripled it. It now reads each linked file once however many times it was placed. Slabs, beams, columns, raft foundations and steelwork were all affected, as was picking elements inside a link without picking individual ones.
+- **Why two people measuring the same model got different totals.** Whether a link is loaded is remembered per person, not saved in the model. One QS can have both copies of a link loaded while a colleague on the same central model has them unloaded. The colleague measured the link once, or not at all, and got the right number; whoever had both loaded got double. Same model, same button, two different bills, and nothing on screen said why.
+- **QUIV now says when it finds a duplicated link.** The first time a takeoff runs against a model that links one file more than once, QUIV names the file, says how many times it is linked, and tells you it measured it once. Check Manage Links in Revit and remove the instances you do not need. If the placements are genuinely separate blocks, measure them as separate projects and merge them on the web app.
+
 ## 3.1.9 — 28 August 2026 — Linked models, the whole takeoff in one go & a much faster run
 
 QUIV now measures a structural model linked into your architectural one, hands you the entire takeoff in a single run split by level and by type, and runs it in about a third of the time. Nothing is priced until you ask, and an export now shows only the rates you set — anything unpriced reads 0 rather than a figure nobody chose.
