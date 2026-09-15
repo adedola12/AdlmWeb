@@ -28,6 +28,7 @@ import CourseDetail from "./pages/CourseDetail.jsx";
 import FreeVideoDetail from "./pages/FreeVideoDetail.jsx";
 import Admin from "./pages/Admin.jsx";
 import AdminLearn from "./pages/AdminLearn.jsx";
+import AdminYoutubeStatus from "./pages/AdminYoutubeStatus.jsx";
 import AdminCourses from "./pages/AdminCourses.jsx";
 import AdminProducts from "./pages/AdminProducts.jsx";
 import AdminProductEdit from "./pages/AdminProductEdit.jsx";
@@ -546,6 +547,16 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
+        {
+          // The YouTube channel beside the free library: what is filed, held,
+          // missing, and whether each video still plays.
+          path: "admin/youtube",
+          element: (
+            <AdminRoute permission="learn">
+              <AdminYoutubeStatus />
+            </AdminRoute>
+          ),
+        },
       {
         path: "admin/users-lite",
         element: (
