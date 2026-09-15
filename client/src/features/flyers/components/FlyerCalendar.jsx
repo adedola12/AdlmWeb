@@ -95,7 +95,7 @@ export default function FlyerCalendar({ flyers, onLoad, onSchedule, onClose, bus
           </strong>
           <span style={{ color: "#8A3A12" }}>
             {" "}
-            — still marked {overdue.length === 1 ? "unposted" : "unposted"}.
+, still marked {overdue.length === 1 ? "unposted" : "unposted"}.
           </span>
         </div>
       )}

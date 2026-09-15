@@ -20,6 +20,18 @@ const RoleSchema = new mongoose.Schema(
     system: { type: Boolean, default: false },
     // Superuser — implicitly has every area, immune to permission edits.
     isSuperAdmin: { type: Boolean, default: false },
+    // Two view-only roles, each with its own server-side mask. They were built
+    // independently on the two branches and are kept apart rather than merged:
+    // collapsing them would change who can see what, and that is the admin
+    // owner's call, not a merge's.
+    //
+    // "Design Access" — a sighted-but-blind role. Like a super-admin it can
+    // open every admin section (so a designer can see and rebuild the whole
+    // UI), but every /admin response is replaced with placeholder data and
+    // every write is simulated. See server/middleware/designMode.js. Never
+    // combine with isSuperAdmin: the mask is what makes this safe.
+    designAccess: { type: Boolean, default: false },
+
     // Demo role — sees every admin area, but strictly read-only and every
     // response is rewritten with placeholder data. For designers and other
     // external collaborators who need the screens, not the business.

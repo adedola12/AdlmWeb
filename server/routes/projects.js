@@ -363,12 +363,29 @@ function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(String(id));
 }
 
+/**
+ * The entitlement a project's bucket is licensed under.
+ *
+ * A materials schedule is not a separate product — it is the same bill broken
+ * into its components, saved under its own key so it does not collide with the
+ * bill. It is covered by the licence for the product that produced it.
+ *
+ * This used to name the three buckets it knew about one at a time, which meant
+ * `civil3d-materials` and `revitmep-materials` fell through and were checked
+ * against entitlements by those names. Nobody holds an entitlement called
+ * "civil3d-materials", so every CIVIQ schedule answered 403 to its own owner.
+ * It went unnoticed for as long as nothing linked to one; the Programme screen
+ * links to all of them.
+ *
+ * Derived from the suffix now, so a bucket added later is covered on the day
+ * it is added rather than on the day somebody notices.
+ */
 function entitlementKeyFor(productKeyOriginal) {
   const key = normalizeProductKey(productKeyOriginal);
-  if (key === "revit-materials") return "revit";
-  if (key === "planswift-materials") return "planswift";
-  if (key === "mep-materials") return "mep";
-  return key;
+  const base = key.replace(/-materials?$/, "");
+  // The MEP plugin has written both spellings of its own key over the years.
+  if (base === "revitmep") return "mep";
+  return base || key;
 }
 
 function mapEntitlementParam(req, _res, next) {
@@ -1797,6 +1814,7 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
     modelTitle,
     modelPath,
     origin,
+    sourceProjectId,
     mergeSameTypeLevel,
     mergeSameLine,
     checklistCompositeKeys,
@@ -1866,6 +1884,9 @@ async function upsertTakeoffLikeProject({ userId, productKey, payload = {} }) {
   if (modelTitle !== undefined) project.modelTitle = modelTitle || "";
   if (modelPath !== undefined) project.modelPath = modelPath || "";
   if (origin !== undefined) project.origin = origin || project.origin || "";
+  // Never cleared once set: a later save of the same schedule that happens not
+  // to carry the id must not orphan it from its bill.
+  if (sourceProjectId) project.sourceProjectId = sourceProjectId;
   if (clientProjectKey !== undefined && key) project.clientProjectKey = key;
 
   if (typeof mergeSameTypeLevel === "boolean") {
@@ -2082,6 +2103,11 @@ async function saveProjectFull(req, res) {
           ...sharedMeta,
           items: mats,
           origin: "takeoff-derived",
+          // The bill this schedule came from. Written here because this is the
+          // one moment both ids are in hand — afterwards the only thing
+          // relating them is a matching modelTitle, which stops being true as
+          // soon as either is renamed.
+          sourceProjectId: takeoffRes?.project?._id || null,
         },
       });
     }

@@ -151,7 +151,12 @@ export async function fetchMasterMaterials(zoneKey, stateKey) {
     "MaterialPrice",
     stateKey
   ).sort((a, b) =>
-    String(a.MaterialName || "").localeCompare(String(b.MaterialName || ""))
+    // Same numeric collation as labour: materials name sizes too, and "0.55mm"
+    // against "0.70mm" or "16mm2" against "4mm2" has the same problem.
+    String(a.MaterialName || "").localeCompare(String(b.MaterialName || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    })
   );
 
   return selected.map((d, i) => ({
@@ -193,7 +198,15 @@ export async function fetchMasterLabour(zoneKey, stateKey) {
     "LabourPrice",
     stateKey
   ).sort((a, b) =>
-    String(a.LabourName || "").localeCompare(String(b.LabourName || ""))
+    // Numeric collation, so sizes read in order. A plain compare is character
+    // by character, which puts "(10 to 20 tonnes)" above "(2.7 to 10 tonnes)"
+    // because "1" precedes "2", and scatters the generators as 1.5, 10, 125,
+    // 150, 200, 250, 27, 50. Comparing digit runs as numbers sorts a catalogue
+    // that names its sizes the way this one does.
+    String(a.LabourName || "").localeCompare(String(b.LabourName || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    })
   );
 
   return selected.map((d, i) => ({
@@ -205,4 +218,63 @@ export async function fetchMasterLabour(zoneKey, stateKey) {
     state: d.state || null,
     zone: d.zone || null,
   }));
+}
+
+
+/**
+ * Update the price on individual master rows.
+ *
+ * ONE ROW AT A TIME, AND NEVER A REPLACE
+ *
+ * The desktop app writes this collection with DeleteMany + InsertMany, which
+ * is safe when it owns the whole file and catastrophic when it does not: this
+ * collection holds 25,628 rows across every zone and state, and a push from
+ * one person whose local library is a single zone would delete everybody
+ * else's. So a price change is an updateOne against the row it names, and a
+ * row that cannot be found is reported rather than inserted — an unmatched
+ * name is a rename or a typo, and inventing a row for it would quietly grow a
+ * second copy of the catalogue.
+ *
+ * @param {"material"|"labour"} kind
+ * @param {Array<{name: string, price: number}>} updates
+ * @param {string} zoneKey  which zone's prices are being set
+ * @param {string} [stateKey]  a state overrides its zone when given
+ */
+export async function updateMasterPrices(kind, updates, zoneKey, stateKey) {
+  await ensureMasterDb();
+
+  const isMaterial = kind === "material";
+  const coll = isMaterial ? _mats : _labs;
+  const nameField = isMaterial ? "MaterialName" : "LabourName";
+  const priceField = isMaterial ? "MaterialPrice" : "LabourPrice";
+
+  const st = normalizeState(stateKey);
+  const z = normalizeZone(zoneKey) || "south_west";
+
+  // A state row and a zone row are different documents; the caller says which
+  // it is editing, and we must not silently write the zone row when a state
+  // was meant or the other way round.
+  const scope = st ? { state: st } : { zone: z, state: { $exists: false } };
+
+  const changed = [];
+  const missing = [];
+
+  for (const u of updates) {
+    const name = String(u?.name || "").trim();
+    const price = Number(u?.price);
+    if (!name || !Number.isFinite(price) || price < 0) {
+      missing.push({ name, reason: "not a usable name and price" });
+      continue;
+    }
+
+    const res = await coll.updateOne(
+      { ...scope, [nameField]: name },
+      { $set: { [priceField]: price, priceUpdatedAt: new Date() } },
+    );
+
+    if (res.matchedCount) changed.push({ name, price });
+    else missing.push({ name, reason: "no row with that name in this scope" });
+  }
+
+  return { changed, missing, scope: st ? { state: st } : { zone: z } };
 }

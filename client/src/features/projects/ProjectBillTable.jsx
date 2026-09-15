@@ -310,7 +310,7 @@ export function RateCell({
   // The popup never opens and onChange never fires, so the rate is
   // frozen until the contract is unlocked.
   disabled = false,
-  disabledHint = "Locked — unlock the contract to edit rates.",
+  disabledHint = "Locked. Unlock the contract to edit rates.",
 }) {
   const [focused, setFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -367,7 +367,7 @@ export function RateCell({
       clearTimeout(debounceRef.current);
       setSearching(false);
     };
-  }, [searchQuery, canRateGenBoq]); // removed onSearchRateGen — use ref instead
+  }, [searchQuery, canRateGenBoq]); // removed onSearchRateGen. Use ref instead
 
   const handleFocus = () => {
     setFocused(true);
@@ -475,7 +475,7 @@ export function RateCell({
 
   return (
     <div ref={wrapRef} className="relative">
-      {/* Static display — shown when not focused */}
+      {/* Static display, shown when not focused */}
       {!focused ? (
         <button
           type="button"
@@ -568,7 +568,7 @@ export function RateCell({
                 <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px] font-mono">
                   =
                 </code>{" "}
-                for a formula — e.g.{" "}
+                for a formula, e.g.{" "}
                 <code className="font-mono">=1.2*1.5*95000</code>
                 {canRateGenBoq ? " · or type a name to search RateGen" : ""}
               </div>
@@ -769,7 +769,7 @@ function ExpandInput({ value, placeholder, onChange, type = "number" }) {
           }
         }}
       />
-      {/* Live formula preview — green when valid, rose when not. Hides
+      {/* Live formula preview: green when valid, rose when not. Hides
           when the input isn't a formula. */}
       {formulaResult ? (
         <div
@@ -1446,7 +1446,7 @@ export default function ProjectBillTable({
       <div className="flex-1 min-w-0 space-y-4">
         <div ref={topAnchorRef} className="scroll-mt-24" aria-hidden="true" />
 
-        {/* Floating Undo bar — sticky at top while any delete is in the
+        {/* Floating Undo bar, sticky at top while any delete is in the
           stack. Lets users recover from accidental trash clicks. */}
         {Array.isArray(boqUndoStack) && boqUndoStack.length > 0 ? (
           <BoqUndoBar
@@ -1608,8 +1608,8 @@ export default function ProjectBillTable({
                       {isSourceGrouping
                         ? "Grouped by the discipline project each line came from. Switch to Category or Trade to arrange the combined bill the usual way."
                         : isTradeGrouping
-                        ? "Grouped by the work being done. Drag a row onto a section to re-file it — learned for next time."
-                        : "Grouped by the element they belong to. Drag a row onto a category to re-file it — learned for next time."}
+                        ? "Grouped by the work being done. Drag a row onto a section to re-file it, learned for next time."
+                        : "Grouped by the element they belong to. Drag a row onto a category to re-file it, learned for next time."}
                     </div>
                     {(isTradeGrouping ? onAddTrade : onAddCategory) ? (
                       <button
@@ -1628,7 +1628,7 @@ export default function ProjectBillTable({
                           else onAddCategory?.(t);
                         }}
                         className="mt-1 inline-flex items-center gap-1 self-start rounded-md border border-dashed border-adlm-blue-300 bg-white px-2 py-1 text-[10px] font-semibold text-adlm-blue-700 hover:bg-blue-50"
-                        title="Create a new category / work section — remembered for your future projects"
+                        title="Create a new category / work section, remembered for your future projects"
                       >
                         + New {isTradeGrouping ? "section" : "category"}
                       </button>
@@ -1873,15 +1873,15 @@ export default function ProjectBillTable({
                           disabled={contractBusy || !onUnlockContract}
                           title={
                             stepUpEnabled
-                              ? "Unlock the contract — we'll email you a verification code."
-                              : "Unlock the contract — you'll need the 4-digit PIN that was used to lock it."
+                              ? "Unlock the contract, we'll email you a verification code."
+                              : "Unlock the contract. You'll need the 4-digit PIN that was used to lock it."
                           }
                         />
                       </>
                     ) : (
                       <>
                         <div className="text-[11px] text-amber-700">
-                          ✎ Draft — editable
+                          ✎ Draft, editable
                         </div>
                         <RibbonButton
                           icon={FaFileInvoiceDollar}
@@ -1972,7 +1972,7 @@ export default function ProjectBillTable({
                     }}
                     title={
                       contractLocked
-                        ? "Contract locked — unlock to add PC sums"
+                        ? "Contract locked. Unlock to add PC sums"
                         : "Add a provisional / PC sum"
                     }
                     disabled={!onAddProvisionalSum || contractLocked}
@@ -2047,7 +2047,7 @@ export default function ProjectBillTable({
                 <col
                   style={{ width: showActualColumns ? "22%" : "28%" }}
                 />{" "}
-                {/* Description — % based */}
+                {/* Description, % based */}
                 <col className="w-16" /> {/* Qty */}
                 <col className="w-10" /> {/* Unit */}
                 <col
@@ -2464,7 +2464,7 @@ export default function ProjectBillTable({
                                       ""
                                     }
                                     disabled={contractLocked}
-                                    disabledHint="Contract locked — unlock it to edit rates"
+                                    disabledHint="Contract locked. Unlock it to edit rates"
                                   />
 
                                   {candidates.length ? (
@@ -2596,7 +2596,7 @@ export default function ProjectBillTable({
                                     }
                                     disabledHint={
                                       contractLocked
-                                        ? "Contract locked — unlock it on the Contract Admin tab to edit rates, or raise a variation."
+                                        ? "Contract locked. Unlock it on the Contract Admin tab to edit rates, or raise a variation."
                                         : "Rate derived from the Budget build-up (Material + Labour + O&P). Edit the prices on the Budget tab."
                                     }
                                   />
@@ -2640,7 +2640,7 @@ export default function ProjectBillTable({
                               {/* Actual Rate cell uses the full RateCell so
                             users can: (a) type a number, (b) start
                             with "=" for a formula, or (c) type a name
-                            to search RateGen — same behaviour as the
+                            to search RateGen, same behaviour as the
                             contract Rate cell, but writes to actualRate
                             instead of rate. NOT locked when the
                             contract is locked because actuals are
@@ -2717,7 +2717,7 @@ export default function ProjectBillTable({
                                 }`}
                                 title={
                                   contractLocked
-                                    ? "Contract locked — unlock it to delete measured items, or raise a variation"
+                                    ? "Contract locked. Unlock it to delete measured items, or raise a variation"
                                     : "Delete row (you'll be able to undo)"
                                 }
                                 disabled={contractLocked}
@@ -2735,7 +2735,7 @@ export default function ProjectBillTable({
                     })}
                     <tr className="border-t bg-slate-50 text-xs font-medium text-slate-800">
                       <td colSpan={6} className="px-2 py-2 text-right">
-                        Subtotal — {category}
+                        Subtotal, {category}
                       </td>
                       {showActualColumns ? <td className="px-2 py-2" /> : null}
                       {showActualColumns ? <td className="px-2 py-2" /> : null}
@@ -2937,11 +2937,11 @@ export default function ProjectBillTable({
                               <span className="ml-1 text-[9px] text-slate-400">(snapshot)</span>
                             )}
                           </td>
-                          <td className="px-2 py-2 text-right text-slate-400">—</td>
+                          <td className="px-2 py-2 text-right text-slate-400">, </td>
                           <td className="px-2 py-2 text-right text-adlm-blue-800 font-semibold">
                             {money(liveTotal)}
                           </td>
-                          <td className="px-2 py-2 text-right text-slate-400">—</td>
+                          <td className="px-2 py-2 text-right text-slate-400">, </td>
                           <td className="px-2 py-2 text-right text-adlm-blue-800 font-semibold">
                             {money(liveTotal)}
                           </td>
@@ -2984,7 +2984,7 @@ export default function ProjectBillTable({
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold text-slate-900">
-                  Variations — Site Instructions / Change Orders
+                  Variations, Site Instructions / Change Orders
                 </div>
                 <div className="text-[11px] text-slate-500">
                   Log variations that come from architect's instructions, client
@@ -3018,7 +3018,7 @@ export default function ProjectBillTable({
                       <th className="px-2 py-2 w-28">Issued</th>
                       <th
                         className="px-2 py-2 w-16 text-center"
-                        title="Tick when variation has been executed on site — flows into earned value."
+                        title="Tick when variation has been executed on site, flows into earned value."
                       >
                         Done
                       </th>
@@ -3136,7 +3136,7 @@ export default function ProjectBillTable({
                                   completed: e.target.checked,
                                 })
                               }
-                              title="Mark as executed — flows into earned value (EV)"
+                              title="Mark as executed, flows into earned value (EV)"
                             />
                           </td>
                           <td className="px-1 py-2 text-center">
@@ -3187,7 +3187,7 @@ export default function ProjectBillTable({
                 </div>
                 <div className="text-[11px] text-slate-500">
                   BESMM4 preliminary checklist. Allocate a percentage of the
-                  preliminary pool to each item, tick off as executed — done
+                  preliminary pool to each item, tick off as executed: done
                   portion is deducted from the outstanding preliminary cost and
                   feeds into certificates and EVM.
                 </div>
@@ -3201,7 +3201,7 @@ export default function ProjectBillTable({
                     disabled={contractLocked}
                     title={
                       contractLocked
-                        ? "Contract locked — unlock to rebalance allocations"
+                        ? "Contract locked. Unlock to rebalance allocations"
                         : "Reset to an even allocation across all listed items"
                     }
                   >
@@ -3216,7 +3216,7 @@ export default function ProjectBillTable({
                     disabled={contractLocked}
                     title={
                       contractLocked
-                        ? "Contract locked — unlock to add a preliminary item"
+                        ? "Contract locked. Unlock to add a preliminary item"
                         : undefined
                     }
                   >
@@ -3278,7 +3278,7 @@ export default function ProjectBillTable({
                       <th className="px-2 py-2">Preliminary item</th>
                       <th className="px-2 py-2 w-24 text-right">Alloc %</th>
                       <th className="px-2 py-2 w-32 text-right">Planned ₦</th>
-                      {/* Actual column — QS-entered spend per prelim row.
+                      {/* Actual column, QS-entered spend per prelim row.
                         Variance vs Planned surfaces underneath. */}
                       <th className="px-2 py-2 w-36 text-right">Actual ₦</th>
                       <th className="px-2 py-2 w-24">Done date</th>
@@ -3352,7 +3352,7 @@ export default function ProjectBillTable({
                           >
                             {money(amount)}
                           </td>
-                          {/* Actual cell — number input + variance hint. */}
+                          {/* Actual cell, number input + variance hint. */}
                           <td className="px-2 py-2 text-right">
                             <input
                               className="input !h-8 w-full !px-2 text-xs text-right"
@@ -3391,7 +3391,7 @@ export default function ProjectBillTable({
                                   variance > 0
                                     ? "Actual exceeds planned share of the preliminary pool"
                                     : variance < 0
-                                      ? "Actual is below planned share — saving on this row"
+                                      ? "Actual is below planned share, saving on this row"
                                       : "Actual matches planned exactly"
                                 }
                               >
@@ -3422,7 +3422,7 @@ export default function ProjectBillTable({
                                 }}
                                 title={
                                   contractLocked
-                                    ? "Contract locked — unlock to remove preliminaries"
+                                    ? "Contract locked. Unlock to remove preliminaries"
                                     : "Remove this row"
                                 }
                               >
@@ -3489,7 +3489,7 @@ export default function ProjectBillTable({
                                 variance > 0
                                   ? "Actual spend has exceeded the preliminary pool"
                                   : variance < 0
-                                    ? "Total actual is below pool — saving overall"
+                                    ? "Total actual is below pool, saving overall"
                                     : "Actual spend equals the pool"
                               }
                             >
@@ -3550,7 +3550,7 @@ export default function ProjectBillTable({
                       <th className="px-2 py-2 w-40 text-right">Amount</th>
                       <th
                         className="px-2 py-2 w-20 text-center"
-                        title="Tick when the PC scope has been executed — earned value will then include it."
+                        title="Tick when the PC scope has been executed, earned value will then include it."
                       >
                         Done
                       </th>
@@ -3608,7 +3608,7 @@ export default function ProjectBillTable({
                                 completed: e.target.checked,
                               })
                             }
-                            title="Mark as executed — flows into earned value (EV)"
+                            title="Mark as executed, flows into earned value (EV)"
                           />
                         </td>
                         <td className="px-1 py-2 text-center">
@@ -3621,7 +3621,7 @@ export default function ProjectBillTable({
                             }`}
                             title={
                               contractLocked
-                                ? "Contract locked — unlock to remove PC sums"
+                                ? "Contract locked. Unlock to remove PC sums"
                                 : "Remove this row"
                             }
                             disabled={contractLocked}
@@ -3677,11 +3677,11 @@ export default function ProjectBillTable({
               <div className="text-[11px] text-slate-500 dark:text-slate-400">
                 {contractLocked
                   ? `Contract locked · baseline ${money(contractSum)}`
-                  : "Draft — lock contract to freeze the baseline."}
+                  : "Draft, lock contract to freeze the baseline."}
               </div>
             </div>
 
-            {/* Sub-total breakdown — three rows that add up to the BoQ
+            {/* Sub-total breakdown, three rows that add up to the BoQ
               subtotal (measured + prov + prelim). */}
             <div className="grid gap-2 text-xs sm:grid-cols-3">
               <div>
@@ -3720,7 +3720,7 @@ export default function ProjectBillTable({
               </div>
             </div>
 
-            {/* Sub-total line — bold, separates BoQ from add-ons */}
+            {/* Sub-total line: bold, separates BoQ from add-ons */}
             <div className="mt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-2 text-xs">
               <div className="font-semibold text-slate-700 dark:text-slate-200">
                 BoQ sub-total
@@ -3730,7 +3730,7 @@ export default function ProjectBillTable({
               </div>
             </div>
 
-            {/* Contingency + Tax row — editable percent inputs inline.
+            {/* Contingency + Tax row, editable percent inputs inline.
               The cascade follows the standard QS grand-summary
               convention: Sub-total → +Contingency → +Tax → Planned. */}
             <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
@@ -3808,7 +3808,7 @@ export default function ProjectBillTable({
               </div>
             </div>
 
-            {/* Planned project total — what was agreed at lock. */}
+            {/* Planned project total, what was agreed at lock. */}
             <div className="mt-3 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-2 text-xs">
               <div className="font-semibold text-slate-700 dark:text-slate-200">
                 Planned project total
@@ -3854,7 +3854,7 @@ export default function ProjectBillTable({
           aria-hidden="true"
         />
 
-        {/* Floating go-to-top / go-to-bottom buttons — always reachable on long
+        {/* Floating go-to-top / go-to-bottom buttons, always reachable on long
           Bill of Quantity pages. Hidden automatically when the content fits
           on screen. */}
         {showFloatNav ? (
@@ -3992,7 +3992,7 @@ function PinDialog({ mode, state, onChange, onClose, onSubmit }) {
         >
           <p className="text-xs text-slate-600">
             {isLock
-              ? "Choose a PIN you'll remember — you'll need the same 4 digits to unlock the contract later. Store it somewhere safe; lost PINs cannot be recovered without a server-side reset."
+              ? "Choose a PIN you'll remember. You'll need the same 4 digits to unlock the contract later. Store it somewhere safe; lost PINs cannot be recovered without a server-side reset."
               : "This contract was locked with a 4-digit PIN. Enter it to unlock and resume editing the priced scope."}
           </p>
           <label className="block">
@@ -4100,7 +4100,7 @@ function WbsLinkChip({ stats }) {
   } else if (isUnder) {
     tone = "slate";
     stateText = "under-allocated";
-    explanation = `Sum of link weights = ${total}%. Only ${total}% of this BoQ line's value is currently represented in the WBS — the rest won't appear in EV. Add a task or raise an existing weight.`;
+    explanation = `Sum of link weights = ${total}%. Only ${total}% of this BoQ line's value is currently represented in the WBS, the rest won't appear in EV. Add a task or raise an existing weight.`;
   } else {
     tone = "emerald";
     stateText = "balanced";

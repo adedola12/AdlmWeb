@@ -4,7 +4,12 @@ import dayjs from "dayjs";
 import mongoose from "mongoose";
 import { requireAuth } from "../middleware/auth.js";
 import { User } from "../models/User.js";
-import { rolePermissionList, isSuperAdminRole, isDemoRole } from "../util/rbac.js";
+import {
+  rolePermissionList,
+  isSuperAdminRole,
+  isDesignRole,
+  isDemoRole,
+} from "../util/rbac.js";
 import { ALL_AREA_KEYS } from "../config/permissions.js";
 import { ZONES, normalizeZone } from "../util/zones.js";
 import { STATES, normalizeState, zoneForState } from "../util/states.js";
@@ -13,10 +18,27 @@ import { Purchase } from "../models/Purchase.js";
 import { Setting } from "../models/Setting.js";
 import { Invoice } from "../models/Invoice.js";
 import { TakeoffProject } from "../models/TakeoffProject.js";
+import { RateGenLibrary } from "../models/RateGenLibrary.js";
+import { CourseEnrollment } from "../models/CourseEnrollment.js";
+import { PaidCourse } from "../models/PaidCourse.js";
+import { FreeVideoWatch } from "../models/FreeVideoWatch.js";
+import { FreeVideo } from "../models/Learn.js";
 import { ActivityLog } from "../models/ActivityLog.js";
 import { sendMail } from "../util/mailer.js";
 import { resolveUserGuideUrl } from "../util/userGuide.js";
 import { isGodUser } from "../util/godAccount.js";
+import bcrypt from "bcryptjs";
+import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import {
+  BOQ_IMPORT_ENTITLEMENT,
+  BOQ_IMPORT_LEGACY_ENTITLEMENT,
+} from "../util/boqImportAccess.js";
+import {
+  verifySocialIdentity,
+  exchangeCodeForIdToken,
+  PROVIDER_FIELD,
+  configuredProviders,
+} from "../util/socialIdentity.js";
 
 const router = express.Router();
 
@@ -245,6 +267,7 @@ router.get(
       isSuperAdmin: isSuperAdminRole(effectiveRole),
       demoMode: isDemoRole(effectiveRole),
       permissions: rolePermissionList(effectiveRole, ALL_AREA_KEYS),
+      designAccess: isDesignRole(effectiveRole),
     });
   }),
 );
@@ -364,8 +387,16 @@ router.get(
 
     // 3) Attach isCourse + productName to entitlements (so Dashboard tabs render properly)
     // Feature grants have no Product doc — give them a readable display name.
+    //
+    // Both BoQ Import keys, from the canonical constants rather than typed.
+    // The feature shipped as "quiv-boq-import" and was renamed to "boq-import"
+    // when it grew past Quiv; this table only listed the legacy one, so an
+    // account granted the CURRENT key saw the raw string "boq-import" where a
+    // name should be. Sourcing the keys from boqImportAccess.js is what stops
+    // the two drifting apart again.
     const FEATURE_GRANT_NAMES = {
-      "quiv-boq-import": "QUIV BoQ Import (feature access)",
+      [BOQ_IMPORT_ENTITLEMENT]: "Excel BoQ Import (feature access)",
+      [BOQ_IMPORT_LEGACY_ENTITLEMENT]: "Excel BoQ Import (feature access)",
       ai: "ADLM AI Add-on (cost intelligence)",
     };
     let entitlements = entsBase.map((e) => {
@@ -624,6 +655,18 @@ router.get(
       firmName: firmName || "",
       nameLockedForCertificate: !!u.certificateNameLockedAt,
       stepUpEnabled: !!u.security?.stepUpEnabled,
+      // Falls back to the schema defaults rather than to false: an account
+      // created before this field existed must not read as "send me nothing".
+      notifications: {
+        productUpdates: u.notifications?.productUpdates ?? true,
+        billing: u.notifications?.billing ?? true,
+        seatsAndMembers: u.notifications?.seatsAndMembers ?? true,
+        coursesAndEvents: u.notifications?.coursesAndEvents ?? false,
+        // Served alongside the other four so the settings screen has one
+        // shape to read, but it does NOT live in `notifications` — see the
+        // note on the POST below for why it is read out of emailPrefs.
+        videoUpdates: u.emailPrefs?.videoUpdates !== false,
+      },
     });
   }),
 );
@@ -1199,8 +1242,16 @@ router.get(
 /* ──────────── Physical Training Date Confirmation ──────────── */
 
 // Authenticated confirmation (from dashboard)
+//
+// requireAuth was missing here while the handler read req.user._id on its
+// first line, so the route threw for everyone who called it — nothing in /me
+// is authenticated router-wide, each route brings its own. Confirming a
+// proposed training date from the dashboard has therefore never worked; it
+// answered 500 rather than 401, which is why it read as a server fault rather
+// than a missing session.
 router.post(
   "/orders/:id/confirm-training-date",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const purchase = await Purchase.findOne({
       _id: req.params.id,
@@ -1428,11 +1479,102 @@ router.get(
           name: 1,
           slug: 1,
           productKey: 1,
+          origin: 1,
+          isMaterials: 1,
+          // The product this work BELONGS to.
+          //
+          // A material & labour schedule is stored as its own project with its
+          // own key — revit-materials, planswift-materials, mep-materials,
+          // civil3d-materials, and one stray revitmep-materials. They are not
+          // separate products: a schedule is derived from a bill measured in
+          // QUIV or HERON and is part of that product's work. Reporting the raw
+          // key made the Work overview count them as products of their own, so
+          // QUIV under-reported its own output and CIVIQ read "Not on this
+          // account" while holding five schedules.
+          //
+          // A BoQ import is a QUIV project. The feature is granted as
+          // quiv-boq-import and produces a full QUIV project; three of them
+          // were stored against planswift and so appeared under HERON.
+          baseProductKey: {
+            $let: {
+              vars: {
+                k: { $toLower: { $ifNull: ["$productKey", ""] } },
+              },
+              in: {
+                $switch: {
+                  branches: [
+                    { case: { $eq: ["$origin", "boq-import"] }, then: "revit" },
+                    {
+                      case: { $in: ["$$k", ["revit-materials", "revit-material"]] },
+                      then: "revit",
+                    },
+                    {
+                      case: { $in: ["$$k", ["planswift-materials", "planswift-material"]] },
+                      then: "planswift",
+                    },
+                    {
+                      case: {
+                        $in: [
+                          "$$k",
+                          ["mep-materials", "mep-material", "revitmep-materials"],
+                        ],
+                      },
+                      then: "mep",
+                    },
+                    {
+                      case: { $in: ["$$k", ["civil3d-materials", "civil3d-material"]] },
+                      then: "civil3d",
+                    },
+                    {
+                      case: { $in: ["$$k", ["archicad-materials", "archicad-material"]] },
+                      then: "archicad",
+                    },
+                  ],
+                  default: "$$k",
+                },
+              },
+            },
+          },
           publicShareEnabled: 1,
           updatedAt: 1,
           version: 1,
           shared: { $ne: ["$userId", userId] },
           itemCount: { $size: "$safeItems" },
+          // Lines that carry a trade and a quantity — i.e. work that can be
+          // put on a programme. The Programme screen shelves projects on this
+          // rather than on "is it a bill", because the three kinds of
+          // materials schedule differ: HERON's carry real trades on their
+          // labour lines, CIVIQ's tag every line "Civil", and Revit MEP's are
+          // equipment schedules with no trade at all. Counting here is the
+          // only way the shelf can tell them apart without fetching each
+          // project in full.
+          tradedItems: {
+            $size: {
+              $filter: {
+                input: "$safeItems",
+                as: "item",
+                cond: {
+                  $and: [
+                    { $gt: [{ $strLenCP: { $ifNull: ["$$item.trade", ""] } }, 0] },
+                    { $gt: [{ $ifNull: ["$$item.qty", 0] }, 0] },
+                    // QUIV's materials schedules put the COMPONENT KIND in the
+                    // trade field — every line reads "Labour". That is not a
+                    // trade, and a programme built on it is one bar called
+                    // Labour over rows with no names, so it does not count as
+                    // sequenceable work.
+                    {
+                      $not: {
+                        $in: [
+                          { $toLower: { $ifNull: ["$$item.trade", ""] } },
+                          ["labour", "labor", "material", "materials"],
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
           markedCount: {
             $size: {
               $filter: { input: "$safeItems", as: "item", cond: markedFlag },
@@ -1745,5 +1887,638 @@ router.post(
     return res.json({ ok: true, message: `Invitation sent to ${email}` });
   }),
 );
+
+/**
+ * GET /me/devices
+ *
+ * The machines this account has activated, one row per machine rather than
+ * one per entitlement.
+ *
+ * /me/summary already carries a `devices` array on each entitlement, but it
+ * only fills it once every seat is taken — a deliberate choice, because the
+ * desktop clients read `devices.length > 0` as "no seats left" and populating
+ * it early would lock people out of an install they are entitled to. That
+ * makes it useless for showing somebody their own machines, which is what the
+ * Team and Settings screens do.
+ *
+ * So this returns them unconditionally, keyed by fingerprint, with the list of
+ * products each machine holds a seat on. A fingerprint is a machine id we
+ * issued, not hardware data, and it is the caller's own account either way.
+ */
+router.get(
+  "/devices",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id, { entitlements: 1 });
+    if (!user) return res.status(404).json({ error: "User missing" });
+
+    await ensureUserEntitlementsMigrated(user);
+
+    const byPrint = new Map();
+
+    for (const ent of user.entitlements || []) {
+      const key = ent.productKey;
+      for (const d of activeDevices(ent)) {
+        const print = String(d.fingerprint || "");
+        if (!print) continue;
+
+        const row = byPrint.get(print) || {
+          fingerprint: print,
+          name: d.name || "",
+          boundAt: d.boundAt || null,
+          lastSeenAt: d.lastSeenAt || null,
+          products: [],
+        };
+
+        row.products.push(key);
+        // A machine's name and last-seen are per-entitlement rows for the same
+        // device; keep the most recent of each so one stale row cannot make an
+        // active machine look abandoned.
+        if (!row.name && d.name) row.name = d.name;
+        if (d.lastSeenAt && (!row.lastSeenAt || d.lastSeenAt > row.lastSeenAt)) {
+          row.lastSeenAt = d.lastSeenAt;
+        }
+        if (d.boundAt && (!row.boundAt || d.boundAt < row.boundAt)) {
+          row.boundAt = d.boundAt;
+        }
+
+        byPrint.set(print, row);
+      }
+    }
+
+    const devices = Array.from(byPrint.values()).sort(
+      (a, b) => new Date(b.lastSeenAt || 0) - new Date(a.lastSeenAt || 0),
+    );
+
+    return res.json({ ok: true, devices });
+  }),
+);
+
+/**
+ * POST /me/notifications
+ *
+ * What this account wants to hear about.
+ *
+ * Four switches, and each one has to mean something before it is worth
+ * offering: a preference that saves nowhere is a promise the account cannot
+ * keep, which is why the settings screen went without this panel until the
+ * field existed.
+ *
+ * Only the four known keys are read. Spreading req.body onto the document
+ * would let a caller write whatever it liked into it.
+ */
+router.post(
+  "/notifications",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ ok: false, error: "User missing" });
+
+    const body = req.body || {};
+    const keys = ["productUpdates", "billing", "seatsAndMembers", "coursesAndEvents"];
+
+    user.notifications = user.notifications || {};
+    for (const k of keys) {
+      // Absent means "leave it alone", so a screen can send one switch without
+      // resetting the other three.
+      if (typeof body[k] === "boolean") user.notifications[k] = body[k];
+    }
+
+    /**
+     * videoUpdates is served and accepted here with the others, but it is
+     * STORED in emailPrefs, not in notifications.
+     *
+     * Because emailPrefs is what the send loop reads, and what the unsubscribe
+     * link in every video announcement writes. Kept in `notifications` as
+     * well, there would be two records of one decision, and the day they
+     * disagreed the switch on this screen would say "off" while the mail kept
+     * arriving. One truth, two ways in.
+     */
+    if (typeof body.videoUpdates === "boolean") {
+      user.emailPrefs = user.emailPrefs || {};
+      user.emailPrefs.videoUpdates = body.videoUpdates;
+      user.emailPrefs.videoUpdatesChangedAt = new Date();
+    }
+
+    await user.save();
+
+    return res.json({
+      ok: true,
+      notifications: {
+        productUpdates: user.notifications.productUpdates ?? true,
+        billing: user.notifications.billing ?? true,
+        seatsAndMembers: user.notifications.seatsAndMembers ?? true,
+        coursesAndEvents: user.notifications.coursesAndEvents ?? false,
+        videoUpdates: user.emailPrefs?.videoUpdates !== false,
+      },
+    });
+  }),
+);
+
+/**
+ * POST /me/devices/revoke
+ *
+ * Free one of your own machines' activations.
+ *
+ * This already existed as POST /admin/users/device/revoke, which meant the
+ * only way to move a licence from a dead laptop to a new one was to ask us to
+ * do it. The seat belongs to the account and the machine belongs to the person
+ * holding it, so there is no reason that has to be a support ticket.
+ *
+ * Deliberately narrower than the admin route: it takes no email and reads the
+ * caller's own record, so the worst it can do is release a seat the caller
+ * already paid for. It marks `revokedAt` rather than deleting the row, the way
+ * the admin route does, because the audit trail is what answers "who released
+ * this and when" later.
+ *
+ * Bumping refreshVersion is what makes it take effect: the desktop clients
+ * re-check on their next call and the revoked machine stops being licensed.
+ */
+router.post(
+  "/devices/revoke",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const fingerprint = String(req.body?.fingerprint || "").trim();
+    const productKey = String(req.body?.productKey || "").trim();
+    if (!fingerprint) {
+      return res.status(400).json({ ok: false, error: "fingerprint is required" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ ok: false, error: "User missing" });
+
+    await ensureUserEntitlementsMigrated(user);
+    applyExpiryToUser(user);
+
+    // No productKey means "this machine, everywhere" — which is what somebody
+    // replacing a laptop actually wants, rather than revoking it once per
+    // product they happen to own.
+    const targets = (user.entitlements || []).filter(
+      (e) => !productKey || e.productKey === productKey,
+    );
+
+    const freed = [];
+    for (const ent of targets) {
+      for (const d of activeDevices(ent)) {
+        if (String(d.fingerprint || "") !== fingerprint) continue;
+        d.revokedAt = new Date();
+        freed.push(ent.productKey);
+      }
+    }
+
+    if (!freed.length) {
+      return res.status(404).json({ ok: false, error: "That machine is not active on this account" });
+    }
+
+    user.refreshVersion = (user.refreshVersion || 0) + 1;
+    await user.save();
+
+    return res.json({ ok: true, freed });
+  }),
+);
+
+/**
+ * GET /me/rail
+ *
+ * The counts the signed-in rail shows beside each item — projects, rate
+ * library, certificates, seats, team. In the design these were sample
+ * figures typed into the markup ("Projects 2", "Rate library 13"); this is
+ * where the real ones come from.
+ *
+ * One endpoint rather than five, because the rail is on every app screen and
+ * five round trips per navigation to draw six small numbers is not worth it.
+ * Every count is best-effort: a rail badge is decoration, and a failure in
+ * one collection must not be able to blank the navigation.
+ */
+router.get(
+  "/rail",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+
+    const zero = (p) => p.catch(() => 0);
+
+    const [projects, rateLib, certificates, user] = await Promise.all([
+      zero(
+        TakeoffProject.countDocuments({
+          $or: [{ userId }, { "collaborators.userId": userId }],
+        }),
+      ),
+      // Materials and labour come off the same document the rate count already
+      // reads, so this is the same query rather than two more. The Work
+      // overview's RateGen card says "N rates, M materials, K gangs" — his
+      // wording — and all three live here.
+      RateGenLibrary.findOne({ userId })
+        .select("customRates materials labour")
+        .lean()
+        .then((doc) => ({
+          rates: (doc?.customRates || []).length,
+          materials: (doc?.materials || []).length,
+          gangs: (doc?.labour || []).length,
+        }))
+        .catch(() => ({ rates: 0, materials: 0, gangs: 0 })),
+      // A certificate is downloadable when the enrolment is signed off AND the
+      // course has a template to print onto — which is exactly what the
+      // Certificates screen offers a Download button for.
+      //
+      // This used to count `certificateUrl`, which only one path ever writes:
+      // the auto-issue that fires when every module is approved. Marking an
+      // enrolment complete by hand — how most of them are actually signed off —
+      // never sets it, so the badge read 0 while the screen showed certificates
+      // sitting there ready.
+      zero(
+        CourseEnrollment.find({ userId, status: "completed" })
+          .select("courseSku")
+          .lean()
+          .then(async (rows) => {
+            const skus = [...new Set(rows.map((r) => r.courseSku).filter(Boolean))];
+            if (!skus.length) return 0;
+            const withTemplate = await PaidCourse.find({
+              sku: { $in: skus },
+              certificateTemplateUrl: { $exists: true, $nin: [null, ""] },
+            })
+              .select("sku")
+              .lean();
+            const ok = new Set(withTemplate.map((c) => c.sku));
+            return rows.filter((r) => ok.has(r.courseSku)).length;
+          }),
+      ),
+      User.findById(userId, {
+        name: 1,
+        email: 1,
+        accountType: 1,
+        organizationName: 1,
+        entitlements: 1,
+      })
+        .lean()
+        .catch(() => null),
+    ]);
+
+    // "Products & seats" counts what this account actually holds against the
+    // catalogue, so the rail reads "3 of 7" the way his design does — but with
+    // 7 being however many products we sell today, not a number frozen into
+    // the markup.
+    const owned = new Set(
+      (user?.entitlements || []).map((e) => e.productKey).filter(Boolean),
+    );
+    const catalogue = await Product.countDocuments({ isCourse: { $ne: true } }).catch(
+      () => 0,
+    );
+
+    res.json({
+      projects,
+      rates: rateLib.rates,
+      materials: rateLib.materials,
+      gangs: rateLib.gangs,
+      certificates,
+      productsOwned: owned.size,
+      productsTotal: catalogue,
+      name: user?.name || "",
+      email: user?.email || "",
+      organizationName: user?.organizationName || "",
+      accountType: user?.accountType || "personal",
+    });
+  }),
+);
+
+/**
+ * POST /me/password  { currentPassword?, newPassword }
+ *
+ * Set the password an account signs in to the desktop software with.
+ *
+ * This exists because of a gap that only shows up on the Windows side. QUIV,
+ * HERON, RateGen, Revit MEP, Time Pro and CIVIQ all authenticate through
+ * POST /auth/login with an email and a password. Someone who created their
+ * ADLM account with Google or Microsoft has no password at all, so every one
+ * of those plugins would reject them with "Invalid credentials" — on an
+ * account that is perfectly valid and may well be paid up.
+ *
+ * Two shapes, and the difference matters:
+ *
+ *   * No password yet (a social account). currentPassword is not required,
+ *     because there is nothing to prove — the bearer token already proves who
+ *     they are, and demanding a password they do not have would be a locked
+ *     door with no key.
+ *   * Changing an existing one. currentPassword IS required, so a stolen or
+ *     borrowed session cannot silently take the account over by rewriting the
+ *     credential the desktop apps trust.
+ */
+router.post(
+  "/password",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const newPassword = String(req.body?.newPassword || "");
+    const currentPassword = String(req.body?.currentPassword || "");
+
+    const weak = validatePasswordStrength(newPassword);
+    if (weak) return res.status(400).json({ error: weak, code: "WEAK_PASSWORD" });
+
+    const user = await User.findById(req.user._id).select(
+      "passwordHash email disabled isGod googleId microsoftId",
+    );
+    if (!user) return res.status(404).json({ error: "User missing" });
+    if (user.disabled) {
+      return res.status(403).json({ error: "Account disabled. Please contact support." });
+    }
+
+    const hadPassword = !!user.passwordHash;
+
+    if (hadPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          error: "Enter your current password to change it.",
+          code: "CURRENT_PASSWORD_REQUIRED",
+        });
+      }
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!ok) {
+        return res.status(401).json({ error: "That current password is not right." });
+      }
+      if (currentPassword === newPassword) {
+        return res
+          .status(400)
+          .json({ error: "That is the password you already have." });
+      }
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    // Deliberately NOT revoking existing refresh tokens.
+    //
+    // On a first-time set there is nothing to revoke and signing the person
+    // out of the browser they are standing in would be baffling. On a change,
+    // revoking everywhere is a defensible policy but a different decision from
+    // this one, and doing it silently here would sign out the desktop plugins
+    // mid-session. Worth deciding deliberately rather than as a side effect.
+    return res.json({
+      ok: true,
+      created: !hadPassword,
+      message: hadPassword
+        ? "Password changed. Use it the next time you sign in."
+        : "Password set. You can now sign in to the ADLM desktop software with it.",
+    });
+  }),
+);
+
+/**
+ * GET /me/password/status
+ *
+ * Whether this account can sign in to the desktop software at all, and how it
+ * was created. The website uses it to decide whether to prompt.
+ */
+router.get(
+  "/password/status",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id)
+      .select("passwordHash googleId microsoftId")
+      .lean();
+    if (!user) return res.status(404).json({ error: "User missing" });
+    res.json({
+      hasPassword: !!user.passwordHash,
+      providers: {
+        google: !!user.googleId,
+        microsoft: !!user.microsoftId,
+      },
+    });
+  }),
+);
+
+/**
+ * GET /me/social
+ *
+ * Which providers this account is connected to, and which could be connected.
+ * Drives the "Connected accounts" panel in the profile.
+ */
+router.get(
+  "/social",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id)
+      .select("googleId microsoftId autodeskId passwordHash email")
+      .lean();
+    if (!user) return res.status(404).json({ error: "User missing" });
+
+    const available = configuredProviders();
+    res.json({
+      email: user.email,
+      hasPassword: !!user.passwordHash,
+      connected: {
+        google: !!user.googleId,
+        microsoft: !!user.microsoftId,
+        autodesk: !!user.autodeskId,
+      },
+      available: {
+        google: available.google,
+        microsoft: available.microsoft,
+        autodesk: available.autodesk,
+      },
+    });
+  }),
+);
+
+/**
+ * POST /me/social/connect  { provider, credential }
+ *
+ * Attach a Google, Microsoft or Autodesk account to the one already signed in,
+ * so a later click on that button lands here instead of creating a second
+ * account.
+ *
+ * The token is verified exactly as it is at sign-in — being signed in already
+ * is permission to connect something, not permission to skip proving what is
+ * being connected.
+ *
+ * The email is NOT required to match. Plenty of people sign in to ADLM with a
+ * work address and hold an Autodesk or Microsoft account under a personal one,
+ * and refusing that would be refusing the normal case. What is refused is a
+ * provider account already attached to a DIFFERENT ADLM user, because that is
+ * the one situation where connecting would quietly take something away from
+ * somebody else.
+ */
+router.post(
+  "/social/connect",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const provider = String(req.body?.provider || "").trim().toLowerCase();
+    const field = PROVIDER_FIELD[provider];
+    if (!field) return res.status(400).json({ error: "Unknown sign-in provider." });
+
+    let identity;
+    try {
+      let credential = req.body?.credential;
+      if (!credential && req.body?.code) {
+        credential = await exchangeCodeForIdToken(provider, {
+          code: String(req.body.code),
+          codeVerifier: String(req.body.codeVerifier || ""),
+          redirectUri: String(req.body.redirectUri || ""),
+        });
+      }
+      identity = await verifySocialIdentity(provider, credential);
+    } catch (e) {
+      console.warn("[/me/social/connect] rejected:", e?.message || e);
+      return res
+        .status(401)
+        .json({ error: "That account could not be verified. Please try again." });
+    }
+
+    const takenBy = await User.findOne({ [field]: identity.subject })
+      .select("_id")
+      .lean();
+    if (takenBy && String(takenBy._id) !== String(req.user._id)) {
+      return res.status(409).json({
+        error: `That ${provider} account is already connected to another ADLM account.`,
+        code: "ALREADY_LINKED",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User missing" });
+
+    user[field] = identity.subject;
+    if (!user.firstName && identity.firstName) user.firstName = identity.firstName;
+    if (!user.lastName && identity.lastName) user.lastName = identity.lastName;
+    await user.save();
+
+    res.json({
+      ok: true,
+      provider,
+      connectedEmail: identity.email,
+      message: `Connected. You can now sign in with ${provider}.`,
+    });
+  }),
+);
+
+/**
+ * DELETE /me/social/:provider
+ *
+ * Disconnect a provider.
+ *
+ * Refused when it is the only way in. Removing the last provider from an
+ * account that has no password locks the owner out of their own account with
+ * one click, and no amount of confirmation copy makes that a reasonable thing
+ * to allow — so it is not allowed until a password exists.
+ */
+router.delete(
+  "/social/:provider",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const provider = String(req.params.provider || "").trim().toLowerCase();
+    const field = PROVIDER_FIELD[provider];
+    if (!field) return res.status(400).json({ error: "Unknown sign-in provider." });
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User missing" });
+    if (!user[field]) {
+      return res.status(400).json({ error: `No ${provider} account is connected.` });
+    }
+
+    const others = Object.entries(PROVIDER_FIELD).filter(
+      ([key, f]) => key !== provider && !!user[f],
+    );
+    if (!user.passwordHash && others.length === 0) {
+      return res.status(400).json({
+        error:
+          "That is the only way into this account. Set a password first, then " +
+          "you can disconnect it.",
+        code: "LAST_CREDENTIAL",
+      });
+    }
+
+    user[field] = null;
+    await user.save();
+    res.json({ ok: true, provider, message: `Disconnected your ${provider} account.` });
+  }),
+);
+
+/* ------------------------------------------------------------------ free
+ * lessons watched
+ *
+ * The free library needs no sign-in, so these two routes only ever see the
+ * subset of viewers who happen to be signed in. That is the honest scope of
+ * the panel on My learning, and the panel says so.
+ */
+
+/**
+ * POST /me/free-lessons/:id/watch
+ * Body: { seconds }
+ *
+ * Records that this account had a free lesson open. `seconds` is dwell on the
+ * lesson page, not video position — see the model for why that distinction is
+ * the only one available behind a cross-origin YouTube embed.
+ */
+router.post("/free-lessons/:id/watch", requireAuth, express.json(), async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({ error: "Not a lesson id" });
+  }
+
+  const video = await FreeVideo.findById(id).select("title isPublished").lean();
+  if (!video) return res.status(404).json({ error: "No such lesson" });
+
+  // A client can send anything, so the increment is clamped rather than
+  // trusted: at most one heartbeat's worth per call. Without this a single
+  // tampered request could claim a hundred hours against a ten-minute video.
+  const asked = Number(req.body?.seconds);
+  const seconds = Number.isFinite(asked) ? Math.min(Math.max(asked, 0), 120) : 0;
+
+  // `opens` counts calls that carry no elapsed time — the one the page sends
+  // when the lesson is first opened. Heartbeats after that carry seconds and
+  // must not each count as another visit.
+  const inc = { watchedSec: seconds };
+  if (!seconds) inc.opens = 1;
+
+  await FreeVideoWatch.updateOne(
+    { userId: req.user._id, videoId: id },
+    {
+      $inc: inc,
+      $set: { title: video.title || "", lastWatchedAt: new Date() },
+      $setOnInsert: { firstWatchedAt: new Date() },
+    },
+    { upsert: true },
+  );
+
+  res.json({ ok: true });
+});
+
+/**
+ * GET /me/free-lessons?limit=5
+ * The most recently opened free lessons on this account, newest first.
+ */
+router.get("/free-lessons", requireAuth, async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit || "5", 10) || 5, 1), 20);
+
+  const rows = await FreeVideoWatch.find({ userId: req.user._id })
+    .sort({ lastWatchedAt: -1 })
+    .limit(limit)
+    .lean();
+  if (!rows.length) return res.json([]);
+
+  // The lesson is joined back in for its runtime and thumbnail, but the row's
+  // own title wins if the lesson has since been deleted.
+  const videos = await FreeVideo.find({ _id: { $in: rows.map((r) => r.videoId) } })
+    .select("title durationSec thumbnailUrl youtubeId isPublished productLabel")
+    .lean();
+  const byId = Object.fromEntries(videos.map((v) => [String(v._id), v]));
+
+  res.json(
+    rows.map((r) => {
+      const v = byId[String(r.videoId)] || null;
+      return {
+        id: String(r.videoId),
+        title: v?.title || r.title || "A free lesson",
+        productLabel: v?.productLabel || "",
+        durationSec: Number(v?.durationSec || 0) || 0,
+        thumbnailUrl: v?.thumbnailUrl || "",
+        watchedSec: Number(r.watchedSec || 0) || 0,
+        opens: Number(r.opens || 0) || 0,
+        lastWatchedAt: r.lastWatchedAt || null,
+        // A lesson can be unpublished after somebody watched it. The row stays
+        // — it happened — but the panel should not link to a dead page.
+        available: !!v?.isPublished,
+      };
+    }),
+  );
+});
 
 export default router;

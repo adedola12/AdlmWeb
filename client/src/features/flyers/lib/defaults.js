@@ -115,7 +115,7 @@ const BASE = {
   ticketTitle: "Integration of BIM, AI & Data analytical tools",
   ticketMeta: "6-week training · Fri–Sun evenings · ADLM Platforms",
   ticketPrice: "90k",
-  ticketCta: "You don't want to miss this — contact us to purchase today!",
+  ticketCta: "You don't want to miss this. Contact us to purchase today!",
 
   // thumbnail (feature pills)
   bullets: ["Auto rate calculation", "Customizable material prices", "Real-time rate logic"],

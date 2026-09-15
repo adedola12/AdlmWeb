@@ -2,6 +2,7 @@ import React from "react";
 import { Outlet, useLocation, ScrollRestoration } from "react-router-dom";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
+import DesignModeBanner from "./components/DesignModeBanner.jsx";
 import YoutubeWelcomeModal from "./components/YoutubeWelcomeModal.jsx";
 import CouponBanner from "./components/CouponBanner.jsx";
 import AiAgent from "./components/AiAgent.jsx";
@@ -14,6 +15,28 @@ import { initGA } from "./ga";
 export default function App() {
   const [showVideo, setShowVideo] = React.useState(false);
   const location = useLocation();
+
+  // Screens that render inside his app frame — rail, app bar, own scroll
+  // container. They supply their own chrome and their own padding, so the
+  // marketing nav, the footer and the page gutter all step aside.
+  //
+  // The dash-* routes are the signed-in half of learning — My learning, the
+  // course player and the certificates — named after his own pages so a URL
+  // here reads the same as the corresponding one in his build. The public
+  // half stays at /learn with the marketing chrome, because it is a page for
+  // people who have not signed in.
+  //
+  // /projects/* and /time-management are on this list because they are now
+  // wrapped in the same frame (see pages/WorkShellRoute.jsx), even though they
+  // are our screens rather than ported ones. Leaving them off put the
+  // marketing nav and "Book a demo" above a signed-in rail.
+  // Routes that carry their own chrome and must not also get the marketing
+  // nav and footer. /admin joins the list because the admin section now has
+  // his rail: two sets of navigation over one page compete for the same job,
+  // and "Book a demo" does not belong above a refund queue.
+  const appShellRoute = /^\/(manage|work|dash-learning|dash-certificates|dash-course|projects|time-management|admin)(\/|$)/.test(
+    location.pathname,
+  );
 
   const [banner, setBanner] = React.useState(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
@@ -58,19 +81,27 @@ export default function App() {
 
       {/* Mounted in the root layout so it sees every route change.
           It existed before this and was never rendered anywhere, which meant
-          GA recorded the first page of a session and nothing after it — in a
+          GA recorded the first page of a session and nothing after it, in a
           single-page app, almost every pageview was missing. */}
       <AnalyticsTracker />
 
-      <Nav />
+      {/* The signed-in app carries his rail and app bar instead. Leaving the
+          marketing nav above it puts "Book a demo" over somebody's dashboard,
+          and the two sets of navigation compete for the same job. His own
+          build does exactly that; it is on the snag list for him rather than
+          reproduced here. */}
+      {!appShellRoute && <Nav />}
 
-      <main className="w-full flex-1 px-4 md:px-8 py-4">
+      {/* Only renders for Design Access sessions, and only on /admin. */}
+      <DesignModeBanner />
+
+      <main className={appShellRoute ? "w-full flex-1" : "w-full flex-1 px-4 md:px-8 py-4"}>
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
       </main>
-
-      <Footer />
+        
+      {!appShellRoute && <Footer />}
       <AiAgent />
 
       {/* New-page navigations start at the top; the browser back/forward
@@ -83,7 +114,7 @@ export default function App() {
         open={showVideo}
         onClose={closeVideo}
         videoId={VIDEO_ID}
-        title="Welcome to ADLM — quick intro"
+        title="Welcome to ADLM, quick intro"
         maxSeconds={MAX_SECONDS}
         closeOnOutsideClick={true}
         hideControls={false}

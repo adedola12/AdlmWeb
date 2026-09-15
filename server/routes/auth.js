@@ -1,4 +1,11 @@
 import express from "express";
+import {
+  verifyEmail,
+  welcome as welcomeMail,
+  passwordResetCode,
+  securityCode,
+  breakGlassCode,
+} from "../util/emailContent.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -12,7 +19,12 @@ import { buildWelcomeEmail } from "../util/welcomeEmail.js";
 import { Invoice } from "../models/Invoice.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
-import { rolePermissionList, isSuperAdminRole, isDemoRole } from "../util/rbac.js";
+import {
+  rolePermissionList,
+  isSuperAdminRole,
+  isDesignRole,
+  isDemoRole,
+} from "../util/rbac.js";
 import { ALL_AREA_KEYS } from "../config/permissions.js";
 import {
   signAccess,
@@ -27,6 +39,13 @@ import {
 import { getPrivateKey, getKid } from "../util/jwks.js";
 import { isGodUser, isGodEmail } from "../util/godAccount.js";
 import { writeAudit, reqAuditContext } from "../util/audit.js";
+import { validatePasswordStrength } from "../util/passwordPolicy.js";
+import {
+  verifySocialIdentity,
+  configuredProviders,
+  exchangeCodeForIdToken,
+  PROVIDER_FIELD,
+} from "../util/socialIdentity.js";
 
 const router = express.Router();
 
@@ -60,9 +79,18 @@ function buildAuthPayload(user) {
     username: user.username || "",
     avatarUrl: user.avatarUrl || "",
     stepUpEnabled: !!user.security?.stepUpEnabled,
+    // Carried in the token so requireVerifiedEmail can read it without a
+    // database round trip on every purchase attempt. An account verified in
+    // another tab keeps its old token until refresh, which is the right way
+    // round: the worst case is being asked to confirm something already
+    // confirmed, not being let through something that is not.
+    emailVerified: !!user.emailVerified,
     isSuperAdmin: isSuperAdminRole(user.role),
     demoMode: isDemoRole(user.role),
     permissions: rolePermissionList(user.role, ALL_AREA_KEYS),
+    // Design Access: sees every admin section, but every /admin response is
+    // placeholder data. The client reads this to show the standing banner.
+    designAccess: isDesignRole(user.role),
     // Only true when BOTH the DB flag and the env allowlist agree. Carried in
     // the token so middleware (requireEntitlement, auditGod) can recognise it.
     isGod: isGodUser(user),
@@ -119,18 +147,8 @@ function activeDevices(entitlement) {
   return (entitlement?.devices || []).filter((device) => !device.revokedAt);
 }
 
-// Password complexity policy — enforced on signup and password reset.
-// Minimum 8 chars, at least one letter and one number.
-function validatePasswordStrength(password) {
-  const pw = String(password || "");
-  if (pw.length < 8) {
-    return "Password must be at least 8 characters.";
-  }
-  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
-    return "Password must contain at least one letter and one number.";
-  }
-  return null;
-}
+// Password complexity lives in util/passwordPolicy.js — see the note there
+// on why it is not defined in each route that sets a password.
 
 // Fingerprint v1→v2 migration: clients sending x-adlm-fp-version >= 2 that
 // don't match any existing device may transparently replace the user's
@@ -428,22 +446,29 @@ router.post("/signup", async (req, res) => {
       entitlements: [],
     });
 
+    // The address has not been proved yet, so the WELCOME does not go now — it
+    // goes when the code comes back. Sending "your account is ready" to an
+    // address nobody has confirmed is how a studio ends up with a list full of
+    // addresses that bounce.
     try {
-      const { subject, html } = buildWelcomeEmail({
-        firstName: user.firstName,
-        lastName: user.lastName,
-      });
-
-      await sendMail({
-        to: user.email,
-        subject,
-        html,
-      });
-
-      user.welcomeEmailSentAt = new Date();
+      const code = newVerifyCode();
+      user.emailVerifyHash = hashCode(code);
+      user.emailVerifyExpires = new Date(Date.now() + VERIFY_MINUTES * 60_000);
+      user.emailVerifySentAt = new Date();
+      user.emailVerifyAttempts = 0;
       await user.save();
+
+      const { subject, html } = verifyEmail({
+        firstName: user.firstName,
+        code,
+        minutes: VERIFY_MINUTES,
+      });
+      await sendMail({ to: user.email, subject, html, templateKey: "account.verify" });
     } catch (mailErr) {
-      console.error("[/auth/signup] welcome mail error:", mailErr);
+      // A signup that cannot send is still a signup. The account exists and
+      // the code can be asked for again, which is better than losing the
+      // registration because a mail server blinked.
+      console.error("[/auth/signup] verification mail error:", mailErr);
     }
 
     // Auto-link any invoices sent to this email address
@@ -513,13 +538,7 @@ async function issueGodLoginOtp(user, req) {
   const safeName = user.firstName || user.username || user.email.split("@")[0];
   await sendMail({
     to: user.email,
-    subject: "ADLM break-glass sign-in code",
-    html: `<p>Hi ${safeName},</p>
-           <p>Use this code to complete your secure (break-glass) sign-in:</p>
-           <p style="font-size:22px;font-weight:bold;letter-spacing:4px">${code}</p>
-           <p>This code expires in 10 minutes. If you did <b>not</b> just try to
-           sign in to a privileged ADLM support account, change your password
-           immediately and notify the team — this account can access any machine.</p>`,
+    ...breakGlassCode({ firstName: safeName, code }),
   });
 }
 
@@ -1007,11 +1026,7 @@ router.post("/password/forgot", async (req, res) => {
     try {
       await sendMail({
         to: user.email,
-        subject: "Your ADLM password reset code",
-        html: `<p>Hi ${safeName},</p>
-               <p>Your password reset code is:</p>
-               <p style="font-size:20px;font-weight:bold;letter-spacing:3px">${code}</p>
-               <p>This code expires in 10 minutes.</p>`,
+        ...passwordResetCode({ firstName: safeName, code }),
       });
     } catch (mailErr) {
       console.error("[/auth/password/forgot] mail error:", mailErr);
@@ -1117,11 +1132,7 @@ router.post("/step-up/request", authLimiter, requireAuth, async (req, res) => {
     try {
       await sendMail({
         to: user.email,
-        subject: "Your ADLM security code",
-        html: `<p>Hi ${safeName},</p>
-               <p>Use this code to confirm a sensitive action (deleting projects or locking a contract):</p>
-               <p style="font-size:22px;font-weight:bold;letter-spacing:4px">${code}</p>
-               <p>This code expires in 10 minutes. If you didn't request it, someone may have your password — please change it.</p>`,
+        ...securityCode({ firstName: safeName, code }),
       });
     } catch (mailErr) {
       console.error("[/auth/step-up/request] mail error:", mailErr);
@@ -1258,5 +1269,326 @@ const _retiredAppLookup = async (req, res) => {
     res.status(500).json({ error: "Lookup failed" });
   }
 };
+
+/**
+ * GET /auth/providers
+ *
+ * Which social buttons can actually work. The page asks before drawing them,
+ * because a "Continue with Microsoft" button that fails on click because no
+ * client id is configured is worse than no button.
+ */
+router.get("/providers", (_req, res) => res.json(configuredProviders()));
+
+/**
+ * POST /auth/social  { provider, credential }
+ *
+ * Sign in, or create an account, from a Google or Microsoft ID token.
+ *
+ * The token is the only input trusted — see util/socialIdentity.js. Anything
+ * else in the body is ignored.
+ *
+ * Matching, in order:
+ *   1. The provider subject we have already stored. This is the durable link.
+ *   2. The verified email, which LINKS the provider to an existing account —
+ *      somebody who signed up with a password and now clicks the Google button
+ *      should land in their own account, not a duplicate.
+ *   3. Otherwise a new account.
+ *
+ * A social account has no password, and the desktop plugins need one, so the
+ * response says so and the website prompts for it.
+ */
+router.post("/social", authLimiter, async (req, res) => {
+  try {
+    await ensureDb();
+
+    const provider = String(req.body?.provider || "").trim().toLowerCase();
+
+    let identity;
+    try {
+      // Two ways in. `code` is the normal one: the browser ran the redirect and
+      // hands back what the provider gave it, and the exchange happens here
+      // because Google's web client requires a secret that must never reach a
+      // browser. `credential` stays supported for a provider that returns an
+      // ID token directly.
+      let credential = req.body?.credential;
+      if (!credential && req.body?.code) {
+        credential = await exchangeCodeForIdToken(provider, {
+          code: String(req.body.code),
+          codeVerifier: String(req.body.codeVerifier || ""),
+          redirectUri: String(req.body.redirectUri || ""),
+        });
+      }
+      identity = await verifySocialIdentity(provider, credential);
+    } catch (e) {
+      // Deliberately not echoed verbatim to the client beyond a short reason:
+      // the detail is useful to us and to an attacker in equal measure.
+      console.warn("[/auth/social] rejected:", e?.message || e);
+      return res.status(401).json({
+        error: "That sign-in could not be verified. Please try again.",
+      });
+    }
+
+    const field = PROVIDER_FIELD[provider];
+    if (!field) return res.status(400).json({ error: "Unknown sign-in provider." });
+    let user = await User.findOne({ [field]: identity.subject });
+    let created = false;
+
+    if (!user) {
+      user = await User.findOne({ email: identity.email });
+
+      if (user) {
+        // Linking an existing account. Safe only because the provider has
+        // verified the address; socialIdentity.js refuses a token that says
+        // otherwise.
+        user[field] = identity.subject;
+      } else {
+        // A username has to be unique, and the local part of an email often
+        // is not, so fall back to a suffixed one rather than failing the
+        // sign-in on a collision.
+        const base = identity.email.split("@")[0].toLowerCase();
+        let username = base;
+        for (let i = 0; i < 5 && (await User.exists({ username })); i += 1) {
+          username = `${base}${crypto.randomInt(100, 9999)}`;
+        }
+
+        user = new User({
+          email: identity.email,
+          username,
+          // No passwordHash. See the note on that field in models/User.js.
+          passwordHash: "",
+          role: "user",
+          firstName: identity.firstName,
+          lastName: identity.lastName,
+          [field]: identity.subject,
+          entitlements: [],
+        });
+        created = true;
+      }
+    }
+
+    if (user.disabled) {
+      return res
+        .status(403)
+        .json({ error: "Account disabled. Please contact support." });
+    }
+
+    // A God account must never be reachable without the OTP flow, and a social
+    // provider cannot satisfy that. Refuse rather than quietly downgrade the
+    // protection on the one account that most needs it.
+    if (isGodUser(user)) {
+      return res.status(403).json({
+        error: "This account must sign in with its password.",
+        code: "PASSWORD_REQUIRED",
+      });
+    }
+
+    // Fill in a name we did not have. Never overwrite one the person set.
+    if (!user.firstName && identity.firstName) user.firstName = identity.firstName;
+    if (!user.lastName && identity.lastName) user.lastName = identity.lastName;
+
+    await user.save();
+
+    if (created) {
+      try {
+        const { subject, html } = buildWelcomeEmail({
+          firstName: user.firstName,
+          lastName: user.lastName,
+        });
+        await sendMail({ to: user.email, subject, html });
+        user.welcomeEmailSentAt = new Date();
+        await user.save();
+      } catch (mailErr) {
+        console.error("[/auth/social] welcome mail error:", mailErr);
+      }
+    }
+
+    const payload = buildAuthPayload(user);
+    const accessToken = signAccess(payload);
+    const refreshToken = signRefresh({ sub: payload._id });
+
+    await Refresh.create({
+      userId: user._id,
+      token: refreshToken,
+      ua: req.headers["user-agent"] || "",
+      ip: req.ip,
+    });
+
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOpts);
+    return res.json({
+      accessToken,
+      user: payload,
+      created,
+      provider,
+      // The website turns this into "set a password so you can sign in to the
+      // desktop apps". It is the whole reason a social user needs one.
+      needsPassword: !user.passwordHash,
+    });
+  } catch (err) {
+    console.error("[/auth/social] error:", err);
+    return res.status(500).json({ error: "Sign-in failed" });
+  }
+});
+
+
+
+/* ══════════════════════════════════════════════════ confirming an address ══
+ *
+ * Until this existed, signup created an account and handed back a working
+ * token, so anybody could register with an address they had invented. Every
+ * message the studio then sent to them bounced into nothing.
+ *
+ * WHAT AN UNCONFIRMED ACCOUNT CAN STILL DO
+ *
+ * Sign in, and look around. It is not locked out — being unable to get back
+ * into a half-made account is its own kind of trap, and somebody who mistyped
+ * their address needs to sign in to fix it. What it cannot do is buy, download
+ * an installer, or be granted an entitlement, because those are the acts that
+ * cost a licence seat or money and depend on us being able to reach them.
+ */
+
+const VERIFY_MINUTES = 30;
+/** How long before another code may be asked for. */
+const VERIFY_RESEND_SECONDS = 60;
+/** Wrong guesses before the code is thrown away. */
+const VERIFY_MAX_ATTEMPTS = 6;
+
+/** Six digits, from a real random source rather than Math.random. */
+function newVerifyCode() {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+/**
+ * Hashed, not stored plain. Six digits is a small secret, and a leaked
+ * database with a plaintext column would let somebody confirm another
+ * person's address at leisure.
+ */
+function hashCode(code) {
+  return crypto.createHash("sha256").update(String(code)).digest("hex");
+}
+
+router.post("/verify-email", requireAuth, async (req, res) => {
+  try {
+    await ensureDb();
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "No such account" });
+
+    if (user.emailVerified) {
+      // Not an error. Somebody pressing the link twice has done nothing wrong.
+      return res.json({ ok: true, alreadyVerified: true });
+    }
+
+    const code = String(req.body?.code || "").trim();
+    if (!/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: "That code should be six digits." });
+    }
+
+    if (!user.emailVerifyHash || !user.emailVerifyExpires) {
+      return res.status(400).json({
+        error: "There is no code waiting. Ask for a new one.",
+        code: "NO_CODE",
+      });
+    }
+    if (user.emailVerifyExpires.getTime() < Date.now()) {
+      return res.status(400).json({
+        error: "That code has expired. Ask for a new one.",
+        code: "CODE_EXPIRED",
+      });
+    }
+    if ((user.emailVerifyAttempts || 0) >= VERIFY_MAX_ATTEMPTS) {
+      return res.status(429).json({
+        error: "Too many wrong codes. Ask for a new one.",
+        code: "TOO_MANY",
+      });
+    }
+
+    if (hashCode(code) !== user.emailVerifyHash) {
+      user.emailVerifyAttempts = (user.emailVerifyAttempts || 0) + 1;
+      await user.save();
+      const left = VERIFY_MAX_ATTEMPTS - user.emailVerifyAttempts;
+      return res.status(400).json({
+        error:
+          left > 0
+            ? `That code is not right. ${left} ${left === 1 ? "try" : "tries"} left.`
+            : "That code is not right, and that was the last try. Ask for a new one.",
+      });
+    }
+
+    user.emailVerified = true;
+    user.emailVerifiedAt = new Date();
+    user.emailVerifyHash = "";
+    user.emailVerifyExpires = null;
+    user.emailVerifyAttempts = 0;
+    await user.save();
+
+    // NOW the welcome goes, to an address we know exists.
+    try {
+      if (!user.welcomeEmailSentAt) {
+        const { subject, html } = welcomeMail({ firstName: user.firstName });
+        await sendMail({ to: user.email, subject, html, templateKey: "account.welcome" });
+        user.welcomeEmailSentAt = new Date();
+        await user.save();
+      }
+    } catch (mailErr) {
+      console.error("[/auth/verify-email] welcome mail error:", mailErr);
+    }
+
+    res.json({ ok: true, user: buildAuthPayload(user) });
+  } catch (err) {
+    console.error("[/auth/verify-email] error:", err);
+    res.status(500).json({ error: "Could not confirm that just now." });
+  }
+});
+
+router.post("/resend-verification", requireAuth, async (req, res) => {
+  try {
+    await ensureDb();
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "No such account" });
+    if (user.emailVerified) return res.json({ ok: true, alreadyVerified: true });
+
+    // On the record rather than in memory, so restarting the server is not a
+    // way around it.
+    const since = user.emailVerifySentAt
+      ? (Date.now() - user.emailVerifySentAt.getTime()) / 1000
+      : Infinity;
+    if (since < VERIFY_RESEND_SECONDS) {
+      return res.status(429).json({
+        error: `Wait ${Math.ceil(VERIFY_RESEND_SECONDS - since)} seconds before asking for another.`,
+      });
+    }
+
+    // An address change is allowed here, because the commonest reason a code
+    // never arrives is that the address was typed wrongly.
+    const wanted = String(req.body?.email || "").trim().toLowerCase();
+    if (wanted && wanted !== user.email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(wanted)) {
+        return res.status(400).json({ error: "That email does not look right." });
+      }
+      if (await User.exists({ email: wanted, _id: { $ne: user._id } })) {
+        return res.status(409).json({ error: "Another account already uses that address." });
+      }
+      user.email = wanted;
+    }
+
+    const code = newVerifyCode();
+    user.emailVerifyHash = hashCode(code);
+    user.emailVerifyExpires = new Date(Date.now() + VERIFY_MINUTES * 60_000);
+    user.emailVerifySentAt = new Date();
+    user.emailVerifyAttempts = 0;
+    await user.save();
+
+    const { subject, html } = verifyEmail({
+      firstName: user.firstName,
+      code,
+      minutes: VERIFY_MINUTES,
+    });
+    await sendMail({ to: user.email, subject, html, templateKey: "account.verify" });
+
+    res.json({ ok: true, email: user.email });
+  } catch (err) {
+    console.error("[/auth/resend-verification] error:", err);
+    res.status(500).json({ error: "Could not send that just now." });
+  }
+});
 
 export default router;

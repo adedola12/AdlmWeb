@@ -24,6 +24,18 @@ const SupportTicketSchema = new mongoose.Schema(
     source: { type: String, trim: true, lowercase: true, default: "web" },
     appVersion: { type: String, trim: true, default: "" },
 
+    // Which machine the problem is on.
+    //
+    // Support's first question on a licensing or install ticket is always which
+    // machine, and the account already knows: the desktop clients register a
+    // device name when they activate. Carrying it on the ticket rather than
+    // buried in the description means it can be shown on the ticket row and
+    // read by the admin queue without anybody parsing prose for it.
+    //
+    // A name, not a fingerprint. The fingerprint identifies the device to the
+    // licensing code; "TUNDE-WS02" is what a person recognises.
+    machine: { type: String, trim: true, default: "" },
+
     category: {
       type: String,
       enum: ["technical", "billing", "account", "general", "feature-request"],

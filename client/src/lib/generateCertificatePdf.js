@@ -10,6 +10,8 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
  * @param {string} opts.fullName - User's verified full name
  * @param {string} opts.courseDescription - e.g. "for the BIM Course on Building Works"
  * @param {string} opts.dateString - e.g. "4 April 2026"
+ * @param {string} [opts.reference] - Certificate reference, stamped bottom-right
+ * @param {boolean} [opts.preview] - Open in a new tab instead of saving
  * @param {string} [opts.filename] - Download filename
  */
 export async function generateCertificatePdf({
@@ -18,6 +20,8 @@ export async function generateCertificatePdf({
   fullName,
   courseDescription,
   dateString,
+  reference = "",
+  preview = false,
   filename = "ADLM_Certificate.pdf",
 }) {
   if (!proxyUrl) throw new Error("Certificate proxy URL is required");
@@ -93,10 +97,36 @@ export async function generateCertificatePdf({
     });
   }
 
-  // Serialize and download
+  // --- Overlay the reference ---
+  //
+  // The certificates panel quotes this against every issued certificate, so
+  // the document has to carry it too — a card naming a reference the PDF does
+  // not have is worse than no reference at all.
+  if (reference) {
+    const refSize = 9;
+    const refWidth = textFont.widthOfTextAtSize(reference, refSize);
+    page.drawText(reference, {
+      x: width * 0.65 - refWidth / 2,
+      y: height * 0.13,
+      size: refSize,
+      font: textFont,
+      color: rgb(0.35, 0.35, 0.35),
+    });
+  }
+
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], { type: "application/pdf" });
   const blobUrl = URL.createObjectURL(blob);
+
+  // Preview opens it; download saves it. Same document either way, which is
+  // the point — nobody should be able to save something they were not shown.
+  if (preview) {
+    window.open(blobUrl, "_blank", "noopener");
+    // Not revoked immediately: the new tab still has to fetch it.
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    return;
+  }
+
   const a = document.createElement("a");
   a.href = blobUrl;
   a.download = filename;

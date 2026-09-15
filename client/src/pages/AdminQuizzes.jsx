@@ -16,7 +16,33 @@ const emptyQuestion = () => ({
   options: ["", ""],
   correctIndex: 0,
   explanation: "",
+  // Unplaced. It is asked at the end with the rest of the quiz until somebody
+  // says where in the lecture it belongs.
+  atSec: null,
 });
+
+/** "41:20" or "1:04:07" from seconds, and back again. */
+function clock(s) {
+  if (s == null || s === "") return "";
+  const n = Math.max(0, Math.floor(Number(s) || 0));
+  const h = Math.floor(n / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  const sec = n % 60;
+  const pad = (x) => String(x).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+
+function seconds(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  // Typed as 41:20, 1:04:07, or just a number of seconds.
+  const parts = t.split(":").map((x) => Number(x));
+  if (parts.some((n) => !Number.isFinite(n) || n < 0)) return null;
+  if (parts.length === 1) return Math.floor(parts[0]);
+  if (parts.length === 2) return Math.floor(parts[0] * 60 + parts[1]);
+  if (parts.length === 3) return Math.floor(parts[0] * 3600 + parts[1] * 60 + parts[2]);
+  return null;
+}
 
 const emptyQuiz = (courseSku, moduleCode) => ({
   courseSku,
@@ -116,10 +142,38 @@ function QuestionEditor({ question, index, onChange, onRemove, canRemove }) {
       <textarea
         className="input mt-2 w-full"
         rows={2}
-        placeholder="Explanation — shown after submission, right or wrong. This is where the teaching happens."
+        placeholder="Explanation: shown after submission, right or wrong. This is where the teaching happens."
         value={question.explanation}
         onChange={(e) => set({ explanation: e.target.value })}
       />
+
+      {/* Where in the lecture this belongs.
+          A quiz at the end of a ninety-minute session mostly measures memory:
+          "I do not remember" and "I did not follow it" arrive as the same
+          wrong answer. Placed here, the player stops at that second and asks
+          it while the explanation is still on the screen behind it.
+          Left blank, nothing changes — it is asked at the end, as before. */}
+      <label className="mt-2 flex items-center gap-2 text-sm">
+        <span className="whitespace-nowrap opacity-70">Ask it at</span>
+        <input
+          className="input w-32"
+          placeholder="41:20"
+          defaultValue={clock(question.atSec)}
+          onBlur={(e) => {
+            const v = seconds(e.target.value);
+            set({ atSec: v });
+            // Written back in the canonical form, so "2510" becomes "41:50"
+            // and a typo that parsed to nothing is visibly empty rather than
+            // silently kept.
+            e.target.value = clock(v);
+          }}
+        />
+        <span className="opacity-60">
+          {question.atSec == null
+            ? "blank — asked at the end with the rest of the quiz"
+            : `a checkpoint in the video at ${clock(question.atSec)}`}
+        </span>
+      </label>
     </div>
   );
 }
@@ -229,7 +283,7 @@ export default function AdminQuizzes() {
       });
       setMsg(
         payload.isPublished
-          ? "Saved and published — students can take it now."
+          ? "Saved and published, students can take it now."
           : "Saved as a draft. Tick Published when it is ready.",
       );
       await load();
@@ -413,7 +467,7 @@ export default function AdminQuizzes() {
                   checked={draft.isPublished}
                   onChange={(e) => setDraftField({ isPublished: e.target.checked })}
                 />
-                Published — students can see and take it
+                Published, students can see and take it
               </label>
 
               <div className="mt-4 space-y-3">

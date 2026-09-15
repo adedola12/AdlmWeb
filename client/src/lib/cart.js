@@ -16,11 +16,23 @@ export function readCartItems() {
   }
 }
 
+// Name of the event fired whenever the cart is written.
+//
+// The checkout form and the order summary beside it are separate components
+// reading the same localStorage key, and localStorage's own `storage` event
+// only fires in OTHER tabs. Without this, dropping a not-yet-sellable line
+// from the form left it sitting in the summary — the panel claiming a product
+// and a price the order no longer contained.
+export const CART_CHANGED = "adlm:cart-changed";
+
 export function writeCartItems(items) {
   const safe = Array.isArray(items) ? items : [];
   localStorage.setItem("cartItems", JSON.stringify(safe));
   const totalQty = safe.reduce((sum, it) => sum + Number(it.qty || 0), 0);
   localStorage.setItem("cartCount", String(totalQty));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CART_CHANGED));
+  }
   return totalQty;
 }
 
@@ -95,4 +107,35 @@ export function addProductToCart(p, months = 1) {
   });
 
   return totalQty;
+}
+
+/**
+ * Everything about an order that is not a line item: which licence type it is,
+ * the organisation it is for, the currency it was priced in, and any on-site
+ * training class chosen.
+ *
+ * Purchase.jsx has carried a private copy of these two since before the
+ * quotation builder existed. They live here now because a second writer —
+ * "Buy these now" — has to agree with it exactly, and two private copies of
+ * the same localStorage key is how they stop agreeing.
+ *
+ * Callers merge rather than replace: the quotation sets currency and training,
+ * the purchase page sets licenseType and org, and neither should erase the
+ * other's fields.
+ */
+export function readCartMeta() {
+  try {
+    const m = JSON.parse(localStorage.getItem("cartMeta") || "{}");
+    return m && typeof m === "object" ? m : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeCartMeta(meta) {
+  localStorage.setItem("cartMeta", JSON.stringify(meta || {}));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(CART_CHANGED));
+  }
+  return meta;
 }

@@ -291,6 +291,84 @@ export async function submitHlsJob({ sourceKey, outPrefix, jobTag = "", sourceHe
   return out?.Job?.Id || "";
 }
 
+
+/**
+ * Strips a lecture down to its audio track, as MP4/AAC in the archive bucket.
+ *
+ * Why this exists: Amazon Transcribe's batch limit is 2 GB per file and AWS
+ * lists it as not adjustable. Four of the thirty-four masters are over it —
+ * the largest is 5.82 GB — because they are two-hour 720p screen recordings.
+ * Transcribe only ever reads the audio track, so handing it 5.82 GB of Revit
+ * screen capture was always waste; this makes that explicit and brings the
+ * file under the ceiling at the same time. A 96-minute lecture comes out
+ * around 70 MB.
+ *
+ * The AAC settings are deliberately the same ones the HLS rungs already use.
+ * They are known to be accepted by this account's MediaConvert queue, and an
+ * invented bitrate/coding-mode/sample-rate combination is the usual way to
+ * have a job rejected for no useful reason.
+ *
+ * Writes to the ARCHIVE bucket rather than the delivery one: Transcribe reads
+ * it, students never do, and the archive is the bucket the pipeline's IAM user
+ * can already write to.
+ *
+ * @param {string} sourceKey  master object in the archive bucket
+ * @param {string} outKey     destination WITHOUT extension, e.g. audio/sku/W1D1
+ */
+export async function submitAudioExtractJob({ sourceKey, outKey, jobTag = "" }) {
+  const archiveBucket = requiredEnv("AWS_VIDEO_ARCHIVE_BUCKET");
+  const role = requiredEnv("AWS_MEDIACONVERT_ROLE_ARN");
+
+  const command = new CreateJobCommand({
+    Role: role,
+    UserMetadata: jobTag ? { module: jobTag, purpose: "transcribe-audio" } : undefined,
+    Settings: {
+      Inputs: [
+        {
+          FileInput: `s3://${archiveBucket}/${sourceKey}`,
+          AudioSelectors: { "Audio Selector 1": { DefaultSelection: "DEFAULT" } },
+          // No VideoSelector: there is no video output to feed, and asking for
+          // one only makes the job decode frames it will then throw away.
+          TimecodeSource: "ZEROBASED",
+        },
+      ],
+      OutputGroups: [
+        {
+          Name: "Audio for transcription",
+          OutputGroupSettings: {
+            Type: "FILE_GROUP_SETTINGS",
+            // Ending the destination at the key rather than a "/" names the
+            // file after it — audio/sku/W1D1 becomes audio/sku/W1D1.mp4.
+            FileGroupSettings: { Destination: `s3://${archiveBucket}/${outKey}` },
+          },
+          Outputs: [
+            {
+              // No VideoDescription at all — that is what makes it audio-only.
+              ContainerSettings: { Container: "MP4", Mp4Settings: {} },
+              AudioDescriptions: [
+                {
+                  AudioSourceName: "Audio Selector 1",
+                  CodecSettings: {
+                    Codec: "AAC",
+                    AacSettings: {
+                      Bitrate: 96000,
+                      CodingMode: "CODING_MODE_2_0",
+                      SampleRate: 48000,
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const out = await mediaConvertClient().send(command);
+  return { jobId: out?.Job?.Id || "", audioKey: `${outKey}.mp4` };
+}
+
 export async function getJobState(jobId) {
   const out = await mediaConvertClient().send(new GetJobCommand({ Id: jobId }));
 

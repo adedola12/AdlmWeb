@@ -1,14 +1,21 @@
 // src/pages/Profile.jsx
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { isAdmin, isStaff } from "../utils/roles.js";
 import AccountActivity from "../features/account/AccountActivity.jsx";
 import Billing from "../features/account/Billing.jsx";
 import AdminLauncher from "../features/admin/AdminLauncher.jsx";
+import DesktopPasswordCard from "../components/DesktopPasswordCard.jsx";
+import ConnectedAccounts from "../components/ConnectedAccounts.jsx";
 
 export default function Profile() {
+  // A social sign-in lands here with ?setPassword=1, because the account it
+  // just created cannot open any of the Windows software until it has one.
+  const [searchParams] = useSearchParams();
+  const askingForPassword = searchParams.get("setPassword") === "1";
+
   const navigate = useNavigate();
   const { user, setAuth, accessToken } = useAuth();
 
@@ -285,6 +292,10 @@ export default function Profile() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Straight after a social sign-in this is the whole reason the page was
+          opened, so it goes above the hero rather than below the fold. */}
+      {askingForPassword && <DesktopPasswordCard autoFocus />}
+
       {/* IDENTITY HERO */}
       <div className="relative overflow-hidden rounded-2xl bg-adlm-navy text-white shadow-depth">
         <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
@@ -445,7 +456,7 @@ export default function Profile() {
               value={stateKey || ""}
               onChange={(e) => setStateKey(e.target.value)}
             >
-              <option value="">— Select state —</option>
+              <option value="">. Select state, </option>
               {stateOptions.map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}
@@ -479,7 +490,7 @@ export default function Profile() {
                 value={zone || ""}
                 onChange={(e) => setZone(e.target.value)}
               >
-                <option value="">— Select zone —</option>
+                <option value="">. Select zone, </option>
                 {zoneOptions.map((z) => (
                   <option key={z.key} value={z.key}>
                     {z.label}
@@ -508,6 +519,14 @@ export default function Profile() {
 
       {/* SAVED CARD + PER-PRODUCT AUTO-RENEW */}
       <Billing />
+
+      {/* Also reachable without the redirect: somebody who set a password
+          months ago still needs somewhere to change the one the desktop
+          software uses. Suppressed when the copy above is already showing it,
+          so the page never has two of the same form. */}
+      {!askingForPassword && <DesktopPasswordCard />}
+
+      <ConnectedAccounts />
 
       {/* SECURITY + ADMIN CARD */}
       <div className="card">
@@ -548,7 +567,7 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* ADMIN TOOLS — permission-aware launcher (replaces the old flat list).
+      {/* ADMIN TOOLS, permission-aware launcher (replaces the old flat list).
           Each card is gated by the user's role permissions via can(). */}
       {staff && (
         <div className="card">

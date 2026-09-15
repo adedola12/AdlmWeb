@@ -93,7 +93,7 @@ export default function AdminAuditLog() {
           <div className="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 p-3 text-sm">
             No emails are listed in <code>GOD_ACCOUNT_EMAILS</code>. God accounts
             stay inactive until an email is added to that env var and the server
-            is redeployed — granting the flag here alone is not enough.
+            is redeployed, granting the flag here alone is not enough.
           </div>
         )}
 

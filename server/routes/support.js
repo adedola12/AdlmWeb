@@ -75,6 +75,11 @@ router.post(
       req.body?.appVersion || req.get("x-adlm-app-version") || "",
     ).trim();
 
+    // Which machine, when the caller knows. The web sends the device name the
+    // person picked from their own activated machines; the desktop clients can
+    // send their own. Capped because it is displayed.
+    const machine = String(req.body?.machine || "").trim().slice(0, 120);
+
     if (!title) return res.status(400).json({ ok: false, error: "Title is required" });
     if (!description)
       return res.status(400).json({ ok: false, error: "Description is required" });
@@ -109,6 +114,7 @@ router.post(
     }
 
     const ticket = await SupportTicket.create({
+      machine,
       userId: uid,
       userEmail: (req.user?.email || "").toLowerCase(),
       userFullName: fullName,

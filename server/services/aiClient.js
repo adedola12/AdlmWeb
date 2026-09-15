@@ -59,9 +59,27 @@ const DEFAULT_MODEL =
     : process.env.AGENT_MODEL ||
       (PROVIDER === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001");
 
-// Output-token cap per model round-trip. Bounds spend on a public key; the
-// caller may pass a smaller value but never a larger one.
+// Output-token default per model round-trip, for a caller that does not say.
+// Not a ceiling: an explicit ask is honoured up to HARD_MAX_TOKENS below.
 const DEFAULT_MAX_TOKENS = Number(process.env.AGENT_MAX_TOKENS || 700);
+
+/**
+ * The most any single call may ask for.
+ *
+ * DEFAULT_MAX_TOKENS is what a caller gets when it does not say — it exists to
+ * keep Ada's chat replies short and cheap. It was also being used as a CEILING
+ * via Math.min(asked, DEFAULT), which meant a caller asking for more was
+ * silently given 700 instead. Nothing errored; the reply just stopped
+ * mid-sentence. Every one of the thirty-two generated quizzes came back
+ * truncated because of it.
+ *
+ * So: unspecified still gets the small default, an explicit ask is honoured,
+ * and this is the real ceiling.
+ */
+const HARD_MAX_TOKENS = Number(process.env.AGENT_HARD_MAX_TOKENS || 8192);
+
+const capTokens = (asked) =>
+  Math.min(Number(asked) || DEFAULT_MAX_TOKENS, HARD_MAX_TOKENS);
 
 let _openai = null;
 function openai() {
@@ -178,7 +196,7 @@ async function anthropicCreate({ system, messages, tools, maxTokens, temperature
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
-        max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+        max_tokens: capTokens(maxTokens),
         system: anthropicSystem(system, { extendedTtl }),
         messages,
         ...(tools && tools.length ? { tools } : {}),
@@ -290,7 +308,7 @@ export function bedrockRequestBody({
 }) {
   return {
     anthropic_version: BEDROCK_ANTHROPIC_VERSION,
-    max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+    max_tokens: capTokens(maxTokens),
     // Never the extended TTL on this path — see the note above.
     system: useCache
       ? anthropicSystem(system, { extendedTtl: false })
@@ -432,7 +450,10 @@ function toOpenAiMessages(system, messages) {
 async function openaiCreate({ system, messages, tools, maxTokens, temperature }) {
   const res = await openai().chat.completions.create({
     model: DEFAULT_MODEL,
-    max_tokens: maxTokens || 700,
+    // Same two tiers as the Anthropic and Bedrock paths. This used to be
+    // `maxTokens || 700`, which had no ceiling at all: switching the provider
+    // to OpenAI quietly removed the spend bound on a public endpoint.
+    max_tokens: capTokens(maxTokens),
     // 0.3 was this path's existing default and stays the default; a caller
     // that asks for something more deterministic now gets it.
     temperature: temperature ?? 0.3,

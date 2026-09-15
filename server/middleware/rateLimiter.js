@@ -13,6 +13,21 @@ export const authLimiter = rateLimit({
   // logs in many times; we key on IP only here because identifier may not
   // be available on all routes.
   skipSuccessfulRequests: false,
+
+  // GET /auth/providers is not an attempt at anything. It is the read-only
+  // lookup that tells the sign-in page which social buttons to draw, and it
+  // returns public client ids and authorize URLs — there is nothing behind it
+  // to brute force.
+  //
+  // It was inside this limiter because the whole /auth router is mounted
+  // behind it, and the effect was ugly and silent: every load of /login,
+  // /signup or the connect-account screen spent one of the ten, so after ten
+  // page views in fifteen minutes the Google and Microsoft buttons simply
+  // stopped appearing. The component draws nothing when the lookup fails, by
+  // design — a button that dies on click is worse than no button — so there
+  // was no error to see. On an office IP behind one NAT address that is ten
+  // people looking at the page once each.
+  skip: (req) => req.method === "GET" && req.path === "/providers",
 });
 
 // Medium: device activation / deactivation

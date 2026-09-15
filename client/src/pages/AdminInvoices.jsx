@@ -166,22 +166,22 @@ export default function AdminInvoices() {
     for (const loc of trainingLocations) {
       opts.push({
         value: `training:${loc._id}`,
-        label: `Physical Training — ${loc.name}${loc.city ? ` (${loc.city})` : ""}`,
+        label: `Physical Training, ${loc.name}${loc.city ? ` (${loc.city})` : ""}`,
         group: "Physical Training",
         priceNGN: Number(loc.trainingCostNGN || 0),
         priceUSD: Number(loc.trainingCostUSD || 0),
-        description: `Physical Training — ${loc.name}`,
+        description: `Physical Training, ${loc.name}`,
         durationDays: loc.durationDays || 1,
       });
       // BIM Install option per location
       if (Number(loc.bimInstallCostNGN || 0) > 0 || Number(loc.bimInstallCostUSD || 0) > 0) {
         opts.push({
           value: `bim:${loc._id}`,
-          label: `BIM Software Install — ${loc.name}`,
+          label: `BIM Software Install, ${loc.name}`,
           group: "Physical Training",
           priceNGN: Number(loc.bimInstallCostNGN || 0),
           priceUSD: Number(loc.bimInstallCostUSD || 0),
-          description: `BIM Software Installation — ${loc.name}`,
+          description: `BIM Software Installation, ${loc.name}`,
         });
       }
     }
@@ -816,7 +816,7 @@ export default function AdminInvoices() {
                       value={item.source || ""}
                       onChange={(e) => selectLineSource(idx, e.target.value)}
                     >
-                      <option value="">— Custom item —</option>
+                      <option value="">, Custom item, </option>
                       {products.length > 0 && (
                         <optgroup label="Software Products">
                           {lineItemOptions
@@ -968,7 +968,7 @@ export default function AdminInvoices() {
                 </select>
               </label>
 
-              {/* Payment details — used on the receipt once marked paid */}
+              {/* Payment details, used on the receipt once marked paid */}
               {form.status === "paid" && (
                 <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 p-3 space-y-3">
                   <div className="text-xs font-semibold text-emerald-800">
@@ -983,7 +983,7 @@ export default function AdminInvoices() {
                         setForm((f) => ({ ...f, paymentMethod: e.target.value }))
                       }
                     >
-                      <option value="">— Select —</option>
+                      <option value="">. Select, </option>
                       <option value="Bank Transfer">Bank Transfer</option>
                       <option value="Card">Card</option>
                       <option value="Cash">Cash</option>
@@ -1103,7 +1103,7 @@ export default function AdminInvoices() {
 }
 
 /* ─────────────────────────────────────────────
-   Invoice Preview — pixel-match to Figma design
+   Invoice Preview, pixel-match to Figma design
    ───────────────────────────────────────────── */
 
 /* Decorative dot grid (Figma has 5×3 dots on the right side) */

@@ -76,7 +76,7 @@ export function findImplausibleUSD(price = {}) {
 export function describeImplausibleUSD(found) {
   const lines = found.map(
     ({ label, usd, ngn, max }) =>
-      `  • ${label}: $${money(usd)} against ₦${money(ngn)} — expected under $${money(max)}`,
+      `  • ${label}: $${money(usd)} against ₦${money(ngn)}: expected under $${money(max)}`,
   );
 
   return [

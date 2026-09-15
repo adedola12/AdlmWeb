@@ -346,7 +346,7 @@ async function resolveMeta({ baseUrl, pathname }) {
       slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     meta = {
       ...meta,
-      title: `${pretty} — What's New | ADLM Studio`,
+      title: `${pretty}: What's New | ADLM Studio`,
       description: `Release notes for ${pretty}: what shipped, when, and what changed.`,
     };
   }

@@ -1,0 +1,197 @@
+// The order summary beside his checkout form, from the real cart.
+//
+// His panel is dressed with one sample order — "5 seats across 3 products",
+// "Then ₦128,000 monthly until cancelled" — and an #ord-rows div his script
+// never fills. On a checkout page that is worse than empty: it states a figure
+// the buyer has not agreed to, next to the control that takes their money.
+//
+// The rows, the seat count and the renewal line all come from the cart and the
+// catalogue. His markup and classes are unchanged.
+
+import React from "react";
+import { Link } from "react-router-dom";
+import { API_BASE } from "../config.js";
+import { readCartItems, readCartMeta, CART_CHANGED } from "../lib/cart.js";
+import { termTotal, unitPrices } from "../lib/termPricing.js";
+
+const fmt = (n, currency = "NGN") =>
+  new Intl.NumberFormat(currency === "USD" ? "en-US" : "en-NG", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: currency === "USD" ? 2 : 0,
+  }).format(Number(n) || 0);
+
+export default function DsCheckoutSummary() {
+  const [items, setItems] = React.useState([]);
+  const [products, setProducts] = React.useState(null);
+  // On-site training is not a catalogue product, so it is not a cart line —
+  // it travels on cartMeta. It still has to appear here, or the panel quietly
+  // omits the largest figure on the order.
+  const [training, setTraining] = React.useState(null);
+  // The order is placed in whatever currency the quotation chose. Formatting
+  // this panel in naira regardless put ₦1,710,000 beside an invoice charging
+  // $1,455.77 for the same basket.
+  const [currency, setCurrency] = React.useState(() => readCartMeta().currency || "NGN");
+
+  // Re-read whenever the cart is written, not only on mount: the form beside
+  // this panel drops lines it cannot sell, and a summary that kept showing them
+  // would name a price the order does not include.
+  React.useEffect(() => {
+    const sync = () => {
+      setItems(readCartItems());
+      setCurrency(readCartMeta().currency || "NGN");
+    };
+    window.addEventListener(CART_CHANGED, sync);
+    return () => window.removeEventListener(CART_CHANGED, sync);
+  }, []);
+
+  React.useEffect(() => {
+    setItems(readCartItems());
+    const chosen = readCartMeta()?.training;
+    if (chosen?.locationId) {
+      fetch(`${API_BASE}/training-locations`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          const loc = (d?.locations || []).find(
+            (l) => String(l._id) === String(chosen.locationId),
+          );
+          if (loc) setTraining({ loc, bimInstall: !!chosen.bimInstall });
+        })
+        .catch(() => {});
+    }
+    let alive = true;
+    fetch(`${API_BASE}/products`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((raw) => {
+        if (!alive || !raw) return;
+        const all = Array.isArray(raw) ? raw : raw.items || raw.products || [];
+        setProducts(Object.fromEntries(all.map((p) => [p.key, p])));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const rows = React.useMemo(
+    () =>
+      items.map((it) => {
+        const key = String(it.productKey || "").trim();
+        const p = products?.[key] || null;
+        const seats = Math.max(1, parseInt(it.seats ?? 1, 10) || 1);
+        const periods = Math.max(1, parseInt(it.periods ?? it.qty ?? 1, 10) || 1);
+
+        // termTotalNGN, not price x periods.
+        //
+        // A monthly-billed product is priced in tiers — six months has its own
+        // figure, twelve months uses the yearly one — and the yearly price IS
+        // twelve months. Multiplying it by twelve periods put QUIV at
+        // ₦12,000,000 on this panel. This is the same helper the purchase page
+        // uses and it mirrors the server's computeRecurring, so the three
+        // cannot disagree.
+        const term = p ? termTotal(p, periods, currency) : 0;
+        const install =
+          p && it.firstTime ? Number(unitPrices(p, currency).install) || 0 : 0;
+
+        return {
+          key,
+          name: p?.name || key,
+          seats,
+          periods,
+          amount: (term + install) * seats,
+          recurring: term * seats,
+          // Unknown until the catalogue answers — shown as such rather than as
+          // ₦0, which reads like a free licence.
+          known: !!p,
+        };
+      }),
+    [items, products, currency],
+  );
+
+  const seatTotal = rows.reduce((n, r) => n + r.seats, 0);
+  const renewal = rows.reduce((n, r) => n + (r.known ? r.recurring : 0), 0);
+  const yearly = items.every(
+    (it) => Math.max(1, parseInt(it.periods ?? it.qty ?? 1, 10) || 1) >= 12,
+  );
+  const priced = rows.every((r) => r.known);
+
+  // Training locations carry both columns too.
+  const usd = String(currency).toUpperCase() === "USD";
+  const trainingFee = training
+    ? Number(usd ? training.loc.trainingCostUSD : training.loc.trainingCostNGN) || 0
+    : 0;
+  const trainingBim = training
+    ? Number(usd ? training.loc.bimInstallCostUSD : training.loc.bimInstallCostNGN) || 0
+    : 0;
+
+  if (!items.length) {
+    return (
+      <>
+        <p className="ds-sub">Your cart is empty.</p>
+        <p className="small" style={{ marginTop: "16px" }}>
+          <Link to="/products" style={{ color: "var(--action)" }}>
+            Choose your licences
+          </Link>{" "}
+, or price them first on the{" "}
+          <Link to="/quote" style={{ color: "var(--action)" }}>
+            quotation builder
+          </Link>
+          .
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <p className="ds-sub">
+        {seatTotal} seat{seatTotal === 1 ? "" : "s"} across {rows.length} product
+        {rows.length === 1 ? "" : "s"}
+        {training ? ", with on-site training" : ""}.
+      </p>
+
+      <div>
+        {rows.map((r) => (
+          <div className="sumrow" key={r.key}>
+            <span>
+              {r.name}
+              <i className="qt-q"> × {r.seats}</i>
+            </span>
+            <b>{r.known ? fmt(r.amount, currency) : "—"}</b>
+          </div>
+        ))}
+
+        {training && (
+          <>
+            <div className="sumrow">
+              <span>
+                On-site training
+                <i className="qt-q"> · {training.loc.city}</i>
+              </span>
+              <b>{fmt(trainingFee, currency)}</b>
+            </div>
+            {training.bimInstall && trainingBim > 0 && (
+              <div className="sumrow">
+                <span>CAD set-up on site</span>
+                <b>{fmt(trainingBim, currency)}</b>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <p className="small" style={{ marginTop: "16px" }}>
+        {priced ? (
+          <>
+            Then {fmt(renewal, currency)} {yearly ? "yearly" : "monthly"} until cancelled.{" "}
+          </>
+        ) : (
+          <>Prices are confirmed on the next step. </>
+        )}
+        <Link to="/purchase" style={{ color: "var(--action)" }}>
+          Edit cart
+        </Link>
+      </p>
+    </>
+  );
+}

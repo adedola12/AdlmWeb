@@ -32,6 +32,10 @@ export function requireAuth(req, res, next) {
   try {
     const token = getTokenFromReq(req);
     if (!token) return safeJson(res, 401, "Unauthorized");
+    // designMode has already verified this token and rewritten req.user to
+    // present the design role as an admin. Re-decoding here would clobber that
+    // and lock the designer out of every screen, so keep what it set.
+    if (req.designMode && req.user) return next();
     req.user = verifyAccess(token); // { id, email, role, isAdmin, ... }
     next();
   } catch {
@@ -60,6 +64,8 @@ export async function requireAdmin(req, res, next) {
 
     const token = getTokenFromReq(req);
     if (!token) return safeJson(res, 401, "Unauthorized");
+
+    if (req.designMode && req.user) return next(); // see requireAuth above
 
     const decoded = verifyAccess(token);
     req.user = decoded;
@@ -176,18 +182,52 @@ export function requireAdminOrMiniAdmin(req, res, next) {
 // are low-volume, so one indexed read is fine), then resolves it against the
 // in-memory role cache. Super-admins pass everything; otherwise the role must
 // hold the area. 403 on denial.
+/**
+ * Refuse an act that costs money or a licence seat until the address is real.
+ *
+ * NOT a general lock on the account. Somebody who mistyped their address has
+ * to be able to sign in to fix it, and being unable to get back into a
+ * half-made account is its own trap. So an unverified person can sign in, look
+ * around, and change their address — they cannot buy, take an installer, or be
+ * granted an entitlement.
+ *
+ * The reply carries a code the client can act on, so the site can offer "send
+ * it again" rather than showing a dead end.
+ */
+export function requireVerifiedEmail(req, res, next) {
+  // Staff are not gated. An admin account is created by hand and its address
+  // is known; locking one out of a purchase queue helps nobody.
+  if (req.user?.isAdmin || req.user?.role === "admin" || req.user?.isGod) return next();
+
+  if (req.user?.emailVerified) return next();
+
+  return res.status(403).json({
+    error:
+      "Confirm your email address first — we will not sell a licence to an address we cannot reach.",
+    code: "EMAIL_NOT_VERIFIED",
+  });
+}
+
 export function requirePermission(area) {
   return async function (req, res, next) {
     try {
       const uid = String(req.user?._id || req.user?.id || req.user?.sub || "");
       if (!uid) return safeJson(res, 401, "Unauthorized");
 
-      // Outside demo scope — see requireStepUp above. Without this a demo
-      // session could not resolve its own role and would 403 everywhere.
-      const doc = await withoutDemo(() =>
-        User.findById(uid).select("role").lean(),
-      );
-      const roleKey = doc?.role || req.user?.role || "user";
+      // designMode (mounted at the /admin boundary) has usually already read
+      // the role from the DB — reuse it rather than paying a second round trip
+      // to Atlas on every admin request.
+      //
+      // The fallback below runs OUTSIDE demo scope (see requireStepUp above):
+      // without that, a demo session cannot resolve its own role and 403s
+      // everywhere.
+      let roleKey = req.resolvedRole;
+      if (!roleKey) {
+        const doc = await withoutDemo(() =>
+          User.findById(uid).select("role").lean(),
+        );
+        roleKey = doc?.role || req.user?.role || "user";
+      }
 
       if (roleHasArea(roleKey, area)) {
         req.userRole = roleKey;

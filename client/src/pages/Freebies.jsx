@@ -171,7 +171,7 @@ export default function Freebies() {
     <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 space-y-4 md:space-y-5 pb-10">
       <Seo
         title="Free QS & BIM Resources"
-        description="Free templates, tools and resources for quantity surveyors from ADLM Studio — rate templates, BoQ formats and BIM starter files."
+        description="Free templates, tools and resources for quantity surveyors from ADLM Studio: rate templates, BoQ formats and BIM starter files."
         path="/freebies"
       />
       {/* Header */}

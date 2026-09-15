@@ -1,4 +1,4 @@
-# publish-build.ps1
+﻿# publish-build.ps1
 # ============================================================================
 # Uploads a built package to ADLM cloud storage and points a product's
 # InstallerHub deployment record at it, so every user gets the new version on

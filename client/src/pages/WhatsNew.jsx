@@ -25,7 +25,7 @@ import { GUIDES } from "../data/guides.js";
 // `message` to "".
 const SEASONAL_NOTE = {
   message:
-    "Happy new month from all of us at ADLM Studio. August opens with ADLM Time Pro 1.1.1 — dark mode, a rebuilt side menu, and Microsoft Project exports that open first time.",
+    "Happy new month from all of us at ADLM Studio. August opens with ADLM Time Pro 1.1.1: dark mode, a rebuilt side menu, and Microsoft Project exports that open first time.",
   until: "2026-09-01",
 };
 
@@ -58,7 +58,7 @@ function ProductCard({ product, index }) {
       <Link
         to={`/whats-new/${product.slug}`}
         className="group block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-adlm-blue-700"
-        aria-label={`${product.name} — what's new`}
+        aria-label={`${product.name}, what's new`}
       >
         <TiltCard
           max={6}
@@ -134,7 +134,7 @@ export default function WhatsNew() {
       <PageSeo path="/whats-new" crumb="What's new" />
       <style>{`@keyframes fade-in-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
-      {/* Hero — what ADLM does */}
+      {/* Hero, what ADLM does */}
       <header className="relative overflow-hidden rounded-adlm-xl bg-gradient-to-br from-adlm-navy via-adlm-navy-mid to-adlm-navy-tertiary px-6 py-12 text-white motion-safe:animate-[fade-in-up_650ms_ease-out_forwards] sm:px-10 sm:py-14">
         <div aria-hidden="true" className="absolute inset-0 grid-overlay opacity-50 mask-radial" />
         <div
@@ -154,7 +154,7 @@ export default function WhatsNew() {
             What&apos;s New across <span className="text-gradient-warm">ADLM Studio</span>
           </h1>
           <p className="mt-3 leading-relaxed text-white/75">
-            ADLM Studio builds digital tools and training for modern Quantity Surveyors —
+            ADLM Studio builds digital tools and training for modern Quantity Surveyors, 
             model-based takeoff, priced budgets, rate build-ups and BIM-focused learning,
             tuned for the African construction market. Pick a product below to see the latest
             features, improvements and fixes.
@@ -174,7 +174,7 @@ export default function WhatsNew() {
         </div>
       </header>
 
-      {/* Seasonal note — self-expiring, see SEASONAL_NOTE */}
+      {/* Seasonal note: self-expiring, see SEASONAL_NOTE */}
       <SeasonalNote />
 
       {/* Product cards */}
@@ -184,7 +184,7 @@ export default function WhatsNew() {
         ))}
       </div>
 
-      {/* User guides — illustrated PDFs, free to download */}
+      {/* User guides: illustrated PDFs, free to download */}
       <Reveal className="mt-12">
         <section className="rounded-adlm-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7 dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
           <div className="flex items-start gap-3">
@@ -196,7 +196,7 @@ export default function WhatsNew() {
                 User guides
               </h2>
               <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-adlm-dark-muted">
-                Illustrated, step-by-step PDFs for every ADLM product — free to
+                Illustrated, step-by-step PDFs for every ADLM product: free to
                 download, no sign-in needed.
               </p>
             </div>

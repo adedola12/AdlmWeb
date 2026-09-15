@@ -38,12 +38,15 @@ test("the body carries no model key", () => {
   assert.ok(!("model" in b), "model belongs in the InvokeModel target, not the body");
 });
 
-test("max_tokens is capped, never raised, by the caller", () => {
-  // The cap bounds spend on a public endpoint, so a caller asking for more
-  // must not get more.
-  assert.ok(bedrockRequestBody({ messages: MESSAGES, maxTokens: 999_999 }).max_tokens <= 700);
-  assert.equal(bedrockRequestBody({ messages: MESSAGES, maxTokens: 200 }).max_tokens, 200);
+test("max_tokens: a small default, an explicit ask honoured, a hard ceiling", () => {
+  // Two tiers, on purpose. A caller that does not say gets the small default,
+  // which keeps Ada's chat replies short and cheap. A caller that asks for more
+  // gets it: using the default as a ceiling silently truncated every generated
+  // quiz. The hard ceiling is what still bounds spend on a public endpoint.
   assert.equal(bedrockRequestBody({ messages: MESSAGES }).max_tokens, 700);
+  assert.equal(bedrockRequestBody({ messages: MESSAGES, maxTokens: 200 }).max_tokens, 200);
+  assert.equal(bedrockRequestBody({ messages: MESSAGES, maxTokens: 2000 }).max_tokens, 2000);
+  assert.equal(bedrockRequestBody({ messages: MESSAGES, maxTokens: 999_999 }).max_tokens, 8192);
 });
 
 test("tools are passed through, and omitted entirely when there are none", () => {

@@ -20,6 +20,7 @@
 //   - bullet                             → an item in the current group
 
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { dedash } from "./lib/dedash.mjs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 
@@ -196,11 +197,23 @@ const products = files
   .map(buildProduct)
   .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
 
+// Every string in the payload, dash-free. Applied here rather than in the
+// markdown so the source a human writes stays natural, and so a changelog
+// pasted in from a plugin CHANGELOG cannot reintroduce them.
+function dedashDeep(value) {
+  if (typeof value === "string") return dedash(value);
+  if (Array.isArray(value)) return value.map(dedashDeep);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, dedashDeep(v)]));
+  }
+  return value;
+}
+
 const out = `/* eslint-disable */
 // ⚠️  AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
 // Source of truth: src/data/changelogs/*.md  (one markdown file per product)
 // Regenerate:      npm run gen:changelogs  (also runs on build & dev)
-export const products = ${JSON.stringify(products, null, 2)};
+export const products = ${JSON.stringify(dedashDeep(products), null, 2)};
 
 export const bySlug = Object.fromEntries(products.map((p) => [p.slug, p]));
 

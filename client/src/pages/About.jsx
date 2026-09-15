@@ -94,7 +94,7 @@ function Stat({ label, value, suffix = "", delay = 0 }) {
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="text-3xl md:text-4xl font-bold tracking-tight">
-        {n}
+        {n.toLocaleString()}
         {suffix}
       </div>
       <div className="text-sm text-slate-200/80 mt-1">{label}</div>
@@ -222,14 +222,14 @@ export default function AboutADLM() {
     },
     {
       title: "Customer First",
-      desc: "Built with Nigerian QS workflows in mind—BESMM4R, NRM2, local pricing & realities.",
+      desc: "Built with Nigerian QS workflows in mind: BESMM4R, NRM2, local pricing & realities.",
       icon: (
         <IconUsers className="w-5 h-5" />
       ),
     },
     {
       title: "Innovation",
-      desc: "From Revit & PlanSwift plugins to RateGen & COBie tools—ship, learn, iterate.",
+      desc: "From Revit & PlanSwift plugins to RateGen & COBie tools: ship, learn, iterate.",
       icon: (
         <IconSparkle className="w-5 h-5" />
       ),
@@ -298,8 +298,8 @@ export default function AboutADLM() {
           <Reveal delay={120}>
             <p className="mt-4 max-w-2xl text-blue-100">
               ADLM is a Nigerian ConTech studio that digitises quantity surveying
-              end to end — model-based takeoff, rate build-ups, bills,
-              programmes and dashboards — and puts the whole workflow on one
+              end to end: model-based takeoff, rate build-ups, bills,
+              programmes and dashboards, and puts the whole workflow on one
               platform. We do not sell a tool and leave. We bring firms the
               software, the training and the process together, so the change
               actually holds.
@@ -348,9 +348,9 @@ export default function AboutADLM() {
             <div className="rounded-xl bg-white p-6 ring-1 ring-slate-200 shadow-depth">
               <h3 className="text-xl font-semibold">Our Mission</h3>
               <p className="mt-2 text-slate-600">
-                To digitise the quantity surveying process for African firms —
+                To digitise the quantity surveying process for African firms, 
                 improving <b>accuracy, productivity and workflow</b> from
-                model-based takeoff through rate build-up, bills and handover —
+                model-based takeoff through rate build-up, bills and handover: 
                 and to make that change stick by pairing every tool with the{" "}
                 <b>training and process</b> a firm needs to adopt it.
               </p>
@@ -361,7 +361,7 @@ export default function AboutADLM() {
               <h3 className="text-xl font-semibold">Our Vision</h3>
               <p className="mt-2 text-slate-600">
                 To become the leading ConTech ecosystem for the
-                continent—connecting{" "}
+                continent, connecting{" "}
                 <b>BIM, AI, and local market intelligence</b>
                 so every QS can deliver world-class results anywhere in Nigeria
                 and beyond.
@@ -399,7 +399,7 @@ export default function AboutADLM() {
         </div>
       </section>
 
-      {/* STRENGTHS — what actually differentiates ADLM.
+      {/* STRENGTHS, what actually differentiates ADLM.
 
           Every claim here is one we can stand behind publicly. Client work is
           described, never named: naming a firm on a public page needs that
@@ -442,7 +442,7 @@ export default function AboutADLM() {
             },
             {
               title: "AI where it earns its place",
-              body: "Cost intelligence, bill checking and rate build-up support are metered into every subscription — used where it saves a quantity surveyor real time, not bolted on as a demo.",
+              body: "Cost intelligence, bill checking and rate build-up support are metered into every subscription: used where it saves a quantity surveyor real time, not bolted on as a demo.",
             },
           ].map((s) => (
             <StaggerItem key={s.title}>
@@ -459,7 +459,7 @@ export default function AboutADLM() {
         </Stagger>
       </section>
 
-      {/* JOURNEY / TIMELINE — FIXED */}
+      {/* JOURNEY / TIMELINE, FIXED */}
       <section className="max-w-6xl mx-auto px-4 py-14">
         <JourneyTimeline />
       </section>
@@ -520,14 +520,24 @@ export default function AboutADLM() {
               By the Numbers
             </h2>
           </Reveal>
+          {/* These must agree with the hero strip at the top of this page and
+              with the company profile. The previous set did not: it claimed
+              5,000+ learners and 50+ organisations directly beneath a hero
+              saying 800+ trained, and 4+ products beneath one saying 10. Every
+              figure here is now one we can show the working for. */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10 mt-6 text-center">
-            <Stat label="Years in Practice" value={7} suffix="+" delay={0} />
-            <Stat label="Products & Plugins" value={4} suffix="+" delay={80} />
-            <Stat label="Happy Learners" value={5000} suffix="+" delay={160} />
+            <Stat label="Years in Practice" value={8} suffix="" delay={0} />
+            <Stat label="Products in the Suite" value={10} suffix="" delay={80} />
             <Stat
-              label="Organizations Trained"
-              value={50}
+              label="AEC Professionals Trained"
+              value={800}
               suffix="+"
+              delay={160}
+            />
+            <Stat
+              label="Attendees Across 30 Events"
+              value={3103}
+              suffix=""
               delay={240}
             />
           </div>

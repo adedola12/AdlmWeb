@@ -84,7 +84,7 @@ export default function PmReport({ report }) {
         />
       </Section>
       {burndown.length >= 2 ? (
-        <Section title="Burndown" k={`Planned vs actual remaining value — ${report.burndownStatus || ""}`}>
+        <Section title="Burndown" k={`Planned vs actual remaining value, ${report.burndownStatus || ""}`}>
           <div className="chart-card">
             <LineChart
               labels={burndown.map((b) => dayjs(b.date).format("DD MMM"))}
@@ -164,7 +164,7 @@ export default function PmReport({ report }) {
     pages.push(
       <Section
         title={ci === 0 ? "Work Breakdown & Schedule" : "Work Breakdown & Schedule (continued)"}
-        k={ci === 0 ? `Top ${report.tasks.length} of ${report.taskCountTotal} work tasks — overdue first, then by value` : undefined}
+        k={ci === 0 ? `Top ${report.tasks.length} of ${report.taskCountTotal} work tasks: overdue first, then by value` : undefined}
       >
         <Table
           cols={[

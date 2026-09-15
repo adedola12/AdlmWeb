@@ -20,6 +20,34 @@ function sanitizeCourseBody(body = {}, { partial = false } = {}) {
   assign("description", stringField("description"));
   assign("thumbnailUrl", stringField("thumbnailUrl"));
   assign("onboardingVideoUrl", stringField("onboardingVideoUrl"));
+  assign("classroomJoinUrl", stringField("classroomJoinUrl"));
+  assign(
+    "classroomProvider",
+    hasOwn(body, "classroomProvider")
+      ? String(body.classroomProvider || "google_classroom").trim() === "other"
+        ? "other"
+        : "google_classroom"
+      : undefined,
+  );
+  assign("classroomCourseId", stringField("classroomCourseId"));
+  assign("classroomNotes", stringField("classroomNotes"));
+  assign("tutorName", stringField("tutorName"));
+  assign("tutorTitle", stringField("tutorTitle"));
+  assign("capstoneTitle", stringField("capstoneTitle"));
+  // The editor sends a date input's "YYYY-MM-DD", or "" for cleared. Empty
+  // must become null rather than an Invalid Date, which Mongoose would reject
+  // and which would fail the whole save over a field nobody filled in.
+  assign(
+    "capstoneDueAt",
+    hasOwn(body, "capstoneDueAt")
+      ? (() => {
+          const raw = String(body.capstoneDueAt || "").trim();
+          if (!raw) return null;
+          const d = new Date(raw);
+          return Number.isNaN(d.getTime()) ? null : d;
+        })()
+      : undefined,
+  );
   assign("certificateTemplateUrl", stringField("certificateTemplateUrl"));
   assign(
     "isPublished",

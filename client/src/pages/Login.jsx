@@ -4,6 +4,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { trackEvent } from "../ga";
+import SocialSignIn from "../components/SocialSignIn.jsx";
+import { AFTER_SIGN_IN } from "../lib/afterSignIn.js";
 import { IconEye, IconEyeOff } from "../components/icons.jsx";
 
 // Password field with a show/hide eye toggle. The toggle is a type="button"
@@ -51,7 +53,7 @@ function PasswordInput({
 export default function Login() {
   const nav = useNavigate();
   const [qs] = useSearchParams();
-  const next = qs.get("next") || "/";
+  const next = qs.get("next") || AFTER_SIGN_IN;
   const { setAuth } = useAuth();
 
   const [email, setEmail] = React.useState("");
@@ -320,6 +322,11 @@ export default function Login() {
           </button>
         </div>
       </form>
+
+      {/* Google and Microsoft. Renders nothing at all when neither is
+          configured, so an environment without the client ids shows the plain
+          password form rather than a broken "or" divider. */}
+      <SocialSignIn next={next} onError={setErr} />
 
       {/* forgot password panel */}
       {showForgot && (

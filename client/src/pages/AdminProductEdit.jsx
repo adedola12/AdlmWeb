@@ -518,7 +518,7 @@ export default function AdminProductEdit() {
       // A USD box holding a Naira figure saves silently and reaches the
       // catalogue as a real price — ask before letting one through.
       if (!confirmPriceSanity(payload)) {
-        setMsg("Not saved — check the USD prices.");
+        setMsg("Not saved. Check the USD prices.");
         return;
       }
 
@@ -767,7 +767,7 @@ export default function AdminProductEdit() {
               Leave blank to auto-calculate as 3% of the active subscription price.
             </div>
             <label className="text-xs block max-w-xs">
-              Price per 10 slots — NGN (leave blank = 3% of subscription)
+              Price per 10 slots, NGN (leave blank = 3% of subscription)
               <input
                 className="input mt-1"
                 type="number"

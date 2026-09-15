@@ -1,0 +1,579 @@
+/* GENERATED — do not edit by hand.
+ *
+ * Ported from RichardEnoch/adlm-studio-site  site/assets/css/beyondbim.css
+ * by client/scripts/port-ds-css.mjs. Re-run that script to pick up his
+ * changes; hand edits here are lost.
+ *
+ * Every rule is scoped under .ds, so this file cannot affect a page that
+ * has not opted in. Ten class names were renamed to avoid colliding with
+ * index.css and Tailwind: .grid->.ds-grid .btn->.ds-btn .btn-sm->.ds-btn-sm .card->.ds-card .a->.ds-a .accent->.ds-accent .lede->.ds-lede .sub->.ds-sub .fill->.ds-fill .field->.ds-field
+ */
+
+/* =========================================================
+   Beyond BIM — the October 2026 programme + registration
+   Consumes site.css tokens only. Two local tokens are added
+   for the hero scrim, because it sits over supplied artwork
+   whose ground already matches each theme.
+   ========================================================= */
+:root{
+  --bb-scrim:rgba(247,250,252,.94);
+  --bb-scrim-2:rgba(247,250,252,.72);
+}
+:root.dark{
+  --bb-scrim:rgba(3,10,19,.94); --bb-scrim-2:rgba(3,10,19,.70)}
+:root.dark{--bb-scrim:rgba(3,10,19,.94); --bb-scrim-2:rgba(3,10,19,.70)}
+
+
+/* Every theme-paired image on this page uses the same two classes: the light
+   plate shows on a light ground, the dark plate on a dark one. Declared once,
+   here, rather than per component. */
+.ds .art-d{display:none}
+.ds .art-l{display:block}
+:root.dark .ds .art-d{display:block}
+:root.dark .ds .art-l{display:none}
+:root.dark .ds .art-d{display:block}
+:root.dark .ds .art-l{display:none}
+
+/* inside a .band-dark scope the ground is dark whatever the theme */
+.ds .band-dark .art-d, .ds .cta .art-d{display:block}
+.ds .band-dark .art-l, .ds .cta .art-l{display:none}
+
+
+/* ---------------- hero -------------------------------------------------
+   The supplied artwork is drawn for exactly this: the subject sits right of
+   centre and the left third is empty ground. So it runs full-bleed and the
+   scrim only has to lift the copy off it. */
+.ds .phero.bb-hero{min-height:calc(100vh - 28px);background:var(--bg)}
+.ds .phero.bb-hero .phero-bg img{object-position:78% 62%}
+.ds .phero.bb-hero .phero-bg::after{
+  background:linear-gradient(96deg,var(--bb-scrim) 0%,var(--bb-scrim) 26%,
+             var(--bb-scrim-2) 46%,transparent 78%)}
+.ds .phero.bb-hero .phero-in{max-width:var(--shell)}
+.ds .phero.bb-hero .phero-in > *{max-width:560px}
+.ds .phero.bb-hero .phero-in .ds-lede{color:var(--ink-2);max-width:47ch;font-size:17px}
+.ds .phero.bb-hero .phero-note{color:var(--ink-3)}
+.ds .phero.bb-hero .host{margin-bottom:14px}
+
+
+/* the wordmark is supplied art, so the h1 is an image with the subtitle set
+   underneath in Lexend. Width is capped in ch-equivalent terms so it never
+   outgrows the copy column. */
+.ds .bb-h1{margin:0 0 20px}
+.ds .bb-h1 img{display:block;width:min(100%,430px);height:auto;
+  filter:drop-shadow(0 10px 28px rgba(var(--shadow-c),.28))}
+.ds .bb-h1 .ds-sub{display:block;margin-top:14px;font-size:clamp(21px,2.5vw,30px);line-height:1.16;
+  letter-spacing:-.028em;font-weight:300;color:var(--ink);max-width:16ch}
+
+
+/* presented-with lockup */
+.ds .bb-with{display:flex;align-items:center;gap:18px;margin-bottom:26px;flex-wrap:wrap}
+
+/* no display here — .art-l/.art-d own it, and a display:block on a two-class
+   selector would out-rank them and show both plates at once */
+.ds .bb-with .bb-logo{height:26px;width:auto}
+.ds .bb-with .bb-niqs{height:40px;width:auto}
+.ds .bb-with-x{width:1px;height:26px;background:var(--line-2);display:block;flex:none}
+
+
+/* the four hero facts */
+.ds .bb-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:32px;
+  max-width:620px;border-radius:16px;overflow:hidden;
+  background:var(--line);border:1px solid var(--line);
+  box-shadow:0 10px 30px rgba(var(--shadow-c),.10)}
+.ds .bb-facts div{background:color-mix(in srgb,var(--bg) 92%,transparent);padding:16px;
+  backdrop-filter:blur(6px)}
+.ds .bb-facts .ico{width:28px;height:28px;border-radius:9px;margin-bottom:12px}
+.ds .bb-facts .ico svg{width:14px;height:14px}
+.ds .bb-facts b{display:block;font-size:15.5px;font-weight:500;color:var(--ink);line-height:1.15;
+  letter-spacing:-.02em;white-space:nowrap}
+
+/* every label is one line, so the four cells share a baseline */
+.ds .bb-facts span:not(.ico){display:block;margin-top:5px;font-size:10.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3);line-height:1.3;white-space:nowrap}
+
+
+/* countdown */
+.ds .bb-count{display:flex;align-items:center;gap:9px;margin-top:24px;flex-wrap:wrap}
+.ds .bb-count .u{min-width:56px;padding:9px 6px;border-radius:12px;text-align:center;
+  background-image:var(--card-fill);border:1px solid var(--line-2)}
+.ds .bb-count .u b{display:block;font-size:21px;font-weight:500;color:var(--ink);
+  font-variant-numeric:tabular-nums;line-height:1}
+.ds .bb-count .u span{display:block;margin-top:5px;font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3)}
+.ds .bb-count .lab{font-size:13px;color:var(--ink-3)}
+
+
+/* ---------------- sticky section rail --------------------------------- */
+
+/* the nav is fixed at z-index 90 and about 60px tall once stuck, so the
+   rail parks underneath it rather than sliding behind it */
+.ds .bb-rail{position:sticky;top:62px;z-index:60;
+  background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);
+  border-bottom:1px solid var(--line)}
+.ds .bb-rail-in{max-width:var(--shell);margin:0 auto;padding:0 32px;display:flex;align-items:center;gap:8px}
+.ds .bb-rail nav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1}
+.ds .bb-rail nav::-webkit-scrollbar{display:none}
+.ds .bb-rail a:not(.ds-btn){white-space:nowrap;padding:15px 12px;font-size:13.5px;font-weight:300;
+  color:var(--ink-3);text-decoration:none;position:relative;
+  transition:color 220ms var(--e-fast)}
+.ds .bb-rail a:not(.ds-btn):hover{color:var(--ink)}
+.ds .bb-rail a:not(.ds-btn)::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;
+  border-radius:2px;background:var(--action);transform:scaleX(0);transform-origin:left;
+  transition:transform 320ms var(--e-out)}
+.ds .bb-rail a.on{color:var(--ink);font-weight:400}
+.ds .bb-rail a.on::after{transform:scaleX(1)}
+.ds .bb-rail .ds-btn{flex:none;margin-left:10px}
+@media (max-width:900px){
+.ds .bb-rail .ds-btn{display:none}
+.ds .bb-rail-in{padding:0 18px}
+}
+
+
+/* ---------------- the live project ------------------------------------ */
+
+/* stretch, not centre: the artwork column runs the full height of the copy
+   beside it, so the two edges line up top and bottom */
+.ds .bb-project{display:grid;grid-template-columns:1fr .8fr;gap:56px;align-items:stretch;
+  padding:36px 0}
+.ds .bb-project-copy .ticks{margin-top:24px}
+.ds .bb-project-art{margin:0;position:relative;border-radius:22px;overflow:hidden;
+  min-height:520px;
+  box-shadow:0 8px 20px rgba(2,9,17,.34),0 34px 70px rgba(2,9,17,.44)}
+.ds .bb-project-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  object-position:center 42%}
+.ds .bb-project-art figcaption{position:absolute;left:0;right:0;bottom:0;padding:26px 24px 22px;
+  font-size:13px;font-weight:300;line-height:1.6;color:#C4D6E8;
+  background:linear-gradient(180deg,transparent,rgba(2,9,17,.86) 42%)}
+@media (max-width:980px){
+.ds .bb-project{grid-template-columns:1fr;gap:34px;padding:12px 0}
+.ds .bb-project-art{max-width:520px}
+}
+
+
+/* the flow table: the week column is a label, never a wrap. Below the
+   min-width the wrap sends it to one word a line, so .tbl-wrap scrolls
+   the table sideways instead of crushing it. */
+.ds #programme .tbl{min-width:760px}
+.ds #programme .tbl td:first-child, .ds #programme .tbl th:first-child{white-space:nowrap}
+
+
+/* the accordion beneath the breakpoint — beyondbim.js builds it from the table's
+   own cells, and only one of the two is ever displayed */
+.ds .bb-flow{display:none;margin-top:56px}
+.ds .bb-flow details{border:1px solid var(--line);border-radius:16px;overflow:hidden;
+  background-image:var(--card-fill);margin-bottom:10px}
+.ds .bb-flow details[open]{border-color:color-mix(in srgb,var(--action) 40%,var(--line));
+  box-shadow:0 12px 30px rgba(var(--shadow-c),.10)}
+.ds .bb-flow summary{list-style:none;cursor:pointer;display:grid;
+  grid-template-columns:42px 1fr 26px;align-items:center;gap:14px;padding:16px 18px}
+.ds .bb-flow summary::-webkit-details-marker{display:none}
+.ds .bb-flow summary:focus-visible{outline:2px solid var(--action);outline-offset:-3px}
+.ds .bb-flow-n{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;
+  font-size:16px;font-weight:500;color:var(--action);font-variant-numeric:tabular-nums;
+  background:color-mix(in srgb,var(--action) 11%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 24%,transparent)}
+.ds .bb-flow-t{font-size:15px;font-weight:500;color:var(--ink);letter-spacing:-.015em;
+  line-height:1.35}
+.ds .bb-flow-x{width:26px;height:26px;display:grid;place-items:center;color:var(--ink-3);
+  transition:transform 320ms var(--e-out),color 240ms}
+.ds .bb-flow-x svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;transform:rotate(90deg)}
+.ds .bb-flow details[open] .bb-flow-x{transform:rotate(180deg);color:var(--action)}
+.ds .bb-flow-b{padding:0 18px 18px 74px}
+.ds .bb-flow-b p{margin:0;font-size:14px;font-weight:300;line-height:1.65;color:var(--ink-2)}
+.ds .bb-flow-b .bb-chips{margin-top:12px}
+@media (max-width:860px){
+.ds #programme .tbl-wrap{display:none}
+.ds .bb-flow{display:block}
+}
+@media (max-width:480px){
+.ds .bb-flow-b{padding-left:18px}
+}
+
+
+/* ---------------- the five-stage chain -------------------------------- */
+.ds .bb-chain{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;position:relative}
+.ds .bb-chain::before{content:"";position:absolute;left:10%;right:10%;top:26px;height:2px;
+  background:linear-gradient(90deg,transparent,var(--line-2) 12%,var(--line-2) 88%,transparent)}
+.ds .bb-link{position:relative;text-align:center;display:block;text-decoration:none}
+.ds .bb-link i{position:relative;z-index:2;display:grid;place-items:center;width:54px;height:54px;
+  margin:0 auto 16px;border-radius:16px;font-style:normal;font-size:14px;font-weight:500;
+  color:var(--action);background:var(--bg);border:1px solid var(--line-2);
+  transition:transform 380ms var(--e-out),border-color 280ms,box-shadow 380ms var(--e-out)}
+.ds .bb-link:hover i{transform:translateY(-4px);border-color:var(--action);
+  box-shadow:0 12px 28px rgba(var(--shadow-c),.16)}
+.ds .bb-link b{display:block;font-size:15.5px;font-weight:500;color:var(--ink);margin-bottom:6px;
+  letter-spacing:-.012em}
+.ds .bb-link p{margin:0;font-size:13.5px;font-weight:300;line-height:1.55;color:var(--ink-3)}
+@media (max-width:860px){
+.ds .bb-chain{grid-template-columns:1fr 1fr;gap:26px 18px}
+.ds .bb-chain::before{display:none}
+}
+
+/* on a phone the five stages read as a list, not five centred blocks: the
+   number goes inline with its own text and the whole thing halves in height */
+@media (max-width:560px){
+.ds .bb-chain{grid-template-columns:1fr;gap:8px}
+.ds .bb-link{display:grid;grid-template-columns:48px 1fr;gap:16px;text-align:left;
+    align-items:start;padding:14px 0;border-bottom:1px solid var(--line)}
+.ds .bb-link:last-child{border-bottom:0}
+
+  /* three children, two columns: the disc spans both rows and the text stacks
+     beside it — without this the paragraph drops into the 48px disc column */
+.ds .bb-link i{width:48px;height:48px;margin:0;border-radius:14px;font-size:13px;
+    grid-column:1;grid-row:1 / span 2}
+.ds .bb-link b{grid-column:2;grid-row:1;margin-bottom:4px}
+.ds .bb-link p{grid-column:2;grid-row:2;font-size:13px}
+}
+
+
+/* The stats frame is four cells in a 2x2, not four full-width rows.
+   site.css's phone rule turns each .stat into a two-column grid — icon left,
+   text right — and places the text with `.statframe .stat > span`. The icon IS
+   a `> span`, so that rule out-ranks `.statframe .ico{grid-column:1}` and drops
+   the icon into the text column, leaving a 36px hole on the left and the glyph
+   sitting above the number instead of beside it. Rather than fight the grid,
+   this turns it off for the block and lets the three parts stack. */
+@media (max-width:640px){
+.ds #overview .statframe{grid-template-columns:1fr 1fr;padding:0}
+.ds #overview .statframe .stat{display:block;text-align:left;padding:22px 18px}
+.ds #overview .statframe .stat + .stat{border-top:0}
+.ds #overview .statframe .stat + .stat::before{display:none}
+.ds #overview .statframe .stat > .ico{width:38px;height:38px;border-radius:11px;
+    margin:0 0 14px}
+.ds #overview .statframe .stat > .ico svg{width:18px;height:18px}
+.ds #overview .statframe b{font-size:28px}
+.ds #overview .statframe .stat > span:not(.ico){font-size:12.5px;margin-top:8px}
+.ds #overview .statframe .stat:nth-child(n+3){border-top:1px solid var(--line)}
+.ds #overview .statframe .stat:nth-child(even){border-left:1px solid var(--line)}
+}
+
+
+/* ---------------- week accordion -------------------------------------- */
+.ds .bb-weeks{display:flex;flex-direction:column;gap:14px}
+.ds .bb-week{border-radius:var(--r-card);border:1px solid var(--line);
+  background-image:var(--card-fill);overflow:hidden;
+  transition:border-color 280ms var(--e-fast),box-shadow 380ms var(--e-out)}
+.ds .bb-week.open{border-color:color-mix(in srgb,var(--action) 42%,var(--line));
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.06),0 22px 50px rgba(var(--shadow-c),.13)}
+.ds .bb-wk-head{display:grid;grid-template-columns:54px 1fr 34px;gap:20px;align-items:start;
+  width:100%;padding:24px 26px;background:none;border:0;cursor:pointer;text-align:left;
+  font-family:var(--font);color:inherit}
+.ds .bb-wk-head:focus-visible{outline:2px solid var(--action);outline-offset:-3px}
+
+/* the number is the thing you read; "Week" is a label above it, not a word
+   competing with it for the same weight */
+.ds .bb-wk-n{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:58px;height:58px;border-radius:16px;
+  background:color-mix(in srgb,var(--action) 11%,transparent);
+  border:1px solid color-mix(in srgb,var(--action) 24%,transparent)}
+.ds .bb-wk-n i{font-style:normal;font-size:8px;letter-spacing:.18em;text-transform:uppercase;
+  font-weight:500;color:color-mix(in srgb,var(--action) 72%,var(--ink-3));line-height:1;
+  margin-bottom:5px}
+.ds .bb-wk-n b{display:block;font-size:23px;font-weight:500;letter-spacing:-.03em;line-height:1;
+  color:var(--action);font-variant-numeric:tabular-nums}
+.ds .bb-wk-t h3{margin:2px 0 6px;font-size:20px;letter-spacing:-.02em;color:var(--ink);line-height:1.25}
+.ds .bb-wk-t p{margin:0;font-size:14px;font-weight:300;color:var(--ink-3);max-width:62ch;line-height:1.6}
+.ds .bb-wk-x{width:34px;height:34px;margin-top:10px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--line-2);color:var(--ink-3);flex:none;
+  transition:transform 420ms var(--e-out),border-color 240ms,color 240ms}
+.ds .bb-wk-x svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;transform:rotate(90deg)}
+.ds .bb-week.open .bb-wk-x{transform:rotate(180deg);border-color:var(--action);color:var(--action)}
+.ds .bb-wk-body{display:grid;grid-template-rows:0fr;
+  transition:grid-template-rows 480ms var(--e-out)}
+.ds .bb-week.open .bb-wk-body{grid-template-rows:1fr}
+.ds .bb-wk-body > div{overflow:hidden;min-height:0}
+.ds .bb-wk-in{padding:0 26px 26px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.ds .bb-sess{border-radius:16px;border:1px solid var(--line);background:var(--bg);padding:22px}
+.ds .bb-sess .host{display:block;font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--accent);font-weight:500;margin-bottom:9px}
+.ds .bb-sess h4{margin:0 0 14px;font-size:16.5px;letter-spacing:-.015em;color:var(--ink);
+  line-height:1.3}
+.ds .bb-sess ul{list-style:none;margin:0;padding:0}
+.ds .bb-sess li{position:relative;padding:0 0 10px 20px;font-size:14px;font-weight:300;
+  line-height:1.6;color:var(--ink-2)}
+.ds .bb-sess li::before{content:"";position:absolute;left:2px;top:9px;width:6px;height:6px;
+  border-radius:50%;background:var(--action);opacity:.55}
+.ds .bb-task{margin-top:14px;padding:12px 14px;border-radius:11px;font-size:13px;font-weight:300;
+  line-height:1.55;color:var(--ink-2);
+  background:color-mix(in srgb,var(--accent) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 24%,transparent)}
+.ds .bb-task b{color:var(--ink);font-weight:500}
+@media (max-width:820px){
+.ds .bb-wk-in{grid-template-columns:1fr}
+.ds .bb-wk-head{gap:14px;padding:20px}
+.ds .bb-wk-t h3{font-size:17.5px}
+}
+@media (max-width:560px){
+.ds .bb-wk-head{grid-template-columns:50px 1fr 30px;gap:12px;padding:18px}
+.ds .bb-wk-n{width:50px;height:50px;border-radius:14px}
+.ds .bb-wk-n i{font-size:7.5px;margin-bottom:4px}
+.ds .bb-wk-n b{font-size:20px}
+.ds .bb-wk-x{width:30px;height:30px;margin-top:6px}
+.ds .bb-wk-in{padding:0 18px 18px}
+.ds .bb-sess{padding:18px}
+}
+
+
+/* tool chips — the icon box is fixed so a row of chips has one baseline */
+.ds .bb-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.ds .bb-chip{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:400;
+  line-height:1;padding:6px 11px;border-radius:8px;color:var(--ink-2);
+  background:var(--bg-inset);border:1px solid var(--line)}
+.ds .bb-chip img{width:15px;height:15px;object-fit:contain;display:block;flex:none}
+
+
+/* ---------------- tools grid ------------------------------------------
+   The product PNGs were drawn on canvases with different padding — MEP fills
+   67% of its file, RateGen 100% — so they are pre-normalised into bb-ic-*.png
+   and dropped into an identical 52px box. The three sprite icons take the
+   same box, so every tile's title sits on the same line. */
+.ds .bb-tools{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.ds .bb-tool{display:flex;flex-direction:column;text-decoration:none;padding:24px;
+  border-radius:18px;border:1px solid var(--line);background-image:var(--card-fill);
+  transition:transform 380ms var(--e-out),box-shadow 380ms var(--e-out),border-color 240ms}
+.ds .bb-tool:hover{transform:translateY(-5px);
+  border-color:color-mix(in srgb,var(--action) 40%,var(--line));
+  box-shadow:0 16px 38px rgba(var(--shadow-c),.15)}
+.ds .bb-tool-ico{display:flex;align-items:center;justify-content:flex-start;
+  width:52px;height:52px;margin-bottom:18px;flex:none}
+.ds .bb-tool-ico img{width:52px;height:52px;object-fit:contain;display:block;
+  filter:drop-shadow(0 8px 16px rgba(var(--shadow-c),.26))}
+.ds .bb-tool-ico .ico{width:52px;height:52px;border-radius:15px;margin:0}
+.ds .bb-tool-ico .ico svg{width:22px;height:22px}
+.ds .bb-tool b{display:block;font-size:16px;font-weight:500;color:var(--ink);letter-spacing:-.015em;
+  line-height:1.3}
+.ds .bb-tool span:not(.bb-tool-ico){display:block;margin-top:7px;font-size:13.5px;font-weight:300;
+  line-height:1.55;color:var(--ink-3)}
+@media (max-width:900px){
+.ds .bb-tools{grid-template-columns:1fr 1fr}
+}
+@media (max-width:520px){
+.ds .bb-tools{grid-template-columns:1fr}
+}
+
+
+/* ---------------- outcomes + certificate ------------------------------
+   Same move as the registration page: the shorter column pins while the
+   taller one travels past it, so the two read as one block rather than two
+   that happen to be side by side. Sticky only while they are side by side —
+   stacked, a pinned column would sit on top of the one below it. */
+.ds .bb-out{display:grid;grid-template-columns:1fr 1.02fr;gap:56px;align-items:start}
+.ds .bb-out-pin{position:sticky;top:132px;align-self:start}
+.ds .bb-cert{border-radius:var(--r-card);border:1px solid var(--line);overflow:hidden;
+  background-image:var(--card-fill);
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.07),0 26px 58px rgba(var(--shadow-c),.15)}
+.ds .bb-cert figure{margin:0;background:var(--bg-inset);border-bottom:1px solid var(--line)}
+.ds .bb-cert figure img{width:100%;height:auto}
+.ds .bb-cert-in{padding:30px}
+.ds .bb-cert-in h3{margin:12px 0 12px;font-size:22px;letter-spacing:-.025em;line-height:1.25}
+.ds .bb-cert-in p{margin:0 0 14px;font-size:14.5px;font-weight:300;line-height:1.65;color:var(--ink-2)}
+.ds .bb-cert-in .frag{margin-top:20px}
+@media (max-width:980px){
+.ds .bb-out{grid-template-columns:1fr;gap:40px}
+.ds .bb-out-pin{position:static}
+}
+
+
+/* ---------------- who it is for --------------------------------------- */
+.ds .bb-needs{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.ds .bb-need{border-radius:var(--r-card);border:1px solid var(--line);overflow:hidden;
+  background-image:var(--card-fill);display:flex;flex-direction:column;
+  transition:transform 400ms var(--e-out),box-shadow 400ms var(--e-out),border-color 240ms}
+.ds .bb-need:hover{transform:translateY(-5px);
+  border-color:color-mix(in srgb,var(--action) 34%,var(--line));
+  box-shadow:0 18px 44px rgba(var(--shadow-c),.16)}
+.ds .bb-need-art{position:relative;aspect-ratio:16/9;overflow:hidden;background:var(--bg-inset)}
+.ds .bb-need-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  transition:transform 900ms var(--e-out)}
+.ds .bb-need:hover .bb-need-art img{transform:scale(1.05)}
+.ds .bb-need-in{padding:24px;position:relative;flex:1}
+.ds .bb-need-in .ico{position:absolute;top:-26px;left:24px;width:44px;height:44px;border-radius:13px;
+  background:var(--bg);border:1px solid var(--line-2);
+  box-shadow:0 8px 20px rgba(var(--shadow-c),.18)}
+.ds .bb-need-in .ico svg{width:19px;height:19px}
+.ds .bb-need-in h4{margin:22px 0 10px;font-size:17.5px;letter-spacing:-.02em}
+.ds .bb-need-in p{margin:0;font-size:14px;font-weight:300;line-height:1.65;color:var(--ink-2)}
+@media (max-width:900px){
+.ds .bb-needs{grid-template-columns:1fr;max-width:520px;margin:0 auto}
+}
+
+
+/* ---------------- fee ------------------------------------------------- */
+.ds .bb-fee{display:grid;grid-template-columns:1.05fr .95fr;gap:28px;align-items:start}
+.ds .bb-price{border-radius:var(--r-card);padding:34px;background-image:var(--card-fill);
+  border:1px solid var(--line);position:relative;overflow:hidden;
+  box-shadow:0 3px 8px rgba(var(--shadow-c),.07),0 24px 56px rgba(var(--shadow-c),.15)}
+.ds .bb-price .eyebrow{margin-bottom:6px}
+.ds .bb-price .amt{font-size:clamp(38px,4.6vw,52px);font-weight:500;letter-spacing:-.035em;
+  color:var(--ink);line-height:1;margin:10px 0 8px}
+.ds .bb-price .amt small{font-size:.32em;font-weight:300;color:var(--ink-3);letter-spacing:0;
+  margin-left:10px}
+.ds .bb-price .note{font-size:13.5px;font-weight:300;line-height:1.6;color:var(--ink-3);margin:0 0 20px}
+.ds .bb-side{border-radius:var(--r-card);padding:34px;border:1px solid var(--line);
+  background:var(--bg-alt)}
+.ds .bb-side h4{margin:0 0 8px;font-size:18px;letter-spacing:-.02em}
+.ds .bb-side p{margin:0 0 20px;font-size:14px;font-weight:300;line-height:1.65;color:var(--ink-2)}
+.ds .bb-side .row{display:flex;justify-content:space-between;gap:16px;padding:11px 0;
+  border-bottom:1px solid var(--line);font-size:14px;font-weight:300;color:var(--ink-2)}
+.ds .bb-side .row:last-of-type{border-bottom:0}
+.ds .bb-side .row b{color:var(--ink);font-weight:500;text-align:right}
+.ds .bb-side-cta{display:flex;gap:9px;margin-top:22px;flex-wrap:wrap}
+@media (max-width:860px){
+.ds .bb-fee{grid-template-columns:1fr}
+}
+
+
+/* ---------------- poster ---------------------------------------------- */
+.ds .bb-poster{display:grid;grid-template-columns:.8fr 1.2fr;gap:48px;align-items:center}
+.ds .bb-poster figure{margin:0;border-radius:18px;overflow:hidden;position:relative;
+  box-shadow:0 6px 16px rgba(var(--shadow-c),.14),0 30px 66px rgba(var(--shadow-c),.24);
+  transition:transform 620ms var(--e-out)}
+.ds .bb-poster figure:hover{transform:translateY(-6px) rotate(-.6deg)}
+.ds .bb-poster figure img{width:100%;height:auto}
+@media (max-width:860px){
+.ds .bb-poster{grid-template-columns:1fr;gap:30px}
+}
+
+
+/* ---------------- registration banner --------------------------------- */
+.ds .bb-banner{position:relative;border-radius:var(--r-frame);overflow:hidden;isolation:isolate;
+  box-shadow:0 8px 22px rgba(2,9,17,.22),0 34px 76px rgba(2,9,17,.30)}
+.ds .bb-banner-art{position:absolute;inset:0;z-index:0}
+.ds .bb-banner-art img{width:100%;height:100%;object-fit:cover;object-position:76% 55%}
+.ds .bb-banner-art::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(96deg,rgba(3,10,19,.96) 0%,rgba(3,10,19,.92) 40%,
+             rgba(3,10,19,.56) 66%,rgba(3,10,19,.20) 100%)}
+.ds .bb-banner-in{position:relative;z-index:2;padding:clamp(34px,5vw,62px);max-width:660px}
+.ds .bb-banner-in h2{color:#F2F7FC;margin-bottom:14px}
+.ds .bb-banner-in .ds-lede{color:#B7C8DA;max-width:46ch}
+.ds .bb-banner-in .hero-cta{margin-top:30px}
+.ds .bb-banner-facts{display:grid;grid-template-columns:repeat(3,auto);gap:26px;margin-top:28px;
+  justify-content:start}
+.ds .bb-banner-facts b{display:block;font-size:16px;font-weight:500;color:#fff;letter-spacing:-.02em}
+.ds .bb-banner-facts span{display:block;margin-top:4px;font-size:12px;font-weight:300;color:#8EA3BC}
+@media (max-width:720px){
+.ds .bb-banner-facts{grid-template-columns:1fr;gap:16px}
+.ds .bb-banner-in{max-width:none}
+
+  /* the copy runs the full width here, so the scrim has to cover the whole
+     frame rather than fading out to the right */
+.ds .bb-banner-art::after{
+    background:linear-gradient(180deg,rgba(3,10,19,.93) 0%,rgba(3,10,19,.86) 100%)}
+.ds .bb-banner-art img{object-position:70% 50%}
+}
+
+
+/* ---------------- registration page ----------------------------------- */
+.ds .bb-regpage{padding-top:150px}
+.ds .bb-back{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:300;
+  color:var(--ink-3);text-decoration:none;margin-bottom:26px;
+  transition:color 220ms var(--e-fast)}
+.ds .bb-back:hover{color:var(--action)}
+.ds .bb-back svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;transform:rotate(180deg)}
+.ds .bb-reg{display:grid;grid-template-columns:1fr 380px;gap:34px;align-items:start}
+.ds .bb-form{border-radius:var(--r-card);padding:34px;background-image:var(--card-fill);
+  border:1px solid var(--line-2);
+  box-shadow:0 2px 6px rgba(var(--shadow-c),.05),0 24px 58px rgba(var(--shadow-c),.11)}
+.ds .bb-leg{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);
+  font-weight:500;display:block;margin:0 0 16px;padding-top:8px}
+.ds .bb-leg.gap{margin-top:14px;padding-top:24px;border-top:1px solid var(--line)}
+.ds .bb-two{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+@media (max-width:560px){
+.ds .bb-two{grid-template-columns:1fr}
+}
+.ds .ds-field .err{display:none;font-size:11.5px;color:var(--accent);margin-top:5px}
+.ds .ds-field.bad input, .ds .ds-field.bad select, .ds .ds-field.bad textarea{border-color:var(--accent)}
+.ds .ds-field.bad .err{display:block}
+.ds .bb-check{display:flex;gap:11px;align-items:flex-start;font-size:13px;font-weight:300;
+  line-height:1.55;color:var(--ink-2);margin:4px 0 20px;cursor:pointer}
+.ds .bb-check input{width:17px;height:17px;flex:none;margin-top:2px;accent-color:var(--action)}
+.ds .bb-check a{color:var(--action)}
+.ds .bb-sum{position:sticky;top:24px;border-radius:var(--r-card);overflow:hidden;
+  border:1px solid var(--line);background:var(--bg-alt)}
+.ds .bb-sum-art{position:relative;height:150px;overflow:hidden;background:var(--bg-inset)}
+.ds .bb-sum-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  object-position:66% 66%}
+.ds .bb-sum h4{margin:22px 28px 4px;font-size:18px;letter-spacing:-.02em}
+.ds .bb-sum .ds-sub{margin:0 28px 18px;font-size:13.5px;font-weight:300;color:var(--ink-3)}
+.ds .bb-sum .row{display:flex;justify-content:space-between;gap:14px;margin:0 28px;padding:10px 0;
+  border-bottom:1px solid var(--line);font-size:13.5px;font-weight:300;color:var(--ink-3)}
+.ds .bb-sum .row b{color:var(--ink);font-weight:500;text-align:right}
+.ds .bb-sum .tot{display:flex;justify-content:space-between;align-items:baseline;
+  margin:16px 28px 0;padding-top:16px;border-top:1px solid var(--line-2)}
+.ds .bb-sum .tot span{font-size:13.5px;color:var(--ink-3)}
+.ds .bb-sum .tot b{font-size:26px;font-weight:500;letter-spacing:-.03em;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.ds .bb-sum .small{margin:14px 28px 26px}
+@media (max-width:1000px){
+.ds .bb-reg{grid-template-columns:1fr}
+.ds .bb-sum{position:static;order:-1}
+.ds .bb-sum-art{height:120px}
+}
+
+
+/* success state */
+.ds .bb-ok{text-align:center;padding:16px 8px 8px}
+.ds .bb-ok .tick{width:64px;height:64px;border-radius:50%;margin:0 auto 22px;display:grid;
+  place-items:center;background:color-mix(in srgb,var(--ok) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--ok) 34%,transparent);
+  animation:bbpop 620ms var(--e-out) both}
+.ds .bb-ok .tick svg{width:26px;height:26px;fill:none;stroke:var(--ok);stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round}
+:root.dark .ds .bb-ok .tick svg{stroke:var(--ok-d)}
+:root.dark .ds .bb-ok .tick svg{stroke:var(--ok-d)}
+@keyframes bbpop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+.ds .bb-ok h3{margin:0 0 10px;font-size:24px;letter-spacing:-.025em}
+.ds .bb-ok p{margin:0 auto 22px;font-size:14.5px;font-weight:300;line-height:1.65;color:var(--ink-2);
+  max-width:46ch}
+.ds .bb-ok .hero-cta{justify-content:center}
+.ds .bb-ok .ref{display:inline-block;margin-top:20px;font-size:12px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums}
+
+
+/* ---------------- sticky footer bar ------------------------------------
+   The right padding keeps the button clear of the Ada bubble, which is
+   fixed in the same corner. */
+.ds .bb-bar{position:fixed;left:0;right:0;bottom:0;z-index:70;
+  transform:translateY(110%);transition:transform 480ms var(--e-out);
+  background:color-mix(in srgb,var(--bg) 90%,transparent);
+  backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+  border-top:1px solid var(--line)}
+.ds .bb-bar.up{transform:none}
+.ds .bb-bar-in{max-width:var(--shell);margin:0 auto;padding:12px 32px 12px;display:flex;
+  align-items:center;gap:18px}
+.ds .bb-bar b{font-size:15px;font-weight:500;color:var(--ink);letter-spacing:-.015em}
+.ds .bb-bar span{font-size:12.5px;font-weight:300;color:var(--ink-3);display:block;margin-top:2px}
+.ds .bb-bar .ds-btn{margin-left:auto;flex:none;margin-right:150px}
+@media (max-width:1560px){
+.ds .bb-bar .ds-btn{margin-right:0}
+}
+@media (max-width:620px){
+.ds .bb-bar-in{padding:10px 18px}
+.ds .bb-bar b{font-size:13.5px}
+.ds .bb-bar span{display:none}
+.ds .bb-bar .ds-btn{margin-right:56px}
+}
+
+
+/* ---------------- responsive hero -------------------------------------- */
+@media (max-width:1000px){
+.ds .phero.bb-hero{min-height:auto;padding:126px 0 76px}
+.ds .phero.bb-hero .phero-bg img{object-position:72% 40%;opacity:.4}
+.ds .phero.bb-hero .phero-bg::after{
+    background:linear-gradient(180deg,var(--bb-scrim) 0%,var(--bb-scrim-2) 34%,
+               var(--bb-scrim) 78%)}
+.ds .phero.bb-hero .phero-in > *{max-width:none}
+.ds .bb-h1 img{width:min(100%,330px)}
+.ds .bb-facts{grid-template-columns:1fr 1fr;max-width:none}
+.ds .bb-regpage{padding-top:126px}
+}
+@media (max-width:480px){
+.ds .bb-with{gap:12px}
+.ds .bb-with .bb-niqs{height:32px}
+.ds .bb-with .bb-logo{height:22px}
+.ds .bb-count .u{min-width:50px}
+}

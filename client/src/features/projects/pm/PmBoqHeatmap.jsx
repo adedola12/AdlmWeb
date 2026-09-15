@@ -226,7 +226,7 @@ export default function PmBoqHeatmap({ boqItems = [], statusLabel = "Ratified" }
           No BoQ items to map
         </div>
         <div className="mt-1 text-xs text-slate-500">
-          Upload a takeoff in the Bill of Quantity tab first — the heatmap will populate automatically.
+          Upload a takeoff in the Bill of Quantity tab first. The heatmap will populate automatically.
         </div>
       </div>
     );
@@ -241,7 +241,7 @@ export default function PmBoqHeatmap({ boqItems = [], statusLabel = "Ratified" }
             BoQ Progress Heatmap
           </div>
           <div className="mt-0.5 text-[11px] text-slate-500">
-            Every BoQ line as a cell — colour shows current progress, hover for detail.
+            Every BoQ line as a cell: colour shows current progress, hover for detail.
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">

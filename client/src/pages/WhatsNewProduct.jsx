@@ -250,7 +250,7 @@ export default function WhatsNewProduct() {
           </h1>
           <p className="mt-3 max-w-2xl text-white/70">
             {product.tagline}
-            {hasReleases ? ". Here's everything we've shipped — newest first." : "."}
+            {hasReleases ? ". Here's everything we've shipped, newest first." : "."}
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
             {product.compatibility && (
@@ -287,7 +287,7 @@ export default function WhatsNewProduct() {
         </div>
       </header>
 
-      {/* User guide — the illustrated PDF covering this product */}
+      {/* User guide, the illustrated PDF covering this product */}
       {guide && (
         <Reveal className="mt-6">
           <div className="flex flex-col gap-4 rounded-adlm-lg border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center dark:border-adlm-dark-border dark:bg-adlm-dark-panel">

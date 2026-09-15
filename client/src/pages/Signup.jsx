@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../store.jsx";
 import { trackEvent } from "../ga";
+import SocialSignIn from "../components/SocialSignIn.jsx";
+import { AFTER_SIGN_IN } from "../lib/afterSignIn.js";
 
 export default function Signup() {
   const nav = useNavigate();
@@ -49,7 +51,7 @@ export default function Signup() {
       // a signup, and counting attempts here would inflate the only number
       // anyone checks on this page.
       trackEvent("sign_up", { method: "password" });
-      nav("/");
+      nav(AFTER_SIGN_IN);
     } catch (e) {
       setErr(e.message || "Signup failed");
     } finally {
@@ -109,6 +111,11 @@ export default function Signup() {
           {busy ? "Creating…" : "Sign up"}
         </button>
       </form>
+
+      {/* The same component as the sign-in page: to Google and Microsoft
+          there is no difference between signing in and signing up, and the
+          route it posts to creates the account when there is none. */}
+      <SocialSignIn onError={setErr} />
     </div>
   );
 }
