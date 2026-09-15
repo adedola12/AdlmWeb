@@ -254,6 +254,49 @@ export default function DsFit() {
     };
   }, [situation, experience, budget, place, catalogue, byKey, cur, bands]);
 
+  // ── his sticky footer bar (fit-answer-bar) ─────────────────────────────
+  // On a phone the answer panel sits about 5,000px below the picker, so a tap
+  // on a card changed nothing you could see. His BeyondBIM page solves the same
+  // problem with .bb-bar, and this is that bar with his rule for it: up while
+  // the thing it points to is off screen, down once it is on screen, so it
+  // never covers the answer it is summarising. On a desktop the panel is
+  // sticky beside the questions and is on screen almost all the time, so the
+  // bar only shows while you are still up in the picker — the same rule,
+  // no breakpoint needed.
+  const panelRef = React.useRef(null);
+  const [panelOff, setPanelOff] = React.useState(false);
+
+  React.useEffect(() => {
+    const check = () => {
+      const r = panelRef.current?.getBoundingClientRect();
+      if (!r) return;
+      setPanelOff(!(r.top < window.innerHeight - 120 && r.bottom > 120));
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+    // Re-measured when the answer changes: a course line or a budget note
+    // changes the panel's height without anybody scrolling.
+  }, [fit]);
+
+  const barUp = !!fit && panelOff;
+
+  const showAnswer = () => {
+    const el = panelRef.current;
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    // Focus follows. The bar goes inert the moment the panel is on screen, so
+    // a keyboard user who pressed "See why" would otherwise be left focused on
+    // a button that has just slid away. preventScroll, because focusing would
+    // otherwise jump straight there and cut the smooth scroll short.
+    el.focus({ preventScroll: true });
+  };
+
   // His flowsteps: done / on / neither. Four questions, in the order asked.
   const stepState = (i) => {
     const vals = [situation, experience, budget, place];
@@ -413,7 +456,16 @@ export default function DsFit() {
             {/* ── the answer ───────────────────────────────────────────────
                 .tilt is his pointer-follow; his own loop leaves it alone on a
                 coarse pointer, so this is a flat card on a phone. */}
-            <div className="panel rise qt-panel tilt">
+            <div
+              className="panel rise qt-panel tilt"
+              id="fit-answer"
+              ref={panelRef}
+              // Focusable by script only (see showAnswer), not a tab stop.
+              tabIndex={-1}
+              // The nav is fixed, so a plain scrollIntoView would park the
+              // panel's heading underneath it.
+              style={{ scrollMarginTop: "96px" }}
+            >
               <h3>What that comes to</h3>
               <p className="sub">Everything below updates as you pick.</p>
 
@@ -487,14 +539,14 @@ export default function DsFit() {
                   ))}
 
                   <Link
-                    className="btn btn-p btn-full"
+                    className="ds-btn btn-p btn-full"
                     to={`/product/${fit.tool.key}`}
                     style={{ marginTop: "22px" }}
                   >
                     See {fit.tool.name} in full
                   </Link>
                   <Link
-                    className="btn btn-o btn-full"
+                    className="ds-btn btn-o btn-full"
                     to="/quote"
                     style={{ marginTop: "10px" }}
                   >
@@ -506,6 +558,31 @@ export default function DsFit() {
           </div>
         </div>
       </section>
+
+      {/* His .bb-bar markup. `inert` while it is down: a bar translated off the
+          bottom of the screen is still in the tab order otherwise, and a
+          keyboard user would land on a button they cannot see. */}
+      <div className={`bb-bar${barUp ? " up" : ""}`} inert={!barUp} aria-live="polite">
+        <div className="bb-bar-in">
+          <div>
+            <b>
+              {fit
+                ? `${fit.tool.name.split(":")[0]}${fit.course ? " + course" : ""} · ${money(fit.total, cur)}${
+                    fit.course ? "" : fit.period === "yearly" ? " a year" : " a month"
+                  }`
+                : ""}
+            </b>
+            <span>
+              {fit
+                ? `${fit.tool.name} · billed ${fit.period}${fit.course ? ` · with ${fit.course.name}` : ""}`
+                : ""}
+            </span>
+          </div>
+          <button type="button" className="ds-btn btn-p ds-btn-sm" onClick={showAnswer}>
+            See why
+          </button>
+        </div>
+      </div>
     </>
   );
 }

@@ -79,6 +79,9 @@ export const NAV = [
     items: [
       { to: "/admin/courses", label: "Courses", icon: "hi-learning", area: "adminhub" },
       { to: "/admin/learn", label: "Free lessons", icon: "hi-play", area: "learn" },
+      // The channel the free lessons come from, beside the library: filed,
+      // held, missing, and whether each video still plays.
+      { to: "/admin/youtube", label: "YouTube", icon: "hi-play", area: "learn" },
       { to: "/admin/quizzes", label: "Quizzes", icon: "hi-check", area: "learn" },
       { to: "/admin/physical-training", label: "Events", icon: "hi-calendar", area: "trainings" },
       { to: "/admin/classrooms", label: "Classrooms", icon: "hi-team", area: "trainings" },

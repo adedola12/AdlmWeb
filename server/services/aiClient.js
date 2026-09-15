@@ -59,8 +59,8 @@ const DEFAULT_MODEL =
     : process.env.AGENT_MODEL ||
       (PROVIDER === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001");
 
-// Output-token cap per model round-trip. Bounds spend on a public key; the
-// caller may pass a smaller value but never a larger one.
+// Output-token default per model round-trip, for a caller that does not say.
+// Not a ceiling: an explicit ask is honoured up to HARD_MAX_TOKENS below.
 const DEFAULT_MAX_TOKENS = Number(process.env.AGENT_MAX_TOKENS || 700);
 
 /**
@@ -450,7 +450,10 @@ function toOpenAiMessages(system, messages) {
 async function openaiCreate({ system, messages, tools, maxTokens, temperature }) {
   const res = await openai().chat.completions.create({
     model: DEFAULT_MODEL,
-    max_tokens: maxTokens || 700,
+    // Same two tiers as the Anthropic and Bedrock paths. This used to be
+    // `maxTokens || 700`, which had no ceiling at all: switching the provider
+    // to OpenAI quietly removed the spend bound on a public endpoint.
+    max_tokens: capTokens(maxTokens),
     // 0.3 was this path's existing default and stays the default; a caller
     // that asks for something more deterministic now gets it.
     temperature: temperature ?? 0.3,
