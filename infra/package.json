@@ -10,9 +10,9 @@
     "build": "tsc",
     "synth": "cdk synth",
     "diff": "cdk diff --all",
-    "deploy": "cdk deploy --all",
-    "deploy:api": "cdk deploy AdlmApi --require-approval never",
-    "diff:api": "cdk diff AdlmApi"
+    "deploy": "node scripts/guarded-deploy.mjs --all",
+    "check:deletions": "node scripts/guarded-deploy.mjs --check-only --all",
+    "deploy:unguarded": "cdk deploy --all"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
