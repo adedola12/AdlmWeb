@@ -64,7 +64,6 @@ import AdminLcCourses from "./pages/AdminLcCourses.jsx";
 import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
 import AdminLcLessons from "./pages/AdminLcLessons.jsx";
 import AdminLcEvents from "./pages/AdminLcEvents.jsx";
-import AdminLcClassrooms from "./pages/AdminLcClassrooms.jsx";
 import AdminLcChangelogs from "./pages/AdminLcChangelogs.jsx";
 import AdminLcShowcase from "./pages/AdminLcShowcase.jsx";
 import AdminLcFreebies from "./pages/AdminLcFreebies.jsx";
@@ -654,14 +653,6 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute permission="adminhub">
             <Admin section="tlocations" />
-          </AdminRoute>
-        ),
-      },
-      {
-        path: "admin/classrooms",
-        element: (
-          <AdminRoute permission="adminhub">
-            <AdminLcClassrooms />
           </AdminRoute>
         ),
       },

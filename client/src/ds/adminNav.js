@@ -84,7 +84,6 @@ export const NAV = [
       { to: "/admin/youtube", label: "YouTube", icon: "hi-play", area: "learn" },
       { to: "/admin/quizzes", label: "Quizzes", icon: "hi-check", area: "learn" },
       { to: "/admin/physical-training", label: "Events", icon: "hi-calendar", area: "trainings" },
-      { to: "/admin/classrooms", label: "Classrooms", icon: "hi-team", area: "trainings" },
       // Issuing has always happened here; nothing ever looked over what had
       // been issued, and there was no way to withdraw one.
       { to: "/admin/certificates", label: "Certificates", icon: "hi-check", area: "adminhub" },
