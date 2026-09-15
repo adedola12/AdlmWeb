@@ -59,8 +59,8 @@ const DEFAULT_MODEL =
     : process.env.AGENT_MODEL ||
       (PROVIDER === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5-20251001");
 
-// Output-token cap per model round-trip. Bounds spend on a public key; the
-// caller may pass a smaller value but never a larger one.
+// Output-token default per model round-trip, for a caller that does not say.
+// Not a ceiling: an explicit ask is honoured up to HARD_MAX_TOKENS below.
 const DEFAULT_MAX_TOKENS = Number(process.env.AGENT_MAX_TOKENS || 700);
 
 /**
