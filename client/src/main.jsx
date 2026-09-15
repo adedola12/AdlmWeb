@@ -181,6 +181,9 @@ import { landingRoutes } from "./pages/landing/routes.jsx";
 import DsPreview from "./ds/DsPreview.jsx";
 import DsPreviewGate from "./ds/DsPreviewGate.jsx";
 import DsPreviewIndex from "./ds/DsPreviewIndex.jsx";
+// Lazy: the fit page and its shell only load for someone who opens /fit.
+const DsShellLazy = React.lazy(() => import("./ds/DsShell.jsx"));
+const DsFit = React.lazy(() => import("./ds/DsFit.jsx"));
 import { DS_PAGES } from "./ds/pages/manifest.js";
 
 const router = createBrowserRouter([
@@ -1058,6 +1061,23 @@ const router = createBrowserRouter([
     ),
     errorElement: <AppError />,
   })),
+
+  // "Which one is for me" — four questions, the product, plan and price.
+  // Built from his products-page picker and quote-page layout; staff only
+  // like the rest of the redesign until it is promoted.
+  {
+    path: "/fit",
+    element: (
+      <DsPreviewGate>
+        <React.Suspense fallback={null}>
+          <DsShellLazy>
+            <DsFit />
+          </DsShellLazy>
+        </React.Suspense>
+      </DsPreviewGate>
+    ),
+    errorElement: <AppError />,
+  },
 
   // An index of everything staged, so the pages can be reviewed without
   // anyone having to remember 25 URLs.

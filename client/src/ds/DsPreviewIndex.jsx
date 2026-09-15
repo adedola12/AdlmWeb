@@ -86,6 +86,22 @@ export default function DsPreviewIndex() {
         tree is disallowed in robots.txt.
       </p>
 
+      <section className="mb-8">
+        <h2 className="text-sm uppercase tracking-wide text-slate-500 mb-1">New experiences</h2>
+        <p className="text-sm text-slate-500 mb-2">
+          Built on his components for things his pages point at but do not do yet.
+        </p>
+        <ul>
+          <li className="flex items-center gap-3 py-2 border-b border-slate-200 dark:border-slate-700">
+            <Link to="/fit" className="font-medium text-adlm-blue-700 dark:text-adlm-blue-600 hover:underline">
+              /fit
+            </Link>
+            <span className="flex-1" />
+            <span className="text-sm text-slate-500">find the product, plan and price from four answers</span>
+          </li>
+        </ul>
+      </section>
+
       {GROUPS.map((g) => (
         <section key={g.title} className="mb-8">
           <h2 className="text-sm uppercase tracking-wide text-slate-500 mb-1">{g.title}</h2>
