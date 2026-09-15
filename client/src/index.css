@@ -20,6 +20,19 @@
 
   /* Brand colors */
   --color-adlm-orange: #E86A27;
+
+  /* Full blue ramp. Only 600 and 700 used to be declared here, so every
+     `adlm-blue-50 / 200 / 300 / 400 / 500` class already written across the
+     app generated no CSS at all — which is why dark-mode accents such as
+     `dark:text-adlm-blue-300` silently fell back to the inherited colour.
+     400/500/600/700 are the values from tailwind.config.js (legacy in v4,
+     kept for reference); 50–300 are tints of 700 on the same ramp. */
+  --color-adlm-blue-50: #eaf2ff;
+  --color-adlm-blue-100: #d3e4ff;
+  --color-adlm-blue-200: #a9c9ff;
+  --color-adlm-blue-300: #7db0ff;
+  --color-adlm-blue-400: #5cb3ff;
+  --color-adlm-blue-500: #36a3ff;
   --color-adlm-blue-600: #239cff;
   --color-adlm-blue-700: #005be3;
 
@@ -111,6 +124,88 @@ html {
 }
 
 .btn-sm { @apply px-3 py-1 text-xs; }
+
+/* ── Button variants ─────────────────────────────────────────────────
+   `.btn` alone is a solid blue button with white text. Toolbars that
+   needed a *secondary* or *destructive* action used to stack a coloured
+   <span> inside it, which rendered blue-on-blue and orange-on-blue.
+   These three variants are the supported way to say "not the primary
+   action" — they override the ground, the text colour and the border.
+
+   Selectors are doubled (`.btn.btn-outline`) on purpose: the dark-mode
+   `.dark .btn:hover` override further down this file would otherwise
+   win the cascade and repaint every variant blue on hover. */
+.btn.btn-outline {
+  @apply border text-slate-700;
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+}
+.btn.btn-outline:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+.dark .btn.btn-outline {
+  background-color: #101e33;
+  border-color: #1f3559;
+  color: #e2e8f0;
+}
+.dark .btn.btn-outline:hover {
+  background-color: #1a2d4a;
+  color: #ffffff;
+}
+
+.btn.btn-ghost {
+  @apply border border-transparent text-slate-600;
+  background-color: transparent;
+  box-shadow: none;
+}
+.btn.btn-ghost:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+.dark .btn.btn-ghost { color: #94a3b8; }
+.dark .btn.btn-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+}
+
+/* Destructive. Orange is the ADLM interrupt colour, so this reads as an
+   outline first and only deepens on hover — dangerous without competing
+   with the primary blue for attention. */
+.btn.btn-danger {
+  @apply border;
+  background-color: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+.btn.btn-danger:hover {
+  background-color: #ffedd5;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+.dark .btn.btn-danger {
+  background-color: rgba(232, 106, 39, 0.12);
+  border-color: rgba(232, 106, 39, 0.35);
+  color: #fdba74;
+}
+.dark .btn.btn-danger:hover {
+  background-color: rgba(232, 106, 39, 0.2);
+  color: #fed7aa;
+}
+
+/* Disabled wins over every variant's hover, in both themes. */
+.btn:disabled,
+.btn[disabled] {
+  @apply cursor-not-allowed opacity-50;
+}
+.dark .btn:disabled:hover,
+.dark .btn[disabled]:hover,
+.btn:disabled:hover,
+.btn[disabled]:hover {
+  box-shadow: none;
+  transform: none;
+}
 
 /* ── Global input ── */
 .input {
@@ -844,6 +939,90 @@ body {
   100% { transform: translateY(64px); opacity: 0; }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   APP SHELL — the chrome the project workspace is built from.
+   Written against docs/BRAND_SYSTEM.md §3 (type) and §4 (motifs).
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Eyebrow (BRAND_SYSTEM §3) ───────────────────────────────────────
+   Tracked, uppercase, small, muted. The cheapest recognisably-ADLM
+   treatment there is, and the site was not using it anywhere. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+.dark .eyebrow { color: #64748b; }
+
+/* ── Corporate-mode ground (BRAND_SYSTEM §1, §4) ─────────────────────
+   White → pale blue-grey, with a large, pale hexagon field over it.
+   The hexagon is the brand's default background texture; at this
+   opacity it reads as paper tooth, not as pattern. */
+.corporate-ground {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(1200px 420px at 50% -10%, rgba(0, 91, 227, 0.055), transparent 70%),
+    linear-gradient(180deg, #ffffff 0%, #eef1f8 100%);
+}
+.dark .corporate-ground {
+  background-color: #0a1320;
+  background-image:
+    radial-gradient(1200px 420px at 50% -10%, rgba(54, 163, 255, 0.09), transparent 70%),
+    linear-gradient(180deg, #0a1320 0%, #081020 100%);
+}
+
+.hex-field { position: relative; isolation: isolate; }
+.hex-field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='64' viewBox='0 0 56 64'%3E%3Cpath d='M28 1 L54 16 L54 48 L28 63 L2 48 L2 16 Z' fill='none' stroke='%23005be3' stroke-opacity='0.07' stroke-width='1.2'/%3E%3C/svg%3E");
+  background-size: 56px 64px;
+  /* Fades out downward so the texture never competes with content. */
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 62%);
+          mask-image: linear-gradient(180deg, #000 0%, transparent 62%);
+}
+.dark .hex-field::before {
+  opacity: 0.6;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='64' viewBox='0 0 56 64'%3E%3Cpath d='M28 1 L54 16 L54 48 L28 63 L2 48 L2 16 Z' fill='none' stroke='%2336a3ff' stroke-opacity='0.10' stroke-width='1.2'/%3E%3C/svg%3E");
+}
+
+/* ── Skeleton ────────────────────────────────────────────────────────
+   Shown while a list is in flight. Without this the project explorer
+   rendered its empty state during the fetch and told people they had
+   no projects a beat before showing them their projects. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: #e9eef5;
+  /* No border-radius here on purpose. This rule is unlayered, so it would
+     beat Tailwind's layered `rounded-*` utilities and callers could not
+     round a skeleton to match the shape it stands in for. */
+}
+.dark .skeleton { background-color: #162842; }
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg,
+              transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: adlm-shimmer 1.6s ease-in-out infinite;
+}
+.dark .skeleton::after {
+  background: linear-gradient(90deg,
+              transparent, rgba(255, 255, 255, 0.07), transparent);
+}
+@keyframes adlm-shimmer {
+  100% { transform: translateX(100%); }
+}
+
 /* ── Respect reduced-motion: kill all the new motion ────────────────── */
 @media (prefers-reduced-motion: reduce) {
   /* .fx-reveal and .tilt are gone — <Reveal> and <TiltCard> now opt out via
@@ -854,4 +1033,5 @@ body {
   .animate-float, .animate-float-slow,
   .aurora::before, .shine,
   .lic-float, .lic-float-2, .license-win, .lic-scan { animation: none !important; }
+  .skeleton::after { animation: none !important; transform: none !important; opacity: 0; }
 }
