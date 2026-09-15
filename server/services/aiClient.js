@@ -450,7 +450,10 @@ function toOpenAiMessages(system, messages) {
 async function openaiCreate({ system, messages, tools, maxTokens, temperature }) {
   const res = await openai().chat.completions.create({
     model: DEFAULT_MODEL,
-    max_tokens: maxTokens || 700,
+    // Same two tiers as the Anthropic and Bedrock paths. This used to be
+    // `maxTokens || 700`, which had no ceiling at all: switching the provider
+    // to OpenAI quietly removed the spend bound on a public endpoint.
+    max_tokens: capTokens(maxTokens),
     // 0.3 was this path's existing default and stays the default; a caller
     // that asks for something more deterministic now gets it.
     temperature: temperature ?? 0.3,
