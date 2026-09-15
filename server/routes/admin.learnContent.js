@@ -36,7 +36,6 @@ import { User } from "../models/User.js";
 // The model is exported as FreeVideo; the file is Learn.js.
 import { FreeVideo as Learn } from "../models/Learn.js";
 import { sectionOf } from "../util/freeVideoSections.js";
-import { Classroom } from "../models/Classroom.js";
 import { Training } from "../models/Training.js";
 // Exported as ChangelogProduct — one row per product, with its releases.
 import { ChangelogProduct as Changelog } from "../models/Changelog.js";
@@ -473,28 +472,6 @@ router.get("/events", ...[requireAuth, requirePermission("trainings")], async (_
   }
 });
 
-/* ──────────────────────────────────────────────────────────── classrooms ── */
-
-router.get("/classrooms", ...[requireAuth, requirePermission("trainings")], async (_req, res, next) => {
-  try {
-    const rows = await Classroom.find({}).sort({ createdAt: -1 }).lean();
-    const items = rows.map((c) => ({
-      id: String(c._id),
-      name: c.title || "Untitled",
-      who: c.userName || c.userEmail || "",
-      email: c.userEmail || "",
-      company: c.companyName || "",
-      code: c.classroomCode || "",
-      url: c.classroomUrl || "",
-      state: c.isActive ? "active" : "closed",
-      createdAt: c.createdAt || null,
-    }));
-    res.json({ items, counts: tally(items) });
-  } catch (err) {
-    next(err);
-  }
-});
-
 /* ────────────────────────────────────────────────────────────── what's new ── */
 
 /**
@@ -913,12 +890,6 @@ const WRITABLE = {
     pub: null,
     label: "training",
     fields: ["title", "description", "mode", "date", "city", "country", "venue", "attendees"],
-  },
-  classrooms: {
-    model: Classroom,
-    pub: "isActive",
-    label: "classroom",
-    fields: ["title", "description", "classroomCode", "classroomUrl", "companyName"],
   },
   showcase: {
     model: Showcase,
