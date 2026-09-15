@@ -8,7 +8,7 @@
 // somebody's inbox, which is the worst place to find out.
 //
 // The base64 case is the one with history. The rest of the app passes
-// attachment bodies as base64 strings because that is what Resend's JSON API
+// attachment bodies as base64 strings because that is what the old Resend API
 // wanted; the SDK wants bytes and does its own encoding. Passing the string
 // through unchanged double-encodes it, and a double-encoded PDF opens as
 // garbage rather than failing.

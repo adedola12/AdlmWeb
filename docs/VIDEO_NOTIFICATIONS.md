@@ -60,11 +60,10 @@ channel was found rather than quietly returning nothing.
 
 ### 3. Sender
 
-`EMAIL_FROM` should be `ADLM Studio <admin@adlmstudio.net>`. The domain has to
-be verified in Resend (**Domains → Add domain**, then the DKIM and SPF records
-on `adlmstudio.net`) or Resend refuses the send and `mailer.js` falls back to
-the `onboarding@resend.dev` sender, which is fine for testing and wrong in
-front of customers.
+`EMAIL_FROM` should be `ADLM Studio <admin@adlmstudio.net>`. Mail leaves through
+SES in eu-west-1, where `adlmstudio.net` is a verified identity with DKIM and the
+custom MAIL FROM `mail.adlmstudio.net` — see `docs/SES_MIGRATION.md`. A From
+address outside that domain is refused by SES rather than sent.
 
 ### 4. Everything else
 

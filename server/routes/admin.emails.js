@@ -81,7 +81,7 @@ router.get("/", ...hub, async (_req, res, next) => {
  *
  * This exists because of how the last failure was found: the SMTP fallback had
  * stopped authenticating and nobody knew, because SMTP is only ever reached
- * once Resend has already failed. A fallback is invisible right up to the
+ * once SES has already failed. A fallback is invisible right up to the
  * moment it is the only thing left, and that is the worst possible moment to
  * discover it does not work.
  *

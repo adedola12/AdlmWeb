@@ -49,7 +49,7 @@ const DEFAULT_BATCH = 50;
  * Messages per second, and how many at a time.
  *
  * The old default was two per second with a hard cap of twenty, both invented:
- * Resend and SMTP throttle at rates neither of them publishes, so timid was
+ * the old reseller and SMTP throttle at rates neither publishes, so timid was
  * the only defensible guess. An explicit BROADCAST_RATE_PER_SEC still wins,
  * because somebody who has set it has a reason.
  *

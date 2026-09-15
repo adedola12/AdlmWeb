@@ -34,7 +34,7 @@ GOD_ACCOUNT_EMAILS=support@adlmstudio.net,founder@adlmstudio.net
 SUPPORT_NOTIFY_EMAIL=support@adlmstudio.net
 ```
 
-Email sending reuses the existing Resend/SMTP `sendMail` infrastructure — no new
+Email sending reuses the existing SES `sendMail` infrastructure — no new
 mail config needed.
 
 ---

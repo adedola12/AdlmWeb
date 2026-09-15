@@ -50,7 +50,7 @@ plan) once nothing depends on it.
 |---|---|
 | `server/util/sesTransport.js` | SES v2 send, IAM-role credentials, reads the account's real send rate |
 | `server/util/sendPool.js` | Runs N sends at once without exceeding R per second |
-| `server/util/mailer.js` | SES → Resend → Gmail SMTP, in that order |
+| `server/util/mailer.js` | SES, with an optional Gmail SMTP fallback. **Resend has been removed** (branch `feat/ses-only`). |
 | `server/util/videoNotifier.js` | Batches now send in parallel |
 | `server/routes/admin.campaigns.js` | Campaign send uses the pool |
 | `server/routes/admin.broadcast.js` | Broadcast batch uses the pool |
@@ -64,8 +64,8 @@ send as the studio if it leaks, because there is nothing in SSM.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `MAIL_TRANSPORT` | unset | Set to `ses` to put SES first. Unset = today's behaviour exactly. |
-| `MAIL_FALLBACK` | on | Set to `off` once you want an SES failure to be a failure, not a silent fall-through to Resend. |
+| `MAIL_TRANSPORT` | unset (= SES) | SES carries everything. `smtp` bypasses SES and sends through the SMTP fallback only — an emergency lever, useful only if the Gmail credential works. |
+| `MAIL_FALLBACK` | on | `off` makes an SES failure a failure instead of a retry through Gmail SMTP. The fallback is only tried when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are all set. |
 | `SES_CONFIGURATION_SET` | unset | Attach once there is one, for bounce/complaint events. |
 | `SES_REGION` | `AWS_REGION`, else `eu-west-1` | Only needed if SES ever lives somewhere other than the API. |
 | `MAIL_SEND_RATE_PER_SEC` | unset | Overrides the rate read from the account. For pinning it below the quota. |
@@ -117,19 +117,40 @@ SES rechecks on its own; verification usually lands within the hour.
 The draft is below. Sandbox is 200 messages a day and 1 per second; production
 starts at 50,000 a day.
 
-### 4. Cut over
+### 4. Cut over — Resend removed
 
-1. Set `MAIL_TRANSPORT=ses` in SSM under `/adlm/cloud/prod`.
-2. Send yourself a campaign test (the admin Campaigns screen refuses to send to
-   a list before you have sent yourself one anyway).
-3. Watch `[mailer] SES OK:` in CloudWatch, and the `via` column on `EmailSend`.
-4. After a week of clean sending: set `MAIL_FALLBACK=off`, delete
-   `RESEND_API_KEY` from SSM, and delete the Gmail `SMTP_USER` / `SMTP_PASS`
-   with it. An app password that can send as the studio is a credential nobody
-   needs once the role can do the job.
+Resend is deleted from the code on branch `feat/ses-only`. **That branch must
+not be deployed while the account is in the sandbox**: with Resend gone, a
+sandboxed SES can only deliver to verified addresses, so every receipt, reset
+and sign-in code to a customer would be refused. The live Lambdas already carry
+the SES IAM grant and both configuration-set variables, so going live is a code
+deploy only — no infrastructure change.
 
-**Rollback is one parameter.** Unset `MAIL_TRANSPORT` and the next cold start is
-back on Resend.
+1. **Wait for approval.** `aws sesv2 get-account --region eu-west-1` must show
+   `ProductionAccessEnabled: true`. The Emails screen's **Can we send?** now says
+   "sandbox … customers cannot be reached" until it does.
+2. **Prove authentication.** Open an SES-sent message in Gmail → Show original,
+   and confirm `dmarc=pass`.
+3. **Merge `feat/ses-only`** into the branch the API deploys from, run
+   `cd infra && npx cdk diff AdlmApi` and read it — AdlmApi is a shared stack, and
+   a deploy from a checkout missing another branch's resources deletes them —
+   then deploy.
+4. **Watch a day.** `[mailer] SES OK:` in the ApiFn log group, `via: "ses"` on
+   `EmailSend`, and bounces on Emails → What came back.
+5. **Then remove Resend everywhere else:**
+   - revoke the API key in the Resend dashboard and close the account;
+   - delete `RESEND_API_KEY` from SSM (`/adlm/cloud/prod/RESEND_API_KEY`);
+   - in Google Cloud DNS, delete Resend's records: `resend._domainkey.adlmstudio.net`
+     (TXT) and `send.adlmstudio.net` (MX and TXT). Leave `mail.adlmstudio.net`,
+     the SES DKIM CNAMEs, the apex SPF and the Google Workspace MX exactly as they are.
+
+**The Gmail SMTP fallback** is still in the code but its credential is rejected
+(`535 BadCredentials`). Either put a working app password in `SMTP_PASS`, or
+delete `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` and set `MAIL_FALLBACK=off` so SES is
+the only way out and a failure is reported as one.
+
+**Rollback** is redeploying the previous build. There is no second provider to
+flip to; `MAIL_TRANSPORT=smtp` only helps if the Gmail credential works.
 
 ---
 

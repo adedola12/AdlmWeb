@@ -146,7 +146,7 @@ export async function sendBoqImportGrantEmail({ user, entitlement }) {
         route: BOQ_IMPORT_PRODUCTS[key].route,
       })),
     });
-    // BCC the admin mailbox: Resend sends never appear in the Gmail Sent
+    // BCC the admin mailbox: SES sends never appear in the Gmail Sent
     // folder, so this keeps an internal copy of every grant notification.
     const adminCopy =
       process.env.ADMIN_NOTIFY_EMAIL || process.env.SMTP_USER || "";

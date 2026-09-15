@@ -39,8 +39,9 @@ const EmailSendSchema = new mongoose.Schema(
     key: { type: String, default: "unattributed", index: true },
     toHash: { type: String, default: "" },
     ok: { type: Boolean, default: true },
-    // Which transport carried it, because "Resend is down" and "the wording is
-    // wrong" are different problems with the same symptom.
+    // Which transport carried it, because "SES is refusing" and "the wording
+    // is wrong" are different problems with the same symptom. Rows from
+    // before the SES cutover read "resend" or "resend-smtp".
     via: { type: String, default: "" },
     // Indexed by the TTL index below, so not marked index:true here as well.
     at: { type: Date, default: Date.now },

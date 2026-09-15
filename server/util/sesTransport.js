@@ -1,12 +1,12 @@
 // server/util/sesTransport.js
 //
-// SES directly, instead of through a reseller.
+// SES, and the only way the studio's mail leaves.
 //
-// This is less of a change than it looks. Resend already sends this domain's
-// mail through SES — `send.adlmstudio.net` publishes an SPF of
-// `include:amazonses.com` and an MX of `feedback-smtp.eu-west-1.amazonses.com`,
-// which is SES in Ireland wearing somebody else's name. What this file removes
-// is the middleman and the API key, not the mail platform.
+// Resend used to sit in front of this, and it was never a different platform:
+// `send.adlmstudio.net` published an SPF of `include:amazonses.com` and an MX
+// of `feedback-smtp.eu-west-1.amazonses.com`, which is SES in Ireland wearing
+// somebody else's name. Going direct removed the middleman, the API key and a
+// free-plan daily cap — not the mail platform, and not the sending reputation.
 //
 // THE REGION IS NOT A DETAIL
 //
@@ -19,10 +19,9 @@
 // THERE IS NO CREDENTIAL
 //
 // The Lambda's execution role is the credential. Nothing to put in SSM,
-// nothing to rotate, nothing that can leak out of a log line — which is the
-// real reason to prefer this over both the Resend key and the Gmail app
-// password it currently falls back to. Locally it picks up whatever the AWS
-// CLI is configured with, and fails loudly if that is nothing.
+// nothing to rotate, nothing that can leak out of a log line. Locally it picks
+// up whatever the AWS CLI is configured with, and fails loudly if that is
+// nothing.
 //
 // SIMPLE CONTENT, NOT RAW MIME
 //
@@ -51,7 +50,12 @@ function ses() {
 }
 
 /**
- * Whether SES should carry the mail.
+ * Whether SES should carry the mail. Yes, unless somebody has said otherwise.
+ *
+ * SES is the default now that Resend is gone. The one exception is
+ * MAIL_TRANSPORT=smtp, an emergency lever that sends through the Gmail SMTP
+ * fallback alone — for the day SES itself is the problem. Anything else,
+ * including unset and the old "ses", means SES.
  *
  * Read at call time, never captured at import: on Lambda the SSM secrets land
  * in process.env at cold start, potentially after this module was already
@@ -59,7 +63,7 @@ function ses() {
  * invocation. util/videoNotifier.js learned this the hard way with DRY_RUN.
  */
 export const isSesSelected = () =>
-  /^ses$/i.test(String(process.env.MAIL_TRANSPORT || "").trim());
+  !/^smtp$/i.test(String(process.env.MAIL_TRANSPORT || "").trim());
 
 /**
  * The configuration set, if one is configured.
@@ -146,6 +150,36 @@ export function forgetSendRate() {
   _rateAt = 0;
 }
 
+/**
+ * Whether this account can reach customers at all, for the health report.
+ *
+ * The question a sandboxed account gets wrong silently: it accepts every send
+ * call and delivers only to verified addresses, so it looks healthy from the
+ * inside right up to the moment a customer's password reset does not arrive.
+ * ProductionAccessEnabled is the field that says which of the two it is.
+ *
+ * Account-level only. The Lambda role holds ses:GetAccount and not
+ * ses:GetEmailIdentity, and reading the identity here would turn a healthy
+ * account into an AccessDenied row on the Emails screen.
+ *
+ * Never throws: a report that cannot be read says so in `error`.
+ */
+export async function sesAccountStatus() {
+  try {
+    const a = await ses().send(new GetAccountCommand({}));
+    return {
+      sendingEnabled: a?.SendingEnabled !== false,
+      productionAccess: Boolean(a?.ProductionAccessEnabled),
+      enforcement: String(a?.EnforcementStatus || ""),
+      max24h: Number(a?.SendQuota?.Max24HourSend) || 0,
+      maxRate: Number(a?.SendQuota?.MaxSendRate) || 0,
+      sent24h: Number(a?.SendQuota?.SentLast24Hours) || 0,
+    };
+  } catch (err) {
+    return { error: `could not read the SES account: ${err?.name || ""} ${err?.message || err}`.trim() };
+  }
+}
+
 /* ───────────────────────────────────────────────────────────── sending ── */
 
 /**
@@ -194,8 +228,8 @@ export function sesSendInput({
   }
 
   if (Array.isArray(attachments) && attachments.length) {
-    // The rest of the app passes attachment bodies as base64 strings, because
-    // that is what the Resend API wanted. The SDK wants bytes and does its own
+    // The rest of the app passes attachment bodies as base64 strings — the
+    // shape the old Resend API wanted. The SDK wants bytes and does its own
     // encoding, so decode here rather than changing twenty call sites.
     Simple.Attachments = attachments.map((a) => ({
       FileName: a.filename,
