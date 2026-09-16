@@ -34,6 +34,7 @@ const when = (d) =>
 const REASON = {
   expired: "Licence lapsed",
   pending: "Order unpaid",
+  silent: "Software gone quiet",
 };
 
 export default function DsAdminFollowUps() {
@@ -112,6 +113,11 @@ export default function DsAdminFollowUps() {
             {/* Somebody who let one licence lapse but still holds another is
                 a different call from somebody who has left entirely. */}
             {f.hasOther ? " · still holds another" : ""}
+            {f.silence
+              ? f.silence.neverUsed
+                ? " · licence never used"
+                : ` · no use for ${f.silence.days} days`
+              : ""}
           </span>
         </span>
       ),
@@ -206,13 +212,13 @@ export default function DsAdminFollowUps() {
           rows={items}
           empty={[
             "Nobody to ring",
-            "No licence has lapsed and no order is sitting unpaid. That is the list being empty, not missing.",
+            "No licence has lapsed, no order is sitting unpaid, and every paid licence is in use. That is the list being empty, not missing.",
           ]}
         />
       )}
 
       <p className="adm-foot-note">
-        The list is rebuilt from expired licences and unpaid orders, and a rebuild never touches
+        The list is rebuilt every morning from expired licences, unpaid orders and paid software nobody is using, and a rebuild never touches
         the call history — somebody leaves this list by renewing or paying, not by being ticked
         off. Logging a call records who made it and when, against your name.
       </p>

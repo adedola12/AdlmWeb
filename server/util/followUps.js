@@ -5,6 +5,8 @@
 // Two sources, one row per person:
 //   • User.entitlements whose expiry has passed  → reason "expired"
 //   • Purchase.status === "pending"              → reason "pending"
+//   • a live paid desktop licence nobody uses    → reason "silent"
+//     (see util/silentCustomers.js)
 //
 // The rebuild is IDEMPOTENT and non-destructive. It refreshes the snapshot a
 // caller reads off the screen (which products, how overdue, what they tried to
@@ -21,6 +23,7 @@ import { User } from "../models/User.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
 import { FollowUp } from "../models/FollowUp.js";
+import { collectSilentCustomers } from "./silentCustomers.js";
 
 /**
  * Effective status of one entitlement, resolving `status` against `expiresAt`.
@@ -112,6 +115,7 @@ async function productNameMap() {
 export async function collectCandidates({
   expiredWithinDays = 0,
   pendingMinAgeHours = 24,
+  includeSilent = true,
 } = {}) {
   const now = dayjs();
   const names = await productNameMap();
@@ -134,6 +138,7 @@ export async function collectCandidates({
         purchases: [],
         hasActiveOther: false,
         accountDisabled: false,
+        silence: null,
       });
     }
     return byEmail.get(key);
@@ -197,6 +202,31 @@ export async function collectCandidates({
     row.hasActiveOther = anyActive;
     row.products = expired.sort((a, b) => b.daysOverdue - a.daysOverdue);
     row.reasons.add("expired");
+  }
+
+  /* ── paid software gone quiet ──────────────────────────────────────── */
+  // A firm can hold valid licences, sign in to the website without trouble,
+  // and still have every computer cut off. Nothing else in the system looks
+  // at whether the software is actually used, so this is the only place a
+  // stuck customer shows up before they stop paying.
+  const silent = includeSilent ? await collectSilentCustomers({ now: now.toDate() }) : [];
+  for (const { user: u, silence } of silent) {
+    const row = rowFor(u.email);
+    if (!row) continue;
+    row.userId = row.userId || u._id;
+    if (!row.firstName) row.firstName = String(u.firstName || "").trim();
+    if (!row.lastName) row.lastName = String(u.lastName || "").trim();
+    if (!row.phone) row.phone = String(u.whatsapp || "").trim();
+    if (!row.firmName) row.firmName = String(u.firmName || "").trim() || silence.organizationName;
+    if (!row.location) row.location = String(u.location || "").trim();
+    row.silence = {
+      ...silence,
+      products: silence.products.map((p) => ({
+        ...p,
+        productName: names.get(p.productKey) || p.productKey,
+      })),
+    };
+    row.reasons.add("silent");
   }
 
   /* ── pending purchases ─────────────────────────────────────────────── */
@@ -312,6 +342,7 @@ export async function rebuildFollowUps(opts = {}) {
           reasons: c.reasons,
           products: c.products,
           purchases: c.purchases,
+          silence: c.silence || null,
           maxDaysOverdue: c.maxDaysOverdue,
           lastExpiredAt: c.lastExpiredAt,
           hasActiveOther: c.hasActiveOther,

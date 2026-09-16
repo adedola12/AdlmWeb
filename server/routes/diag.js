@@ -26,6 +26,8 @@
 // a report can be found in CloudWatch by the code the customer reads out.
 
 import express from "express";
+import mongoose from "mongoose";
+import { ClientNetError } from "../models/ClientNetError.js";
 
 const router = express.Router();
 
@@ -75,6 +77,58 @@ router.post("/report", express.raw({ type: () => true, limit: "128kb" }), (req, 
 // is the one shape that always gets through.
 router.get("/report", (req, res) => {
   logReport(String(req.query.data || req.query.d || ""), res);
+});
+
+/*
+ * A browser reporting that one of its requests to the API never completed.
+ * Sent by client/src/lib/netFailureBeacon.js as text/plain (no preflight).
+ *
+ * Public by necessity: the whole point is to hear from browsers whose signed-in
+ * requests are failing. So everything is clipped, nothing is trusted, and each
+ * warm container accepts a bounded number of reports per address per minute.
+ */
+const recent = new Map();
+function allow(ip, now = Date.now()) {
+  const hits = (recent.get(ip) || []).filter((t) => now - t < 60_000);
+  if (hits.length >= 20) {
+    recent.set(ip, hits);
+    return false;
+  }
+  hits.push(now);
+  recent.set(ip, hits);
+  if (recent.size > 5000) recent.clear();
+  return true;
+}
+
+const clip = (v, n) => String(v ?? "").slice(0, n);
+
+router.post("/client-error", express.raw({ type: () => true, limit: "8kb" }), async (req, res) => {
+  if (!allow(req.ip || "-")) return res.status(204).end();
+  let data = {};
+  try {
+    const b = req.body;
+    data = JSON.parse(Buffer.isBuffer(b) ? b.toString("utf8") : String(b || "{}")) || {};
+  } catch {
+    return res.status(204).end();
+  }
+  const doc = {
+    userId: mongoose.isValidObjectId(data.userId) ? data.userId : null,
+    email: clip(data.email, 200).trim().toLowerCase(),
+    path: clip(data.path, 200).split("?")[0],
+    method: clip(data.method, 10).toUpperCase(),
+    page: clip(data.page, 200).split("?")[0],
+    online: typeof data.online === "boolean" ? data.online : null,
+    message: clip(data.message, 200),
+    ua: clip(data.ua || req.headers["user-agent"], 300),
+  };
+  if (!doc.path) return res.status(204).end();
+  console.log(`[client-error] ${doc.method} ${doc.path} user=${doc.email || doc.userId || "-"} page=${doc.page}`);
+  try {
+    await ClientNetError.create(doc);
+  } catch (e) {
+    console.warn("[client-error] not stored:", e?.message || e);
+  }
+  return res.status(204).end();
 });
 
 export default router;

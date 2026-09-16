@@ -211,7 +211,19 @@ router.get("/followups", requireAuth, requirePermission("adminhub"), async (req,
       // Why this person is on the list at all — expired licences, unpaid
       // orders, or both. The reason is the call.
       reasons: f.reasons || [],
-      products: (f.products || []).map((p) => p.productName || p.productKey).filter(Boolean),
+      products: [
+        ...(f.products || []).map((p) => p.productName || p.productKey),
+        // Paid software that has gone quiet names its products too.
+        ...(f.silence?.products || []).map((p) => p.productName || p.productKey),
+      ].filter((v, i, all) => v && all.indexOf(v) === i),
+      // null when the software is in use; otherwise how long it has been quiet.
+      silence: f.silence
+        ? {
+            neverUsed: !!f.silence.neverUsed,
+            days: f.silence.days ?? null,
+            seats: n0(f.silence.seats),
+          }
+        : null,
       overdue: n0(f.maxDaysOverdue),
       calls: n0(f.callCount),
       lastCalledAt: f.lastCalledAt || null,

@@ -22,6 +22,7 @@ import { App, Tags } from "aws-cdk-lib";
 import { config } from "../config.js";
 import { AdlmEdgeStack } from "../lib/adlm-edge-stack.js";
 import { AdlmApiStack } from "../lib/adlm-api-stack.js";
+import { AdlmOpsAlertsStack } from "../lib/adlm-ops-alerts-stack.js";
 
 const app = new App();
 
@@ -106,6 +107,28 @@ if (useExternalDns) {
 
   api.addStackDependency(edge);
 }
+
+// Alerting lives in its own stacks, so a deploy of AdlmApi from the wrong
+// checkout can never delete it. See lib/adlm-ops-alerts-stack.ts.
+//
+//   npx cdk bootstrap aws://<account>/us-east-1      (once, before the first deploy)
+//   npx cdk deploy AdlmOpsAlerts AdlmOpsAlertsEu
+//
+// Then click the two AWS Notifications confirmation emails.
+new AdlmOpsAlertsStack(app, "AdlmOpsAlerts", {
+  // Support case updates and account-wide Health events are emitted here.
+  env: { account: config.account, region: "us-east-1" },
+  alertEmail: config.opsAlertEmail,
+  watchSupportCases: true,
+  description: "ADLM - AWS Support case updates and account-wide Health events to the ops inbox",
+});
+new AdlmOpsAlertsStack(app, "AdlmOpsAlertsEu", {
+  env: { account: config.account, region: config.region },
+  alertEmail: config.opsAlertEmail,
+  watchSupportCases: false,
+  digestLogGroupName: config.scheduledLogGroupName,
+  description: "ADLM - regional Health events and the daily operations report watchdog",
+});
 
 // Makes the Activate credit burn-down attributable per application in Cost
 // Explorer, which is what the Phase 9 cost report is built from.

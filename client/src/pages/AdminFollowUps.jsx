@@ -51,9 +51,10 @@ const statusTone = {
 const reasonTone = {
   expired: "bg-rose-100 text-rose-700",
   pending: "bg-sky-100 text-sky-700",
+  silent: "bg-amber-100 text-amber-800",
 };
 
-const REASON_LABELS = { expired: "Expired", pending: "Unpaid order" };
+const REASON_LABELS = { expired: "Expired", pending: "Unpaid order", silent: "Software silent" };
 
 function fmtDate(d) {
   return d ? new Date(d).toLocaleDateString() : "—";
@@ -405,7 +406,7 @@ export default function AdminFollowUps() {
       <AdminPageHeader
         icon={IconPhone}
         title="Follow-up calls"
-        subtitle="Everyone with an expired subscription or an unapproved order, and the log of every call made to them."
+        subtitle="Everyone with an expired subscription, an unapproved order, or paid software nobody is using, and the log of every call made to them."
         actions={
           <>
             <button
@@ -461,10 +462,11 @@ export default function AdminFollowUps() {
       ) : null}
 
       {/* ── quick counters ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         {[
           { label: "Expired subscriptions", value: c.reasons?.expired || 0, key: "expired" },
           { label: "Unapproved orders", value: c.reasons?.pending || 0, key: "pending" },
+          { label: "Software gone quiet", value: c.reasons?.silent || 0, key: "silent" },
           { label: "Never called", value: c.uncalled || 0, key: "uncalled" },
           { label: "Callbacks due", value: c.due || 0, key: "due" },
         ].map((box) => (
@@ -475,7 +477,7 @@ export default function AdminFollowUps() {
             onClick={() =>
               setFilters((f) => ({
                 ...f,
-                reason: box.key === "expired" || box.key === "pending" ? box.key : "",
+                reason: ["expired", "pending", "silent"].includes(box.key) ? box.key : "",
                 uncalled: box.key === "uncalled",
                 due: box.key === "due",
               }))
@@ -499,6 +501,7 @@ export default function AdminFollowUps() {
           <option value="">All reasons</option>
           <option value="expired">Expired subscription</option>
           <option value="pending">Unapproved order</option>
+          <option value="silent">Software gone quiet</option>
         </select>
 
         <select
@@ -658,6 +661,13 @@ export default function AdminFollowUps() {
                             </span>
                           ))}
                         </div>
+                        {it.silence ? (
+                          <div className="text-xs text-amber-700 mt-1">
+                            {it.silence.neverUsed
+                              ? "licence never used"
+                              : `no software use for ${it.silence.days} days`}
+                          </div>
+                        ) : null}
                         {it.maxDaysOverdue ? (
                           <div className="text-xs text-slate-500 mt-1">
                             {it.maxDaysOverdue} days lapsed
@@ -672,6 +682,15 @@ export default function AdminFollowUps() {
                             <span className="text-slate-500">
                               expired {fmtDate(p.expiresAt)}
                               {p.seats > 1 ? ` · ${p.seats} seats` : ""}
+                            </span>
+                          </div>
+                        ))}
+                        {(it.silence?.products || []).map((sp) => (
+                          <div key={`quiet-${sp.productKey}`} className="text-xs">
+                            <span className="font-medium">{sp.productName || sp.productKey}</span>{" "}
+                            <span className="text-slate-500">
+                              {sp.lastSeenAt ? `last used ${fmtDate(sp.lastSeenAt)}` : "never used"}
+                              {sp.seats > 1 ? ` · ${sp.seats} seats` : ""}
                             </span>
                           </div>
                         ))}
