@@ -64,6 +64,13 @@ export default function ModelViewer({
   productKey = "",
   projectId = "",
   accessToken = "",
+  // Work area: a canvas-only viewer driven from outside. `highlightIds` are
+  // the element IDs to light up (empty clears), `onPickElement` reports a
+  // click on the model, and `height` sizes the canvas.
+  compact = false,
+  height = 600,
+  highlightIds = null,
+  onPickElement = null,
 }) {
   // Disciplines that actually have an attached model.
   const available = React.useMemo(
@@ -103,6 +110,24 @@ export default function ModelViewer({
   const [error, setError] = React.useState("");
   const [selectedItemKey, setSelectedItemKey] = React.useState(null);
   const [pickedId, setPickedId] = React.useState(0);
+  // The latest pick callback, read by the viewer without re-creating it.
+  const pickRef = React.useRef(onPickElement);
+  React.useEffect(() => {
+    pickRef.current = onPickElement;
+  }, [onPickElement]);
+
+  // Highlight driven from outside (the work area). Re-applied once the model
+  // is ready, since a selection can be made while it is still loading.
+  const highlightKey = Array.isArray(highlightIds) ? highlightIds.join(",") : null;
+  React.useEffect(() => {
+    if (highlightKey === null || status !== "ready") return;
+    const v = viewerRef.current;
+    if (!v) return;
+    if (highlightIds.length) v.highlight(highlightIds);
+    else v.clearHighlight();
+    // highlightKey stands in for the array's contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightKey, status]);
 
   // (Re)create the viewer whenever the selected model changes.
   React.useEffect(() => {
@@ -133,7 +158,10 @@ export default function ModelViewer({
       setError(e?.message || "WebGL isn't available in this browser.");
       return undefined;
     }
-    viewer.onPick = (id) => setPickedId(id);
+    viewer.onPick = (id) => {
+      setPickedId(id);
+      pickRef.current?.(id);
+    };
     viewerRef.current = viewer;
 
     // Fetch the IFC through the SAME-ORIGIN API proxy (not the R2 URL directly):
@@ -257,11 +285,14 @@ export default function ModelViewer({
         </span>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[1fr_320px]" style={{ padding: 16 }}>
+      <div
+        className={compact ? "grid" : "grid gap-3 md:grid-cols-[1fr_320px]"}
+        style={{ padding: compact ? 12 : 16 }}
+      >
         {/* 3D canvas */}
         <div
-          className="relative h-[600px] overflow-hidden"
-          style={{ borderRadius: 14, border: "1px solid var(--line)", background: "var(--bg-alt)" }}
+          className="relative overflow-hidden"
+          style={{ height, borderRadius: 14, border: "1px solid var(--line)", background: "var(--bg-alt)" }}
         >
           <div ref={containerRef} className="absolute inset-0" />
           {status === "loading" ? (
@@ -297,8 +328,9 @@ export default function ModelViewer({
           ) : null}
         </div>
 
-        {/* Side panel: BoQ lines + pick info */}
-        <div className="flex h-[600px] flex-col gap-3">
+        {/* Side panel: BoQ lines + pick info (the work area shows its own) */}
+        {compact ? null : (
+        <div className="flex flex-col gap-3" style={{ height }}>
           {/* Clicked element trace: this element's own BoQ qty + materials */}
           {pickedId ? (
             <div
@@ -463,6 +495,7 @@ export default function ModelViewer({
             the model to see its quantities.
           </div>
         </div>
+        )}
       </div>
     </section>
   );

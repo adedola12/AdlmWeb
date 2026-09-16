@@ -15,6 +15,7 @@ const ReportModal = React.lazy(() => import("../reports/ReportModal.jsx"));
 
 // Lazy — pulls in three.js + the web-ifc wasm; only loads when the 3D tab opens.
 const ModelViewer = React.lazy(() => import("./ModelViewer.jsx"));
+const WorkAreaView = React.lazy(() => import("./WorkAreaView.jsx"));
 
 // Close a popover on an outside press or Escape — the same behaviour as his
 // .wk-dd control (see ds/WkDropdown.jsx).
@@ -315,6 +316,12 @@ const TAB_OPTIONS = [
     group: "Commercial",
   },
   {
+    id: "work",
+    label: "Work area",
+    helper: "Model, bill, schedule and Ada together",
+    group: "Delivery",
+  },
+  {
     id: "model",
     label: "3D Model",
     helper: "View & verify the BIM model",
@@ -334,6 +341,7 @@ const VIEW_ICONS = {
   bill: "hi-doc",
   budget: "hi-billing",
   valuation: "hi-cert",
+  work: "hi-products",
   model: "hi-product",
   pm: "hi-calendar",
 };
@@ -1067,6 +1075,24 @@ export default function ProjectOpenView({
             progressTotal={progressTotal}
           />
         </div>
+      ) : null}
+
+      {activeTab === "work" ? (
+        <React.Suspense fallback={<div className="wk-empty">Loading the work area…</div>}>
+          <WorkAreaView
+            projectName={projectName}
+            productKey={productKey}
+            projectId={projectId}
+            accessToken={accessToken}
+            items={items}
+            rows={computedShown}
+            projectModels={projectModels}
+            materialItems={materialItems}
+            budgetItems={budgetItems}
+            pmDashboard={pmDashboard}
+            canSeeRates={canSeeRates}
+          />
+        </React.Suspense>
       ) : null}
 
       {activeTab === "model" ? (
