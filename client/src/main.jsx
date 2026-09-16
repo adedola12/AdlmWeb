@@ -854,16 +854,6 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
-        {
-          // The YouTube channel beside the free library: what is filed, held,
-          // missing, and whether each video still plays.
-          path: "admin/youtube",
-          element: (
-            <AdminRoute permission="learn">
-              <AdminYoutubeStatus />
-            </AdminRoute>
-          ),
-        },
       {
         // The YouTube channel beside the free library: what is filed, held,
         // missing, and whether each video still plays. His design at
