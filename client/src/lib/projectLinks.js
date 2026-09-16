@@ -54,21 +54,25 @@ export function materialsBase(k) {
 /**
  * Materials are a project's Budget, not a place of their own.
  *
- * A schedule saved with its bill (same product, same slug, or the slug with
- * "-material(s)" on the end) is already the Budget inside that project, so it
+ * A schedule saved with its bill (its sourceProjectId, or the same product
+ * and slug, or the slug with "-material(s)" on the end) is already the Budget inside that project, so it
  * is dropped from project lists. A schedule with no bill behind it — older
  * saves, MEP and CIVIQ schedules — stays listed as a project of its own
  * product and opens on the project page, where its lines are its Budget.
  */
 export function foldMaterials(list) {
   const rows = Array.isArray(list) ? list : [];
+  const billRows = rows.filter((p) => !isMaterialsKey(p?.productKey));
   const bills = new Set(
-    rows
-      .filter((p) => !isMaterialsKey(p?.productKey) && p?.slug)
+    billRows
+      .filter((p) => p?.slug)
       .map((p) => `${String(p.productKey).toLowerCase()}::${p.slug}`),
   );
+  const billIds = new Set(billRows.map((p) => String(p?.id || p?._id || "")).filter(Boolean));
   return rows.filter((p) => {
     if (!isMaterialsKey(p?.productKey)) return true;
+    // Saved with its bill: the server records which one.
+    if (p?.sourceProjectId && billIds.has(String(p.sourceProjectId))) return false;
     const base = materialsBase(p.productKey);
     const slug = String(p?.slug || "");
     const bare = slug.replace(/-materials?$/, "");
@@ -87,7 +91,10 @@ export function normaliseRollup(list) {
 /** The workspace address for a project (by slug). */
 export function projectWorkspaceHref(p) {
   const k = String(p?.productKey || "").toLowerCase();
-  if (k === "archicad") return "/archicad";
+  if (k === "archicad") {
+    const key = p?.slug || p?.id || p?._id || "";
+    return key ? `/archicad/${encodeURIComponent(key)}/boq` : "/archicad";
+  }
   if (k === "rategen") return "/rategen";
   if (!k) return "/manage";
   const key = p?.slug || p?.id || p?._id || "";

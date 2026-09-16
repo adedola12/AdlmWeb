@@ -2,7 +2,7 @@
 // Budget dashboard route for an ArchiCAD project — wraps
 // ArchiCADBudgetDashboard around the current costed BoQ document.
 import React from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { FaListUl } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
@@ -20,6 +20,16 @@ export default function ArchiCADDashboard() {
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
   const [savingBudget, setSavingBudget] = React.useState(false);
+
+
+  // An old link carries the database id; once the project is known, show its
+  // slug in the address instead (a history replace, not a new entry).
+  const navigate = useNavigate();
+  React.useEffect(() => {
+    if (boq?.slug && boq?.projectId === projectId && /^[a-f\d]{24}$/i.test(projectId)) {
+      navigate(`/archicad/${encodeURIComponent(boq.slug)}/dashboard`, { replace: true });
+    }
+  }, [boq?.slug, boq?.projectId, projectId, navigate]);
 
   const load = React.useCallback(async () => {
     setLoading(true);

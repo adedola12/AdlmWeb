@@ -1481,6 +1481,9 @@ router.get(
           productKey: 1,
           origin: 1,
           isMaterials: 1,
+          // The bill a material & labour schedule was saved with, so the web
+          // can fold the schedule into that project's Budget.
+          sourceProjectId: 1,
           // The product this work BELONGS to.
           //
           // A material & labour schedule is stored as its own project with its

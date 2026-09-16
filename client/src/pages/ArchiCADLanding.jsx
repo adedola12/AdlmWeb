@@ -121,11 +121,11 @@ export default function ArchiCADLanding() {
                 </div>
               </div>
               <div className="wk-acts" style={{ marginTop: 16 }}>
-                <Link to={`/archicad/${p.id}/boq`} className="ds-btn ds-btn-sm btn-p">
+                <Link to={`/archicad/${encodeURIComponent(p.slug || p.id)}/boq`} className="ds-btn ds-btn-sm btn-p">
                   Open BoQ
                 </Link>
                 <Link
-                  to={`/archicad/${p.id}/dashboard`}
+                  to={`/archicad/${encodeURIComponent(p.slug || p.id)}/dashboard`}
                   title="Budget dashboard"
                   className="ds-btn ds-btn-sm btn-o"
                 >

@@ -3,7 +3,7 @@
 // exports, share link, connector badge, unit toggle, changed-line
 // highlighting and the data-issues banner.
 import React from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { FaChartBar, FaCheck, FaCopy, FaLink } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
@@ -47,6 +47,16 @@ export default function ArchiCADBoQ() {
   const [reapplying, setReapplying] = React.useState(false);
 
   const readOnly = viewingVersionId != null;
+
+
+  // An old link carries the database id; once the project is known, show its
+  // slug in the address instead (a history replace, not a new entry).
+  const navigate = useNavigate();
+  React.useEffect(() => {
+    if (boq?.slug && boq?.projectId === projectId && /^[a-f\d]{24}$/i.test(projectId)) {
+      navigate(`/archicad/${encodeURIComponent(boq.slug)}/boq`, { replace: true });
+    }
+  }, [boq?.slug, boq?.projectId, projectId, navigate]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
