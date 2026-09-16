@@ -8,10 +8,16 @@ import { API_BASE } from "../config";
 // ifcElements (which pulls in the ~1.5 MB web-ifc wasm wrapper) is imported
 // dynamically inside handleUploadModel so it is code-split out of the main
 // bundle and only fetched when a user actually uploads a model.
-import { FaChartBar, FaCubes, FaFileExcel, FaFolder, FaInfoCircle, FaKey, FaSearch, FaSyncAlt, FaTasks, FaThLarge, FaTimes, FaUserPlus } from "../components/icons.jsx";
+import { FaCubes, FaFolder, FaInfoCircle } from "../components/icons.jsx";
 import * as XLSX from "xlsx";
 import ProjectExplorerGrid from "../features/projects/ProjectExplorerGrid.jsx";
 import ProjectOpenView from "../features/projects/ProjectOpenView.jsx";
+import WkModal from "../ds/WkModal.jsx";
+
+// His orange palette, for a note that is a warning rather than information.
+// Tokens only, so it follows the theme; there is no new CSS rule behind it.
+const NOTE_WARN = { background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)" };
+const NOTE_FULL = { gridColumn: "1 / -1", margin: 0 };
 import {
   allCategoriesForProductKey,
   deriveItemCategory,
@@ -1069,7 +1075,6 @@ export default function ProjectsGeneric() {
     : "Completed to date";
 
   const sidebarMeta = React.useMemo(() => getSidebarMeta(tool), [tool]);
-  const SidebarIcon = sidebarMeta.Icon;
 
   const [rows, setRows] = React.useState([]);
   const [sel, setSel] = React.useState(null);
@@ -5105,349 +5110,158 @@ export default function ProjectsGeneric() {
     "h-4 w-4 accent-blue-600 border-0 outline-none ring-0 focus:ring-0 focus:outline-none";
 
   return (
-    <div className="min-h-screen p-4 md:p-6">
-      <div className={`mx-auto flex flex-col gap-4 ${sel ? "max-w-[1700px]" : "max-w-7xl md:flex-row"}`}>
-        {/* SIDEBAR, vertical while browsing; collapses to a slim
-            horizontal bar once a project is open so the data tables get
-            the full width of the screen. */}
-        <aside className={sel ? "w-full" : "md:w-[260px]"}>
-          {sel ? (
-            <div className="space-y-3">
-              <div className="card !p-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 text-white shadow-glow-blue">
-                    <SidebarIcon className="text-base" />
-                  </div>
-                  <div className="min-w-0 leading-tight">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
-                      {sidebarMeta.app}
-                    </div>
-                    <div className="truncate text-sm font-bold text-slate-900 dark:text-white">
-                      {sidebarMeta.section}
-                    </div>
-                  </div>
-                </div>
-
-                {showRevitToggle && (
-                  <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-adlm-dark-border dark:bg-white/5">
-                    <Link
-                      to={`/projects/${toolFamily}`}
-                      className={[
-                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                        toolNorm === toolFamily
-                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      <FaFolder className="text-[12px]" />
-                      Takeoffs
-                    </Link>
-                    <Link
-                      to={`/projects/${toolFamily}-materials`}
-                      className={[
-                        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                        isMaterialsTool(tool)
-                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      <FaCubes className="text-[12px]" />
-                      Materials
-                    </Link>
-                  </div>
-                )}
-
-                <div className="ml-auto flex items-center gap-2">
-                  <Link
-                    to={DASHBOARD_PATH}
-                    title="Back to dashboard"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
-                  >
-                    <FaThLarge className="text-[12px]" />
-                    <span className="hidden sm:inline">Dashboard</span>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => load({ keepSelection: true })}
-                    disabled={bulkBusy}
-                    title="Refresh projects"
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-text"
-                  >
-                    <FaSyncAlt className={`text-[12px] ${bulkBusy ? "animate-spin" : ""}`} />
-                    <span className="hidden sm:inline">{bulkBusy ? "Refreshing…" : "Refresh"}</span>
-                  </button>
-                  {canBoqImport &&
-                    sel?.origin === BOQ_IMPORT_ORIGIN &&
-                    sel?._access?.canEdit !== false && (
-                      <>
-                        <input
-                          ref={boqReimportInputRef}
-                          type="file"
-                          accept=".xlsx,.xlsm"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) reimportBoq(f);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => boqReimportInputRef.current?.click()}
-                          disabled={boqImportBusy}
-                          title="Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
-                          className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:shadow-depth active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                        >
-                          <FaFileExcel className="text-[12px]" />
-                          <span className="hidden sm:inline">
-                            {boqImportBusy ? "Updating…" : "Update from Excel"}
-                          </span>
-                        </button>
-                      </>
-                    )}
-                </div>
-              </div>
-
-              {err && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {err}
-                </div>
-              )}
-              {notice && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  {notice}
-                </div>
-              )}
-            </div>
-          ) : (
-          <div className="card !p-0 overflow-hidden md:sticky md:top-6">
-            {/* Identity band, tells the user exactly which tool & mode
-                they're in, so the rest of the sidebar is purely navigation. */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-adlm-blue-700 to-adlm-blue-600 p-4 text-white">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl"
-              />
-              <div className="relative flex items-start gap-3">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
-                  <SidebarIcon className="text-lg text-white" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-100/90">
-                    {sidebarMeta.app}
-                  </div>
-                  <div className="truncate text-base font-bold leading-tight">
-                    {sidebarMeta.section}
-                  </div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-blue-100/80">
-                    {sidebarMeta.hint}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 p-3">
-              {/* Group 1, Mode: switch between Takeoffs and Materials for
-                  the same tool. A segmented control reads as "pick one",
-                  unlike the old stack of identical bordered links. */}
-              {showRevitToggle && (
-                <div>
-                  <div className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
-                    Mode
-                  </div>
-                  <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-adlm-dark-border dark:bg-white/5">
-                    <Link
-                      to={`/projects/${toolFamily}`}
-                      className={[
-                        "inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold transition",
-                        toolNorm === toolFamily
-                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      <FaFolder className="text-[12px]" />
-                      Takeoffs
-                    </Link>
-                    <Link
-                      to={`/projects/${toolFamily}-materials`}
-                      className={[
-                        "inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold transition",
-                        isMaterialsTool(tool)
-                          ? "bg-white text-adlm-blue-700 shadow-depth dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
-                          : "text-slate-600 hover:bg-white/70 dark:text-adlm-dark-muted dark:hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      <FaCubes className="text-[12px]" />
-                      Materials
-                    </Link>
-                  </div>
-                </div>
-              )}
-
-              {/* Group 2, Navigate: leave the tool or refresh the list.
-                  "Back to projects" lives on the project header itself,
-                  so it isn't duplicated here. */}
-              <div>
-                <div className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
-                  Navigate
-                </div>
-                <div className="space-y-1.5">
-                  <Link
-                    to={DASHBOARD_PATH}
-                    className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                    title="Back to dashboard"
-                  >
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                      <FaThLarge className="text-[12px]" />
-                    </span>
-                    Dashboard
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => load({ keepSelection: true })}
-                    disabled={bulkBusy}
-                    title="Refresh projects"
-                    className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                  >
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                      <FaSyncAlt className={`text-[12px] ${bulkBusy ? "animate-spin" : ""}`} />
-                    </span>
-                    {bulkBusy ? "Refreshing…" : "Refresh projects"}
-                  </button>
-                  {toolNorm === "revit" && (
-                    <Link
-                      to="/pm-tracker"
-                      title="PM Tracker, standalone project schedules (QUIV)"
-                      className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                    >
-                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                        <FaTasks className="text-[12px]" />
-                      </span>
-                      <span className="flex-1">PM Tracker</span>
-                      <span className="rounded-full bg-adlm-blue-700/10 px-1.5 py-0.5 text-[10px] font-semibold text-adlm-blue-700 dark:bg-adlm-blue-700/20 dark:text-adlm-blue-300">
-                        QUIV
-                      </span>
-                    </Link>
-                  )}
-                  {canBoqImport && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBoqImportErr("");
-                        setBoqImportOpen(true);
-                      }}
-                      title="Create a project from an Excel Bill of Quantities, the material & labour schedule is built for you"
-                      className="group flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                    >
-                      <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
-                        <FaFileExcel className="text-[12px]" />
-                      </span>
-                      <span className="flex-1 text-left">Import Excel BoQ</span>
-                      <span className="rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                        {boqImportBadge}
-                      </span>
-                    </button>
-                  )}
-                  {/* Portfolio Dashboard sits last, it's the cross-product
-                      roll-up you leave the tool for, so it anchors the group. */}
-                  <Link
-                    to="/portfolio-dashboard"
-                    title="Portfolio dashboard, all projects"
-                    className="group flex items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm dark:text-adlm-dark-text dark:hover:border-adlm-dark-border dark:hover:bg-white/5"
-                  >
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-adlm-blue-700 dark:bg-white/10 dark:text-adlm-dark-muted">
-                      <FaChartBar className="text-[12px]" />
-                    </span>
-                    Portfolio Dashboard
-                  </Link>
-                </div>
-              </div>
-
-              {err && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {err}
-                </div>
-              )}
-              {notice && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  {notice}
-                </div>
-              )}
-            </div>
+    <div>
+      <div>
+        {/* His work-surface head. The rail already carries the app's
+            navigation, so the old identity sidebar folds into this: the tool
+            and mode in the heading, every action it held on the right. */}
+        <div className="wk-head">
+          <div>
+            <h1>{sel ? sel?.name || "Untitled project" : title}</h1>
+            <p className="wk-ref">
+              {sel
+                ? title
+                : [sidebarMeta.app, sidebarMeta.hint].filter(Boolean).join(" · ")}
+            </p>
           </div>
-          )}
-        </aside>
-
-        {/* MAIN */}
-        <main className="flex-1">
-          <div className="card">
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div className="min-w-0">
-                {sel ? (
-                  <>
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-adlm-dark-dim">
-                      <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-adlm-orange" />
-                      {title}
-                    </div>
-                    <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                      <span aria-hidden="true" className="h-7 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
-                      <span className="truncate">{sel?.name || "Untitled project"}</span>
-                    </h1>
-                  </>
-                ) : (
-                  <>
-                    <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                      <span aria-hidden="true" className="h-6 w-1.5 rounded-full bg-gradient-to-b from-adlm-orange to-amber-400 flex-shrink-0" />
-                      <span className="truncate">{title}</span>
-                    </h1>
-                    <div className="text-xs text-slate-500 dark:text-adlm-dark-muted mt-1">
-                      Select a project folder to open
-                    </div>
-                  </>
-                )}
+          <div className="wk-acts" style={{ flexWrap: "wrap" }}>
+            {showRevitToggle && (
+              <div className="wk-loc-sw" role="group" aria-label="Mode">
+                <button
+                  type="button"
+                  className={toolNorm === toolFamily ? "on" : ""}
+                  onClick={() => navigate(`/projects/${toolFamily}`)}
+                >
+                  Takeoffs
+                </button>
+                <button
+                  type="button"
+                  className={isMaterialsTool(tool) ? "on" : ""}
+                  onClick={() => navigate(`/projects/${toolFamily}-materials`)}
+                >
+                  Materials
+                </button>
               </div>
-
-              {/* Search projects + Add shared project (always visible) */}
-              {!sel && (
-                <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center md:w-auto">
-                  <div className="w-full md:w-[420px]">
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-adlm-dark-border px-3 py-2 bg-white dark:bg-adlm-dark-panel shadow-depth focus-within:ring-2 focus-within:ring-adlm-blue-700/40 transition">
-                      <FaSearch className="text-slate-400" />
-                      <input
-                        className="w-full outline-none text-sm bg-transparent"
-                        placeholder="Search projects..."
-                        value={projectQuery}
-                        onChange={(e) => setProjectQuery(e.target.value)}
-                      />
-                      {!!projectQuery && (
-                        <button
-                          type="button"
-                          className="text-slate-500 hover:text-slate-700"
-                          onClick={() => setProjectQuery("")}
-                          title="Clear"
-                        >
-                          <FaTimes />
-                        </button>
-                      )}
-                    </div>
-                  </div>
+            )}
+            <Link
+              to={DASHBOARD_PATH}
+              title="Back to dashboard"
+              className="ds-btn ds-btn-sm btn-o"
+            >
+              Dashboard
+            </Link>
+            <button
+              type="button"
+              onClick={() => load({ keepSelection: true })}
+              disabled={bulkBusy}
+              title="Refresh projects"
+              className="ds-btn ds-btn-sm btn-o"
+            >
+              {bulkBusy ? "Refreshing…" : sel ? "Refresh" : "Refresh projects"}
+            </button>
+            {!sel && toolNorm === "revit" && (
+              <Link
+                to="/pm-tracker"
+                title="PM Tracker, standalone project schedules (QUIV)"
+                className="ds-btn ds-btn-sm btn-o"
+              >
+                PM Tracker · QUIV
+              </Link>
+            )}
+            {!sel && canBoqImport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBoqImportErr("");
+                  setBoqImportOpen(true);
+                }}
+                title="Create a project from an Excel Bill of Quantities, the material & labour schedule is built for you"
+                className="ds-btn ds-btn-sm btn-o"
+              >
+                Import Excel BoQ · {boqImportBadge}
+              </button>
+            )}
+            {!sel && (
+              <Link
+                to="/portfolio-dashboard"
+                title="Portfolio dashboard, all projects"
+                className="ds-btn ds-btn-sm btn-o"
+              >
+                Portfolio Dashboard
+              </Link>
+            )}
+            {sel &&
+              canBoqImport &&
+              sel?.origin === BOQ_IMPORT_ORIGIN &&
+              sel?._access?.canEdit !== false && (
+                <>
+                  <input
+                    ref={boqReimportInputRef}
+                    type="file"
+                    accept=".xlsx,.xlsm"
+                    hidden
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) reimportBoq(f);
+                    }}
+                  />
                   <button
                     type="button"
-                    onClick={() => {
-                      setClaimErr("");
-                      setClaimUpsell(null);
-                      setClaimCode("");
-                      setClaimOpen(true);
-                    }}
-                    title="Add a project a colleague shared with you (enter the share code)"
-                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-adlm-blue-700 shadow-depth transition hover:-translate-y-0.5 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-blue-300"
+                    onClick={() => boqReimportInputRef.current?.click()}
+                    disabled={boqImportBusy}
+                    title="Update this project from a newer copy of the source workbook. A workbook exported from ADLM is refused — re-measure at the source instead."
+                    className="ds-btn ds-btn-sm btn-o"
                   >
-                    <FaUserPlus /> Add shared project
+                    {boqImportBusy ? "Updating…" : "Update from Excel"}
                   </button>
-                </div>
+                </>
               )}
-            </div>
+          </div>
+        </div>
 
+        {err && (
+          <p className="mk-note" role="alert" style={{ ...NOTE_WARN, marginBottom: 16 }}>
+            {err}
+          </p>
+        )}
+        {notice && (
+          <p className="mk-note" role="status" style={{ marginBottom: 16 }}>
+            {notice}
+          </p>
+        )}
+
+        {!sel && (
+          <div className="wk-bar">
+            <label className="wk-find">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#hi-search" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Search projects..."
+                aria-label="Search projects"
+                autoComplete="off"
+                value={projectQuery}
+                onChange={(e) => setProjectQuery(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setClaimErr("");
+                setClaimUpsell(null);
+                setClaimCode("");
+                setClaimOpen(true);
+              }}
+              title="Add a project a colleague shared with you (enter the share code)"
+              className="ds-btn ds-btn-sm btn-o"
+            >
+              Add shared project
+            </button>
+          </div>
+        )}
+
+        <main>
             {!sel ? (
               <ProjectExplorerGrid
                 rowsShown={rowsShown}
@@ -5733,190 +5547,124 @@ export default function ProjectsGeneric() {
                 onDelete={() => delProject(selectedId, sel?.name)}
               />
             )}
-          </div>
         </main>
       </div>
 
-      {/* Add-shared-project (claim by code) modal */}
-      {claimOpen ? (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-            onClick={() => !claimBusy && setClaimOpen(false)}
-          />
-          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-adlm-dark-border dark:bg-adlm-dark-bg">
-            <div className="flex items-center justify-between bg-gradient-to-r from-adlm-blue-700 to-adlm-blue-600 px-5 py-4 text-white">
-              <div className="flex items-center gap-2.5">
-                <FaUserPlus />
-                <div className="text-sm font-bold">Add a shared project</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setClaimOpen(false)}
-                className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
-                aria-label="Close"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="space-y-3 p-5">
-              <p className="text-xs text-slate-500 dark:text-adlm-dark-muted">
-                Enter the share code a colleague gave you. You'll need the
-                matching plugin subscription to open the project.
-              </p>
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-adlm-dark-border">
-                <FaKey className="text-slate-400" />
-                <input
-                  autoFocus
-                  className="w-full bg-transparent font-mono text-sm tracking-wider outline-none dark:text-adlm-dark-text"
-                  placeholder="e.g. ABCDE-FGHIJ"
-                  value={claimCode}
-                  onChange={(e) => setClaimCode(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") claimSharedProject();
-                  }}
-                />
-              </div>
-
-              {claimErr ? (
-                <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300">
-                  {claimErr}
-                  {claimUpsell ? (
-                    <div className="mt-2">
-                      <Link
-                        to={`/product/${claimUpsell.requiredProductKey}`}
-                        onClick={() => setClaimOpen(false)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-adlm-orange px-3 py-1.5 text-xs font-bold text-white shadow-glow-orange"
-                      >
-                        Get {claimUpsell.productName}
-                      </Link>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setClaimOpen(false)}
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={claimSharedProject}
-                  disabled={claimBusy}
-                  className="btn-3d inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
-                >
-                  {claimBusy ? "Adding…" : "Add project"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ── Import Excel BoQ modal ── */}
-      {boqImportOpen ? (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
-          onClick={() => {
-            if (!boqImportBusy) setBoqImportOpen(false);
+      {/* Add a project a colleague shared (claim by code) */}
+      <WkModal
+        open={claimOpen}
+        title="Add a shared project"
+        sub="Enter the share code a colleague gave you. You'll need the matching plugin subscription to open the project."
+        busy={claimBusy}
+        onClose={() => setClaimOpen(false)}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            claimSharedProject();
           }}
         >
-          <div
-            className="card w-full max-w-md !p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
-                  <FaFileExcel className="text-emerald-600" />
-                  Import Excel BoQ
-                </h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-adlm-dark-muted">
-                  Creates a {boqImportBadge} project from an Excel Bill of
-                  Quantities. Categories, planned-vs-actual columns and
-                  optional Material &amp; Labour schedules are read from the
-                  workbook. Where the workbook has no schedule, one is built
-                  for you: cement, sand, granite, blocks, formwork, rebar and
-                  labour, priced from your Material Constants and RateGen: 
-                  and it stays live across the Dashboard, BoQ, Budget and
-                  Valuation tabs.
-                </p>
-                <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
-                  Upload your own bill, not one exported from here. An ADLM
-                  export is refused: importing it would spend a project slot on
-                  a duplicate of a bill you already have. To update quantities,
-                  re-measure at the source and sync, or edit the bill in the
-                  project itself.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="text-slate-400 transition hover:text-slate-600"
-                onClick={() => setBoqImportOpen(false)}
-                title="Close"
-              >
-                <FaTimes />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <label className="block text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
-                Project name (optional)
-                <input
-                  className="input mt-1 w-full"
-                  placeholder="Defaults to the file name"
-                  value={boqImportName}
-                  onChange={(e) => setBoqImportName(e.target.value)}
-                />
-              </label>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-adlm-dark-muted">
-                Excel workbook (.xlsx)
-                <input
-                  type="file"
-                  accept=".xlsx,.xlsm"
-                  className="input mt-1 w-full"
-                  onChange={(e) => setBoqImportFile(e.target.files?.[0] || null)}
-                />
-              </label>
-              <button
-                type="button"
-                className="text-xs font-semibold text-adlm-blue-700 hover:underline dark:text-adlm-blue-300"
-                onClick={downloadBoqTemplate}
-              >
-                Download the import template
-              </button>
-              {boqImportErr ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {boqImportErr}
-                </div>
+          <label className="wk-f">
+            <span>Share code</span>
+            <input
+              autoFocus
+              placeholder="e.g. ABCDE-FGHIJ"
+              autoComplete="off"
+              spellCheck={false}
+              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", letterSpacing: ".08em" }}
+              value={claimCode}
+              onChange={(e) => setClaimCode(e.target.value)}
+            />
+          </label>
+          {claimErr ? (
+            <p className="mk-note" role="alert" style={{ ...NOTE_WARN, ...NOTE_FULL }}>
+              {claimErr}
+              {claimUpsell ? (
+                <>
+                  <br />
+                  <Link
+                    to={`/product/${claimUpsell.requiredProductKey}`}
+                    onClick={() => setClaimOpen(false)}
+                    className="ds-btn btn-p ds-btn-sm"
+                    style={{ marginTop: 10 }}
+                  >
+                    Get {claimUpsell.productName}
+                  </Link>
+                </>
               ) : null}
-            </div>
+            </p>
+          ) : null}
+          <button type="submit" className="wk-modal-go" disabled={claimBusy}>
+            {claimBusy ? "Adding…" : "Add project"}
+          </button>
+        </form>
+      </WkModal>
 
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setBoqImportOpen(false)}
-                disabled={boqImportBusy}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitBoqImport}
-                disabled={boqImportBusy || !boqImportFile}
-                className="btn-3d inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
-              >
-                {boqImportBusy ? "Importing…" : "Import project"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* Import Excel BoQ */}
+      <WkModal
+        open={boqImportOpen}
+        title="Import Excel BoQ"
+        busy={boqImportBusy}
+        onClose={() => setBoqImportOpen(false)}
+      >
+        <p>
+          Creates a {boqImportBadge} project from an Excel Bill of Quantities.
+          Categories, planned-vs-actual columns and optional Material &amp; Labour
+          schedules are read from the workbook. Where the workbook has no schedule, one
+          is built for you: cement, sand, granite, blocks, formwork, rebar and labour,
+          priced from your Material Constants and RateGen, and it stays live across the
+          Dashboard, BoQ, Budget and Valuation tabs.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!boqImportBusy && boqImportFile) submitBoqImport();
+          }}
+        >
+          <p className="mk-note" style={{ ...NOTE_WARN, ...NOTE_FULL }}>
+            Upload your own bill, not one exported from here. An ADLM export is refused:
+            importing it would spend a project slot on a duplicate of a bill you already
+            have. To update quantities, re-measure at the source and sync, or edit the
+            bill in the project itself.
+          </p>
+          <label className="wk-f">
+            <span>Project name (optional)</span>
+            <input
+              placeholder="Defaults to the file name"
+              value={boqImportName}
+              onChange={(e) => setBoqImportName(e.target.value)}
+            />
+          </label>
+          <label className="wk-f">
+            <span>Excel workbook (.xlsx)</span>
+            <input
+              type="file"
+              accept=".xlsx,.xlsm"
+              onChange={(e) => setBoqImportFile(e.target.files?.[0] || null)}
+            />
+          </label>
+          <button
+            type="button"
+            className="ds-btn btn-o ds-btn-sm"
+            style={{ gridColumn: "1 / -1", justifySelf: "start" }}
+            onClick={downloadBoqTemplate}
+          >
+            Download the import template
+          </button>
+          {boqImportErr ? (
+            <p className="mk-note" role="alert" style={{ ...NOTE_WARN, ...NOTE_FULL }}>
+              {boqImportErr}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            className="wk-modal-go"
+            disabled={boqImportBusy || !boqImportFile}
+          >
+            {boqImportBusy ? "Importing…" : "Import project"}
+          </button>
+        </form>
+      </WkModal>
     </div>
   );
 }
