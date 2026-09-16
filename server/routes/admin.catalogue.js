@@ -426,14 +426,14 @@ router.get("/rates", requireAuth, requirePermission("rategen"), async (req, res,
         id: String(r._id),
         section:
           SECTION_LABELS[normalizeSectionKey(r.sectionKey)] || r.sectionLabel || r.sectionKey || "",
-        // The update endpoint validates sectionKey and refuses without it, so
-        // a screen that edits a rate has to carry it.
-        sectionKey: r.sectionKey || "",
         sectionLabel: r.sectionLabel || "",
         code: r.code || "",
         description: r.description || "",
-        // The canonical key, so a deep link can tell RateGen which
-        // section to open at.
+        // The canonical key. A deep link uses it to tell RateGen which section
+        // to open at, and a screen that edits a rate has to send it back: the
+        // update endpoint refuses a rate without one. The canonical form
+        // serves both, since that endpoint normalizes and validates against
+        // the same keys.
         sectionKey: normalizeSectionKey(r.sectionKey),
         unit: r.unit || "",
         // A recipe carries no stored cost — see asRecipe above.
