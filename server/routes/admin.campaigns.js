@@ -329,6 +329,12 @@ router.post("/:id/send", ...hub, async (req, res, next) => {
           // sender rules exist to punish. The footer link stays too — this is
           // the same URL, reachable from the client's own chrome.
           listUnsubscribe: optOut,
+          // Routes this send to MarketingConfigSet, the only configuration set
+          // that records opens and clicks, and keeps the recipient against this
+          // campaign in EmailSend. Without it a campaign goes out on the
+          // identity default set and is never measured. Transactional mail
+          // must not pass this; see models/EmailSend.js.
+          track: { campaign: String(c._id) },
         });
       },
       {
