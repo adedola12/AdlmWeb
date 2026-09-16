@@ -36,7 +36,7 @@ export class AdlmEdgeStack extends Stack {
      * anything missing here goes dark while it propagates. See the runbook. */
     const zone = new route53.PublicHostedZone(this, "Zone", {
       zoneName: cfg.domainName,
-      comment: "ADLM Cloud — created during the Render→AWS migration",
+      comment: "ADLM Cloud - created during the Render-to-AWS migration",
     });
     // Never let a stack teardown delete the zone: recreating it issues NEW
     // nameservers, which means another full delegation wait.

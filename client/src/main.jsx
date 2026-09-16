@@ -64,7 +64,6 @@ import AdminLcCourses from "./pages/AdminLcCourses.jsx";
 import AdminLcQuizzes from "./pages/AdminLcQuizzes.jsx";
 import AdminLcLessons from "./pages/AdminLcLessons.jsx";
 import AdminLcEvents from "./pages/AdminLcEvents.jsx";
-import AdminLcClassrooms from "./pages/AdminLcClassrooms.jsx";
 import AdminLcChangelogs from "./pages/AdminLcChangelogs.jsx";
 import AdminLcShowcase from "./pages/AdminLcShowcase.jsx";
 import AdminLcFreebies from "./pages/AdminLcFreebies.jsx";
@@ -657,14 +656,6 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
-      {
-        path: "admin/classrooms",
-        element: (
-          <AdminRoute permission="adminhub">
-            <AdminLcClassrooms />
-          </AdminRoute>
-        ),
-      },
       // Every certificate the studio has issued, and the one verb that was
       // missing entirely: withdrawing one.
       {
@@ -863,16 +854,6 @@ const router = createBrowserRouter([
           </AdminRoute>
         ),
       },
-        {
-          // The YouTube channel beside the free library: what is filed, held,
-          // missing, and whether each video still plays.
-          path: "admin/youtube",
-          element: (
-            <AdminRoute permission="learn">
-              <AdminYoutubeStatus />
-            </AdminRoute>
-          ),
-        },
       {
         // The YouTube channel beside the free library: what is filed, held,
         // missing, and whether each video still plays. His design at
