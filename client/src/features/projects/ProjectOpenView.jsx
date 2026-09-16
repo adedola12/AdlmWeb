@@ -865,7 +865,10 @@ export default function ProjectOpenView({
 
         {/* .wk-legacy maps the older markup inside the views (budget, bill,
             contract, PM) onto his tokens; see ds-local.css. */}
-        <div className="wk-legacy" style={{ display: "grid", gap: 18, minWidth: 0 }}>
+        <div
+          className="wk-legacy"
+          style={{ display: "grid", gap: 18, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}
+        >
           {!viewsOpen ? (
             <div className="wk-bar" style={{ marginBottom: 0 }}>
               <button
