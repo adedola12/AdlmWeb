@@ -22,6 +22,7 @@ import Home from "./pages/Home.jsx";
 import Products from "./pages/Products.jsx";
 import Quote from "./pages/Quote.jsx";
 import ProductDetail from "./pages/ProductDetail.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
 import Login from "./pages/Login.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminToday from "./pages/AdminToday.jsx";
@@ -287,14 +288,18 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      // Retired. /manage is the account overview now — his screen, on real
-      // data — and two dashboards competing for the same job is how one of
-      // them quietly goes stale.
-      //
-      // A redirect rather than a deletion, and permanently so: this path is in
-      // receipts, in enrolment emails and in people's history, and the same
-      // reasoning already keeps /learn/course/:sku alive a few lines below.
-      { path: "dashboard", element: <Navigate to="/manage" replace /> },
+      // The dashboard customers use today. /manage replaces it only when the
+      // new build goes fully live; until then this is every signed-in user's
+      // home, and receipts, enrolment emails and the nav all point here.
+      // The 15 Sept release briefly turned it into a redirect to /manage.
+      {
+        path: "dashboard",
+        element: (
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "freebies",
         element: (
