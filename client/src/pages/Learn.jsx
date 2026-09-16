@@ -66,7 +66,7 @@ function PaidCard({ c }) {
     <div className="group card p-0 lift spotlight">
       <HoverVideo src={preview || c.previewUrl} poster={c.thumbnailUrl} />
       <Link
-        to={`/dash-course/${encodeURIComponent(c.sku)}`}
+        to={`/learn/course/${encodeURIComponent(c.sku)}`}
         className="block p-3 text-sm font-medium group-hover:text-adlm-blue-700"
       >
         {c.title}
