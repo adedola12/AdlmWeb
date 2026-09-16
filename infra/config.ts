@@ -200,6 +200,15 @@ export interface AdlmConfig {
   scheduledLogGroupName: string;
 
   /**
+   * Staff inboxes that receive the daily operations report (SSM OPS_DIGEST_TO).
+   * While SES is in the sandbox, AWS checks the sending role's permission on
+   * each recipient's verified identity as well as the sender's, so these
+   * addresses are listed on the scheduled job or every send is refused with
+   * AccessDenied. Harmless once production access is granted.
+   */
+  opsReportRecipients: string[];
+
+  /**
    * DNS strategy.
    *
    * true  — EXTERNAL DNS (recommended for the emergency restore). No Route 53
@@ -321,6 +330,7 @@ export const config: AdlmConfig = {
 
   opsAlertEmail: "dolapo836@gmail.com",
   scheduledLogGroupName: "AdlmApi-ScheduledFnLogs70A012CD-CVI5WqN5Tato",
+  opsReportRecipients: ["dolapo836@gmail.com", "fadeyibiebunoluwa@gmail.com"],
 
   // Added 2026-08-11, to finish moving off Render. See the interface docs.
   deployMpxj: true,

@@ -727,6 +727,22 @@ export class AdlmApiStack extends Stack {
     // the same grant the API function has. The video poller is the one that
     // sends to the whole customer base at once, which makes it the reason the
     // quota read is here too.
+    // The daily operations report (server/util/opsDigest.js) goes to staff
+    // inboxes that are not on this domain. In the SES sandbox AWS checks the
+    // recipient identity as well as the sender, so without this every report
+    // is refused with AccessDenied. Listed addresses only, and only on the job
+    // that sends the report.
+    if (cfg.opsReportRecipients.length) {
+      scheduledFn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["ses:SendEmail", "ses:SendRawEmail"],
+          resources: cfg.opsReportRecipients.map(
+            (addr) => `arn:aws:ses:${cfg.region}:${this.account}:identity/${addr}`,
+          ),
+        }),
+      );
+    }
+
     for (const fn of [scheduledFn, videoPollFn]) {
       fn.addToRolePolicy(sesSend);
       fn.addToRolePolicy(sesReadQuota);
