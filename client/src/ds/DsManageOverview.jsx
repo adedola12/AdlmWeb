@@ -106,8 +106,8 @@ export default function DsManageOverview() {
     //
     // This tile read `entitlements.filter(e => e.isCourse)` and showed 0 for an
     // account holding two courses. A course is a CourseEnrollment keyed on a
-    // courseSku, which is a different collection with its own expiry, its own
-    // progress and its own classroom link — GET /me/courses is what the
+    // courseSku, which is a different collection with its own expiry and its own
+    // progress. GET /me/courses is what the
     // dashboard has always read, and it returns a bare array.
     apiAuthed("/me/courses", { token: accessToken })
       .then((d) => alive && setCourses(Array.isArray(d) ? d : []))
