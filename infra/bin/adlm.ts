@@ -127,6 +127,7 @@ new AdlmOpsAlertsStack(app, "AdlmOpsAlertsEu", {
   alertEmail: config.opsAlertEmail,
   watchSupportCases: false,
   digestLogGroupName: config.scheduledLogGroupName,
+  dmarcReportDomain: config.dmarcReportDomain,
   description: "ADLM - regional Health events and the daily operations report watchdog",
 });
 

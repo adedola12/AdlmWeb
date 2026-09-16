@@ -209,6 +209,13 @@ export interface AdlmConfig {
   opsReportRecipients: string[];
 
   /**
+   * Where DMARC aggregate reports are received (lib/adlm-ops-alerts-stack.ts).
+   * Needs an MX record pointing at SES inbound in the stack's region, and a
+   * matching rua address in the _dmarc TXT record.
+   */
+  dmarcReportDomain: string;
+
+  /**
    * DNS strategy.
    *
    * true  — EXTERNAL DNS (recommended for the emergency restore). No Route 53
@@ -331,6 +338,7 @@ export const config: AdlmConfig = {
   opsAlertEmail: "dolapo836@gmail.com",
   scheduledLogGroupName: "AdlmApi-ScheduledFnLogs70A012CD-CVI5WqN5Tato",
   opsReportRecipients: ["dolapo836@gmail.com", "fadeyibiebunoluwa@gmail.com"],
+  dmarcReportDomain: "reports.adlmstudio.net",
 
   // Added 2026-08-11, to finish moving off Render. See the interface docs.
   deployMpxj: true,
