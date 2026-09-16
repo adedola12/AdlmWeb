@@ -125,7 +125,7 @@ function getSidebarMeta(tool) {
     };
   }
 
-  if (t === "revitmep") {
+  if (t === "revitmep" || t === "mep") {
     return {
       app: "Revit MEP",
       section: "Projects",
@@ -2118,9 +2118,17 @@ export default function ProjectsGeneric() {
         }
       }
     } catch (e) {
-      setErr(e.message || "Failed to load projects");
+      // closeProject() clears the message, so it runs first: the other order
+      // left a lapsed subscription looking like an empty "0 projects" list.
       closeProject();
       setRows([]);
+      const msg = e?.message || "Failed to load projects";
+      const product = String(TITLES[tool] || "this product").replace(/ projects$/, "");
+      setErr(
+        /subscription/i.test(msg)
+          ? `${msg}: ${product} projects can only be opened with an active ${product} subscription. Renew it under Manage > Products & seats to open them again; nothing has been deleted.`
+          : msg,
+      );
     }
   }
 
@@ -5125,7 +5133,8 @@ export default function ProjectsGeneric() {
     "h-4 w-4 accent-blue-600 border-0 outline-none ring-0 focus:ring-0 focus:outline-none";
 
   if (materialsListOnly) {
-    return <Navigate to={`/projects/${toolNorm.replace(/-materials?$/, "")}`} replace />;
+    const base = toolNorm.replace(/-materials?$/, "");
+    return <Navigate to={`/projects/${base === "revitmep" ? "mep" : base}`} replace />;
   }
 
   return (
