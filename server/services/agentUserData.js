@@ -76,6 +76,13 @@ export async function getPortfolioSummary(userId) {
       $project: {
         productKey: 1,
         name: 1,
+        origin: 1,
+        updatedAt: 1,
+        // Which disciplines have a 3D (IFC) model attached — the question
+        // "which of my projects has a model" has no other answer source.
+        modelArch: { $gt: [{ $strLenCP: { $ifNull: ["$models.architectural.url", ""] } }, 0] },
+        modelStruct: { $gt: [{ $strLenCP: { $ifNull: ["$models.structural.url", ""] } }, 0] },
+        modelMep: { $gt: [{ $strLenCP: { $ifNull: ["$models.mep.url", ""] } }, 0] },
         itemCount: { $size: "$safeItems" },
         totalCost: { $sum: { $map: { input: "$safeItems", as: "item", in: lineAmount } } },
         valuedAmount: {
@@ -130,6 +137,48 @@ export async function getPortfolioSummary(userId) {
       `- ${productLabel(key)}: ${g.count} project(s), value ${naira(g.cost)}, done ${naira(g.valued)}`,
     );
   }
+  // 3D models: only a model actually attached counts. A QUIV project is not
+  // "a 3D project" unless one was pushed or uploaded.
+  const modelled = rows
+    .map((r) => ({
+      r,
+      parts: [
+        r.modelArch && "architectural",
+        r.modelStruct && "structural",
+        r.modelMep && "MEP",
+      ].filter(Boolean),
+    }))
+    .filter((x) => x.parts.length);
+  lines.push("");
+  if (modelled.length) {
+    lines.push(`Projects with a 3D model attached (${modelled.length}):`);
+    for (const { r, parts } of modelled) {
+      lines.push(`- ${r.name || "Untitled"} (${productLabel(r.productKey)}): ${parts.join(", ")} model`);
+    }
+  } else {
+    lines.push(
+      "Projects with a 3D model attached: none. A model is attached when the project is saved from QUIV (or uploaded on the project's 3D Model view).",
+    );
+  }
+
+  // Every project, newest first, so questions naming or filtering projects
+  // ("which of my projects...", "list my HERON jobs") can be answered.
+  const listed = [...rows]
+    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+    .slice(0, 60);
+  lines.push("");
+  lines.push(
+    `Projects (newest first${rows.length > listed.length ? `, first ${listed.length} of ${rows.length}` : ""}):`,
+  );
+  for (const r of listed) {
+    const pct = safeNum(r.itemCount) > 0 ? (safeNum(r.progressShare) / safeNum(r.itemCount)) * 100 : 0;
+    const model = r.modelArch || r.modelStruct || r.modelMep ? ", 3D model attached" : "";
+    const imported = r.origin === "boq-import" ? ", imported from Excel" : "";
+    lines.push(
+      `- ${r.name || "Untitled"}: ${productLabel(r.productKey)}, ${r.itemCount} lines, value ${naira(r.totalCost)}, ${pct.toFixed(0)}% done${model}${imported}, updated ${fmtDate(r.updatedAt)}`,
+    );
+  }
+
   lines.push("");
   lines.push(
     "Note: MEP-family and some materials projects can show ₦0 value when rates aren't on the bill lines. Figures match the Portfolio Dashboard.",
