@@ -61,7 +61,6 @@ export function toRow(c) {
     firstWeek: Math.min(...mods.map((m) => Number(m.week || 0) || 0), 0) || 1,
     accessLabel: c.access?.label || "",
     expired: !!c.access?.isExpired,
-    classroomUrl: c.classroom?.joinUrl || "",
     completed: c.enrollment?.status === "completed",
     issuedAt: c.enrollment?.certificateIssuedAt || c.enrollment?.updatedAt || null,
     certificateRef: c.enrollment?.certificateRef || "",

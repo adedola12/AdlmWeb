@@ -25,7 +25,7 @@ export const GUIDES = [
     blurb:
       "Opening your model, the Model Checker, taking off every element, and turning it into a priced bill.",
     file: "/docs/ADLM-QUIV-Revit-User-Guide.pdf",
-    pages: 22,
+    pages: 23,
     productKeys: ["revit", "mep"],
     changelogSlugs: ["quiv"],
   },
@@ -35,7 +35,7 @@ export const GUIDES = [
     blurb:
       "Rate build-ups, the material and labour libraries, custom rates, Build with AI, and how rates reach QUIV and Heron.",
     file: "/docs/ADLM-RateGen-User-Guide.pdf",
-    pages: 19,
+    pages: 22,
     productKeys: ["rategen"],
     changelogSlugs: ["rategen"],
   },
@@ -45,15 +45,35 @@ export const GUIDES = [
     blurb:
       "The combined book: the Hub end to end, then Heron: scaling drawings, measuring with the ADLM templates, pricing and export.",
     file: "/docs/ADLM-Complete-User-Guide.pdf",
-    pages: 48,
+    pages: 50,
     productKeys: ["planswift", "heron"],
     changelogSlugs: ["heron"],
+  },
+  // The whole suite in one book, built by ADLMInstallerHub
+  // Scripts\build-suite-guide.ps1 and published rasterised (issue-guide.py
+  // --raster), so it opens and prints but its text cannot be copied out.
+  //
+  // productKeys is empty and alwaysShow is off ON PURPOSE. Either would put
+  // this book into ownedGuidesFor, which feeds the Dashboard and the user-guide
+  // mailshot (server/util/guideEmail.js), and change what every customer is
+  // sent. That is a decision for whoever owns that mailshot, not a side effect
+  // of publishing a PDF. So for now it appears on What's New, which lists every
+  // guide, and on the product pages for the three products that had no guide.
+  {
+    id: "suite",
+    title: "ADLM Complete Software Guide",
+    blurb:
+      "Every product in one book: the Hub, Time Pro, QUIV for Revit and ArchiCAD, Heron, Revit MEP and Rate Gen, plus valuation, model verification and the PM dashboard.",
+    file: "/docs/ADLM-Software-Complete-Guide.pdf",
+    pages: 166,
+    productKeys: [],
+    changelogSlugs: ["mep", "cloud", "timepro"],
   },
 ];
 
 /**
  * The guide covering a given What's New product slug, or null when that
- * product has no published guide yet (CIVIQ, Courses, ADLM MEP, ADLM Cloud).
+ * product has no published guide yet (CIVIQ, Courses).
  */
 export function guideForChangelogSlug(slug) {
   const key = String(slug || "").toLowerCase();

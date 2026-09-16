@@ -36,7 +36,9 @@ export const CALL_OUTCOMES = [
 
 export const FOLLOWUP_STATUSES = ["to_call", "in_progress", "done", "snoozed"];
 
-export const FOLLOWUP_REASONS = ["expired", "pending"];
+// "silent": a live, paid desktop licence that nobody has used for weeks. See
+// util/silentCustomers.js for why this is a call worth making.
+export const FOLLOWUP_REASONS = ["expired", "pending", "silent"];
 
 const CallSchema = new mongoose.Schema(
   {
@@ -103,6 +105,34 @@ const PurchaseSnapshotSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Paid software that has gone quiet. Rebuilt from devices and usage heartbeats.
+const SilenceSnapshotSchema = new mongoose.Schema(
+  {
+    neverUsed: { type: Boolean, default: false },
+    // Days since the last sign-in or heartbeat, or since the licence was
+    // granted when it has never been used. Null when neither date is known.
+    days: { type: Number, default: null },
+    lastActivityAt: { type: Date, default: null },
+    seats: { type: Number, default: 0 },
+    organizationName: { type: String, trim: true, default: "" },
+    products: {
+      type: [
+        new mongoose.Schema(
+          {
+            productKey: { type: String, trim: true, lowercase: true, default: "" },
+            productName: { type: String, trim: true, default: "" },
+            seats: { type: Number, default: 1 },
+            lastSeenAt: { type: Date, default: null },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
+  },
+  { _id: false },
+);
+
 const FollowUpSchema = new mongoose.Schema(
   {
     // ── who to call ──────────────────────────────────────────────────────
@@ -128,6 +158,7 @@ const FollowUpSchema = new mongoose.Schema(
 
     products: { type: [ProductSnapshotSchema], default: [] },
     purchases: { type: [PurchaseSnapshotSchema], default: [] },
+    silence: { type: SilenceSnapshotSchema, default: null },
 
     // Largest daysOverdue across `products` — the list sorts on this so the
     // longest-lapsed accounts are called first.

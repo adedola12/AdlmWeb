@@ -57,13 +57,14 @@ function ready() {
     await loadSecretsIntoEnv();
     const { connectDB } = await import("./db.js");
     await connectDB(process.env.MONGO_URI);
-    const [{ runExpiryNotifier }, { runAutoRenewals }, { runVideoPoll }] =
+    const [{ runExpiryNotifier }, { runAutoRenewals }, { runVideoPoll }, { runOpsDigest }] =
       await Promise.all([
         import("./util/expiryNotifier.js"),
         import("./util/autoRenew.js"),
         import("./util/videoNotifier.js"),
+        import("./util/opsDigest.js"),
       ]);
-    return { runExpiryNotifier, runAutoRenewals, runVideoPoll };
+    return { runExpiryNotifier, runAutoRenewals, runVideoPoll, runOpsDigest };
   })().catch((err) => {
     _readyPromise = null;
     throw err;
@@ -82,7 +83,7 @@ export async function handler(event, context) {
   // Throwing sends the event to the scheduler's dead-letter queue, where the
   // DLQ-depth alarm surfaces it. Silently succeeding would hide a broken rule
   // until someone noticed nobody had been renewed.
-  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll"];
+  const KNOWN = ["expiry-notifier", "auto-renew", "video-poll", "ops-digest"];
   if (!KNOWN.includes(job)) {
     throw new Error(`Unknown job "${job}". Expected one of: ${KNOWN.join(", ")}.`);
   }
@@ -100,12 +101,29 @@ export async function handler(event, context) {
     // (VideoPollFn) at this same file — one copy of the code, two concurrency
     // budgets.
     "video-poll": () => jobs.runVideoPoll(),
+    // Normally rides on expiry-notifier below; listed so it can be invoked by
+    // hand with { "job": "ops-digest" } to resend a morning report.
+    "ops-digest": () => jobs.runOpsDigest(),
   }[job];
 
   const startedAt = Date.now();
   console.log(`[scheduled] ${job} starting`);
 
   const out = await run();
+
+  // The morning operations report (util/opsDigest.js) runs straight after the
+  // daily expiry job instead of on a schedule of its own. A new schedule would
+  // mean changing the shared AdlmApi stack, and that stack deletes resources
+  // when deployed from the wrong checkout. Its own lock and its own try/catch
+  // mean a failed report can never fail the expiry run, and vice versa.
+  if (job === "expiry-notifier" && out && typeof out === "object") {
+    try {
+      out.opsDigest = await jobs.runOpsDigest();
+    } catch (err) {
+      console.error("[scheduled] ops-digest failed:", err?.message || err);
+      out.opsDigest = { ok: false, error: String(err?.message || err) };
+    }
+  }
 
   console.log(
     `[scheduled] ${job} done in ${Date.now() - startedAt}ms:`,
