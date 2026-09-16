@@ -411,7 +411,7 @@ export class AdlmApiStack extends Stack {
     mailIdentity.dkimRecords.forEach((record, i) => {
       new CfnOutput(this, `MailDkim${i + 1}`, {
         value: `${record.name} CNAME ${record.value}`,
-        description: `Publish in Google Cloud DNS — DKIM ${i + 1} of 3 for ${cfg.domainName}`,
+        description: `Publish in Google Cloud DNS - DKIM ${i + 1} of 3 for ${cfg.domainName}`,
       });
     });
 
@@ -486,8 +486,8 @@ export class AdlmApiStack extends Stack {
      */
     const distribution = new cloudfront.Distribution(this, "ApiDistribution", {
       comment: certificate
-        ? `ADLM Cloud API — ${cfg.apiHostname}`
-        : "ADLM Cloud API — CloudFront domain only (no custom domain yet)",
+        ? `ADLM Cloud API - ${cfg.apiHostname}`
+        : "ADLM Cloud API - CloudFront domain only (no custom domain yet)",
       // A custom domain requires a certificate; with neither, CloudFront serves
       // on its own *.cloudfront.net name using AWS's own certificate.
       ...(certificate
@@ -558,7 +558,7 @@ export class AdlmApiStack extends Stack {
     const alarms: cloudwatch.Alarm[] = [
       new cloudwatch.Alarm(this, "ErrorsAlarm", {
         alarmDescription:
-          "Lambda function errors — 5xx from the API. Check CloudWatch Logs Insights.",
+          "Lambda function errors - 5xx from the API. Check CloudWatch Logs Insights.",
         metric: fn.metricErrors({ period: Duration.minutes(5) }),
         threshold: 5,
         evaluationPeriods: 2,
@@ -575,7 +575,7 @@ export class AdlmApiStack extends Stack {
       }),
       new cloudwatch.Alarm(this, "DurationAlarm", {
         alarmDescription:
-          "p99 duration approaching the function timeout — requests are about to be cut off.",
+          "p99 duration approaching the function timeout - requests are about to be cut off.",
         metric: fn.metricDuration({
           period: Duration.minutes(5),
           statistic: "p99",
@@ -874,7 +874,7 @@ export class AdlmApiStack extends Stack {
       job: "auto-renew",
       hour: "8",
       retryAttempts: 0,
-      description: "ADLM auto-renewal charges — 08:00 Africa/Lagos daily",
+      description: "ADLM auto-renewal charges - 08:00 Africa/Lagos daily",
     });
 
     // 09:00 Lagos — sends "expiring soon" email. Idempotent and harmless to
@@ -884,7 +884,7 @@ export class AdlmApiStack extends Stack {
       job: "expiry-notifier",
       hour: "9",
       retryAttempts: 2,
-      description: "ADLM entitlement expiry notifier — 09:00 Africa/Lagos daily",
+      description: "ADLM entitlement expiry notifier - 09:00 Africa/Lagos daily",
     });
 
     /* Every fifteen minutes, and a RATE rather than a cron: this has no
@@ -899,7 +899,7 @@ export class AdlmApiStack extends Stack {
      * minutes late has already been answered by the poll that came after it.
      */
     new scheduler.Schedule(this, "VideoPollSchedule", {
-      description: "ADLM new-video check — every 15 minutes",
+      description: "ADLM new-video check - every 15 minutes",
       schedule: scheduler.ScheduleExpression.rate(Duration.minutes(15)),
       target: new schedulerTargets.LambdaInvoke(videoPollFn, {
         input: scheduler.ScheduleTargetInput.fromObject({ job: "video-poll" }),
@@ -920,7 +920,7 @@ export class AdlmApiStack extends Stack {
      * has already gone cold, so it should be dropped rather than replayed. */
     if (cfg.warmIntervalMinutes > 0) {
       new scheduler.Schedule(this, "ApiWarmSchedule", {
-        description: `Keeps one API container and its Mongo pool warm — every ${cfg.warmIntervalMinutes} min`,
+        description: `Keeps one API container and its Mongo pool warm - every ${cfg.warmIntervalMinutes} min`,
         schedule: scheduler.ScheduleExpression.rate(
           Duration.minutes(cfg.warmIntervalMinutes),
         ),
@@ -934,7 +934,7 @@ export class AdlmApiStack extends Stack {
 
     const scheduledErrors = new cloudwatch.Alarm(this, "ScheduledErrorsAlarm", {
       alarmDescription:
-        "A nightly job threw. Auto-renew failing means entitlements silently lapse — check " +
+        "A nightly job threw. Auto-renew failing means entitlements silently lapse - check " +
         "the ScheduledFn log group for the run that failed.",
       metric: scheduledFn.metricErrors({ period: Duration.hours(1) }),
       threshold: 1,
@@ -968,7 +968,7 @@ export class AdlmApiStack extends Stack {
     const videoPollErrors = new cloudwatch.Alarm(this, "VideoPollErrorsAlarm", {
       alarmDescription:
         "The new-video poller has failed more than once in an hour. Nobody is being told " +
-        "about new videos, and the symptom is silence — check the VideoPollFn log group " +
+        "about new videos, and the symptom is silence - check the VideoPollFn log group " +
         "for a quotaExceeded or keyInvalid from YouTube.",
       metric: videoPollFn.metricErrors({ period: Duration.hours(1) }),
       threshold: 2,
@@ -1132,7 +1132,7 @@ export class AdlmApiStack extends Stack {
     new CfnOutput(this, "ReservedConcurrency", {
       value: cfg.useReservedConcurrency
         ? String(reservedConcurrency(cfg))
-        : "not set — bounded by the account concurrency quota instead",
+        : "not set - bounded by the account concurrency quota instead",
       description: cfg.useReservedConcurrency
         ? `Max ${reservedConcurrency(cfg) * cfg.mongoMaxPool} Atlas connections of ${cfg.atlasConnectionLimit}`
         : `Atlas connections are capped at (account quota) x ${cfg.mongoMaxPool}. Raise the Lambda quota, then set useReservedConcurrency: true.`,

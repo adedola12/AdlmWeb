@@ -83,14 +83,14 @@ if (useExternalDns) {
     // No zone: the CNAME is added by hand at the existing DNS provider.
     env: { account: config.account, region: config.region },
     description:
-      "ADLM Cloud — Express API on Lambda behind CloudFront (external DNS)",
+      "ADLM Cloud - Express API on Lambda behind CloudFront (external DNS)",
   });
 } else {
   const edge = new AdlmEdgeStack(app, "AdlmEdge", {
     config,
     env: { account: config.account, region: config.edgeRegion },
     description:
-      "ADLM Cloud — Route 53 hosted zone + CloudFront ACM certificate",
+      "ADLM Cloud - Route 53 hosted zone + CloudFront ACM certificate",
     // Required so the eu-west-1 stack can consume this stack's outputs.
     crossRegionReferences: true,
   });
@@ -100,7 +100,7 @@ if (useExternalDns) {
     zone: edge.zone,
     certificateArn: certificateArnOverride ?? edge.certificateArn,
     env: { account: config.account, region: config.region },
-    description: "ADLM Cloud — Express API on Lambda behind CloudFront",
+    description: "ADLM Cloud - Express API on Lambda behind CloudFront",
     crossRegionReferences: true,
   });
 
