@@ -83,6 +83,7 @@ function shareInfo(project) {
 function buildBoqDocument(project, version) {
   return {
     projectId: String(project._id),
+    slug: project.slug || "",
     projectName: project.name,
     versionId: String(version._id),
     versionNumber: version.versionNumber,
@@ -161,6 +162,23 @@ function generatePublicToken() {
   ).join("");
 }
 
+// A project is addressed by its id (the connector) or its slug (the web, so
+// the database id never has to sit in an address bar). A slug is unique per
+// owner, so for a slug the caller's own project wins over one shared with
+// them, then the most recently updated.
+async function findAccessibleProject(idOrSlug, userId, { ownerOnly = false } = {}) {
+  const key = String(idOrSlug || "").trim();
+  if (!key) return null;
+  const who = ownerOnly ? { userId } : { $or: [{ userId }, { "collaborators.userId": userId }] };
+  if (isValidObjectId(key)) {
+    return TakeoffProject.findOne({ _id: key, productKey: PRODUCT_KEY, ...who });
+  }
+  const matches = await TakeoffProject.find({ slug: key, productKey: PRODUCT_KEY, ...who })
+    .sort({ updatedAt: -1 })
+    .limit(10);
+  return matches.find((p) => String(p.userId) === String(userId)) || matches[0] || null;
+}
+
 async function findProjectForUser(req, res) {
   const userId = getUserObjectId(req);
   if (!userId) {
@@ -168,11 +186,11 @@ async function findProjectForUser(req, res) {
     return null;
   }
   const id = String(req.params.projectId || "").trim();
-  if (!isValidObjectId(id)) {
+  if (!id) {
     res.status(400).json({ error: "Invalid project id" });
     return null;
   }
-  const project = await TakeoffProject.findOne(accessFilter(id, userId));
+  const project = await findAccessibleProject(id, userId);
   if (!project) {
     res.status(404).json({ error: "Project not found" });
     return null;
@@ -299,7 +317,7 @@ router.get("/projects", async (req, res) => {
       productKey: PRODUCT_KEY,
       $or: [{ userId }, { "collaborators.userId": userId }],
     })
-      .select("name updatedAt")
+      .select("name slug updatedAt")
       .sort({ updatedAt: -1 })
       .lean();
 
@@ -321,6 +339,7 @@ router.get("/projects", async (req, res) => {
     res.json(
       projects.map((p) => ({
         id: String(p._id),
+        slug: p.slug || "",
         name: p.name,
         updatedAt: p.updatedAt,
         versionCount: countById.get(String(p._id)) || 0,
@@ -600,13 +619,10 @@ router.post("/boq/:projectId/share", async (req, res) => {
     const userId = getUserObjectId(req);
     if (!userId) return res.status(401).json({ error: "Invalid user id" });
     const id = String(req.params.projectId || "").trim();
-    if (!isValidObjectId(id)) return res.status(400).json({ error: "Invalid project id" });
+    if (!id) return res.status(400).json({ error: "Invalid project id" });
 
-    const project = await TakeoffProject.findOne({
-      _id: id,
-      userId,
-      productKey: PRODUCT_KEY,
-    });
+    // Only the owner can change sharing.
+    const project = await findAccessibleProject(id, userId, { ownerOnly: true });
     if (!project) return res.status(404).json({ error: "Project not found" });
 
     const enabled = (req.body?.enabled ?? req.body?.enable) !== false;
