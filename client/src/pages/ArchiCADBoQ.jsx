@@ -4,7 +4,7 @@
 // highlighting and the data-issues banner.
 import React from "react";
 import { Link, useParams } from "react-router-dom";
-import { FaArrowLeft, FaChartBar, FaCheck, FaCopy, FaExclamationTriangle, FaHistory, FaLink } from "../components/icons.jsx";
+import { FaChartBar, FaCheck, FaCopy, FaLink } from "../components/icons.jsx";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
 import { unwrap, unwrapList } from "../features/archicad/archicadApi.js";
@@ -190,36 +190,28 @@ export default function ArchiCADBoQ() {
   const viewedVersion = versions.find((v) => v.versionId === viewingVersionId);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-adlm-dark-bg">
-      <div className="mx-auto max-w-7xl space-y-4 px-4 py-8">
+    <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0, 1fr)" }}>
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/archicad"
-              className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-slate-700 dark:text-adlm-dark-muted dark:hover:text-adlm-dark-text"
-            >
-              <FaArrowLeft className="text-xs" /> Projects
+        <div className="wk-head" style={{ marginBottom: 0 }}>
+          <div>
+            <Link to="/archicad" className="wk-back">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#hi-right" />
+            </svg>
+              Projects
             </Link>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                {boq?.projectName || "ArchiCAD BoQ"}
-              </h1>
-              <div className="text-xs text-slate-400 dark:text-adlm-dark-dim">
-                Bill of Quantities
-                {boq?.modelVersion ? ` · model ${boq.modelVersion}` : ""}
-                {boq?.versionNumber ? ` · v${boq.versionNumber}` : ""}
-              </div>
-            </div>
+            <h1>{boq?.projectName || "ArchiCAD BoQ"}</h1>
+            <p className="wk-ref">
+              Bill of Quantities
+              {boq?.modelVersion ? ` · model ${boq.modelVersion}` : ""}
+              {boq?.versionNumber ? ` · v${boq.versionNumber}` : ""}
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="wk-acts" style={{ alignItems: "center" }}>
             <ArchiCADConnectorStatus />
             <ArchiCADUnitToggle units={units} onChange={setUnits} />
-            <Link
-              to={`/archicad/${projectId}/dashboard`}
-              className="inline-flex items-center gap-1.5 rounded-adlm border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:border-adlm-blue-600 hover:text-adlm-blue-700 dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-text dark:hover:text-adlm-blue-300"
-            >
-              <FaChartBar /> Dashboard
+            <Link to={`/archicad/${projectId}/dashboard`} className="ds-btn ds-btn-sm btn-o">
+              <FaChartBar size={14} /> Dashboard
             </Link>
             <ArchiCADExportBar
               projectId={projectId}
@@ -230,7 +222,10 @@ export default function ArchiCADBoQ() {
         </div>
 
         {/* Version + share controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-adlm-lg border border-slate-200 bg-white p-3 dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
+        <div
+          className="wk-panel wk-bar"
+          style={{ marginBottom: 0, padding: "12px 16px", justifyContent: "space-between" }}
+        >
           <ArchiCADVersionSelector
             versions={versions}
             currentVersionId={viewingVersionId ? null : boq?.versionId}
@@ -240,19 +235,14 @@ export default function ArchiCADBoQ() {
             reapplying={reapplying}
             currency={boq?.currency}
           />
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="wk-acts" style={{ alignItems: "center" }}>
             <button
               type="button"
               disabled={shareBusy}
               onClick={toggleShare}
-              className={[
-                "inline-flex items-center gap-1.5 rounded-adlm px-3 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
-                share.enabled
-                  ? "border border-slate-300 bg-white text-slate-700 hover:text-red-600 dark:border-adlm-dark-border dark:bg-adlm-dark-raised dark:text-adlm-dark-text dark:hover:text-red-400"
-                  : "bg-adlm-blue-600 text-white hover:bg-adlm-blue-700",
-              ].join(" ")}
+              className={`ds-btn ds-btn-sm ${share.enabled ? "btn-o" : "btn-p"}`}
             >
-              <FaLink />
+              <FaLink size={14} />
               {shareBusy
                 ? "Working…"
                 : share.enabled
@@ -260,61 +250,62 @@ export default function ArchiCADBoQ() {
                   : "Create share link"}
             </button>
             {share.enabled && share.url ? (
-              <span className="inline-flex max-w-[340px] items-center gap-1.5 rounded-adlm border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 dark:border-adlm-dark-border dark:bg-white/5 dark:text-adlm-dark-muted">
-                <span className="truncate">{share.url}</span>
+              <span className="wk-src" style={{ maxWidth: 340 }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {share.url}
+                </span>
                 <button
                   type="button"
                   onClick={copyShareUrl}
                   title="Copy link"
-                  className="shrink-0 text-adlm-blue-700 transition hover:opacity-80 dark:text-adlm-blue-300"
+                  aria-label="Copy link"
+                  style={{ background: "none", border: 0, padding: 0, cursor: "pointer", color: "var(--action)", display: "inline-flex" }}
                 >
-                  {copied ? <FaCheck /> : <FaCopy />}
+                  {copied ? <FaCheck size={13} /> : <FaCopy size={13} />}
                 </button>
               </span>
             ) : null}
           </div>
         </div>
 
-        {/* Banners */}
+        {/* Notes */}
         {readOnly ? (
-          <div className="flex items-center gap-2 rounded-adlm-lg border border-adlm-blue-600/40 bg-adlm-blue-600/10 px-4 py-3 text-sm font-medium text-adlm-blue-700 dark:text-adlm-blue-300">
-            <FaHistory />
-            Viewing old version{viewedVersion ? ` v${viewedVersion.versionNumber}` : ""}, 
+          <p className="mk-note" style={{ margin: 0, background: "var(--pal-light-wash)", color: "var(--pal-light-key)", borderColor: "var(--pal-light-line)" }}>
+            Viewing old version{viewedVersion ? ` v${viewedVersion.versionNumber}` : ""},
             read-only.{" "}
             <button
               type="button"
               onClick={() => selectVersion(null)}
-              className="underline underline-offset-2"
+              style={{ background: "none", border: 0, padding: 0, cursor: "pointer", color: "inherit", font: "inherit", textDecoration: "underline" }}
             >
               Back to current
             </button>
-          </div>
+          </p>
         ) : null}
 
         {err ? (
-          <div className="rounded-adlm-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+          <p className="mk-note" role="alert" style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)", borderColor: "var(--pal-orange-line)" }}>
             {err}
-          </div>
+          </p>
         ) : null}
         {notice ? (
-          <div className="rounded-adlm-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300">
+          <p className="mk-note" style={{ margin: 0, background: "var(--pal-light-wash)", color: "var(--pal-light-key)", borderColor: "var(--pal-light-line)" }}>
             {notice}
-          </div>
+          </p>
         ) : null}
 
         {issues.length > 0 ? (
-          <div className="rounded-adlm-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
-            <div className="flex items-center gap-2 font-semibold">
-              <FaExclamationTriangle />
+          <div className="mk-note" style={{ margin: 0, background: "var(--pal-orange-wash)", color: "var(--pal-orange-key)", borderColor: "var(--pal-orange-line)" }}>
+            <b style={{ fontWeight: 500 }}>
               {issues.length} data issue{issues.length === 1 ? "" : "s"} detected in the
               model extraction
-            </div>
-            <ul className="mt-2 list-disc space-y-1 pl-6">
+            </b>
+            <ul style={{ margin: "8px 0 0", paddingLeft: 20, display: "grid", gap: 4 }}>
               {issues.slice(0, 8).map((iss, i) => (
                 <li key={`${iss?.guid || i}`}>
                   <Link
                     to={`/archicad/${projectId}/element/${encodeURIComponent(iss?.guid || "")}`}
-                    className="font-mono text-xs underline underline-offset-2"
+                    style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: "inherit" }}
                   >
                     {iss?.guid || "unknown element"}
                   </Link>{" "}
@@ -329,12 +320,9 @@ export default function ArchiCADBoQ() {
 
         {/* Table */}
         {loading ? (
-          <div className="animate-pulse space-y-2 rounded-adlm-lg border border-slate-200 bg-white p-6 dark:border-adlm-dark-border dark:bg-adlm-dark-panel">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-4 rounded bg-slate-100 dark:bg-white/10" />
-            ))}
-          </div>
+          <div className="wk-panel animate-pulse" style={{ marginBottom: 0, minHeight: 280 }} aria-hidden="true" />
         ) : boq ? (
+          <div className="wk-legacy">
           <ArchiCADBoQTable
             boq={boq}
             units={units}
@@ -343,17 +331,14 @@ export default function ArchiCADBoQ() {
             onLineMargin={onLineMargin}
             onGlobalMargin={onGlobalMargin}
           />
+          </div>
         ) : !err ? (
-          <div className="rounded-adlm-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 dark:border-adlm-dark-border dark:bg-adlm-dark-panel dark:text-adlm-dark-muted">
+          <div className="wk-panel wk-empty" style={{ marginBottom: 0 }}>
             No BoQ found for this project yet. Run an extraction from the
-            connector panel (start it with{" "}
-            <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs dark:bg-white/10">
-              node index.js
-            </code>
-            , then open http://localhost:4823).
+            connector panel (start it with <code>node index.js</code>, then open
+            http://localhost:4823).
           </div>
         ) : null}
-      </div>
     </div>
   );
 }
