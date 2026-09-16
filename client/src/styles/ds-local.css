@@ -1477,3 +1477,10 @@
 .ds .wk-legacy .btn:hover:not(:disabled){border-color:var(--ink-3) !important;background:var(--bg-alt) !important}
 .ds .wk-legacy .btn-3d{background-image:var(--action-grad) !important;color:var(--action-ink) !important;border:0 !important;box-shadow:none}
 
+
+/* ds-btn disabled — his three rules from ds-admin.css, copied verbatim.
+   ds-admin.css is not loaded in the app shell, and the project workspace
+   disables ds-btns (Finalize before lock, Move up on the first bill row). */
+.ds .ds-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
+.ds .ds-btn:disabled:hover{transform:none;filter:none}
+.ds .ds-btn:disabled::before{display:none}

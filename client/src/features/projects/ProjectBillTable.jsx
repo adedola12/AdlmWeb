@@ -94,10 +94,43 @@ const TOTAL_ROW = {
 };
 const READING = { color: "var(--ink)", fontWeight: 500, fontVariantNumeric: "tabular-nums" };
 
+// One of his palettes, for a .wk-src chip or a toggled button.
+function palChip(pal) {
+  return {
+    background: `var(--pal-${pal}-wash)`,
+    color: `var(--pal-${pal}-key)`,
+    borderColor: `var(--pal-${pal}-line)`,
+  };
+}
+// His .wk-dd-m surface, for popovers that are open whenever they render.
+const POP = {
+  background: "var(--bg)",
+  border: "1px solid var(--line)",
+  borderRadius: 14,
+  boxShadow: "0 3px 10px rgba(var(--shadow-c),.08), 0 20px 46px rgba(var(--shadow-c),.20)",
+};
+// A compact ds-btn holding just an icon.
+const ICON_BTN = { padding: "6px 8px" };
+const ROW_BTN = { padding: "4px 6px" };
+
+// A bill row's state in his tokens: a dragged row fades, a marked row takes
+// his light wash, and the drop target shows an action-coloured line.
+function billRowStyle({ dragging, marked, dropAbove, dropBelow }) {
+  return {
+    ...(dragging
+      ? { opacity: 0.4, background: "var(--bg-alt)" }
+      : marked
+        ? { background: "var(--pal-light-wash)" }
+        : null),
+    ...(dropAbove ? { borderTop: "2px solid var(--action)" } : null),
+    ...(dropBelow ? { borderBottom: "2px solid var(--action)" } : null),
+  };
+}
+
 function InfoTip({ text }) {
   return (
     <span className="relative inline-flex items-center group">
-      <FaInfoCircle className="text-slate-500" />
+      <FaInfoCircle size={13} className="text-slate-500" />
       <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-xs text-white group-hover:block">
         {text}
       </span>
@@ -123,13 +156,8 @@ function PercentInline({
       : Math.max(0, Math.min(100, Number(row?.percentComplete) || 0));
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1 py-0.5 text-[10px] ${
-        isRatified
-          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-          : value > 0
-            ? "border-amber-300 bg-amber-50 text-amber-700"
-            : "border-slate-200 bg-white text-slate-500"
-      }`}
+      className="wk-src sm"
+      style={isRatified ? palChip("light") : value > 0 ? palChip("orange") : undefined}
       title={
         isRatified
           ? "Fully ratified (100%)"
@@ -149,6 +177,7 @@ function PercentInline({
           onPercentChange?.(row.i, v);
         }}
         className="w-10 bg-transparent text-right tabular-nums focus:outline-none disabled:opacity-70"
+        style={{ border: 0, color: "inherit", font: "inherit" }}
       />
       <span>%</span>
     </span>
@@ -522,7 +551,7 @@ export function RateCell({
         </button>
       ) : (
         /* Expanded popup overlay on focus */
-        <div className="absolute left-0 top-0 z-40 w-80 rounded-lg border border-blue-300 bg-white shadow-xl">
+        <div className="absolute left-0 top-0 z-40 w-80" style={POP}>
           <div className="p-2">
             <input
               ref={inputRef}
@@ -572,11 +601,8 @@ export function RateCell({
             {/* Live formula preview / hint strip */}
             {formulaResult ? (
               <div
-                className={`mt-1 rounded-md border px-2 py-1 text-[11px] ${
-                  formulaResult.ok
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border-rose-200 bg-rose-50 text-rose-800"
-                }`}
+                className="mt-1 rounded-md border px-2 py-1 text-[11px]"
+                style={palChip(formulaResult.ok ? "light" : "orange")}
               >
                 {formulaResult.ok ? (
                   <span>
@@ -1338,9 +1364,9 @@ export default function ProjectBillTable({
       <span className="inline-flex items-center gap-1">
         {children}
         {sortCol === col ? (
-          <span className="text-adlm-blue-700">{sortAsc ? "▲" : "▼"}</span>
+          <span style={{ color: "var(--action)" }}>{sortAsc ? "▲" : "▼"}</span>
         ) : (
-          <span className="text-slate-300">⇅</span>
+          <span style={{ color: "var(--ink-3)", opacity: 0.6 }}>⇅</span>
         )}
       </span>
     </th>
@@ -2233,29 +2259,24 @@ export default function ProjectBillTable({
                             setDragIdx(null);
                             setDragOverIdx(null);
                           }}
-                          className={[
-                            "border-t align-top transition-colors",
-                            isDragging
-                              ? "opacity-40 bg-slate-100"
-                              : row.isMarked
-                                ? "bg-emerald-50/40"
-                                : "bg-white",
-                            isOver && dragIdx != null && dragIdx !== row.i
-                              ? dragIdx < row.i
-                                ? "border-b-2 border-b-adlm-blue-700"
-                                : "border-t-2 border-t-adlm-blue-700"
-                              : "",
-                          ].join(" ")}
+                          className="border-t align-top transition-colors"
+                          style={billRowStyle({
+                            dragging: isDragging,
+                            marked: row.isMarked,
+                            dropAbove: isOver && dragIdx != null && dragIdx > row.i,
+                            dropBelow: isOver && dragIdx != null && dragIdx < row.i,
+                          })}
                         >
                           {/* Drag handle + S/N */}
                           <td className="px-1 py-2">
                             <div className="flex items-center gap-1">
                               {!sortCol && (
                                 <span
-                                  className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 touch-none"
+                                  className="cursor-grab active:cursor-grabbing touch-none"
+                                  style={{ color: "var(--ink-3)", display: "inline-flex" }}
                                   title="Drag to reorder"
                                 >
-                                  <FaGripVertical className="text-[10px]" />
+                                  <FaGripVertical size={13} />
                                 </span>
                               )}
                               <span className="font-medium text-slate-700">
@@ -2497,17 +2518,19 @@ export default function ProjectBillTable({
                                     <div className="relative">
                                       <button
                                         type="button"
-                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border hover:bg-slate-50"
+                                        className="ds-btn ds-btn-sm btn-o"
+                                        style={ICON_BTN}
+                                        aria-label="Pick a matching material price"
                                         title="Pick a matching material price"
                                         onClick={() =>
                                           onToggleOpenPickKey?.(row.key)
                                         }
                                       >
-                                        <FaSearch className="text-xs text-slate-600" />
+                                        <FaSearch size={13} />
                                       </button>
 
                                       {openPickKey === row.key ? (
-                                        <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-lg border bg-white shadow-lg">
+                                        <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden" style={POP}>
                                           <div className="border-b px-3 py-2 text-xs text-slate-600">
                                             Choose a price for{" "}
                                             <b>
@@ -2573,7 +2596,7 @@ export default function ProjectBillTable({
                                           <div className="flex justify-end p-2">
                                             <button
                                               type="button"
-                                              className="btn btn-xs"
+                                              className="ds-btn ds-btn-sm btn-o"
                                               onClick={onClosePickKey}
                                             >
                                               Close
@@ -2629,7 +2652,10 @@ export default function ProjectBillTable({
 
                                   <button
                                     type="button"
-                                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition ${canLink ? (linked ? "border-blue-300 bg-blue-50" : "hover:bg-slate-50") : "cursor-not-allowed opacity-40"}`}
+                                    className="ds-btn ds-btn-sm btn-o"
+                                    style={{ ...ICON_BTN, ...(linked ? palChip("light") : null) }}
+                                    aria-pressed={linked}
+                                    aria-label="Link similar items"
                                     title={
                                       canLink
                                         ? linked
@@ -2642,9 +2668,7 @@ export default function ProjectBillTable({
                                       onToggleGroupLink?.(groupId, row.i)
                                     }
                                   >
-                                    <FaLink
-                                      className={`text-xs ${linked ? "text-adlm-blue-700" : "text-slate-600"}`}
-                                    />
+                                    <FaLink size={13} />
                                   </button>
                                 </>
                               )}
@@ -2715,32 +2739,31 @@ export default function ProjectBillTable({
 
                           {/* Actions: move up / move down / delete */}
                           <td className="px-1 py-2">
-                            <div className="flex items-center justify-center gap-0.5">
+                            <div className="flex items-center justify-center gap-1">
                               <button
                                 type="button"
-                                className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="ds-btn ds-btn-sm btn-o"
+                                style={ROW_BTN}
                                 title="Move up"
                                 disabled={row.i === 0}
                                 onClick={() => onMoveItem?.(row.i, row.i - 1)}
                               >
-                                <FaArrowUp className="text-[10px]" />
+                                <FaArrowUp size={12} />
                               </button>
                               <button
                                 type="button"
-                                className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="ds-btn ds-btn-sm btn-o"
+                                style={ROW_BTN}
                                 title="Move down"
                                 disabled={row.i >= items.length - 1}
                                 onClick={() => onMoveItem?.(row.i, row.i + 1)}
                               >
-                                <FaArrowDown className="text-[10px]" />
+                                <FaArrowDown size={12} />
                               </button>
                               <button
                                 type="button"
-                                className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
-                                  contractLocked
-                                    ? "text-slate-300 cursor-not-allowed"
-                                    : "hover:bg-red-50 text-slate-400 hover:text-red-600"
-                                }`}
+                                className="ds-btn ds-btn-sm btn-o"
+                                style={ROW_BTN}
                                 title={
                                   contractLocked
                                     ? "Contract locked. Unlock it to delete measured items, or raise a variation"
@@ -2752,7 +2775,7 @@ export default function ProjectBillTable({
                                   onDeleteItem?.(row.i);
                                 }}
                               >
-                                <FaTrashAlt className="text-[10px]" />
+                                <FaTrashAlt size={12} />
                               </button>
                             </div>
                           </td>
@@ -4132,13 +4155,9 @@ function WbsLinkChip({ stats }) {
     explanation = `Sum of link weights = ${total}%. This BoQ line is correctly allocated across the WBS.`;
   }
 
-  const palette = {
-    emerald:
-      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700/40",
-    rose: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-700/40",
-    slate:
-      "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
-  }[tone];
+  // Balanced reads in his light palette, over-allocated in his warning
+  // orange, under-allocated stays his neutral chip.
+  const palette = { emerald: palChip("light"), rose: palChip("orange"), slate: undefined }[tone];
 
   const names = Array.isArray(stats.taskNames) ? stats.taskNames : [];
   const previewNames = names.slice(0, 6);
@@ -4157,7 +4176,8 @@ function WbsLinkChip({ stats }) {
     <div className="mt-1 inline-flex items-center">
       <span
         title={title}
-        className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${palette}`}
+        className="wk-src sm"
+        style={palette}
       >
         <span aria-hidden="true">🔗</span>
         {n} link{n === 1 ? "" : "s"} · {total}%
