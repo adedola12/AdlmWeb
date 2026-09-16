@@ -40,6 +40,42 @@ export function projectBaseKey(p) {
   return p?.baseProductKey || MATERIALS_BASE[k] || k || "other";
 }
 
+/** A storage key that holds a material & labour schedule. */
+export function isMaterialsKey(k) {
+  return /-materials?$/.test(String(k || "").toLowerCase());
+}
+
+/** The product a materials key belongs to ("planswift-materials" → "planswift"). */
+export function materialsBase(k) {
+  const key = String(k || "").toLowerCase();
+  return MATERIALS_BASE[key] || key.replace(/-materials?$/, "");
+}
+
+/**
+ * Materials are a project's Budget, not a place of their own.
+ *
+ * A schedule saved with its bill (same product, same slug, or the slug with
+ * "-material(s)" on the end) is already the Budget inside that project, so it
+ * is dropped from project lists. A schedule with no bill behind it — older
+ * saves, MEP and CIVIQ schedules — stays listed as a project of its own
+ * product and opens on the project page, where its lines are its Budget.
+ */
+export function foldMaterials(list) {
+  const rows = Array.isArray(list) ? list : [];
+  const bills = new Set(
+    rows
+      .filter((p) => !isMaterialsKey(p?.productKey) && p?.slug)
+      .map((p) => `${String(p.productKey).toLowerCase()}::${p.slug}`),
+  );
+  return rows.filter((p) => {
+    if (!isMaterialsKey(p?.productKey)) return true;
+    const base = materialsBase(p.productKey);
+    const slug = String(p?.slug || "");
+    const bare = slug.replace(/-materials?$/, "");
+    return !(bills.has(`${base}::${slug}`) || bills.has(`${base}::${bare}`));
+  });
+}
+
 /** Normalise a /me/projects-rollup list so baseProductKey is right. */
 export function normaliseRollup(list) {
   return (Array.isArray(list) ? list : []).map((p) => ({

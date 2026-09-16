@@ -1484,3 +1484,9 @@
 .ds .ds-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
 .ds .ds-btn:disabled:hover{transform:none;filter:none}
 .ds .ds-btn:disabled::before{display:none}
+
+/* project card pill — ds.css's hero `.ds .stage` (width:min(1080px,86%),
+   margin-top 66px) shares the class name with his card's .stage chip, so the
+   chip stretched to 86% of the card, squeezed the title to one word a line
+   and ran past the card edge. The chip sizes to its text. */
+.ds .wk-proj .stage{width:auto;margin:0;white-space:nowrap}

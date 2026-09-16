@@ -525,6 +525,10 @@ export default function ProjectOpenView({
   showActualColumns = false,
   showDailyValuationLog = true,
   showMaterials = false,
+  // A standalone material & labour schedule (a "-materials" project): its
+  // lines ARE its budget, so the Bill view is named Budget and the separate
+  // (empty) Budget view is not offered.
+  materialsSchedule = false,
   showValuationSettings = true,
   statusLabel = "Completed",
   statusPastLabel = "Completed to date",
@@ -618,7 +622,11 @@ export default function ProjectOpenView({
       !(
         t.id === "model" &&
         (String(productKey).startsWith("planswift") || isBoqImport)
-      ),
+      ) && !(materialsSchedule && (t.id === "budget" || t.id === "model")),
+  ).map((t) =>
+    materialsSchedule && t.id === "bill"
+      ? { ...t, label: "Budget", helper: "Material & labour lines" }
+      : t,
   );
 
   // Groups in the order the table lists them (Overview, Commercial, Delivery).

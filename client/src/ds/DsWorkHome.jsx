@@ -27,7 +27,7 @@ import { Link } from "react-router-dom";
 import { apiAuthed } from "../api.js";
 import { useAuth } from "../store.jsx";
 import WkPrefs from "./WkPrefs.jsx";
-import { normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
+import { foldMaterials, normaliseRollup, projectWorkspaceHref } from "../lib/projectLinks.js";
 
 const money = (n) =>
   new Intl.NumberFormat("en-NG", {
@@ -123,7 +123,7 @@ export default function DsWorkHome() {
     let alive = true;
 
     apiAuthed("/me/projects-rollup", { token: accessToken })
-      .then((d) => alive && setProjects(normaliseRollup(d.projects)))
+      .then((d) => alive && setProjects(foldMaterials(normaliseRollup(d.projects))))
       .catch(() => alive && setFailed(true));
 
     // His last "Needs a decision" card is about what is on the plan but not

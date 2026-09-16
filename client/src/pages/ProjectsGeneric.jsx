@@ -3,7 +3,7 @@ import React from "react";
 import { useAuth } from "../store.jsx";
 import { useStepUp } from "../features/security/useStepUp.jsx";
 import { apiAuthed } from "../http.js";
-import { Link, useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { API_BASE } from "../config";
 // ifcElements (which pulls in the ~1.5 MB web-ifc wasm wrapper) is imported
 // dynamically inside handleUploadModel so it is code-split out of the main
@@ -36,12 +36,12 @@ const TITLES = {
   mep: "Revit MEP projects",
   planswift: "HERON projects",
   civil3d: "CIVIQ projects",
-  "revit-materials": "QUIV materials",
-  "revit-material": "QUIV materials",
-  "planswift-materials": "HERON materials",
-  "planswift-material": "HERON materials",
-  "mep-materials": "Revit MEP materials",
-  "civil3d-materials": "CIVIQ materials",
+  "revit-materials": "QUIV",
+  "revit-material": "QUIV",
+  "planswift-materials": "HERON",
+  "planswift-material": "HERON",
+  "mep-materials": "Revit MEP",
+  "civil3d-materials": "CIVIQ",
 };
 
 function normTool(t) {
@@ -5094,6 +5094,12 @@ export default function ProjectsGeneric() {
 
   const title = TITLES[tool] || "Projects";
 
+  // There is no Materials page. A material & labour schedule is a project's
+  // Budget; one opened directly (?project=) still loads here from its own
+  // storage, but the bare materials list forwards to the product's list.
+  const materialsTool = /-materials?$/.test(toolNorm);
+  const materialsListOnly = materialsTool && !searchParams.get("project");
+
   // Persist procurement marking from the Budget tab. Isolated PUT that only
   // updates budgetItems[] — never touches the BoQ/valuation save path.
   async function saveBudgetProcurement(nextBudgetItems) {
@@ -5118,6 +5124,10 @@ export default function ProjectsGeneric() {
   const checkboxCls =
     "h-4 w-4 accent-blue-600 border-0 outline-none ring-0 focus:ring-0 focus:outline-none";
 
+  if (materialsListOnly) {
+    return <Navigate to={`/projects/${toolNorm.replace(/-materials?$/, "")}`} replace />;
+  }
+
   return (
     <div>
       <div>
@@ -5129,7 +5139,7 @@ export default function ProjectsGeneric() {
             <h1>{sel ? sel?.name || "Untitled project" : title}</h1>
             <p className="wk-ref">
               {sel
-                ? `${title}${sel?.origin === BOQ_IMPORT_ORIGIN ? " · imported from Excel" : ""}`
+                ? `${title}${sel?.origin === BOQ_IMPORT_ORIGIN ? " · imported from Excel" : ""}${materialsTool ? " · material & labour schedule" : ""}`
                 : [sidebarMeta.app, sidebarMeta.hint].filter(Boolean).join(" · ")}
             </p>
           </div>
@@ -5317,6 +5327,7 @@ export default function ProjectsGeneric() {
                 projectName={sel?.name || "Project"}
                 selectedId={selectedId}
                 showMaterials={showMaterials}
+                materialsSchedule={materialsTool}
                 statusLabel={statusLabel}
                 statusPastLabel={statusPastLabel}
                 checkboxCls={checkboxCls}

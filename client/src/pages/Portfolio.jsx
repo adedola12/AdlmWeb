@@ -5,6 +5,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../store.jsx";
 import { apiAuthed } from "../http.js";
+import { foldMaterials, isMaterialsKey, materialsBase } from "../lib/projectLinks.js";
 import { IconArrowRight, IconLink } from "../components/icons.jsx";
 
 dayjs.extend(relativeTime);
@@ -16,13 +17,14 @@ const PRODUCT_LABELS = {
   civil3d: "Civil 3D",
 };
 
-const SKIP_KEYS = new Set(["revit-materials", "planswift-materials"]);
-
+// A materials schedule is its bill's Budget: one with a bill is dropped, one
+// without is listed under its own product (see lib/projectLinks.js).
 function groupProjects(projects) {
   const groups = {};
-  for (const p of projects) {
-    const key = p.productKey || "other";
-    if (SKIP_KEYS.has(key)) continue;
+  for (const p of foldMaterials(projects)) {
+    const key = isMaterialsKey(p.productKey)
+      ? materialsBase(p.productKey)
+      : p.productKey || "other";
     if (!groups[key]) groups[key] = [];
     groups[key].push(p);
   }
